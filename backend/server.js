@@ -7620,14 +7620,20 @@ app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
       UPDATE cantera_batches SET
         nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
         filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11,
-        tiers_calificantes=$12::jsonb, updated_at=NOW()
+        tiers_calificantes=$12::jsonb, reglas_buyer=$13::jsonb, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || [])]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || []), JSON.stringify(Array.isArray(b.reglas_buyer) ? b.reglas_buyer : [])]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
+});
+app.post('/api/cantera/batches/:id/asignar-buyers', requireAuth, async (req, res) => {
+  try {
+    const r = await require('./services/canteraBuyerService').asignarBuyers(pool, req.params.id, req.workspaceOwnerId, null);
+    res.json(r);
+  } catch (err) { console.error('[cantera] asignar-buyers', err.message); res.status(500).json({ error: 'No se pudo asignar' }); }
 });
 app.delete('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   try {
@@ -7976,6 +7982,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
          AND company_id IN (SELECT company_id FROM cantera_contacts WHERE batch_id=$1 GROUP BY company_id HAVING COUNT(*)=1)
     `, [batchId]);
   } catch (e) { console.error('[cantera] auto-prioridad import', e.message); }
+  try { await require('./services/canteraBuyerService').asignarBuyers(pool, batchId, uid, null); } catch (e) { console.error('[cantera] buyers import', e.message); }
   job.running = false; job.summary = summary;
 });
 app.get('/api/cantera/batches/:id/import-status', requireAuth, async (req, res) => {

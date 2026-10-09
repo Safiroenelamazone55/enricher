@@ -397,6 +397,7 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
         await pool.query(`UPDATE cantera_contacts SET puesto_estado=$1, puesto_motivo=$2 WHERE id=$3`,
           [['decide', 'respaldo', 'descartado'].includes(res.puesto_estado) ? res.puesto_estado : 'pendiente', String(res.motivo || ''), match.id]);
       }
+      try { await require('./canteraBuyerService').asignarBuyers(pool, batchId, uid, [company.id]); } catch (_) {}
       done++;
     } catch (e) {
       errores++;

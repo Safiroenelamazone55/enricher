@@ -6184,6 +6184,19 @@ const CanteraModule = (() => {
             </div>
           </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
         </div>
+        <div class="cant-buyers" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Buyer por tamaño de empresa <span class="cant-hint" style="font-weight:400">(automático, sin IA)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Según el tamaño de la empresa, el cargo que escribas PRIMERO es el 1.º a contactar, el segundo es el 2.º, etc. Se aplica solo al importar y al analizar. Lo que pongas a mano nunca se pisa.</p>
+          ${(_current.reglas_buyer || []).map((r, i) => `
+            <div class="cant-buyer-row" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="width:90px"><span class="cant-hint">Desde (empl.)</span><input type="number" class="form-input" value="${esc(r.desde ?? '')}" oninput="CanteraModule.setBuyerField(${i},'desde',this.value)"></label>
+              <label style="width:90px"><span class="cant-hint">Hasta</span><input type="number" class="form-input" placeholder="sin tope" value="${esc(r.hasta ?? '')}" oninput="CanteraModule.setBuyerField(${i},'hasta',this.value)"></label>
+              <label style="flex:1"><span class="cant-hint">Cargos en orden (uno por línea · el 1.º es el Buyer 1)</span><textarea class="form-input" rows="3" placeholder="Founder&#10;Owner&#10;Managing Director" oninput="CanteraModule.setBuyerField(${i},'cargos',this.value)">${esc(r.cargos || '')}</textarea></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeBuyerRule(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addBuyerRule()">+ Agregar rango de tamaño</button>
+          ${(_current.reglas_buyer || []).length ? `<button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="CanteraModule.aplicarBuyers()">Guardar y aplicar a todo el borrador</button>` : ''}
+        </div>
         <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar criterio</button></div>
       </div>` : ''}
 
@@ -7143,6 +7156,18 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     _paint();
   }
+  function addBuyerRule() { _current.reglas_buyer = [...(_current.reglas_buyer || []), { desde: '', hasta: '', cargos: '' }]; _paint(); }
+  function removeBuyerRule(i) { (_current.reglas_buyer || []).splice(i, 1); _paint(); }
+  function setBuyerField(i, k, v) { _current.reglas_buyer[i][k] = v; }
+  async function aplicarBuyers() {
+    try {
+      await saveCriterio();
+      const r = await apiFetch(API + '/cantera/batches/' + _current.id + '/asignar-buyers', { method: 'POST' });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _contactsByCompany = {}; _contactsLoaded = false; await _loadCompanies(); _paint();
+      showBanner('Listo: ' + j.asignados + ' contactos con prioridad en ' + j.empresas + ' empresas' + (j.sinBanda ? ' · ' + j.sinBanda + ' sin rango (tamaño vacío o fuera de tus rangos)' : ''), 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function saveCriterio() {
     _current.icp = document.getElementById('cant-icp')?.value || '';
     try {
@@ -7553,6 +7578,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
+    addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
