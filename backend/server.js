@@ -1777,21 +1777,7 @@ app.post('/api/mgmt/projects', requireAuth, async (req, res) => {
     // Canal de Slack para el proyecto nuevo, en el workspace marcado por defecto
     // (Novacentrax). Best-effort: si Slack falla, el proyecto se crea igual y el
     // canal se puede ligar despues a mano.
-    let slack_channel = null;
-    try {
-      const { rows: [ws] } = await pool.query(
-        `SELECT * FROM slack_workspaces WHERE user_id=$1 AND es_default_proyectos=true LIMIT 1`,
-        [req.workspaceOwnerId]);
-      if (ws) {
-        const { rows: [cli] } = await pool.query(`SELECT nombre, empresa FROM clients WHERE id=$1`, [client_id]);
-        const base = [cli ? (cli.nombre || cli.empresa) : '', nombre].filter(Boolean).join(' ');
-        const chName = slackSvc.normalizarNombre(base, 'pj');
-        const ch = await slackSvc.crearCanal(ws, chName);
-        await pool.query(`UPDATE projects SET slack_channel_id=$1, slack_ws_id=$2 WHERE id=$3`,
-          [ch.id, ws.id, rows[0].id]);
-        slack_channel = ch.name;
-      }
-    } catch (e) { console.warn('[mgmt/projects] no se pudo crear el canal de Slack:', e.message); }
+    const slack_channel = await _slackCrearCanalProyecto(req.workspaceOwnerId, rows[0].id, client_id, nombre);
 
     res.status(201).json({ ...rows[0], slack_channel });
   } catch (err) {
@@ -11455,7 +11441,8 @@ async function _slackCrearCanalProyecto(uid, projectId, clientId, nombre) {
     if (!ws) return null;
     const { rows: [cli] } = await pool.query('SELECT nombre, empresa FROM clients WHERE id=$1', [clientId]);
     const base = [cli ? (cli.nombre || cli.empresa) : '', String(nombre || '').replace(/^P\d{3}\s*[·\-]\s*/, '')].filter(Boolean).join(' ');
-    const ch = await slackSvc.crearCanal(ws, slackSvc.normalizarNombre(base, 'pj'));
+    const nm = slackSvc.normalizarNombre(base, 'pj');
+    let ch; try { ch = await slackSvc.crearCanal(ws, nm); } catch (e) { if (!/name_taken/.test(e.message)) throw e; ch = await slackSvc.crearCanal(ws, (nm + '-' + projectId).slice(0, 80)); }
     await pool.query('UPDATE projects SET slack_channel_id=$1, slack_ws_id=$2 WHERE id=$3', [ch.id, ws.id, projectId]);
     return ch.name;
   } catch (e) { console.warn('[slack] no se pudo crear el canal del proyecto ' + projectId + ':', e.message); return null; }
