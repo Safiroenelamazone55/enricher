@@ -1851,6 +1851,7 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
        comision || null, touchResp]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    if (['completado', 'cancelado'].includes(rows[0].estado)) await _slackArchivarCanalProyecto(req.workspaceOwnerId, rows[0].id);
     res.json(rows[0]);
   } catch (err) {
     console.error('[mgmt/projects] PUT error:', err.message);
@@ -10486,6 +10487,8 @@ app.post('/api/mgmt/opportunities/:id/proyecto', requireAuth, async (req, res) =
               estado='ganada', updated_at=NOW() WHERE id=$3`,
       [proy.id, clientId, o.id]);
     await client.query('COMMIT');
+    try { proy.nombre = (await pool.query('UPDATE projects SET nombre=$1 WHERE id=$2 RETURNING nombre', [_conCodigoProyecto(proy.id, proy.nombre), proy.id])).rows[0].nombre; } catch (e) { console.warn('[opp/proyecto] código:', e.message); }
+    _slackCrearCanalProyecto(uid, proy.id, clientId, proy.nombre);
     res.status(201).json({ ok: true, project: proy, client_id: clientId });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -11443,6 +11446,26 @@ app.delete('/api/slack/workspaces/:id', requireAuth, async (req, res) => {
 });
 
 // Helper: trae el workspace con su token descifrado, o null.
+// Canal de Slack automático de un proyecto (workspace marcado por defecto). Best-effort: nunca rompe la operación que lo llama.
+async function _slackCrearCanalProyecto(uid, projectId, clientId, nombre) {
+  try {
+    const { rows: [pj] } = await pool.query('SELECT slack_channel_id FROM projects WHERE id=$1', [projectId]);
+    if (pj && pj.slack_channel_id) return null;
+    const { rows: [ws] } = await pool.query('SELECT * FROM slack_workspaces WHERE user_id=$1 AND es_default_proyectos=true LIMIT 1', [uid]);
+    if (!ws) return null;
+    const { rows: [cli] } = await pool.query('SELECT nombre, empresa FROM clients WHERE id=$1', [clientId]);
+    const base = [cli ? (cli.nombre || cli.empresa) : '', String(nombre || '').replace(/^P\d{3}\s*[·\-]\s*/, '')].filter(Boolean).join(' ');
+    const ch = await slackSvc.crearCanal(ws, slackSvc.normalizarNombre(base, 'pj'));
+    await pool.query('UPDATE projects SET slack_channel_id=$1, slack_ws_id=$2 WHERE id=$3', [ch.id, ws.id, projectId]);
+    return ch.name;
+  } catch (e) { console.warn('[slack] no se pudo crear el canal del proyecto ' + projectId + ':', e.message); return null; }
+}
+async function _slackArchivarCanalProyecto(uid, projectId) {
+  try {
+    const { rows: [pj] } = await pool.query('SELECT slack_channel_id, slack_ws_id FROM projects WHERE id=$1 AND user_id=$2', [projectId, uid]);
+    if (pj && pj.slack_channel_id && pj.slack_ws_id) { const w = await _slackWs(uid, pj.slack_ws_id); if (w) await slackSvc.archivarCanal(w, pj.slack_channel_id); }
+  } catch (e) { console.warn('[slack] no se pudo archivar el canal del proyecto ' + projectId + ':', e.message); }
+}
 async function _slackWs(uid, id) {
   const { rows: [w] } = await pool.query(
     `SELECT * FROM slack_workspaces WHERE id=$1 AND user_id=$2`, [id, uid]);
