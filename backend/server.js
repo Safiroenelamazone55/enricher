@@ -2868,6 +2868,25 @@ async function _archiveOldWeeklyTasksTick() {
   } catch (e) { console.error('[archivar-semanal]', e.message); }
 }
 setInterval(_archiveOldWeeklyTasksTick, 60 * 60 * 1000);
+// Red de seguridad: todo proyecto ACTIVO sin canal de Slack (porque Slack falló al crearlo) se reintenta solo cada 10 min. Evita que un fallo puntual deje al proyecto sin canal para siempre.
+async function _slackReconcileTick() {
+  try {
+    const { rows } = await pool.query("SELECT id, user_id, client_id, nombre FROM projects WHERE estado='activo' AND slack_channel_id IS NULL AND created_at > NOW() - INTERVAL '90 days'");
+    for (const p of rows) { const n = await _slackCrearCanalProyecto(p.user_id, p.id, p.client_id, p.nombre); if (n) console.log('[slack] canal creado en reintento: #' + n + ' (proyecto ' + p.id + ')'); }
+  } catch (e) { console.warn('[slack] reconciliación:', e.message); }
+}
+setTimeout(_slackReconcileTick, 60 * 1000);
+setInterval(_slackReconcileTick, 10 * 60 * 1000);
+app.post('/api/mgmt/projects/:id/slack', requireAuth, async (req, res) => {
+  try {
+    const { rows: [p] } = await pool.query('SELECT id, client_id, nombre, slack_channel_id FROM projects WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!p) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    if (p.slack_channel_id) return res.json({ ok: true, ya: true });
+    const n = await _slackCrearCanalProyecto(req.workspaceOwnerId, p.id, p.client_id, p.nombre);
+    if (!n) return res.status(502).json({ error: 'No se pudo crear el canal. Revisa que haya un Slack marcado como Organización en Integraciones.' });
+    res.json({ ok: true, canal: n });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 setTimeout(_archiveOldWeeklyTasksTick, 25 * 1000);
 
 // ── PATCH /api/mgmt/projects/:id/billing-cfg ──────────────────────
