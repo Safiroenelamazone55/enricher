@@ -9385,6 +9385,24 @@ app.post('/api/campaigns', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Error al crear campaña' });
   }
 });
+app.patch('/api/campaigns/:id/estado', requireAuth, async (req, res) => {
+  try {
+    const estado = String((req.body || {}).estado || '');
+    if (!CMP_ESTADOS.includes(estado)) return res.status(400).json({ error: 'Estado no válido' });
+    const { rows } = await pool.query('UPDATE campaigns SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, estado', [estado, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Campaña no encontrada' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo cambiar el estado' }); }
+});
+app.patch('/api/outbound-clients/:id/estado', requireAuth, async (req, res) => {
+  try {
+    const estado = String((req.body || {}).estado || '');
+    if (!OBC_ESTADOS.includes(estado)) return res.status(400).json({ error: 'Estado no válido' });
+    const { rows } = await pool.query('UPDATE outbound_clients SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, estado', [estado, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo cambiar el estado' }); }
+});
 app.put('/api/campaigns/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });

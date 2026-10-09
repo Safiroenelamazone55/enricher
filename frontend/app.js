@@ -20692,11 +20692,31 @@ const LeadManagerModule = (() => {
     document.querySelectorAll('.ldh-toolbar .pv-views .pv-view, .lm-sec-head ~ .ldh-toolbar .pv-view').forEach(b => { const m = /lmSetLayout\('(\w+)','(\w+)'\)/.exec(b.getAttribute('onclick') || ''); if (m && m[1] === key) b.classList.toggle('pv-view--active', m[2] === l); });
   }
   // Tablero genérico: columnas por estado; "cols" = [[clave, [etiqueta, fondo, color]], …]
-  function _lmBoard(cols, list, stateOf, cardFn) {
+  function _lmBoard(kind, cols, list, stateOf, cardFn) {
     return '<div class="cl-board" style="padding:6px 0 24px;grid-template-columns:repeat(' + Math.min(cols.length, 4) + ',minmax(220px,1fr))">' + cols.map(([k, v]) => {
       const items = list.filter(x => stateOf(x) === k);
-      return '<div class="cl-bcol"><div class="cl-bcol__h"><span>' + esc(v[0]) + '</span><span class="cl-bcol__n">' + items.length + '</span></div>' + (items.map(cardFn).join('') || '<div class="cl-bcol__e">Sin elementos</div>') + '</div>';
+      return '<div class="cl-bcol" ondragover="event.preventDefault();this.classList.add(\'cl-bcol--over\')" ondragleave="this.classList.remove(\'cl-bcol--over\')" ondrop="this.classList.remove(\'cl-bcol--over\');LeadManagerModule.kbDrop(event,\'' + kind + '\',\'' + k + '\')"><div class="cl-bcol__h"><span>' + esc(v[0]) + '</span><span class="cl-bcol__n">' + items.length + '</span></div>' +
+        (items.map(x => cardFn(x).replace('<div class="cl-bcard"', '<div class="cl-bcard" draggable="true" ondragstart="LeadManagerModule.kbDragStart(event,\'' + kind + '\',' + x.id + ')"')).join('') || '<div class="cl-bcol__e">Sin elementos</div>') + '</div>';
     }).join('') + '</div>';
+  }
+  // Arrastrar una tarjeta a otra columna cambia su estado (cada tipo con su regla)
+  let _kbDrag = null;
+  function kbDragStart(e, kind, id) { _kbDrag = { kind, id }; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(id)); } catch (_) {} }
+  async function kbDrop(e, kind, estado) {
+    e.preventDefault(); const d = _kbDrag; _kbDrag = null; if (!d || d.kind !== kind) return;
+    try {
+      if (kind === 'sq') {
+        const s = _sequences.find(x => x.id === d.id); if (!s || s.estado === estado) return;
+        if (estado === 'pausada' && s.estado === 'activa') await seqPauseAll(d.id);
+        else if (estado === 'activa' && s.estado === 'pausada') await seqResumeAll(d.id);
+        else showBanner('Desde aquí una secuencia solo pasa de Activa a Pausada y de Pausada a Activa (para archivarla o dejarla en borrador, usa su menú).', 'info');
+        _sqPaint(); return;
+      }
+      const list = kind === 'cm' ? _campaigns : _clients, it = list.find(x => x.id === d.id); if (!it || (it.estado || '') === estado) return;
+      const r = await apiFetch(API + (kind === 'cm' ? '/campaigns/' : '/outbound-clients/') + d.id + '/estado', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      it.estado = j.estado; if (kind === 'cm') _cmPaint(); else _clPaint();
+    } catch (err) { showBanner('Error: ' + err.message, 'error'); }
   }
   // Clientes outbound: filtros propios (búsqueda + estado) y tres vistas
   let _clQ = '', _clEst = '';
@@ -20715,7 +20735,7 @@ const LeadManagerModule = (() => {
     }
     if (L === 'tablero') {
       const cols = _OBC_OPTS.map(([k, l]) => [k, [l]]);
-      return _lmBoard(cols, list, c => c.estado || 'preparacion', c => '<div class="cl-bcard" onclick="LeadManagerModule.openClient(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (c.responsable ? '<div class="cl-bcard__s">' + esc(c.responsable) + '</div>' : '') + '<div class="cl-bcard__s">' + nC(c) + ' campaña(s) · ' + nS(c) + ' secuencia(s)</div></div>');
+      return _lmBoard('cl', cols, list, c => c.estado || 'preparacion', c => '<div class="cl-bcard" onclick="LeadManagerModule.openClient(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (c.responsable ? '<div class="cl-bcard__s">' + esc(c.responsable) + '</div>' : '') + '<div class="cl-bcard__s">' + nC(c) + ' campaña(s) · ' + nS(c) + ' secuencia(s)</div></div>');
     }
     return '<div class="lm-obc-grid">' + list.map(_obcCard).join('') + '</div>';
   }
@@ -20750,7 +20770,7 @@ const LeadManagerModule = (() => {
       };
     };
     if (_lmLayout.cm === 'tablero') {
-      wrap.innerHTML = _lmBoard(Object.entries(_CMP), list, c => c.estado || 'draft', c => { const m = stats(c), cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
+      wrap.innerHTML = _lmBoard('cm', Object.entries(_CMP), list, c => c.estado || 'draft', c => { const m = stats(c), cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
       return;
     }
     const rows = list.map(c => {
@@ -20855,7 +20875,7 @@ const LeadManagerModule = (() => {
     if (_sqQ) { const q = _sqQ.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
     if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna secuencia cumple estos filtros.</div></div>`; return; }
     if (_lmLayout.sq === 'tablero') {
-      wrap.innerHTML = _lmBoard(Object.entries(_SEQ), list, s => s.estado || 'draft', s => { const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id), n = _seqSteps(s.id).length; return '<div class="cl-bcard" onclick="LeadManagerModule.openSequence(' + s.id + ')"><div class="cl-bcard__t">' + esc(s.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (cmp ? '<div class="cl-bcard__s">' + esc(cmp) + '</div>' : '') + '<div class="cl-bcard__s">' + (n ? n + ' paso' + (n !== 1 ? 's' : '') : 'Sin pasos') + ((s.awaiting || 0) > 0 ? ' · <b>' + s.awaiting + '</b> por aprobar' : '') + '</div></div>'; });
+      wrap.innerHTML = _lmBoard('sq', Object.entries(_SEQ), list, s => s.estado || 'draft', s => { const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id), n = _seqSteps(s.id).length; return '<div class="cl-bcard" onclick="LeadManagerModule.openSequence(' + s.id + ')"><div class="cl-bcard__t">' + esc(s.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (cmp ? '<div class="cl-bcard__s">' + esc(cmp) + '</div>' : '') + '<div class="cl-bcard__s">' + (n ? n + ' paso' + (n !== 1 ? 's' : '') : 'Sin pasos') + ((s.awaiting || 0) > 0 ? ' · <b>' + s.awaiting + '</b> por aprobar' : '') + '</div></div>'; });
       return;
     }
     const rows = list.map(s => {
@@ -33986,7 +34006,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, _clientGoTab, clientQuickMenu,
+  return { load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
