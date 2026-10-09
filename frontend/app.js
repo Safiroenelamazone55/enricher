@@ -36977,16 +36977,26 @@ const QuickWaModule = (() => {
       // vivo 2026-09-16: "cómo podría yo saber si el mensaje realmente le
       // llegó al cliente... no tengo el teléfono ahí". Mismo criterio que el
       // WhatsApp de Operaciones: ✓ = enviado, ✓✓ gris = entregado, ✓✓ azul = leído.
-      const tickHtml = m.from_me ? _qwaTickHtml(m.ack) : '';
+      const tickHtml = m.from_me ? _qwaTickHtml(m.ack, m.ts) : '';
       const bubbleHtml = `${actions}${citado}${mediaHtml}${textoHtml}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
-      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}${tickHtml.includes('wa-msg__fail') ? ' wa-msg--fail' : ''}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
   // Ticks de entrega/leído (estilo WhatsApp real). ack de Baileys: 1 pendiente,
   // 2 enviado al server (✓), 3 entregado (✓✓ gris), 4 leído (✓✓ azul).
-  function _qwaTickHtml(ack) {
+  async function reparar() {
+    if (!_jid || !_conn) return;
+    showBanner('Reparando la conexión con este contacto…', 'info');
+    try {
+      const r = await apiFetch(API + '/wa/connections/' + _conn.id + '/chats/' + encodeURIComponent(_jid) + '/reparar', { method: 'POST' });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner(j.reenviados ? 'Listo: se reenviaron ' + j.reenviados + ' mensaje(s).' : 'Conexión reparada. Escribe de nuevo si hace falta.', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _qwaTickHtml(ack, ts) {
     const a = +ack || 0;
+    if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 90 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="No se entregó. Repara la sesión con este contacto y reenvía los mensajes pendientes." onclick="event.stopPropagation();QuickWaModule.reparar()">No entregado · Reintentar</button>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;
@@ -37231,7 +37241,7 @@ const QuickWaModule = (() => {
     if (_pendingImgUrl) { URL.revokeObjectURL(_pendingImgUrl); _pendingImgUrl = null; }
   }
 
-  return {
+  return { reparar,
     open, close, enviar, onPasteInput, pickImage, editPendingImg, cancelImg,
     responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado,
     reactPop, reaccionar, emojiPicker, _emojiIns, msgMenu, toggleImportante,
