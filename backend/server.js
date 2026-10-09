@@ -12728,6 +12728,13 @@ app.post('/api/wa/connections/:id/chats/:jid/resync', requireAuth, async (req, r
   } catch (err) { console.error('[wa] resync', err.message); res.status(500).json({ error: err.message || 'No se pudo pedir el historial' }); }
 });
 
+app.post('/api/wa/connections/:id/chats/:jid/reparar', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    res.json(await waSvc.repararChat(pool, conn.id, req.params.jid));
+  } catch (err) { console.error('[wa] reparar', err.message); res.status(500).json({ error: err.message || 'No se pudo reparar' }); }
+});
 app.patch('/api/wa/connections/:id/chats/:jid/archivar', requireAuth, async (req, res) => {
   try {
     const conn = await _cargarConexionAutorizada(req, res, req.params.id);

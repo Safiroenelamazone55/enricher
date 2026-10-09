@@ -39033,7 +39033,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
   function _tickHtml(ack, ts) {
     const a = +ack || 0;
     // Más de 5 min sin confirmación (y no es historial viejo): se avisa en rojo en vez de dejar el relojito eterno.
-    if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 5 * 60 * 1000 && age < 3 * 864e5) return `<span class="wa-msg__fail" title="No se entregó. El sistema reinicia la sesión con este contacto; vuelve a enviarlo.">No entregado</span>`; }
+    if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 5 * 60 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="No se entregó. Repara la sesión con este contacto y reenvía los mensajes pendientes." onclick="event.stopPropagation();WaChatModule.reparar()">No entregado · Reintentar</button>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;
@@ -40214,7 +40214,17 @@ const ObcWaModule = (() => {
     abrirChat(`${digits}@s.whatsapp.net`);
   }
 
-  return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  async function reparar() {
+    if (!_chatAct || !_conn) return;
+    showBanner('Reparando la conexión con este contacto…', 'info');
+    try {
+      const r = await apiFetch(API + '/wa/connections/' + _conn.id + '/chats/' + encodeURIComponent(_chatAct) + '/reparar', { method: 'POST' });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner(j.reenviados ? 'Listo: se reenviaron ' + j.reenviados + ' mensaje(s).' : 'Conexión reparada. Escribe de nuevo si hace falta.', 'success');
+      setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  return { reparar, shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            usarExistenteAbrir, usarExistentePick,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,

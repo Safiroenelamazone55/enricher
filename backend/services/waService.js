@@ -846,21 +846,37 @@ let _tickerWatchdog = null;
 // (el otro teléfono muestra "Esperando el mensaje…"). Se borra solo la sesión de ese contacto para que se renegocie limpia en el siguiente envío.
 // Máx. una vez cada 6 h por contacto; nunca toca grupos ni a otros contactos.
 const _healed = new Map();
+const _bootAt = Date.now();
+// Repara la sesión de cifrado con UN contacto (borra solo la suya para que se renegocie limpia) y REENVÍA los mensajes de texto de las últimas 3 h que quedaron sin entregar.
+async function _repararChat(pool, connId, jid) {
+  const sock = _socks.get(connId);
+  if (!sock || !sock.authState || !sock.authState.keys) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  const user = String(jid).split('@')[0].split(':')[0];
+  let addrs = [];
+  try { addrs = fs.readdirSync(_sessionDir(connId)).filter(f => f.startsWith('session-' + user + '.') && f.endsWith('.json')).map(f => f.slice(8, -5)); } catch (e) {}
+  if (addrs.length) await sock.authState.keys.set({ session: Object.fromEntries(addrs.map(a => [a, null])) });
+  await new Promise(r => setTimeout(r, 1500));
+  const { rows } = await pool.query("SELECT msg_id, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND from_me AND ack=0 AND COALESCE(media_type,'')='' AND COALESCE(texto,'')<>'' AND ts > NOW() - INTERVAL '3 hours' ORDER BY ts", [connId, jid]);
+  let reenviados = 0;
+  for (const m of rows) {
+    try { await enviar(pool, connId, jid, m.texto); await pool.query('DELETE FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [connId, m.msg_id]); reenviados++; }
+    catch (e) { console.warn('[wa] reenviar tras reparar:', e.message); break; }
+  }
+  console.log('[wa] reparación: ' + jid + ' (conexión ' + connId + '): ' + addrs.length + ' sesión(es) reiniciadas, ' + reenviados + ' mensaje(s) reenviados');
+  return { sesiones: addrs.length, reenviados };
+}
+// Auto-reparación: un mensaje sin confirmación de entrega tras 2 min = la sesión con ese contacto se dañó. Se repara y se reenvía sola (máx. una vez cada 15 min por contacto).
+// No actúa en los primeros 10 min tras un reinicio del servidor (las confirmaciones pueden llegar tarde y se duplicaría el envío).
 async function _healStuck(pool) {
   try {
+    if (Date.now() - _bootAt < 10 * 60 * 1000) return;
     const { rows } = await pool.query(
-      "SELECT connection_id, chat_jid, COUNT(*)::int AS n FROM wa_messages WHERE from_me AND ack = 0 AND chat_jid LIKE '%@s.whatsapp.net' AND ts BETWEEN NOW() - INTERVAL '3 hours' AND NOW() - INTERVAL '5 minutes' GROUP BY 1,2");
+      "SELECT connection_id, chat_jid, COUNT(*)::int AS n FROM wa_messages WHERE from_me AND ack = 0 AND chat_jid LIKE '%@s.whatsapp.net' AND ts BETWEEN NOW() - INTERVAL '3 hours' AND NOW() - INTERVAL '2 minutes' GROUP BY 1,2");
     for (const r of rows) {
       const key = r.connection_id + ':' + r.chat_jid;
-      if (Date.now() - (_healed.get(key) || 0) < 6 * 3600 * 1000) continue;
-      const sock = _socks.get(r.connection_id); if (!sock || !sock.authState || !sock.authState.keys) continue;
-      const user = r.chat_jid.split('@')[0].split(':')[0];
-      let addrs = [];
-      try { addrs = fs.readdirSync(_sessionDir(r.connection_id)).filter(f => f.startsWith('session-' + user + '.') && f.endsWith('.json')).map(f => f.slice(8, -5)); } catch (e) {}
+      if (Date.now() - (_healed.get(key) || 0) < 15 * 60 * 1000) continue;
       _healed.set(key, Date.now());
-      if (!addrs.length) { console.log('[wa] auto-reparación: ' + r.chat_jid + ' sin sesión local (conexión ' + r.connection_id + ')'); continue; }
-      await sock.authState.keys.set({ session: Object.fromEntries(addrs.map(a => [a, null])) });
-      console.log('[wa] auto-reparación: sesión con ' + r.chat_jid + ' reiniciada (conexión ' + r.connection_id + ', ' + r.n + ' mensaje(s) sin entregar)');
+      try { await _repararChat(pool, r.connection_id, r.chat_jid); } catch (e) { console.warn('[wa] auto-reparación ' + r.chat_jid + ':', e.message); }
     }
   } catch (e) { console.warn('[wa] auto-reparación:', e.message); }
 }
@@ -877,7 +893,7 @@ async function reanudarTodas(pool) {
   } catch (e) { console.warn('[wa] reanudarTodas:', e.message); }
   if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
   if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 60 * 1000);
-  setInterval(() => _healStuck(pool), 5 * 60 * 1000);
+  setInterval(() => _healStuck(pool), 60 * 1000);
 }
 
-module.exports = { participantesGrupo, iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
+module.exports = { repararChat: _repararChat, participantesGrupo, iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
