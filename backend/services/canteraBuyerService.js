@@ -11,13 +11,23 @@ function parseTamano(txt) {
   return nums.length ? nums[0] : null;
 }
 
-function bandaPara(reglas, tamano) {
-  const n = parseTamano(tamano);
-  if (n == null) return null;
+// Cada regla elige el CAMPO por el que se evalúa (tamano | pais | industria | ciudad). tamano: rango numérico desde–hasta; los demás: lista de valores (uno por línea, coincidencia por texto). Gana la primera regla que calce.
+function bandaPara(reglas, co) {
+  const empresa = (co && typeof co === 'object') ? co : { tamano: co };
   return (reglas || []).find(r => {
-    const d = r.desde === '' || r.desde == null ? 0 : Number(r.desde);
-    const h = r.hasta === '' || r.hasta == null ? Infinity : Number(r.hasta);
-    return n >= d && n <= h;
+    const campo = r.campo || 'tamano';
+    if (campo === 'tamano') {
+      const n = parseTamano(empresa.tamano);
+      if (n == null) return false;
+      const d = r.desde === '' || r.desde == null ? 0 : Number(r.desde);
+      const h = r.hasta === '' || r.hasta == null ? Infinity : Number(r.hasta);
+      return n >= d && n <= h;
+    }
+    const v = _n(empresa[campo]);
+    if (!v) return false;
+    const vals = String(r.valores || '').split(/?
+/).map(_n).filter(Boolean);
+    return vals.some(x => v.includes(x));
   }) || null;
 }
 
@@ -31,12 +41,12 @@ async function asignarBuyers(pool, batchId, uid, companyIds) {
   if (!reglas.length) return { empresas: 0, asignados: 0, sinBanda: 0 };
   const { rows: companies } = await pool.query(
     Array.isArray(companyIds) && companyIds.length
-      ? 'SELECT id, tamano FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[])'
-      : 'SELECT id, tamano FROM cantera_companies WHERE batch_id=$1 AND user_id=$2',
+      ? 'SELECT id, tamano, pais, industria, ciudad FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[])'
+      : 'SELECT id, tamano, pais, industria, ciudad FROM cantera_companies WHERE batch_id=$1 AND user_id=$2',
     Array.isArray(companyIds) && companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
   let empresas = 0, asignados = 0, sinBanda = 0;
   for (const co of companies) {
-    const banda = bandaPara(reglas, co.tamano);
+    const banda = bandaPara(reglas, co);
     if (!banda) { sinBanda++; continue; }
     const cargos = cargosDe(banda);
     const { rows: cts } = await pool.query('SELECT id, cargo, prioridad, prioridad_auto FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 ORDER BY id', [co.id, uid]);
