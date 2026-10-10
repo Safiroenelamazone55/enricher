@@ -3743,8 +3743,11 @@ app.get('/api/lm/custom-fields', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT entity, field_key, label FROM lm_custom_field_labels WHERE user_id=$1`, [req.workspaceOwnerId]);
     const byKey = new Map(rows.map(r => [r.entity + ':' + r.field_key, r.label]));
-    const build = entity => LM_CUSTOM_KEYS.map(k => ({ entity, field_key: k, label: byKey.get(entity + ':' + k) || '' }));
-    res.json({ company: build('company'), contact: build('contact') });
+    // Cuántos registros tienen dato en cada slot — para ver cuáles están en uso (aunque no tengan nombre) y cuáles están libres.
+    const cnt = async tbl => { const { rows: [r] } = await pool.query('SELECT ' + LM_CUSTOM_KEYS.map(k => "COUNT(*) FILTER (WHERE " + k + " <> '')::int AS " + k).join(', ') + ' FROM ' + tbl + ' WHERE user_id=$1', [req.workspaceOwnerId]); return r || {}; };
+    const [nc, nk] = await Promise.all([cnt('lm_companies'), cnt('lm_contacts')]);
+    const build = (entity, n) => LM_CUSTOM_KEYS.map(k => ({ entity, field_key: k, label: byKey.get(entity + ':' + k) || '', n: n[k] || 0 }));
+    res.json({ company: build('company', nc), contact: build('contact', nk) });
   } catch (err) { console.error('[lm-cf] GET', err.message); res.status(500).json({ error: 'Error al cargar campos personalizados' }); }
 });
 app.put('/api/lm/custom-fields', requireAuth, async (req, res) => {
@@ -3754,6 +3757,10 @@ app.put('/api/lm/custom-fields', requireAuth, async (req, res) => {
   if (!['company', 'contact'].includes(entity)) return res.status(400).json({ error: 'Entidad inválida' });
   if (!LM_CUSTOM_KEYS.includes(fieldKey)) return res.status(400).json({ error: 'Campo inválido' });
   try {
+    if (label) {
+      const { rows: dup } = await pool.query('SELECT field_key FROM lm_custom_field_labels WHERE user_id=$1 AND entity=$2 AND field_key<>$3 AND LOWER(TRIM(label))=LOWER($4)', [req.workspaceOwnerId, entity, fieldKey, label.trim()]);
+      if (dup.length) return res.status(409).json({ error: 'Ya existe un campo llamado "' + label + '" (' + dup[0].field_key.replace('campo', 'Campo ') + '). Usa otro nombre.' });
+    }
     await pool.query(`
       INSERT INTO lm_custom_field_labels (user_id, entity, field_key, label) VALUES ($1,$2,$3,$4)
       ON CONFLICT (user_id, entity, field_key) DO UPDATE SET label=$4

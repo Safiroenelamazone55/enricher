@@ -18127,3 +18127,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .slk-org{border:1px solid var(--border);background:var(--surface);color:var(--text-muted);border-radius:999px;padding:3px 10px;font-size:.72rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
 .slk-org:hover:not(:disabled){border-color:var(--primary,#0090FF);color:var(--primary,#0090FF)}
 .slk-org--on{background:#E7F6EC;border-color:#2E9D5B;color:#1F7A44}
+
+.cf-row{align-items:center}
+.cf-sum{font-weight:400;font-size:.74rem;color:var(--text-muted);margin-left:8px}
+.cf-st{font-style:normal;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap;margin-left:8px}
+.cf-st--free{background:#EEF1F4;color:#667085}
+.cf-st--named{background:#E8F1FF;color:#175CD3}
+.cf-st--on{background:#E7F6EC;color:#1F7A44}
+.cf-st--warn{background:#FDECEC;color:#B42318}

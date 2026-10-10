@@ -30807,8 +30807,15 @@ ${foot}
   // ── Campos personalizados (Field1..10 renombrables desde Configuración) ──
   const LM_CUSTOM_KEYS = Array.from({ length: 10 }, (_, i) => `campo${i + 1}`);
   function _cfCol(entity, label) {
-    const cur = new Map((_lmCustomFields[entity] || []).map(f => [f.field_key, f.label]));
-    return `<div class="cf-col"><div class="cf-col__t">${label}</div>${LM_CUSTOM_KEYS.map((k, i) => `<label class="cf-row"><span>Campo ${i + 1}</span><input class="form-input" value="${esc(cur.get(k) || '')}" placeholder="Sin usar" onblur="LeadManagerModule.cfSaveLabel('${entity}','${k}',this)"></label>`).join('')}</div>`;
+    const cur = new Map((_lmCustomFields[entity] || []).map(f => [f.field_key, f]));
+    const est = k => { const f = cur.get(k) || {}; const named = !!(f.label || '').trim(); const n = f.n || 0;
+      if (!named && n) return { c: 'cf-st cf-st--warn', t: '⚠ ' + n + ' con datos sin nombre' };
+      if (named && n) return { c: 'cf-st cf-st--on', t: 'En uso · ' + n };
+      if (named) return { c: 'cf-st cf-st--named', t: 'Activo · sin datos' };
+      return { c: 'cf-st cf-st--free', t: 'Libre' }; };
+    const all = LM_CUSTOM_KEYS.map(est);
+    const libres = all.filter(x => x.t === 'Libre').length, avisos = all.filter(x => x.c.includes('warn')).length;
+    return `<div class="cf-col"><div class="cf-col__t">${label} <span class="cf-sum">${libres} libres${avisos ? ' · <b style="color:#B42318">' + avisos + ' con datos sin nombre</b>' : ''}</span></div>${LM_CUSTOM_KEYS.map((k, i) => { const e = all[i]; return `<label class="cf-row"><span>Campo ${i + 1}</span><input class="form-input" value="${esc((cur.get(k) || {}).label || '')}" placeholder="Sin usar" onblur="LeadManagerModule.cfSaveLabel('${entity}','${k}',this)"><em class="${e.c}">${e.t}</em></label>`; }).join('')}</div>`;
   }
   function _cfFieldsCard() {
     return `<div class="cp-card"><div class="cp-card__t">Campos personalizados</div><p class="lm-sec-sub" style="margin:-4px 0 12px">Nómbralos para que aparezcan en el formulario, los filtros, la importación y la exportación. Vacío = no se usa.</p><div class="cf-grid">${_cfCol('company', 'Empresas')}${_cfCol('contact', 'Contactos')}</div></div>`;
@@ -30817,12 +30824,17 @@ ${foot}
     const label = (el.value || '').trim();
     try {
       const r = await apiFetch(`${API}/lm/custom-fields`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity, field_key: fieldKey, label }) });
-      if (!r.ok) throw new Error('Error al guardar');
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error al guardar');
       const arr = _lmCustomFields[entity] || (_lmCustomFields[entity] = []);
       const f = arr.find(x => x.field_key === fieldKey);
       if (f) f.label = label; else arr.push({ entity, field_key: fieldKey, label });
       showBanner(label ? `✓ “${label}” activado` : 'Campo desactivado', 'success');
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+      try { const rr = await apiFetch(`${API}/lm/custom-fields`); if (rr.ok) { _lmCustomFields = await rr.json(); const card = el.closest('.cp-card'); if (card) card.outerHTML = _cfFieldsCard(); } } catch (_) {}
+    } catch (e) {
+      const prev = ((_lmCustomFields[entity] || []).find(x => x.field_key === fieldKey) || {}).label || '';
+      el.value = prev;
+      showBanner('Error: ' + e.message, 'error');
+    }
   }
   // ── Catálogo de campos para el mapeo (por destino) ──
   const LM_FIELDS = {
