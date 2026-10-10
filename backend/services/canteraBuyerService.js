@@ -25,8 +25,7 @@ function bandaPara(reglas, co) {
     }
     const v = _n(empresa[campo]);
     if (!v) return false;
-    const vals = String(r.valores || '').split(/?
-/).map(_n).filter(Boolean);
+    const vals = String(r.valores || "").split(/\r?\n/).map(_n).filter(Boolean);
     return vals.some(x => v.includes(x));
   }) || null;
 }
