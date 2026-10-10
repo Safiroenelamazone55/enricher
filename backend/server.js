@@ -5637,7 +5637,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
-      buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
+      buzon: mb ? { id: mb.id, email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
       workspace: { activo: false, limite: null, enviados_hoy: ws.n, envio_global: !!(cfg && cfg.enabled) },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
