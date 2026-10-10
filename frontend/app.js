@@ -11844,6 +11844,8 @@ const TasksModule = (() => {
   let _filterProjectId = null; // set by setProjectFilter() — Tareas abierta enfocada en un solo proyecto
   let _teamMembers  = [];
   let _projectsForDateLimit = [];
+  // Desplegado por defecto: solo se recuerdan las que ella cierra a mano.
+  let _tlCollapsed   = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_collapsed') || '[]'); } catch { return []; } })());
   let _tlExpanded    = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_expanded') || '[]'); } catch { return []; } })());
   let _tlSubExpanded = new Set();
   let _tlGroupCollapsed = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_groups') || '[]'); } catch { return []; } })());
@@ -12149,7 +12151,7 @@ const TasksModule = (() => {
     if (!_enLista(_getFilteredTasks())) { _filterMember = ''; const ms = $('tasks-member-filter'); if (ms) { ms.value = ''; ms.classList.remove('filter-select--active'); } }
     if (!_enLista(_getFilteredTasks())) { try { _filterPrioSet.clear(); } catch (_) {} _filterFecha = ''; }
     if (_currentView === 'calendar') setView('list');
-    if (t.parent_task_id && _currentView === 'list') { _tlExpanded.add(t.parent_task_id); }
+    if (t.parent_task_id && _currentView === 'list') { _tlExpanded.add(t.parent_task_id); _tlCollapsed.delete(t.parent_task_id); }
     _rerender();
     const flash = el => {
       if (!el) { showBanner('No se pudo ubicar la tarea en esta vista', 'error'); return; }
@@ -12878,9 +12880,9 @@ const TasksModule = (() => {
   }
 
   function toggleTaskExpand(tid) {
-    if (_tlExpanded.has(tid)) _tlExpanded.delete(tid);
-    else _tlExpanded.add(tid);
-    try { localStorage.setItem('nova_tl_expanded', JSON.stringify([..._tlExpanded])); } catch {}
+    if (_tlCollapsed.has(tid)) _tlCollapsed.delete(tid);
+    else _tlCollapsed.add(tid);
+    try { localStorage.setItem('nova_tl_collapsed', JSON.stringify([..._tlCollapsed])); } catch {}
     render();
   }
 
@@ -12962,7 +12964,8 @@ const TasksModule = (() => {
     });
 
     // Búsqueda: auto-desplegar tareas cuyas subtareas coinciden con la query
-    const effExpanded = new Set(_tlExpanded);
+    const effExpanded = new Set();
+    mainInList.forEach(t => { if (!_tlCollapsed.has(t.id) && _tasks.some(x => x.parent_task_id === t.id)) effExpanded.add(t.id); });
     if (q) mainInList.forEach(t => {
       if (_tasks.some(x => x.parent_task_id === t.id &&
         (x.titulo + ' ' + (x.responsable || '') + ' ' + (x.responsables || []).join(' ')).toLowerCase().includes(q)))
