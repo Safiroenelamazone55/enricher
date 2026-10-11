@@ -2306,6 +2306,10 @@ async function initDb() {
     // Buyer por tamaño de empresa (regla sin IA): [{desde,hasta,cargos:'un cargo por línea, el 1.º primero'}]
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS reglas_buyer JSONB NOT NULL DEFAULT '[]'`);
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS prioridad_auto BOOLEAN NOT NULL DEFAULT FALSE`);
+    // Scoring opcional por borrador: {variables:[{nombre,peso,criterio}], cortes:[{tier,desde}]} + resultado por empresa
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS scoring JSONB NOT NULL DEFAULT '{}'`);
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS puntaje INTEGER`);
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS puntaje_detalle JSONB NOT NULL DEFAULT '[]'`);
 
     // Para poder ENRIQUECER (no solo filtrar al vuelo) seniority/departamento de
     // un contacto de Cantera y que quede guardado — mismo criterio que ya existe

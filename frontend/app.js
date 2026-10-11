@@ -5318,7 +5318,7 @@ function _incExcRow(label, isInc, isExc, incAction, excAction, count) {
 // lm_contacts hasta que se "mueve al CRM" (promote, aún no implementado
 // en esta primera pasada — ver TODO en canteraPromote).
 // =================================================================
-const CANTERA_PROMPT_IA = "Vas a definir el criterio de calificación de una campaña de prospección B2B. Un sistema automático lo usará para investigar cada empresa en internet y decidir si califica, así que cada línea que escribas debe ser exacta y comprobable. Si el criterio es vago, todo el análisis posterior sale mal.\n\nPASO 0 — Antes de escribir nada, revisa lo que sabes de esta campaña (cliente, oferta, mercado, tamaño de empresa, país, decisores). Si falta algo importante para definir bien el ICP, los Tiers o los cargos, HAZME PRIMERO las preguntas necesarias, de una vez, y espera mis respuestas. No inventes datos.\n\nREGLAS DE CALIDAD (obligatorias):\n1. Cada \"Criterio de entrada\" es un HECHO que se pueda comprobar con fuentes públicas (sitio web de la empresa, LinkedIn, noticias, ofertas de empleo, registros). Prohibido usar opiniones (\"prestigiosa\", \"en crecimiento\") o datos privados (facturación, presupuesto), salvo que se puedan inferir de señales públicas; en ese caso di cuáles.\n2. Un hecho por línea. Nada de frases largas que mezclen varios criterios.\n3. Los Tiers deben ser EXCLUYENTES: una empresa debe caber en un solo Tier. Si dos pueden coincidir, indica la regla de desempate. Ordénalos de mejor a menor encaje (A, B, C, D, E…). Crea solo los Tiers que existan de verdad; no inventes Tiers para llegar a una letra.\n4. \"Esto NO califica si\" lista las exclusiones duras de ese Tier, también comprobables.\n5. En cada cargo escribe sus variantes en español e inglés (ej.: \"Founder / Fundador / Co-Founder\"), porque el sistema compara por texto.\n6. Todos los Tiers que aparezcan en PUESTOS deben existir en la sección de Tiers, con la misma letra.\n7. Escribe en el idioma de la campaña, en texto plano, sin tablas y sin explicaciones fuera del formato.\n\nFORMATO DE ENTREGA (respétalo exactamente):\n\nICP\n(un párrafo: a quién buscamos, geografía, rango de tamaño, tipo de negocio, señales clave)\n\nTIER A\nNombre: (3 a 6 palabras)\nCriterio de entrada:\n- (hecho comprobable)\n- (hecho comprobable)\nEsto NO califica si:\n- (exclusión comprobable)\n\nTIER B\nNombre:\nCriterio de entrada:\n-\nEsto NO califica si:\n-\n\n(sigue con TIER C, D, E… solo los que existan)\n\nPUESTOS POR TIER\nTIER A\n- Cargo con variantes ES/EN | decide / respaldo / descartar | excluir si: (opcional)\n(un cargo por línea; repite para cada Tier)\n\nBUYER SEGÚN LA EMPRESA\nRegla 1\nSegún: tamaño | país | industria | ciudad\nDesde: (número de empleados)   Hasta: (número, o vacío si no hay tope)    ← solo si Según = tamaño\nValores: (uno por línea)   ← solo si Según = país, industria o ciudad\nCargos en orden (el 1.º es el Buyer 1, el 2.º es el Buyer 2…):\n1.\n2.\n(una regla por bloque, de la más específica a la más general)\n\nAL FINAL, revisa tu propia respuesta y confirma con una lista corta:\n- ¿Cada criterio es un hecho comprobable en internet?\n- ¿Los Tiers son excluyentes y están ordenados de mejor a menor encaje?\n- ¿Los Tiers de PUESTOS coinciden con los Tiers definidos?\n- ¿Cada cargo trae sus variantes ES/EN?\n- ¿Marcaste con \"FALTA:\" todo lo que no pudiste completar?";
+const CANTERA_PROMPT_IA = "Vas a definir el criterio de calificación de una campaña de prospección B2B. Un sistema automático lo usará para investigar cada empresa en internet y decidir si califica, así que cada línea que escribas debe ser exacta y comprobable. Si el criterio es vago, todo el análisis posterior sale mal.\r\n\r\nPASO 0 — Antes de escribir nada, revisa lo que sabes de esta campaña (cliente, oferta, mercado, tamaño de empresa, país, decisores). Si falta algo importante para definir bien el ICP, los Tiers o los cargos, HAZME PRIMERO las preguntas necesarias, de una vez, y espera mis respuestas. No inventes datos.\r\n\r\nREGLAS DE CALIDAD (obligatorias):\r\n1. Cada \"Criterio de entrada\" es un HECHO que se pueda comprobar con fuentes públicas (sitio web de la empresa, LinkedIn, noticias, ofertas de empleo, registros). Prohibido usar opiniones (\"prestigiosa\", \"en crecimiento\") o datos privados (facturación, presupuesto), salvo que se puedan inferir de señales públicas; en ese caso di cuáles.\r\n2. Un hecho por línea. Nada de frases largas que mezclen varios criterios.\r\n3. Los Tiers deben ser EXCLUYENTES: una empresa debe caber en un solo Tier. Si dos pueden coincidir, indica la regla de desempate. Ordénalos de mejor a menor encaje (A, B, C, D, E…). Crea solo los Tiers que existan de verdad; no inventes Tiers para llegar a una letra.\r\n4. \"Esto NO califica si\" lista las exclusiones duras de ese Tier, también comprobables.\r\n5. En cada cargo escribe sus variantes en español e inglés (ej.: \"Founder / Fundador / Co-Founder\"), porque el sistema compara por texto.\r\n6. Todos los Tiers que aparezcan en PUESTOS deben existir en la sección de Tiers, con la misma letra.\r\n7. Escribe en el idioma de la campaña, en texto plano, sin tablas y sin explicaciones fuera del formato.\r\n\r\nFORMATO DE ENTREGA (respétalo exactamente):\r\n\r\nICP\r\n(un párrafo: a quién buscamos, geografía, rango de tamaño, tipo de negocio, señales clave)\r\n\r\nTIER A\r\nNombre: (3 a 6 palabras)\r\nCriterio de entrada:\r\n- (hecho comprobable)\r\n- (hecho comprobable)\r\nEsto NO califica si:\r\n- (exclusión comprobable)\r\n\r\nTIER B\r\nNombre:\r\nCriterio de entrada:\r\n-\r\nEsto NO califica si:\r\n-\r\n\r\n(sigue con TIER C, D, E… solo los que existan)\r\n\r\nPUESTOS POR TIER\r\nTIER A\r\n- Cargo con variantes ES/EN | decide / respaldo / descartar | excluir si: (opcional)\r\n(un cargo por línea; repite para cada Tier)\r\n\r\nBUYER SEGÚN LA EMPRESA\r\nRegla 1\r\nSegún: tamaño | país | industria | ciudad\r\nDesde: (número de empleados)   Hasta: (número, o vacío si no hay tope)    ← solo si Según = tamaño\r\nValores: (uno por línea)   ← solo si Según = país, industria o ciudad\r\nCargos en orden (el 1.º es el Buyer 1, el 2.º es el Buyer 2…):\r\n1.\r\n2.\r\n(una regla por bloque, de la más específica a la más general)\r\n\r\nSCORING (OPCIONAL — inclúyelo solo si tengo un modelo de puntaje en el contexto o te lo pido; si no, omite esta sección)\r\nVariable | Peso | Cómo puntuar (qué hecho comprobable da cuántos puntos)\r\n(una variable por línea; los pesos deben sumar 100)\r\nCortes de Tier por puntaje (opcional): TIER A desde 75 puntos, TIER B desde 55, etc.\r\n\r\nAL FINAL, revisa tu propia respuesta y confirma con una lista corta:\r\n- ¿Cada criterio es un hecho comprobable en internet?\r\n- ¿Los Tiers son excluyentes y están ordenados de mejor a menor encaje?\r\n- ¿Los Tiers de PUESTOS coinciden con los Tiers definidos?\r\n- ¿Cada cargo trae sus variantes ES/EN?\r\n- ¿Marcaste con \"FALTA:\" todo lo que no pudiste completar?\r\n- Si incluiste SCORING: ¿los pesos suman 100?";
 const CanteraModule = (() => {
   let _containerId = 'cantera-body';
   let _view = 'list';       // list | detail
@@ -5943,6 +5943,7 @@ const CanteraModule = (() => {
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
+    { key: 'puntaje', label: 'Puntaje', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
@@ -5990,6 +5991,7 @@ const CanteraModule = (() => {
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
+      case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
@@ -6202,6 +6204,35 @@ const CanteraModule = (() => {
               <button class="add-role" onclick="CanteraModule.addPuesto('${esc(t.clave)}')">+ Agregar puesto</button>
             </div>
           </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
+        </div>
+        <div class="cant-score" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Scoring <span class="cant-hint" style="font-weight:400">(opcional · lo calcula la IA en la validación profunda)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Define las variables y cuántos puntos pesa cada una (idealmente suman 100). Al investigar cada empresa, la IA puntúa variable por variable, suma el total y lo guarda en la columna "Puntaje" para que ordenes por quién contactar primero. Si no defines variables, no se calcula nada.</p>
+          ${((_current.scoring || {}).variables || []).map((v, i) => `
+            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="flex:1"><span class="cant-hint">Variable</span><input class="form-input" value="${esc(v.nombre || '')}" placeholder="Ej. Internacionalidad e idiomas" oninput="CanteraModule.setScoreVar(${i},'nombre',this.value)"></label>
+              <label style="width:80px"><span class="cant-hint">Peso</span><input type="number" min="0" class="form-input" value="${esc(v.peso ?? '')}" oninput="CanteraModule.setScoreVar(${i},'peso',this.value)"></label>
+              <label style="flex:2"><span class="cant-hint">Qué se mide y cómo puntuar (opcional)</span><input class="form-input" value="${esc(v.criterio || '')}" placeholder="Ej. 15 si la web está en 3+ idiomas, 8 si en 2, 0 si en 1" oninput="CanteraModule.setScoreVar(${i},'criterio',this.value)"></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeScoreVar(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addScoreVar()">+ Agregar variable</button>
+          ${((_current.scoring || {}).variables || []).length ? `<span id="cant-score-total" class="cant-hint" style="margin-left:10px">${_scoreTotalHtml()}</span>` : ''}
+          ${((_current.scoring || {}).variables || []).length ? `
+          <div style="margin-top:12px">
+            <div class="cant-hint" style="margin-bottom:4px">Cortes de Tier por puntaje (opcional): si los defines, el Tier lo decide el puntaje y no la IA.</div>
+            ${((_current.scoring || {}).cortes || []).map((c, i) => `
+              <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+                <span class="cant-hint">Tier</span>
+                <select class="form-input" style="width:auto" onchange="CanteraModule.setScoreCut(${i},'tier',this.value)">
+                  <option value="">—</option>${(_current.tiers || []).filter(t => t.clave).map(t => `<option value="${esc(t.clave)}"${c.tier === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
+                </select>
+                <span class="cant-hint">desde</span>
+                <input type="number" min="0" max="100" class="form-input" style="width:80px" value="${esc(c.desde ?? '')}" oninput="CanteraModule.setScoreCut(${i},'desde',this.value)">
+                <span class="cant-hint">puntos</span>
+                <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeScoreCut(${i})">✕</button>
+              </div>`).join('')}
+            <button class="add-role" onclick="CanteraModule.addScoreCut()">+ Agregar corte</button>
+          </div>` : ''}
         </div>
         <div class="cant-buyers" style="margin-top:18px">
           <h4 style="margin:0 0 4px">Buyer según la empresa <span class="cant-hint" style="font-weight:400">(automático, sin IA)</span></h4>
@@ -7188,6 +7219,17 @@ const CanteraModule = (() => {
     if (btn) { btn.classList.add('cant-pia__copy--ok'); setTimeout(() => btn.classList.remove('cant-pia__copy--ok'), 1500); }
     showBanner('Instrucción copiada. Pégala en tu IA.', 'success');
   }
+  function _scoreTotalHtml() {
+    const tot = (((_current.scoring || {}).variables) || []).reduce((s, v) => s + (Number(v.peso) || 0), 0);
+    return tot === 100 ? '<b style="color:#1F7A44">Total: 100 ✓</b>' : '<b style="color:#B42318">Total: ' + tot + ' (lo ideal es 100)</b>';
+  }
+  function _scoreEnsure() { _current.scoring = _current.scoring || {}; _current.scoring.variables = _current.scoring.variables || []; _current.scoring.cortes = _current.scoring.cortes || []; }
+  function addScoreVar() { _scoreEnsure(); _current.scoring.variables.push({ nombre: '', peso: '', criterio: '' }); _paint(); }
+  function removeScoreVar(i) { _scoreEnsure(); _current.scoring.variables.splice(i, 1); _paint(); }
+  function setScoreVar(i, k, v) { _scoreEnsure(); _current.scoring.variables[i][k] = v; if (k === 'peso') { const el = document.getElementById('cant-score-total'); if (el) el.innerHTML = _scoreTotalHtml(); } }
+  function addScoreCut() { _scoreEnsure(); _current.scoring.cortes.push({ tier: '', desde: '' }); _paint(); }
+  function removeScoreCut(i) { _scoreEnsure(); _current.scoring.cortes.splice(i, 1); _paint(); }
+  function setScoreCut(i, k, v) { _scoreEnsure(); _current.scoring.cortes[i][k] = v; }
   function addBuyerRule() { _current.reglas_buyer = [...(_current.reglas_buyer || []), { desde: '', hasta: '', cargos: '' }]; _paint(); }
   function removeBuyerRule(i) { (_current.reglas_buyer || []).splice(i, 1); _paint(); }
   function setBuyerField(i, k, v, repaint) { _current.reglas_buyer[i][k] = v; if (repaint) _paint(); }
@@ -7610,7 +7652,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    togglePromptIA, copyPromptIA, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
+    togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
@@ -7768,6 +7810,7 @@ const CanteraMesaModule = (() => {
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
+    { key: 'puntaje', label: 'Puntaje', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
@@ -7810,6 +7853,7 @@ const CanteraMesaModule = (() => {
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
+      case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;

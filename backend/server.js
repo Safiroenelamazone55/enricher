@@ -7627,11 +7627,11 @@ app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
       UPDATE cantera_batches SET
         nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
         filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11,
-        tiers_calificantes=$12::jsonb, reglas_buyer=$13::jsonb, updated_at=NOW()
+        tiers_calificantes=$12::jsonb, reglas_buyer=$13::jsonb, scoring=$14::jsonb, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || []), JSON.stringify(Array.isArray(b.reglas_buyer) ? b.reglas_buyer : [])]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || []), JSON.stringify(Array.isArray(b.reglas_buyer) ? b.reglas_buyer : []), JSON.stringify(b.scoring && typeof b.scoring === 'object' ? b.scoring : {})]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
