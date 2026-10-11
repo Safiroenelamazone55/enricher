@@ -87,7 +87,7 @@ function _buildSystemPrompt(batch, human = false) {
   // Datos extra opcionales a investigar por empresa (para personalizar mensajes). Sin datos definidos, nada de esto aparece.
   const _de = (Array.isArray(batch.datos_extra) ? batch.datos_extra : []).filter(d => d && String(d.nombre || '').trim() && String(d.pregunta || '').trim());
   const extraBlock = _de.length
-    ? `DATOS ADICIONALES A INVESTIGAR (en esta misma investigación, con las mismas reglas de evidencia): para cada uno responde con un valor corto y concreto que se pueda pegar tal cual dentro de un mensaje de venta — una frase o un nombre, sin explicaciones. Si no hay evidencia verificable, responde exactamente "No verificado"; nunca lo inventes ni lo estimes.\n${_de.map(d => `- ${String(d.nombre).trim()}: ${String(d.pregunta).trim()}${d.solo_si_califica === false ? '' : ' (solo si la empresa califica en un Tier; si se descarta, responde "No verificado")'}`).join('\n')}\n\n`
+    ? `DATOS ADICIONALES A INVESTIGAR (en esta misma investigación, con las mismas reglas de evidencia): para cada uno responde con un valor corto y concreto que se pueda pegar tal cual dentro de un mensaje de venta — una frase o un nombre, sin explicaciones. Si no hay evidencia verificable, responde exactamente "No verificado"; nunca lo inventes ni lo estimes. Todo nombre propio que respondas debe venir de una página que abriste y que confirme que esa empresa existe y es del mismo sector y zona; no completes con nombres plausibles.\n${_de.map(d => `- ${String(d.nombre).trim()}: ${String(d.pregunta).trim()}${d.solo_si_califica === false ? '' : ' (solo si la empresa califica en un Tier; si se descarta, responde "No verificado")'}`).join('\n')}\n\n`
     : '';
   const extraH = _de.length ? `\nDatos extra: [una línea por dato: "Nombre — valor corto o No verificado"]` : '';
   const extraJ = _de.length ? `\n  "datos_extra": {${_de.map(d => JSON.stringify(String(d.nombre).trim()) + ': "valor corto o No verificado"').join(', ')}},` : '';
@@ -99,7 +99,8 @@ function _buildSystemPrompt(batch, human = false) {
 Empresa: [el nombre exacto de la empresa que investigaste]
 Tier: [${tierH}]
 Prioridad: [alta | media | baja]
-Confianza: [alta | media | baja]${scoreH}${extraH}
+Confianza: [alta | media | baja]
+Verificación: [una línea: sitio web ✓/✗ · LinkedIn ✓/✗ · ciudad ✓/✗ · país ✓/✗ · industria ✓/✗ — y, si algo no coincide con lo importado, qué encontraste en su lugar]${scoreH}${extraH}
 Contactos: [para cada cargo de la lista que te doy abajo, una línea: "Cargo — decide/respaldo/descartado — motivo corto"]
 Razón: [una sola frase, menos de una línea — por qué este Tier o por qué se descarta]
 Nota: [resumen breve y útil en una o dos frases: qué hace la empresa y por qué calificó o no]
@@ -108,7 +109,8 @@ Evidencia: [2 a 5 líneas, una por fuente: "Nombre de la fuente — URL — qué
 {
   "tier_clave": "${tierJ}",
   "confianza": "alta | media | baja",
-  "prioridad": "alta | media | baja",${scoreJ}${extraJ}
+  "prioridad": "alta | media | baja",
+  "verificacion": "sitio web, LinkedIn, ciudad, país e industria: cuáles se confirmaron y cuáles no coinciden con lo importado",${scoreJ}${extraJ}
   "contactos": [{"cargo": "el cargo tal como aparece en la lista que te paso", "puesto_estado": "decide | respaldo | descartado", "motivo": "por qué, especialmente si se descarta un cargo parecido"}],
   "motivo_descarte": "vacío si calificó; si no, la razón exacta y específica a ESTA empresa",
   "nota": "resumen breve y útil en una o dos frases — nunca vacío",
@@ -122,7 +124,7 @@ Tu única tarea en esta llamada: investigar UNA empresa específica y clasificar
 ═══════════════════════════════════
 PROTOCOLO DE INVESTIGACIÓN (en orden)
 ═══════════════════════════════════
-1. IDENTIFICA la empresa exacta. Si el nombre es genérico o común, confírmalo cruzando dominio/sitio web, país y sector antes de seguir — nunca asumas que el primer resultado con un nombre parecido es la empresa correcta. Si hay varias empresas con nombres similares y no puedes confirmar cuál es, dilo explícitamente y baja la confianza.
+1. IDENTIFICA Y VERIFICA la empresa exacta. TODOS los datos importados (sitio web, dominio, URL de LinkedIn, país, ciudad, industria, tamaño) son PISTAS sin verificar: nunca los des por ciertos. Confirma siempre, aunque el Tier no lo mencione, que el sitio web y la página de LinkedIn corresponden a la MISMA empresa (mismo nombre, actividad y ciudad) y que el país, la ciudad (sede u oficina real, con su dirección) y la industria son los correctos. Si lo que encuentras difiere de lo importado, prevalece lo que encuentres y dilo. Si no se importó sitio web, búscalo; si tras una búsqueda razonable no existe o no se puede confirmar, dilo explícitamente (es relevante para los criterios que exigen web propia). Si el nombre es genérico o común, confírmalo cruzando dominio/sitio web, país y sector antes de seguir — nunca asumas que el primer resultado con un nombre parecido es la empresa correcta. Si hay varias empresas con nombres similares y no puedes confirmar cuál es, dilo explícitamente y baja la confianza.
 2. DISTINGUE estructura societaria: si la empresa es una filial, marca o división de un grupo mayor, evalúa el ICP contra LA ENTIDAD QUE REALMENTE OPERA (la que aparece en los datos importados) — no contra el grupo matriz completo, salvo que el ICP pida explícitamente evaluar al grupo.
 3. RECOLECTA evidencia de al menos 5 FUENTES independientes cuando existan (sitio oficial, LinkedIn, noticias/prensa, ofertas de empleo activas, registros públicos, directorios de industria). Una FUENTE es un origen distinto de información — no cada página individual dentro del mismo sitio. Visitar 5 páginas distintas del sitio web oficial (Inicio, Nosotros, Servicios, Equipo, Noticias) cuenta como UNA sola fuente, no cinco. Cuando el sitio web oficial sea relevante, revisa TODAS sus páginas relevantes antes de darlo por agotado — no te quedes solo en la portada. Prioriza fuentes oficiales y recientes sobre agregadores de terceros — los directorios tipo Crunchbase/ZoomInfo pueden estar desactualizados o mal categorizados; trátalos como pista, nunca como prueba final. Si después de una búsqueda exhaustiva no existen 5 fuentes distintas para esta empresa (empresas pequeñas o con poca presencia digital), dilo explícitamente y baja la confianza en vez de forzar el número.
 4. VERIFICA CADA CRITERIO DEL TIER por separado con su propia evidencia directa. Si el criterio depende de un HECHO puntual y verificable (ej. "tiene flota propia", "opera en X país", "usa tal tecnología"), ese hecho necesita SU PROPIA evidencia directa — no basta con fuentes genéricas sobre la empresa si ninguna confirma ese hecho en particular.
