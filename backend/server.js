@@ -7991,6 +7991,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
          AND company_id IN (SELECT company_id FROM cantera_contacts WHERE batch_id=$1 GROUP BY company_id HAVING COUNT(*)=1)
     `, [batchId]);
   } catch (e) { console.error('[cantera] auto-prioridad import', e.message); }
+  try { await require('./services/canteraGeoService').derivarUbicacion(pool, batchId); } catch (e) { console.error('[cantera] ubicación import', e.message); }
   try { await require('./services/canteraBuyerService').asignarBuyers(pool, batchId, uid, null); } catch (e) { console.error('[cantera] buyers import', e.message); }
   job.running = false; job.summary = summary;
 });

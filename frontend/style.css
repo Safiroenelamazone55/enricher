@@ -18160,3 +18160,9 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cant-section textarea.form-input{field-sizing:content;min-height:7.5em;max-height:70vh;resize:vertical;line-height:1.5}
 .cant-section textarea#cant-icp{min-height:14em}
 .cant-tier textarea.form-input,.cant-tiers textarea.form-input{min-height:7.5em}
+
+.cant-mc{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.cant-mc__row{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.cant-mc__row:last-child{border-bottom:0}
+.cant-mc__who{flex:1;min-width:0;font-size:.86rem}
+.cant-mc__sub{font-size:.76rem;color:var(--text-muted)}

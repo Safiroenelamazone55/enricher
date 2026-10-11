@@ -6849,6 +6849,40 @@ const CanteraModule = (() => {
       `LinkedIn: ${co.linkedin || '—'}`,
     ].join('\n');
   }
+  // Contactos de la empresa dentro de la validación manual — solo si tiene 2 o más y la empresa califica en algún Tier (no descartada).
+  // Permite poner la prioridad (1.º, 2.º…) sin cerrar la ventana.
+  function _manualContactsHtml(co) {
+    const cts = [...(_contactsByCompany[co.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
+    if (cts.length < 2) return '';
+    const n = cts.length;
+    return '<div id="cant-manual-contacts" style="display:none"><div class="cant-flabel" style="margin-bottom:6px">Contactos de esta empresa <span class="field-note">elige a quién contactar primero (1 = primero)</span></div>'
+      + '<div class="cant-mc">' + cts.map(k => {
+        const li = k.linkedin ? '<a href="' + esc(/^https?:/i.test(k.linkedin) ? k.linkedin : 'https://' + k.linkedin) + '" target="_blank" rel="noopener" style="margin-left:6px">LinkedIn</a>' : '';
+        return '<div class="cant-mc__row"><div class="cant-mc__who"><b>' + esc([k.nombre, k.apellido].filter(Boolean).join(' ') || '(sin nombre)') + '</b>' + li
+          + '<div class="cant-mc__sub">' + esc(k.cargo || '(sin cargo)') + (k.ubicacion ? ' · ' + esc(k.ubicacion) : '') + '</div></div>'
+          + '<select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridadModal(' + k.id + ',this.value)">'
+          + '<option value="0"' + (!k.prioridad ? ' selected' : '') + '>Sin prioridad</option>'
+          + Array.from({ length: n }, (_, i) => i + 1).map(num => '<option value="' + num + '"' + (k.prioridad === num ? ' selected' : '') + '>' + num + '</option>').join('')
+          + '</select></div>';
+      }).join('') + '</div></div>';
+  }
+  function _manualToggleContacts() {
+    const box = document.getElementById('cant-manual-contacts'); if (!box) return;
+    const tier = document.getElementById('cant-manual-tier')?.value || '';
+    box.style.display = (tier && tier !== '__descartar__') ? '' : 'none';
+  }
+  async function setContactPrioridadModal(contactId, val) {
+    const prioridad = parseInt(val, 10) || 0;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts/${contactId}/prioridad`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await _refreshContacts(); _paint();
+      showBanner('✓ Prioridad guardada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // Campos que pide la configuración del borrador: cada dato a investigar y, si hay scoring, el puntaje. Se guardan con el mismo autoguardado del Tier.
   function _manualExtraHtml(co) {
     const datos = (_current.datos_extra || []).filter(d => (d.nombre || '').trim());
@@ -6863,6 +6897,7 @@ const CanteraModule = (() => {
   async function openManualValidation(companyId) {
     const co = _companies.find(c => c.id === companyId); if (!co) return;
     const tiers = (_current.tiers || []).filter(t => t.clave);
+    if (!_contactsLoaded) { try { await _refreshContacts(); } catch (_) {} }
     document.getElementById('cant-manual-modal')?.remove();
     // Progreso minimalista "N de M" -- pedido explícito 2026-09-30: "quiero
     // una barra minimalista de progreso... ojo, no es el universo total, sino
@@ -6918,6 +6953,7 @@ const CanteraModule = (() => {
         </label>
         </div>
         ${_manualExtraHtml(co)}
+        ${_manualContactsHtml(co)}
         <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="4" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
@@ -6928,6 +6964,7 @@ const CanteraModule = (() => {
         </div>
       </div></div>`;
     document.body.appendChild(m);
+    _manualToggleContacts();
     try {
       const d = await (await apiFetch(`${API}/cantera/batches/${_current.id}/instruccion?companyId=${co.id}`)).json();
       const ta = document.getElementById('cant-manual-instruccion');
@@ -6952,6 +6989,7 @@ const CanteraModule = (() => {
   // pasa lo mismo si entro a actualizar". No cierra el modal (así se puede
   // seguir escribiendo la nota después de elegir el Tier).
   async function saveManualValidation(companyId) {
+    _manualToggleContacts();
     const tier = document.getElementById('cant-manual-tier')?.value;
     const nota = document.getElementById('cant-manual-nota')?.value || '';
     const confianza = document.getElementById('cant-manual-confianza')?.value || '';
@@ -7706,7 +7744,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    setIcp, addDatoExtra, removeDatoExtra, setDatoExtra, togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
+    setContactPrioridadModal, setIcp, addDatoExtra, removeDatoExtra, setDatoExtra, togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
