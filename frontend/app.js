@@ -6169,12 +6169,12 @@ const CanteraModule = (() => {
             <option value="kimi"${b.motor_ia === 'kimi' ? ' selected' : ''}>Kimi-K3 vía NVIDIA (con búsqueda propia vía Brave)</option>
           </select>
         </label>
-        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="10" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="10" placeholder="¿A quién buscamos?" oninput="CanteraModule.setIcp(this.value)">${esc(b.icp || '')}</textarea></label>
 
         <div class="cant-tiers">${tiers.map((t, i) => `
           <div class="cant-tier-card">
             <div class="cant-tier-row">
-              <input type="text" class="form-input cant-tier-clave" placeholder="TIER_1A" value="${esc(t.clave || '')}" oninput="CanteraModule.setTierField(${i},'clave',this.value)">
+              <input type="text" class="form-input cant-tier-clave" placeholder="${String.fromCharCode(65 + (i % 26))}" value="${esc(t.clave || '')}" oninput="CanteraModule.setTierField(${i},'clave',this.value)">
               <input type="text" class="form-input" placeholder="Nombre del Tier" value="${esc(t.nombre || '')}" oninput="CanteraModule.setTierField(${i},'nombre',this.value)">
               <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeTier(${i})">✕</button>
             </div>
@@ -7189,7 +7189,13 @@ const CanteraModule = (() => {
   }
 
   // ── Criterio (ICP + Tiers + Puestos) ──────────────────────────────
-  function addTier() { _current.tiers = [...(_current.tiers || []), { clave: '', nombre: '', criterio: '', descarte: '' }]; _paint(); }
+  function setIcp(v) { _current.icp = v; }
+  // La clave del Tier nuevo arranca con la siguiente letra libre (A, B, C…) para no repetir y que Puestos pueda enlazarla.
+  function addTier() {
+    const usadas = new Set((_current.tiers || []).map(t => String(t.clave || '').trim().toUpperCase()));
+    let n = 0, clave = ''; do { clave = String.fromCharCode(65 + (n % 26)); n++; } while (usadas.has(clave) && n < 26);
+    _current.icp = document.getElementById('cant-icp')?.value ?? _current.icp;
+    _current.tiers = [...(_current.tiers || []), { clave, nombre: '', criterio: '', descarte: '' }]; _paint(); }
   function removeTier(i) { _current.tiers.splice(i, 1); _paint(); }
   function setTierField(i, k, v) { _current.tiers[i][k] = v; }
   function addPuesto(clave) { _current.puestos = _current.puestos || {}; _current.puestos[clave] = [...(_current.puestos[clave] || []), { titulo: '', tipo: 'decide', exclusion: '' }]; _paint(); }
@@ -7671,7 +7677,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    addDatoExtra, removeDatoExtra, setDatoExtra, togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
+    setIcp, addDatoExtra, removeDatoExtra, setDatoExtra, togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
