@@ -43,7 +43,8 @@ function bandaPara(reglas, co) {
 }
 
 function cargosDe(regla) {
-  return String(regla?.cargos || '').split(/\r?\n/).map(_n).filter(Boolean);
+  // Cada línea es un nivel de buyer (1.º, 2.º…); dentro de la línea, " / " separa variantes del mismo cargo (ES/EN).
+  return String(regla?.cargos || '').split(/\r?\n/).map(l => l.split('/').map(_n).filter(Boolean)).filter(vs => vs.length);
 }
 
 async function asignarBuyers(pool, batchId, uid, companyIds) {
@@ -65,7 +66,7 @@ async function asignarBuyers(pool, batchId, uid, companyIds) {
     const usados = new Set(manuales.map(c => c.prioridad));
     const cand = cts.filter(c => !(c.prioridad > 0 && !c.prioridad_auto)).map(c => {
       const cg = _n(c.cargo);
-      const idx = cargos.findIndex(t => cg.includes(t));
+      const idx = cargos.findIndex(vs => vs.some(t => cg.includes(t)));
       return { c, idx };
     }).filter(x => x.idx >= 0).sort((a, b2) => a.idx - b2.idx || a.c.id - b2.c.id);
     let rank = 1;

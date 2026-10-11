@@ -6250,7 +6250,7 @@ const CanteraModule = (() => {
               <label style="width:90px"><span class="cant-hint">Desde</span><input type="number" class="form-input" value="${esc(r.desde ?? '')}" oninput="CanteraModule.setBuyerField(${i},'desde',this.value)"></label>
               <label style="width:90px"><span class="cant-hint">Hasta</span><input type="number" class="form-input" placeholder="sin tope" value="${esc(r.hasta ?? '')}" oninput="CanteraModule.setBuyerField(${i},'hasta',this.value)"></label>`
               : `<label style="width:190px"><span class="cant-hint">Valores (uno por línea)</span><textarea class="form-input" rows="3" placeholder="Spain&#10;Mallorca" oninput="CanteraModule.setBuyerField(${i},'valores',this.value)">${esc(r.valores || '')}</textarea></label>`}
-              <label style="flex:1"><span class="cant-hint">Cargos en orden (uno por línea · el 1.º es el Buyer 1)</span><textarea class="form-input" rows="3" placeholder="Founder&#10;Owner&#10;Managing Director" oninput="CanteraModule.setBuyerField(${i},'cargos',this.value)">${esc(r.cargos || '')}</textarea></label>
+              <label style="flex:1"><span class="cant-hint">Cargos en orden (uno por línea · el 1.º es el Buyer 1 · usa " / " para variantes del mismo cargo)</span><textarea class="form-input" rows="3" placeholder="Founder&#10;Owner&#10;Managing Director" oninput="CanteraModule.setBuyerField(${i},'cargos',this.value)">${esc(r.cargos || '')}</textarea></label>
               <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeBuyerRule(${i})">✕</button>
             </div>`).join('')}
           <button class="add-role" onclick="CanteraModule.addBuyerRule()">+ Agregar regla</button>
