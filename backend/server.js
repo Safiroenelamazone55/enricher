@@ -4111,6 +4111,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
       SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
+        co.campo1 AS company_campo1, co.campo2 AS company_campo2, co.campo3 AS company_campo3, co.campo4 AS company_campo4, co.campo5 AS company_campo5, co.campo6 AS company_campo6, co.campo7 AS company_campo7, co.campo8 AS company_campo8, co.campo9 AS company_campo9, co.campo10 AS company_campo10,
         COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text, 'contact_sequence_id', cs.id, 'paused_reason', cs.paused_reason, 'next_action_at', cs.next_action_at) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
@@ -6655,6 +6656,7 @@ async function _pendingNoEmailRows(pool, userId, seqId) {
     const step = steps[effIdx];
     if (!step || step.canal !== 'email') continue; // no está bloqueado por email — le toca otro canal
     const variant = pickVariant(step, enr);
+    await require('./services/sendEngine').attachCustom(pool, enr, userId);
     const asunto = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr)
       || `Seguimiento — ${enr.empresa_nombre || enr.nombre || ''}`;
     const cuerpo = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
@@ -9800,6 +9802,7 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
           [st.id, req.workspaceOwnerId]);
         for (const d of drafts) {
           const ctx = d; // renderTemplate lee k.* / company_nombre desde ctx
+          await require('./services/sendEngine').attachCustom(pool, ctx, req.workspaceOwnerId);
           const variant = pickVariant(st, ctx);
           const asu = renderTemplate((variant && variant.asunto) || st.asunto || 'Seguimiento — {{company}}', ctx)
                     || `Seguimiento — ${ctx.company_nombre || ctx.empresa_nombre || ctx.nombre}`;

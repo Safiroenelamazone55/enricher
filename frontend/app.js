@@ -23775,10 +23775,33 @@ ${foot}
     };
     return String(tpl || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m, tok) => {
       const k = tok.trim().toLowerCase().replace(/[\s-]+/g, '_');
-      if (!(k in MAP)) return m;
+      if (!(k in MAP)) {
+        const CM = _customVarMap(s);
+        if (k in CM) { const cv = CM[k]; return cv == null ? '' : String(cv); }
+        return m;
+      }
       const v = MAP[k];
       return v == null ? '' : String(v);
     });
+  }
+  // Campos personalizados con nombre (Configuración) como variables {{nombre_del_campo}}: de la empresa (company_campoN) o del contacto (campoN).
+  function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+  function _customVarMap(s) {
+    const out = {};
+    ['company', 'contact'].forEach(ent => (_lmCustomFields[ent] || []).forEach(f => {
+      const slug = _slugVar(f.label); if (!slug) return;
+      const v = ent === 'company' ? (s || {})['company_' + f.field_key] : (s || {})[f.field_key];
+      out[slug] = v;
+    }));
+    return out;
+  }
+  function _customVarGroups() {
+    const g = [];
+    [['company', 'Empresa'], ['contact', 'Contacto']].forEach(([ent, lbl]) => {
+      const items = (_lmCustomFields[ent] || []).filter(f => (f.label || '').trim()).map(f => [_slugVar(f.label), f.label + ' (' + lbl + ')']);
+      if (items.length) g.push(['Campos personalizados · ' + lbl, items]);
+    });
+    return g;
   }
   async function seqTaskOpen(seqId, cid) {
     if (!cid) return;
@@ -30895,7 +30918,7 @@ ${foot}
     ['Empresa', [['company', 'Nombre empresa'], ['company_domain', 'Dominio'], ['company_website', 'Website'], ['company_industry', 'Industria'], ['company_size', 'Nº empleados'], ['company_revenue', 'Ingresos'], ['company_city', 'Ciudad'], ['company_country', 'País'], ['company_target_tier', 'Target Tier / Focus'], ['company_segmento', 'Segmento / ICP']]],
   ];
   function _varSelectHtml(fn) {
-    return `<div class="step-vars"><span class="step-vars__l">Insertar variable</span><select class="step-varsel" onchange="LeadManagerModule.${fn}(this.value); this.selectedIndex=0;"><option value="">＋ Elegir campo…</option>${_VAR_GROUPS.map(g => `<optgroup label="${g[0]}">${g[1].map(v => `<option value="${v[0]}">${v[1]}  ·  {{${v[0]}}}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
+    return `<div class="step-vars"><span class="step-vars__l">Insertar variable</span><select class="step-varsel" onchange="LeadManagerModule.${fn}(this.value); this.selectedIndex=0;"><option value="">＋ Elegir campo…</option>${_VAR_GROUPS.concat(_customVarGroups()).map(g => `<optgroup label="${g[0]}">${g[1].map(v => `<option value="${v[0]}">${v[1]}  ·  {{${v[0]}}}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
   }
 
   function _ico(k) {

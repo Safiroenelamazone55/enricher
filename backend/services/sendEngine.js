@@ -45,6 +45,41 @@ function pickVariant(st, ctx) {
   return vars[0];
 }
 
+// ── Campos personalizados como variables: cada campo con nombre (Configuración → Campos personalizados) se usa como {{nombre_del_campo}} ──
+const _CF_KEYS = Array.from({ length: 10 }, (_, i) => 'campo' + (i + 1));
+function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+const _cfLabelCache = new Map();   // user_id → { t, rows }
+async function _cfLabels(pool, uid) {
+  const hit = _cfLabelCache.get(uid);
+  if (hit && Date.now() - hit.t < 60000) return hit.rows;
+  const { rows } = await pool.query("SELECT entity, field_key, label FROM lm_custom_field_labels WHERE user_id=$1 AND label <> ''", [uid]);
+  _cfLabelCache.set(uid, { t: Date.now(), rows });
+  return rows;
+}
+// Deja en ctx._custom los valores de los campos personalizados (de la empresa y del contacto) por nombre-variable. Nunca rompe el envío.
+async function attachCustom(pool, ctx, uidFallback) {
+  try {
+    const uid = ctx.user_id || uidFallback, cid = ctx.contact_id;
+    if (!uid || !cid) return ctx;
+    const labels = await _cfLabels(pool, uid);
+    if (!labels.length) { ctx._custom = {}; return ctx; }
+    const cols = _CF_KEYS.join(', ');
+    const { rows: [k] } = await pool.query('SELECT company_id, ' + cols + ' FROM lm_contacts WHERE id=$1 AND user_id=$2', [cid, uid]);
+    if (!k) return ctx;
+    let co = {};
+    if (k.company_id) { const r = await pool.query('SELECT ' + cols + ' FROM lm_companies WHERE id=$1 AND user_id=$2', [k.company_id, uid]); co = r.rows[0] || {}; }
+    const out = {};
+    for (const l of labels) {
+      const src = l.entity === 'company' ? co : k;
+      const v = src[l.field_key];
+      const slug = _slugVar(l.label);
+      if (slug && v) out[slug] = v;
+    }
+    ctx._custom = out;
+  } catch (err) { console.warn('[sendEngine] campos personalizados:', err.message); }
+  return ctx;
+}
+
 // ── Render de plantillas: {{first_name}}, {{company}}, {{title}}, … ──
 function renderTemplate(str, ctx) {
   const map = {
@@ -57,8 +92,9 @@ function renderTemplate(str, ctx) {
     nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo,
     empresa: ctx.company_nombre || ctx.empresa_nombre, ciudad: ctx.ciudad, pais: ctx.pais,
   };
+  const custom = ctx._custom || {};
   return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => {
-    const v = map[k.toLowerCase()];
+    const v = map[k.toLowerCase()] != null && map[k.toLowerCase()] !== '' ? map[k.toLowerCase()] : custom[k.toLowerCase()];
     return (v == null || v === '') ? '' : String(v);
   });
 }
@@ -443,6 +479,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       ORDER BY updated_at DESC LIMIT 1`,
     [uid, enr.contact_id, step.id]
   );
+  await attachCustom(pool, enr);
   let variantName = '';
   if (aiDraft && (aiDraft.asunto || aiDraft.cuerpo)) {
     // El borrador ya viene personalizado con datos reales; render por si quedó alguna variable.
@@ -866,6 +903,7 @@ async function _draftPreapprovedBatch(pool, seen) {
         [enr.user_id, enr.contact_id, step.id]);
       if (waiting) continue;
       // Mismo render que el flujo principal (borrador IA aprobado > variante A/B > plantilla).
+      await attachCustom(pool, enr);
       let asunto, cuerpoTxt, variantName = '';
       const { rows: [aiDraft] } = await pool.query(
         `SELECT asunto, cuerpo FROM lm_ai_drafts WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND status='approved'
@@ -1021,4 +1059,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
