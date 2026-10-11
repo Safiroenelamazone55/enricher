@@ -5318,6 +5318,7 @@ function _incExcRow(label, isInc, isExc, incAction, excAction, count) {
 // lm_contacts hasta que se "mueve al CRM" (promote, aún no implementado
 // en esta primera pasada — ver TODO en canteraPromote).
 // =================================================================
+const CANTERA_PROMPT_IA = "Vas a definir el criterio de calificación de una campaña de prospección B2B. Un sistema automático lo usará para investigar cada empresa en internet y decidir si califica, así que cada línea que escribas debe ser exacta y comprobable. Si el criterio es vago, todo el análisis posterior sale mal.\n\nPASO 0 — Antes de escribir nada, revisa lo que sabes de esta campaña (cliente, oferta, mercado, tamaño de empresa, país, decisores). Si falta algo importante para definir bien el ICP, los Tiers o los cargos, HAZME PRIMERO las preguntas necesarias, de una vez, y espera mis respuestas. No inventes datos.\n\nREGLAS DE CALIDAD (obligatorias):\n1. Cada \"Criterio de entrada\" es un HECHO que se pueda comprobar con fuentes públicas (sitio web de la empresa, LinkedIn, noticias, ofertas de empleo, registros). Prohibido usar opiniones (\"prestigiosa\", \"en crecimiento\") o datos privados (facturación, presupuesto), salvo que se puedan inferir de señales públicas; en ese caso di cuáles.\n2. Un hecho por línea. Nada de frases largas que mezclen varios criterios.\n3. Los Tiers deben ser EXCLUYENTES: una empresa debe caber en un solo Tier. Si dos pueden coincidir, indica la regla de desempate. Ordénalos de mejor a menor encaje (A, B, C, D, E…). Crea solo los Tiers que existan de verdad; no inventes Tiers para llegar a una letra.\n4. \"Esto NO califica si\" lista las exclusiones duras de ese Tier, también comprobables.\n5. En cada cargo escribe sus variantes en español e inglés (ej.: \"Founder / Fundador / Co-Founder\"), porque el sistema compara por texto.\n6. Todos los Tiers que aparezcan en PUESTOS deben existir en la sección de Tiers, con la misma letra.\n7. Escribe en el idioma de la campaña, en texto plano, sin tablas y sin explicaciones fuera del formato.\n\nFORMATO DE ENTREGA (respétalo exactamente):\n\nICP\n(un párrafo: a quién buscamos, geografía, rango de tamaño, tipo de negocio, señales clave)\n\nTIER A\nNombre: (3 a 6 palabras)\nCriterio de entrada:\n- (hecho comprobable)\n- (hecho comprobable)\nEsto NO califica si:\n- (exclusión comprobable)\n\nTIER B\nNombre:\nCriterio de entrada:\n-\nEsto NO califica si:\n-\n\n(sigue con TIER C, D, E… solo los que existan)\n\nPUESTOS POR TIER\nTIER A\n- Cargo con variantes ES/EN | decide / respaldo / descartar | excluir si: (opcional)\n(un cargo por línea; repite para cada Tier)\n\nBUYER SEGÚN LA EMPRESA\nRegla 1\nSegún: tamaño | país | industria | ciudad\nDesde: (número de empleados)   Hasta: (número, o vacío si no hay tope)    ← solo si Según = tamaño\nValores: (uno por línea)   ← solo si Según = país, industria o ciudad\nCargos en orden (el 1.º es el Buyer 1, el 2.º es el Buyer 2…):\n1.\n2.\n(una regla por bloque, de la más específica a la más general)\n\nAL FINAL, revisa tu propia respuesta y confirma con una lista corta:\n- ¿Cada criterio es un hecho comprobable en internet?\n- ¿Los Tiers son excluyentes y están ordenados de mejor a menor encaje?\n- ¿Los Tiers de PUESTOS coinciden con los Tiers definidos?\n- ¿Cada cargo trae sus variantes ES/EN?\n- ¿Marcaste con \"FALTA:\" todo lo que no pudiste completar?";
 const CanteraModule = (() => {
   let _containerId = 'cantera-body';
   let _view = 'list';       // list | detail
@@ -6146,6 +6147,16 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 2 ? `<div class="cant-section">
+        <div class="cant-pia">
+          <div class="cant-pia__hd">
+            <div style="flex:1;min-width:0"><div class="cant-pia__t">Instrucción para tu IA (ChatGPT, Copilot, Gemini…)</div><div class="cant-pia__s">Pégala en tu otra ventana de trabajo con IA para que te entregue el ICP, los Tiers, los puestos y las reglas de buyer listos para copiar aquí.</div></div>
+            <button type="button" class="cant-pia__copy" id="cant-pia-copy" title="Copiar la instrucción completa" onclick="CanteraModule.copyPromptIA()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+          </div>
+          <div class="cant-pia__body">
+            <pre class="cant-pia__txt${_promptIAOpen ? '' : ' cant-pia__clip'}">${esc(CANTERA_PROMPT_IA)}</pre>
+            <button type="button" class="cant-pia__more" onclick="CanteraModule.togglePromptIA()">${_promptIAOpen ? 'Ver menos' : 'Ver más'}</button>
+          </div>
+        </div>
         <p class="cant-hint">Esto es lo único que escribes — el criterio de investigación (protocolo, evidencia, formato) es fijo para cualquier motor que elijas abajo.</p>
         <label class="cant-flabel" style="display:block;margin-bottom:12px">Motor de investigación profunda (IA)
           <select id="cant-motor-ia" class="form-input" onchange="CanteraModule.setMotorIA(this.value)">
@@ -7168,6 +7179,15 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     _paint();
   }
+  let _promptIAOpen = false;   // la instrucción para la IA externa arranca contraída
+  function togglePromptIA() { _promptIAOpen = !_promptIAOpen; _paint(); }
+  async function copyPromptIA() {
+    const btn = document.getElementById('cant-pia-copy');
+    try { await navigator.clipboard.writeText(CANTERA_PROMPT_IA); }
+    catch (_) { const ta = document.createElement('textarea'); ta.value = CANTERA_PROMPT_IA; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (__) {} ta.remove(); }
+    if (btn) { btn.classList.add('cant-pia__copy--ok'); setTimeout(() => btn.classList.remove('cant-pia__copy--ok'), 1500); }
+    showBanner('Instrucción copiada. Pégala en tu IA.', 'success');
+  }
   function addBuyerRule() { _current.reglas_buyer = [...(_current.reglas_buyer || []), { desde: '', hasta: '', cargos: '' }]; _paint(); }
   function removeBuyerRule(i) { (_current.reglas_buyer || []).splice(i, 1); _paint(); }
   function setBuyerField(i, k, v, repaint) { _current.reglas_buyer[i][k] = v; if (repaint) _paint(); }
@@ -7590,7 +7610,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
+    togglePromptIA, copyPromptIA, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
