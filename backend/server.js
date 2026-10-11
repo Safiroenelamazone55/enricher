@@ -7627,11 +7627,11 @@ app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
       UPDATE cantera_batches SET
         nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
         filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11,
-        tiers_calificantes=$12::jsonb, reglas_buyer=$13::jsonb, scoring=$14::jsonb, updated_at=NOW()
+        tiers_calificantes=$12::jsonb, reglas_buyer=$13::jsonb, scoring=$14::jsonb, datos_extra=$15::jsonb, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || []), JSON.stringify(Array.isArray(b.reglas_buyer) ? b.reglas_buyer : []), JSON.stringify(b.scoring && typeof b.scoring === 'object' ? b.scoring : {})]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || []), JSON.stringify(Array.isArray(b.reglas_buyer) ? b.reglas_buyer : []), JSON.stringify(b.scoring && typeof b.scoring === 'object' ? b.scoring : {}), JSON.stringify(Array.isArray(b.datos_extra) ? b.datos_extra : [])]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
@@ -9120,6 +9120,28 @@ app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) =
 // resto después). Usado por Mesa de trabajo, donde la selección puede venir
 // de varios borradores a la vez. Sin `company_ids`, comportamiento de
 // siempre: todo el borrador de una vez, y lo marca 'promovido'.
+// Cada dato extra investigado en Cantera pasa a un campo personalizado de la EMPRESA (Configuración → Campos personalizados):
+// reutiliza el slot que ya tenga ese nombre o toma el primero libre y lo nombra. "No verificado" nunca pasa al CRM.
+async function _promoteDatosExtra(cl, uid, coId, datos) {
+  try {
+    const entries = Object.entries(datos || {}).filter(([, v]) => String(v || '').trim() && !/^no verificado\b/i.test(String(v).trim()));
+    if (!entries.length) return;
+    const { rows: labels } = await cl.query("SELECT field_key, label FROM lm_custom_field_labels WHERE user_id=$1 AND entity='company'", [uid]);
+    const porLabel = new Map(labels.filter(l => (l.label || '').trim()).map(l => [l.label.trim().toLowerCase(), l.field_key]));
+    const usados = new Set([...porLabel.values()]);
+    for (const [nombre, valor] of entries) {
+      let key = porLabel.get(String(nombre).trim().toLowerCase());
+      if (!key) {
+        key = LM_CUSTOM_KEYS.find(k => !usados.has(k));
+        if (!key) { console.warn('[cantera] sin campo personalizado libre para "' + nombre + '"'); continue; }
+        await cl.query("INSERT INTO lm_custom_field_labels (user_id, entity, field_key, label) VALUES ($1,'company',$2,$3) ON CONFLICT (user_id, entity, field_key) DO UPDATE SET label=$3", [uid, key, String(nombre).trim()]);
+        porLabel.set(String(nombre).trim().toLowerCase(), key); usados.add(key);
+      }
+      if (!LM_CUSTOM_KEYS.includes(key)) continue;
+      await cl.query('UPDATE lm_companies SET ' + key + '=$1 WHERE id=$2 AND user_id=$3', [String(valor).trim(), coId, uid]);
+    }
+  } catch (e) { console.warn('[cantera] datos extra al CRM:', e.message); }
+}
 app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
@@ -9167,6 +9189,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         coId = ins.rows[0].id;
       }
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
+      await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
 
       const estados = includeRespaldo ? ['decide', 'respaldo'] : ['decide'];
@@ -9285,6 +9308,7 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
         coId = ins.rows[0].id;
       }
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
+      await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
 
       // Contactos: por prioridad explícita (lo que se filtró/seleccionó), no por

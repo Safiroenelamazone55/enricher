@@ -84,12 +84,19 @@ function _buildSystemPrompt(batch, human = false) {
     : '';
   const scoreH = _sv.length ? `\nPuntaje: [número de 0 a 100, la suma de las variables]\nDesglose: [una línea por variable: "Variable — puntos/peso — razón corta"]` : '';
   const scoreJ = _sv.length ? `\n  "puntaje": 0,\n  "desglose": [{"variable": "nombre exacto de la variable", "puntos": 0, "razon": "por qué ese puntaje, con la evidencia"}],` : '';
+  // Datos extra opcionales a investigar por empresa (para personalizar mensajes). Sin datos definidos, nada de esto aparece.
+  const _de = (Array.isArray(batch.datos_extra) ? batch.datos_extra : []).filter(d => d && String(d.nombre || '').trim() && String(d.pregunta || '').trim());
+  const extraBlock = _de.length
+    ? `DATOS ADICIONALES A INVESTIGAR (en esta misma investigación, con las mismas reglas de evidencia): para cada uno responde con un valor corto y concreto que se pueda pegar tal cual dentro de un mensaje de venta — una frase o un nombre, sin explicaciones. Si no hay evidencia verificable, responde exactamente "No verificado"; nunca lo inventes ni lo estimes.\n${_de.map(d => `- ${String(d.nombre).trim()}: ${String(d.pregunta).trim()}${d.solo_si_califica === false ? '' : ' (solo si la empresa califica en un Tier; si se descarta, responde "No verificado")'}`).join('\n')}\n\n`
+    : '';
+  const extraH = _de.length ? `\nDatos extra: [una línea por dato: "Nombre — valor corto o No verificado"]` : '';
+  const extraJ = _de.length ? `\n  "datos_extra": {${_de.map(d => JSON.stringify(String(d.nombre).trim()) + ': "valor corto o No verificado"').join(', ')}},` : '';
   const formato = human ? `FORMATO DE SALIDA — responde en este formato exacto, corto y legible (esto lo va a leer una persona, NUNCA uses JSON):
 Empresa: [el nombre exacto de la empresa que investigaste]
 Tier: [la clave del Tier, ej. TIER_1A — o "Descartada" si no calza en ninguno]
 Prioridad: [alta | media | baja]
 Confianza: [alta | media | baja]
-Razón: [una sola frase, menos de una línea — por qué este Tier o por qué se descarta]${scoreH}
+Razón: [una sola frase, menos de una línea — por qué este Tier o por qué se descarta]${scoreH}${extraH}
 Evidencia: [2 a 5 líneas, una por fuente: "Nombre de la fuente — URL — qué dice en pocas palabras"]
 Contactos: [para cada cargo de la lista que te doy abajo, una línea: "Cargo — decide/respaldo/descartado — motivo corto"]`
     : `FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta:
@@ -97,7 +104,7 @@ Contactos: [para cada cargo de la lista que te doy abajo, una línea: "Cargo —
   "tier_clave": "TIER_1A o vacío si se descarta",
   "confianza": "alta | media | baja",
   "prioridad": "alta | media | baja",
-  "nota": "resumen breve y útil en una o dos frases — nunca vacío",${scoreJ}
+  "nota": "resumen breve y útil en una o dos frases — nunca vacío",${scoreJ}${extraJ}
   "evidencia": [{"fuente": "nombre de la fuente", "url": "https://...", "resumen": "qué dice y por qué importa"}],
   "motivo_descarte": "vacío si calificó; si no, la razón exacta y específica a ESTA empresa",
   "contactos": [{"cargo": "el cargo tal como aparece en la lista que te paso", "puesto_estado": "decide | respaldo | descartado", "motivo": "por qué, especialmente si se descarta un cargo parecido"}]
@@ -150,7 +157,7 @@ ${_tiersBlock(batch.tiers)}
 PUESTOS A CONTACTAR POR TIER (para decidir prioridad de contacto una vez clasificada la empresa):
 ${_puestosBlock(batch.puestos, batch.tiers)}
 
-${scoreBlock}PRIORIDAD (qué tan urgente es trabajar esta empresa AHORA frente a las demás calificadas — no confundir con el Tier, que es a qué segmento pertenece):
+${scoreBlock}${extraBlock}PRIORIDAD (qué tan urgente es trabajar esta empresa AHORA frente a las demás calificadas — no confundir con el Tier, que es a qué segmento pertenece):
 - "alta": calificó con margen claro en su Tier (no por poco) Y tiene al menos un contacto "decide" identificado.
 - "baja": calificó por un margen ajustado, o solo hay contactos "respaldo" disponibles (ningún "decide"), o se descartó.
 - "media": los demás casos.
@@ -386,6 +393,17 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
 
       let tierClave = String(parsed.tier_clave || '').trim();
       // Scoring (opcional): se recalcula el total a partir del desglose (nunca se confía en la suma de la IA), con tope por variable.
+      // Datos extra: se guardan por nombre tal como los definió la persona (respuesta de la IA buscada sin distinguir mayúsculas).
+      const extraObj = {};
+      const _dx = (Array.isArray(batch.datos_extra) ? batch.datos_extra : []).filter(d => d && String(d.nombre || '').trim() && String(d.pregunta || '').trim());
+      if (_dx.length && parsed.datos_extra && typeof parsed.datos_extra === 'object') {
+        for (const d of _dx) {
+          const nm = String(d.nombre).trim();
+          const key = Object.keys(parsed.datos_extra).find(x => x.trim().toLowerCase() === nm.toLowerCase());
+          const val = key ? String(parsed.datos_extra[key] == null ? '' : parsed.datos_extra[key]).trim() : '';
+          if (val) extraObj[nm] = val;
+        }
+      }
       let puntaje = null, detalle = [], motivoDesc = String(parsed.motivo_descarte || '');
       const _vars = (batch.scoring && Array.isArray(batch.scoring.variables)) ? batch.scoring.variables.filter(v => v && String(v.nombre || '').trim() && Number(v.peso) > 0) : [];
       if (_vars.length && Array.isArray(parsed.desglose)) {
@@ -406,11 +424,11 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
       const aprobado = !!tierClave;
       await pool.query(`
         UPDATE cantera_companies SET
-          paso2_estado=$1, tier_clave=$2, confianza=$3, evidencia=$4::jsonb, motivo_descarte=$5, prioridad=$6, nota_manual=$7, puntaje=$9, puntaje_detalle=$10::jsonb, validado_at=NOW()
+          paso2_estado=$1, tier_clave=$2, confianza=$3, evidencia=$4::jsonb, motivo_descarte=$5, prioridad=$6, nota_manual=$7, puntaje=$9, puntaje_detalle=$10::jsonb, datos_extra=$11::jsonb, validado_at=NOW()
         WHERE id=$8`,
         [aprobado ? 'aprobado' : 'descartado', tierClave, String(parsed.confianza || ''),
          JSON.stringify(parsed.evidencia || []), motivoDesc,
-         String(parsed.prioridad || ''), String(parsed.nota || ''), company.id, puntaje, JSON.stringify(detalle)]);
+         String(parsed.prioridad || ''), String(parsed.nota || ''), company.id, puntaje, JSON.stringify(detalle), JSON.stringify(extraObj)]);
 
       // Empareja cada contacto importado con su resultado por CARGO (mismo orden/texto
       // que se le mandó al modelo) — si no calza ninguno, queda pendiente sin tocar.

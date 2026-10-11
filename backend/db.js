@@ -2310,6 +2310,9 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS scoring JSONB NOT NULL DEFAULT '{}'`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS puntaje INTEGER`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS puntaje_detalle JSONB NOT NULL DEFAULT '[]'`);
+    // Datos extra a investigar por empresa (para personalizar mensajes): config [{nombre,pregunta,solo_si_califica}] y resultado {nombre: valor}
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS datos_extra JSONB NOT NULL DEFAULT '[]'`);
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS datos_extra JSONB NOT NULL DEFAULT '{}'`);
 
     // Para poder ENRIQUECER (no solo filtrar al vuelo) seniority/departamento de
     // un contacto de Cantera y que quede guardado — mismo criterio que ya existe

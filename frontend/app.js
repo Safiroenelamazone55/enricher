@@ -5944,6 +5944,7 @@ const CanteraModule = (() => {
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'puntaje', label: 'Puntaje', def: true },
+    { key: 'datos_extra', label: 'Datos extra', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
@@ -5991,6 +5992,7 @@ const CanteraModule = (() => {
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
+      case 'datos_extra': { const e = Object.entries(c.datos_extra || {}); if (!e.length) return '—'; const tx = e.map(([k, v]) => k + ': ' + v).join(' · '); return `<span class="cant-nota-cell" title="${esc(tx)}">${esc(tx)}</span>`; }
       case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
@@ -6204,6 +6206,18 @@ const CanteraModule = (() => {
               <button class="add-role" onclick="CanteraModule.addPuesto('${esc(t.clave)}')">+ Agregar puesto</button>
             </div>
           </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
+        </div>
+        <div class="cant-datos" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Datos a investigar por empresa <span class="cant-hint" style="font-weight:400">(opcional · para personalizar tus mensajes)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Cada dato se investiga en la misma validación profunda (no cuesta una pasada aparte) y al mover la empresa al CRM queda guardado como un campo personalizado, listo para usar en el texto de tus pasos como <code>{{nombre_del_dato}}</code>. Si la IA no encuentra evidencia, guarda "No verificado" y ese valor no pasa al CRM.</p>
+          ${(_current.datos_extra || []).map((d, i) => `
+            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="width:200px"><span class="cant-hint">Nombre del dato</span><input class="form-input" value="${esc(d.nombre || '')}" placeholder="Ej. Competidor 1" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value)"><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
+              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="2" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
+              <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addDatoExtra()">+ Agregar dato</button>
         </div>
         <div class="cant-score" style="margin-top:18px">
           <h4 style="margin:0 0 4px">Scoring <span class="cant-hint" style="font-weight:400">(opcional · lo calcula la IA en la validación profunda)</span></h4>
@@ -7219,6 +7233,11 @@ const CanteraModule = (() => {
     if (btn) { btn.classList.add('cant-pia__copy--ok'); setTimeout(() => btn.classList.remove('cant-pia__copy--ok'), 1500); }
     showBanner('Instrucción copiada. Pégala en tu IA.', 'success');
   }
+  // Nombre del dato → nombre de variable para los mensajes ({{competidor_1}}). Mismo criterio que el servidor.
+  function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+  function addDatoExtra() { _current.datos_extra = [...(_current.datos_extra || []), { nombre: '', pregunta: '', solo_si_califica: true }]; _paint(); }
+  function removeDatoExtra(i) { (_current.datos_extra || []).splice(i, 1); _paint(); }
+  function setDatoExtra(i, k, v) { _current.datos_extra[i][k] = v; if (k === 'nombre') { const el = document.getElementById('cant-de-slug-' + i); if (el) el.textContent = v ? '{{' + _slugVar(v) + '}}' : ''; } }
   function _scoreTotalHtml() {
     const tot = (((_current.scoring || {}).variables) || []).reduce((s, v) => s + (Number(v.peso) || 0), 0);
     return tot === 100 ? '<b style="color:#1F7A44">Total: 100 ✓</b>' : '<b style="color:#B42318">Total: ' + tot + ' (lo ideal es 100)</b>';
@@ -7652,7 +7671,7 @@ const CanteraModule = (() => {
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
+    addDatoExtra, removeDatoExtra, setDatoExtra, togglePromptIA, copyPromptIA, addScoreVar, removeScoreVar, setScoreVar, addScoreCut, removeScoreCut, setScoreCut, addBuyerRule, removeBuyerRule, setBuyerField, aplicarBuyers,
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
@@ -7811,6 +7830,7 @@ const CanteraMesaModule = (() => {
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'puntaje', label: 'Puntaje', def: true },
+    { key: 'datos_extra', label: 'Datos extra', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
@@ -7853,6 +7873,7 @@ const CanteraMesaModule = (() => {
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
+      case 'datos_extra': { const e = Object.entries(c.datos_extra || {}); if (!e.length) return '—'; const tx = e.map(([k, v]) => k + ': ' + v).join(' · '); return `<span class="cant-nota-cell" title="${esc(tx)}">${esc(tx)}</span>`; }
       case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
