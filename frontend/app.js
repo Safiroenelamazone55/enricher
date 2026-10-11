@@ -6933,7 +6933,7 @@ const CanteraModule = (() => {
         <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
-          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
+          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>Descartada</option>
         </select></label>
         <label class="cant-flabel">Prioridad
           <select id="cant-manual-prioridad" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
@@ -8407,7 +8407,7 @@ const CanteraMesaModule = (() => {
         <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
-          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
+          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>Descartada</option>
         </select></label>
         <label class="cant-flabel">Prioridad
           <select id="mesa-manual-prioridad" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
