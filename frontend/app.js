@@ -6124,6 +6124,7 @@ const CanteraModule = (() => {
       <div class="cant-stepbar">
         <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
+        <button class="cant-step${_step === 6 ? ' on' : ''}" onclick="CanteraModule.setStep(6)">Datos a investigar <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar prospectos</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
         <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
@@ -6207,18 +6208,6 @@ const CanteraModule = (() => {
             </div>
           </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
         </div>
-        <div class="cant-datos" style="margin-top:18px">
-          <h4 style="margin:0 0 4px">Datos a investigar por empresa <span class="cant-hint" style="font-weight:400">(opcional · para personalizar tus mensajes)</span></h4>
-          <p class="cant-hint" style="margin:0 0 10px">Cada dato se investiga en la misma validación profunda (no cuesta una pasada aparte) y al mover la empresa al CRM queda guardado como un campo personalizado, listo para usar en el texto de tus pasos como <code>{{nombre_del_dato}}</code>. Si la IA no encuentra evidencia, guarda "No verificado" y ese valor no pasa al CRM.</p>
-          ${(_current.datos_extra || []).map((d, i) => `
-            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
-              <label style="width:200px"><span class="cant-hint">Nombre del dato</span><input class="form-input" value="${esc(d.nombre || '')}" placeholder="Ej. Competidor 1" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value)"><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
-              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="2" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
-              <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
-              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
-            </div>`).join('')}
-          <button class="add-role" onclick="CanteraModule.addDatoExtra()">+ Agregar dato</button>
-        </div>
         <div class="cant-score" style="margin-top:18px">
           <h4 style="margin:0 0 4px">Scoring <span class="cant-hint" style="font-weight:400">(opcional · lo calcula la IA en la validación profunda)</span></h4>
           <p class="cant-hint" style="margin:0 0 10px">Define las variables y cuántos puntos pesa cada una (idealmente suman 100). Al investigar cada empresa, la IA puntúa variable por variable, suma el total y lo guarda en la columna "Puntaje" para que ordenes por quién contactar primero. Si no defines variables, no se calcula nada.</p>
@@ -6266,6 +6255,22 @@ const CanteraModule = (() => {
           ${(_current.reglas_buyer || []).length ? `<button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="CanteraModule.aplicarBuyers()">Guardar y aplicar a todo el borrador</button>` : ''}
         </div>
         <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar criterio</button></div>
+      </div>` : ''}
+
+      ${_step === 6 ? `<div class="cant-section">
+        <div class="cant-datos" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Datos a investigar por empresa <span class="cant-hint" style="font-weight:400">(opcional · para personalizar tus mensajes)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Cada dato se investiga en la misma validación profunda (no cuesta una pasada aparte) y al mover la empresa al CRM queda guardado como un campo personalizado, listo para usar en el texto de tus pasos como <code>{{nombre_del_dato}}</code>. Si la IA no encuentra evidencia, guarda "No verificado" y ese valor no pasa al CRM.</p>
+          ${(_current.datos_extra || []).map((d, i) => `
+            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="width:200px"><span class="cant-hint">Nombre del dato</span><input class="form-input" value="${esc(d.nombre || '')}" placeholder="Ej. Competidor 1" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value)"><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
+              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="2" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
+              <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addDatoExtra()">+ Agregar dato</button>
+        </div>
+        <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar</button></div>
       </div>` : ''}
 
       ${_step === 3 ? `<div class="cant-section">
