@@ -5944,13 +5944,22 @@ const CanteraModule = (() => {
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'puntaje', label: 'Puntaje', def: true },
-    { key: 'datos_extra', label: 'Datos extra', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
     { key: 'en_crm', label: 'En CRM', def: true },
   ];
+  // Cada dato a investigar (competidores, una frase, etc.) es una columna propia: aparece sola, con su nombre, y se puede ocultar.
+  function _deNames() {
+    const n = []; const add = x => { x = String(x || '').trim(); if (x && !n.includes(x)) n.push(x); };
+    ((_current && _current.datos_extra) || []).forEach(d => add(d.nombre));
+    (_companies || []).forEach(c => Object.keys(c.datos_extra || {}).forEach(add));
+    return n;
+  }
+  function _allResultCols() { return CANT_RESULT_COLS.concat(_deNames().map(n => ({ key: 'de:' + n, label: n, def: true }))); }
+  function _hiddenDe() { try { return new Set(JSON.parse(localStorage.getItem('cantera_hidden_de') || '[]')); } catch (_) { return new Set(); } }
+  function _colOn(c) { return c.key.startsWith('de:') ? !_hiddenDe().has(c.key) : _loadVisibleCols().has(c.key); }
   let _visibleCols = null;
   function _loadVisibleCols() {
     if (_visibleCols) return _visibleCols;
@@ -5973,11 +5982,13 @@ const CanteraModule = (() => {
   }
   function _saveVisibleCols() { try { localStorage.setItem('cantera_result_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
   function toggleResultCol(key) {
+    if (key.startsWith('de:')) { const h = _hiddenDe(); if (h.has(key)) h.delete(key); else h.add(key); try { localStorage.setItem('cantera_hidden_de', JSON.stringify([...h])); } catch (_) {} _paint(); return; }
     const s = _loadVisibleCols();
     if (s.has(key)) s.delete(key); else s.add(key);
     _saveVisibleCols(); _paint();
   }
   function _colCellHtml(c, key) {
+    if (key.startsWith('de:')) { const v = (c.datos_extra || {})[key.slice(3)]; return v ? `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>` : '—'; }
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
       case 'pais': return esc(c.pais || '—');
@@ -6055,7 +6066,7 @@ const CanteraModule = (() => {
     const tiers = b.tiers || [];
     const puestos = b.puestos || {};
     const expanded = _expanded || new Set();
-    const visCols = CANT_RESULT_COLS.filter(c => _loadVisibleCols().has(c.key));
+    const visCols = _allResultCols().filter(_colOn);
     // Contacto/Puesto/Prioridad son columnas propias y fijas (pedido explícito
     // 2026-09-06: "que se encuentren en la columna donde le corresponden... si
     // muevo la tabla, todo sigue en su lugar") — celdas reales, no un bloque de
@@ -6553,8 +6564,7 @@ const CanteraModule = (() => {
     const enrichPanel = Object.keys(CANT_ENRICH_LABELS).map(f =>
       item(_lastEnrich[f] !== undefined ? `${CANT_ENRICH_LABELS[f]} enriquecido (${_lastEnrich[f]})` : `Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)
     ).join('') + item(_lastEnrich.ran ? `Enriquecido todo (${_lastEnrich.total})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
-    const visCols = _loadVisibleCols();
-    const colsPanel = CANT_RESULT_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${visCols.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
+    const colsPanel = _allResultCols().map(c => `<label class="cant-colchk"><input type="checkbox" ${_colOn(c) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     // Filtro por Tier + prioridad de contacto — pedido explícito 2026-09-06:
     // "filtrar por empresas con tier 1 y contactos 1 o 2, y podré enviarlos a
     // una secuencia". Necesario para saber cuáles marcar y mandar de una vez.
@@ -7903,7 +7913,6 @@ const CanteraMesaModule = (() => {
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'puntaje', label: 'Puntaje', def: true },
-    { key: 'datos_extra', label: 'Datos extra', def: true },
     { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
@@ -7929,9 +7938,23 @@ const CanteraMesaModule = (() => {
     return _visibleCols;
   }
   function _saveVisibleCols() { try { localStorage.setItem('cantera_mesa_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
-  function toggleCol(key) { const s = _loadVisibleCols(); if (s.has(key)) s.delete(key); else s.add(key); _saveVisibleCols(); _paint(); }
+  // Columnas por cada dato a investigar que traigan las empresas cargadas (de cualquier borrador).
+  function _deNames() {
+    const n = []; const add = x => { x = String(x || '').trim(); if (x && !n.includes(x)) n.push(x); };
+    Object.values(_knownRows).forEach(c => Object.keys((c && c.datos_extra) || {}).forEach(add));
+    (_rows || []).forEach(c => Object.keys(c.datos_extra || {}).forEach(add));
+    return n;
+  }
+  function _allCols() { return MESA_COLS.concat(_deNames().map(n => ({ key: 'de:' + n, label: n, def: true }))); }
+  function _hiddenDe() { try { return new Set(JSON.parse(localStorage.getItem('cantera_mesa_hidden_de') || '[]')); } catch (_) { return new Set(); } }
+  function _colOn(c) { return c.key.startsWith('de:') ? !_hiddenDe().has(c.key) : _loadVisibleCols().has(c.key); }
+  function toggleCol(key) {
+    if (key.startsWith('de:')) { const h = _hiddenDe(); if (h.has(key)) h.delete(key); else h.add(key); try { localStorage.setItem('cantera_mesa_hidden_de', JSON.stringify([...h])); } catch (_) {} _paint(); return; }
+    const s = _loadVisibleCols(); if (s.has(key)) s.delete(key); else s.add(key); _saveVisibleCols(); _paint();
+  }
   function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado_manual' ? 'Descartado manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function _colCellHtml(c, key) {
+    if (key.startsWith('de:')) { const v = (c.datos_extra || {})[key.slice(3)]; return v ? `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>` : '—'; }
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
       case 'pais': return esc(c.pais || '—');
@@ -8130,8 +8153,7 @@ const CanteraMesaModule = (() => {
     const archivoPanel = _archivoOpts.map(f =>
       _incExcRow(`${esc(f.nombre || 'archivo')} <span class="cant-hint" style="margin:0">· ${esc(f.batch_nombre || '')}</span>`, _archivoFiltro.has(f.id), _archivoExclFiltro.has(f.id), `CanteraMesaModule.toggleArchivoFiltro('${_jsEsc(f.id)}')`, `CanteraMesaModule.toggleArchivoExclFiltro('${_jsEsc(f.id)}')`)
     ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Ningún archivo importado todavía tiene historial rastreable</div>';
-    const vis = _loadVisibleCols();
-    const colsPanel = MESA_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${vis.has(c.key) ? 'checked' : ''} onchange="CanteraMesaModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
+    const colsPanel = _allCols().map(c => `<label class="cant-colchk"><input type="checkbox" ${_colOn(c) ? 'checked' : ''} onchange="CanteraMesaModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     const calificadas = _coSel.size ? [..._coSel].filter(id => { const r = _knownRows[id]; return r && (r.paso2_estado === 'aprobado' || r.paso2_estado === 'validacion_manual'); }).length : 0;
     const html = `<div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
@@ -8504,7 +8526,7 @@ const CanteraMesaModule = (() => {
   }
   function _html() {
     const opts = _opts || { clientes: [], campanas: [], secuencias: [] };
-    const visCols = MESA_COLS.filter(c => _loadVisibleCols().has(c.key));
+    const visCols = _allCols().filter(_colOn);
     const emptyColspan = 4 + visCols.length;
     const rows = _rows.map(c => {
       const main = `<tr class="${_coSel.has(c.id) ? 'sel' : ''}">
