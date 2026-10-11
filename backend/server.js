@@ -8931,13 +8931,26 @@ app.patch('/api/cantera/batches/:id/companies/:companyId/validar-manual', requir
   const confianza = ['alta', 'media', 'baja'].includes(b.confianza) ? b.confianza : '';
   const prioridad = ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : '';
   const nota = _lmS(b.nota);
+  // Datos extra (competidores, etc.) y puntaje: opcionales; si no llegan en el body, no se tocan.
+  let datosJson = null;
+  if (b.datos_extra && typeof b.datos_extra === 'object') {
+    const clean = {};
+    for (const [k, v] of Object.entries(b.datos_extra)) { const s = _lmS(v); if (String(k).trim() && s) clean[String(k).trim()] = s; }
+    datosJson = JSON.stringify(clean);
+  }
+  const hasPuntaje = Object.prototype.hasOwnProperty.call(b, 'puntaje');
+  const pn = hasPuntaje && b.puntaje !== '' && b.puntaje != null ? Math.max(0, Math.min(100, Math.round(Number(b.puntaje)))) : null;
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_companies
-         SET paso2_estado=$1, tier_clave=$2, nota_manual=$3, motivo_descarte='', confianza=$4, prioridad=$5, evidencia='[]', validado_at=NOW()
+         SET paso2_estado=$1, tier_clave=$2, nota_manual=$3, motivo_descarte='', confianza=$4, prioridad=$5, evidencia='[]', validado_at=NOW(),
+             datos_extra=COALESCE($9::jsonb, datos_extra),
+             puntaje=CASE WHEN $10::boolean THEN $11::int ELSE puntaje END
        WHERE id=$6 AND batch_id=$7 AND user_id=$8 RETURNING *
-    `, [descartar ? 'descartado_manual' : 'validacion_manual', tierClave, nota, confianza, prioridad, req.params.companyId, req.params.id, uid]);
+    `, [descartar ? 'descartado_manual' : 'validacion_manual', tierClave, nota, confianza, prioridad, req.params.companyId, req.params.id, uid, datosJson, hasPuntaje, Number.isFinite(pn) ? pn : null]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    // Con el Tier/puntaje nuevos, las reglas de buyer que dependan de ellos se recalculan para esta empresa.
+    try { await require('./services/canteraBuyerService').asignarBuyers(pool, req.params.id, uid, [parseInt(req.params.companyId)]); } catch (_) {}
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] validar-manual', err.message); res.status(500).json({ error: 'Error al guardar la validación manual' }); }
 });

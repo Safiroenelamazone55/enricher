@@ -6849,6 +6849,17 @@ const CanteraModule = (() => {
       `LinkedIn: ${co.linkedin || '—'}`,
     ].join('\n');
   }
+  // Campos que pide la configuración del borrador: cada dato a investigar y, si hay scoring, el puntaje. Se guardan con el mismo autoguardado del Tier.
+  function _manualExtraHtml(co) {
+    const datos = (_current.datos_extra || []).filter(d => (d.nombre || '').trim());
+    const sv = ((_current.scoring || {}).variables || []).filter(v => (v.nombre || '').trim() && Number(v.peso) > 0);
+    if (!datos.length && !sv.length) return '';
+    const vals = co.datos_extra || {};
+    return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      + datos.map((d, i) => '<label class="cant-flabel">' + esc(d.nombre) + '<span class="field-note">' + esc((d.pregunta || '').slice(0, 90)) + '</span><input id="cant-manual-de-' + i + '" class="form-input" value="' + esc(vals[d.nombre.trim()] || '') + '" placeholder="Valor corto, o déjalo vacío" onblur="CanteraModule.saveManualValidation(' + co.id + ')"></label>').join('')
+      + (sv.length ? '<label class="cant-flabel">Puntaje (0–100)<span class="field-note">suma de tus variables de scoring</span><input id="cant-manual-puntaje" type="number" min="0" max="100" class="form-input" value="' + (co.puntaje != null ? esc(co.puntaje) : '') + '" onblur="CanteraModule.saveManualValidation(' + co.id + ')"></label>' : '')
+      + '</div>';
+  }
   async function openManualValidation(companyId) {
     const co = _companies.find(c => c.id === companyId); if (!co) return;
     const tiers = (_current.tiers || []).filter(t => t.clave);
@@ -6906,6 +6917,7 @@ const CanteraModule = (() => {
           </select>
         </label>
         </div>
+        ${_manualExtraHtml(co)}
         <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="4" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
@@ -6944,6 +6956,8 @@ const CanteraModule = (() => {
     const nota = document.getElementById('cant-manual-nota')?.value || '';
     const confianza = document.getElementById('cant-manual-confianza')?.value || '';
     const prioridad = document.getElementById('cant-manual-prioridad')?.value || '';
+    const _dx = {}; (_current.datos_extra || []).filter(d => (d.nombre || '').trim()).forEach((d, i) => { const el = document.getElementById('cant-manual-de-' + i); if (el) _dx[d.nombre.trim()] = el.value.trim(); });
+    const _pEl = document.getElementById('cant-manual-puntaje');
     // Antes se quedaba en silencio si aún no se elegía Tier (para que la Nota
     // no se guardara sola al perder el foco antes de decidir) — pero eso
     // significaba que Confianza/Prioridad/Nota tampoco se guardaban aunque sí
@@ -6954,12 +6968,12 @@ const CanteraModule = (() => {
     // mostrando la advertencia sin que Jenny hubiera tocado nada (reportado
     // en vivo 2026-09-16: "se ve apagado y no se puede continuar").
     if (!tier) {
-      if (nota.trim() || confianza || prioridad) showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info');
+      if (nota.trim() || confianza || prioridad || Object.values(_dx).some(Boolean) || (_pEl && _pEl.value)) showBanner('Elige un Tier (o Descartar) para guardar — lo demás se guarda junto con él', 'info');
       return;
     }
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza, prioridad }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ tier_clave: tier, nota, confianza, prioridad }, Object.keys(_dx).length ? { datos_extra: _dx } : {}, _pEl ? { puntaje: _pEl.value } : {})),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
