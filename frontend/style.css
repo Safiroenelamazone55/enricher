@@ -18155,3 +18155,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .tp-manual__row label{display:flex;flex-direction:column;font-size:.72rem;color:var(--text-muted);gap:3px}
 .tp-manual__row input{padding:7px 9px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:.86rem;background:var(--surface,#fff)}
 .tp-manual__dur{font-size:.82rem;font-weight:600;min-width:90px;padding-bottom:8px}
+
+/* Cantera: cajas de texto del criterio con altura cómoda, que crecen con el contenido */
+.cant-section textarea.form-input{field-sizing:content;min-height:7.5em;max-height:70vh;resize:vertical;line-height:1.5}
+.cant-section textarea#cant-icp{min-height:14em}
+.cant-tier textarea.form-input,.cant-tiers textarea.form-input{min-height:7.5em}

@@ -6179,8 +6179,8 @@ const CanteraModule = (() => {
               <input type="text" class="form-input" placeholder="Nombre del Tier" value="${esc(t.nombre || '')}" oninput="CanteraModule.setTierField(${i},'nombre',this.value)">
               <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeTier(${i})">✕</button>
             </div>
-            <textarea class="form-input" rows="2" placeholder="Criterio de entrada…" oninput="CanteraModule.setTierField(${i},'criterio',this.value)">${esc(t.criterio || '')}</textarea>
-            <textarea class="form-input" rows="1" placeholder="Esto NO califica si… (opcional)" oninput="CanteraModule.setTierField(${i},'descarte',this.value)">${esc(t.descarte || '')}</textarea>
+            <textarea class="form-input" rows="7" placeholder="Criterio de entrada…" oninput="CanteraModule.setTierField(${i},'criterio',this.value)">${esc(t.criterio || '')}</textarea>
+            <textarea class="form-input" rows="5" placeholder="Esto NO califica si… (opcional)" oninput="CanteraModule.setTierField(${i},'descarte',this.value)">${esc(t.descarte || '')}</textarea>
             ${t.clave ? `<label class="cant-tier-califica"><input type="checkbox" ${(b.tiers_calificantes || []).includes(t.clave) ? 'checked' : ''} onchange="CanteraModule.toggleTierCalifica('${_jsEsc(t.clave)}')"> Cuenta como "califica" en el portal del cliente para esta campaña</label>` : ''}
           </div>`).join('')}
         </div>
@@ -6266,7 +6266,7 @@ const CanteraModule = (() => {
           ${(_current.datos_extra || []).map((d, i) => `
             <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
               <label style="width:200px"><span class="cant-hint">Nombre del dato</span><input class="form-input" value="${esc(d.nombre || '')}" placeholder="Ej. Competidor 1" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value)"><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
-              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="2" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
+              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="5" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
               <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
               <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
             </div>`).join('')}
