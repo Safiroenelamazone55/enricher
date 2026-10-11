@@ -6187,6 +6187,8 @@ const CanteraModule = (() => {
         <span class="cant-hint" style="display:block;margin:-6px 0 10px">${(b.tiers_calificantes || []).length ? '' : 'Sin ningún Tier marcado: por defecto, en el portal "califica" cualquier empresa aprobada o validada manualmente, sea cual sea su Tier.'}</span>
         <button class="add-tier" onclick="CanteraModule.addTier()">+ Agregar Tier</button>
 
+        <div style="margin-top:16px"><h4 style="margin:0 0 4px">Puestos por Tier <span class="cant-hint" style="font-weight:400">(opcional · lo clasifica la IA)</span></h4>
+          <p class="cant-hint" style="margin:0 0 8px">Marca qué cargos deciden, cuáles son respaldo y cuáles se descartan en cada Tier. Si ya usas <b>Buyer según la empresa</b> (abajo) para ordenar a quién contactar primero, aquí basta con los cargos a <b>descartar</b>; no repitas los mismos cargos en las dos cajas.</p></div>
         <div class="cant-puestos" style="margin-top:16px">${tiers.filter(t => t.clave).map(t => `
           <div class="roles-tier">
             <div class="roles-tier-label"><span class="tier-badge t1a">${esc(t.clave)}</span></div>
