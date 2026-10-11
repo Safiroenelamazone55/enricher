@@ -9831,9 +9831,13 @@ const DashboardModule = (() => {
       const due = (ds) => { if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d <= today; };
       // Las tareas contenedoras de un PERIODO (semana/mes: tienen fecha de inicio y fin) ya terminado no se ofrecen para registrar tiempo.
       const _periodoPasado = t => !t.parent_task_id && t.fecha_inicio && t.deadline && new Date(String(t.deadline).split('T')[0] + 'T00:00:00') < today;
-      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && !_periodoPasado(t)).map(t => {
+      // Si una tarea tiene subtareas abiertas, se ofrecen las SUBTAREAS (no la tarea contenedora); sin subtareas abiertas se ofrece la tarea misma.
+      const _abiertas = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && (t.estado || '') !== 'cancelado');
+      const _padresConSubs = new Set(_abiertas.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+      const _titPadre = new Map(tasks.map(t => [t.id, t.titulo]));
+      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && !_periodoPasado(t) && !_padresConSubs.has(t.id)).map(t => {
         const resp = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
-        return { kind:'proyecto', id:t.id, titulo:t.titulo, ctx:t.project_nombre || 'Sin proyecto', cliente:t.client_nombre || '', deadline:t.deadline, prioridad:t.prioridad, mine: resp.some(r => (r||'').toLowerCase() === me), today: due(t.deadline) };
+        return { kind:'proyecto', id:t.id, titulo:t.titulo, ctx:t.project_nombre || 'Sin proyecto', cliente:t.client_nombre || '', empresa:t.client_empresa || '', padre:t.parent_task_id ? (_titPadre.get(t.parent_task_id) || '') : '', deadline:t.deadline, prioridad:t.prioridad, mine: resp.some(r => (r||'').toLowerCase() === me), today: due(t.deadline) };
       });
       _tpOpp = opp.filter(t => (t.estado === 'completada' ? 'completado' : t.estado) !== 'completado').map(t => ({
         kind:'oportunidad', id:t.id, titulo:t.titulo, ctx:t.opp_titulo || 'Oportunidad', cliente:t.opp_cliente || '', deadline:t.fecha_limite, prioridad:t.prioridad, mine:(t.responsable||'').toLowerCase() === me, today: due(t.fecha_limite) }));
@@ -9848,7 +9852,8 @@ const DashboardModule = (() => {
     const list = $('tp-list'); if (!list) return;
     q = (q || '').toLowerCase().trim();
     const all = [..._tpTasks, ..._tpOpp];
-    const filtered = all.filter(it => !q || (it.titulo + ' ' + it.ctx + ' ' + it.cliente).toLowerCase().includes(q));
+    const _nq = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const filtered = all.filter(it => !q || _nq(it.titulo + ' ' + it.ctx + ' ' + it.cliente + ' ' + (it.empresa || '') + ' ' + (it.padre || '')).includes(_nq(q)));
     if (!filtered.length) {
       list.innerHTML = `<div class="tp-empty"><div class="tp-empty__ico">🔍</div><p>${all.length ? 'Sin resultados para tu búsqueda.' : 'No tienes tareas activas. Crea una tarea o una oportunidad para empezar a registrar tiempo.'}</p></div>`;
       return;
@@ -9873,7 +9878,8 @@ const DashboardModule = (() => {
     const prioMap = { alta:'Alta', media:'Media', baja:'Baja' };
     const prio = (it.prioridad && prioMap[it.prioridad]) ? `<span class="tp-prio tp-prio--${it.prioridad}">${prioMap[it.prioridad]}</span>` : '';
     const sub = [];
-    if (it.cliente) sub.push(`${isOpp ? 'Prospecto' : 'Cliente'}: ${esc(it.cliente)}`);
+    if (it.padre) sub.push(`Subtarea de ${esc(it.padre)}`);
+    if (it.cliente) sub.push(`${isOpp ? 'Prospecto' : 'Cliente'}: ${esc(it.cliente)}${it.empresa && it.empresa !== it.cliente ? ' · ' + esc(it.empresa) : ''}`);
     const _vencida = it.deadline && new Date(String(it.deadline).split('T')[0] + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
     if (dl) sub.push(_vencida ? `<span style="color:#D94B4B;font-weight:600">Vencida el ${dl}</span>` : `Vence ${dl}`);
     return `<button class="tp-card${sel ? ' tp-card--sel' : ''}" data-k="${it.kind}" data-i="${it.id}" onclick="DashboardModule._tpSelect('${it.kind}',${it.id})">
