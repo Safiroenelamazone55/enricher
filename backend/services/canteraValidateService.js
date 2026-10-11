@@ -91,9 +91,13 @@ function _buildSystemPrompt(batch, human = false) {
     : '';
   const extraH = _de.length ? `\nDatos extra: [una línea por dato: "Nombre — valor corto o No verificado"]` : '';
   const extraJ = _de.length ? `\n  "datos_extra": {${_de.map(d => JSON.stringify(String(d.nombre).trim()) + ': "valor corto o No verificado"').join(', ')}},` : '';
+  // Las claves reales de los Tiers del borrador (A, B, C…): el formato de salida las usa tal cual, nunca un ejemplo fijo.
+  const _claves = (batch.tiers || []).map(t => String(t.clave || '').trim()).filter(Boolean);
+  const tierH = _claves.length ? 'exactamente una de estas claves: ' + _claves.join(', ') + ' — o "Descartada" si no calza en ninguno' : 'la clave del Tier — o "Descartada" si no calza en ninguno';
+  const tierJ = _claves.length ? 'una de: ' + _claves.join(' | ') + ' — vacío si se descarta' : 'la clave del Tier, o vacío si se descarta';
   const formato = human ? `FORMATO DE SALIDA — responde en este formato exacto, corto y legible (esto lo va a leer una persona, NUNCA uses JSON):
 Empresa: [el nombre exacto de la empresa que investigaste]
-Tier: [la clave del Tier, ej. TIER_1A — o "Descartada" si no calza en ninguno]
+Tier: [${tierH}]
 Prioridad: [alta | media | baja]
 Confianza: [alta | media | baja]
 Razón: [una sola frase, menos de una línea — por qué este Tier o por qué se descarta]${scoreH}${extraH}
@@ -101,7 +105,7 @@ Evidencia: [2 a 5 líneas, una por fuente: "Nombre de la fuente — URL — qué
 Contactos: [para cada cargo de la lista que te doy abajo, una línea: "Cargo — decide/respaldo/descartado — motivo corto"]`
     : `FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta:
 {
-  "tier_clave": "TIER_1A o vacío si se descarta",
+  "tier_clave": "${tierJ}",
   "confianza": "alta | media | baja",
   "prioridad": "alta | media | baja",
   "nota": "resumen breve y útil en una o dos frases — nunca vacío",${scoreJ}${extraJ}
