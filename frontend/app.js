@@ -6117,7 +6117,7 @@ const CanteraModule = (() => {
       </div>
 
       <div class="cant-stepbar">
-        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos</button>
+        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar prospectos</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
@@ -6127,6 +6127,7 @@ const CanteraModule = (() => {
 
       ${_step === 1 ? `<div class="cant-section">
         <div class="cant-note" style="background:#EEF4FF;border:1px solid #C7D7FE;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:.84rem;line-height:1.5;color:#1D2939">
+          <b>Validación básica · opcional.</b> Es una revisión rápida y superficial, sin IA y sin costo: solo compara los datos que ya importaste. Puedes completarla, completar solo algunos filtros o saltarla; la <b>validación profunda</b> (investigación con IA, por clave API o pegando la instrucción en tu herramienta de IA) funciona igual sin haberla corrido.<br><br>
           <b>Estos filtros deciden sobre la EMPRESA.</b> Primero se define la empresa objetivo, y solo las empresas que cumplen pasan al análisis. Si una no cumple, se descarta entera con su motivo.
           <ul style="margin:6px 0 0 18px;padding:0">
             <li><b>País, Industria y Tamaño:</b> se comparan con los datos de la propia empresa.</li>
