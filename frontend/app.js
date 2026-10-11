@@ -6126,13 +6126,20 @@ const CanteraModule = (() => {
       </div>
 
       ${_step === 1 ? `<div class="cant-section">
+        <div class="cant-note" style="background:#EEF4FF;border:1px solid #C7D7FE;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:.84rem;line-height:1.5;color:#1D2939">
+          <b>Estos filtros deciden sobre la EMPRESA.</b> Primero se define la empresa objetivo, y solo las empresas que cumplen pasan al análisis. Si una no cumple, se descarta entera con su motivo.
+          <ul style="margin:6px 0 0 18px;padding:0">
+            <li><b>País, Industria y Tamaño:</b> se comparan con los datos de la propia empresa.</li>
+            <li><b>Seniority y Departamento:</b> se deducen del cargo de sus contactos. La empresa pasa si <i>al menos uno</i> cumple; un contacto que no encaja no se elimina por separado.</li>
+          </ul>
+        </div>
         <p class="cant-hint">Selecciona de una lista real — nunca escribes el valor a mano, así "España" y "Spain" siempre se reconocen como el mismo país.</p>
         <div class="filters-grid">
-          ${_taField('pais', 'País')}
-          ${_taField('industria', 'Industria')}
-          ${_taField('tamano', 'Tamaño de empresa')}
-          ${_taField('seniority', 'Seniority del contacto')}
-          ${_taField('departamento', 'Departamento del contacto')}
+          ${_taField('pais', 'País de la empresa')}
+          ${_taField('industria', 'Industria de la empresa')}
+          ${_taField('tamano', 'Tamaño de la empresa')}
+          ${_taField('seniority', 'Seniority (de sus contactos)')}
+          ${_taField('departamento', 'Departamento (de sus contactos)')}
         </div>
         <div class="cant-save-row"><button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar filtros</button></div>
       </div>` : ''}
