@@ -18147,3 +18147,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cant-pia__copy{border:1px solid var(--border);background:var(--surface,#fff);border-radius:8px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);flex:none}
 .cant-pia__copy:hover{color:var(--primary,#0090FF);border-color:var(--primary,#0090FF)}
 .cant-pia__copy--ok{color:#1F7A44;border-color:#2E9D5B}
+
+.tp-manual{border-top:1px solid var(--border);padding:12px 20px;background:var(--surface-secondary,#F7F8F6)}
+.tp-manual__t{font-weight:600;font-size:.86rem;margin-bottom:8px}
+.tp-manual__s{font-weight:400;font-size:.74rem;color:var(--text-muted);margin-left:6px}
+.tp-manual__row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.tp-manual__row label{display:flex;flex-direction:column;font-size:.72rem;color:var(--text-muted);gap:3px}
+.tp-manual__row input{padding:7px 9px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:.86rem;background:var(--surface,#fff)}
+.tp-manual__dur{font-size:.82rem;font-weight:600;min-width:90px;padding-bottom:8px}

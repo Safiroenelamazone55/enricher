@@ -9841,7 +9841,18 @@ const DashboardModule = (() => {
           </div>
         </div>
         <div class="tp-list" id="tp-list"><div class="tp-skel">${Array.from({length:4}).map(()=>'<div class="tp-skel-row"></div>').join('')}</div></div>
+        <div class="tp-manual" id="tp-manual" style="display:none">
+          <div class="tp-manual__t">Registrar tiempo manual <span class="tp-manual__s">en la tarea que marcaste arriba (hora de Lima)</span></div>
+          <div class="tp-manual__row">
+            <label>Fecha<input type="date" id="tp-m-fecha"></label>
+            <label>Inicio<input type="time" id="tp-m-ini"></label>
+            <label>Fin<input type="time" id="tp-m-fin"></label>
+            <span class="tp-manual__dur" id="tp-m-dur"></span>
+            <button class="tp-btn tp-btn--primary" id="tp-m-save" onclick="DashboardModule._tpSaveManual()">Guardar tiempo</button>
+          </div>
+        </div>
         <div class="tp-foot">
+          <button class="tp-btn tp-btn--ghost" style="margin-right:auto" onclick="DashboardModule._tpToggleManual()">Registrar tiempo</button>
           <button class="tp-btn tp-btn--ghost" onclick="DashboardModule.closeTrackPicker()">Cancelar</button>
           <button class="tp-btn tp-btn--primary" id="tp-start" disabled onclick="DashboardModule.trackPickerStart()"><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><polygon points="6 4 20 12 6 20 6 4"/></svg> Iniciar seguimiento</button>
         </div>
@@ -9982,6 +9993,43 @@ const DashboardModule = (() => {
     _tpSel = { kind, id };
     document.querySelectorAll('#tp-list .tp-card').forEach(c => c.classList.toggle('tp-card--sel', c.dataset.k === kind && +c.dataset.i === id));
     const btn = $('tp-start'); if (btn) btn.disabled = false;
+  }
+  // ── Registrar tiempo a mano (sin cronómetro) sobre la tarea marcada en la lista ──
+  function _tpToggleManual() {
+    const box = $('tp-manual'); if (!box) return;
+    const open = box.style.display === 'none';
+    box.style.display = open ? '' : 'none';
+    if (open) {
+      const p = n => String(n).padStart(2, '0'), d = new Date();
+      if (!$('tp-m-fecha').value) $('tp-m-fecha').value = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+      ['tp-m-ini', 'tp-m-fin', 'tp-m-fecha'].forEach(id => { const el = $(id); if (el && !el._tpBound) { el._tpBound = true; el.addEventListener('input', _tpManualDur); } });
+      if (!_tpSel) showBanner('Primero marca la tarea en la que trabajaste', 'info');
+      _tpManualDur();
+    }
+  }
+  function _tpManualDur() {
+    const el = $('tp-m-dur'); if (!el) return;
+    const a = $('tp-m-ini').value, b = $('tp-m-fin').value;
+    if (!a || !b) { el.textContent = ''; return; }
+    const m = (parseInt(b.slice(0, 2)) * 60 + parseInt(b.slice(3))) - (parseInt(a.slice(0, 2)) * 60 + parseInt(a.slice(3)));
+    el.textContent = m > 0 ? (Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : '') + (m % 60 ? m % 60 + ' min' : '') : 'Fin debe ser después del inicio';
+    el.style.color = m > 0 ? '' : '#B42318';
+  }
+  async function _tpSaveManual() {
+    if (!_tpSel) { showBanner('Primero marca la tarea en la que trabajaste', 'info'); return; }
+    const it = [..._tpTasks, ..._tpOpp].find(x => x.kind === _tpSel.kind && x.id === _tpSel.id); if (!it) return;
+    const btn = $('tp-m-save'); if (btn) btn.disabled = true;
+    try {
+      const r = await apiFetch(API + '/timer/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        task_id: it.kind === 'proyecto' ? it.id : null, task_titulo: it.titulo, project_nombre: it.ctx,
+        fecha: $('tp-m-fecha').value, inicio: $('tp-m-ini').value, fin: $('tp-m-fin').value,
+        metadata: it.kind === 'oportunidad' ? { oppTaskId: it.id } : {},
+      }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'No se pudo guardar');
+      closeTrackPicker();
+      showBanner('Tiempo registrado en "' + it.titulo + '"', 'success');
+      try { _renderHours(); } catch (_) {}
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) btn.disabled = false; }
   }
   async function trackPickerStart() {
     if (!_tpSel) return;
@@ -11001,7 +11049,7 @@ const DashboardModule = (() => {
 
   return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx, setOvPeriod,
     openTrackPicker, closeTrackPicker, _tpFilter, _tpSelect, trackPickerStart, hrsPause, hrsResume, hrsStop, hrsChangeTask,
-    _tpToggleNew, _tpNewCheck, _tpCreateAndStart,
+    _tpToggleNew, _tpNewCheck, _tpCreateAndStart, _tpToggleManual, _tpSaveManual,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
     expEditStatus, expPickStatus, expEditDate, expEditStart, openDateFromRow, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee,

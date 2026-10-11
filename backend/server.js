@@ -13150,6 +13150,35 @@ app.post('/api/timer/start', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/timer/manual — registrar tiempo trabajado a mano (sin cronómetro): fecha + hora de inicio y fin (hora de Lima).
+app.post('/api/timer/manual', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id, b = req.body || {};
+    const okF = /^\d{4}-\d{2}-\d{2}$/.test(b.fecha || ''), okI = /^\d{2}:\d{2}$/.test(b.inicio || ''), okH = /^\d{2}:\d{2}$/.test(b.fin || '');
+    if (!okF || !okI || !okH) return res.status(400).json({ error: 'Indica la fecha, la hora de inicio y la de fin' });
+    const ini = new Date(b.fecha + 'T' + b.inicio + ':00-05:00'), fin = new Date(b.fecha + 'T' + b.fin + ':00-05:00');
+    if (isNaN(ini) || isNaN(fin)) return res.status(400).json({ error: 'Fecha u hora inválida' });
+    if (fin <= ini) return res.status(400).json({ error: 'La hora de fin debe ser posterior a la de inicio' });
+    const dur = Math.round((fin - ini) / 1000);
+    if (dur > 16 * 3600) return res.status(400).json({ error: 'Un registro no puede pasar de 16 horas' });
+    if (fin.getTime() > Date.now() + 60000) return res.status(400).json({ error: 'No se puede registrar tiempo en el futuro' });
+    let taskTitulo = String(b.task_titulo || '').trim(), projectNombre = String(b.project_nombre || '').trim();
+    let validTaskId = parseInt(b.task_id) || null;
+    if (validTaskId) {
+      const tr = await pool.query('SELECT t.titulo, p.nombre FROM tasks t LEFT JOIN projects p ON p.id=t.project_id WHERE t.id=$1', [validTaskId]);
+      if (tr.rows.length) { if (!taskTitulo) taskTitulo = tr.rows[0].titulo || ''; if (!projectNombre) projectNombre = tr.rows[0].nombre || ''; } else validTaskId = null;
+    }
+    if (!validTaskId && !taskTitulo) return res.status(400).json({ error: 'Elige una tarea' });
+    const meta = Object.assign({}, b.metadata && typeof b.metadata === 'object' ? b.metadata : {}, { manual_entry: true });
+    const { rows } = await pool.query(
+      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,ended_at,duration_s,active_s,idle_s,source,activity_type,metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$7,0,'manual_timer','active_work',$8) RETURNING id`,
+      [uid, validTaskId, taskTitulo, projectNombre, ini.toISOString(), fin.toISOString(), dur, JSON.stringify(meta)]);
+    if (validTaskId) { try { await pool.query("UPDATE tasks SET estado='en_progreso', updated_at=NOW() WHERE (id=$1 OR id=(SELECT parent_task_id FROM tasks WHERE id=$1)) AND estado='pendiente'", [validTaskId]); } catch (_) {} }
+    res.status(201).json({ ok: true, id: rows[0].id, duration_s: dur });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PATCH /api/timer/:id/pulse — heartbeat every 30s
 app.patch('/api/timer/:id/pulse', requireAuth, async (req, res) => {
   try {
