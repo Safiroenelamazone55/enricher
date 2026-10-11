@@ -11,22 +11,34 @@ function parseTamano(txt) {
   return nums.length ? nums[0] : null;
 }
 
-// Cada regla elige el CAMPO por el que se evalúa (tamano | pais | industria | ciudad). tamano: rango numérico desde–hasta; los demás: lista de valores (uno por línea, coincidencia por texto). Gana la primera regla que calce.
+// Cada regla elige el CAMPO por el que se evalúa. Numéricos (rango desde–hasta): tamano, puntaje. Textuales (lista de valores, uno por línea):
+// pais, industria, ciudad (coincidencia por texto), tier_clave, prioridad, confianza (igualdad exacta) y "dato:<nombre>" (un dato extra investigado, por texto). Gana la primera regla que calce.
+const _NUM_CAMPOS = ['tamano', 'puntaje'];
+const _EXACT_CAMPOS = ['tier_clave', 'prioridad', 'confianza'];
+function _valorCampo(empresa, campo) {
+  if (campo === 'tamano') return parseTamano(empresa.tamano);
+  if (campo === 'puntaje') return empresa.puntaje == null || empresa.puntaje === '' ? null : Number(empresa.puntaje);
+  if (campo.startsWith('dato:')) {
+    const nm = campo.slice(5).trim().toLowerCase(), de = empresa.datos_extra || {};
+    const k = Object.keys(de).find(x => x.trim().toLowerCase() === nm);
+    return k ? _n(de[k]) : '';
+  }
+  return _n(empresa[campo]);
+}
 function bandaPara(reglas, co) {
   const empresa = (co && typeof co === 'object') ? co : { tamano: co };
   return (reglas || []).find(r => {
     const campo = r.campo || 'tamano';
-    if (campo === 'tamano') {
-      const n = parseTamano(empresa.tamano);
-      if (n == null) return false;
+    const v = _valorCampo(empresa, campo);
+    if (_NUM_CAMPOS.includes(campo)) {
+      if (v == null || isNaN(v)) return false;
       const d = r.desde === '' || r.desde == null ? 0 : Number(r.desde);
       const h = r.hasta === '' || r.hasta == null ? Infinity : Number(r.hasta);
-      return n >= d && n <= h;
+      return v >= d && v <= h;
     }
-    const v = _n(empresa[campo]);
     if (!v) return false;
     const vals = String(r.valores || "").split(/\r?\n/).map(_n).filter(Boolean);
-    return vals.some(x => v.includes(x));
+    return _EXACT_CAMPOS.includes(campo) ? vals.includes(v) : vals.some(x => v.includes(x));
   }) || null;
 }
 
@@ -40,8 +52,8 @@ async function asignarBuyers(pool, batchId, uid, companyIds) {
   if (!reglas.length) return { empresas: 0, asignados: 0, sinBanda: 0 };
   const { rows: companies } = await pool.query(
     Array.isArray(companyIds) && companyIds.length
-      ? 'SELECT id, tamano, pais, industria, ciudad FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[])'
-      : 'SELECT id, tamano, pais, industria, ciudad FROM cantera_companies WHERE batch_id=$1 AND user_id=$2',
+      ? 'SELECT id, tamano, pais, industria, ciudad, tier_clave, puntaje, prioridad, confianza, datos_extra FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[])'
+      : 'SELECT id, tamano, pais, industria, ciudad, tier_clave, puntaje, prioridad, confianza, datos_extra FROM cantera_companies WHERE batch_id=$1 AND user_id=$2',
     Array.isArray(companyIds) && companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
   let empresas = 0, asignados = 0, sinBanda = 0;
   for (const co of companies) {

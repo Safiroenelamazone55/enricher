@@ -6242,10 +6242,10 @@ const CanteraModule = (() => {
           <p class="cant-hint" style="margin:0 0 10px">Elige por qué dato de la empresa cambia el buyer (tamaño, país, industria, ciudad). El cargo que escribas PRIMERO es el 1.º a contactar, el segundo el 2.º, etc. Gana la primera regla que calce. Se aplica al importar y al analizar. Lo que pongas a mano nunca se pisa.</p>
           ${(_current.reglas_buyer || []).map((r, i) => `
             <div class="cant-buyer-row" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
-              <label style="width:120px"><span class="cant-hint">Según</span><select class="form-input" onchange="CanteraModule.setBuyerField(${i},'campo',this.value,true)">
-                ${[['tamano', 'Tamaño'], ['pais', 'País'], ['industria', 'Industria'], ['ciudad', 'Ciudad']].map(([v, l]) => `<option value="${v}"${(r.campo || 'tamano') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-              ${(r.campo || 'tamano') === 'tamano' ? `
-              <label style="width:90px"><span class="cant-hint">Desde (empl.)</span><input type="number" class="form-input" value="${esc(r.desde ?? '')}" oninput="CanteraModule.setBuyerField(${i},'desde',this.value)"></label>
+              <label style="width:190px"><span class="cant-hint">Según</span><select class="form-input" onchange="CanteraModule.setBuyerField(${i},'campo',this.value,true)">
+                ${_buyerCampoOptions(r.campo || 'tamano')}</select></label>
+              ${['tamano', 'puntaje'].includes(r.campo || 'tamano') ? `
+              <label style="width:90px"><span class="cant-hint">Desde</span><input type="number" class="form-input" value="${esc(r.desde ?? '')}" oninput="CanteraModule.setBuyerField(${i},'desde',this.value)"></label>
               <label style="width:90px"><span class="cant-hint">Hasta</span><input type="number" class="form-input" placeholder="sin tope" value="${esc(r.hasta ?? '')}" oninput="CanteraModule.setBuyerField(${i},'hasta',this.value)"></label>`
               : `<label style="width:190px"><span class="cant-hint">Valores (uno por línea)</span><textarea class="form-input" rows="3" placeholder="Spain&#10;Mallorca" oninput="CanteraModule.setBuyerField(${i},'valores',this.value)">${esc(r.valores || '')}</textarea></label>`}
               <label style="flex:1"><span class="cant-hint">Cargos en orden (uno por línea · el 1.º es el Buyer 1)</span><textarea class="form-input" rows="3" placeholder="Founder&#10;Owner&#10;Managing Director" oninput="CanteraModule.setBuyerField(${i},'cargos',this.value)">${esc(r.cargos || '')}</textarea></label>
@@ -7260,6 +7260,14 @@ const CanteraModule = (() => {
   function addScoreCut() { _scoreEnsure(); _current.scoring.cortes.push({ tier: '', desde: '' }); _paint(); }
   function removeScoreCut(i) { _scoreEnsure(); _current.scoring.cortes.splice(i, 1); _paint(); }
   function setScoreCut(i, k, v) { _scoreEnsure(); _current.scoring.cortes[i][k] = v; }
+  // Variables por las que puede cambiar el buyer: datos de la empresa, resultado de la investigación y cada dato extra definido en el borrador.
+  function _buyerCampoOptions(cur) {
+    const grp = (t, items) => '<optgroup label="' + t + '">' + items.map(([v, l]) => '<option value="' + esc(v) + '"' + (cur === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</optgroup>';
+    const extras = (_current.datos_extra || []).filter(d => (d.nombre || '').trim()).map(d => ['dato:' + d.nombre.trim(), d.nombre.trim()]);
+    return grp('Datos de la empresa', [['tamano', 'Tamaño (empleados)'], ['pais', 'País'], ['industria', 'Industria'], ['ciudad', 'Ciudad']])
+      + grp('Resultado de la investigación', [['tier_clave', 'Tier'], ['puntaje', 'Puntaje (0–100)'], ['prioridad', 'Prioridad (alta/media/baja)'], ['confianza', 'Confianza (alta/media/baja)']])
+      + (extras.length ? grp('Datos a investigar', extras) : '');
+  }
   function addBuyerRule() { _current.reglas_buyer = [...(_current.reglas_buyer || []), { desde: '', hasta: '', cargos: '' }]; _paint(); }
   function removeBuyerRule(i) { (_current.reglas_buyer || []).splice(i, 1); _paint(); }
   function setBuyerField(i, k, v, repaint) { _current.reglas_buyer[i][k] = v; if (repaint) _paint(); }
