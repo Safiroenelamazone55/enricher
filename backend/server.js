@@ -9209,8 +9209,8 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
 
       const estados = includeRespaldo ? ['decide', 'respaldo'] : ['decide'];
       const { rows: contactos } = await cl.query(
-        `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND puesto_estado = ANY($3::text[])`,
-        [co.id, uid, estados]);
+        `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND (puesto_estado = ANY($3::text[]) OR (puesto_estado='pendiente' AND (prioridad = 1 OR ($4::boolean AND prioridad > 1))))`,
+        [co.id, uid, estados, includeRespaldo]);
       for (const k of contactos) {
         const email = (k.email || '').toLowerCase();
         // Dedup en 3 niveles, en orden — la mayoría de los contactos de
@@ -9239,7 +9239,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
             INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12) RETURNING id
           `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
-              k.puesto_estado === 'decide' ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
+              (k.puesto_estado === 'decide' || (k.puesto_estado === 'pendiente' && k.prioridad === 1)) ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
           contactId = ins.rows[0].id;
         }
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
