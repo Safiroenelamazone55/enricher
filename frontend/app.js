@@ -28222,10 +28222,10 @@ ${foot}
           const utc = _zonedToUtc(ymd, S.hour, S.tz);
           local = utc.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: _userTZ() });
         } catch (e) { /* sin zona local válida */ }
-        return { txt: `${txt} · ${String(S.hour).padStart(2, '0')}:00`, local };
+        return { txt: `${txt} · ${String(S.hour).padStart(2, '0')}:00`, local, ymd };
       }
     } catch (e) { /* sin zona válida */ }
-    return { txt: '', local: '' };
+    return { txt: '', local: '', ymd: '' };
   }
   async function _rpReload() { try { const r = await _portalApi(`/lm/reports/${_RP.cid}`); _RP.info = Object.assign({}, _RP.info, { schedule: r.schedule, last_sent_at: r.last_sent_at, last_recipients: r.last_recipients, last_by: r.last_by }); } catch (e) { /* se conserva lo mostrado */ } _rpSide(); }
   // Panel izquierdo del informe semanal. Jerarquía: 1) estado + interruptor, 2) próximo envío y acciones,
@@ -28235,10 +28235,13 @@ ${foot}
     const on = !!S.on, draft = !!S.draft, paused = on && !!sch.paused;
     const state = draft ? 'draft' : (on ? (paused ? 'paused' : 'on') : 'off');
     const sub = { on: 'Activo', paused: 'En pausa', draft: 'Configurando…', off: 'Apagado · envío manual' }[state];
-    let body = '';
+    let body = '', skipVigente = false;
     if (state === 'on') {
-      const nxt = _rpNext(S, sch.last_auto || '', sch.skip_date || '');
-      const skipped = sch.skip_date ? _rpNext(S, sch.last_auto || '', '') : null;
+      // el salto solo cuenta si apunta a la PRÓXIMA fecha programada; uno viejo (de una semana ya pasada) se ignora
+      const sinSalto = _rpNext(S, sch.last_auto || '', '');
+      skipVigente = !!sch.skip_date && sinSalto.ymd === sch.skip_date;
+      const nxt = skipVigente ? _rpNext(S, sch.last_auto || '', sch.skip_date) : sinSalto;
+      const skipped = skipVigente ? sinSalto : null;
       body += `<div class="rp-hero__next"><div class="rp-hero__nl">Próximo envío</div><div class="rp-hero__nv">${_rpEsc(nxt.txt || '—')}</div>
         <div class="rp-hero__nz">${_rpEsc(_rpTzName(S.tz))}${nxt.local ? ' · tu hora: <b>' + _rpEsc(nxt.local) + '</b>' : ''}</div></div>`;
       if (skipped && skipped.txt) body += `<div class="rp-hero__skip">Se omite el envío de <b>${_rpEsc(skipped.txt)}</b></div>`;
@@ -28246,7 +28249,7 @@ ${foot}
       body += '<div class="rp-hero__skip">No se enviará nada hasta que lo reanudes. Se conservan día, hora y destinatarios.</div>';
     }
     if (on) {
-      body += `<div class="rp-hero__btns"><button class="rp-lnk" onclick="LeadManagerModule.reportPause(${paused ? 'false' : 'true'})">${paused ? '▶ Reanudar' : '⏸ Pausar'}</button>${paused ? '' : (sch.skip_date ? '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(false)">Cancelar salto</button>' : '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(true)" title="No se envía la próxima vez; las siguientes semanas siguen igual">Saltar esta semana</button>')}</div>`;
+      body += `<div class="rp-hero__btns"><button class="rp-lnk" onclick="LeadManagerModule.reportPause(${paused ? 'false' : 'true'})">${paused ? '▶ Reanudar' : '⏸ Pausar'}</button>${paused ? '' : (skipVigente ? '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(false)">Cancelar salto</button>' : '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(true)" title="No se envía la próxima vez; las siguientes semanas siguen igual">Saltar esta semana</button>')}</div>`;
     }
     if (on || draft) {
       body += `<div class="rp-hero__cfg"><span>Cada</span>
