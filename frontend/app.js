@@ -22167,7 +22167,8 @@ ${foot}
       <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
         <p style="margin:0 0 12px;font-size:.9rem">Un documento con la fecha de inicio y el texto de cada paso (día, canal, asunto y mensaje) de <b>${esc(s.nombre)}</b> — ${nPasos} paso${nPasos === 1 ? '' : 's'}.</p>
         <label style="display:flex;gap:8px;align-items:center;font-size:.86rem;margin:0 0 6px"><input type="checkbox" id="cd-var" checked style="width:auto"> Incluir las variantes (A/B o por segmento)</label>
-        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem"><input type="checkbox" id="cd-fechas" checked style="width:auto"> Mostrar la fecha de cada paso (si la secuencia ya tiene fecha de inicio)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem;margin:0 0 6px"><input type="checkbox" id="cd-fechas" checked style="width:auto"> Mostrar la fecha de cada paso (si la secuencia ya tiene fecha de inicio)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem"><input type="checkbox" id="cd-firma" checked style="width:auto"> Mostrar la firma del buzón al final de los emails</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqCopyDocGen(${id},'pdf')">Descargar PDF</button>
@@ -22198,9 +22199,10 @@ ${foot}
         const asunto = st.canal === 'email' ? bloque('Asunto', v.asunto || st.asunto || '') : '';
         return nom + asunto + bloque(esIA ? 'Instrucción para la IA (comentario)' : (esMsg ? 'Mensaje' : 'Guion / nota'), v.cuerpo);
       }).join('') : '<p class="vacio">(Sin texto todavía)</p>';
+      const firmaHtml = (st.canal === 'email' && opts.firma) ? '<p class="lbl">Firma (se agrega al final de cada email)</p><div class="firma">' + opts.firma + '</div>' : '';
       return '<div class="paso"><h3>Día ' + (st.dia || 1) + ' · ' + esc(canalNom) + (acc ? ' — ' + esc(acc) : '') + '</h3>'
         + '<p class="meta">' + [fecha ? fLong(fecha) : '', st.hora ? 'a las ' + esc(st.hora) : '', st.titulo ? 'Paso: ' + esc(st.titulo) : ''].filter(Boolean).join(' · ') + '</p>'
-        + cuerpoHtml + '</div>';
+        + cuerpoHtml + firmaHtml + '</div>';
     }).join('');
     return '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="es"><head><meta charset="utf-8"><title>Plantillas · ' + esc(s.nombre || '') + '</title>'
       + '<style>body{font-family:Calibri,Segoe UI,Arial,sans-serif;color:#1F1D1B;font-size:11pt;line-height:1.45;margin:28px}'
@@ -22209,15 +22211,29 @@ ${foot}
       + '.paso{margin:0 0 18px;padding:0 0 12px;border-bottom:1px solid #E5E2DC;page-break-inside:avoid}'
       + 'h3{font-size:13pt;margin:0 0 2px;color:#0A5BC4}.meta{margin:0 0 8px;color:#6B6760;font-size:9.5pt}'
       + '.lbl{margin:8px 0 2px;font-size:9pt;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#8A8680}'
-      + '.txt{margin:0 0 6px;white-space:normal}.var{margin:10px 0 0;font-weight:bold;color:#7A5200}.vacio{color:#999}'
+      + '.firma{margin:4px 0 6px;padding:8px 0 0;border-top:1px dashed #D5D1CA}.txt{margin:0 0 6px;white-space:normal}.var{margin:10px 0 0;font-weight:bold;color:#7A5200}.vacio{color:#999}'
       + '@media print{body{margin:0}}</style></head><body>'
       + '<h1>Plantillas de la secuencia</h1><h2>' + esc(s.nombre || '') + (cli ? ' · Cliente: ' + esc(cli) : '') + (cmp ? ' · Campaña: ' + esc(cmp) : '') + '</h2>'
       + '<div class="inicio"><b>' + (okInicio ? 'La secuencia inicia el ' + esc(fLong(inicio)) : 'Fecha de inicio por definir') + '</b>' + (steps.length ? ' · ' + steps.length + ' paso' + (steps.length === 1 ? '' : 's') + ' (día ' + (steps[0].dia || 1) + ' al día ' + (steps[steps.length - 1].dia || 1) + ')' : '') + '</div>'
       + (pasos || '<p class="vacio">Esta secuencia todavía no tiene pasos.</p>') + '</body></html>';
   }
-  function seqCopyDocGen(id, fmt) {
+  async function _copyDocFirma(s) {
+    // Misma regla que el envío real: la firma del buzón del cliente (conectado o solo envío) pisa a la global de Configuración.
+    try {
+      const rm = await apiFetch(`${API}/lm/mailboxes`); const mbs = rm && rm.ok ? await rm.json() : [];
+      const mb = (Array.isArray(mbs) ? mbs : []).find(x => x.outbound_client_id === s.outbound_client_id && ['conectado', 'solo_envio'].includes(x.estado) && (x.signature_html || '').trim());
+      if (mb) return String(mb.signature_html);
+      const rs = await apiFetch(`${API}/lm/send-settings`); const cfg = rs && rs.ok ? await rs.json() : {};
+      return String((cfg && cfg.firma) || '');
+    } catch (_) { return ''; }
+  }
+  async function seqCopyDocGen(id, fmt) {
     const opts = { variantes: !!document.getElementById('cd-var')?.checked, fechas: !!document.getElementById('cd-fechas')?.checked };
     const s = _sequences.find(x => x.id === id) || {};
+    // la pestaña del PDF se abre YA (dentro del clic) para que el navegador no la bloquee
+    const w = fmt === 'word' ? null : window.open('', '_blank');
+    if (fmt !== 'word' && !w) { alert('Permite las ventanas emergentes para generar el PDF.'); return; }
+    if (document.getElementById('cd-firma')?.checked) opts.firma = (await _copyDocFirma(s)).replace(/<script[\s\S]*?<\/script>/gi, '');
     const html = _copyDocHtml(id, opts);
     const base = ('Plantillas - ' + (s.nombre || 'secuencia')).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
     document.getElementById('lm-copydoc-modal')?.remove();
@@ -22228,8 +22244,6 @@ ${foot}
       document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
       showBanner('✓ Descargando ' + base + '.doc', 'success');
     } else {
-      const w = window.open('', '_blank');
-      if (!w) { alert('Permite las ventanas emergentes para generar el PDF.'); return; }
       w.document.open(); w.document.write(html); w.document.close();
       setTimeout(() => { try { w.focus(); w.print(); } catch (_) {} }, 500);   // en el diálogo de impresión elige «Guardar como PDF»
     }
