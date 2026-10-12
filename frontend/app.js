@@ -5473,12 +5473,21 @@ const CanteraModule = (() => {
     return best;
   }
   const _C_CO_PFX = /^(company|empresa|account|org|organization)\s+(.+)$/;
-  function _cGuess(headerRaw) {
+  // ¿El archivo trae columnas de PERSONA (nombre, apellido, cargo, email)? Entonces una columna "Ciudad"/"City"/"Location" SIN prefijo
+  // de empresa es la ubicación de la persona, no la de la empresa. Mapearla a la empresa fue la causa de ciudades erróneas (la
+  // empresa heredaba "Murcia"/"Valencia"/"Aruba" del LinkedIn del contacto aunque su oficina estuviera en Alicante).
+  const _C_PERSON_KEYS = ['nombre', 'apellido', 'nombre_completo', 'cargo', 'email'];
+  function _cIsPersonFile(headers) { return (headers || []).some(x => _C_PERSON_KEYS.includes(_cBest(_cNorm(x), CANT_CT_SYN))); }
+  function _cGuess(headerRaw, personFile) {
     const h = _cNorm(headerRaw); if (!h) return '';
     const m = h.match(_C_CO_PFX);
     if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; }
     const c = _cBest(h, CANT_CT_SYN); if (c) return c;
-    const a = _cBest(h, CANT_CO_SYN); if (a) return 'co_' + a;
+    const a = _cBest(h, CANT_CO_SYN);
+    if (a) {
+      if (personFile && (a === 'ciudad' || a === 'ubicacion')) return 'ubicacion';   // ubicación del contacto, no de la empresa
+      return 'co_' + a;
+    }
     return '';
   }
   function _cCsvParse(text, delim) {
@@ -5608,9 +5617,12 @@ const CanteraModule = (() => {
   }
   function _cImpStepMap() {
     _cImp.opts = _cImpOpts();
+    const _personFile = _cIsPersonFile(_cImp.headers);
+    const _seenUbic = new Set();
     const rowsHtml = _cImp.headers.map((h, idx) => {
       const samples = _cImp.samples.map(r => r[idx] || '').filter(Boolean).slice(0, 2);
-      const gKey = _cGuess(h);
+      let gKey = _cGuess(h, _personFile);
+      if (gKey === 'ubicacion') { if (_seenUbic.has('u')) gKey = ''; else _seenUbic.add('u'); }   // un solo campo de ubicación del contacto
       const gOpt = _cImp.opts.find(o => o.key === gKey) || _cImp.opts[0];
       const chips = samples.length ? samples.map(v => `<span class="lm-map-chip">${esc(v.length > 22 ? v.slice(0, 20) + '…' : v)}</span>`).join('') : '<span class="lm-map-empty">sin datos</span>';
       return `<div class="lm-map-row${gKey ? ' mapped' : ''}" data-idx="${idx}">
@@ -33937,12 +33949,41 @@ ${foot}
       telefono: v => { if (!v) return ''; const d = v.replace(/\D/g, ''); return (d.length < 6 || d.length > 15) ? 'Teléfono con formato dudoso' : ''; },
     },
   };
+  // Zona geográfica del cliente. Si la gran mayoría de las empresas de un cliente están en la provincia de Alicante, una empresa cuya
+  // ciudad cae fuera (Murcia, Valencia, Barcelona, un país lejano…) se marca para revisar: es el aviso que habría detectado las ciudades
+  // copiadas del LinkedIn del contacto. No corrige nada solo.
+  const DG_ALC = new Set(['alicante', 'alacant', 'elche', 'elx', 'torrevieja', 'orihuela', 'orihuela costa', 'benidorm', 'alcoy', 'alcoi', 'denia', 'javea', 'xabia', 'calpe', 'calp', 'altea', 'villajoyosa', 'la vila joiosa', 'vila joiosa', 'santa pola',
+       'elda', 'petrer', 'novelda', 'crevillent', 'crevillente', 'san vicente del raspeig', 'sant vicent del raspeig', 'el campello', 'campello', 'mutxamel', 'san juan', 'sant joan', 'playa san juan', 'moraira', 'teulada', 'benissa',
+       'benitachell', 'alfaz del pi', 'l alfas del pi', 'albir', 'l albir', 'polop', 'la nucia', 'finestrat', 'callosa de ensarria', 'guadalest', 'pego', 'ondara', 'els poblets', 'el verger', 'gata de gorgos', 'pedreguer', 'la xara',
+       'jesus pobre', 'orba', 'parcent', 'jalon', 'xalo', 'lliber', 'rojales', 'ciudad quesada', 'guardamar del segura', 'guardamar', 'san fulgencio', 'la marina', 'la zenia', 'cabo roig', 'playa flamenca', 'punta prima',
+       'pilar de la horadada', 'los montesinos', 'algorfa', 'almoradi', 'dolores', 'san miguel de salinas', 'bigastro', 'rafal', 'redovan', 'cox', 'la mata', 'gran alacant', 'el altet', 'busot', 'aigues', 'jijona', 'xixona', 'ibi',
+       'castalla', 'onil', 'villena', 'biar', 'banyeres de mariola', 'cocentaina', 'muro de alcoy', 'pinoso', 'monforte del cid', 'aspe', 'hondon de las nieves', 'la romana', 'agost', 'tibi', 'relleu', 'sella', 'benidoleig', 'vergel',
+       'costa blanca', 'provincia de alicante', 'alicante alacant', 'greater alicante area']);
+  function _dgCityNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’'`·]/g, ' ').replace(/\b(greater|metropolitan|area|region|province|provincia de|comunidad valenciana|valencian community|spain|espana)\b/g, ' ').replace(/[,.\-/()]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+  let _dgZoneMemo = { sig: '', byClient: {} };
+  function _dgZoneOf(clientId) {
+    const sig = (_companies || []).length + ':' + (_companies || []).reduce((n, c) => n + (c.ciudad ? 1 : 0), 0);
+    if (_dgZoneMemo.sig !== sig) _dgZoneMemo = { sig, byClient: {} };
+    const k = String(clientId || '');
+    if (!(k in _dgZoneMemo.byClient)) {
+      const cs = (_companies || []).filter(c => String(c.outbound_client_id || '') === k && _dgCityNorm(c.ciudad));
+      const inAlc = cs.filter(c => DG_ALC.has(_dgCityNorm(c.ciudad))).length;
+      _dgZoneMemo.byClient[k] = (cs.length >= 8 && inAlc / cs.length >= 0.6) ? 'alicante' : '';
+    }
+    return _dgZoneMemo.byClient[k];
+  }
   function _dgRowIssues(r) {
     const V = DG_VALIDATORS[_dgEntity] || {};
     const out = [];
     for (const field of Object.keys(V)) {
       const msg = V[field](String(r[field] || '').trim());
       if (msg) out.push({ field, msg });
+    }
+    if (_dgEntity === 'companies') {
+      const pais = String(r.pais || '').trim();
+      if (!pais || /^(n\/?a|na|-|—)$/i.test(pais)) out.push({ field: 'pais', msg: 'País sin dato' });
+      const ciu = _dgCityNorm(r.ciudad);
+      if (ciu && _dgZoneOf(r.outbound_client_id) === 'alicante' && !DG_ALC.has(ciu)) out.push({ field: 'ciudad', msg: 'Ciudad fuera de la zona de este cliente (provincia de Alicante): revisa si es la de la oficina o la del contacto' });
     }
     return out;
   }

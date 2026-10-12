@@ -7749,9 +7749,16 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'posted on linkedin recently': 'publico_reciente',
       'follows your company': 'sigue_empresa',
     };
+    // Archivo de PERSONAS (trae nombre/apellido/cargo/email): una columna "Ciudad"/"City" sin prefijo de empresa es la ubicación de la persona.
+    // Mapearla a la empresa hacía que la empresa heredara la ciudad del LinkedIn del contacto (Murcia, Valencia, Aruba…) aunque su oficina
+    // estuviera en Alicante. Solo en ese caso, y solo si el archivo no trae ya su propia columna de ubicación del contacto.
+    const personHdr = headerRow.some(h => /^(first name|firstname|nombre|nombres|apellido|last name|lastname|cargo|job title|title|email|full name|nombre completo)$/.test(norm(h)));
+    const hasUbic = headerRow.some((h, i) => AUTO[norm(h)] === 'ubicacion' || colMap[i] === 'ubicacion');
+    let ubicTaken = hasUbic;
     headerRow.forEach((h, idx) => {
       if (colMap[idx] || ignored.has(idx)) return;
-      const field = AUTO[norm(h)];
+      let field = AUTO[norm(h)];
+      if (field === 'co_ciudad' && personHdr && ['ciudad', 'city'].includes(norm(h))) { field = ubicTaken ? null : 'ubicacion'; if (field) ubicTaken = true; }
       if (field) colMap[idx] = field;
     });
   }
