@@ -7311,20 +7311,30 @@ const CanteraModule = (() => {
   }
   // Nombre del dato → nombre de variable para los mensajes ({{competidor_1}}). Mismo criterio que el servidor.
   function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
-  function _knownDeNames() { return [...new Set((_batches || []).flatMap(b => (b.datos_extra || []).map(x => (x.nombre || '').trim())).filter(Boolean))]; }
+  function _knownDeNames() {
+    const m = new Map();
+    (_batches || []).forEach(b => (b.datos_extra || []).forEach(x => { const n = (x.nombre || '').trim(); if (n && !m.has(n.toLowerCase())) m.set(n.toLowerCase(), { nombre: n, pregunta: x.pregunta || '', solo: x.solo_si_califica !== false }); }));
+    return [...m.values()];
+  }
   function showDeNames(i) {
     const m = document.getElementById('cant-de-menu-' + i); if (!m) return;
     const cur = ((_current.datos_extra || [])[i] || {}).nombre || '';
     const q = cur.trim().toLowerCase();
     const usados = new Set((_current.datos_extra || []).map((x, j) => j === i ? '' : (x.nombre || '').trim().toLowerCase()));
-    const names = _knownDeNames().filter(n => !usados.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q)) && n.toLowerCase() !== q);
-    if (!names.length) { m.style.display = 'none'; return; }
-    m.innerHTML = names.map(n => '<div onmousedown="event.preventDefault();CanteraModule.pickDeName(' + i + ',this.dataset.n)" data-n="' + esc(n) + '" style="padding:7px 10px;border-radius:6px;cursor:pointer;font-size:.88rem;color:var(--text)" onmouseover="this.style.background=&quot;#F4F2EE&quot;" onmouseout="this.style.background=&quot;&quot;">' + esc(n) + '</div>').join('');
+    const items = _knownDeNames().filter(k => !q || k.nombre.toLowerCase().includes(q));
+    if (!items.length) { m.style.display = 'none'; return; }
+    m.innerHTML = '<div style="padding:4px 10px 6px;font-size:.72rem;color:var(--text-3,#8a867f)">Datos ya usados en tus borradores</div>' + items.map(k => {
+      const ya = usados.has(k.nombre.toLowerCase());
+      return '<div ' + (ya ? '' : 'onmousedown="event.preventDefault();CanteraModule.pickDeName(' + i + ',this.dataset.n)" onmouseover="this.style.background=&quot;#F4F2EE&quot;" onmouseout="this.style.background=&quot;&quot;"') + ' data-n="' + esc(k.nombre) + '" style="padding:7px 10px;border-radius:6px;font-size:.88rem;display:flex;justify-content:space-between;gap:8px;' + (ya ? 'color:#a8a49d;cursor:default' : 'color:var(--text);cursor:pointer') + '"><span>' + esc(k.nombre) + '</span>' + (ya ? '<span style="font-size:.72rem">ya está en este borrador</span>' : '') + '</div>';
+    }).join('');
     m.style.display = 'block';
   }
   function hideDeNames(i) { const m = document.getElementById('cant-de-menu-' + i); if (m) m.style.display = 'none'; }
   function pickDeName(i, n) {
+    const known = _knownDeNames().find(k => k.nombre === n);
     setDatoExtra(i, 'nombre', n);
+    const d = _current.datos_extra[i];
+    if (known && !(d.pregunta || '').trim()) { d.pregunta = known.pregunta; d.solo_si_califica = known.solo; _paint(); return; }
     const m = document.getElementById('cant-de-menu-' + i); if (m) { m.style.display = 'none'; const inp = m.parentNode.querySelector('input'); if (inp) inp.value = n; }
   }
   function addDatoExtra() { _current.datos_extra = [...(_current.datos_extra || []), { nombre: '', pregunta: '', solo_si_califica: true }]; _paint(); }
