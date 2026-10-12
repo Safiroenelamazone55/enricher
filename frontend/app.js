@@ -29403,7 +29403,63 @@ ${foot}
         <button class="btn btn--primary btn--sm" id="ref-save" onclick="LeadManagerModule.ldReferSave(${cid},'${disp}')">Guardar</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    // Otros contactos YA existentes en la misma empresa (la siguiente persona de la lista): se previsualizan con su LinkedIn para verificarlos
+    // y se puede seguir con uno de ellos; agregar a alguien nuevo queda como segunda opción.
+    const _descartado = ['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
+    const _rank = x => ({ Principal: 0, Secundario: 1 }[x.contact_priority] ?? 2);
+    const cands = c.company_id ? (_contacts || []).filter(x => x.id !== cid && x.company_id === c.company_id && !_descartado.includes(x.disposition)).sort((a, b) => _rank(a) - _rank(b) || a.id - b.id) : [];
+    if (cands.length) {
+      const liUrl = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u); };
+      const card = x => {
+        const nom = [x.nombre, x.apellido].filter(Boolean).join(' ') || x.email || ('#' + x.id);
+        const inSeq = (x.sequences || []).length;
+        const li = liUrl(x.linkedin);
+        return `<div class="ref-cand" style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 11px;border:1px solid var(--border,#EAE7E2);border-radius:10px;margin-bottom:7px">
+          <div style="min-width:0"><div style="font-weight:600;font-size:.9rem">${esc(nom)} ${x.contact_priority ? `<span style="font-weight:500;font-size:.72rem;color:#6C6862;background:#F1EFEB;border-radius:999px;padding:1px 7px">${esc(x.contact_priority)}</span>` : ''}</div>
+            <div style="font-size:.8rem;color:var(--text-muted,#7a766f)">${esc(x.cargo || 'Sin cargo')} · ${inSeq ? 'ya está en una secuencia' : 'sin secuencia todavía'}</div>
+            <div style="font-size:.8rem;margin-top:2px">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#0A66C2;font-weight:600">Ver LinkedIn ↗</a>` : '<span style="color:#B45309">Sin LinkedIn guardado</span>'}</div></div>
+          <button type="button" class="btn btn--primary btn--sm" style="flex:none" onclick="LeadManagerModule.ldReferExisting(${cid},'${disp}',${x.id})">Seguir con este</button>
+        </div>`;
+      };
+      const form = m.querySelector('.fin-pi-form');
+      const intro = form.querySelector('.seq-drip-hint');
+      [...form.children].forEach(el => { if (el !== intro) { el.setAttribute('data-refnew', '1'); el.style.display = 'none'; } });
+      const saveBtn = m.querySelector('#ref-save'); if (saveBtn) saveBtn.style.display = 'none';
+      intro.insertAdjacentHTML('afterend', `<div class="fin-pi-full ref-cands"><div class="ref-enter__t" style="margin:6px 0 6px">${cands.length === 1 ? 'Hay otro contacto en esta empresa' : 'Hay otros contactos en esta empresa'} <small>— revisa su LinkedIn y sigue con el que sea la persona correcta</small></div>${cands.map(card).join('')}
+        <button type="button" class="btn btn--ghost btn--sm" id="ref-showform" style="margin-top:4px" onclick="LeadManagerModule.refShowForm()">＋ Agregar a otra persona</button></div>`);
+    }
     setTimeout(() => $('ref-nombre')?.focus(), 60);
+  }
+  function refShowForm() {
+    const m = document.getElementById('lm-ref-modal'); if (!m) return;
+    m.querySelectorAll('[data-refnew]').forEach(el => { el.style.display = ''; });
+    const sb = m.querySelector('#ref-save'); if (sb) sb.style.display = '';
+    const b = m.querySelector('#ref-showform'); if (b) b.style.display = 'none';
+    setTimeout(() => $('ref-nombre')?.focus(), 30);
+  }
+  // Seguir con un contacto que ya existe en la empresa: el actual sale de la cola y ese pasa a ser el contacto (se enrola si hacía falta).
+  async function ldReferExisting(cid, disp, otherId) {
+    const btns = document.querySelectorAll('#lm-ref-modal .ref-cand button'); btns.forEach(b => { b.disabled = true; });
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/refer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disposition: disp, existing_contact_id: otherId, nota: '', sequence_id: $('ref-seq')?.value || '', campaign_id: $('ref-camp')?.value || '' }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await _reloadContacts();
+      const ctx = _cpTaskCtx;
+      if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
+      await load();
+      document.getElementById('lm-ref-modal')?.remove();
+      const nom = [d.contacto?.nombre, d.contacto?.apellido].filter(Boolean).join(' ') || 'el siguiente contacto';
+      showBanner(`✓ Seguimos con ${esc(nom)}${d.enrolado > 0 ? ' · entró a la secuencia desde el paso 1' : ''}`, 'success');
+      openContactPage(otherId, ctx ? { seqId: ctx.seqId } : undefined);
+    } catch (e) {
+      btns.forEach(b => { b.disabled = false; });
+      const hint = $('ref-hint'); if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      else showBanner('Error: ' + e.message, 'error');
+    }
   }
   async function ldReferSave(cid, disp) {
     const g = id => ($(id)?.value || '').trim();
@@ -34657,7 +34713,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,

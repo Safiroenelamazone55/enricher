@@ -5023,7 +5023,9 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
   const b = req.body || {};
   const nombre = _lmS(b.nombre), apellido = _lmS(b.apellido), email = _lmS(b.email).toLowerCase();
   const disp = b.disposition === 'no_es_persona' ? 'no_es_persona' : 'derivado';
-  if (!nombre && !email) return res.status(400).json({ error: 'Indica al menos el nombre o el email del nuevo contacto' });
+  // existing_contact_id: se sigue con OTRO contacto que ya existe en la misma empresa (en vez de crear uno nuevo).
+  const existingId = parseInt(b.existing_contact_id) || 0;
+  if (!existingId && !nombre && !email) return res.status(400).json({ error: 'Indica al menos el nombre o el email del nuevo contacto' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -5034,7 +5036,11 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
 
     // Si ya existe un contacto con ese email en el workspace, se reutiliza (no se duplica).
     let nuevo = null;
-    if (email) {
+    if (existingId) {
+      const { rows } = await client.query(`SELECT * FROM lm_contacts WHERE id=$1 AND user_id=$2 AND id<>$3 AND company_id IS NOT DISTINCT FROM $4`, [existingId, uid, cid, orig.company_id]);
+      if (!rows.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Ese contacto no es de la misma empresa' }); }
+      nuevo = rows[0];
+    } else if (email) {
       const { rows } = await client.query(`SELECT * FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email]);
       nuevo = rows[0] || null;
     }
@@ -5046,7 +5052,7 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
         [uid, orig.company_id, nombre, apellido, email, _lmS(b.telefono), _lmS(b.movil), _lmS(b.cargo), _lmS(b.linkedin),
          orig.empresa_nombre, orig.outbound_client_id, cid, _lmS(b.nota), `Referido por ${nomOrig}`]);
       nuevo = ins;
-    } else {
+    } else if (!existingId) {
       await client.query(`UPDATE lm_contacts SET referred_by=COALESCE(referred_by,$1), referred_note=COALESCE(NULLIF(referred_note,''),$2), company_id=COALESCE(company_id,$3), updated_at=NOW() WHERE id=$4`,
         [cid, _lmS(b.nota), orig.company_id, nuevo.id]);
     }
@@ -5070,7 +5076,7 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     // derivado_a en el original (éste) + referred_by en el nuevo (arriba) — con eso la
     // ficha y la tabla de Leads pueden mostrar un link real, no solo el texto suelto de
     // la actividad de abajo.
-    const nomNuevo = [nombre, apellido].filter(Boolean).join(' ') || email;
+    const nomNuevo = existingId ? ([nuevo.nombre, nuevo.apellido].filter(Boolean).join(' ') || nuevo.email) : ([nombre, apellido].filter(Boolean).join(' ') || email);
     await client.query(`UPDATE lm_contacts SET disposition=$1, derivado_a=$4, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid, nuevo.id]);
     await client.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
       [uid, cid, 'disposition_' + disp]);
@@ -5084,7 +5090,7 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$5,$4,NOW(),'hecha')`,
       [uid, cid, orig.outbound_client_id, `Disposición: ${LM_DISP_LBL[disp]} → ${nomNuevo}${_lmS(b.nota) ? ' — ' + _lmS(b.nota) : ''}`, disp === 'no_es_persona' ? 'nota' : 'respuesta']);
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
-      [uid, nuevo.id, orig.outbound_client_id, `Referido por ${nomOrig} (misma empresa)`]);
+      [uid, nuevo.id, orig.outbound_client_id, existingId ? `Pasa a ser el contacto de la empresa: ${nomOrig} no era la persona` : `Referido por ${nomOrig} (misma empresa)`]);
     await client.query('COMMIT');
     // Entrada EXPLÍCITA elegida en el formulario (secuencia y/o campaña): se enrola con la lógica normal (goteo, cadencia, misma empresa).
     let aviso = '';
