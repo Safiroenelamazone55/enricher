@@ -21460,6 +21460,7 @@ const LeadManagerModule = (() => {
       + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
       + item(s && s.estado === 'pausada' ? '► Reactivar todo' : 'II Pausar todo', s && s.estado === 'pausada' ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
       + item('Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
+      + item('Descargar plantillas (Word / PDF)', `LeadManagerModule.seqCopyDocOpen(${seqId})`)
       + '<div class="cp-mark-menu__sep"></div>'
       + item('Duplicar…', `LeadManagerModule.seqDuplicateOpen(${seqId})`)
       + item('<span style="color:#B91C1C">Eliminar</span>', `LeadManagerModule.confirmDeleteSequence(${seqId})`)
@@ -22152,6 +22153,86 @@ ${foot}
         <button class="btn btn--primary btn--sm" onclick="${genCall}">${_ico('down')} Generar PDF</button>
       </div></div></div>`;
     document.body.appendChild(m);
+  }
+  // ── Descargar los textos (copys) de la secuencia, paso por paso, en Word o PDF ──
+  // «Secuencia inicia el <fecha> · Día 1 · LinkedIn … · Día 3 · Email (asunto + mensaje)…». Incluye las variantes A/B o por segmento.
+  function seqCopyDocOpen(id) {
+    const s = _sequences.find(x => x.id === id); if (!s) return;
+    document.getElementById('lm-copydoc-modal')?.remove();
+    const nPasos = _seqSteps(id).length;
+    const m = document.createElement('div'); m.id = 'lm-copydoc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
+      <div class="fin-pi-box__hd"><h3>Descargar plantillas de la secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('lm-copydoc-modal').remove()">✕</button></div>
+      <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
+        <p style="margin:0 0 12px;font-size:.9rem">Un documento con la fecha de inicio y el texto de cada paso (día, canal, asunto y mensaje) de <b>${esc(s.nombre)}</b> — ${nPasos} paso${nPasos === 1 ? '' : 's'}.</p>
+        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem;margin:0 0 6px"><input type="checkbox" id="cd-var" checked style="width:auto"> Incluir las variantes (A/B o por segmento)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem"><input type="checkbox" id="cd-fechas" checked style="width:auto"> Mostrar la fecha de cada paso (si la secuencia ya tiene fecha de inicio)</label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqCopyDocGen(${id},'pdf')">Descargar PDF</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCopyDocGen(${id},'word')">Descargar Word</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function _copyDocHtml(id, opts) {
+    const s = _sequences.find(x => x.id === id) || {};
+    const steps = _seqSteps(id);
+    const cli = _clientName(s.outbound_client_id), cmp = s.campaign_id ? _campaignName(s.campaign_id) : '';
+    const fLong = d => d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const inicio = s.starts_on ? new Date(String(s.starts_on).slice(0, 10) + 'T00:00:00') : null;
+    const okInicio = inicio && !isNaN(inicio);
+    const vars = t => esc(t).replace(/\{\{[^{}\n]*\}\}/g, m => '<span style="background:#E3EEFF;color:#1B5FD1">' + m + '</span>').replace(/\n/g, '<br>');
+    const bloque = (lbl, texto) => texto && String(texto).trim() ? '<p class="lbl">' + esc(lbl) + '</p><p class="txt">' + vars(String(texto).trim()) + '</p>' : '';
+    const pasos = steps.map(st => {
+      const canalNom = (_TOUCH[st.canal] || [st.canal])[0];
+      const acc = _accionLabel(st.canal, st.accion);
+      const fecha = (opts.fechas && okInicio) ? _stepDateObj(st) : null;
+      const esIA = st.canal === 'linkedin' && st.accion === 'comentario';
+      const esMsg = st.canal === 'email' || st.canal === 'linkedin' || st.canal === 'whatsapp';
+      let variantes = _stepVariants(st).filter(v => (v.cuerpo || '').trim() || (v.asunto || '').trim());
+      if (!opts.variantes) variantes = variantes.slice(0, 1);
+      const multi = variantes.length > 1;
+      const cuerpoHtml = variantes.length ? variantes.map(v => {
+        const nom = multi ? '<p class="var">Variante ' + esc(v.nombre || '') + (st.variant_mode === 'segment' && Array.isArray(v.targets) && v.targets.length ? ' · segmento: ' + esc(v.targets.join(', ')) : '') + '</p>' : '';
+        const asunto = st.canal === 'email' ? bloque('Asunto', v.asunto || st.asunto || '') : '';
+        return nom + asunto + bloque(esIA ? 'Instrucción para la IA (comentario)' : (esMsg ? 'Mensaje' : 'Guion / nota'), v.cuerpo);
+      }).join('') : '<p class="vacio">(Sin texto todavía)</p>';
+      return '<div class="paso"><h3>Día ' + (st.dia || 1) + ' · ' + esc(canalNom) + (acc ? ' — ' + esc(acc) : '') + '</h3>'
+        + '<p class="meta">' + [fecha ? fLong(fecha) : '', st.hora ? 'a las ' + esc(st.hora) : '', st.titulo ? 'Paso: ' + esc(st.titulo) : ''].filter(Boolean).join(' · ') + '</p>'
+        + cuerpoHtml + '</div>';
+    }).join('');
+    return '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="es"><head><meta charset="utf-8"><title>Plantillas · ' + esc(s.nombre || '') + '</title>'
+      + '<style>body{font-family:Calibri,Segoe UI,Arial,sans-serif;color:#1F1D1B;font-size:11pt;line-height:1.45;margin:28px}'
+      + 'h1{font-size:19pt;margin:0 0 4px;color:#0F172A}h2{font-size:11pt;font-weight:normal;color:#6B6760;margin:0 0 14px}'
+      + '.inicio{border-left:4px solid #0A84FF;background:#F4F8FF;padding:8px 12px;margin:10px 0 22px;font-size:12pt}'
+      + '.paso{margin:0 0 18px;padding:0 0 12px;border-bottom:1px solid #E5E2DC;page-break-inside:avoid}'
+      + 'h3{font-size:13pt;margin:0 0 2px;color:#0A5BC4}.meta{margin:0 0 8px;color:#6B6760;font-size:9.5pt}'
+      + '.lbl{margin:8px 0 2px;font-size:9pt;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#8A8680}'
+      + '.txt{margin:0 0 6px;white-space:normal}.var{margin:10px 0 0;font-weight:bold;color:#7A5200}.vacio{color:#999}'
+      + '@media print{body{margin:0}}</style></head><body>'
+      + '<h1>Plantillas de la secuencia</h1><h2>' + esc(s.nombre || '') + (cli ? ' · Cliente: ' + esc(cli) : '') + (cmp ? ' · Campaña: ' + esc(cmp) : '') + '</h2>'
+      + '<div class="inicio"><b>' + (okInicio ? 'La secuencia inicia el ' + esc(fLong(inicio)) : 'Fecha de inicio por definir') + '</b>' + (steps.length ? ' · ' + steps.length + ' paso' + (steps.length === 1 ? '' : 's') + ' (día ' + (steps[0].dia || 1) + ' al día ' + (steps[steps.length - 1].dia || 1) + ')' : '') + '</div>'
+      + (pasos || '<p class="vacio">Esta secuencia todavía no tiene pasos.</p>') + '</body></html>';
+  }
+  function seqCopyDocGen(id, fmt) {
+    const opts = { variantes: !!document.getElementById('cd-var')?.checked, fechas: !!document.getElementById('cd-fechas')?.checked };
+    const s = _sequences.find(x => x.id === id) || {};
+    const html = _copyDocHtml(id, opts);
+    const base = ('Plantillas - ' + (s.nombre || 'secuencia')).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    document.getElementById('lm-copydoc-modal')?.remove();
+    if (fmt === 'word') {
+      // Word abre este HTML como documento (.doc) con el mismo formato; se puede editar y guardar como .docx
+      const blob = new Blob(['﻿', html], { type: 'application/msword' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + '.doc';
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      showBanner('✓ Descargando ' + base + '.doc', 'success');
+    } else {
+      const w = window.open('', '_blank');
+      if (!w) { alert('Permite las ventanas emergentes para generar el PDF.'); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+      setTimeout(() => { try { w.focus(); w.print(); } catch (_) {} }, 500);   // en el diálogo de impresión elige «Guardar como PDF»
+    }
   }
   function seqReportOpen(id) {
     _rptModal('Informe PDF de la secuencia', `LeadManagerModule.seqReportGen(${id})`,
@@ -34735,7 +34816,7 @@ ${foot}
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
-    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
+    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqCopyDocOpen, seqCopyDocGen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplInsertVarAsunto, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
