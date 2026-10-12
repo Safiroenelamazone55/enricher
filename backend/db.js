@@ -452,6 +452,8 @@ async function initDb() {
     // compartido por todos — hacía falta distinguir quién conectó cada uno para
     // poder marcarlo privado).
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS visibilidad TEXT NOT NULL DEFAULT 'todos';`);
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS visibilidad_niveles TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS visibilidad_miembros INTEGER[] NOT NULL DEFAULT '{}';`);
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS connected_by INTEGER;`);
     await pool.query(`UPDATE slack_workspaces SET connected_by = user_id WHERE connected_by IS NULL;`);
     // Id de la persona DENTRO de Slack (auth.test) para ese token — sirve para

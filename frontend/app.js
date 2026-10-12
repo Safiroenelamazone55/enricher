@@ -16198,12 +16198,7 @@ const SlackModule = (() => {
         </div>
         ${w.ultimo_error ? `<span class="slk-err" title="${esc(w.ultimo_error)}">Con error</span>` : ''}
         <button class="slk-org${w.es_default_proyectos ? ' slk-org--on' : ''}" ${canEdit ? '' : 'disabled'} title="${w.es_default_proyectos ? 'Aquí se crea un canal por cada proyecto nuevo y se archiva al cerrarlo. Clic para quitarlo.' : 'Es un Slack de terceros: Nova solo participa, no crea ni archiva canales. Clic para marcarlo como el de tu organización.'}" onclick="SlackModule.marcarOrganizacion(${w.id},${w.es_default_proyectos ? 'false' : 'true'})">${w.es_default_proyectos ? '✓ Organización' : 'Tercero'}</button>
-        <select class="slk-vis" title="Quién puede ver este Slack conectado"
-                onchange="SlackModule.cambiarVisibilidad(${w.id},this.value)" ${canEdit ? '' : 'disabled'}>
-          <option value="todos"${w.visibilidad === 'todos' ? ' selected' : ''}>Todos los miembros</option>
-          <option value="admin"${w.visibilidad === 'admin' ? ' selected' : ''}>Solo admins</option>
-          <option value="solo_yo"${w.visibilidad === 'solo_yo' ? ' selected' : ''}>Solo yo (privado)</option>
-        </select>
+        <button class="slk-vis" style="cursor:${canEdit ? 'pointer' : 'default'}" title="Quién puede ver este Slack conectado" ${canEdit ? `onclick="SlackModule.visPop(event,${w.id})"` : 'disabled'}>${esc(_visLabel(w))} ▾</button>
         <button class="slk-x" onclick="SlackModule.desconectar(${w.id})" title="Desconectar">✕</button>
       </div>`;
     }).join('');
@@ -16217,14 +16212,60 @@ const SlackModule = (() => {
       await cargar();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  async function cambiarVisibilidad(id, visibilidad) {
+  const _VIS_ET = { todos: 'Todos los miembros', admin: 'Solo admins', nivel: 'Por nivel', miembros: 'Miembros específicos', solo_yo: 'Solo yo (privado)' };
+  function _visLabel(w) {
+    if (w.visibilidad === 'miembros') { const n = (w.visibilidad_miembros || []).length; return 'Miembros específicos' + (n ? ` (${n})` : ''); }
+    return _VIS_ET[w.visibilidad] || 'Todos los miembros';
+  }
+  // Mismo panel que el de WhatsApp: todos / por nivel / miembros específicos / solo yo.
+  async function visPop(ev, id) {
+    ev.stopPropagation();
+    const btnRect = ev.currentTarget.getBoundingClientRect();
+    document.querySelectorAll('.wa-vis-pop').forEach(x => x.remove());
+    const w = _ws.find(x => x.id === id); if (!w) return;
+    let team = []; try { team = (await WaChatModule._cargarTeam()) || []; } catch (_) {}
+    // 'admin' (valor anterior de Slack) equivale a «Por nivel → Admin»
+    const vis = w.visibilidad === 'admin' ? 'nivel' : (w.visibilidad || 'todos');
+    const niveles = w.visibilidad === 'admin' ? ['admin'] : (w.visibilidad_niveles || []);
+    const miembros = (w.visibilidad_miembros || []).map(Number);
+    const opt = (v, lbl) => `<label class="wa-vis-opt"><input type="radio" name="slkvis-${id}" value="${v}"${vis === v ? ' checked' : ''} onchange="SlackModule._visSub(${id})"> ${lbl}</label>`;
+    const nivelChk = (v, lbl) => `<label class="wa-vis-sub__item"><input type="checkbox" class="slkvis-nivel-${id}" value="${v}"${niveles.includes(v) ? ' checked' : ''}> ${lbl}</label>`;
+    const miembroChk = t => `<label class="wa-vis-sub__item"><input type="checkbox" class="slkvis-mbr-${id}" value="${t.id}"${miembros.includes(t.id) ? ' checked' : ''}> ${esc(t.nombre)}</label>`;
+    const pop = document.createElement('div');
+    pop.className = 'wa-vis-pop'; pop.id = `slk-vis-pop-${id}`; pop.onclick = e => e.stopPropagation();
+    pop.innerHTML = `
+      <div class="wa-vis-pop__t">¿Quién puede ver este Slack?</div>
+      ${opt('todos', 'Todos los miembros')}
+      ${opt('nivel', 'Por nivel')}
+      <div class="wa-vis-sub" id="slkvis-sub-nivel-${id}" style="display:${vis === 'nivel' ? 'flex' : 'none'}">${nivelChk('admin', 'Admin')}${nivelChk('manager', 'Manager')}${nivelChk('miembro', 'Miembro')}</div>
+      ${opt('miembros', 'Miembros específicos')}
+      <div class="wa-vis-sub" id="slkvis-sub-miembros-${id}" style="display:${vis === 'miembros' ? 'flex' : 'none'}">${team.length ? team.map(miembroChk).join('') : '<span class="wa-vis-sub__vacio">No hay miembros en el equipo todavía.</span>'}</div>
+      ${opt('solo_yo', 'Solo yo (privado)')}
+      <button class="btn btn--primary btn--sm" style="margin-top:8px;width:100%" onclick="SlackModule.guardarVis(${id})">Guardar</button>`;
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10050;top:${btnRect.bottom + 6}px;left:${Math.max(8, Math.min(btnRect.left, window.innerWidth - 260))}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _visSub(id) {
+    const pop = document.getElementById(`slk-vis-pop-${id}`); if (!pop) return;
+    const v = pop.querySelector(`input[name="slkvis-${id}"]:checked`)?.value;
+    const a = document.getElementById(`slkvis-sub-nivel-${id}`), b = document.getElementById(`slkvis-sub-miembros-${id}`);
+    if (a) a.style.display = v === 'nivel' ? 'flex' : 'none';
+    if (b) b.style.display = v === 'miembros' ? 'flex' : 'none';
+  }
+  async function guardarVis(id) {
+    const pop = document.getElementById(`slk-vis-pop-${id}`); if (!pop) return;
+    const visibilidad = pop.querySelector(`input[name="slkvis-${id}"]:checked`)?.value || 'solo_yo';
+    const niveles = visibilidad === 'nivel' ? [...pop.querySelectorAll(`.slkvis-nivel-${id}:checked`)].map(el => el.value) : [];
+    const miembros = visibilidad === 'miembros' ? [...pop.querySelectorAll(`.slkvis-mbr-${id}:checked`)].map(el => +el.value) : [];
+    if (visibilidad === 'nivel' && !niveles.length) { showBanner('Marca al menos un nivel', 'info'); return; }
+    if (visibilidad === 'miembros' && !miembros.length) { showBanner('Marca al menos una persona', 'info'); return; }
     try {
-      const r = await apiFetch(`${API}/slack/workspaces/${id}/visibilidad`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visibilidad }),
-      });
-      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo cambiar');
-      const w = _ws.find(x => x.id === id); if (w) w.visibilidad = visibilidad;
+      const r = await apiFetch(`${API}/slack/workspaces/${id}/visibilidad`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibilidad, niveles, miembros }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo cambiar');
+      pop.remove();
+      const w = _ws.find(x => x.id === id); if (w) { w.visibilidad = visibilidad; w.visibilidad_niveles = niveles; w.visibilidad_miembros = miembros; }
+      pintar();
       showBanner('✓ Visibilidad actualizada', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); await cargar(); }
   }
@@ -16262,7 +16303,7 @@ const SlackModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { cargar, conectar, desconectar, cambiarVisibilidad, marcarOrganizacion };
+  return { cargar, conectar, desconectar, visPop, guardarVis, _visSub, marcarOrganizacion };
 })();
 
 // Fila del WhatsApp de Operaciones en Configuración → Integraciones. Reusa

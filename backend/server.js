@@ -11409,7 +11409,7 @@ app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, team_id, team_name, etiqueta, token_tipo, bot_user_id, estado,
-              ultimo_error, created_at, icon_url, visibilidad, connected_by, slack_user_id, es_default_proyectos
+              ultimo_error, created_at, icon_url, visibilidad, visibilidad_niveles, visibilidad_miembros, connected_by, slack_user_id, es_default_proyectos
          FROM slack_workspaces WHERE user_id=$1 ORDER BY created_at`,
       [req.workspaceOwnerId]);
     // Backfill perezoso: los workspaces conectados antes de tener icon_url o
@@ -11435,12 +11435,8 @@ app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
         }
       }));
     }
-    const rol = await _resolveRol(req);
-    const visibles = rows.filter(w =>
-      w.visibilidad === 'solo_yo' ? w.connected_by === req.user.id
-      : w.visibilidad === 'admin' ? (rol === 'admin' || w.connected_by === req.user.id)
-      : true);
-    res.json(visibles);
+    const ok = await Promise.all(rows.map(w => _puedeVerSlack(req, w)));
+    res.json(rows.filter((w, i) => ok[i]));
   } catch (err) {
     console.error('[slack] list:', err.message);
     res.status(500).json({ error: 'Error al leer los workspaces' });
@@ -11496,9 +11492,11 @@ app.patch('/api/slack/workspaces/:id/organizacion', requireAuth, async (req, res
 });
 app.patch('/api/slack/workspaces/:id/visibilidad', requireAuth, async (req, res) => {
   const visibilidad = String(req.body?.visibilidad || '');
-  if (!['todos', 'admin', 'solo_yo'].includes(visibilidad)) {
+  if (!['todos', 'admin', 'nivel', 'miembros', 'solo_yo'].includes(visibilidad)) {
     return res.status(400).json({ error: 'Valor de visibilidad inválido' });
   }
+  const niveles = visibilidad === 'nivel' && Array.isArray(req.body?.niveles) ? req.body.niveles.filter(n => ['miembro', 'manager', 'admin'].includes(n)) : [];
+  const miembros = visibilidad === 'miembros' && Array.isArray(req.body?.miembros) ? req.body.miembros.map(Number).filter(Number.isFinite) : [];
   try {
     const { rows } = await pool.query(
       `SELECT connected_by FROM slack_workspaces WHERE id=$1 AND user_id=$2`,
@@ -11508,7 +11506,7 @@ app.patch('/api/slack/workspaces/:id/visibilidad', requireAuth, async (req, res)
     if (rows[0].connected_by !== req.user.id && rol !== 'admin') {
       return res.status(403).json({ error: 'Solo quien lo conectó o un admin puede cambiar esto' });
     }
-    await pool.query(`UPDATE slack_workspaces SET visibilidad=$1 WHERE id=$2`, [visibilidad, req.params.id]);
+    await pool.query(`UPDATE slack_workspaces SET visibilidad=$1, visibilidad_niveles=$2, visibilidad_miembros=$3 WHERE id=$4`, [visibilidad, niveles, miembros, req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[slack] visibilidad:', err.message);
@@ -11554,6 +11552,22 @@ async function _slackWs(uid, id) {
     `SELECT * FROM slack_workspaces WHERE id=$1 AND user_id=$2`, [id, uid]);
   return w || null;
 }
+// ¿req.user puede ver este Slack? Quien lo conectó siempre; si no, según su visibilidad (igual que WhatsApp: todos / por nivel / miembros específicos / solo yo; 'admin' = solo admins, valor anterior).
+async function _puedeVerSlack(req, w) {
+  if (w.connected_by === req.user.id) return true;
+  if (w.visibilidad === 'todos') return true;
+  const rol = await _resolveRol(req);
+  if (w.visibilidad === 'admin') return rol === 'admin';
+  if (w.visibilidad === 'nivel') return (w.visibilidad_niveles || []).includes(rol);
+  if (w.visibilidad === 'miembros') { const mid = await _miMemberId(req); return mid != null && (w.visibilidad_miembros || []).includes(mid); }
+  return false;   // 'solo_yo' y no soy quien lo conectó
+}
+// Igual que _slackWs pero para las rutas de la API: devuelve null (→ 404) si quien pregunta no puede ver ese Slack. Así la visibilidad no depende solo del filtro de la lista.
+async function _slackWsReq(req, id) {
+  const w = await _slackWs(req.workspaceOwnerId, id);
+  if (!w) return null;
+  return (await _puedeVerSlack(req, w)) ? w : null;
+}
 
 // Los archivos de Slack (url_private, thumb_*) exigen el Bearer token del
 // workspace para verse — un <img>/<video>/<audio> directo a esa URL da 401
@@ -11566,7 +11580,7 @@ app.get('/api/slack/workspaces/:id/archivo-proxy', requireAuth, async (req, res)
     return res.status(400).json({ error: 'URL inválida' });
   }
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const token = mailboxSvc.decPass(w.token_enc);
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -11583,7 +11597,7 @@ app.get('/api/slack/workspaces/:id/archivo-proxy', requireAuth, async (req, res)
 // Equipo del workspace: es lo que permite ver a la gente y resolver las menciones.
 app.get('/api/slack/workspaces/:id/miembros', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json(await slackSvc.miembros(w));
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11591,7 +11605,7 @@ app.get('/api/slack/workspaces/:id/miembros', requireAuth, async (req, res) => {
 
 app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json(await slackSvc.canales(w, { cursor: req.query.cursor }));
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11603,7 +11617,7 @@ app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
 // estuviera en la lista sincronizada.
 app.post('/api/slack/workspaces/:id/directo', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const usuarioId = String(req.body?.usuarioId || '').trim();
     if (!usuarioId) return res.status(400).json({ error: 'Falta el usuario' });
@@ -11615,7 +11629,7 @@ app.post('/api/slack/workspaces/:id/directo', requireAuth, async (req, res) => {
 // Miembros de UN canal — panel "Ver miembros" del header, mismo pedido.
 app.get('/api/slack/workspaces/:id/canales/:canal/miembros', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const ids = await slackSvc.miembrosCanal(w, req.params.canal);
     res.json({ ids });
@@ -11627,7 +11641,7 @@ app.get('/api/slack/workspaces/:id/canales/:canal/miembros', requireAuth, async 
 // token). Un canal silenciado deja de sumar al contador de no leídos del riel.
 app.get('/api/slack/workspaces/:id/mutes', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const { rows } = await pool.query(`SELECT canal_id FROM slack_mutes WHERE workspace_id=$1`, [w.id]);
     res.json({ canales: rows.map(r => r.canal_id) });
@@ -11635,7 +11649,7 @@ app.get('/api/slack/workspaces/:id/mutes', requireAuth, async (req, res) => {
 });
 app.post('/api/slack/workspaces/:id/canales/:canal/silenciar', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     if (req.body?.silenciar) {
       await pool.query(`INSERT INTO slack_mutes (workspace_id, canal_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [w.id, req.params.canal]);
@@ -11650,7 +11664,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/silenciar', requireAuth, asyn
 app.post('/api/slack/workspaces/:id/canales/:canal/reaccion', requireAuth, async (req, res) => {
   const { ts, emoji, quitar } = req.body || {};
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     if (quitar) await slackSvc.quitarReaccion(w, req.params.canal, ts, emoji);
     else        await slackSvc.reaccionar(w, req.params.canal, ts, emoji);
@@ -11662,7 +11676,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/reaccion', requireAuth, async
 app.post('/api/slack/workspaces/:id/canales/:canal/anclar', requireAuth, async (req, res) => {
   const { ts, quitar } = req.body || {};
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     if (quitar) await slackSvc.desanclar(w, req.params.canal, ts);
     else        await slackSvc.anclar(w, req.params.canal, ts);
@@ -11673,7 +11687,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/anclar', requireAuth, async (
 // Mensajes anclados del canal.
 app.get('/api/slack/workspaces/:id/canales/:canal/anclados', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json({ anclados: await slackSvc.anclados(w, req.params.canal) });
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11683,7 +11697,7 @@ app.get('/api/slack/workspaces/:id/canales/:canal/anclados', requireAuth, async 
 app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, uploadSlack.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No llegó ningún archivo' });
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const f = await slackSvc.subirArchivo(w, req.params.canal, req.file.buffer,
       req.file.originalname || 'archivo', req.body?.comentario || '', req.body?.thread_ts || '');
@@ -11697,7 +11711,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload
 // Marcar un canal como no leido.
 app.post('/api/slack/workspaces/:id/canales/:canal/no-leido', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.marcarNoLeido(w, req.params.canal);
     res.json({ ok: true });
@@ -11724,7 +11738,7 @@ app.get('/api/slack/workspaces/:id/vinculos', requireAuth, async (req, res) => {
 app.post('/api/slack/workspaces/:id/canales/:canal/renombrar', requireAuth, async (req, res) => {
   const { nombre, projectId } = req.body || {};
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const ch = await slackSvc.renombrarCanal(w, req.params.canal, nombre);
     if (projectId) {
@@ -11739,7 +11753,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/renombrar', requireAuth, asyn
 // vez de archivar, porque Slack no archiva directos.
 app.post('/api/slack/workspaces/:id/canales/:canal/archivar-canal', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const r = await slackSvc.archivarCanal(w, req.params.canal, { dm: !!(req.body && req.body.dm) });
     res.json({ ok: true, cerrado: !!r.cerrado });
@@ -11749,7 +11763,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivar-canal', requireAuth,
 // Guardados del workspace (stars.list). Sección "Guardados" del riel.
 app.get('/api/slack/workspaces/:id/guardados', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json({ items: await slackSvc.guardados(w) });
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11760,7 +11774,7 @@ app.get('/api/slack/workspaces/:id/guardados', requireAuth, async (req, res) => 
 // POST fija/actualiza uno; DELETE lo cancela.
 app.get('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const { rows } = await pool.query(
       `SELECT canal_id, ts, remind_at FROM slack_recordatorios WHERE workspace_id=$1`, [w.id]);
@@ -11769,7 +11783,7 @@ app.get('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res)
 });
 app.post('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const canal = String(req.body?.canal || '').trim();
     const ts = String(req.body?.ts || '').trim();
@@ -11784,7 +11798,7 @@ app.post('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res
 });
 app.delete('/api/slack/workspaces/:id/recordatorios/:canal/:ts', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await pool.query(
       `DELETE FROM slack_recordatorios WHERE workspace_id=$1 AND canal_id=$2 AND ts=$3`,
@@ -11800,7 +11814,7 @@ app.delete('/api/slack/workspaces/:id/recordatorios/:canal/:ts', requireAuth, as
 // como sin leer, así que lo que manda para el badge es nuestra propia hora.
 app.post('/api/slack/workspaces/:id/canales/:canal/leido', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.marcarLeido(w, req.params.canal);
     await pool.query(
@@ -11818,7 +11832,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/leido', requireAuth, async (r
 // aunque Slack siga reportando unread_count_display=1 para ellas.
 app.get('/api/slack/workspaces/:id/no-leidos', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const { canales } = await slackSvc.canales(w);
     const datos = await slackSvc.noLeidos(w, canales);
@@ -11844,7 +11858,7 @@ app.get('/api/slack/workspaces/:id/no-leidos', requireAuth, async (req, res) => 
 // justo lo que Jenny pidio (que la memoria la ponga Slack, no su base).
 app.get('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const d = await slackSvc.historial(w, req.params.canal,
       { limit: Math.min(+req.query.limit || 50, 200), cursor: req.query.cursor });
@@ -11855,7 +11869,7 @@ app.get('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async 
 // Un hilo completo (el primer mensaje es el que lo abrio).
 app.get('/api/slack/workspaces/:id/canales/:canal/hilo/:ts', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json(await slackSvc.hilo(w, req.params.canal, req.params.ts));
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11869,7 +11883,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
   const texto = String(req.body?.texto || '').trim();
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.status(201).json(await slackSvc.enviar(w, req.params.canal, texto,
       { thread_ts: req.body?.thread_ts, reply_broadcast: req.body?.reply_broadcast === true }));
@@ -11881,7 +11895,7 @@ app.patch('/api/slack/workspaces/:id/canales/:canal/mensajes/:ts', requireAuth, 
   const texto = String(req.body?.texto || '').trim();
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.editarMensaje(w, req.params.canal, req.params.ts, texto);
     res.json({ editado: true });
@@ -11889,7 +11903,7 @@ app.patch('/api/slack/workspaces/:id/canales/:canal/mensajes/:ts', requireAuth, 
 });
 app.delete('/api/slack/workspaces/:id/canales/:canal/mensajes/:ts', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.borrarMensaje(w, req.params.canal, req.params.ts);
     res.json({ borrado: true });
@@ -11901,7 +11915,7 @@ app.get('/api/slack/workspaces/:id/buscar', requireAuth, async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ resultados: [] });
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json({ resultados: await slackSvc.buscarMensajes(w, q, req.query.canal || null) });
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -11910,14 +11924,14 @@ app.get('/api/slack/workspaces/:id/buscar', requireAuth, async (req, res) => {
 // Favoritos: canales marcados con ⭐ (mismo stars.list de "Guardados", otro tipo de item).
 app.get('/api/slack/workspaces/:id/favoritos', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.json({ canales: await slackSvc.canalesFavoritos(w) });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 app.post('/api/slack/workspaces/:id/canales/:canal/estrella', requireAuth, async (req, res) => {
   try {
-    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    const w = await _slackWsReq(req, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.estrella(w, req.params.canal, req.body?.marcar !== false);
     res.json({ ok: true });
