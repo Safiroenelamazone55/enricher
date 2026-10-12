@@ -6274,10 +6274,10 @@ const CanteraModule = (() => {
         <div class="cant-datos" style="margin-top:18px">
           <h4 style="margin:0 0 4px">Datos a investigar por empresa <span class="cant-hint" style="font-weight:400">(opcional · para personalizar tus mensajes)</span></h4>
           <p class="cant-hint" style="margin:0 0 10px">Cada dato se investiga en la misma validación profunda (no cuesta una pasada aparte) y al mover la empresa al CRM queda guardado como un campo personalizado, listo para usar en el texto de tus pasos como <code>{{nombre_del_dato}}</code>. Si la IA no encuentra evidencia, guarda "No verificado" y ese valor no pasa al CRM.</p>
-          <datalist id="cant-de-known">${[...new Set((_batches || []).flatMap(b => (b.datos_extra || []).map(x => (x.nombre || '').trim())).filter(Boolean))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+
           ${(_current.datos_extra || []).map((d, i) => `
             <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
-              <label style="width:200px"><span class="cant-hint">Nombre del dato</span><input class="form-input" list="cant-de-known" value="${esc(d.nombre || '')}" placeholder="Elige uno usado antes o escribe uno nuevo" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value)"><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
+              <label style="width:200px;position:relative"><span class="cant-hint">Nombre del dato</span><input class="form-input" autocomplete="off" value="${esc(d.nombre || '')}" placeholder="Elige uno usado antes o escribe uno nuevo" onfocus="CanteraModule.showDeNames(${i})" onblur="CanteraModule.hideDeNames(${i})" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value);CanteraModule.showDeNames(${i})"><div id="cant-de-menu-${i}" style="display:none;position:absolute;left:0;right:0;top:56px;z-index:30;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-l);padding:4px;max-height:200px;overflow:auto"></div><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
               <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="5" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
               <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
               <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
@@ -7311,6 +7311,22 @@ const CanteraModule = (() => {
   }
   // Nombre del dato → nombre de variable para los mensajes ({{competidor_1}}). Mismo criterio que el servidor.
   function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+  function _knownDeNames() { return [...new Set((_batches || []).flatMap(b => (b.datos_extra || []).map(x => (x.nombre || '').trim())).filter(Boolean))]; }
+  function showDeNames(i) {
+    const m = document.getElementById('cant-de-menu-' + i); if (!m) return;
+    const cur = ((_current.datos_extra || [])[i] || {}).nombre || '';
+    const q = cur.trim().toLowerCase();
+    const usados = new Set((_current.datos_extra || []).map((x, j) => j === i ? '' : (x.nombre || '').trim().toLowerCase()));
+    const names = _knownDeNames().filter(n => !usados.has(n.toLowerCase()) && (!q || n.toLowerCase().includes(q)) && n.toLowerCase() !== q);
+    if (!names.length) { m.style.display = 'none'; return; }
+    m.innerHTML = names.map(n => '<div onmousedown="event.preventDefault();CanteraModule.pickDeName(' + i + ',this.dataset.n)" data-n="' + esc(n) + '" style="padding:7px 10px;border-radius:6px;cursor:pointer;font-size:.88rem;color:var(--text)" onmouseover="this.style.background=&quot;#F4F2EE&quot;" onmouseout="this.style.background=&quot;&quot;">' + esc(n) + '</div>').join('');
+    m.style.display = 'block';
+  }
+  function hideDeNames(i) { const m = document.getElementById('cant-de-menu-' + i); if (m) m.style.display = 'none'; }
+  function pickDeName(i, n) {
+    setDatoExtra(i, 'nombre', n);
+    const m = document.getElementById('cant-de-menu-' + i); if (m) { m.style.display = 'none'; const inp = m.parentNode.querySelector('input'); if (inp) inp.value = n; }
+  }
   function addDatoExtra() { _current.datos_extra = [...(_current.datos_extra || []), { nombre: '', pregunta: '', solo_si_califica: true }]; _paint(); }
   function removeDatoExtra(i) { (_current.datos_extra || []).splice(i, 1); _paint(); }
   function setDatoExtra(i, k, v) { _current.datos_extra[i][k] = v; if (k === 'nombre') { const el = document.getElementById('cant-de-slug-' + i); if (el) el.textContent = v ? '{{' + _slugVar(v) + '}}' : ''; } }
@@ -7751,7 +7767,7 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
