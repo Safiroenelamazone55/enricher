@@ -6583,11 +6583,11 @@ const CanteraModule = (() => {
     // explícito 2026-09-07: "aquí solo puedo filtrar por dos opciones").
     const numContactosPanel = [
       { n: 2, label: '2 o más contactos' }, { n: 3, label: '3 o más contactos' }, { n: 4, label: '4 o más contactos' },
-    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="cant-num-contactos" ${_minContactos === n ? 'checked' : ''} onchange="CanteraModule.setMinContactos(${n})"> ${label}</label>`).join('')
+    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="cant-num-contactos" ${_minContactos === n ? 'checked' : ''} onclick="CanteraModule.setMinContactos(${n})"> ${label}</label>`).join('')
       + `<label class="cant-colchk"><input type="checkbox" ${_sinPrioridad ? 'checked' : ''} onchange="CanteraModule.toggleSinPrioridad()"> Sin ningún contacto priorizado todavía</label>`;
     const auditoriaPanel = [
       ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
-    ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onchange="CanteraModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
+    ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onclick="CanteraModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
     // Más filtros — pedido explícito 2026-09-07. País/Industria/Tamaño solo
     // muestran los valores que YA existen en este borrador (no una lista
     // fija). "Paso 2 = Descartado" es distinto de "Ver solo descartadas"
@@ -8141,11 +8141,11 @@ const CanteraMesaModule = (() => {
     // importar si tienen 2, 3 o más contactos.
     const numContactosPanel = [
       { n: 2, label: '2 o más contactos' }, { n: 3, label: '3 o más contactos' }, { n: 4, label: '4 o más contactos' },
-    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="mesa-num-contactos" ${_minContactos === n ? 'checked' : ''} onchange="CanteraMesaModule.setMinContactos(${n})"> ${label}</label>`).join('')
+    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="mesa-num-contactos" ${_minContactos === n ? 'checked' : ''} onclick="CanteraMesaModule.setMinContactos(${n})"> ${label}</label>`).join('')
       + `<label class="cant-colchk"><input type="checkbox" ${_sinPrioridad ? 'checked' : ''} onchange="CanteraMesaModule.toggleSinPrioridad()"> Sin ningún contacto priorizado todavía</label>`;
     const auditoriaPanel = [
       ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
-    ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="mesa-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onchange="CanteraMesaModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
+    ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="mesa-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onclick="CanteraMesaModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
     // Industria y Archivo de importación — pedido explícito 2026-09-15: "así
     // trabajo directamente en el archivo nuevo... marco y demarco lo que quiero".
     const industriaPanel = _industriaOpts.map(v =>
