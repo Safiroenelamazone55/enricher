@@ -25,7 +25,7 @@
   const toast = (m, t) => { try { if (typeof showBanner === 'function') showBanner(m, t || 'info'); } catch (e) { /* sin aviso */ } };
 
   function kindFor(el) {
-    if (el.id === 'qwa-input' || el.id === 'ocwa-input') return 'whatsapp';
+    if (el.id === 'wa-input' || el.id === 'qwa-input' || el.id === 'ocwa-input') return 'whatsapp';
     if (el.tagName === 'INPUT' || el.id === 'tpl-asunto') return 'subject';
     const cn = document.getElementById('step-canal'); const canal = cn && cn.value;
     if (canal === 'linkedin') return 'linkedin';
@@ -35,7 +35,7 @@
   function suggest(el, ctx) {
     const mine = guess(el.value);
     let chat = null;
-    const box = el.id === 'qwa-input' ? document.getElementById('qwa-messages') : el.id === 'ocwa-input' ? document.getElementById('ocwa-messages') : null;
+    const box = el.id === 'wa-input' ? document.getElementById('wa-messages') : el.id === 'qwa-input' ? document.getElementById('qwa-messages') : el.id === 'ocwa-input' ? document.getElementById('ocwa-messages') : null;
     if (box) {
       const txt = [...box.querySelectorAll('.wa-msg--in .wa-msg__bubble')].slice(-8).map(b => b.textContent).join(' ');
       chat = guess(txt);
@@ -111,7 +111,7 @@
   }
   function scan(root) {
     if (!root.querySelectorAll) return;
-    root.querySelectorAll('#qwa-input, #ocwa-input').forEach(attachWa);
+    root.querySelectorAll('#wa-input, #qwa-input, #ocwa-input').forEach(attachWa);
     root.querySelectorAll('.vc-ta').forEach(attachField);
   }
   function start() {
