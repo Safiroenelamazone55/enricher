@@ -20369,6 +20369,7 @@ const BlocksModule = (() => {
 
 const TeamModule = (() => {
   let _all = [], _filter = 'all', _q = '';
+  let _acc = new Map();   // correo → { has_password, password_pending, has_google } (quién entra con contraseña / Google)
 
   const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', miembro: 'Miembro', freelance: 'Freelance' };
   const ROLE_COLORS = {
@@ -20395,6 +20396,7 @@ const TeamModule = (() => {
       const res = await apiFetch(`${API}/mgmt/team`);
       const data = await res.json();
       _all = Array.isArray(data) ? data : [];
+      try { const ra = await apiFetch(`${API}/team/access-info`); const ja = ra && ra.ok ? await ra.json() : []; _acc = new Map((Array.isArray(ja) ? ja : []).map(x => [String(x.email || '').toLowerCase(), x])); } catch (_) { _acc = new Map(); }
       render();
     } catch(e) { alert('Error cargando equipo: ' + e.message); }
     finally { document.getElementById('team-loading').style.display = 'none'; }
@@ -20439,6 +20441,7 @@ const TeamModule = (() => {
             <img class="team-avatar" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(m.nombre)}" style="object-fit:cover" alt=""/>
             <div>
               <div class="team-member-cell__name">${esc(m.nombre)}</div>
+              ${_accChip(m)}
             </div>
           </div>
         </td>
@@ -20448,6 +20451,9 @@ const TeamModule = (() => {
         <td><span class="workload-badge ${wClass}">${n} tarea${n!==1?'s':''}</span></td>
         <td><span class="blk-motivo">${m.notas ? esc(m.notas) : '<span style="color:var(--muted)">—</span>'}</span></td>
         <td class="client-actions-cell">
+          <button class="client-action-btn" onclick="TeamModule.openAccess(${m.id})" title="Acceso con correo y contraseña">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8"/><path d="m16 7 3 3"/><path d="m18 5 2 2"/></svg>
+          </button>
           <button class="client-action-btn" onclick="TeamModule.openDrawer(${m.id})" title="Editar">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
@@ -20468,6 +20474,7 @@ const TeamModule = (() => {
     document.getElementById('team-notas').value  = m ? (m.notas || '') : '';
     document.getElementById('team-save-btn').textContent = m ? 'Guardar cambios' : 'Guardar miembro';
     document.getElementById('team-delete-btn').style.display = m ? '' : 'none';
+    const accRow = document.getElementById('team-access-row'); if (accRow) accRow.style.display = m ? 'none' : '';   // solo al crear; a los existentes se les da acceso con la llave de la fila
     document.getElementById('team-drawer-overlay').classList.add('open');
     document.getElementById('team-drawer').classList.add('open');
     setTimeout(() => document.getElementById('team-nombre').focus(), 80);
@@ -20490,15 +20497,88 @@ const TeamModule = (() => {
       notas:  document.getElementById('team-notas').value.trim(),
     };
     const btn = document.getElementById('team-save-btn');
+    const wantAccess = !id && !!document.getElementById('team-access-chk')?.checked;
+    if (wantAccess && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(body.email)) { alert('Para darle acceso necesito un correo válido. Escríbelo o desmarca «Darle acceso a Nova».'); return; }
     btn.disabled = true;
     try {
       if (id) await apiFetch(`${API}/mgmt/team/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       else     await apiFetch(`${API}/mgmt/team`,      { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       closeDrawer();
+      if (wantAccess) await _grantAccess(body);
       load();
     } catch(err) { alert('Error guardando miembro: ' + err.message); }
     finally { btn.disabled = false; }
   }
+
+  // ── Acceso con correo y contraseña ────────────────────────────────────────
+  function _accOf(m) { return m && m.email ? _acc.get(String(m.email).toLowerCase()) : null; }
+  function _accChip(m) {
+    const a = _accOf(m);
+    if (!a) return '';
+    const t = a.has_password ? ['Entra con contraseña', '#065F46', '#D1FAE5'] : a.password_pending ? ['Falta crear contraseña', '#92400E', '#FEF3C7'] : a.has_google ? ['Entra con Google', '#1E40AF', '#DBEAFE'] : null;
+    return t ? `<span style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:600;color:${t[1]};background:${t[2]}">${t[0]}</span>` : '';
+  }
+  function _closeAcc() { document.getElementById('team-acc-modal')?.remove(); }
+  function _accModal(inner) {
+    _closeAcc();
+    const m = document.createElement('div'); m.id = 'team-acc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) _closeAcc(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:480px">${inner}</div>`;
+    document.body.appendChild(m);
+  }
+  function _accResult(r, nombre, email, esReset) {
+    const emailed = !!r.emailed;
+    _accModal(`<div class="fin-pi-box__hd"><h3>${esReset ? 'Enlace para restablecer contraseña' : 'Acceso creado'}</h3><button class="fin-pi-x" onclick="TeamModule.closeAcc()">✕</button></div>
+      <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
+        <p style="margin:0 0 10px;font-size:.92rem">${emailed
+          ? `Se envió un correo a <b>${esc(email)}</b> desde <b>${esc(r.from || '')}</b> con el enlace para ${esReset ? 'elegir una nueva contraseña' : 'crear su contraseña'}.`
+          : `<span style="color:#B45309"><b>El correo no salió.</b> ${esc(r.email_error || '')}</span><br>Copia este enlace y mándaselo tú a <b>${esc(email)}</b>.`}</p>
+        <label class="fin-cfg-lbl" style="display:block;margin:10px 0 4px">Enlace (de un solo uso, vence ${esReset ? 'en 24 horas' : 'en 7 días'})</label>
+        <div style="display:flex;gap:6px"><input class="form-input" id="team-acc-link" readonly value="${esc(r.link)}" style="flex:1;font-size:.78rem" onclick="this.select()"><button type="button" class="btn btn--ghost btn--sm" onclick="TeamModule.copyAccLink()">Copiar</button></div>
+        <p class="cant-hint" style="margin:10px 0 0;font-size:.78rem">Con ese enlace ${esc(nombre)} elige su propia contraseña y entra desde app.novacentrax.com con su correo. Tú nunca ves su contraseña.</p>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="TeamModule.closeAcc()">Listo</button></div></div>`);
+  }
+  async function _grantAccess(b) {
+    const res = await apiFetch(`${API}/team/access`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: b.nombre, email: b.email, rol: b.rol, cargo: b.cargo }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { alert('No se pudo dar acceso: ' + (j.error || 'error')); return; }
+    _accResult(j, b.nombre, b.email, false);
+  }
+  async function _sendReset(email, nombre) {
+    const res = await apiFetch(`${API}/team/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(j.error || 'No se pudo generar el enlace'); return; }
+    _accResult(j, nombre, email, true);
+  }
+  function openAccess(id) {
+    const m = _all.find(x => x.id === id); if (!m) return;
+    if (!m.email) { alert('Esta persona no tiene correo. Edítala y agrégalo primero.'); return; }
+    const a = _accOf(m);
+    const tiene = !!(a && (a.has_password || a.password_pending));
+    const estado = a && a.has_password ? 'Ya entra con correo y contraseña.' : a && a.password_pending ? 'Tiene acceso creado, pero aún no eligió su contraseña.' : a && a.has_google ? 'Entra con su cuenta de Google. Puedes además darle contraseña.' : 'Todavía no tiene acceso a Nova.';
+    _accModal(`<div class="fin-pi-box__hd"><h3>Acceso de ${esc(m.nombre)}</h3><button class="fin-pi-x" onclick="TeamModule.closeAcc()">✕</button></div>
+      <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
+        <p style="margin:0 0 4px;font-size:.92rem"><b>${esc(m.email)}</b></p>
+        <p style="margin:0 0 12px;font-size:.88rem;color:var(--text-muted,#7a766f)">${estado}</p>
+        <p style="margin:0;font-size:.84rem">${tiene ? 'Le enviaremos por correo un enlace de un solo uso para que elija una contraseña nueva.' : 'Le enviaremos por correo un enlace de un solo uso para que cree su contraseña y pueda entrar con este correo (sin Google).'}</p>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="TeamModule.closeAcc()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="team-acc-go" onclick="TeamModule.doAccess(${m.id})">${tiene ? 'Enviar enlace para restablecer' : 'Dar acceso y enviar correo'}</button>
+      </div></div>`);
+  }
+  async function doAccess(id) {
+    const m = _all.find(x => x.id === id); if (!m) return;
+    const go = document.getElementById('team-acc-go'); if (go) { go.disabled = true; go.textContent = 'Enviando…'; }
+    const a = _accOf(m);
+    try {
+      if (a && (a.has_password || a.password_pending)) await _sendReset(m.email, m.nombre);
+      else await _grantAccess({ nombre: m.nombre, email: m.email, rol: m.rol, cargo: m.cargo || '' });
+      load();
+    } catch (e) { alert('Error: ' + e.message); _closeAcc(); }
+  }
+  function copyAccLink() { const i = document.getElementById('team-acc-link'); if (!i) return; i.select(); try { navigator.clipboard.writeText(i.value); } catch (_) { document.execCommand('copy'); } try { showBanner('Enlace copiado', 'success'); } catch (_) {} }
 
   async function confirmDelete() {
     const id = document.getElementById('team-id').value;
@@ -20510,7 +20590,7 @@ const TeamModule = (() => {
     } catch(err) { alert('Error eliminando miembro: ' + err.message); }
   }
 
-  return { load, filter, setFilter, render, openDrawer, closeDrawer, save, confirmDelete };
+  return { load, filter, setFilter, render, openDrawer, closeDrawer, save, confirmDelete, openAccess, doAccess, closeAcc: _closeAcc, copyAccLink };
 })();
 
 // =================================================================

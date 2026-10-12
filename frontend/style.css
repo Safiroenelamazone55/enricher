@@ -18200,3 +18200,9 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .tr-it{padding:7px 10px;border-radius:6px;font-size:.86rem;cursor:pointer;color:var(--text,#1F1D1B)}
 .tr-it:hover{background:#EEF4FF}
 .tr-it.on{color:#1B5FD1;font-weight:600}
+
+/* ── Acceso con correo y contraseña (Equipo) ── */
+.team-access{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border,#EAE7E2);border-radius:10px;background:#F7FAFF;cursor:pointer;font-size:.88rem}
+.team-access input{margin-top:3px;width:auto}
+.team-access b{display:block;font-weight:600}
+.team-access small{display:block;margin-top:2px;color:var(--text-muted,#7a766f);font-size:.76rem;line-height:1.4}

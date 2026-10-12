@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026101202"/>
+  <link rel="stylesheet" href="style.css?v=2026101203"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3027,6 +3027,9 @@
       <label class="form-label">Notas</label>
       <textarea id="team-notas" class="form-input" rows="2" placeholder="Especialidad, disponibilidad…"></textarea>
     </div>
+    <div class="form-row" id="team-access-row">
+      <label class="team-access"><input type="checkbox" id="team-access-chk" checked><span><b>Darle acceso a Nova con su correo</b><small>Le llega un enlace para crear su contraseña. Sirve para correos de dominio propio (sin Google). Tú no ves ni escribes su contraseña.</small></span></label>
+    </div>
     <div class="drawer__footer">
       <button type="button" class="btn btn--ghost btn--danger" id="team-delete-btn" style="display:none" onclick="TeamModule.confirmDelete()">Eliminar</button>
       <button type="button" class="btn btn--ghost" onclick="TeamModule.closeDrawer()">Cancelar</button>
@@ -3295,10 +3298,19 @@
     var tipo = document.getElementById('acc-tipo');
     var status = document.getElementById('acc-status');
     if (!form || !status) return;
+    var API_ = 'https://api.novacentrax.com/api';
+    function say(msg, ok) { status.textContent = msg; status.classList.add('is-visible'); status.style.color = ok ? '#047857' : ''; }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (tipo.value === 'equipo') {
-        window.location.href = 'https://api.novacentrax.com/api/auth/google';
+        var em0 = document.getElementById('acc-email'), pw0 = document.getElementById('acc-pass'), btn0 = document.getElementById('acc-submit');
+        // Con correo y contraseña escritos: entra con contraseña (correos de dominio propio). Sin ellos: Google, como siempre.
+        if (!em0.value.trim() || !pw0.value) { window.location.href = API_ + '/auth/google'; return; }
+        btn0.disabled = true; status.classList.remove('is-visible');
+        fetch(API_ + '/auth/login', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em0.value.trim(), password: pw0.value }) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (x) { if (x.ok) { window.location.replace(window.location.pathname); return; } say(x.j.error || 'No se pudo iniciar sesión'); btn0.disabled = false; })
+          .catch(function () { say('No se pudo conectar. Inténtalo de nuevo.'); btn0.disabled = false; });
         return;
       }
       var em = document.getElementById('acc-email'), pw = document.getElementById('acc-pass'), btn = document.getElementById('acc-submit');
@@ -3311,10 +3323,59 @@
         })
         .catch(function () { status.textContent = 'No se pudo conectar. Inténtalo de nuevo.'; status.classList.add('is-visible'); btn.disabled = false; });
     });
+
+    // "¿Olvidaste tu contraseña?": en la pestaña de equipo pide el enlace por correo (si es de cliente, sigue el contacto de siempre).
+    var forgot = document.querySelector('.lp-forgot');
+    if (forgot) forgot.addEventListener('click', function (e) {
+      if (tipo.value !== 'equipo') return;
+      e.preventDefault();
+      var email = (document.getElementById('acc-email').value || '').trim();
+      if (!email) { say('Escribe tu correo arriba y vuelve a pulsar «¿Olvidaste tu contraseña?».'); document.getElementById('acc-email').focus(); return; }
+      fetch(API_ + '/auth/forgot', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { say(r.ok ? 'Si ese correo tiene acceso con contraseña, te enviamos un enlace para restablecerla. Revisa tu bandeja (y spam).' : (j.error || 'No se pudo enviar'), r.ok); }); })
+        .catch(function () { say('No se pudo conectar. Inténtalo de nuevo.'); });
+    });
+  })();
+
+  /* Enlace del correo: ?reset=TOKEN → pantalla para elegir contraseña (alta de un miembro nuevo o restablecimiento). */
+  (function () {
+    var token = new URLSearchParams(window.location.search).get('reset');
+    if (!token) return;
+    var API_ = 'https://api.novacentrax.com/api';
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(20,22,26,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit';
+    wrap.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:26px 24px;box-shadow:0 20px 50px rgba(0,0,0,.25)">'
+      + '<h2 style="margin:0 0 6px;font-size:1.25rem;color:#1F1D1B">Elige tu contraseña</h2>'
+      + '<p id="rs-sub" style="margin:0 0 16px;font-size:.88rem;color:#6b6760">Comprobando el enlace…</p>'
+      + '<form id="rs-form" style="display:none"><label style="font-size:.78rem;color:#6b6760">Nueva contraseña</label>'
+      + '<input id="rs-p1" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:.95rem">'
+      + '<label style="font-size:.78rem;color:#6b6760">Repítela</label>'
+      + '<input id="rs-p2" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 6px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:.95rem">'
+      + '<p style="margin:0 0 14px;font-size:.76rem;color:#8a867f">Mínimo 10 caracteres, con letras y al menos un número.</p>'
+      + '<button id="rs-go" type="submit" style="width:100%;padding:11px;border:0;border-radius:8px;background:#0A84FF;color:#fff;font-weight:600;font-size:.95rem;cursor:pointer">Guardar y entrar</button></form>'
+      + '<p id="rs-msg" style="margin:12px 0 0;font-size:.84rem;color:#B91C1C"></p></div>';
+    document.body.appendChild(wrap);
+    var sub = wrap.querySelector('#rs-sub'), form = wrap.querySelector('#rs-form'), msg = wrap.querySelector('#rs-msg');
+    fetch(API_ + '/auth/reset-info?token=' + encodeURIComponent(token), { credentials: 'include' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        if (!x.ok) { sub.textContent = x.j.error || 'El enlace no es válido.'; return; }
+        sub.textContent = 'Para ' + x.j.email + '. Con esta contraseña entrarás desde app.novacentrax.com.'; form.style.display = 'block'; wrap.querySelector('#rs-p1').focus();
+      }).catch(function () { sub.textContent = 'No se pudo comprobar el enlace. Recarga la página.'; });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault(); msg.textContent = '';
+      var p1 = wrap.querySelector('#rs-p1').value, p2 = wrap.querySelector('#rs-p2').value, go = wrap.querySelector('#rs-go');
+      if (p1 !== p2) { msg.textContent = 'Las dos contraseñas no coinciden.'; return; }
+      go.disabled = true; go.textContent = 'Guardando…';
+      fetch(API_ + '/auth/reset', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, password: p1 }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) { if (x.ok) { window.location.replace(window.location.pathname); return; } msg.textContent = x.j.error || 'No se pudo guardar.'; go.disabled = false; go.textContent = 'Guardar y entrar'; })
+        .catch(function () { msg.textContent = 'No se pudo conectar. Inténtalo de nuevo.'; go.disabled = false; go.textContent = 'Guardar y entrar'; });
+    });
   })();
 </script>
 
-<script src="app.js?v=2026101110"></script>
+<script src="app.js?v=2026101111"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>

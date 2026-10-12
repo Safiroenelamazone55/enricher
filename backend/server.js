@@ -7158,6 +7158,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
 app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 require('./services/translateRoutes').mount(app, { requireAuth });
+require('./services/accessRoutes').mount(app, { pool, requireAuth, rateLimit, findUserById, mailboxSvc });
 
 // ── LM · A/B (Fase B3): métricas por variante de cada paso email ──
 // Combina: envíos AUTOMÁTICOS (lm_messages: funnel completo con opens/clics/replies)
