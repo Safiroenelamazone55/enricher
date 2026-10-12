@@ -21574,7 +21574,13 @@ const LeadManagerModule = (() => {
     const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
       ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
-        + (s.estado === 'activa' && steps.length ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0)
+        // Aprobaciones y "sin email": se cuentan igual que se muestran. Con las listas ya cargadas se usa su largo REAL
+        // (antes se sumaba el contador del servidor, que incluye a todos los enrolados sin email aunque su paso de email
+        // no toque aún → la pestaña decía 67 y la lista mostraba 25).
+        + (s.estado === 'activa' && steps.length
+            ? (Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : (s.awaiting || 0))
+              + (Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : (s.no_email_pending || 0))
+            : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
     // Pasos vive SIEMPRE en su propia tarjeta a la izquierda (colapsable con «/›);
