@@ -18209,3 +18209,12 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 
 .cp-mark-menu__b--danger{color:#DC2626}
 .cp-mark-menu__b--danger:hover{background:#FEF2F2}
+
+/* Nueva tarea / subtarea (selector «¿En qué vas a trabajar?») */
+.tp-newp{position:relative;flex:1 1 100%}
+.tp-newp .tp-new__title{width:100%;box-sizing:border-box}
+.tp-newp__menu{display:none;position:absolute;left:0;right:0;top:40px;z-index:30;background:#fff;border:1px solid var(--border,#EAE7E2);box-shadow:var(--shadow-l,0 12px 32px rgba(16,24,20,.12));max-height:230px;overflow:auto}
+.tp-newp__it{padding:8px 11px;cursor:pointer;display:flex;flex-direction:column;gap:1px;font-size:.82rem;color:#1F1D1B}
+.tp-newp__it small{font-size:.72rem;color:#8a867f}
+.tp-newp__it:hover{background:#EEF4FF}
+.tp-newp__none{padding:9px 11px;font-size:.78rem;color:#8a867f}

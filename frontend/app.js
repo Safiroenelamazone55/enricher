@@ -9948,9 +9948,10 @@ const DashboardModule = (() => {
 
   // ── Modal selector de tarea (premium) ───────────────────────────
   let _tpTasks = [], _tpOpp = [], _tpSel = null, _tpNewOpen = false, _tpProjects = null;
+  let _tpRoots = [], _tpParent = null;   // tareas que pueden ser «padre» de una subtarea nueva · padre elegido
 
   async function openTrackPicker() {
-    _tpSel = null; _tpNewOpen = false; _tpProjects = null;
+    _tpSel = null; _tpNewOpen = false; _tpProjects = null; _tpParent = null;
     let back = $('tp-backdrop');
     if (!back) { back = document.createElement('div'); back.id = 'tp-backdrop'; back.className = 'tp-backdrop'; document.body.appendChild(back); }
     back.innerHTML = `
@@ -9969,7 +9970,8 @@ const DashboardModule = (() => {
             Nueva tarea
           </button>
           <div class="tp-new__form" id="tp-new-form" style="display:none">
-            <select class="tp-new__proj" id="tp-new-proj" onchange="DashboardModule._tpNewCheck()"><option value="">Proyecto…</option></select>
+            <select class="tp-new__proj" id="tp-new-proj" onchange="DashboardModule._tpProjChange()"><option value="">Proyecto…</option></select>
+            <div class="tp-newp" id="tp-newp"><input class="tp-new__title" id="tp-new-parent-q" placeholder="Es subtarea de… (opcional: busca por tarea, proyecto o cliente)" autocomplete="off" oninput="DashboardModule._tpParentSearch()" onfocus="DashboardModule._tpParentSearch()" onblur="setTimeout(()=>document.getElementById('tp-newp-menu')&&(document.getElementById('tp-newp-menu').style.display='none'),150)"><div class="tp-newp__menu" id="tp-newp-menu"></div></div>
             <input class="tp-new__title" id="tp-new-title" placeholder="¿Qué vas a hacer?" autocomplete="off" oninput="DashboardModule._tpNewCheck()">
             <button class="tp-new__go" id="tp-new-go" disabled onclick="DashboardModule._tpCreateAndStart()">Crear y empezar →</button>
           </div>
@@ -10022,22 +10024,44 @@ const DashboardModule = (() => {
   }
   function _tpNewCheck() {
     const btn = $('tp-new-go'); if (!btn) return;
-    btn.disabled = !($('tp-new-proj')?.value && ($('tp-new-title')?.value || '').trim());
+    btn.disabled = !(($('tp-new-proj')?.value || _tpParent) && ($('tp-new-title')?.value || '').trim());
+  }
+  function _tpProjChange() { _tpParentSearch(); _tpNewCheck(); }
+  // Busca tareas que pueden tener subtareas (raíz, abiertas, no archivadas) por título, proyecto o cliente; si ya hay un proyecto elegido, muestra las de ese proyecto.
+  function _tpParentSearch() {
+    const inp = $('tp-new-parent-q'), menu = $('tp-newp-menu'), sel = $('tp-new-proj'); if (!inp || !menu) return;
+    if (_tpParent && inp.value !== _tpParent.label) { _tpParent = null; if (sel) sel.disabled = false; _tpNewCheck(); }   // se editó el texto: ya no hay padre elegido
+    const nq = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const q = nq(inp.value).trim();
+    const projId = sel && sel.value ? +sel.value : 0;
+    let list = _tpRoots.filter(t => (!projId || t.project_id === projId) && (!q || nq(t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '')).includes(q)));
+    list = list.sort((a, b) => String(b.deadline || '').localeCompare(String(a.deadline || ''))).slice(0, 8);
+    if (!list.length) { menu.innerHTML = '<div class="tp-newp__none">' + (q || projId ? 'No hay tareas que coincidan: se creará como tarea nueva dentro del proyecto.' : 'Escribe el nombre de la tarea, el proyecto o el cliente.') + '</div>'; menu.style.display = 'block'; return; }
+    menu.innerHTML = list.map(t => `<div class="tp-newp__it" onmousedown="event.preventDefault();DashboardModule._tpParentPick(${t.id})"><b>${esc(t.titulo)}</b><small>${esc([t.project_nombre, t.client_nombre].filter(Boolean).join(' · '))}</small></div>`).join('');
+    menu.style.display = 'block';
+  }
+  function _tpParentPick(id) {
+    const t = _tpRoots.find(x => x.id === id); if (!t) return;
+    _tpParent = { id: t.id, project_id: t.project_id, project_nombre: t.project_nombre || '', client_nombre: t.client_nombre || '', titulo: t.titulo, label: '↳ ' + t.titulo + (t.project_nombre ? ' · ' + t.project_nombre : '') };
+    const inp = $('tp-new-parent-q'); if (inp) inp.value = _tpParent.label;
+    const sel = $('tp-new-proj'); if (sel) { sel.value = String(t.project_id); sel.disabled = true; }   // la subtarea va en el proyecto del padre
+    const menu = $('tp-newp-menu'); if (menu) menu.style.display = 'none';
+    _tpNewCheck(); setTimeout(() => $('tp-new-title')?.focus(), 20);
   }
   async function _tpCreateAndStart() {
-    const projId = $('tp-new-proj')?.value, title = ($('tp-new-title')?.value || '').trim();
+    const projId = _tpParent ? String(_tpParent.project_id) : $('tp-new-proj')?.value, title = ($('tp-new-title')?.value || '').trim();
     if (!projId || !title) return;
     const btn = $('tp-new-go'); if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
     try {
       const me = window._authUser?.memberNombre || window._authUser?.name || '';
       const r = await apiFetch(`${API}/mgmt/tasks`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titulo: title, project_id: +projId, responsable: me, estado: 'pendiente' }),
+        body: JSON.stringify({ titulo: title, project_id: +projId, responsable: me, estado: 'pendiente', ...(_tpParent ? { parent_task_id: _tpParent.id } : {}) }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'No se pudo crear la tarea');
       const proj = (_tpProjects || []).find(p => p.id === +projId);
-      const ctx = { taskId: d.id, kind: 'proyecto', titulo: d.titulo, ctx: proj?.nombre || '', ctxLabel: 'Proyecto · ' + (proj?.nombre || ''), cliente: proj?.client_nombre || '' };
+      const ctx = { taskId: d.id, kind: 'proyecto', titulo: d.titulo, ctx: proj?.nombre || (_tpParent && _tpParent.project_nombre) || '', ctxLabel: 'Proyecto · ' + (proj?.nombre || (_tpParent && _tpParent.project_nombre) || ''), cliente: proj?.client_nombre || (_tpParent && _tpParent.client_nombre) || '' };
       closeTrackPicker();
       try { await TimerModule.start(ctx.taskId, ctx); } catch (e) { console.error('[dashboard] start tracking:', e); }
     } catch (e) {
@@ -10063,10 +10087,14 @@ const DashboardModule = (() => {
       // Las tareas contenedoras de un PERIODO (semana/mes: tienen fecha de inicio y fin) ya terminado no se ofrecen para registrar tiempo.
       const _periodoPasado = t => !t.parent_task_id && t.fecha_inicio && t.deadline && new Date(String(t.deadline).split('T')[0] + 'T00:00:00') < today;
       // Si una tarea tiene subtareas abiertas, se ofrecen las SUBTAREAS (no la tarea contenedora); sin subtareas abiertas se ofrece la tarea misma.
-      const _abiertas = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && (t.estado || '') !== 'cancelado');
+      // Archivadas (semanas ya cerradas y sus subtareas) NO se ofrecen: el archivado semanal las saca de Tareas, y aquí también.
+      const _archIds = new Set(tasks.filter(t => t.archivada).map(t => t.id));
+      const _viva = t => !t.archivada && !(t.parent_task_id && _archIds.has(t.parent_task_id));
+      _tpRoots = tasks.filter(t => _viva(t) && !t.parent_task_id && (t.estado || 'pendiente') !== 'completado' && (t.estado || '') !== 'cancelado' && !_periodoPasado(t));
+      const _abiertas = tasks.filter(t => _viva(t) && (t.estado || 'pendiente') !== 'completado' && (t.estado || '') !== 'cancelado');
       const _padresConSubs = new Set(_abiertas.filter(t => t.parent_task_id).map(t => t.parent_task_id));
       const _titPadre = new Map(tasks.map(t => [t.id, t.titulo]));
-      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && !_periodoPasado(t) && !_padresConSubs.has(t.id)).map(t => {
+      _tpTasks = tasks.filter(t => _viva(t) && (t.estado || 'pendiente') !== 'completado' && !_periodoPasado(t) && !_padresConSubs.has(t.id)).map(t => {
         const resp = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
         return { kind:'proyecto', id:t.id, titulo:t.titulo, ctx:t.project_nombre || 'Sin proyecto', cliente:t.client_nombre || '', empresa:t.client_empresa || '', padre:t.parent_task_id ? (_titPadre.get(t.parent_task_id) || '') : '', deadline:t.deadline, prioridad:t.prioridad, mine: resp.some(r => (r||'').toLowerCase() === me), today: due(t.deadline) };
       });
@@ -11183,7 +11211,7 @@ const DashboardModule = (() => {
 
   return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx, setOvPeriod,
     openTrackPicker, closeTrackPicker, _tpFilter, _tpSelect, trackPickerStart, hrsPause, hrsResume, hrsStop, hrsChangeTask,
-    _tpToggleNew, _tpNewCheck, _tpCreateAndStart, _tpToggleManual, _tpSaveManual,
+    _tpToggleNew, _tpProjChange, _tpParentSearch, _tpParentPick, _tpNewCheck, _tpCreateAndStart, _tpToggleManual, _tpSaveManual,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
     expEditStatus, expPickStatus, expEditDate, expEditStart, openDateFromRow, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee,
