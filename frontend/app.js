@@ -21275,13 +21275,13 @@ const LeadManagerModule = (() => {
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
     _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
-    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
+    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqApprovals = null; _seqPendingNoEmail = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
     // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
     // aún en null (ej. "Empresas 0" aunque los 117 contactos ya cargaron) y esa pintura
     // parcial se queda en pantalla si el segundo resuelve sin cambiar nada visible propio.
-    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id)]);
+    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id), _seqLoadApprovals(id), _seqLoadPendingNoEmail(id)]);
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
@@ -21571,15 +21571,18 @@ const LeadManagerModule = (() => {
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
     const _today0 = new Date(new Date().toDateString());
-    const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
+    // REGLA ÚNICA (para que este número nunca vuelva a divergir de la lista): un contador de pestaña solo se muestra cuando
+    // la lista que cuenta ya está cargada, y se calcula SIEMPRE a partir de esa misma lista. Nunca de contadores aproximados del
+    // servidor (s.awaiting / s.no_email_pending): esos cuentan distinto y fueron la causa repetida de «67 arriba, 25 abajo».
+    const _seqListasOk = Array.isArray(_seqApprovals) && Array.isArray(_seqPendingNoEmail);
+    const _seqTaskN = ((Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos)) && _seqListasOk)
       ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
         // Aprobaciones y "sin email": se cuentan igual que se muestran. Con las listas ya cargadas se usa su largo REAL
         // (antes se sumaba el contador del servidor, que incluye a todos los enrolados sin email aunque su paso de email
         // no toque aún → la pestaña decía 67 y la lista mostraba 25).
         + (s.estado === 'activa' && steps.length
-            ? (Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : (s.awaiting || 0))
-              + (Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : (s.no_email_pending || 0))
+            ? _seqApprovals.filter(a => a.estado === 'awaiting').length + _seqPendingNoEmail.length
             : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
@@ -21643,8 +21646,8 @@ const LeadManagerModule = (() => {
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
     ];
-    const apN = s.estado === 'activa' && _seqSteps(id).length ? (Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : (s.awaiting || 0)) : 0;
-    const blN = s.estado === 'activa' && _seqSteps(id).length ? (Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : (s.no_email_pending || 0)) : 0;
+    const apN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : 0;
+    const blN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : 0;
     if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
     if (blN > 0 || _seqTab === 'bloqueos') tabs.push(['bloqueos', 'Bloqueos', blN]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
