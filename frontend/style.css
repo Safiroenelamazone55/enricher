@@ -18206,3 +18206,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .team-access input{margin-top:3px;width:auto}
 .team-access b{display:block;font-weight:600}
 .team-access small{display:block;margin-top:2px;color:var(--text-muted,#7a766f);font-size:.76rem;line-height:1.4}
+
+.cp-mark-menu__b--danger{color:#DC2626}
+.cp-mark-menu__b--danger:hover{background:#FEF2F2}

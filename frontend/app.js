@@ -29430,6 +29430,35 @@ ${foot}
     }
     setTimeout(() => $('ref-nombre')?.focus(), 60);
   }
+  // Menú «⋮» de la ficha del contacto: acciones secundarias, alineado a la derecha. Incluye cambiar de contacto (No es la persona / Derivó a otro),
+  // que abre la ventana con los otros contactos de la empresa (con su LinkedIn) y la opción de agregar a otra persona.
+  function cpMoreMenu(ev, id) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, cls) => `<button class="cp-mark-menu__b${cls ? ' ' + cls : ''}" onclick="${close};${onclick}">${label}</button>`;
+    const hayDeal = c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado);
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '260px';
+    menu.innerHTML = `<div class="cp-mark-menu__list">`
+      + item('No es la persona — cambiar de contacto', `LeadManagerModule.ldRefer(${id},'no_es_persona')`)
+      + item('Derivó a otro (me pasó a alguien)', `LeadManagerModule.ldRefer(${id},'derivado')`)
+      + `</div><div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">`
+      + item(hayDeal ? '$ Ver deal' : '＋ Deal', `LeadManagerModule.dlOpen(${id})`)
+      + item('Reunión', `LeadManagerModule.mtOpen(${id})`)
+      + item('＋ Tarea / nota', `LeadManagerModule.cpActOpen('tarea')`)
+      + `</div><div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">`
+      + item('Eliminar contacto', `LeadManagerModule.cpDelete(${id})`, 'cp-mark-menu__b--danger')
+      + `</div>`;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const rc = t.getBoundingClientRect();
+    menu.style.top = `${rc.bottom + 6}px`;
+    menu.style.left = `${Math.max(8, Math.min(rc.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8))}px`;   // alineado al borde derecho del botón
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
   function refShowForm() {
     const m = document.getElementById('lm-ref-modal'); if (!m) return;
     m.querySelectorAll('[data-refnew]').forEach(el => { el.style.display = ''; });
@@ -32263,13 +32292,10 @@ ${foot}
           <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
           <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato — corrige el dato y sus secuencias se reanudan">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
           ${_cpStrip(c)}
-        <div class="cp-actions" style="margin-top:12px">
+        <div class="cp-actions" style="margin-top:12px;display:flex;align-items:center;gap:8px">
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
-          <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
-          <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
-          <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">Reunión</button>
-          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
-          <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
+          <span style="flex:1"></span>
+          <button class="cp-act" style="padding:6px 9px" title="Más acciones: cambiar de contacto, deal, reunión, tarea / nota, eliminar" onclick="LeadManagerModule.cpMoreMenu(event,${id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
         </div>
         </div>
       </div>
@@ -34713,7 +34739,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
