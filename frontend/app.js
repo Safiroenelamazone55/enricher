@@ -22730,9 +22730,21 @@ ${foot}
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); } else _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Tras resolver con ventana propia (referido / más adelante) desde la vista de tarea: sigue con la siguiente tarea de la cola.
+  function taskAfterResolve(cid) {
+    if (!_cpTaskCtx) return false;
+    const seqId = _cpTaskCtx.seqId;
+    const next = _cpNextTask(seqId, cid);
+    if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    return true;
+  }
   async function seqDoDisposition(disp) {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    // 'Derivó a otro' / 'No es la persona' piden los datos del contacto correcto y 'Más adelante' la fecha: abren su ventana en vez de
+    // guardar solo un estado con nota (antes, desde una tarea, quedaban a medias y no había dónde agregar al otro contacto).
+    if (disp === 'mas_adelante') return ldNurture(cid);
+    if (disp === 'derivado' || disp === 'no_es_persona') return ldRefer(cid, disp);
     try {
       const nota = disp ? await novaNote({ title: _dispoLabel(disp), message: '¿Alguna nota de la respuesta? Quedará en la ficha y en Leads. (Esc para omitir)' }) : '';
       const r = await _lmSetDispositionCore(cid, disp, seqId, nota);
@@ -29426,7 +29438,7 @@ ${foot}
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('campaign',[${newId}])">＋ Campaña</button>` : ''}
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('sequence',[${newId}])">＋ Secuencia</button>` : ''}
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.openContactPage(${newId});LeadManagerModule.cpActOpen('tarea')">＋ Tarea</button>` : ''}
-          <button class="btn btn--primary btn--sm" onclick="document.getElementById('lm-ref-modal').remove()">Cerrar</button>
+          <button class="btn btn--primary btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.taskAfterResolve(${cid})">${_cpTaskCtx ? 'Cerrar y seguir con la siguiente tarea' : 'Cerrar'}</button>
         </div></div></div>`;
       showBanner(`✓ ${esc(nom)} agregado — pendiente de revisión`, 'success');
     } catch (e) {
@@ -29477,6 +29489,7 @@ ${foot}
       await load();
       if (_section === 'inbox' && _ibActive === cid) await ibOpen(cid);
       showBanner(`✓ Marcado para retomar${fecha ? ' el ' + fecha : ''}`, 'success');
+      if (_cpTaskCtx) { _seqContacts = null; await _seqLoadContacts(_cpTaskCtx.seqId); taskAfterResolve(cid); }
     } catch (e) {
       const h = $('nur-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; }
       if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
@@ -34644,7 +34657,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
