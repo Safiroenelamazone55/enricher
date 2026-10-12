@@ -8,32 +8,59 @@
  * eso lo hace el endpoint POST /api/lm/bulk-clean en server.js, que decide qué cambió.
  */
 
-// Sufijos legales al final del nombre de empresa. Orden importa: los más largos/específicos
-// van primero para que no los "coma" una alternativa más corta (ej. "S.A. DE C.V." antes que "S.A.").
-const CO_SUFFIXES = [
-  's\\.?a\\.?\\s*de\\s*c\\.?v\\.?',
-  's\\.?a\\.?c\\.?',
-  's\\.?r\\.?l\\.?',
-  'l\\.?l\\.?c\\.?',
-  'incorporated',
-  'inc\\.?',
-  'corporation',
-  'corp\\.?',
-  'ltda\\.?',
-  'ltd\\.?',
-  'gmbh',
-  'plc',
-  'llp',
-  's\\.?a\\.?',
-  'co\\.?',
+// ── Nombre de empresa ────────────────────────────────────────────────────────
+// Sufijos legales al final del nombre (España, LatAm, UE, anglo). Se quitan en bucle (hasta 3 veces) para casos como
+// "Acme Homes S.L.U." o "Acme, S.A. de C.V.". Las formas abreviadas aceptan cualquier mezcla de puntos y espacios:
+// "S.L", "SL", "S. L.", "s.l." → dot('sl') genera  s\.?\s*l\.?  (cada letra con punto y espacios opcionales).
+function dot(w) { return w.split('').map(c => c + '\\.?').join('\\s*'); }
+// Formas largas / con puntos: sin distinguir mayúsculas. El orden importa (las más largas primero).
+const CO_LONG = [
+  dot('sa') + '\\s*de\\s*' + dot('cv'),                      // S.A. de C.V.
+  dot('sderl') + '(?:\\s*de\\s*' + dot('cv') + ')?',        // S. de R.L. [de C.V.]
+  dot('slu'), dot('sll'), dot('slne'), dot('sau'), dot('sas'), dot('sac'), dot('scp'), dot('sca'),
+  dot('srl'), dot('spa'), dot('sl'), dot('sa'), dot('sc'),
+  dot('bv'), dot('nv'), dot('sarl'), dot('llc'), dot('llp'), dot('pty') + '(?:\\s*' + dot('ltd') + ')?',
+  's\\.?\\s*coop',                                           // cooperativa
+  'c\\.\\s*b\\.',                                            // comunidad de bienes (solo escrita con puntos: "CB" suelto puede ser parte del nombre)
+  's\\.\\s*i\\.?',                                           // "S.I": error de tipeo habitual de "S.L."
+  'incorporated', 'inc', 'corporation', 'corp', 'limited', 'ltda', 'ltd', 'gmbh', 'plc', 'co',
 ];
-const CO_SUFFIX_RE = new RegExp('[,.\\s]+(' + CO_SUFFIXES.join('|') + ')\\.?\\s*$', 'i');
+// Formas cortas ambiguas: solo en MAYÚSCULAS y como palabra suelta (así no se confunden con palabras normales).
+const CO_UPPER = ['AG', 'AS', 'AB', 'OY', 'ApS', 'KG', 'UG'];
+const CO_SUFFIX_RE = new RegExp('[,;.\\s]+(?:' + CO_LONG.join('|') + ')[.\\s]*$', 'i');
+const CO_UPPER_RE = new RegExp('[,;.\\s]+(?:' + CO_UPPER.join('|') + ')[.\\s]*$');
+const LOWER_WORDS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'en', 'the', 'of', 'and', 'a']);
+
+function titleCaseName(s) {
+  return s.split(/(\s+)/).map((w, i) => {
+    if (!w.trim()) return w;
+    if (/[\/\d&@.]/.test(w) && w === w.toUpperCase()) return w;            // RE/MAX, 4YOU, S&P: se respetan
+    const low = w.toLowerCase();
+    if (i > 0 && LOWER_WORDS.has(low)) return low;
+    return low.replace(/(^|[-'’])([a-záéíóúñüçãõàèìòùâêîôû])/g, (_, p, c) => p + c.toUpperCase());
+  }).join('');
+}
 
 function cleanCompanyName(raw) {
-  let s = String(raw == null ? '' : raw).trim();
+  let s = String(raw == null ? '' : raw).replace(/[ ​  ]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return s;
-  s = s.replace(CO_SUFFIX_RE, '');
-  s = s.replace(/[,.\s]+$/, '').replace(/\s{2,}/g, ' ').trim();
+  s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();                   // comillas envolventes
+  for (let i = 0; i < 3; i++) {
+    const t = s.replace(CO_SUFFIX_RE, '').replace(CO_UPPER_RE, '');
+    if (t === s || !t.trim()) break;                                         // nunca dejar el nombre vacío
+    s = t;
+  }
+  s = s.replace(/^[\s,;:.\-–—|]+|[\s,;:.\-–—|]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+  s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();                   // comillas que quedaron al descubierto al quitar el sufijo
+  // TODO MAYÚSCULAS o todo minúsculas con 2+ palabras → Capitalizado (una sola palabra en mayúsculas suele ser marca: IMMOFY, RE/MAX)
+  const letters = s.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇç]/g, '');
+  if (letters.length > 3 && /\s/.test(s)) {
+    const allUp = s === s.toUpperCase() && s !== s.toLowerCase();
+    const allLow = s === s.toLowerCase() && s !== s.toUpperCase();
+    if (allUp || allLow) s = titleCaseName(s);
+  }
+  // Un nombre de empresa siempre empieza con mayúscula ("casaverano real estate" / "iProperty" → "Casaverano…" / "IProperty"); el resto no se toca.
+  s = s.replace(/^([a-záéíóúñüçãõàèìòùâêîôû])/, c => c.toUpperCase());
   return s;
 }
 
