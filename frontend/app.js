@@ -31096,6 +31096,7 @@ ${foot}
     ['Contacto', [['first_name', 'Nombre'], ['last_name', 'Apellido'], ['full_name', 'Nombre completo'], ['email', 'Email'], ['personal_email', 'Email personal'], ['phone', 'Teléfono'], ['mobile', 'Móvil'], ['title', 'Cargo'], ['seniority', 'Seniority'], ['department', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['city', 'Ciudad'], ['region', 'Región'], ['country', 'País'], ['stage', 'Estado'], ['source', 'Fuente']]],
     ['Empresa', [['company', 'Nombre empresa'], ['company_domain', 'Dominio'], ['company_website', 'Website'], ['company_industry', 'Industria'], ['company_size', 'Nº empleados'], ['company_revenue', 'Ingresos'], ['company_city', 'Ciudad'], ['company_country', 'País'], ['company_target_tier', 'Target Tier / Focus'], ['company_segmento', 'Segmento / ICP']]],
   ];
+  window.__lmVarList = () => _VAR_GROUPS.concat(_customVarGroups()).flatMap(g => g[1]); // lista de variables para el autocompletado de varchips.js
   function _varSelectHtml(fn) {
     return `<div class="step-vars"><span class="step-vars__l">Insertar variable</span><select class="step-varsel" onchange="LeadManagerModule.${fn}(this.value); this.selectedIndex=0;"><option value="">＋ Elegir campo…</option>${_VAR_GROUPS.concat(_customVarGroups()).map(g => `<optgroup label="${g[0]}">${g[1].map(v => `<option value="${v[0]}">${v[1]}  ·  {{${v[0]}}}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
   }

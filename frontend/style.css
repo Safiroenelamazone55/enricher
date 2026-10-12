@@ -18166,3 +18166,17 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cant-mc__row:last-child{border-bottom:0}
 .cant-mc__who{flex:1;min-width:0;font-size:.86rem}
 .cant-mc__sub{font-size:.76rem;color:var(--text-muted)}
+
+/* ── Variables {{…}} como chips (varchips.js) ── */
+.vc-wrap{position:relative;display:block;width:100%}
+.vc-back{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;pointer-events:none;color:var(--text,#1F1D1B);white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word}
+.vc-wrap--line .vc-back{white-space:pre;word-wrap:normal;overflow-wrap:normal}
+.vc-tok{background:#E3EEFF;color:#1B5FD1;border-radius:4px;box-shadow:0 0 0 1px #CFE1FF}
+.vc-ta{-webkit-text-fill-color:transparent;background:transparent !important;caret-color:#1F1D1B;position:relative;z-index:1;width:100%}
+.vc-ta::placeholder{-webkit-text-fill-color:#9A958D;color:#9A958D}
+.vc-ta::selection{background:rgba(59,130,246,.28);-webkit-text-fill-color:transparent}
+.vc-caret{display:inline-block;width:0;height:1em}
+.vc-menu{display:none;position:absolute;z-index:80;min-width:240px;max-width:340px;background:#fff;border:1px solid var(--border,#EAE7E2);border-radius:10px;box-shadow:var(--shadow-l,0 12px 32px rgba(16,24,20,.12));padding:4px;max-height:230px;overflow:auto}
+.vc-it{padding:6px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:14px;font-size:.86rem;color:var(--text,#1F1D1B)}
+.vc-it.on,.vc-it:hover{background:#EEF4FF}
+.vc-it code{color:#1B5FD1;font-size:.76rem;background:none}
