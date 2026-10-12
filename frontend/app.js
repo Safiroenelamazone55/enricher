@@ -37355,7 +37355,7 @@ const QuickWaModule = (() => {
       // vivo 2026-09-16: "cómo podría yo saber si el mensaje realmente le
       // llegó al cliente... no tengo el teléfono ahí". Mismo criterio que el
       // WhatsApp de Operaciones: ✓ = enviado, ✓✓ gris = entregado, ✓✓ azul = leído.
-      const tickHtml = m.from_me ? _qwaTickHtml(m.ack, m.ts) : '';
+      const tickHtml = m.from_me ? _qwaTickHtml(m.ack, m.ts, m.chat_jid || _jid) : '';
       const bubbleHtml = `${actions}${citado}${mediaHtml}${textoHtml}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}${tickHtml.includes('wa-msg__fail') ? ' wa-msg--fail' : ''}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
@@ -37372,8 +37372,11 @@ const QuickWaModule = (() => {
       showBanner(j.reenviados ? 'Listo: se reenviaron ' + j.reenviados + ' mensaje(s).' : 'Conexión reparada. Escribe de nuevo si hace falta.', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _qwaTickHtml(ack, ts) {
+  function _qwaTickHtml(ack, ts, jid) {
     const a = +ack || 0;
+    // Solo los chats 1:1 normales (@s.whatsapp.net) reciben confirmación de entrega; en grupos y chats @lid el ack se queda en 0
+    // aunque el mensaje salió bien, así que ahí no se marca "No entregado" (y Reintentar reenviaría mensajes que sí llegaron).
+    if (jid && !String(jid).endsWith('@s.whatsapp.net') && a < 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 90 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="No se entregó. Repara la sesión con este contacto y reenvía los mensajes pendientes." onclick="event.stopPropagation();QuickWaModule.reparar()">No entregado · Reintentar</button>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -39410,7 +39413,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
       const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();WaChatModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
       const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
-      const tickHtml = m.from_me ? _tickHtml(m.ack, m.ts) : '';
+      const tickHtml = m.from_me ? _tickHtml(m.ack, m.ts, m.chat_jid || _chatAct) : '';
       const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}${tickHtml.includes('wa-msg__fail') ? ' wa-msg--fail' : ''}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
@@ -39419,8 +39422,10 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
 
   // Ticks de entrega/leído (estilo WhatsApp/Chatwoot real). ack de Baileys:
   // 1 pendiente, 2 enviado al server (✓), 3 entregado (✓✓ gris), 4 leído (✓✓ azul).
-  function _tickHtml(ack, ts) {
+  function _tickHtml(ack, ts, jid) {
     const a = +ack || 0;
+    // Grupos y chats @lid no reciben ack de entrega (queda en 0 aunque salió bien): no se marcan como "No entregado".
+    if (jid && !String(jid).endsWith('@s.whatsapp.net') && a < 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     // Más de 5 min sin confirmación (y no es historial viejo): se avisa en rojo en vez de dejar el relojito eterno.
     if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 90 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="No se entregó. Repara la sesión con este contacto y reenvía los mensajes pendientes." onclick="event.stopPropagation();WaChatModule.reparar()">No entregado · Reintentar</button>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
