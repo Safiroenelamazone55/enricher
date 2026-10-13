@@ -28978,14 +28978,16 @@ ${foot}
   // Sin encabezado: una empresa o dominio por línea (2ª columna: LinkedIn, dominio o ciudad).
   const _exNorm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
   function _exHeaderKey(h) {
-    const n = _exNorm(h); if (!n) return null;
+    // Tolera mayúsculas, tildes, guiones/dos puntos y encabezados en inglés ("Contact 2 First name", "Email domain 1").
+    const n = _exNorm(h).replace(/[_\-:·.]+/g, ' ').replace(/\s+/g, ' ').trim(); if (!n) return null;
     let m;
-    if ((m = n.match(/^contacto\s*(\d+)\s*(nombre completo|nombre|apellidos?|puesto|cargo|nota|email|correo|linkedin)$/))) {
-      const f = { 'nombre completo': 'nombre_completo', nombre: 'nombre', apellido: 'apellido', apellidos: 'apellido', puesto: 'puesto', cargo: 'puesto', nota: 'nota', email: 'email', correo: 'email', linkedin: 'linkedin' }[m[2]];
+    if ((m = n.match(/^(?:contacto|contact|persona)\s*(\d+)\s*(nombre completo|full name|name|nombre|first name|first|apellidos?|last name|surname|puesto|cargo|job title|title|position|nota|note|notes|email|e mail|correo|linkedin)$/))) {
+      const f = { 'nombre completo': 'nombre_completo', 'full name': 'nombre_completo', name: 'nombre_completo', nombre: 'nombre', 'first name': 'nombre', first: 'nombre', apellido: 'apellido', apellidos: 'apellido', 'last name': 'apellido', surname: 'apellido', puesto: 'puesto', cargo: 'puesto', 'job title': 'puesto', title: 'puesto', position: 'puesto', nota: 'nota', note: 'nota', notes: 'nota', email: 'email', 'e mail': 'email', correo: 'email', linkedin: 'linkedin' }[m[2]];
       return { c: +m[1], f };
     }
-    if ((m = n.match(/^dominio(?: de)?(?: email| correo)?\s*(\d+)$/))) return { d: +m[1] };
-    const M = { tipo: 'tipo', 'categoria original': 'categoria', categoria: 'categoria', empresa: 'nombre', 'nombre empresa': 'nombre', company: 'nombre', website: 'website', web: 'website', 'sitio web': 'website', url: 'website', 'dominio web': 'dominio_web', dominio: 'dominio_web', domain: 'dominio_web', linkedin: 'linkedin', 'linkedin empresa': 'linkedin', ciudad: 'ciudad', city: 'ciudad', pais: 'pais', country: 'pais', motivo: 'motivo', razon: 'motivo', aviso: 'nota', nota: 'nota', notas: 'nota', 'bloquear por dominio': 'match_dominio' };
+    if ((m = n.match(/^(?:dominio|domain|email domain|dominio email|dominio de email|dominio correo|dominio de correo)s?\s*(\d*)$/)) && /email|correo|^dominio\s*\d|^domain\s*\d/.test(n)) return { d: m[1] ? +m[1] : 1 };
+    if ((m = n.match(/^(?:dominio|domain)(?: de)?(?: email| correo)?\s*(\d+)$/))) return { d: +m[1] };
+    const M = { tipo: 'tipo', type: 'tipo', 'categoria original': 'categoria', categoria: 'categoria', category: 'categoria', empresa: 'nombre', 'nombre empresa': 'nombre', 'nombre de la empresa': 'nombre', company: 'nombre', 'company name': 'nombre', website: 'website', web: 'website', 'sitio web': 'website', url: 'website', 'dominio web': 'dominio_web', dominio: 'dominio_web', domain: 'dominio_web', 'website domain': 'dominio_web', linkedin: 'linkedin', 'linkedin empresa': 'linkedin', 'company linkedin': 'linkedin', ciudad: 'ciudad', city: 'ciudad', pais: 'pais', country: 'pais', motivo: 'motivo', razon: 'motivo', reason: 'motivo', aviso: 'nota', nota: 'nota', notas: 'nota', notes: 'nota', note: 'nota', 'bloquear por dominio': 'match_dominio', 'block by domain': 'match_dominio' };
     if (M[n]) return { k: M[n] };
     return null;
   }

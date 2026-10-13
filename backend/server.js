@@ -4337,8 +4337,9 @@ app.post('/api/lm/exclusions/import', requireAuth, async (req, res) => {
       const ex = ins.rows[0];
       let ord = 0;
       for (const c of (Array.isArray(r.contactos) ? r.contactos : []).slice(0, 30)) {
-        const nombre = S(c.nombre, 120), apellido = S(c.apellido, 160);
+        let nombre = S(c.nombre, 120), apellido = S(c.apellido, 160);
         const completo = S(c.nombre_completo, 280) || [nombre, apellido].filter(Boolean).join(' ');
+        if (!nombre && !apellido && completo) { const t = completo.split(/\s+/); nombre = t[0]; apellido = t.slice(1).join(' '); }   // solo "nombre completo": se separa en nombre + apellido
         if (!nombre && !completo && !_lmCleanUrlish(c.email)) continue;
         await pool.query(`INSERT INTO lm_exclusion_contacts (exclusion_id,user_id,orden,nombre,apellido,nombre_completo,puesto,nota,email,linkedin) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [ex.id, uid, ++ord, nombre || completo.split(' ')[0] || '', apellido, completo, S(c.puesto, 160), S(c.nota, 300), S(c.email, 200).toLowerCase(), S(c.linkedin, 300)]);
