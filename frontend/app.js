@@ -34339,11 +34339,45 @@ ${foot}
       ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ciudad', 'Ciudad'], ['pais', 'País'], ['target_tier', 'Target Tier'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis']]
       : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['cargo', 'Cargo'], ['company_nombre', 'Empresa'], ['email', 'Email'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['estado', 'Estado'], ['analisis', 'Análisis']];
     const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact');
-    return base.concat(active.map(f => [f.field_key, f.label]));
+    return base.concat(_dgExtraOn(entity), active.map(f => [f.field_key, f.label]));
+  }
+  // Columnas opcionales (⋮ → Columnas): datos que existen pero no salían en la tabla. Los de CONTACTO
+  // (ciudad/región/país) son los del propio contacto, no los de su empresa.
+  const DG_EXTRA = {
+    companies: [['website', 'Sitio web'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['region', 'Región'], ['ingresos', 'Ingresos'], ['fundada', 'Fundada'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['descripcion', 'Descripción'], ['notas', 'Notas']],
+    contacts: [['ciudad', 'Ciudad (contacto)'], ['region', 'Región (contacto)'], ['pais', 'País (contacto)'], ['email_personal', 'Email personal'], ['movil', 'Móvil'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Rol de compra'], ['contact_priority', 'Prioridad'], ['fuente', 'Fuente'], ['notas', 'Notas']],
+  };
+  function _dgExtraKeys(entity) {
+    try { const s = JSON.parse(localStorage.getItem('dg_extra_cols') || '{}'); return Array.isArray(s[entity]) ? s[entity] : []; } catch (_) { return []; }
+  }
+  function _dgExtraOn(entity) { const on = new Set(_dgExtraKeys(entity)); return (DG_EXTRA[entity] || []).filter(c => on.has(c[0])); }
+  function dgToggleExtraCol(key, on) {
+    let s = {}; try { s = JSON.parse(localStorage.getItem('dg_extra_cols') || '{}') || {}; } catch (_) {}
+    const set = new Set(Array.isArray(s[_dgEntity]) ? s[_dgEntity] : []);
+    if (on) set.add(key); else set.delete(key);
+    s[_dgEntity] = [...set];
+    try { localStorage.setItem('dg_extra_cols', JSON.stringify(s)); } catch (_) {}
+    _dgRenderRows();
+  }
+  function dgColsMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const on = new Set(_dgExtraKeys(_dgEntity));
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '230px';
+    menu.innerHTML = `<div class="cp-mark-menu__list" style="max-height:340px;overflow:auto"><div style="padding:6px 10px;font-size:.72rem;color:#64748B">Agregar columnas</div>`
+      + (DG_EXTRA[_dgEntity] || []).map(([k, l]) => `<label style="display:flex;gap:8px;align-items:center;padding:6px 10px;font-size:.85rem;cursor:pointer"><input type="checkbox" ${on.has(k) ? 'checked' : ''} onchange="LeadManagerModule.dgToggleExtraCol('${k}',this.checked)"> ${esc(l)}</label>`).join('') + `</div>`;
+    document.body.appendChild(menu);
+    const kb = document.querySelector('.dg-kebab');
+    const r = (kb || document.body).getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 230, window.innerWidth - 240))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   function _dgEditableFields(entity) {
     const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact').map(f => f.field_key);
-    return DG_EDITABLE_BASE[entity].concat(active);
+    return DG_EDITABLE_BASE[entity].concat(_dgExtraKeys(entity), active);
   }
   function _dgFieldLabel(field) { return (DG_COLS_FOR(_dgEntity).find(x => x[0] === field) || [field, field])[1]; }
   // Nombre del registro al que pertenece un cambio — sin esto, una vista previa
@@ -34391,6 +34425,7 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">`
+      + item(`${NI('sliders')} Columnas`, `LeadManagerModule.dgColsMenu(event)`)
       + item(_dgSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.dgToggleSelMode()`)
       + `</div>`;
     const menu = document.createElement('div');
@@ -34844,7 +34879,7 @@ ${foot}
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
     dgEditCell, dgEditKey, dgSaveCell, dgCleanMenu, dgCleanOpen, dgCleanClose, dgCleanApply,
-    dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
+    dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgColsMenu, dgToggleExtraCol, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
     reportPause, reportSkip, openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
