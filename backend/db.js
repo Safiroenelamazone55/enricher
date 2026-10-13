@@ -1570,6 +1570,27 @@ async function initDb() {
     // se agenda desde aquí (retraso corre la cadencia, como Outreach). NULL → ancla en start_date/created_at.
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS paso_date DATE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_next_idx ON lm_contact_sequences (estado, next_action_at);`);
+    // Lista de exclusión de empresas (no contactar). scope: global | cliente | campana | secuencia. Ver services/exclusions.js.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_exclusions (
+        id                 SERIAL PRIMARY KEY,
+        user_id            INTEGER NOT NULL,
+        nombre             TEXT NOT NULL DEFAULT '',
+        nombre_norm        TEXT NOT NULL DEFAULT '',
+        dominio            TEXT NOT NULL DEFAULT '',
+        linkedin_slug      TEXT NOT NULL DEFAULT '',
+        ciudad             TEXT NOT NULL DEFAULT '',
+        ciudad_norm        TEXT NOT NULL DEFAULT '',
+        pais               TEXT NOT NULL DEFAULT '',
+        motivo             TEXT NOT NULL DEFAULT '',
+        lista              TEXT NOT NULL DEFAULT '',
+        scope              TEXT NOT NULL DEFAULT 'global',
+        outbound_client_id INTEGER,
+        campaign_id        INTEGER,
+        sequence_id        INTEGER,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_excl_user_idx ON lm_exclusions (user_id, scope);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);
     // Reply threading: si TRUE, el paso email se envía como respuesta al último

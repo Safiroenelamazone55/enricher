@@ -402,6 +402,14 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
     return false;
   }
 
+  // Lista de exclusión: si la empresa se excluyó DESPUÉS de inscribirlo, no se le escribe nunca.
+  try {
+    if (await require('./exclusions').isEnrollmentExcluded(pool, enr)) {
+      await _pauseEnrollment(pool, enr, 'excluida', null);
+      return false;
+    }
+  } catch (e) { console.warn('[send-engine] exclusiones:', e.message); }
+
   const { rows: steps } = await pool.query(
     `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, reply_to_step_id, cond, cond_step_id
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,

@@ -20921,6 +20921,7 @@ const LeadManagerModule = (() => {
     { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
+    { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
@@ -20938,6 +20939,7 @@ const LeadManagerModule = (() => {
     clients:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
     campaigns:'<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
     sequences:'<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    exclusions:'<circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>',
     leads:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
     deals:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     companies:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/>',
@@ -21012,6 +21014,7 @@ const LeadManagerModule = (() => {
     if (section === 'wa')        { _waList = null; _waReload(); }
     if (section === 'tasks')     { _apList = null; _apReload(); }
     if (section === 'leads')     _reloadActivities();
+    if (section === 'exclusions') { _exList = null; _exLoad(); }
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
@@ -21072,6 +21075,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
     else if (_section === 'company-view') { body.innerHTML = _vCompanyPage(_companyView); }
+    else if (_section === 'exclusions') body.innerHTML = _vExclusions();
     else if (_section === 'templates') body.innerHTML = _vTemplates();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
     else if (_section === 'settings') { body.innerHTML = _vSettings(); _countUp(); }
@@ -28962,6 +28966,118 @@ ${foot}
   function _tplAllTags() { const m = new Map(); (_lmTpls || []).forEach(t => _tplTagsOf(t).forEach(s => { const k = _lmNorm(s); if (!m.has(k)) m.set(k, s); })); return [...m.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })); }
   function _tplSeqsOf(t) { return String(t.sequence_ids || '').split(',').map(s => s.trim()).filter(Boolean); }
   function _seqNameById(id) { const s = (_sequences || []).find(x => String(x.id) === String(id)); return s ? s.nombre : ('Secuencia ' + id); }
+  // ══ Exclusiones: lista de empresas que NO se contactan (por cliente / campaña / secuencia / todo) ══
+  let _exList = null;
+  let _exDraft = { scope: 'global', client: '', campaign: '', sequence: '', lista: '', text: '', q: '' };
+  async function _exLoad() {
+    try { const r = await apiFetch(`${API}/lm/exclusions`); if (r.ok) _exList = await r.json(); else _exList = []; } catch (_) { _exList = []; }
+    if (_section === 'exclusions') _renderBody();
+  }
+  // Pega desde Excel (TSV) o CSV. Con encabezado (Empresa, Dominio, Web, LinkedIn, Ciudad, País, Motivo) o sin él (1 columna = empresa o dominio).
+  function _exParse(text) {
+    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    const delim = lines[0].includes('\t') ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
+    const split = l => l.split(delim).map(x => x.trim().replace(/^"|"$/g, ''));
+    const MAP = { empresa: 'nombre', nombre: 'nombre', company: 'nombre', 'nombre empresa': 'nombre', dominio: 'dominio', domain: 'dominio', web: 'website', website: 'website', 'sitio web': 'website', url: 'website', linkedin: 'linkedin', 'linkedin empresa': 'linkedin', ciudad: 'ciudad', city: 'ciudad', pais: 'pais', 'país': 'pais', country: 'pais', motivo: 'motivo', razon: 'motivo', 'razón': 'motivo', nota: 'motivo', notas: 'motivo' };
+    const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const head = split(lines[0]).map(h => MAP[norm(h)] || null);
+    const hasHead = head.filter(Boolean).length >= 1 && head.some(h => h === 'nombre' || h === 'dominio' || h === 'website' || h === 'linkedin');
+    const out = [];
+    (hasHead ? lines.slice(1) : lines).forEach(l => {
+      const c = split(l); const o = {};
+      if (hasHead) head.forEach((k, i) => { if (k && c[i]) o[k] = c[i]; });
+      else {
+        const v = c[0] || '';
+        if (/^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(v) && !/\s/.test(v)) o.dominio = v; else o.nombre = v;
+        if (c[1]) { if (/linkedin\.com/i.test(c[1])) o.linkedin = c[1]; else if (/\./.test(c[1]) && !/\s/.test(c[1])) o.dominio = c[1]; else o.ciudad = c[1]; }
+        if (c[2]) o.ciudad = o.ciudad || c[2];
+      }
+      if (o.nombre || o.dominio || o.website || o.linkedin) out.push(o);
+    });
+    return out;
+  }
+  function exSet(k, v) { _exDraft[k] = v; if (k === 'scope') _renderBody(); else if (k === 'text') { const n = $('ex-count'); if (n) n.textContent = _exParse(v).length + ' empresa(s) detectada(s)'; } else if (k === 'q') { _renderBody(); const i = document.querySelector('input[placeholder^="Buscar en exclusiones"]'); if (i) { i.focus(); try { i.setSelectionRange(v.length, v.length); } catch (_) {} } } }
+  function exFile(inp) {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { _exDraft.text = String(rd.result || ''); _renderBody(); };
+    rd.readAsText(f, 'utf-8');
+  }
+  async function exSave() {
+    const rows = _exParse(_exDraft.text);
+    if (!rows.length) { showBanner('Pega o sube al menos una empresa', 'error'); return; }
+    const d = _exDraft;
+    const body = { rows, scope: d.scope, lista: d.lista, outbound_client_id: d.client, campaign_id: d.campaign, sequence_id: d.sequence };
+    if (d.scope === 'cliente' && !d.client) { showBanner('Elige el cliente', 'error'); return; }
+    if (d.scope === 'campana' && !d.campaign) { showBanner('Elige la campaña', 'error'); return; }
+    if (d.scope === 'secuencia' && !d.sequence) { showBanner('Elige la secuencia', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/lm/exclusions/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner(`${j.added} empresa(s) excluida(s)` + (j.duplicadas ? ` · ${j.duplicadas} ya estaban` : '') + (j.pausados ? ` · ${j.pausados} contacto(s) en secuencia pausado(s)` : '') + (j.cola_descartada ? ` · ${j.cola_descartada} de la cola de empresas descartada(s)` : ''), 'success');
+      _exDraft.text = ''; _exDraft.lista = '';
+      await _exLoad(); try { await load(); } catch (_) {}
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function exDelete(ids, lista) {
+    if (!confirm(lista != null ? `¿Quitar toda la lista “${lista || '(sin nombre)'}” de las exclusiones?` : '¿Quitar esta empresa de las exclusiones?')) return;
+    try {
+      const r = await apiFetch(`${API}/lm/exclusions/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lista != null ? { lista } : { ids }) });
+      if (!r.ok) throw new Error('No se pudo borrar');
+      showBanner('Quitada(s) de la lista de exclusión. Los contactos ya pausados no se reactivan solos.', 'success');
+      await _exLoad();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _exScopeChip(e) {
+    if (e.scope === 'global') return '<span class="lm-obc-badge" style="background:#FEE2E2;color:#991B1B">Todo el workspace</span>';
+    if (e.scope === 'cliente') return `<span class="lm-obc-badge" style="background:#DBEAFE;color:#1E40AF">Cliente · ${esc(e.cliente_nombre || '—')}</span>`;
+    if (e.scope === 'campana') return `<span class="lm-obc-badge" style="background:#FEF3C7;color:#92400E">Campaña · ${esc(e.campana_nombre || '—')}</span>`;
+    return `<span class="lm-obc-badge" style="background:#E0E7FF;color:#3730A3">Secuencia · ${esc(e.secuencia_nombre || '—')}</span>`;
+  }
+  function _vExclusions() {
+    if (_exList === null) { _exLoad(); return '<div class="cp-empty2" style="padding:22px">Cargando…</div>'; }
+    const d = _exDraft;
+    const opt = (arr, val, ph) => `<option value="">${ph}</option>` + arr.map(x => `<option value="${x.id}"${String(val) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    const target = d.scope === 'cliente' ? `<select class="form-input" onchange="LeadManagerModule.exSet('client',this.value)">${opt(_clients, d.client, 'Elige el cliente…')}</select>`
+      : d.scope === 'campana' ? `<select class="form-input" onchange="LeadManagerModule.exSet('campaign',this.value)">${opt(_campaigns, d.campaign, 'Elige la campaña…')}</select>`
+      : d.scope === 'secuencia' ? `<select class="form-input" onchange="LeadManagerModule.exSet('sequence',this.value)">${opt(_sequences, d.sequence, 'Elige la secuencia…')}</select>` : '';
+    const n = _exParse(d.text).length;
+    const q = (d.q || '').toLowerCase().trim();
+    const rows = (_exList || []).filter(e => !q || [e.nombre, e.dominio, e.ciudad, e.lista, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre].filter(Boolean).join(' ').toLowerCase().includes(q));
+    const listas = [...new Set((_exList || []).map(e => e.lista))];
+    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th>Empresa</th><th>Dominio</th><th>Ciudad</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
+        <td>${esc(e.nombre || '—')}${e.motivo ? `<div style="font-size:.72rem;color:#64748B">${esc(e.motivo)}</div>` : ''}</td><td>${esc(e.dominio || '—')}</td><td>${esc(e.ciudad || '—')}</td>
+        <td>${_exScopeChip(e)}</td><td>${esc(e.lista || '—')}</td><td>${e.coincidencias || 0}</td>
+        <td><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete([${e.id}])" title="Quitar de la lista">✕</button></td></tr>`).join('')}</tbody></table></div>${rows.length > 400 ? `<p class="lm-sec-sub">Mostrando 400 de ${rows.length}. Usa el buscador.</p>` : ''}`
+      : '<div class="cp-empty2" style="padding:22px;text-align:center">Aún no hay empresas excluidas.</div>';
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Exclusiones</h2><p class="lm-sec-sub">Empresas a las que NO se escribe. Se reconocen por dominio, web, LinkedIn de empresa o nombre (sin tildes ni SL/SA), y se bloquean al inscribir, al enviar y en lo que ya está en marcha.</p></div></div>
+      <div class="cp-card" style="padding:16px;margin-bottom:16px;display:grid;gap:10px">
+        <div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(200px,1fr) minmax(160px,.7fr);gap:10px">
+          <select class="form-input" onchange="LeadManagerModule.exSet('scope',this.value)">
+            <option value="global"${d.scope === 'global' ? ' selected' : ''}>Aplica a: todo el workspace (todos los clientes)</option>
+            <option value="cliente"${d.scope === 'cliente' ? ' selected' : ''}>Aplica a: un cliente (todas sus campañas y secuencias)</option>
+            <option value="campana"${d.scope === 'campana' ? ' selected' : ''}>Aplica a: una campaña</option>
+            <option value="secuencia"${d.scope === 'secuencia' ? ' selected' : ''}>Aplica a: una secuencia</option>
+          </select>
+          ${target || '<div></div>'}
+          <input class="form-input" placeholder="Nombre de la lista (opcional)" value="${esc(d.lista)}" oninput="LeadManagerModule.exSet('lista',this.value)">
+        </div>
+        <textarea class="form-input" rows="6" style="font-family:inherit" placeholder="Pega aquí desde Excel o CSV. Columnas: Empresa, Dominio, Web, LinkedIn, Ciudad, País, Motivo (con encabezado). Sin encabezado: una empresa o dominio por línea." oninput="LeadManagerModule.exSet('text',this.value)">${esc(d.text)}</textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label class="btn btn--ghost btn--sm" style="cursor:pointer">Subir CSV/TXT<input type="file" accept=".csv,.txt,.tsv" style="display:none" onchange="LeadManagerModule.exFile(this)"></label>
+          <span id="ex-count" style="font-size:.8rem;color:#64748B">${n} empresa(s) detectada(s)</span>
+          <button class="btn btn--primary btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exSave()">Agregar a exclusiones</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <input class="form-input" style="max-width:320px" placeholder="Buscar en exclusiones…" value="${esc(d.q)}" oninput="LeadManagerModule.exSet('q',this.value)">
+        <span class="lm-sec-sub" style="margin:0">${(_exList || []).length} empresa(s) excluida(s)</span>
+        ${listas.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${listas.map(l => `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete(null,${JSON.stringify(l).replace(/"/g, '&quot;')})" title="Quitar toda esta lista">🗑 ${esc(l || '(sin nombre)')}</button>`).join('')}</span>` : ''}
+      </div>${tbl}`;
+  }
+
   function _vTemplates() {
     let list = _tplFilter === 'all' ? _lmTpls : _lmTpls.filter(t => (t.canal || 'general') === _tplFilter);
     if (_tplTagFilter) list = list.filter(t => _tplTagsOf(t).some(x => _lmNorm(x) === _lmNorm(_tplTagFilter)));
@@ -34851,7 +34967,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { exSet, exFile, exSave, exDelete, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

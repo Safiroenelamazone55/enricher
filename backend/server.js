@@ -3934,7 +3934,10 @@ app.post('/api/lm/companies/bulk-enroll', requireAuth, async (req, res) => {
     // Solo empresas del usuario que no estén ya en la cola de esta secuencia.
     const already = new Set((await pool.query(`SELECT company_id FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 AND company_id = ANY($3::int[])`, [uid, seqId, ids])).rows.map(r => r.company_id));
     const valid = new Set((await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
-    const toAdd = ids.filter(id => valid.has(id) && !already.has(id));
+    let toAdd = ids.filter(id => valid.has(id) && !already.has(id));
+    const fxCo = await _excl.filterCompanies(pool, uid, toAdd, { sequenceId: seqId });
+    toAdd = fxCo.allowed;
+    if (fxCo.excluded.length) { const _rj1 = res.json.bind(res); res.json = o => _rj1(o && typeof o === 'object' && !Array.isArray(o) ? { ...o, excluidos: fxCo.excluded.length, excluidos_detalle: fxCo.excluded.slice(0, 12) } : o); }
     if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
     // ── Mismo "arranque escalonado · X por día" que ya usan los contactos (_lmAddMembership) ──
     const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
@@ -4270,6 +4273,83 @@ async function _seqHasDirectContacts(uid, sid) {
 async function _seqHasCompanyQueue(uid, sid) {
   return !!(await pool.query(`SELECT 1 FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 LIMIT 1`, [uid, sid])).rowCount;
 }
+// ── Lista de exclusión de empresas (no contactar) ──
+const _excl = require('./services/exclusions');
+app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.*, oc.nombre AS cliente_nombre, cp.nombre AS campana_nombre, sq.nombre AS secuencia_nombre
+         FROM lm_exclusions e
+         LEFT JOIN outbound_clients oc ON oc.id = e.outbound_client_id
+         LEFT JOIN campaigns cp ON cp.id = e.campaign_id
+         LEFT JOIN sequences sq ON sq.id = e.sequence_id
+        WHERE e.user_id=$1 ORDER BY e.created_at DESC, e.id DESC`, [uid]);
+    // Cuántas empresas del CRM coinciden hoy con cada exclusión (informativo).
+    const cos = (await pool.query(`SELECT id, nombre, dominio, website, linkedin, ciudad FROM lm_companies WHERE user_id=$1`, [uid])).rows;
+    rows.forEach(e => { e.coincidencias = cos.filter(c => _excl.matchCompany(e, c)).length; });
+    res.json(rows);
+  } catch (err) { console.error('[lm-excl] GET', err.message); res.status(500).json({ error: 'Error al cargar las exclusiones' }); }
+});
+app.post('/api/lm/exclusions/import', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {};
+  const scope = ['global', 'cliente', 'campana', 'secuencia'].includes(b.scope) ? b.scope : null;
+  if (!scope) return res.status(400).json({ error: 'Elige el alcance de la lista' });
+  const rowsIn = Array.isArray(b.rows) ? b.rows : [];
+  if (!rowsIn.length) return res.status(400).json({ error: 'La lista está vacía' });
+  if (rowsIn.length > 5000) return res.status(400).json({ error: 'Máximo 5.000 empresas por carga' });
+  try {
+    let clientId = null, campaignId = null, sequenceId = null;
+    if (scope === 'cliente') {
+      clientId = parseInt(b.outbound_client_id) || null;
+      if (!clientId || !(await pool.query(`SELECT 1 FROM outbound_clients WHERE id=$1 AND user_id=$2`, [clientId, uid])).rowCount) return res.status(400).json({ error: 'Elige un cliente' });
+    } else if (scope === 'campana') {
+      campaignId = parseInt(b.campaign_id) || null;
+      if (!campaignId || !(await pool.query(`SELECT 1 FROM campaigns WHERE id=$1 AND user_id=$2`, [campaignId, uid])).rowCount) return res.status(400).json({ error: 'Elige una campaña' });
+    } else if (scope === 'secuencia') {
+      sequenceId = parseInt(b.sequence_id) || null;
+      if (!sequenceId || !(await pool.query(`SELECT 1 FROM sequences WHERE id=$1 AND user_id=$2`, [sequenceId, uid])).rowCount) return res.status(400).json({ error: 'Elige una secuencia' });
+    }
+    const lista = _lmS(b.lista).slice(0, 80);
+    // Ya existentes en el MISMO alcance (para no duplicar).
+    const cur = (await pool.query(
+      `SELECT nombre_norm, dominio, linkedin_slug FROM lm_exclusions WHERE user_id=$1 AND scope=$2 AND COALESCE(outbound_client_id,0)=$3 AND COALESCE(campaign_id,0)=$4 AND COALESCE(sequence_id,0)=$5`,
+      [uid, scope, clientId || 0, campaignId || 0, sequenceId || 0])).rows;
+    const seen = new Set();
+    cur.forEach(r => { if (r.dominio) seen.add('d:' + r.dominio); if (r.linkedin_slug) seen.add('l:' + r.linkedin_slug); if (r.nombre_norm) seen.add('n:' + r.nombre_norm); });
+    const created = []; let dup = 0, vacias = 0;
+    for (const r of rowsIn) {
+      const row = { nombre: _lmCleanUrlish(r.nombre), dominio: _lmCleanUrlish(r.dominio), website: _lmCleanUrlish(r.website), linkedin: _lmCleanUrlish(r.linkedin), ciudad: _lmCleanUrlish(r.ciudad), pais: _lmCleanUrlish(r.pais), motivo: _lmCleanUrlish(r.motivo) };
+      const k = _excl.keysOf(row);
+      if (!k.nombre_norm && !k.dominio && !k.linkedin_slug) { vacias++; continue; }
+      const keys = [k.dominio && 'd:' + k.dominio, k.linkedin_slug && 'l:' + k.linkedin_slug, k.nombre_norm && 'n:' + k.nombre_norm].filter(Boolean);
+      if (keys.some(x => seen.has(x))) { dup++; continue; }
+      keys.forEach(x => seen.add(x));
+      const ins = await pool.query(
+        `INSERT INTO lm_exclusions (user_id,nombre,nombre_norm,dominio,linkedin_slug,ciudad,ciudad_norm,pais,motivo,lista,scope,outbound_client_id,campaign_id,sequence_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        [uid, row.nombre.slice(0, 200), k.nombre_norm, k.dominio, k.linkedin_slug, row.ciudad.slice(0, 120), k.ciudad_norm, row.pais.slice(0, 80), row.motivo.slice(0, 300), lista, scope, clientId, campaignId, sequenceId]);
+      created.push(ins.rows[0]);
+    }
+    const paused = await _excl.pauseExistingFor(pool, uid, created);
+    res.json({ added: created.length, duplicadas: dup, vacias, pausados: paused.paused, cola_descartada: paused.queue });
+  } catch (err) { console.error('[lm-excl] import', err.message); res.status(500).json({ error: 'Error al guardar la lista de exclusión' }); }
+});
+app.post('/api/lm/exclusions/bulk-delete', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {};
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const lista = typeof b.lista === 'string' ? b.lista : null;
+  try {
+    const r = ids.length
+      ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])
+      : lista !== null
+        ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1 AND lista=$2`, [uid, lista])
+        : { rowCount: 0 };
+    // Quitar una exclusión NO reactiva sola a quienes ya se pausaron: se hace a mano desde la secuencia.
+    res.json({ deleted: r.rowCount });
+  } catch (err) { console.error('[lm-excl] delete', err.message); res.status(500).json({ error: 'Error al borrar' }); }
+});
+
 async function _lmAddMembership(req, res, kind) {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
@@ -4287,12 +4367,13 @@ async function _lmAddMembership(req, res, kind) {
       return res.status(400).json({ error: 'Esta secuencia está en modalidad Empresa primero — agrega contactos desde la pestaña Empresas (＋ Agregar contacto), no por enrolamiento directo.' });
     }
     if (kind !== 'sequence') {
-      const r = await pool.query(`
+      const fx = await _excl.filterContacts(pool, uid, ids, { campaignId: targetId });
+      const r = fx.allowed.length ? await pool.query(`
         INSERT INTO ${table} (user_id, contact_id, ${col})
         SELECT $1, c.id, $2 FROM lm_contacts c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
         ON CONFLICT (contact_id, ${col}) DO NOTHING
-      `, [uid, targetId, ids]);
-      return res.json({ added: r.rowCount, requested: ids.length });
+      `, [uid, targetId, fx.allowed]) : { rowCount: 0 };
+      return res.json({ added: r.rowCount, requested: ids.length, excluidos: fx.excluded.length, excluidos_detalle: fx.excluded.slice(0, 12) });
     }
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
     const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on, rotacion_empresa FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
@@ -4302,6 +4383,15 @@ async function _lmAddMembership(req, res, kind) {
     const already = new Set((await pool.query(`SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`, [uid, targetId, ids])).rows.map(r => r.contact_id));
     const exist = new Set((await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
     let toAdd = ids.filter(id => exist.has(id) && !already.has(id));
+    // Lista de exclusión: las empresas excluidas para esta secuencia (o su campaña/cliente, o globales) NO se inscriben.
+    {
+      const fx = await _excl.filterContacts(pool, uid, toAdd, { sequenceId: targetId });
+      if (fx.excluded.length) {
+        toAdd = fx.allowed;
+        const _rj0 = res.json.bind(res);
+        res.json = o => _rj0(o && typeof o === 'object' && !Array.isArray(o) ? { ...o, excluidos: fx.excluded.length, excluidos_detalle: fx.excluded.slice(0, 12) } : o);
+      }
+    }
     // Los contactos con conversación abierta (Respondió / Interesado / Más adelante / Reunión / Derivó) NO se enrolan en una secuencia fría:
     // ya tienen su propio seguimiento (tareas de seguimiento, Leads, Deals). Se informan como omitidos; se pueden forzar con incluir_respondieron:true.
     let _omit = [];
