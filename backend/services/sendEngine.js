@@ -348,6 +348,10 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
        -- el enrolamiento avanza (PATCH). Así el paso 3 (email) NO avanza hasta que el
        -- paso 2 (WhatsApp) se haga a mano. Sin esto el motor los auto-saltaba.
        AND cur.canal = 'email'
+       -- Pre-aprobado: quien ya tiene su borrador esperando (por aprobar o aprobado) NO se vuelve a elegir. Antes el motor lo "pateaba"
+       -- +12 h en cada pasada, y como _flushApproved exige next_action_at <= ahora, el email aprobado quedaba aplazado para siempre.
+       AND NOT (s.send_mode = 'preaprobado' AND EXISTS (
+            SELECT 1 FROM lm_messages w WHERE w.contact_id = cs.contact_id AND w.sequence_id = cs.sequence_id AND w.estado IN ('awaiting','approved')))
        -- Intervalo anti-ráfaga POR SECUENCIA: espera N min desde el último envío de esta secuencia.
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
@@ -529,9 +533,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       );
       console.log(`[send-engine] borrador por aprobar → ${enr.email} (${enr.seq_nombre} paso ${enr.paso})`);
     }
-    // Patear el enrolamiento para no bloquear el pick del workspace; reintenta luego
-    // por si el borrador se descarta sin avanzar. El envío real ocurre al aprobar.
-    await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '12 hours' WHERE id=$1`, [enr.enr_id]);
+    // NO se toca next_action_at: la fecha real del paso debe quedar intacta para que _flushApproved envíe al aprobar.
+    // El pick ya excluye a quien tiene borrador esperando; si el borrador se descarta, vuelve a elegirse solo.
     return false;
   }
 
@@ -865,7 +868,7 @@ async function _draftPreapprovedBatch(pool, seen) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status,
-           k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre
+           k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days
       FROM lm_contact_sequences cs
       JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -884,8 +887,13 @@ async function _draftPreapprovedBatch(pool, seen) {
      LIMIT 500
   `, [seen]);
   enrs.forEach(e => seen.push(e.enr_id));   // lo ya visto en esta pasada no vuelve a entrar al lote
+  // Horizonte por secuencia: aparece lo de HOY y la tanda del próximo día de envío (según los días de cadencia), no todo de golpe.
+  // Así el arranque escalonado se ve como es: 20 hoy, 13 mañana… y no los 33 juntos.
+  const _hz = {};
+  const _horizon = (mask) => { if (!_hz[mask]) { const t = _todayUTC(); t.setUTCDate(t.getUTCDate() + 1); const nx = _rollFwd(t, mask); nx.setUTCDate(nx.getUTCDate() + 1); _hz[mask] = nx.getTime(); } return _hz[mask]; };
   for (const enr of enrs) {
     try {
+      if (enr.next_action_at && new Date(enr.next_action_at).getTime() >= _horizon(_sanSendDays(enr.send_days))) continue;
       // Solo se salta sin email o con email que ya rebotó (invalid). "Sin verificar" SÍ
       // genera borrador (se confía en el dato; el rebote real lo detecta el vigilante).
       if (!enr.email || enr.email_status === 'invalid') continue;
@@ -959,6 +967,19 @@ async function _draftPreapproved(pool) {
         AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
                          WHERE cs.contact_id=a.contact_id AND s.estado='activa' AND cs.estado IN ('activo','pausado'))`).catch(x => console.warn('[send-engine] barrido-rebotes:', x.message));
   }
+  // Red de seguridad (autocuración): un contacto en el paso 1 cuya fecha de arranque (start_date) ya llegó NO puede tener next_action_at en el futuro
+  // (solo "Repartir/re-anclar" la mueve, y ese camino cambia también start_date). Si pasa, algo la aplazó por error: se restaura a su fecha real
+  // y se avisa en el log, para que un borrador aprobado nunca se quede esperando indefinidamente.
+  await pool.query(`UPDATE lm_contact_sequences cs SET next_action_at = cs.start_date::timestamptz
+      FROM sequences s
+     WHERE s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
+       AND cs.estado='activo' AND cs.paso = 1 AND cs.start_date IS NOT NULL AND cs.start_date <= CURRENT_DATE
+       AND cs.next_action_at > NOW() + interval '5 minutes'
+       -- solo en día de cadencia permitido (si hoy no se envía, el motor mueve la fecha al próximo día permitido a propósito)
+       AND substr(COALESCE(NULLIF(s.send_days,''),'1111100'), EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'UTC'))::int, 1) = '1'
+       AND EXISTS (SELECT 1 FROM lm_messages m WHERE m.contact_id=cs.contact_id AND m.sequence_id=cs.sequence_id AND m.estado IN ('awaiting','approved'))`)
+    .then(r => { if (r.rowCount) console.warn(`[send-engine] autocuración: ${r.rowCount} contacto(s) del paso 1 tenían la fecha aplazada por error — restaurados a su start_date`); })
+    .catch(e => console.warn('[send-engine] autocuracion:', e.message));
   // Alinea la fecha de envío de los borradores pendientes con la fecha REAL de su contacto (puede haber cambiado al editar la
   // fecha de inicio, la cadencia o el goteo después de redactarlos; sin esto salían un día antes de lo previsto).
   await pool.query(`UPDATE lm_messages m SET scheduled_at = cs.next_action_at
