@@ -3629,6 +3629,19 @@ function _lmCleanUrlish(v) {
   if (!s || /^(n\s*\/?\s*a|none|null|-|n\.?a\.?|tbd|not\s*applicable|not\s*available)$/i.test(s)) return '';
   return s;
 }
+// Ubicación de LinkedIn del contacto ("Alicante, Valencian Community, Spain", "Greater Murcia Metropolitan Area", "Spain")
+// → { ciudad, region, pais }. Al pasar de Cantera al CRM esto no se copiaba y las fichas quedaban sin ciudad/país del prospecto.
+function _lmSplitLocation(raw) {
+  const s = _lmCleanUrlish(raw);
+  if (!s) return { ciudad: '', region: '', pais: '' };
+  const COUNTRIES = /^(spain|españa|espana|peru|perú|mexico|méxico|colombia|chile|argentina|portugal|france|francia|italy|italia|germany|alemania|united kingdom|united states|usa|ecuador|bolivia|paraguay|uruguay|venezuela)$/i;
+  const parts = s.split(',').map(x => x.trim()).filter(Boolean);
+  if (parts.length >= 3) return { ciudad: parts[0], region: parts.slice(1, -1).join(', '), pais: parts[parts.length - 1] };
+  if (parts.length === 2) return { ciudad: parts[0], region: '', pais: parts[1] };
+  const one = parts[0] || '';
+  if (COUNTRIES.test(one)) return { ciudad: '', region: '', pais: one };
+  return { ciudad: one.replace(/^greater\s+/i, '').replace(/\s+(metropolitan\s+)?area$/i, '').trim() || one, region: '', pais: '' };
+}
 function _lmNormDomain(raw) {
   let s = _lmS(raw).toLowerCase();
   if (!s) return '';
@@ -9247,17 +9260,19 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         if (!dup && !email) dup = (await cl.query(
           `SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND LOWER(nombre)=$3 AND LOWER(COALESCE(apellido,''))=$4 LIMIT 1`,
           [uid, coId, (k.nombre || '').toLowerCase(), (k.apellido || '').toLowerCase()])).rows[0];
+        const _loc = _lmSplitLocation(k.ubicacion);
         let contactId;
         if (dup) {
           contactId = dup.id;
         } else {
           const ins = await cl.query(`
-            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12) RETURNING id
+            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,ciudad,region,pais,seniority,departamento)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id
           `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
-              (k.puesto_estado === 'decide' || (k.puesto_estado === 'pendiente' && k.prioridad === 1)) ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
+              (k.puesto_estado === 'decide' || (k.puesto_estado === 'pendiente' && k.prioridad === 1)) ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, _loc.ciudad, _loc.region, _loc.pais, k.seniority || '', k.departamento || '']);
           contactId = ins.rows[0].id;
         }
+        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);
@@ -9362,17 +9377,19 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
         if (!dup && !email) dup = (await cl.query(
           `SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND LOWER(nombre)=$3 AND LOWER(COALESCE(apellido,''))=$4 LIMIT 1`,
           [uid, coId, (k.nombre || '').toLowerCase(), (k.apellido || '').toLowerCase()])).rows[0];
+        const _loc = _lmSplitLocation(k.ubicacion);
         let contactId;
         if (dup) {
           contactId = dup.id;
         } else {
           const ins = await cl.query(`
-            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12) RETURNING id
+            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,ciudad,region,pais,seniority,departamento)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id
           `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
-              k.prioridad === 1 ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
+              k.prioridad === 1 ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, _loc.ciudad, _loc.region, _loc.pais, k.seniority || '', k.departamento || '']);
           contactId = ins.rows[0].id;
         }
+        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);
