@@ -28968,7 +28968,7 @@ ${foot}
   function _seqNameById(id) { const s = (_sequences || []).find(x => String(x.id) === String(id)); return s ? s.nombre : ('Secuencia ' + id); }
   // ══ Exclusiones: lista de empresas que NO se contactan (por cliente / campaña / secuencia / todo) ══
   let _exList = null;
-  let _exDraft = { scope: 'global', client: '', campaign: '', sequence: '', lista: '', text: '', q: '', rows: null, hi: -1, codes: null, fileName: '' };
+  let _exDraft = { scope: 'global', client: '', campaign: '', sequence: '', lista: '', text: '', q: '', rows: null, hi: -1, codes: null, fileName: '', f: { lista: null, scope: '', estado: '', crm: '', cont: '', dom: '' } };
   const _exSel = new Set();
   async function _exLoad() {
     try { const r = await apiFetch(`${API}/lm/exclusions`); if (r.ok) _exList = await r.json(); else _exList = []; } catch (_) { _exList = []; }
@@ -29167,9 +29167,29 @@ ${foot}
     return _exDoDelete({ ids }, '¿Quitar esta empresa de las exclusiones?');
   }
   function exToggle(id, on) { if (on) _exSel.add(id); else _exSel.delete(id); _renderBody(); }
-  function exToggleAll(on) { const q = (_exDraft.q || '').toLowerCase().trim(); (_exList || []).forEach(e => { if (!q || [e.nombre, e.dominio, e.lista].filter(Boolean).join(' ').toLowerCase().includes(q)) { if (on) _exSel.add(e.id); else _exSel.delete(e.id); } }); _renderBody(); }
+  function exToggleAll(on) { _exFiltered().forEach(e => { if (on) _exSel.add(e.id); else _exSel.delete(e.id); }); _renderBody(); }
   function exDeleteSel() { if (_exSel.size) return _exDoDelete({ ids: [..._exSel] }, `¿Quitar las ${_exSel.size} empresa(s) seleccionada(s) de las exclusiones?`); }
   function exDeleteAll() { return _exDoDelete({ todas: true }, `¿Borrar TODAS las exclusiones (${(_exList || []).length})? Esto no se puede deshacer.`); }
+  function _exFiltered() {
+    const d = _exDraft, f = d.f || {};
+    const q = (d.q || '').toLowerCase().trim();
+    return (_exList || []).filter(e => {
+      if (q && ![e.nombre, e.dominio, (e.dominios_extra || []).join(' '), e.ciudad, e.lista, e.categoria, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre, (e.contactos || []).map(c => c.nombre_completo).join(' ')].filter(Boolean).join(' ').toLowerCase().includes(q)) return false;
+      if (f.lista !== null && f.lista !== undefined && (e.lista || '') !== f.lista) return false;
+      if (f.scope && e.scope !== f.scope) return false;
+      if (f.estado && (e.categoria || e.motivo || '') !== f.estado) return false;
+      if (f.crm === 'si' && !(e.coincidencias > 0)) return false;
+      if (f.crm === 'no' && (e.coincidencias > 0)) return false;
+      if (f.cont === 'con' && !(e.contactos || []).length) return false;
+      if (f.cont === 'sin' && (e.contactos || []).length) return false;
+      if (f.dom === 'no' && e.match_dominio !== false) return false;
+      if (f.dom === 'si' && e.match_dominio === false) return false;
+      return true;
+    });
+  }
+  function exFilter(k, v) { _exDraft.f = _exDraft.f || {}; _exDraft.f[k] = (k === 'lista' && v === '__all') ? null : v; _renderBody(); }
+  function exClearFilters() { _exDraft.f = { lista: null, scope: '', estado: '', crm: '', cont: '', dom: '' }; _exDraft.q = ''; _renderBody(); }
+  function exDeleteFiltered() { const ids = _exFiltered().map(e => e.id); if (ids.length) return _exDoDelete({ ids }, `¿Quitar las ${ids.length} empresa(s) que se ven con estos filtros?`); }
   function _exScopeChip(e) {
     if (e.scope === 'global') return '<span class="lm-obc-badge" style="background:#FEE2E2;color:#991B1B">Todo el workspace</span>';
     if (e.scope === 'cliente') return `<span class="lm-obc-badge" style="background:#DBEAFE;color:#1E40AF">Cliente · ${esc(e.cliente_nombre || '—')}</span>`;
@@ -29195,9 +29215,12 @@ ${foot}
     const target = d.scope === 'cliente' ? `<select class="form-input" onchange="LeadManagerModule.exSet('client',this.value)">${opt(_clients, d.client, 'Elige el cliente…')}</select>`
       : d.scope === 'campana' ? `<select class="form-input" onchange="LeadManagerModule.exSet('campaign',this.value)">${opt(_campaigns, d.campaign, 'Elige la campaña…')}</select>`
       : d.scope === 'secuencia' ? `<select class="form-input" onchange="LeadManagerModule.exSet('sequence',this.value)">${opt(_sequences, d.sequence, 'Elige la secuencia…')}</select>` : '';
-    const q = (d.q || '').toLowerCase().trim();
-    const rows = (_exList || []).filter(e => !q || [e.nombre, e.dominio, (e.dominios_extra || []).join(' '), e.ciudad, e.lista, e.categoria, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre, (e.contactos || []).map(c => c.nombre_completo).join(' ')].filter(Boolean).join(' ').toLowerCase().includes(q));
-    const listas = [...new Set((_exList || []).map(e => e.lista))];
+    const rows = _exFiltered();
+    const listas = [...new Set((_exList || []).map(e => e.lista || ''))];
+    const estados = [...new Set((_exList || []).map(e => e.categoria || e.motivo || '').filter(Boolean))];
+    const f = d.f || {};
+    const filtrosOn = !!(d.q || (f.lista !== null && f.lista !== undefined) || f.scope || f.estado || f.crm || f.cont || f.dom);
+    const sel = (k, val, opts) => `<select class="form-input" style="width:auto;min-width:140px" onchange="LeadManagerModule.exFilter('${k}',this.value)">${opts.map(([v, l]) => `<option value="${esc(v)}"${String(val) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th style="width:34px"><input type="checkbox" onchange="LeadManagerModule.exToggleAll(this.checked)" ${rows.length && rows.every(e => _exSel.has(e.id)) ? 'checked' : ''}></th><th>Empresa</th><th>Dominios</th><th>Contactos</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
         <td><input type="checkbox" ${_exSel.has(e.id) ? 'checked' : ''} onchange="LeadManagerModule.exToggle(${e.id},this.checked)"></td>
         <td>${esc(e.nombre || '—')}${(e.categoria || e.motivo) ? `<div style="font-size:.72rem;color:#64748B">Estado: ${esc(e.categoria || e.motivo)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>` : ''}</td>
@@ -29226,12 +29249,19 @@ ${foot}
         </div>
       </div>
       ${_exMapCardHtml()}
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-        <input class="form-input" style="max-width:320px" placeholder="Buscar en exclusiones…" value="${esc(d.q)}" oninput="LeadManagerModule.exSet('q',this.value)">
-        <span class="lm-sec-sub" style="margin:0">${(_exList || []).length} empresa(s) excluida(s)</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <input class="form-input" style="max-width:260px" placeholder="Buscar en exclusiones…" value="${esc(d.q)}" oninput="LeadManagerModule.exSet('q',this.value)">
+        ${sel('lista', f.lista === null || f.lista === undefined ? '__all' : f.lista, [['__all', 'Lista: todas']].concat(listas.map(l => [l, l || '(sin nombre)'])))}
+        ${sel('scope', f.scope || '', [['', 'Alcance: todos'], ['global', 'Todo el workspace'], ['cliente', 'Un cliente'], ['campana', 'Una campaña'], ['secuencia', 'Una secuencia']])}
+        ${estados.length ? sel('estado', f.estado || '', [['', 'Estado: todos']].concat(estados.map(x => [x, x]))) : ''}
+        ${sel('crm', f.crm || '', [['', 'En el CRM: todas'], ['si', 'Ya están en el CRM'], ['no', 'No están en el CRM']])}
+        ${sel('cont', f.cont || '', [['', 'Contactos: todas'], ['con', 'Con contactos'], ['sin', 'Sin contactos']])}
+        ${sel('dom', f.dom || '', [['', 'Dominio: todos'], ['si', 'Bloquea por dominio'], ['no', 'Solo por nombre/contactos']])}
+        ${filtrosOn ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exClearFilters()">Limpiar filtros</button>' : ''}
+        <span class="lm-sec-sub" style="margin:0">${filtrosOn ? rows.length + ' de ' + (_exList || []).length : (_exList || []).length} empresa(s)</span>
         ${_exSel.size ? `<button class="btn btn--primary btn--sm" style="background:#B91C1C" onclick="LeadManagerModule.exDeleteSel()">🗑 Borrar seleccionadas (${_exSel.size})</button>` : ''}
-        ${(_exList || []).length ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDeleteAll()">Borrar todas</button>' : ''}
-        ${listas.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${listas.map(l => `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete(null,${JSON.stringify(l).replace(/"/g, '&quot;')})" title="Quitar toda esta lista">🗑 ${esc(l || '(sin nombre)')}</button>`).join('')}</span>` : ''}
+        ${filtrosOn && rows.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDeleteFiltered()">Borrar las ${rows.length} filtradas</button>` : ''}
+        ${(_exList || []).length ? '<button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exDeleteAll()">Borrar todas</button>' : ''}
       </div>${tbl}`;
   }
 
@@ -35124,7 +35154,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
