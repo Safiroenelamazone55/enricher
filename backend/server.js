@@ -4285,6 +4285,7 @@ app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
          LEFT JOIN campaigns cp ON cp.id = e.campaign_id
          LEFT JOIN sequences sq ON sq.id = e.sequence_id
         WHERE e.user_id=$1 ORDER BY e.created_at DESC, e.id DESC`, [uid]);
+    await _excl._attachContacts(pool, rows);
     // Cuántas empresas del CRM coinciden hoy con cada exclusión (informativo).
     const cos = (await pool.query(`SELECT id, nombre, dominio, website, linkedin, ciudad FROM lm_companies WHERE user_id=$1`, [uid])).rows;
     rows.forEach(e => { e.coincidencias = cos.filter(c => _excl.matchCompany(e, c)).length; });
@@ -4317,22 +4318,36 @@ app.post('/api/lm/exclusions/import', requireAuth, async (req, res) => {
       [uid, scope, clientId || 0, campaignId || 0, sequenceId || 0])).rows;
     const seen = new Set();
     cur.forEach(r => { if (r.dominio) seen.add('d:' + r.dominio); if (r.linkedin_slug) seen.add('l:' + r.linkedin_slug); if (r.nombre_norm) seen.add('n:' + r.nombre_norm); });
-    const created = []; let dup = 0, vacias = 0;
+    const created = []; let dup = 0, vacias = 0, nContactos = 0;
+    const S = (v, n) => _lmCleanUrlish(v).slice(0, n);
     for (const r of rowsIn) {
-      const row = { nombre: _lmCleanUrlish(r.nombre), dominio: _lmCleanUrlish(r.dominio), website: _lmCleanUrlish(r.website), linkedin: _lmCleanUrlish(r.linkedin), ciudad: _lmCleanUrlish(r.ciudad), pais: _lmCleanUrlish(r.pais), motivo: _lmCleanUrlish(r.motivo) };
+      const row = { nombre: S(r.nombre, 200), dominio: _lmCleanUrlish(r.dominio), website: _lmCleanUrlish(r.website), dominios: (Array.isArray(r.dominios) ? r.dominios : []).map(_lmCleanUrlish), linkedin: _lmCleanUrlish(r.linkedin), ciudad: S(r.ciudad, 120), pais: S(r.pais, 80), motivo: S(r.motivo, 300) };
       const k = _excl.keysOf(row);
       if (!k.nombre_norm && !k.dominio && !k.linkedin_slug) { vacias++; continue; }
-      const keys = [k.dominio && 'd:' + k.dominio, k.linkedin_slug && 'l:' + k.linkedin_slug, k.nombre_norm && 'n:' + k.nombre_norm].filter(Boolean);
-      if (keys.some(x => seen.has(x))) { dup++; continue; }
-      keys.forEach(x => seen.add(x));
+      const keys = [k.dominio && 'd:' + k.dominio, ...(k.dominios_extra || []).map(x => 'd:' + x), k.linkedin_slug && 'l:' + k.linkedin_slug, k.nombre_norm && 'n:' + k.nombre_norm].filter(Boolean);
+      // Duplicada si coincide en dominio principal, LinkedIn o nombre con una ya existente (los dominios extra compartidos entre empresas no la duplican).
+      const dupKeys = [k.dominio && 'd:' + k.dominio, k.linkedin_slug && 'l:' + k.linkedin_slug, k.nombre_norm && 'n:' + k.nombre_norm].filter(Boolean);
+      if (dupKeys.some(x => seen.has(x))) { dup++; continue; }
+      dupKeys.forEach(x => seen.add(x));
+      const matchDom = !(r.match_dominio === false || /^(no|false|0)$/i.test(String(r.match_dominio == null ? '' : r.match_dominio).trim()));
       const ins = await pool.query(
-        `INSERT INTO lm_exclusions (user_id,nombre,nombre_norm,dominio,linkedin_slug,ciudad,ciudad_norm,pais,motivo,lista,scope,outbound_client_id,campaign_id,sequence_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-        [uid, row.nombre.slice(0, 200), k.nombre_norm, k.dominio, k.linkedin_slug, row.ciudad.slice(0, 120), k.ciudad_norm, row.pais.slice(0, 80), row.motivo.slice(0, 300), lista, scope, clientId, campaignId, sequenceId]);
-      created.push(ins.rows[0]);
+        `INSERT INTO lm_exclusions (user_id,nombre,nombre_norm,dominio,dominios_extra,linkedin_slug,ciudad,ciudad_norm,pais,motivo,lista,scope,outbound_client_id,campaign_id,sequence_id,website,categoria,nota,match_dominio)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        [uid, row.nombre, k.nombre_norm, k.dominio, k.dominios_extra || [], k.linkedin_slug, row.ciudad, k.ciudad_norm, row.pais, row.motivo, lista, scope, clientId, campaignId, sequenceId, S(r.website, 300), S(r.categoria, 80), S(r.nota, 400), matchDom]);
+      const ex = ins.rows[0];
+      let ord = 0;
+      for (const c of (Array.isArray(r.contactos) ? r.contactos : []).slice(0, 30)) {
+        const nombre = S(c.nombre, 120), apellido = S(c.apellido, 160);
+        const completo = S(c.nombre_completo, 280) || [nombre, apellido].filter(Boolean).join(' ');
+        if (!nombre && !completo && !_lmCleanUrlish(c.email)) continue;
+        await pool.query(`INSERT INTO lm_exclusion_contacts (exclusion_id,user_id,orden,nombre,apellido,nombre_completo,puesto,nota,email,linkedin) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [ex.id, uid, ++ord, nombre || completo.split(' ')[0] || '', apellido, completo, S(c.puesto, 160), S(c.nota, 300), S(c.email, 200).toLowerCase(), S(c.linkedin, 300)]);
+        nContactos++;
+      }
+      created.push(ex);
     }
     const paused = await _excl.pauseExistingFor(pool, uid, created);
-    res.json({ added: created.length, duplicadas: dup, vacias, pausados: paused.paused, cola_descartada: paused.queue });
+    res.json({ added: created.length, contactos: nContactos, duplicadas: dup, vacias, pausados: paused.paused, cola_descartada: paused.queue });
   } catch (err) { console.error('[lm-excl] import', err.message); res.status(500).json({ error: 'Error al guardar la lista de exclusión' }); }
 });
 app.post('/api/lm/exclusions/bulk-delete', requireAuth, async (req, res) => {

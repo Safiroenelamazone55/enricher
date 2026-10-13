@@ -28973,39 +28973,98 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/exclusions`); if (r.ok) _exList = await r.json(); else _exList = []; } catch (_) { _exList = []; }
     if (_section === 'exclusions') _renderBody();
   }
-  // Pega desde Excel (TSV) o CSV. Con encabezado (Empresa, Dominio, Web, LinkedIn, Ciudad, País, Motivo) o sin él (1 columna = empresa o dominio).
-  function _exParse(text) {
-    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (!lines.length) return [];
-    const delim = lines[0].includes('\t') ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
-    const split = l => l.split(delim).map(x => x.trim().replace(/^"|"$/g, ''));
-    const MAP = { empresa: 'nombre', nombre: 'nombre', company: 'nombre', 'nombre empresa': 'nombre', dominio: 'dominio', domain: 'dominio', web: 'website', website: 'website', 'sitio web': 'website', url: 'website', linkedin: 'linkedin', 'linkedin empresa': 'linkedin', ciudad: 'ciudad', city: 'ciudad', pais: 'pais', 'país': 'pais', country: 'pais', motivo: 'motivo', razon: 'motivo', 'razón': 'motivo', nota: 'motivo', notas: 'motivo' };
-    const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-    const head = split(lines[0]).map(h => MAP[norm(h)] || null);
-    const hasHead = head.filter(Boolean).length >= 1 && head.some(h => h === 'nombre' || h === 'dominio' || h === 'website' || h === 'linkedin');
+  // Lee una tabla (array de filas) con o sin encabezado. Reconoce: Tipo, Categoría, Empresa, Website, Dominio web, Dominio email 1/2/3…,
+  // Bloquear por dominio (Sí/No), Aviso/Nota/Motivo, LinkedIn, Ciudad, País y Contacto N (Nombre, Apellido, Nombre completo, Puesto, Nota, Email).
+  // Sin encabezado: una empresa o dominio por línea (2ª columna: LinkedIn, dominio o ciudad).
+  const _exNorm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  function _exHeaderKey(h) {
+    const n = _exNorm(h); if (!n) return null;
+    let m;
+    if ((m = n.match(/^contacto\s*(\d+)\s*(nombre completo|nombre|apellidos?|puesto|cargo|nota|email|correo|linkedin)$/))) {
+      const f = { 'nombre completo': 'nombre_completo', nombre: 'nombre', apellido: 'apellido', apellidos: 'apellido', puesto: 'puesto', cargo: 'puesto', nota: 'nota', email: 'email', correo: 'email', linkedin: 'linkedin' }[m[2]];
+      return { c: +m[1], f };
+    }
+    if ((m = n.match(/^dominio(?: de)?(?: email| correo)?\s*(\d+)$/))) return { d: +m[1] };
+    const M = { tipo: 'tipo', 'categoria original': 'categoria', categoria: 'categoria', empresa: 'nombre', 'nombre empresa': 'nombre', company: 'nombre', website: 'website', web: 'website', 'sitio web': 'website', url: 'website', 'dominio web': 'dominio_web', dominio: 'dominio_web', domain: 'dominio_web', linkedin: 'linkedin', 'linkedin empresa': 'linkedin', ciudad: 'ciudad', city: 'ciudad', pais: 'pais', country: 'pais', motivo: 'motivo', razon: 'motivo', aviso: 'nota', nota: 'nota', notas: 'nota', 'bloquear por dominio': 'match_dominio' };
+    if (M[n]) return { k: M[n] };
+    return null;
+  }
+  function _exParseAoa(aoa) {
+    const rows = (aoa || []).map(r => (r || []).map(x => String(x == null ? '' : x).trim())).filter(r => r.some(Boolean));
+    if (!rows.length) return [];
+    // La fila de encabezado = la primera (entre las 8 primeras) que reconoce una columna de empresa/dominio/web.
+    let hi = -1, keys = null;
+    for (let i = 0; i < Math.min(rows.length, 8); i++) {
+      const ks = rows[i].map(_exHeaderKey);
+      if (ks.some(k => k && (k.k === 'nombre' || k.k === 'dominio_web' || k.k === 'website' || k.d))) { hi = i; keys = ks; break; }
+    }
     const out = [];
-    (hasHead ? lines.slice(1) : lines).forEach(l => {
-      const c = split(l); const o = {};
-      if (hasHead) head.forEach((k, i) => { if (k && c[i]) o[k] = c[i]; });
-      else {
-        const v = c[0] || '';
-        if (/^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(v) && !/\s/.test(v)) o.dominio = v; else o.nombre = v;
-        if (c[1]) { if (/linkedin\.com/i.test(c[1])) o.linkedin = c[1]; else if (/\./.test(c[1]) && !/\s/.test(c[1])) o.dominio = c[1]; else o.ciudad = c[1]; }
+    if (hi < 0) {
+      rows.forEach(c => {
+        const o = {}; const v = c[0] || '';
+        if (/^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(v) && !/\s/.test(v)) o.dominios = [v]; else o.nombre = v;
+        if (c[1]) { if (/linkedin\.com/i.test(c[1])) o.linkedin = c[1]; else if (/\./.test(c[1]) && !/\s/.test(c[1])) o.dominios = (o.dominios || []).concat(c[1]); else o.ciudad = c[1]; }
         if (c[2]) o.ciudad = o.ciudad || c[2];
-      }
-      if (o.nombre || o.dominio || o.website || o.linkedin) out.push(o);
+        if (o.nombre || o.dominios) out.push(o);
+      });
+      return out;
+    }
+    rows.slice(hi + 1).forEach(c => {
+      const o = { dominios: [], contactos: [] }; const ct = {}; const dm = {};
+      keys.forEach((k, i) => {
+        const v = c[i]; if (!k || !v) return;
+        if (k.c) { (ct[k.c] = ct[k.c] || {})[k.f] = v; }
+        else if (k.d) dm[k.d] = v;
+        else if (k.k === 'dominio_web') o._dweb = v;
+        else o[k.k] = v;
+      });
+      Object.keys(dm).sort((a, b) => a - b).forEach(n => o.dominios.push(dm[n]));
+      if (o._dweb && !o.dominios.includes(o._dweb)) o.dominios.push(o._dweb);
+      delete o._dweb;
+      Object.keys(ct).sort((a, b) => a - b).forEach(n => {
+        const x = ct[n]; if (x.nombre || x.nombre_completo || x.email) o.contactos.push({ nombre: x.nombre || '', apellido: x.apellido || '', nombre_completo: x.nombre_completo || '', puesto: x.puesto || '', nota: x.nota || '', email: x.email || '', linkedin: x.linkedin || '' });
+      });
+      if (o.nombre || o.dominios.length || o.website || o.linkedin) { if (!o.motivo && o.tipo) o.motivo = o.tipo; if (o.tipo) o.categoria = o.tipo; out.push(o); }
     });
     return out;
   }
-  function exSet(k, v) { _exDraft[k] = v; if (k === 'scope') _renderBody(); else if (k === 'text') { const n = $('ex-count'); if (n) n.textContent = _exParse(v).length + ' empresa(s) detectada(s)'; } else if (k === 'q') { _renderBody(); const i = document.querySelector('input[placeholder^="Buscar en exclusiones"]'); if (i) { i.focus(); try { i.setSelectionRange(v.length, v.length); } catch (_) {} } } }
+  function _exParse(text) {
+    const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return [];
+    const delim = lines[0].includes('\t') ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
+    return _exParseAoa(lines.map(l => l.split(delim).map(x => x.trim().replace(/^"|"$/g, ''))));
+  }
+  function _exRows() { return _exDraft.parsed || _exParse(_exDraft.text); }
+  function _exCountTxt() { const r = _exRows(); const nc = r.reduce((n, x) => n + (x.contactos ? x.contactos.length : 0), 0); return r.length + ' empresa(s)' + (nc ? ' · ' + nc + ' contacto(s)' : '') + ' detectada(s)'; }
+  function exSet(k, v) {
+    _exDraft[k] = v;
+    if (k === 'scope') _renderBody();
+    else if (k === 'text') { _exDraft.parsed = null; _exDraft.fileName = ''; const n = $('ex-count'); if (n) n.textContent = _exCountTxt(); }
+    else if (k === 'q') { _renderBody(); const i = document.querySelector('input[placeholder^="Buscar en exclusiones"]'); if (i) { i.focus(); try { i.setSelectionRange(v.length, v.length); } catch (_) {} } }
+  }
   function exFile(inp) {
     const f = inp.files && inp.files[0]; if (!f) return;
     const rd = new FileReader();
-    rd.onload = () => { _exDraft.text = String(rd.result || ''); _renderBody(); };
-    rd.readAsText(f, 'utf-8');
+    if (/\.xlsx?$/i.test(f.name) && typeof XLSX !== 'undefined') {
+      rd.onload = () => {
+        try {
+          const wb = XLSX.read(new Uint8Array(rd.result), { type: 'array' });
+          // Prefiere la hoja "Empresas" (formato ordenado); si no existe, la primera.
+          const nm = wb.SheetNames.find(n => _exNorm(n) === 'empresas') || wb.SheetNames[0];
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '' });
+          _exDraft.parsed = _exParseAoa(aoa); _exDraft.text = ''; _exDraft.fileName = f.name + ' · hoja «' + nm + '»';
+          if (!_exDraft.lista) _exDraft.lista = f.name.replace(/\.[^.]+$/, '');
+        } catch (e) { showBanner('No se pudo leer el Excel: ' + e.message, 'error'); }
+        _renderBody();
+      };
+      rd.readAsArrayBuffer(f);
+    } else {
+      rd.onload = () => { _exDraft.text = String(rd.result || ''); _exDraft.parsed = null; _exDraft.fileName = f.name; if (!_exDraft.lista) _exDraft.lista = f.name.replace(/\.[^.]+$/, ''); _renderBody(); };
+      rd.readAsText(f, 'utf-8');
+    }
   }
   async function exSave() {
-    const rows = _exParse(_exDraft.text);
+    const rows = _exRows();
     if (!rows.length) { showBanner('Pega o sube al menos una empresa', 'error'); return; }
     const d = _exDraft;
     const body = { rows, scope: d.scope, lista: d.lista, outbound_client_id: d.client, campaign_id: d.campaign, sequence_id: d.sequence };
@@ -29016,8 +29075,8 @@ ${foot}
       const r = await apiFetch(`${API}/lm/exclusions/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Error');
-      showBanner(`${j.added} empresa(s) excluida(s)` + (j.duplicadas ? ` · ${j.duplicadas} ya estaban` : '') + (j.pausados ? ` · ${j.pausados} contacto(s) en secuencia pausado(s)` : '') + (j.cola_descartada ? ` · ${j.cola_descartada} de la cola de empresas descartada(s)` : ''), 'success');
-      _exDraft.text = ''; _exDraft.lista = '';
+      showBanner(`${j.added} empresa(s) excluida(s)` + (j.duplicadas ? ` · ${j.duplicadas} ya estaban` : '') + (j.contactos ? ` · ${j.contactos} contacto(s)` : '') + (j.pausados ? ` · ${j.pausados} contacto(s) en secuencia pausado(s)` : '') + (j.cola_descartada ? ` · ${j.cola_descartada} de la cola de empresas descartada(s)` : ''), 'success');
+      _exDraft.text = ''; _exDraft.lista = ''; _exDraft.parsed = null; _exDraft.fileName = '';
       await _exLoad(); try { await load(); } catch (_) {}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -29036,6 +29095,18 @@ ${foot}
     if (e.scope === 'campana') return `<span class="lm-obc-badge" style="background:#FEF3C7;color:#92400E">Campaña · ${esc(e.campana_nombre || '—')}</span>`;
     return `<span class="lm-obc-badge" style="background:#E0E7FF;color:#3730A3">Secuencia · ${esc(e.secuencia_nombre || '—')}</span>`;
   }
+  function _exDomsHtml(e) {
+    const ds = [e.dominio].concat(e.dominios_extra || []).filter(Boolean);
+    if (!ds.length) return '—';
+    return ds.map(d => `<div style="font-size:.8rem">${esc(d)}</div>`).join('') + (e.match_dominio === false ? '<div style="font-size:.7rem;color:#B45309" title="Red/franquicia: se bloquea por nombre y contactos, no por el dominio">sin bloqueo por dominio</div>' : '');
+  }
+  function _exContactsHtml(e) {
+    const cs = e.contactos || [];
+    if (!cs.length) return '<span style="color:#94A3B8">—</span>';
+    const plain = c => (c.nombre_completo || [c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.puesto ? ' · ' + c.puesto : '');
+    const first = cs.slice(0, 2).map(c => `<div style="font-size:.8rem">${esc(plain(c))}</div>`).join('');
+    return first + (cs.length > 2 ? `<div style="font-size:.72rem;color:#64748B" title="${esc(cs.map(plain).join(' | '))}">+${cs.length - 2} más</div>` : '');
+  }
   function _vExclusions() {
     if (_exList === null) { _exLoad(); return '<div class="cp-empty2" style="padding:22px">Cargando…</div>'; }
     const d = _exDraft;
@@ -29043,12 +29114,13 @@ ${foot}
     const target = d.scope === 'cliente' ? `<select class="form-input" onchange="LeadManagerModule.exSet('client',this.value)">${opt(_clients, d.client, 'Elige el cliente…')}</select>`
       : d.scope === 'campana' ? `<select class="form-input" onchange="LeadManagerModule.exSet('campaign',this.value)">${opt(_campaigns, d.campaign, 'Elige la campaña…')}</select>`
       : d.scope === 'secuencia' ? `<select class="form-input" onchange="LeadManagerModule.exSet('sequence',this.value)">${opt(_sequences, d.sequence, 'Elige la secuencia…')}</select>` : '';
-    const n = _exParse(d.text).length;
     const q = (d.q || '').toLowerCase().trim();
-    const rows = (_exList || []).filter(e => !q || [e.nombre, e.dominio, e.ciudad, e.lista, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre].filter(Boolean).join(' ').toLowerCase().includes(q));
+    const rows = (_exList || []).filter(e => !q || [e.nombre, e.dominio, (e.dominios_extra || []).join(' '), e.ciudad, e.lista, e.categoria, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre, (e.contactos || []).map(c => c.nombre_completo).join(' ')].filter(Boolean).join(' ').toLowerCase().includes(q));
     const listas = [...new Set((_exList || []).map(e => e.lista))];
-    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th>Empresa</th><th>Dominio</th><th>Ciudad</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
-        <td>${esc(e.nombre || '—')}${e.motivo ? `<div style="font-size:.72rem;color:#64748B">${esc(e.motivo)}</div>` : ''}</td><td>${esc(e.dominio || '—')}</td><td>${esc(e.ciudad || '—')}</td>
+    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th>Empresa</th><th>Dominios</th><th>Contactos</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
+        <td>${esc(e.nombre || '—')}${(e.categoria || e.motivo) ? `<div style="font-size:.72rem;color:#64748B">${esc(e.categoria || e.motivo)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>` : ''}</td>
+        <td>${_exDomsHtml(e)}</td>
+        <td>${_exContactsHtml(e)}</td>
         <td>${_exScopeChip(e)}</td><td>${esc(e.lista || '—')}</td><td>${e.coincidencias || 0}</td>
         <td><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete([${e.id}])" title="Quitar de la lista">✕</button></td></tr>`).join('')}</tbody></table></div>${rows.length > 400 ? `<p class="lm-sec-sub">Mostrando 400 de ${rows.length}. Usa el buscador.</p>` : ''}`
       : '<div class="cp-empty2" style="padding:22px;text-align:center">Aún no hay empresas excluidas.</div>';
@@ -29064,10 +29136,10 @@ ${foot}
           ${target || '<div></div>'}
           <input class="form-input" placeholder="Nombre de la lista (opcional)" value="${esc(d.lista)}" oninput="LeadManagerModule.exSet('lista',this.value)">
         </div>
-        <textarea class="form-input" rows="6" style="font-family:inherit" placeholder="Pega aquí desde Excel o CSV. Columnas: Empresa, Dominio, Web, LinkedIn, Ciudad, País, Motivo (con encabezado). Sin encabezado: una empresa o dominio por línea." oninput="LeadManagerModule.exSet('text',this.value)">${esc(d.text)}</textarea>
+        <textarea class="form-input" rows="6" style="font-family:inherit" placeholder="Sube el Excel arriba o pega aquí. Columnas reconocidas: Tipo, Empresa, Website, Dominio email 1/2/3, Bloquear por dominio (Sí/No), LinkedIn, Ciudad, País, Nota, y por contacto: Contacto 1 Nombre / Apellido / Nombre completo / Puesto / Nota / Email (1, 2, 3…). Sin encabezado: una empresa o dominio por línea." oninput="LeadManagerModule.exSet('text',this.value)">${esc(d.text)}</textarea>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <label class="btn btn--ghost btn--sm" style="cursor:pointer">Subir CSV/TXT<input type="file" accept=".csv,.txt,.tsv" style="display:none" onchange="LeadManagerModule.exFile(this)"></label>
-          <span id="ex-count" style="font-size:.8rem;color:#64748B">${n} empresa(s) detectada(s)</span>
+          <label class="btn btn--ghost btn--sm" style="cursor:pointer">Subir Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" style="display:none" onchange="LeadManagerModule.exFile(this)"></label>
+          <span id="ex-count" style="font-size:.8rem;color:#64748B">${_exCountTxt()}${d.fileName ? ' · ' + esc(d.fileName) : ''}</span>
           <button class="btn btn--primary btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exSave()">Agregar a exclusiones</button>
         </div>
       </div>

@@ -1591,6 +1591,28 @@ async function initDb() {
         created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_excl_user_idx ON lm_exclusions (user_id, scope);`);
+    // Varios dominios de email por empresa, tipo/categoría, nota y "bloquear por dominio" (apagado para redes/franquicias que comparten dominio).
+    await pool.query(`ALTER TABLE lm_exclusions ADD COLUMN IF NOT EXISTS website TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_exclusions ADD COLUMN IF NOT EXISTS dominios_extra TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE lm_exclusions ADD COLUMN IF NOT EXISTS categoria TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_exclusions ADD COLUMN IF NOT EXISTS nota TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_exclusions ADD COLUMN IF NOT EXISTS match_dominio BOOLEAN NOT NULL DEFAULT TRUE;`);
+    // Contactos 1..N de cada empresa excluida (nombre, apellido, nombre completo, puesto, nota, email opcional).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_exclusion_contacts (
+        id             SERIAL PRIMARY KEY,
+        exclusion_id   INTEGER NOT NULL REFERENCES lm_exclusions(id) ON DELETE CASCADE,
+        user_id        INTEGER NOT NULL,
+        orden          INTEGER NOT NULL DEFAULT 1,
+        nombre         TEXT NOT NULL DEFAULT '',
+        apellido       TEXT NOT NULL DEFAULT '',
+        nombre_completo TEXT NOT NULL DEFAULT '',
+        puesto         TEXT NOT NULL DEFAULT '',
+        nota           TEXT NOT NULL DEFAULT '',
+        email          TEXT NOT NULL DEFAULT '',
+        linkedin       TEXT NOT NULL DEFAULT ''
+      );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_exclc_ex_idx ON lm_exclusion_contacts (exclusion_id);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);
     // Reply threading: si TRUE, el paso email se envía como respuesta al último

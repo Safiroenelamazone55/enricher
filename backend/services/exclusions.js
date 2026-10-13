@@ -1,11 +1,17 @@
-// Lista de exclusión de empresas: empresas que NO se deben contactar.
+// Lista de exclusión de empresas: empresas (y sus contactos) que NO se deben contactar.
 // Alcance (scope): 'global' (todo el workspace) | 'cliente' (todas las campañas y secuencias de ese cliente outbound)
 //                  | 'campana' (una campaña) | 'secuencia' (una secuencia).
-// Reconocimiento: una empresa coincide si comparte DOMINIO (de su dominio o su web), LINKEDIN de empresa, o NOMBRE normalizado
-// (sin tildes, sin SL/SA/Ltd…). Si la exclusión trae ciudad y la empresa también y son distintas, el nombre solo no basta
-// (otra sucursal/homónima). Falsos positivos son preferibles a contactar a alguien excluido.
+// Una exclusión = una empresa con: nombre, website, LinkedIn, ciudad, VARIOS dominios (principal + extra) y N contactos
+// (nombre, apellido, nombre completo, puesto, nota, email opcional).
+// Reconocimiento de una empresa: comparte alguno de sus DOMINIOS (si "match_dominio" no está apagado: las redes/franquicias
+// como RE/MAX comparten dominio y se bloquean solo por nombre), su LINKEDIN, o su NOMBRE normalizado (sin tildes ni SL/SA/Ltd).
+// Si la exclusión trae ciudad y la empresa también y son distintas, el nombre solo no basta (otra sucursal).
+// Reconocimiento de un contacto: su empresa coincide, o su EMAIL es exactamente uno de los emails excluidos, o su email es de
+// un dominio excluido, o (sin empresa conocida) coincide nombre + apellido con un contacto excluido.
+// Falsos positivos son preferibles a contactar a alguien excluido.
 
 const LEGAL = /\b(s\.?\s?l\.?\s?u?\.?|s\.?\s?a\.?\s?u?\.?|s\.?\s?l\.?\s?l\.?|s\.?\s?c\.?\s?p?\.?|c\.?\s?b\.?|ltd\.?|limited|inc\.?|llc|gmbh|sas|srl|s\.r\.l\.|b\.?v\.?|ag|co\.?|corp\.?|corporation|sociedad limitada|sociedad anonima)\s*$/i;
+const FREEMAIL = new Set(['gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.es', 'outlook.com', 'outlook.es', 'yahoo.com', 'yahoo.es', 'icloud.com', 'live.com', 'msn.com', 'proton.me', 'protonmail.com', 'gmx.com', 'aol.com']);
 
 function normName(s) {
   let x = String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' y ');
@@ -13,12 +19,16 @@ function normName(s) {
   for (let i = 0; i < 2; i++) x = x.replace(LEGAL, '').trim();
   return x;
 }
+function normPerson(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’'`´".,;:()\-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
 function normDomain(raw) {
   let s = String(raw || '').trim().toLowerCase();
   if (!s) return '';
   if (s.includes('@')) s = s.split('@').pop();
-  s = s.replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0].trim();
-  return /\./.test(s) ? s : '';
+  s = s.replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').split(/[/?#\s(]/)[0].trim();
+  if (!/\./.test(s) || FREEMAIL.has(s)) return '';
+  return s;
 }
 function linkedinSlug(raw) {
   const m = String(raw || '').toLowerCase().match(/linkedin\.com\/(?:company|school)\/([^/?#\s]+)/);
@@ -28,20 +38,28 @@ function normPlace(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(greater|metropolitan|area|provincia de|province)\b/g, ' ').replace(/[.,;:()\-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// Campos derivados que se guardan junto a cada exclusión.
+// Campos derivados que se guardan junto a cada exclusión. row.dominios (array) + row.dominio + row.website, en ese orden de prioridad.
 function keysOf(row) {
+  const doms = [];
+  [].concat(row.dominios || [], [row.dominio, row.website]).forEach(d => { const n = normDomain(d); if (n && !doms.includes(n)) doms.push(n); });
   return {
     nombre_norm: normName(row.nombre),
-    dominio: normDomain(row.dominio) || normDomain(row.website),
+    dominio: doms[0] || '',
+    dominios_extra: doms.slice(1),
     linkedin_slug: linkedinSlug(row.linkedin),
     ciudad_norm: normPlace(row.ciudad),
   };
 }
+function domainsOf(ex) {
+  if (ex.match_dominio === false) return [];
+  return [ex.dominio].concat(ex.dominios_extra || []).filter(Boolean);
+}
 
 // ¿Esta empresa coincide con esta exclusión? → 'dominio' | 'linkedin' | 'nombre' | null
 function matchCompany(ex, co) {
+  const exDoms = domainsOf(ex);
   const cDom = [normDomain(co.dominio), normDomain(co.website)].filter(Boolean);
-  if (ex.dominio && cDom.includes(ex.dominio)) return 'dominio';
+  if (exDoms.length && cDom.some(d => exDoms.includes(d))) return 'dominio';
   const slug = linkedinSlug(co.linkedin);
   if (ex.linkedin_slug && slug && slug === ex.linkedin_slug) return 'linkedin';
   const nm = normName(co.nombre || co.empresa_nombre);
@@ -49,6 +67,25 @@ function matchCompany(ex, co) {
     const cc = normPlace(co.ciudad);
     if (ex.ciudad_norm && cc && ex.ciudad_norm !== cc) return null;   // misma marca, otra sucursal
     return 'nombre';
+  }
+  return null;
+}
+
+// ¿Este CONTACTO está excluido por la exclusión? (por su empresa o por sus propios datos)
+function matchContact(ex, k) {
+  const byCo = matchCompany(ex, { nombre: k.co_nombre || k.empresa_nombre, dominio: k.dominio, website: k.website, linkedin: k.linkedin, ciudad: k.ciudad });
+  if (byCo) return byCo;
+  const email = String(k.email || '').trim().toLowerCase();
+  const email2 = String(k.email_personal || '').trim().toLowerCase();
+  const cts = ex.contactos || [];
+  if (email || email2) {
+    if (cts.some(c => c.email && [email, email2].includes(String(c.email).trim().toLowerCase()))) return 'email';
+    const ed = normDomain(email);
+    if (ed && domainsOf(ex).includes(ed)) return 'dominio_email';
+  }
+  if (!k.company_id && !k.co_nombre && !k.empresa_nombre) {
+    const full = normPerson((k.nombre || '') + ' ' + (k.apellido || ''));
+    if (full && (k.apellido || '').trim() && cts.some(c => c.apellido && normPerson(c.nombre_completo || ((c.nombre || '') + ' ' + (c.apellido || ''))) === full)) return 'contacto';
   }
   return null;
 }
@@ -66,7 +103,16 @@ async function resolveCtx(pool, uid, ctx) {
   return out;
 }
 
-// Exclusiones que aplican a un contexto (secuencia / campaña / cliente).
+async function _attachContacts(pool, rows) {
+  if (!rows.length) return rows;
+  const cts = (await pool.query(`SELECT * FROM lm_exclusion_contacts WHERE exclusion_id = ANY($1::int[]) ORDER BY orden, id`, [rows.map(r => r.id)])).rows;
+  const by = new Map();
+  cts.forEach(c => { if (!by.has(c.exclusion_id)) by.set(c.exclusion_id, []); by.get(c.exclusion_id).push(c); });
+  rows.forEach(r => { r.contactos = by.get(r.id) || []; });
+  return rows;
+}
+
+// Exclusiones que aplican a un contexto (secuencia / campaña / cliente), con sus contactos.
 async function loadApplicable(pool, uid, ctx) {
   const c = await resolveCtx(pool, uid, ctx);
   const { rows } = await pool.query(
@@ -76,9 +122,13 @@ async function loadApplicable(pool, uid, ctx) {
         OR (scope='campana'   AND campaign_id = ANY($3::int[]))
         OR (scope='secuencia' AND sequence_id IS NOT NULL AND sequence_id=$4)
      )`, [uid, c.clientId, c.campaignIds, c.sequenceId]);
-  return rows;
+  return _attachContacts(pool, rows);
 }
 
+function firstMatchContact(exs, k) {
+  for (const ex of exs) { const how = matchContact(ex, k); if (how) return { ex, how }; }
+  return null;
+}
 function firstMatch(exs, co) {
   for (const ex of exs) { const how = matchCompany(ex, co); if (how) return { ex, how }; }
   return null;
@@ -89,7 +139,7 @@ async function filterContacts(pool, uid, contactIds, ctx) {
   const exs = await loadApplicable(pool, uid, ctx);
   if (!exs.length || !contactIds.length) return { allowed: contactIds.slice(), excluded: [] };
   const { rows } = await pool.query(
-    `SELECT k.id, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre_contacto, k.empresa_nombre,
+    `SELECT k.id, k.nombre, k.apellido, k.email, k.email_personal, k.company_id, k.empresa_nombre,
             co.nombre AS co_nombre, co.dominio, co.website, co.linkedin, co.ciudad
        FROM lm_contacts k LEFT JOIN lm_companies co ON co.id = k.company_id
       WHERE k.user_id=$1 AND k.id = ANY($2::int[])`, [uid, contactIds]);
@@ -98,8 +148,8 @@ async function filterContacts(pool, uid, contactIds, ctx) {
   for (const id of contactIds) {
     const r = byId.get(id);
     if (!r) { allowed.push(id); continue; }
-    const m = firstMatch(exs, { nombre: r.co_nombre || r.empresa_nombre, dominio: r.dominio, website: r.website, linkedin: r.linkedin, ciudad: r.ciudad });
-    if (m) excluded.push({ id, nombre: r.nombre_contacto, empresa: r.co_nombre || r.empresa_nombre || '', motivo: m.ex.motivo || '', lista: m.ex.lista || '', scope: m.ex.scope, how: m.how });
+    const m = firstMatchContact(exs, r);
+    if (m) excluded.push({ id, nombre: [r.nombre, r.apellido].filter(Boolean).join(' '), empresa: r.co_nombre || r.empresa_nombre || '', motivo: m.ex.motivo || m.ex.categoria || '', lista: m.ex.lista || '', scope: m.ex.scope, how: m.how });
     else allowed.push(id);
   }
   return { allowed, excluded };
@@ -114,30 +164,30 @@ async function filterCompanies(pool, uid, companyIds, ctx) {
   for (const id of companyIds) {
     const r = byId.get(id);
     const m = r ? firstMatch(exs, r) : null;
-    if (m) excluded.push({ id, empresa: r.nombre, motivo: m.ex.motivo || '', lista: m.ex.lista || '', scope: m.ex.scope, how: m.how });
+    if (m) excluded.push({ id, empresa: r.nombre, motivo: m.ex.motivo || m.ex.categoria || '', lista: m.ex.lista || '', scope: m.ex.scope, how: m.how });
     else allowed.push(id);
   }
   return { allowed, excluded };
 }
 
-// Guardia del motor de envío: ¿esta inscripción activa pertenece a una empresa excluida para su secuencia?
+// Guardia del motor de envío: ¿esta inscripción activa pertenece a una empresa/contacto excluido para su secuencia?
 async function isEnrollmentExcluded(pool, enr) {
   const exs = await loadApplicable(pool, enr.user_id, { sequenceId: enr.sequence_id, clientId: enr.outbound_client_id });
   if (!exs.length) return false;
-  let co = { nombre: enr.company_nombre || enr.empresa_nombre };
-  if (enr.company_id) {
-    const r = (await pool.query(`SELECT nombre, dominio, website, linkedin, ciudad FROM lm_companies WHERE id=$1`, [enr.company_id])).rows[0];
-    if (r) co = r;
-  }
-  return !!firstMatch(exs, co);
+  const r = (await pool.query(
+    `SELECT k.id, k.nombre, k.apellido, k.email, k.email_personal, k.company_id, k.empresa_nombre,
+            co.nombre AS co_nombre, co.dominio, co.website, co.linkedin, co.ciudad
+       FROM lm_contacts k LEFT JOIN lm_companies co ON co.id = k.company_id WHERE k.id=$1`, [enr.contact_id])).rows[0];
+  return r ? !!firstMatchContact(exs, r) : false;
 }
 
-// Al crear exclusiones: pausa lo que ya está en marcha para esas empresas dentro del alcance de cada exclusión.
+// Al crear exclusiones: pausa lo que ya está en marcha para esas empresas/contactos dentro del alcance de cada exclusión.
 async function pauseExistingFor(pool, uid, newExclusions) {
   if (!newExclusions.length) return { paused: 0, queue: 0 };
+  await _attachContacts(pool, newExclusions);
   const { rows } = await pool.query(
-    `SELECT cs.id AS enr_id, cs.sequence_id, k.company_id, k.empresa_nombre, s.campaign_id, s.outbound_client_id,
-            co.nombre AS co_nombre, co.dominio, co.website, co.linkedin, co.ciudad
+    `SELECT cs.id AS enr_id, cs.sequence_id, k.id AS contact_id, k.nombre, k.apellido, k.email, k.email_personal, k.company_id, k.empresa_nombre,
+            s.campaign_id, s.outbound_client_id, co.nombre AS co_nombre, co.dominio, co.website, co.linkedin, co.ciudad
        FROM lm_contact_sequences cs
        JOIN lm_contacts k ON k.id = cs.contact_id
        JOIN sequences s ON s.id = cs.sequence_id
@@ -148,10 +198,7 @@ async function pauseExistingFor(pool, uid, newExclusions) {
     || (ex.scope === 'campana' && r.campaign_id && ex.campaign_id === r.campaign_id)
     || (ex.scope === 'secuencia' && ex.sequence_id === r.sequence_id);
   const ids = [];
-  for (const r of rows) {
-    const co = { nombre: r.co_nombre || r.empresa_nombre, dominio: r.dominio, website: r.website, linkedin: r.linkedin, ciudad: r.ciudad };
-    if (newExclusions.some(ex => inScope(ex, r) && matchCompany(ex, co))) ids.push(r.enr_id);
-  }
+  for (const r of rows) if (newExclusions.some(ex => inScope(ex, r) && matchContact(ex, r))) ids.push(r.enr_id);
   if (ids.length) {
     await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='excluida' WHERE id = ANY($1::int[])`, [ids]);
     // Borradores/aprobados pendientes de esos contactos: no deben salir.
@@ -170,4 +217,4 @@ async function pauseExistingFor(pool, uid, newExclusions) {
   return { paused: ids.length, queue: qids.length };
 }
 
-module.exports = { normName, normDomain, linkedinSlug, normPlace, keysOf, matchCompany, loadApplicable, filterContacts, filterCompanies, isEnrollmentExcluded, pauseExistingFor };
+module.exports = { normName, normPerson, normDomain, linkedinSlug, normPlace, keysOf, domainsOf, matchCompany, matchContact, loadApplicable, filterContacts, filterCompanies, isEnrollmentExcluded, pauseExistingFor, _attachContacts };
