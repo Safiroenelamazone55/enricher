@@ -24826,15 +24826,21 @@ ${foot}
   // secuencia) sobre el total — a diferencia de _stepStates (arriba), esto SÍ
   // mide avance real, no solo si la fecha calendario ya pasó.
   function _stepRealProgress(steps) {
-    const contacts = Array.isArray(_seqContacts) ? _seqContacts : null;
-    if (!contacts || !contacts.length) return steps.map(() => null);
+    const all = Array.isArray(_seqContacts) ? _seqContacts : null;
+    if (!all || !all.length) return steps.map(() => null);
+    // Respaldos en espera de rotación ("una por empresa": su empresa ya está cubierta) y contactos que
+    // ya no pueden avanzar (no es persona, etc.) NO cuentan en el total: si no, el paso 1 nunca llegaba al 100%.
+    const _fuera = c => c.estado === 'pausado' && (c.paused_reason === 'rotacion_empresa' || /^disposition_/.test(c.paused_reason || ''));
+    const waiting = all.filter(c => c.estado === 'pausado' && c.paused_reason === 'rotacion_empresa').length;
+    const contacts = all.filter(c => !_fuera(c));
+    if (!contacts.length) return steps.map(() => null);
     const total = contacts.length;
     return steps.map((st, i) => {
       const done = contacts.filter(c => c.estado === 'terminado' || (c.paso || 1) - 1 > i).length;
       // "here" = contactos que YA llegaron a este paso y están en él ahora mismo (ni antes ni después) —
       // sirve para saber si el paso está realmente en curso, no solo si su fecha de calendario tocó hoy.
       const here = contacts.filter(c => c.estado !== 'terminado' && (c.paso || 1) - 1 === i).length;
-      return { done, here, total, pct: Math.round(done / total * 100) };
+      return { done, here, total, waiting, pct: Math.round(done / total * 100) };
     });
   }
   function _progColor(pct) {
@@ -24847,9 +24853,9 @@ ${foot}
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
     const cb = _stepCondBadge(st);
-    const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} contactos ya pasaron este paso">
+    const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} contactos ya pasaron este paso${prog.waiting ? ' · ' + prog.waiting + ' de respaldo en espera (su empresa ya está cubierta), no cuentan' : ''}">
         <div class="lm-step__prog__bar"><span style="width:${prog.pct}%;background:${_progColor(prog.pct)}"></span></div>
-        <span class="lm-step__prog__n">${prog.done}/${prog.total}</span>
+        <span class="lm-step__prog__n">${prog.done}/${prog.total}${prog.waiting ? ` <span style="opacity:.6;font-weight:400">+${prog.waiting} resp.</span>` : ''}</span>
       </div>` : '';
     return `<div class="lm-step lm-step--${state}" onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})">
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>

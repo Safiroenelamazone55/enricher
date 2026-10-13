@@ -5395,7 +5395,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     // disposition='derivado' — así no se pierde de la lista de seguimiento de la semana.
     const TERMINAL = "('respondio','interesado','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
     const { rows } = await pool.query(`
-      SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
+      SELECT cs.contact_id, cs.paso, cs.estado, cs.paused_reason, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
         k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, f.kd AS disposition, co.nombre AS company_nombre,
         CASE WHEN COALESCE(k.disposition,'')<>'' AND f.kd IS NULL THEN k.disposition END AS prev_disposition,
         CASE WHEN f.kd IN ${TERMINAL} THEN f.kd
