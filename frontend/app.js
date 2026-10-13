@@ -28968,7 +28968,8 @@ ${foot}
   function _seqNameById(id) { const s = (_sequences || []).find(x => String(x.id) === String(id)); return s ? s.nombre : ('Secuencia ' + id); }
   // ══ Exclusiones: lista de empresas que NO se contactan (por cliente / campaña / secuencia / todo) ══
   let _exList = null;
-  let _exDraft = { scope: 'global', client: '', campaign: '', sequence: '', lista: '', text: '', q: '' };
+  let _exDraft = { scope: 'global', client: '', campaign: '', sequence: '', lista: '', text: '', q: '', rows: null, hi: -1, codes: null, fileName: '' };
+  const _exSel = new Set();
   async function _exLoad() {
     try { const r = await apiFetch(`${API}/lm/exclusions`); if (r.ok) _exList = await r.json(); else _exList = []; } catch (_) { _exList = []; }
     if (_section === 'exclusions') _renderBody();
@@ -28991,17 +28992,35 @@ ${foot}
     if (M[n]) return { k: M[n] };
     return null;
   }
-  function _exParseAoa(aoa) {
-    const rows = (aoa || []).map(r => (r || []).map(x => String(x == null ? '' : x).trim())).filter(r => r.some(Boolean));
-    if (!rows.length) return [];
-    // La fila de encabezado = la primera (entre las 8 primeras) que reconoce una columna de empresa/dominio/web.
-    let hi = -1, keys = null;
+  // Código de columna (editable por la persona) ↔ clave interna del encabezado.
+  function _exKeyToCode(k) {
+    if (!k) return '';
+    if (k.c) return 'c' + k.c + '_' + k.f;
+    if (k.d) return 'd' + k.d;
+    return k.k;
+  }
+  function _exCodeToKey(code) {
+    if (!code) return null;
+    let m;
+    if ((m = code.match(/^c(\d+)_(.+)$/))) return { c: +m[1], f: m[2] };
+    if ((m = code.match(/^d(\d+)$/))) return { d: +m[1] };
+    return { k: code };
+  }
+  function _exCleanRows(aoa) { return (aoa || []).map(r => (r || []).map(x => String(x == null ? '' : x).trim())).filter(r => r.some(Boolean)); }
+  // Detecta la fila de encabezado (entre las 8 primeras, la primera que reconoce empresa/dominio/web) y propone un código por columna.
+  function _exAutoMap(aoa) {
+    const rows = _exCleanRows(aoa);
+    let hi = -1, codes = null;
     for (let i = 0; i < Math.min(rows.length, 8); i++) {
       const ks = rows[i].map(_exHeaderKey);
-      if (ks.some(k => k && (k.k === 'nombre' || k.k === 'dominio_web' || k.k === 'website' || k.d))) { hi = i; keys = ks; break; }
+      if (ks.some(k => k && (k.k === 'nombre' || k.k === 'dominio_web' || k.k === 'website' || k.d))) { hi = i; codes = ks.map(_exKeyToCode); break; }
     }
+    return { rows, hi, codes };
+  }
+  function _exBuild(rows, hi, codes) {
     const out = [];
-    if (hi < 0) {
+    if (!rows || !rows.length) return out;
+    if (hi < 0 || !codes) {
       rows.forEach(c => {
         const o = {}; const v = c[0] || '';
         if (/^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(v) && !/\s/.test(v)) o.dominios = [v]; else o.nombre = v;
@@ -29011,6 +29030,7 @@ ${foot}
       });
       return out;
     }
+    const keys = codes.map(_exCodeToKey);
     rows.slice(hi + 1).forEach(c => {
       const o = { dominios: [], contactos: [] }; const ct = {}; const dm = {};
       keys.forEach((k, i) => {
@@ -29020,28 +29040,77 @@ ${foot}
         else if (k.k === 'dominio_web') o._dweb = v;
         else o[k.k] = v;
       });
-      Object.keys(dm).sort((a, b) => a - b).forEach(n => o.dominios.push(dm[n]));
+      Object.keys(dm).sort((x, y) => x - y).forEach(n => o.dominios.push(dm[n]));
       if (o._dweb && !o.dominios.includes(o._dweb)) o.dominios.push(o._dweb);
       delete o._dweb;
-      Object.keys(ct).sort((a, b) => a - b).forEach(n => {
+      Object.keys(ct).sort((x, y) => x - y).forEach(n => {
         const x = ct[n]; if (x.nombre || x.nombre_completo || x.email) o.contactos.push({ nombre: x.nombre || '', apellido: x.apellido || '', nombre_completo: x.nombre_completo || '', puesto: x.puesto || '', nota: x.nota || '', email: x.email || '', linkedin: x.linkedin || '' });
       });
-      if (o.nombre || o.dominios.length || o.website || o.linkedin) { if (!o.motivo && o.tipo) o.motivo = o.tipo; if (o.tipo) o.categoria = o.tipo; out.push(o); }
+      if (o.nombre || o.dominios.length || o.website || o.linkedin) {
+        if (o.tipo && !o.motivo) o.motivo = o.tipo;
+        if (o.tipo) o.categoria = o.tipo;
+        out.push(o);
+      }
     });
     return out;
   }
-  function _exParse(text) {
+  function _exParseAoa(aoa) { const m = _exAutoMap(aoa); return _exBuild(m.rows, m.hi, m.codes); }
+  function _exTextToAoa(text) {
     const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
     if (!lines.length) return [];
     const delim = lines[0].includes('\t') ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
-    return _exParseAoa(lines.map(l => l.split(delim).map(x => x.trim().replace(/^"|"$/g, ''))));
+    return lines.map(l => l.split(delim).map(x => x.trim().replace(/^"|"$/g, '')));
   }
-  function _exRows() { return _exDraft.parsed || _exParse(_exDraft.text); }
+  function _exParse(text) { return _exParseAoa(_exTextToAoa(text)); }
+  // Carga una tabla ya leída (Excel/CSV/pegado): el usuario revisa y corrige la asignación de columnas antes de importar.
+  function _exLoadAoa(aoa) {
+    const m = _exAutoMap(aoa);
+    _exDraft.rows = m.rows; _exDraft.hi = m.hi; _exDraft.codes = m.codes;
+  }
+  function _exRows() { return _exDraft.rows ? _exBuild(_exDraft.rows, _exDraft.hi, _exDraft.codes) : []; }
   function _exCountTxt() { const r = _exRows(); const nc = r.reduce((n, x) => n + (x.contactos ? x.contactos.length : 0), 0); return r.length + ' empresa(s)' + (nc ? ' · ' + nc + ' contacto(s)' : '') + ' detectada(s)'; }
+  const _EX_FIELDS = [
+    ['Empresa', [['nombre', 'Empresa (nombre)'], ['tipo', 'Estado / Tipo'], ['categoria', 'Categoría'], ['website', 'Website'], ['dominio_web', 'Dominio web'], ['linkedin', 'LinkedIn de la empresa'], ['ciudad', 'Ciudad'], ['pais', 'País'], ['nota', 'Nota / Aviso'], ['motivo', 'Motivo'], ['match_dominio', 'Bloquear por dominio (Sí/No)']]],
+    ['Dominios de email', [['d1', 'Dominio email 1 (principal)'], ['d2', 'Dominio email 2'], ['d3', 'Dominio email 3'], ['d4', 'Dominio email 4']]],
+  ];
+  function _exFieldOptions(sel, maxC) {
+    let h = `<option value="">— Ignorar esta columna —</option>`;
+    _EX_FIELDS.forEach(([g, items]) => { h += `<optgroup label="${g}">` + items.map(([c, l]) => `<option value="${c}"${sel === c ? ' selected' : ''}>${l}</option>`).join('') + '</optgroup>'; });
+    for (let n = 1; n <= maxC; n++) {
+      h += `<optgroup label="Contacto ${n}">` + [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'], ['puesto', 'Puesto'], ['nota', 'Nota'], ['email', 'Email'], ['linkedin', 'LinkedIn']].map(([f, l]) => { const c = 'c' + n + '_' + f; return `<option value="${c}"${sel === c ? ' selected' : ''}>Contacto ${n} · ${l}</option>`; }).join('') + '</optgroup>';
+    }
+    return h;
+  }
+  function _exMapCardHtml() {
+    const d = _exDraft;
+    if (!d.rows || !d.rows.length) return '';
+    const n = _exRows().length;
+    if (d.hi < 0) return `<div class="cp-card" style="padding:14px;margin-bottom:16px;border:1px dashed #CBD5E1"><b>Sin encabezado detectado.</b> Se toma una empresa o dominio por línea (${d.rows.length} línea(s)). Si tu archivo tiene títulos de columna, que estén en la primera fila.</div>`;
+    const cols = d.codes.length;
+    let maxC = 3; d.codes.forEach(c => { const m = (c || '').match(/^c(\d+)_/); if (m) maxC = Math.max(maxC, +m[1] + 1); }); maxC = Math.min(maxC, 12);
+    const data = d.rows.slice(d.hi + 1);
+    const sample = i => data.slice(0, 3).map(r => r[i]).filter(Boolean).map(esc).join(' · ') || '<span style="color:#CBD5E1">—</span>';
+    const used = new Set(d.codes.filter(Boolean));
+    const falta = !(used.has('nombre') || used.has('d1') || used.has('dominio_web') || used.has('website') || used.has('linkedin'));
+    const prev = _exRows().slice(0, 3).map(r => `<div style="font-size:.8rem"><b>${esc(r.nombre || (r.dominios || [])[0] || '—')}</b> · ${(r.dominios || []).length} dominio(s) · ${(r.contactos || []).length} contacto(s)${r.tipo ? ' · ' + esc(r.tipo) : ''}</div>`).join('');
+    return `<div class="cp-card" style="padding:16px;margin-bottom:16px;display:grid;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>Asigna las columnas</b><span style="font-size:.8rem;color:#64748B">Revisa qué campo es cada columna de tu archivo antes de importar (${data.length} fila(s)).</span>
+        <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exClearFile()">Cancelar</button></div>
+      <div class="lm-dt-wrap" style="max-height:340px;overflow:auto"><table class="clients-table"><thead><tr><th>Columna del archivo</th><th>Ejemplos</th><th style="min-width:260px">Es el campo…</th></tr></thead><tbody>${d.rows[d.hi].slice(0, cols).map((h, i) => `<tr><td><b>${esc(h || '(sin título)')}</b></td><td style="font-size:.8rem;color:#475569">${sample(i)}</td><td><select class="form-input" style="width:100%" onchange="LeadManagerModule.exMap(${i},this.value)">${_exFieldOptions(d.codes[i] || '', maxC)}</select></td></tr>`).join('')}</tbody></table></div>
+      ${falta ? '<div style="color:#B91C1C;font-size:.82rem">Asigna al menos una columna de Empresa, Dominio, Website o LinkedIn.</div>' : `<div style="display:grid;gap:2px"><span style="font-size:.75rem;color:#64748B">Vista previa de las primeras empresas:</span>${prev}</div>`}
+    </div>`;
+  }
+  function exMap(i, code) {
+    if (!_exDraft.codes) return;
+    _exDraft.codes[i] = code || '';
+    _renderBody();
+  }
+  function exClearFile() { _exDraft.rows = null; _exDraft.hi = -1; _exDraft.codes = null; _exDraft.fileName = ''; _exDraft.text = ''; _renderBody(); }
+  function exTextCommit() { const aoa = _exTextToAoa(_exDraft.text); if (aoa.length) { _exLoadAoa(aoa); _renderBody(); } }
   function exSet(k, v) {
     _exDraft[k] = v;
     if (k === 'scope') _renderBody();
-    else if (k === 'text') { _exDraft.parsed = null; _exDraft.fileName = ''; const n = $('ex-count'); if (n) n.textContent = _exCountTxt(); }
+    else if (k === 'text') { if (_exDraft.rows) { _exDraft.rows = null; _exDraft.codes = null; _exDraft.hi = -1; _exDraft.fileName = ''; } const n = $('ex-count'); if (n) n.textContent = _exParse(v).length + ' empresa(s) detectada(s) — pulsa fuera del cuadro para asignar columnas'; }
     else if (k === 'q') { _renderBody(); const i = document.querySelector('input[placeholder^="Buscar en exclusiones"]'); if (i) { i.focus(); try { i.setSelectionRange(v.length, v.length); } catch (_) {} } }
   }
   function exFile(inp) {
@@ -29053,21 +29122,22 @@ ${foot}
           const wb = XLSX.read(new Uint8Array(rd.result), { type: 'array' });
           // Prefiere la hoja "Empresas" (formato ordenado); si no existe, la primera.
           const nm = wb.SheetNames.find(n => _exNorm(n) === 'empresas') || wb.SheetNames[0];
-          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '' });
-          _exDraft.parsed = _exParseAoa(aoa); _exDraft.text = ''; _exDraft.fileName = f.name + ' · hoja «' + nm + '»';
+          _exLoadAoa(XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '' }));
+          _exDraft.text = ''; _exDraft.fileName = f.name + ' · hoja «' + nm + '»';
           if (!_exDraft.lista) _exDraft.lista = f.name.replace(/\.[^.]+$/, '');
         } catch (e) { showBanner('No se pudo leer el Excel: ' + e.message, 'error'); }
         _renderBody();
       };
       rd.readAsArrayBuffer(f);
     } else {
-      rd.onload = () => { _exDraft.text = String(rd.result || ''); _exDraft.parsed = null; _exDraft.fileName = f.name; if (!_exDraft.lista) _exDraft.lista = f.name.replace(/\.[^.]+$/, ''); _renderBody(); };
+      rd.onload = () => { _exLoadAoa(_exTextToAoa(String(rd.result || ''))); _exDraft.text = ''; _exDraft.fileName = f.name; if (!_exDraft.lista) _exDraft.lista = f.name.replace(/\.[^.]+$/, ''); _renderBody(); };
       rd.readAsText(f, 'utf-8');
     }
+    inp.value = '';
   }
   async function exSave() {
     const rows = _exRows();
-    if (!rows.length) { showBanner('Pega o sube al menos una empresa', 'error'); return; }
+    if (!rows.length) { showBanner('Sube o pega al menos una empresa y asigna sus columnas', 'error'); return; }
     const d = _exDraft;
     const body = { rows, scope: d.scope, lista: d.lista, outbound_client_id: d.client, campaign_id: d.campaign, sequence_id: d.sequence };
     if (d.scope === 'cliente' && !d.client) { showBanner('Elige el cliente', 'error'); return; }
@@ -29078,19 +29148,28 @@ ${foot}
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Error');
       showBanner(`${j.added} empresa(s) excluida(s)` + (j.duplicadas ? ` · ${j.duplicadas} ya estaban` : '') + (j.contactos ? ` · ${j.contactos} contacto(s)` : '') + (j.pausados ? ` · ${j.pausados} contacto(s) en secuencia pausado(s)` : '') + (j.cola_descartada ? ` · ${j.cola_descartada} de la cola de empresas descartada(s)` : ''), 'success');
-      _exDraft.text = ''; _exDraft.lista = ''; _exDraft.parsed = null; _exDraft.fileName = '';
+      _exDraft.text = ''; _exDraft.lista = ''; _exDraft.rows = null; _exDraft.codes = null; _exDraft.hi = -1; _exDraft.fileName = ''; _exSel.clear();
       await _exLoad(); try { await load(); } catch (_) {}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  async function exDelete(ids, lista) {
-    if (!confirm(lista != null ? `¿Quitar toda la lista “${lista || '(sin nombre)'}” de las exclusiones?` : '¿Quitar esta empresa de las exclusiones?')) return;
+  async function _exDoDelete(body, msg) {
+    if (!confirm(msg)) return;
     try {
-      const r = await apiFetch(`${API}/lm/exclusions/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lista != null ? { lista } : { ids }) });
-      if (!r.ok) throw new Error('No se pudo borrar');
-      showBanner('Quitada(s) de la lista de exclusión. Los contactos ya pausados no se reactivan solos.', 'success');
-      await _exLoad();
+      const r = await apiFetch(`${API}/lm/exclusions/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'No se pudo borrar');
+      showBanner(`${j.deleted || 0} exclusión(es) quitada(s). Los contactos que ya se pausaron no se reactivan solos.`, 'success');
+      _exSel.clear(); await _exLoad();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  function exDelete(ids, lista) {
+    if (lista != null) return _exDoDelete({ lista }, `¿Quitar toda la lista “${lista || '(sin nombre)'}” de las exclusiones?`);
+    return _exDoDelete({ ids }, '¿Quitar esta empresa de las exclusiones?');
+  }
+  function exToggle(id, on) { if (on) _exSel.add(id); else _exSel.delete(id); _renderBody(); }
+  function exToggleAll(on) { const q = (_exDraft.q || '').toLowerCase().trim(); (_exList || []).forEach(e => { if (!q || [e.nombre, e.dominio, e.lista].filter(Boolean).join(' ').toLowerCase().includes(q)) { if (on) _exSel.add(e.id); else _exSel.delete(e.id); } }); _renderBody(); }
+  function exDeleteSel() { if (_exSel.size) return _exDoDelete({ ids: [..._exSel] }, `¿Quitar las ${_exSel.size} empresa(s) seleccionada(s) de las exclusiones?`); }
+  function exDeleteAll() { return _exDoDelete({ todas: true }, `¿Borrar TODAS las exclusiones (${(_exList || []).length})? Esto no se puede deshacer.`); }
   function _exScopeChip(e) {
     if (e.scope === 'global') return '<span class="lm-obc-badge" style="background:#FEE2E2;color:#991B1B">Todo el workspace</span>';
     if (e.scope === 'cliente') return `<span class="lm-obc-badge" style="background:#DBEAFE;color:#1E40AF">Cliente · ${esc(e.cliente_nombre || '—')}</span>`;
@@ -29119,8 +29198,9 @@ ${foot}
     const q = (d.q || '').toLowerCase().trim();
     const rows = (_exList || []).filter(e => !q || [e.nombre, e.dominio, (e.dominios_extra || []).join(' '), e.ciudad, e.lista, e.categoria, e.cliente_nombre, e.campana_nombre, e.secuencia_nombre, (e.contactos || []).map(c => c.nombre_completo).join(' ')].filter(Boolean).join(' ').toLowerCase().includes(q));
     const listas = [...new Set((_exList || []).map(e => e.lista))];
-    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th>Empresa</th><th>Dominios</th><th>Contactos</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
-        <td>${esc(e.nombre || '—')}${(e.categoria || e.motivo) ? `<div style="font-size:.72rem;color:#64748B">${esc(e.categoria || e.motivo)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>` : ''}</td>
+    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th style="width:34px"><input type="checkbox" onchange="LeadManagerModule.exToggleAll(this.checked)" ${rows.length && rows.every(e => _exSel.has(e.id)) ? 'checked' : ''}></th><th>Empresa</th><th>Dominios</th><th>Contactos</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
+        <td><input type="checkbox" ${_exSel.has(e.id) ? 'checked' : ''} onchange="LeadManagerModule.exToggle(${e.id},this.checked)"></td>
+        <td>${esc(e.nombre || '—')}${(e.categoria || e.motivo) ? `<div style="font-size:.72rem;color:#64748B">Estado: ${esc(e.categoria || e.motivo)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>` : ''}</td>
         <td>${_exDomsHtml(e)}</td>
         <td>${_exContactsHtml(e)}</td>
         <td>${_exScopeChip(e)}</td><td>${esc(e.lista || '—')}</td><td>${e.coincidencias || 0}</td>
@@ -29138,16 +29218,19 @@ ${foot}
           ${target || '<div></div>'}
           <input class="form-input" placeholder="Nombre de la lista (opcional)" value="${esc(d.lista)}" oninput="LeadManagerModule.exSet('lista',this.value)">
         </div>
-        <textarea class="form-input" rows="6" style="font-family:inherit" placeholder="Sube el Excel arriba o pega aquí. Columnas reconocidas: Tipo, Empresa, Website, Dominio email 1/2/3, Bloquear por dominio (Sí/No), LinkedIn, Ciudad, País, Nota, y por contacto: Contacto 1 Nombre / Apellido / Nombre completo / Puesto / Nota / Email (1, 2, 3…). Sin encabezado: una empresa o dominio por línea." oninput="LeadManagerModule.exSet('text',this.value)">${esc(d.text)}</textarea>
+        ${d.rows ? '' : `<textarea class="form-input" rows="5" style="font-family:inherit" placeholder="Sube tu Excel o CSV con el botón de abajo, o pega aquí la tabla (con la fila de títulos). Después podrás asignar cada columna a su campo antes de importar." oninput="LeadManagerModule.exSet('text',this.value)" onchange="LeadManagerModule.exTextCommit()">${esc(d.text)}</textarea>`}
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <label class="btn btn--ghost btn--sm" style="cursor:pointer">Subir Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" style="display:none" onchange="LeadManagerModule.exFile(this)"></label>
-          <span id="ex-count" style="font-size:.8rem;color:#64748B">${_exCountTxt()}${d.fileName ? ' · ' + esc(d.fileName) : ''}</span>
-          <button class="btn btn--primary btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exSave()">Agregar a exclusiones</button>
+          <span id="ex-count" style="font-size:.8rem;color:#64748B">${d.rows ? _exCountTxt() : 'Aún no hay archivo'}${d.fileName ? ' · ' + esc(d.fileName) : ''}</span>
+          <button class="btn btn--primary btn--sm" style="margin-left:auto"${d.rows && _exRows().length ? '' : ' disabled'} onclick="LeadManagerModule.exSave()">${d.rows && _exRows().length ? 'Importar ' + _exRows().length + ' empresa(s)' : 'Importar'}</button>
         </div>
       </div>
+      ${_exMapCardHtml()}
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
         <input class="form-input" style="max-width:320px" placeholder="Buscar en exclusiones…" value="${esc(d.q)}" oninput="LeadManagerModule.exSet('q',this.value)">
         <span class="lm-sec-sub" style="margin:0">${(_exList || []).length} empresa(s) excluida(s)</span>
+        ${_exSel.size ? `<button class="btn btn--primary btn--sm" style="background:#B91C1C" onclick="LeadManagerModule.exDeleteSel()">🗑 Borrar seleccionadas (${_exSel.size})</button>` : ''}
+        ${(_exList || []).length ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDeleteAll()">Borrar todas</button>' : ''}
         ${listas.length ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${listas.map(l => `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete(null,${JSON.stringify(l).replace(/"/g, '&quot;')})" title="Quitar toda esta lista">🗑 ${esc(l || '(sin nombre)')}</button>`).join('')}</span>` : ''}
       </div>${tbl}`;
   }
@@ -35041,7 +35124,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { exSet, exFile, exSave, exDelete, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

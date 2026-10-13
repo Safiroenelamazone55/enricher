@@ -4356,7 +4356,9 @@ app.post('/api/lm/exclusions/bulk-delete', requireAuth, async (req, res) => {
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
   const lista = typeof b.lista === 'string' ? b.lista : null;
   try {
-    const r = ids.length
+    const r = b.todas === true
+      ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1`, [uid])
+      : ids.length
       ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])
       : lista !== null
         ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1 AND lista=$2`, [uid, lista])
