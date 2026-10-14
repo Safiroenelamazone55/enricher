@@ -24944,21 +24944,31 @@ ${foot}
   // los contactos enrolados YA pasaron este paso (paso > i, o terminaron la
   // secuencia) sobre el total — a diferencia de _stepStates (arriba), esto SÍ
   // mide avance real, no solo si la fecha calendario ya pasó.
+  // Avance de cada paso, medido en EMPRESAS (no en contactos): una empresa "pasó" un paso cuando su contacto más adelantado
+  // ya lo superó. Así el número coincide con la pestaña Empresas y no depende de cuántas personas tenga cada empresa.
+  //  · Contactos de respaldo en cola de rotación y contactos cerrados por una respuesta no cuentan como avance.
+  //  · Una empresa sin ningún contacto vivo (todos cerrados) no entra en el total; una empresa que solo tiene respaldos
+  //    esperando tampoco (se muestra como "+N resp.").
   function _stepRealProgress(steps) {
     const all = Array.isArray(_seqContacts) ? _seqContacts : null;
     if (!all || !all.length) return steps.map(() => null);
-    // Respaldos en espera de rotación ("una por empresa": su empresa ya está cubierta) y contactos que
-    // ya no pueden avanzar (no es persona, etc.) NO cuentan en el total: si no, el paso 1 nunca llegaba al 100%.
-    const _fuera = c => c.estado === 'pausado' && (c.paused_reason === 'rotacion_empresa' || /^disposition_/.test(c.paused_reason || ''));
-    const waiting = all.filter(c => c.estado === 'pausado' && c.paused_reason === 'rotacion_empresa').length;
-    const contacts = all.filter(c => !_fuera(c));
-    if (!contacts.length) return steps.map(() => null);
-    const total = contacts.length;
+    const CERR = ['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
+    const enCola = c => c.estado === 'pausado' && c.paused_reason === 'rotacion_empresa';
+    const cerrado = c => (c.estado === 'pausado' && /^disposition_/.test(c.paused_reason || '')) || CERR.includes(c.disposition || c.real_disposition || '');
+    const waiting = all.filter(enCola).length;
+    const key = c => c.company_id != null ? 'i' + c.company_id : (c.company_nombre ? 'n' + String(c.company_nombre).toLowerCase() : 'c' + c.contact_id);
+    const emps = new Map();   // empresa → contacto vivo más adelantado
+    all.forEach(c => {
+      if (enCola(c) || cerrado(c)) return;
+      const k = key(c), cur = emps.get(k), adv = c.estado === 'terminado' ? 1e9 : (c.paso || 1);
+      if (!cur || adv > cur.adv) emps.set(k, { adv, terminado: c.estado === 'terminado' });
+    });
+    const list = [...emps.values()];
+    if (!list.length) return steps.map(() => null);
+    const total = list.length;
     return steps.map((st, i) => {
-      const done = contacts.filter(c => c.estado === 'terminado' || (c.paso || 1) - 1 > i).length;
-      // "here" = contactos que YA llegaron a este paso y están en él ahora mismo (ni antes ni después) —
-      // sirve para saber si el paso está realmente en curso, no solo si su fecha de calendario tocó hoy.
-      const here = contacts.filter(c => c.estado !== 'terminado' && (c.paso || 1) - 1 === i).length;
+      const done = list.filter(e => e.terminado || e.adv - 1 > i).length;
+      const here = list.filter(e => !e.terminado && e.adv - 1 === i).length;
       return { done, here, total, waiting, pct: Math.round(done / total * 100) };
     });
   }
@@ -24974,7 +24984,7 @@ ${foot}
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
     const cb = _stepCondBadge(st);
-    const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} contactos ya pasaron este paso${prog.waiting ? ' · ' + prog.waiting + ' de respaldo en espera (su empresa ya está cubierta), no cuentan' : ''}">
+    const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} empresas ya pasaron este paso (cuenta su contacto más adelantado)${prog.waiting ? ' · ' + prog.waiting + ' contacto(s) de respaldo esperan en cola (su empresa ya está cubierta), no cuentan' : ''}">
         <div class="lm-step__prog__bar"><span style="width:${prog.pct}%;background:${_progColor(prog.pct)}"></span></div>
         <span class="lm-step__prog__n">${prog.done}/${prog.total}${prog.waiting ? ` <span style="opacity:.6;font-weight:400">+${prog.waiting} resp.</span>` : ''}</span>
       </div>` : '';
