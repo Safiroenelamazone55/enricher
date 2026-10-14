@@ -30863,7 +30863,12 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-abrev', 'Abreviatura (para los códigos de campaña, ej. GRE)', c?.abrev, 'Se genera sola si la dejas vacía')}
         ${fld('obc-website', 'Website', c?.website, '')}
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del cliente</span><select class="form-input" id="obc-tz"><option value="">— Sin definir (usa Nueva York) —</option>${[['America/New_York', 'EE. UU. Este (New York)'], ['America/Chicago', 'EE. UU. Centro (Chicago)'], ['America/Denver', 'EE. UU. Montaña (Denver)'], ['America/Los_Angeles', 'EE. UU. Pacífico (Los Ángeles)'], ['America/Lima', 'Lima'], ['America/Bogota', 'Bogotá'], ['America/Mexico_City', 'Ciudad de México'], ['America/Santiago', 'Santiago'], ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Sao_Paulo', 'São Paulo'], ['Europe/London', 'Londres'], ['Europe/Madrid', 'Madrid'], ['Europe/Berlin', 'Berlín']].map(([v, l]) => `<option value="${v}"${c?.timezone === v ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="seq-drip-hint">Se usa para enviarle los avisos de seguimiento en su horario laboral (8–17 h).</span></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del cliente</span><input class="form-input" id="obc-tz" list="obc-tz-list" value="${esc(c?.timezone || '')}" placeholder="Escribe: India, Madrid, Lima, New York…" autocomplete="off"><datalist id="obc-tz-list">${(() => {
+          const F = { 'Asia/Kolkata': 'India', 'Asia/Dubai': 'Emiratos', 'Asia/Singapore': 'Singapur', 'Asia/Tokyo': 'Japón', 'Asia/Shanghai': 'China', 'Asia/Karachi': 'Pakistán', 'Asia/Dhaka': 'Bangladés', 'Asia/Manila': 'Filipinas', 'Australia/Sydney': 'Australia Sídney', 'America/New_York': 'EE. UU. Este', 'America/Chicago': 'EE. UU. Centro', 'America/Denver': 'EE. UU. Montaña', 'America/Los_Angeles': 'EE. UU. Pacífico', 'America/Lima': 'Perú', 'America/Bogota': 'Colombia', 'America/Mexico_City': 'México', 'America/Santiago': 'Chile', 'America/Argentina/Buenos_Aires': 'Argentina', 'America/Sao_Paulo': 'Brasil', 'Europe/London': 'Reino Unido', 'Europe/Madrid': 'España', 'Europe/Berlin': 'Alemania', 'Europe/Paris': 'Francia', 'Europe/Lisbon': 'Portugal', 'Europe/Rome': 'Italia', 'UTC': 'UTC' };
+          let all = []; try { all = Intl.supportedValuesOf('timeZone'); } catch (_) {}
+          const keys = [...new Set([...Object.keys(F), ...all])];
+          return keys.map(k => `<option value="${k}">${F[k] || ''}</option>`).join('');
+        })()}</datalist><span class="seq-drip-hint">Se usa para enviarle los avisos de seguimiento en su horario laboral (8–17 h). Elige de la lista (ej. Asia/Kolkata = India).</span></label>
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
         ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
@@ -30910,12 +30915,13 @@ ${foot}
     // canal/mercado/icp/notas viven ahora en campaña y secuencia — se preservan los valores
     // históricos del cliente sin exponerlos en el formulario (el PUT del backend pisa todo).
     const c0 = id ? _clients.find(x => x.id === id) : null;
+    { const tzv = (($('obc-tz')?.value) || '').trim(); if (tzv) { try { new Intl.DateTimeFormat('en', { timeZone: tzv }); } catch (_) { if (hint) { hint.textContent = 'Zona horaria no válida: elige una de la lista (ej. Asia/Kolkata para India)'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; } } }
     const body = {
       nombre, estado: $('obc-estado')?.value || 'preparacion',
       responsable: $('obc-responsable')?.value.trim() || '', canal: c0?.canal || '',
       website: $('obc-website')?.value.trim() || '', mercado: c0?.mercado || '',
       from_email: $('obc-from')?.value.trim() || '', cc_email: $('obc-cc')?.value.trim() || '',
-      timezone: $('obc-tz')?.value || '',
+      timezone: (($('obc-tz')?.value) || '').trim(),
       icp: c0?.icp || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
       notas: c0?.notas || '',
       li_cargo: $('obc-li-cargo')?.value.trim() || '',
