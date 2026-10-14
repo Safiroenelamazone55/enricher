@@ -21838,8 +21838,10 @@ const LeadManagerModule = (() => {
     ];
     const apN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : 0;
     const blN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : 0;
-    if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
-    if (blN > 0 || _seqTab === 'bloqueos') tabs.push(['bloqueos', 'Bloqueos', blN]);
+    // Aprobar y Bloqueos ya no son pestañas fijas: lo pendiente (por corregir y por aprobar) vive en Tareas. La vista de revisión
+    // detallada ("Revisar / editar") sigue abriéndose desde ahí y solo muestra su pestaña mientras estás dentro.
+    if (_seqTab === 'aprobar') tabs.push(['aprobar', 'Aprobar', apN || null]);
+    if (_seqTab === 'bloqueos') tabs.push(['bloqueos', 'Bloqueos', blN]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
         <span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
