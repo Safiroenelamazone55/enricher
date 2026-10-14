@@ -23388,7 +23388,7 @@ ${foot}
     return out;
   }
   function _fixSectionHtml() {
-    const list = _fixList(); if (!list.length) return '';
+    const list = _fixF(); if (!list.length) return '';
     const shown = (_taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
     const rows = shown.map(({ c, bad, seqs }) => {
       const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
@@ -23416,9 +23416,9 @@ ${foot}
     return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="seq-tasks">' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
-    if (!Array.isArray(_apList) || !_apList.length) return '';
-    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${_apList.length}</span></div>
-      <div class="seq-tasks">${_apList.map(_apRowHtml).join('')}</div>`;
+    const apl = _apF(); if (!apl.length) return '';
+    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${apl.length}</span></div>
+      <div class="seq-tasks">${apl.map(_apRowHtml).join('')}</div>`;
   }
   async function taskApprove(mid) {
     try {
@@ -25157,6 +25157,14 @@ ${foot}
     </div>`;
   }
   // ── Filtro por campaña/secuencia en Tareas comerciales (lista y calendario) ──
+  // El mismo filtro vale para las tareas de secuencia, los emails por aprobar y los contactos por corregir.
+  function _tkSeqPass(seqId) {
+    if (_taskFSeq && String(seqId) !== String(_taskFSeq)) return false;
+    if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === seqId); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
+    return true;
+  }
+  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id)) : []; }
+  function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))); }
   function _taskFilterPass(t) {
     if (_taskFSeq && String(t.sq.id) !== String(_taskFSeq)) return false;
     if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === t.sq.id); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
@@ -25187,11 +25195,26 @@ ${foot}
       const s = (_sequences || []).find(x => x.id === t.sq.id); const cid = s && s.campaign_id;
       if (cid && !campMap.has(cid)) campMap.set(cid, _campaignName(cid) || ('Campaña ' + cid));
     });
-    const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-    const seqOpts = optSort(seqMap).filter(([id]) => { if (!_taskFCamp) return true; const s = (_sequences || []).find(x => x.id === id); return String((s && s.campaign_id) || '') === String(_taskFCamp); });
+    const _addSeqOpt = sid => {
+      const sq0 = (_sequences || []).find(x => x.id === sid); if (!sq0) return;
+      if (!seqMap.has(sid)) seqMap.set(sid, sq0.nombre);
+      const cid0 = sq0.campaign_id; if (cid0 && !campMap.has(cid0)) campMap.set(cid0, _campaignName(cid0) || ('Campaña ' + cid0));
+    };
+    (Array.isArray(_apList) ? _apList : []).forEach(a => _addSeqOpt(a.sequence_id));
+    _fixList().forEach(x => (x.seqs || []).forEach(sq => _addSeqOpt(sq.id)));
+    // Cuántas tareas hay en cada secuencia/campaña según la vista elegida (arriba: Vencidas, Para hoy, Por aprobar…) — para empezar por donde hay más.
+    const _cnt = {}, _bump = sid => { _cnt[sid] = (_cnt[sid] || 0) + 1; };
+    const _sc = _taskStat;
+    if (!_sc || ['over', 'today', 'next'].includes(_sc)) allRaw.forEach(t => { const ok = !_sc ? t.due <= today : _sc === 'over' ? t.due < today : _sc === 'today' ? t.due.getTime() === today.getTime() : t.due > today; if (ok) _bump(t.sq.id); });
+    if (!_sc || _sc === 'approve') (Array.isArray(_apList) ? _apList : []).forEach(a => _bump(a.sequence_id));
+    if (!_sc || _sc === 'fix') _fixList().forEach(x => (x.seqs || []).forEach(sq => _bump(sq.id)));
+    if (_sc === 'accept') _pendingAccept().forEach(x => (x.seqs || []).forEach(sq => _bump(sq.id)));
+    const _campCnt = {}; Object.keys(_cnt).forEach(k => { const s0 = (_sequences || []).find(x => String(x.id) === k); const c0 = s0 && s0.campaign_id; if (c0) _campCnt[c0] = (_campCnt[c0] || 0) + _cnt[k]; });
+    const optSort = (m, cnt) => [...m.entries()].sort((a, b) => ((cnt && cnt[b[0]]) || 0) - ((cnt && cnt[a[0]]) || 0) || String(a[1]).localeCompare(String(b[1])));
+    const seqOpts = optSort(seqMap, _cnt).filter(([id]) => { if (!_taskFCamp) return true; const s = (_sequences || []).find(x => x.id === id); return String((s && s.campaign_id) || '') === String(_taskFCamp); });
     const filterRow = (seqMap.size > 1 || campMap.size > 1 || hasFilter) ? `<div class="lm-task-filters">
-      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>` : ''}
-      <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
+      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${optSort(campMap, _campCnt).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)} · ${_campCnt[id] || 0}</option>`).join('')}</select>` : ''}
+      <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)} · ${_cnt[id] || 0}</option>`).join('')}</select>
       ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
     </div>` : '';
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
@@ -25215,8 +25238,8 @@ ${foot}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('follow', 'Follow-ups', acts.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
-      ${_fixList().length ? stat('fix', 'Por corregir', _fixList().length, true) : ''}
-      ${totalAwaiting ? stat('approve', 'Por aprobar', totalAwaiting, true) : ''}
+      ${(hasFilter ? _fixF() : _fixList()).length ? stat('fix', 'Por corregir', (hasFilter ? _fixF() : _fixList()).length, true) : ''}
+      ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
     </div>` : '';
     const sel = _taskStat;
     const showApr = !sel || sel === 'approve', showOver = !sel || sel === 'over', showHoy = !sel || sel === 'today';
