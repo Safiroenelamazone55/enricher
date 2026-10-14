@@ -140,6 +140,45 @@ async function _isTeamAddr(pool, userId, addr) {
   return !m || (await _teamDomains(pool, userId)).has(m[1]);
 }
 
+// ── Respuesta automática de ausencia: se detecta la fecha de regreso y se aplazan sus próximos pasos hasta que vuelva ──
+const _MESES = { enero: 1, ene: 1, febrero: 2, feb: 2, marzo: 3, mar: 3, abril: 4, abr: 4, mayo: 5, junio: 6, jun: 6, julio: 7, jul: 7, agosto: 8, ago: 8, septiembre: 9, setiembre: 9, sep: 9, sept: 9, octubre: 10, oct: 10, noviembre: 11, nov: 11, diciembre: 12, dic: 12,
+  january: 1, jan: 1, february: 2, march: 3, april: 4, apr: 4, may: 5, june: 6, july: 7, august: 8, aug: 8, september: 9, october: 10, november: 11, december: 12, dec: 12 };
+function parseReturnDate(text, ref) {
+  ref = ref || new Date();
+  const t = String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 2500);
+  const lo = new Date(ref.getTime() - 86400000), hi = new Date(ref.getTime() + 150 * 86400000), found = [];
+  const push = (d, mo, y) => {
+    if (!(d >= 1 && d <= 31 && mo >= 1 && mo <= 12)) return;
+    let yy = y ? (y < 100 ? 2000 + y : y) : ref.getUTCFullYear();
+    let dt = new Date(Date.UTC(yy, mo - 1, d, 12));
+    if (!y && dt < lo) dt = new Date(Date.UTC(yy + 1, mo - 1, d, 12));
+    if (dt >= lo && dt <= hi) found.push(dt);
+  };
+  let m;
+  const re1 = /(\d{1,2})(?:st|nd|rd|th|o)?\s*(?:de\s+|of\s+)?([a-z]{3,10})\.?(?:\s*(?:de|,)?\s*(\d{4}))?/g;   // 21 de octubre · 21st october
+  while ((m = re1.exec(t))) if (_MESES[m[2]]) push(+m[1], _MESES[m[2]], m[3] ? +m[3] : 0);
+  const re2 = /([a-z]{3,10})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/g;                                // october 21st
+  while ((m = re2.exec(t))) if (_MESES[m[1]]) push(+m[2], _MESES[m[1]], m[3] ? +m[3] : 0);
+  const re3 = /\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g;                                              // 21/10 · 21-10-2026
+  while ((m = re3.exec(t))) push(+m[1], +m[2], m[3] ? +m[3] : 0);
+  return found.length ? new Date(Math.max(...found.map(d => d.getTime()))) : null;
+}
+async function _onOoo(pool, mb, contact, parsed, snippet, imapUid) {
+  try {
+    const ret = parseReturnDate((parsed.subject || '') + ' ' + snippet, parsed.date || new Date());
+    if (ret) await pool.query(`UPDATE lm_inbox_messages SET ooo_hasta=$3 WHERE mailbox_id=$1 AND imap_uid=$2`, [mb.id, imapUid, ret.toISOString().slice(0, 10)]);
+    // Sus pasos pendientes se aplazan hasta el día siguiente a su regreso (sin fecha reconocible: 7 días). No cambia su disposición ni pausa la secuencia.
+    const r = await pool.query(
+      `UPDATE lm_contact_sequences SET next_action_at = GREATEST(COALESCE(next_action_at, NOW()), $3::timestamptz)
+        WHERE user_id=$1 AND contact_id=$2 AND estado='activo' AND (next_action_at IS NULL OR next_action_at < $3::timestamptz)`,
+      [mb.user_id, contact.id, ret ? new Date(ret.getTime() + 36 * 3600e3).toISOString() : new Date(Date.now() + 7 * 86400e3).toISOString()]);
+    const f = d => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','email',$3,NOW(),'hecha')`,
+      [mb.user_id, contact.id, 'Respuesta automática: fuera de oficina' + (ret ? ' hasta el ' + f(ret) : ' (sin fecha de regreso)') + (r.rowCount ? ' — sus próximos pasos se aplazaron ' + (ret ? 'hasta que vuelva' : '7 días') : '')]);
+    return r.rowCount;
+  } catch (e) { console.warn('[imap-watcher] ooo:', e.message); return 0; }
+}
+
 async function _onReply(pool, mb, contact, parsed, snippet) {
   // Auto-pausa TODAS las secuencias activas del contacto (jamás seguir tras respuesta).
   // paused_reason normalizado a 'reply_received' (mismo código que usa el endpoint de
@@ -355,6 +394,7 @@ async function _checkMailbox(pool, mb) {
         );
 
         if (tipo === 'reply' && contact) await _onReply(pool, mb, contact, parsed, snippet);
+        if (tipo === 'ooo' && contact) await _onOoo(pool, mb, contact, parsed, snippet, msg.uid);
         // OOO: se guarda para el Inbox pero NO pausa (el contacto no respondió de verdad).
         // 'equipo' (alguien más escribe sobre/con el contacto en copia — no el prospecto)
         // antes solo quedaba en lm_inbox_messages, invisible en la ficha del contacto y en
@@ -464,4 +504,4 @@ async function backfillTables(pool, days) {
   return { scanned, fixed };
 }
 
-module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, isTeamAddr: _isTeamAddr };
+module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, onOoo: _onOoo, parseReturnDate, isTeamAddr: _isTeamAddr };

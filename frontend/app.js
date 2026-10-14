@@ -25547,7 +25547,7 @@ ${foot}
     const inAt  = t.last_in_at  ? new Date(t.last_in_at).getTime()  : 0;
     const outAt = t.last_out_at ? new Date(t.last_out_at).getTime() : 0;
     if (t.bounces > 0 && !inAt) return 'reb';
-    if (inAt && inAt >= outAt) return 'sin';
+    if (inAt && inAt >= outAt) return t.last_in_tipo === 'ooo' ? 'env' : 'sin';   // una respuesta automática (fuera de oficina) no pide respuesta tuya
     if (inAt) return 'resp';
     return 'env';
   }
@@ -25638,7 +25638,7 @@ ${foot}
     const snippet = t.last_snippet || t.last_asunto
       || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : (t.tiene_programado ? 'Correo programado, todavía no sale' : ''));
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
-                : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
+                : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo" title="Respuesta automática de ausencia: sus próximos pasos se aplazan hasta que vuelva">OOO${t.ooo_hasta ? ' · vuelve ' + new Date(String(t.ooo_hasta).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : ''}</span>` : '';
     // Correo programado que aún no salió — antes era invisible en el Inbox hasta que
     // realmente se enviaba (pedido explícito de Jenny 2026-08-26: verlo con cuánto
     // falta, no solo cuando ya salió).

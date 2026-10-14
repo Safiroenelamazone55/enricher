@@ -6519,7 +6519,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
              i.last_in_at, COALESCE(i.unread,0) AS unread, COALESCE(i.bounces,0) AS bounces,
              o.last_out_at, COALESCE(o.sent_count,0) AS sent_count, COALESCE(o.abierto,FALSE) AS abierto,
              COALESCE(o.tiene_programado,FALSE) AS tiene_programado, o.proximo_programado,
-             li.asunto AS last_asunto, li.cuerpo AS last_snippet, li.tipo AS last_in_tipo
+             li.asunto AS last_asunto, li.cuerpo AS last_snippet, li.tipo AS last_in_tipo, li.ooo_hasta
         FROM lm_contacts k
         LEFT JOIN inx  i ON i.contact_id = k.id
         LEFT JOIN outx o ON o.contact_id = k.id
@@ -6527,7 +6527,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
         LEFT JOIN outbound_clients oc ON oc.id = k.outbound_client_id
         LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
         LEFT JOIN LATERAL (
-          SELECT asunto, LEFT(cuerpo, 160) AS cuerpo, tipo
+          SELECT asunto, LEFT(cuerpo, 160) AS cuerpo, tipo, ooo_hasta
             FROM lm_inbox_messages
            WHERE contact_id = k.id AND tipo IN ('reply','ooo','equipo')
            ORDER BY received_at DESC LIMIT 1
