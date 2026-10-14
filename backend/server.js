@@ -3544,8 +3544,33 @@ app.post('/api/leads/:id/convert', requireAuth, async (req, res) => {
 // =================================================================
 const OBC_ESTADOS = ['preparacion', 'activo', 'pausado', 'cerrado'];
 
+// Estado del cliente outbound AUTOMÁTICO según su trabajo: con alguna secuencia o campaña activa → Activo; si todas están pausadas /
+// archivadas / cerradas → Pausado; si solo hay borradores → En preparación. 'Cerrado' es manual y no se toca. (Pedido 2026-10-14)
+async function _syncClientEstados() {
+  try {
+    await pool.query(`
+      WITH st AS (
+        SELECT oc.id, oc.estado,
+          (EXISTS (SELECT 1 FROM sequences s WHERE s.outbound_client_id=oc.id AND s.estado='activa')
+           OR EXISTS (SELECT 1 FROM campaigns c WHERE c.outbound_client_id=oc.id AND c.estado='activa')) AS act,
+          (EXISTS (SELECT 1 FROM sequences s WHERE s.outbound_client_id=oc.id AND s.estado<>'draft')
+           OR EXISTS (SELECT 1 FROM campaigns c WHERE c.outbound_client_id=oc.id AND c.estado<>'draft')) AS trabajo,
+          (EXISTS (SELECT 1 FROM sequences s WHERE s.outbound_client_id=oc.id)
+           OR EXISTS (SELECT 1 FROM campaigns c WHERE c.outbound_client_id=oc.id)) AS alguno
+        FROM outbound_clients oc WHERE oc.estado <> 'cerrado')
+      UPDATE outbound_clients oc SET estado = CASE
+          WHEN st.act THEN 'activo'
+          WHEN st.trabajo THEN 'pausado'
+          ELSE 'preparacion' END, updated_at = NOW()
+        FROM st WHERE st.id = oc.id AND (st.act OR st.alguno)
+          AND oc.estado <> CASE WHEN st.act THEN 'activo' WHEN st.trabajo THEN 'pausado' ELSE 'preparacion' END`);
+  } catch (e) { console.warn('[obc-estado]', e.message); }
+}
+setTimeout(_syncClientEstados, 30 * 1000);
+setInterval(_syncClientEstados, 5 * 60 * 1000);
 app.get('/api/outbound-clients', requireAuth, async (req, res) => {
   try {
+    await _syncClientEstados();
     const { rows } = await pool.query(
       `SELECT * FROM outbound_clients WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]
     );
