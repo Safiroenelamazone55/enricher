@@ -24730,6 +24730,8 @@ ${foot}
     if (_cpClockTimer) return;
     _cpClockTimer = setInterval(() => { const el = document.getElementById('cp-clock-row'); if (el && el.dataset.tz) el.innerHTML = _prospectClockInner(el.dataset.tz); }, 20000);
   }
+  // CC efectivo de un paso: el del cliente, salvo que el paso lo tenga desactivado (cc_off). Única regla para runner, revisión y envío.
+  function _ccFor(st, obc) { return (st && st.cc_off) ? '' : String((obc && obc.cc_email) || '').trim(); }
   function _cpTaskBar(cid) {
     if (!_cpTaskCtx) return '';
     if (_cpTaskCtx.approve) return _cpApproveBar(cid);
@@ -24770,7 +24772,8 @@ ${foot}
 
     // Buzón/CC del cliente outbound (informativos, para el envío manual desde Zoho/etc.)
     const obc = _clients.find(x => x.id === (seq && seq.outbound_client_id)) || {};
-    const ccMail = (obc.cc_email || '').trim(), fromMail = (obc.from_email || '').trim();
+    // El CC del cliente va SOLO si este paso no lo tiene desactivado (misma regla que usa el envío real y la revisión de aprobaciones).
+    const ccMail = _ccFor(st, obc), fromMail = (obc.from_email || '').trim();
     // Canales para contactar — acción principal (canal del paso) + otros como íconos sutiles.
     const wa = _waDigits(c);
     const _tel = String(c.movil || c.celular || c.telefono || c.phone || '').trim();
