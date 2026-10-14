@@ -21338,7 +21338,7 @@ const LeadManagerModule = (() => {
   function cmSetQ(v) { _cmQ = v; _cmPaint(); }
 
   // ── Helpers de secuencia (Fase 3) ──
-  const _SEQ = { draft: ['Draft', '#F1F5F9', '#64748B'], activa: ['Activa', '#DCFCE7', '#16A34A'], pausada: ['Pausada', '#FEF3C7', '#B45309'], archivada: ['Archivada', '#F1F5F9', '#475569'] };
+  const _SEQ = { draft: ['Draft', '#F1F5F9', '#64748B'], activa: ['Activa', '#DCFCE7', '#16A34A'], pausada: ['Pausada', '#FEF3C7', '#B45309'], completada: ['Culminada', '#DBEAFE', '#1D4ED8'], archivada: ['Archivada', '#F1F5F9', '#475569'] };
   const _TOUCH = {
     email:    ['Email',    '#E07B12', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>'],
     linkedin: ['LinkedIn', '#0A66C2', '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'],
@@ -21366,7 +21366,7 @@ const LeadManagerModule = (() => {
   function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _seqSteps(id) { return _steps.filter(s => s.sequence_id === id).sort((a, b) => (a.dia - b.dia) || (a.orden - b.orden) || (a.id - b.id)); }
   function _sequencesByClient(cid) { return _sequences.filter(s => s.outbound_client_id === cid); }
-  function _sortSeq(arr) { const o = { activa: 0, pausada: 1, draft: 2, archivada: 3 }; return [...arr].sort((a, b) => (o[a.estado] ?? 9) - (o[b.estado] ?? 9) || (b.id || 0) - (a.id || 0)); }
+  function _sortSeq(arr) { const o = { activa: 0, pausada: 1, draft: 2, completada: 3, archivada: 4 }; return [...arr].sort((a, b) => (o[a.estado] ?? 9) - (o[b.estado] ?? 9) || (b.id || 0) - (a.id || 0)); }
 
   function _sequenceCard(s, withClient) {
     const steps = _seqSteps(s.id);
@@ -21850,7 +21850,7 @@ const LeadManagerModule = (() => {
     pt: { title: 'Relatório de sequência', gen: 'Gerado em', client: 'Cliente', campaign: 'Campanha', status: 'Estado', obj: 'Objetivo', launch: 'Data de lançamento', tzOp: 'Fuso horário de operação', tzProsp: 'Fuso do prospecto', window: 'Janela de envio sugerida (seu horário)', cadence: 'Cadência', day: 'Dia', channel: 'Canal', time: 'Hora', ttl: 'Título do passo', mode: 'Modo', variants: 'Variantes', angles: 'Ângulos', segField: 'Campo de segmento', segments: 'Segmentos', audience: 'Público', leads: 'Leads inscritos', bySeg: 'Leads por segmento', metrics: 'Métricas', byStatus: 'Por estado da sequência', byDisp: 'Por disposição', config: 'Configuração', sendDays: 'Dias de cadência', drip: 'Início escalonado', none: '—', allDay: 'Dia todo', single: 'Mensagem única', random: 'A/B aleatório', segmentMode: 'Por segmento', notSet: 'Não definido', perDay: '/dia', touches: 'Touches', summary: 'Resumo executivo', msgsBySeg: 'Mensagens por segmento e passo', foot: 'Gerado por Nova', anglesByStep: 'Ângulos por passo e segmento', segment: 'Segmento', valuesFor: 'Valores', noSeg: 'Esta sequência não segmenta por ângulos.', noData: 'Sem dados', total: 'Total', dayShort: ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'], print: 'Baixar / Imprimir PDF', market: 'Mercado', icp: 'ICP', notes: 'Notas', context: 'Contexto e segmento', dailyLim: 'Limite diário de envios', globalLim: 'Limite de aquecimento da caixa', results: 'Resultados', contacted: 'Contatados', replies: 'Respostas', meetings: 'Reuniões', seqs: 'Sequências', cmpTitle: 'Relatório de campanha', cmpSeqs: 'Sequências da campanha', noSeqs: 'Esta campanha ainda não tem sequências.', chMain: 'Canal principal', chSec: 'Canal secundário', steps: 'Passos' },
   };
   const _RPT_CH = { email: { es: 'Email', en: 'Email', pt: 'Email' }, linkedin: { es: 'LinkedIn', en: 'LinkedIn', pt: 'LinkedIn' }, call: { es: 'Llamada', en: 'Call', pt: 'Ligação' }, task: { es: 'Tarea', en: 'Task', pt: 'Tarefa' }, whatsapp: { es: 'WhatsApp', en: 'WhatsApp', pt: 'WhatsApp' } };
-  const _RPT_EST = { activo: { es: 'Activo', en: 'Active', pt: 'Ativo' }, pausado: { es: 'Pausado', en: 'Paused', pt: 'Pausado' }, terminado: { es: 'Terminado', en: 'Finished', pt: 'Concluído' }, respondido: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, bounce: { es: 'Rebote', en: 'Bounce', pt: 'Bounce' }, draft: { es: 'Borrador', en: 'Draft', pt: 'Rascunho' }, activa: { es: 'Activa', en: 'Active', pt: 'Ativa' }, pausada: { es: 'Pausada', en: 'Paused', pt: 'Pausada' }, cerrada: { es: 'Cerrada', en: 'Closed', pt: 'Encerrada' }, archivada: { es: 'Archivada', en: 'Archived', pt: 'Arquivada' } };
+  const _RPT_EST = { activo: { es: 'Activo', en: 'Active', pt: 'Ativo' }, pausado: { es: 'Pausado', en: 'Paused', pt: 'Pausado' }, terminado: { es: 'Terminado', en: 'Finished', pt: 'Concluído' }, respondido: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, bounce: { es: 'Rebote', en: 'Bounce', pt: 'Bounce' }, draft: { es: 'Borrador', en: 'Draft', pt: 'Rascunho' }, activa: { es: 'Activa', en: 'Active', pt: 'Ativa' }, pausada: { es: 'Pausada', en: 'Paused', pt: 'Pausada' }, cerrada: { es: 'Cerrada', en: 'Closed', pt: 'Encerrada' }, completada: { es: 'Culminada', en: 'Completed', pt: 'Concluída' }, archivada: { es: 'Archivada', en: 'Archived', pt: 'Arquivada' } };
   const _RPT_DISP = { aceptado: { es: 'Aceptó en LinkedIn', en: 'Accepted on LinkedIn', pt: 'Aceitou no LinkedIn' }, respondio: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, reunion: { es: 'Reunión', en: 'Meeting', pt: 'Reunião' }, no_interesado: { es: 'No interesado', en: 'Not interested', pt: 'Não interessado' }, no_contactar: { es: 'No contactar', en: 'Do not contact', pt: 'Não contatar' } };
   function _rptChan(c, l) { return (_RPT_CH[c] && _RPT_CH[c][l]) || c; }
   function _rptModeLabel(st, L) { const m = st.variant_mode || 'off'; return m === 'segment' ? L.segmentMode : m === 'random' ? L.random : L.single; }
@@ -21871,7 +21871,7 @@ const LeadManagerModule = (() => {
     return { s, steps, enrolled, segField, segLabel, bySeg, byState, byDisp, touches: steps.length, anglesMax, segCount };
   }
   // ── Piezas compartidas de informes (secuencia + campaña) ──
-  const _RPT_PILL = { activa: ['#D1FAE5', '#065F46'], activo: ['#D1FAE5', '#065F46'], pausada: ['#FFEDD5', '#9A3412'], pausado: ['#FFEDD5', '#9A3412'], draft: ['#F1EFEB', '#6C6862'], cerrada: ['#F1EFEB', '#3B5573'], archivada: ['#F1EFEB', '#3B5573'], terminado: ['#D1FAE5', '#065F46'] };
+  const _RPT_PILL = { activa: ['#D1FAE5', '#065F46'], activo: ['#D1FAE5', '#065F46'], pausada: ['#FFEDD5', '#9A3412'], pausado: ['#FFEDD5', '#9A3412'], draft: ['#F1EFEB', '#6C6862'], cerrada: ['#F1EFEB', '#3B5573'], completada: ['#DBEAFE', '#1D4ED8'], archivada: ['#F1EFEB', '#3B5573'], terminado: ['#D1FAE5', '#065F46'] };
   function _rptPill(key, lang) { const c = _RPT_PILL[key] || _RPT_PILL.draft; const lbl = (_RPT_EST[key] && _RPT_EST[key][lang]) || key; return `<span class="pill" style="background:${c[0]};color:${c[1]}">${esc(lbl)}</span>`; }
   function _rptDays(mask, L) { return `<span class="dchips">${L.dayShort.map((d, i) => `<span class="dchip${mask[i] === '1' ? ' on' : ''}">${d}</span>`).join('')}</span>`; }
   function _rptFunnel(M, L) {
@@ -29818,7 +29818,7 @@ ${foot}
   }
   function _refSeqOpts(cli, camp, sel) {
     const list = (_sequences || []).filter(x => x.outbound_client_id === cli && (!camp || x.campaign_id === Number(camp)));
-    return '<option value="">— Ninguna: lo decido después —</option>' + list.map(x => '<option value="' + x.id + '"' + (sel && x.id === sel ? ' selected' : '') + '>' + esc(x.nombre) + (x.estado !== 'activa' ? ' (' + (x.estado === 'pausada' ? 'pausada' : x.estado === 'draft' ? 'borrador' : x.estado) + ')' : '') + '</option>').join('');
+    return '<option value="">— Ninguna: lo decido después —</option>' + list.map(x => '<option value="' + x.id + '"' + (sel && x.id === sel ? ' selected' : '') + '>' + esc(x.nombre) + (x.estado !== 'activa' ? ' (' + (x.estado === 'pausada' ? 'pausada' : x.estado === 'draft' ? 'borrador' : x.estado === 'completada' ? 'culminada' : x.estado) + ')' : '') + '</option>').join('');
   }
   function refCampChange(cid) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
@@ -31010,7 +31010,7 @@ ${foot}
   }
 
   // ── Secuencia: drawer crear/editar ──
-  const _SEQ_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['archivada', 'Archivada']];
+  const _SEQ_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['completada', 'Culminada'], ['archivada', 'Archivada']];
   function openSequenceDrawer(id, presetClient, onCreated) {
     _seqOnCreated = onCreated || null;
     const s = id ? _sequences.find(x => x.id === id) : null;

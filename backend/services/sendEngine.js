@@ -963,6 +963,14 @@ async function _draftPreapproved(pool) {
     await pool.query(`UPDATE activities a SET estado='hecha' FROM sequences s
         WHERE a.estado='pendiente' AND a.tipo='tarea' AND s.user_id=a.user_id AND s.estado<>'activa'
           AND left(a.nota, length(s.nombre) + 2) = '[' || s.nombre || ']'`).catch(x => console.warn('[send-engine] barrido-tareas:', x.message));
+    // Autocompletar: una secuencia ACTIVA con contactos, ninguno activo ni pausado y sin empresas pendientes en cola pasó por todo → 'completada'.
+    await pool.query(`UPDATE sequences s SET estado='completada', updated_at=NOW()
+        WHERE s.estado='activa'
+          AND EXISTS (SELECT 1 FROM lm_contact_sequences x WHERE x.sequence_id=s.id)
+          AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND x.estado IN ('activo','pausado'))
+          AND NOT EXISTS (SELECT 1 FROM lm_company_sequences q WHERE q.sequence_id=s.id AND q.estado='pendiente')`)
+      .then(r => { if (r.rowCount) console.log(`[send-engine] ${r.rowCount} secuencia(s) pasaron a Completada`); })
+      .catch(x => console.warn('[send-engine] autocompletar:', x.message));
     await pool.query(`UPDATE activities a SET estado='hecha' WHERE a.estado='pendiente' AND a.tipo='tarea' AND a.nota LIKE 'Rebote:%'
         AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
                          WHERE cs.contact_id=a.contact_id AND s.estado='activa' AND cs.estado IN ('activo','pausado'))`).catch(x => console.warn('[send-engine] barrido-rebotes:', x.message));

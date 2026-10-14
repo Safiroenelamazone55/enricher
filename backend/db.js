@@ -843,6 +843,9 @@ async function initDb() {
     // en sendEngine.js.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa_paso INTEGER NOT NULL DEFAULT 0;`);
+    // Estado 'completada': la secuencia terminó su trabajo (distinto de 'archivada', que es sacarla de la lista).
+    await pool.query(`ALTER TABLE sequences DROP CONSTRAINT IF EXISTS sequences_estado_check;`);
+    await pool.query(`ALTER TABLE sequences ADD CONSTRAINT sequences_estado_check CHECK (estado IN ('draft','activa','pausada','completada','archivada'));`);
     // Canal principal de la secuencia: cuando el contacto acepta/responde, el
     // re-enrutado a la rama 'replied' PRIORIZA pasos de este canal (linkedin/email).
     // '' = auto (comportamiento clásico: primer paso replied sin importar canal).

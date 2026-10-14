@@ -4393,6 +4393,8 @@ async function _lmAddMembership(req, res, kind) {
       `, [uid, targetId, fx.allowed]) : { rowCount: 0 };
       return res.json({ added: r.rowCount, requested: ids.length, excluidos: fx.excluded.length, excluidos_detalle: fx.excluded.slice(0, 12) });
     }
+    // Enrolar en una secuencia 'completada' la vuelve a poner activa (si no, el motor no la tocaría y los contactos quedarían muertos).
+    await pool.query(`UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2 AND estado='completada'`, [targetId, uid]).catch(() => {});
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
     const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on, rotacion_empresa FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
     const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
@@ -9690,7 +9692,7 @@ app.delete('/api/campaigns/:id', requireAuth, async (req, res) => {
 });
 
 // ── Secuencias + pasos (Fase 3) ────────────────────────────────────
-const SEQ_ESTADOS  = ['draft', 'activa', 'pausada', 'archivada'];
+const SEQ_ESTADOS  = ['draft', 'activa', 'pausada', 'completada', 'archivada'];
 const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
 
 // Saneo del modo de envío por secuencia (manual = externo, default).
