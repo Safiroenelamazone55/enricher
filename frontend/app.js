@@ -22545,12 +22545,12 @@ ${foot}
     const byCo = new Map();
     contacts.forEach(c => {
       const key = c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`;
-      if (!byCo.has(key)) byCo.set(key, { nombre: c.company_nombre || '(sin empresa)', n: 0 });
+      if (!byCo.has(key)) byCo.set(key, { nombre: c.company_nombre || '(sin empresa)', n: 0, company_id: c.company_id });
       byCo.get(key).n++;
     });
     const cos = [...byCo.values()].sort((a, b) => b.n - a.n);
     return `<div class="seq-list-hd"><h3>Empresas (${cos.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
-      <div class="seq-co-list">${_seqPageSlice(cos, _seqCoPage, p => { _seqCoPage = p; }).map(c => `<div class="seq-co-card seq-co-card--plain">
+      <div class="seq-co-list">${_seqPageSlice(cos, _seqCoPage, p => { _seqCoPage = p; }).map(c => `<div class="seq-co-card seq-co-card--plain"${c.company_id != null ? ` onclick="LeadManagerModule.openCompanyPage(${c.company_id})" style="cursor:pointer" title="Ver empresa y sus contactos"` : ''}>
         <div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
         <div class="seq-co-card__main"><div class="seq-co-card__name">${esc(c.nombre)}</div></div>
         <div class="seq-co-card__right"><div class="seq-co-card__paso">${c.n} contacto${c.n !== 1 ? 's' : ''}</div></div>
@@ -31744,7 +31744,7 @@ ${foot}
   // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
   let _cpFrom = 'contacts';
   let _cpFromSeq = null;   // {seqId, tab} si la ficha se abrió desde dentro de una secuencia
-  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
+  const _CP_FROM_LABEL = { sequences: 'Secuencia', contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
