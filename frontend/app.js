@@ -7644,6 +7644,32 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // Cascada Cliente → Campaña → Secuencia en los modales de Cantera: la campaña solo muestra las del cliente elegido y la
+  // secuencia solo las de esa campaña (sin campaña: las del cliente). Pedido 2026-10-13: antes salían TODAS las de todos los clientes.
+  window._cantCascade = window._cantCascade || {
+    data: {},
+    init(p, d) { this.data[p] = d; this.change(p, 'init'); },
+    _opts(list, ph, sel) { return `<option value="">${ph}</option>` + list.map(x => `<option value="${x.id}"${String(sel) === String(x.id) ? ' selected' : ''}>${String(x.nombre == null ? '' : x.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join(''); },
+    change(p, level) {
+      const d = this.data[p]; if (!d) return;
+      const g = k => document.getElementById(p + '-' + k);
+      const cl = g('client'), ca = g('camp'), sq = g('seq');
+      const clV = cl ? cl.value : '';
+      if (ca && level !== 'camp' && level !== 'seq') {
+        const keep = level === 'init' ? d.camp : ca.value;
+        const list = d.campanas.filter(c => !clV || String(c.outbound_client_id) === String(clV));
+        ca.innerHTML = this._opts(list, d.campPh || 'Sin campaña', list.some(c => String(c.id) === String(keep)) ? keep : '');
+      }
+      if (sq) {
+        const caV = ca ? ca.value : '';
+        const keep = level === 'init' ? d.seq : sq.value;
+        let list = d.secuencias;
+        if (caV) list = list.filter(x => String(x.campaign_id) === String(caV));
+        else if (clV) list = list.filter(x => String(x.outbound_client_id) === String(clV));
+        sq.innerHTML = this._opts(list, d.seqPh || 'Sin secuencia', list.some(x => String(x.id) === String(keep)) ? keep : '');
+      }
+    },
+  };
   async function openPromote() {
     // Si hay empresas marcadas con el check, "Mover al CRM" opera SOLO sobre
     // esa selección (de entre las marcadas, las calificadas) — igual que ya
@@ -7670,11 +7696,11 @@ const CanteraModule = (() => {
       <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="CanteraModule.closePromote()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s)${_coSel.size ? ' de tu selección' : ''} se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
-        <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input">
+        <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input" onchange="_cantCascade.change('cant-pr','client')">
           <option value="">— elegir —</option>
           ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
         </select></label>
-        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-pr-camp" class="form-input">
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-pr-camp" class="form-input" onchange="_cantCascade.change('cant-pr','camp')">
           <option value="">Sin campaña</option>
           ${campanas.map(c => `<option value="${c.id}"${String(_current.campaign_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
         </select></label>
@@ -7689,6 +7715,7 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" id="cant-pr-go" onclick="CanteraModule.doPromote()">Mover al CRM</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    _cantCascade.init('cant-pr', { campanas, secuencias, camp: _current.campaign_id, seq: _current.sequence_id, campPh: 'Sin campaña', seqPh: 'Sin secuencia' });
   }
   function closePromote() { document.getElementById('cant-promote-modal')?.remove(); }
   async function doPromote() {
@@ -7742,18 +7769,9 @@ const CanteraModule = (() => {
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeSendSeq()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez en la secuencia.</p>
-        <label class="cant-flabel">Cliente<select id="cant-sq-client" class="form-input">
-          <option value="">— elegir —</option>
-          ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
-        </select></label>
-        <label class="cant-flabel">Secuencia<select id="cant-sq-seq" class="form-input">
-          <option value="">— elegir —</option>
-          ${secuencias.map(s => `<option value="${s.id}"${String(_current.sequence_id) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}
-        </select></label>
-        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-sq-camp" class="form-input">
-          <option value="">Sin campaña</option>
-          ${campanas.map(c => `<option value="${c.id}"${String(_current.campaign_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
-        </select></label>
+        <label class="cant-flabel">Cliente<select id="cant-sq-client" class="form-input" onchange="_cantCascade.change('cant-sq','client')"></select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-sq-camp" class="form-input" onchange="_cantCascade.change('cant-sq','camp')"></select></label>
+        <label class="cant-flabel">Secuencia<select id="cant-sq-seq" class="form-input"></select></label>
         <div class="cant-flabel">Prioridad de contacto a enviar
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${[1, 2, 3, 4, 5].map(prioChk).join('')}</div>
         </div>
@@ -7763,6 +7781,8 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" id="cant-sq-go" onclick="CanteraModule.doSendSeq()">Enviar</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    document.getElementById('cant-sq-client').innerHTML = '<option value="">— elegir —</option>' + clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    _cantCascade.init('cant-sq', { campanas, secuencias, camp: _current.campaign_id, seq: _current.sequence_id, campPh: 'Sin campaña', seqPh: '— elegir —' });
   }
   function closeSendSeq() { document.getElementById('cant-seq-modal')?.remove(); }
   async function doSendSeq() {
@@ -8343,8 +8363,8 @@ const CanteraMesaModule = (() => {
       <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-promote-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">Las empresas calificadas de tu selección, con sus contactos "Decide"/"Respaldo", se crean como reales. Esto no se puede deshacer.</p>
-        <label class="cant-flabel">Cliente<select id="mesa-pr-client" class="form-input"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
-        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-pr-camp" class="form-input"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Cliente<select id="mesa-pr-client" class="form-input" onchange="_cantCascade.change('mesa-pr','client')"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-pr-camp" class="form-input" onchange="_cantCascade.change('mesa-pr','camp')"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
         <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="mesa-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
@@ -8352,6 +8372,7 @@ const CanteraMesaModule = (() => {
         <button class="btn btn--primary btn--sm" onclick="CanteraMesaModule.doPromote()">Mover al CRM</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    _cantCascade.init('mesa-pr', { campanas, secuencias: [], camp: '', seq: '', campPh: 'Sin campaña' });
   }
   async function doPromote() {
     const clientId = document.getElementById('mesa-pr-client')?.value;
@@ -8388,9 +8409,9 @@ const CanteraMesaModule = (() => {
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-seq-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez.</p>
-        <label class="cant-flabel">Cliente<select id="mesa-sq-client" class="form-input"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
-        <label class="cant-flabel">Secuencia<select id="mesa-sq-seq" class="form-input"><option value="">— elegir —</option>${secuencias.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></label>
-        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-sq-camp" class="form-input"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Cliente<select id="mesa-sq-client" class="form-input" onchange="_cantCascade.change('mesa-sq','client')"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-sq-camp" class="form-input" onchange="_cantCascade.change('mesa-sq','camp')"></select></label>
+        <label class="cant-flabel">Secuencia<select id="mesa-sq-seq" class="form-input"></select></label>
         <div class="cant-flabel">Prioridad de contacto a enviar<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${[1, 2, 3, 4, 5].map(prioChk).join('')}</div></div>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
@@ -8398,6 +8419,7 @@ const CanteraMesaModule = (() => {
         <button class="btn btn--primary btn--sm" onclick="CanteraMesaModule.doSendSeq()">Enviar</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    _cantCascade.init('mesa-sq', { campanas, secuencias, camp: '', seq: '', campPh: 'Sin campaña', seqPh: '— elegir —' });
   }
   async function doSendSeq() {
     const clientId = document.getElementById('mesa-sq-client')?.value;
