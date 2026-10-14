@@ -28304,9 +28304,9 @@ ${foot}
         <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver el correo que recibiría</button></div></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Próximo envío</div><div id="pa-avnext"><div class="cp-empty2" style="padding:10px">Calculando…</div></div></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Avisos enviados</div><div id="pa-avlog"><div class="cp-empty2" style="padding:10px">Cargando…</div></div></div>`;
-    if (sub === 'avisos') setTimeout(() => { _paAvNext(cid); _paAvLog(cid); }, 0);
     else body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informe semanal</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Resumen por correo con los resultados de la semana: destinatarios, idioma, nota y envío programado.</div><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportOpen(${cid})">Abrir informe semanal</button></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informes de campaña y secuencia</div><div class="cp-empty2" style="padding:6px 0;text-align:left">En pausa: el portal del cliente ya muestra estos datos en vivo.</div></div>`;
+    if (sub === 'avisos') setTimeout(() => { _paAvNext(cid); _paAvLog(cid); }, 0);
     return nav + body + `<div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación.</div></div>`;
   }
   async function _paAvNext(cid) {
