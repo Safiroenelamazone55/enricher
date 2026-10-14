@@ -848,6 +848,7 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_avisos INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_snooze_until DATE`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seguimiento_avisos BOOLEAN NOT NULL DEFAULT TRUE`);
     // Estado 'completada': la secuencia terminó su trabajo (distinto de 'archivada', que es sacarla de la lista).
     await pool.query(`ALTER TABLE sequences DROP CONSTRAINT IF EXISTS sequences_estado_check;`);
     await pool.query(`ALTER TABLE sequences ADD CONSTRAINT sequences_estado_check CHECK (estado IN ('draft','activa','pausada','completada','archivada'));`);

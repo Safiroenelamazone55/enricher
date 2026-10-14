@@ -441,3 +441,14 @@ button{cursor:pointer}
 .pt-week__k .dash-kpi__l{min-width:0;overflow-wrap:anywhere;hyphens:auto}
 .pt-week__k .dash-kpi__v{font-size:clamp(20px,16cqw,30px);overflow-wrap:anywhere}
 .pt-week__k .dash-d,.pt-week__k .dash-kpi__s{overflow-wrap:anywhere}
+
+.pt-seg{background:#fff;border:1px solid #E1E6EC;border-left:3px solid #0B1220;padding:14px;margin-bottom:14px}
+.pt-seg__l{display:block;font-size:11px;font-weight:700;color:#64748B;margin:10px 0 4px;text-transform:none}
+.pt-seg__i{width:100%;box-sizing:border-box;border:1px solid #D9DEE3;background:#fff;padding:8px 10px;font:inherit;font-size:13.5px;color:#0F172A;border-radius:0}
+.pt-seg__i:focus{outline:2px solid #0B122033;border-color:#0B1220}
+textarea.pt-seg__i{resize:vertical;min-height:70px}
+.pt-seg__q{background:#FFF7E6;border:1px solid #F5D9A0;padding:10px 12px;margin-bottom:6px;font-size:13.5px}
+.pt-seg__b{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pt-seg__o{border:1px solid #D9DEE3;background:#fff;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#0F172A}
+.pt-seg__o:hover{border-color:#0B1220}
+.pt-seg__o.on{background:#0B1220;color:#fff;border-color:#0B1220}

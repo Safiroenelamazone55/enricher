@@ -3596,6 +3596,7 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
     `, [b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
         b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', _lmS(b.from_email), _lmS(b.cc_email),
         _lmS(b.li_cargo), _lmS(b.li_empresa), _lmS(b.li_que_hace), req.params.id, req.workspaceOwnerId]);
+    if (rows.length && b.seguimiento_avisos !== undefined) { rows[0].seguimiento_avisos = !!b.seguimiento_avisos; await pool.query('UPDATE outbound_clients SET seguimiento_avisos=$1 WHERE id=$2', [rows[0].seguimiento_avisos, rows[0].id]); }
     if (rows.length && b.timezone !== undefined) { rows[0].timezone = String(b.timezone || '').slice(0, 60); await pool.query('UPDATE outbound_clients SET timezone=$1 WHERE id=$2', [rows[0].timezone, rows[0].id]); }
     if (!rows.length) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
     res.json(rows[0]);

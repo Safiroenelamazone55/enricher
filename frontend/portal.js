@@ -576,7 +576,7 @@
         const c = d.contact, seqTxt = c.secuencia ? `${esc(c.secuencia)}${c.paso ? ' · paso ' + c.paso : ''}` : '';
         detEl.innerHTML = `<h2 style="font-size:19px;margin-bottom:2px">${esc(c.nombre)}</h2><div class="pt-item__s" style="margin-bottom:14px">${esc([c.cargo, c.empresa].filter(Boolean).join(' · '))}</div>
           <div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
-          ${dealBox(d.deal)}${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}${notesBox(d.notes, false)}
+          ${dealBox(d.deal)}${segBlock(d)}${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}${notesBox(d.notes, false)}
           <div class="pt-dr__info">${c.pais ? `<span>${esc(c.pais)}</span>` : ''}${seqTxt ? `<span>${seqTxt}</span>` : ''}</div>
           <h3 class="pt-dr__s">Historial del contacto</h3>${d.timeline.map(e => evHtml(e, false)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
       } catch (e) { detEl.innerHTML = `<div class="pt-empty">${esc(e.message)}</div>`; }
@@ -699,7 +699,7 @@
     const label = first.toLocaleDateString(PT_I18N.locale(), { month: 'long', year: 'numeric', timeZone: 'UTC' });
     const now = dkey(new Date()), up = dated.filter(r => dkey(r.fecha) >= now), past = dated.filter(r => dkey(r.fecha) < now).reverse();
     const row = r => `<div class="pt-mrow" onclick="PT.open(${r.contact_id})">${r.fecha ? `<div class="pt-date"><b>${new Date(r.fecha).toLocaleDateString(PT_I18N.locale(), { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase()}</b><span>${new Date(r.fecha).getUTCDate()}</span></div>` : '<div class="pt-date"><b>—</b><span>·</span></div>'}
-      <div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span class="pt-badge pt-b--${r.etapa === 'ganado' ? 'g' : r.etapa === 'perdido' ? 'r' : 'b'}">${esc(r.etapa_label || '')}</span></div><div class="pt-item__s">${esc(r.nombre)}${r.cargo ? ' · ' + esc(r.cargo) : ''}</div>${r.valor ? `<div class="pt-item__s">${money2(r.valor, r.moneda)}${r.prob != null ? ' · ' + r.prob + '%' : ''}</div>` : ''}</div></div>`;
+      <div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span class="pt-badge pt-b--${r.etapa === 'ganado' ? 'g' : r.etapa === 'perdido' ? 'r' : 'b'}">${esc(r.etapa_label || '')}</span></div><div class="pt-item__s">${esc(r.nombre)}${r.cargo ? ' · ' + esc(r.cargo) : ''}</div>${r.fecha && dkey(r.fecha) < dkey(new Date()) && !r.opp_reunion_estado && !['ganado', 'perdido'].includes(r.etapa) ? '<div><span class="pt-badge pt-b--r">Seguimiento pendiente</span></div>' : ''}${r.valor ? `<div class="pt-item__s">${money2(r.valor, r.moneda)}${r.prob != null ? ' · ' + r.prob + '%' : ''}</div>` : ''}</div></div>`;
     return `<div class="pt-h"><h2>Oportunidades</h2></div>
       <div class="pt-two pt-two--cal"><div class="pt-card"><div class="pt-cal__h"><button class="pt-morebtn" onclick="PT.cal(-1)">‹</button><b>${esc(label)}</b><button class="pt-morebtn" onclick="PT.cal(1)">›</button><button class="pt-morebtn" onclick="PT.cal(0)">Hoy</button></div>
         <div class="pt-cal"><div class="pt-cal__w">${wd.map(x => `<span>${esc(x)}</span>`).join('')}</div><div class="pt-cal__g">${cells}</div></div></div>
@@ -718,13 +718,39 @@
     else if (e.kind === 'status') { ic = ['check', '#2563EB']; body = `<b>Estado</b> <span class="pt-badge pt-b--b">${esc(e.label)}</span> ${who}`; }
     else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Oportunidad creada</b> <span>Para el ${dlong(e.date)}</span> ${who}`; }
     else if (e.kind === 'meeting') { ic = ['cal', '#F59E0B']; body = `<b>Oportunidad</b> ${who}`; }
-    else if (e.kind === 'note') { ic = ['chat', '#2563EB']; body = `<b>Nota de tu equipo</b> ${who}<div class="pt-item__n">${esc(e.text)}</div>`; }
+    else if (e.kind === 'note') { ic = ['chat', '#2563EB']; body = `<b>${/\(cliente\)\s*$/.test(e.autor || '') ? 'Tu nota' : 'Nota de tu equipo'}</b> ${who}<div class="pt-item__n">${esc(e.text)}</div>`; }
     return `<div class="pt-tl"><span class="pt-tl__i" style="background:${ic[1]}">${ico(ic[0], 14)}</span><div class="pt-tl__b"><div class="pt-tl__t">${body}</div><div class="pt-tl__d">${when}</div></div></div>`;
   }
   function dealBox(dl) {
     return dl ? `<div class="pt-dr__deal"><div><span>Fecha de la oportunidad</span><b>${dlong(dl.fecha)}</b></div><div><span>Agendada el</span><b>${dlong(dl.agendada)}</b></div>${dl.valor ? `<div><span>Valor</span><b>${money2(dl.valor, dl.moneda)}</b></div>` : ''}${dl.prob != null ? `<div><span>Probabilidad</span><b>${dl.prob}%</b></div>` : ''}</div>` : '';
   }
   function notesBox(notes, withWho) { return notes.length ? `<h3 class="pt-dr__s">Notas y comentarios del deal</h3>${notes.map(n => `<div class="pt-item__n" style="margin-bottom:6px">${esc(n.texto)}<div class="pt-tl__d">${withWho && n.contact ? esc(n.contact) + ' · ' : ''}${new Date(n.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' })}</div></div>`).join('')}` : ''; }
+  // Seguimiento (lo hace el cliente): resultado de la reunión, etapa, nota y próxima fecha. Cada guardado reinicia los avisos por correo.
+  function segBlock(d) {
+    if (!d || !d.deal || (S.me.sections && S.me.sections.reuniones === false)) return '';
+    const sg = d.seg || {}, c = d.contact, past = dkey(d.deal.fecha) < dkey(new Date()), asks = past && !sg.reunion;
+    const et = String(c.etapa || '').toLowerCase();
+    const RB = [['realizada', 'Se realizó'], ['no_asistio', 'No asistió'], ['reprogramada', 'Se reprogramó']];
+    return `<div class="pt-seg"><h3 class="pt-dr__s" style="margin-top:0">Seguimiento</h3>
+      ${asks ? `<div class="pt-seg__q"><b>¿Se realizó la reunión del ${dlong(d.deal.fecha)}?</b><div class="pt-seg__b">${RB.map(([v, l]) => `<button type="button" class="pt-seg__o${S.segRes === v ? ' on' : ''}" onclick="PT.segRes('${v}')">${l}</button>`).join('')}</div>
+        <div id="pt-seg-nf" style="display:${S.segRes === 'reprogramada' ? 'block' : 'none'};margin-top:8px"><label class="pt-seg__l">Nueva fecha</label><input type="date" id="pt-seg-nf-i" class="pt-seg__i"></div></div>` : (sg.reunion ? `<div class="pt-item__s" style="margin-bottom:8px">Reunión: <b>${esc({ realizada: 'realizada', no_asistio: 'no asistió', reprogramada: 'reprogramada' }[sg.reunion] || sg.reunion)}</b></div>` : '')}
+      <label class="pt-seg__l">Etapa</label><select id="pt-seg-et" class="pt-seg__i"><option value="">— Sin cambios —</option>${[['propuesta', 'Propuesta enviada'], ['negociacion', 'En negociación'], ['ganado', 'Ganado'], ['perdido', 'Perdido']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+      <label class="pt-seg__l">Nota o comentario</label><textarea id="pt-seg-n" class="pt-seg__i" rows="3" maxlength="2000" placeholder="Ej. Enviamos la propuesta; quedaron en responder el viernes"></textarea>
+      <label class="pt-seg__l">Próximo seguimiento</label><input type="date" id="pt-seg-sig" class="pt-seg__i" value="${sg.snooze ? String(sg.snooze).slice(0, 10) : ''}">
+      <div class="pt-item__s" style="margin:4px 0 10px">No te recordaremos esta oportunidad hasta esa fecha.</div>
+      <button type="button" class="pt-btn" id="pt-seg-go" style="margin-top:0" onclick="PT.segSave(${c.id})">Guardar seguimiento</button></div>`;
+  }
+  S.segRes = '';
+  window.PT.segRes = v => { S.segRes = S.segRes === v ? '' : v; drPaint(); };
+  window.PT.segSave = async id => {
+    const g = i => { const e = document.getElementById(i); return e ? e.value : ''; };
+    const body = { reunion_estado: S.segRes || undefined, nueva_fecha: g('pt-seg-nf-i') || undefined, etapa: g('pt-seg-et') || undefined, nota: g('pt-seg-n'), siguiente: g('pt-seg-sig') };
+    if (S.segRes === 'reprogramada' && !body.nueva_fecha) { alert('Indica la nueva fecha'); return; }
+    if (!S.segRes && !body.etapa && !body.nota.trim() && !body.siguiente) { alert('Agrega una nota, cambia la etapa o fija una fecha'); return; }
+    const b = document.getElementById('pt-seg-go'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
+    try { await api('/portal/contact/' + id + '/seguimiento', { method: 'POST', body: JSON.stringify(body) }); S.segRes = ''; await drLoadContact(id); drPaint(); load(true); }
+    catch (e) { alert(e.message || 'No se pudo guardar'); drPaint(); }
+  };
   function drBody() {
     const D = S.dr;
     if (D.tab === 'empresa') {
@@ -732,6 +758,7 @@
       const c = d.company;
       const rows = d.contacts.map(k => `<div class="pt-mrow" onclick="PT.drTab('contacto',${k.id})"><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(k.nombre)}</span><span>${k.estado ? badge(k.estado) : (k.reunion ? badge('Oportunidad') : '')}</span></div><div class="pt-item__s">${esc(k.cargo || '')}</div><div class="pt-item__s">Agregado el ${fdate(k.agregado, { day: 'numeric', month: 'short', year: 'numeric' })}${k.secuencia ? ' · ' + esc(k.secuencia) : ''}</div></div></div>`).join('');
       return `<div class="pt-dr__info">${c.website ? `<span>${esc(c.website.replace(/^https?:\/\//, ''))}</span>` : ''}${c.industria ? `<span>${esc(c.industria)}</span>` : ''}${c.ciudad ? `<span>${esc(c.ciudad)}</span>` : ''}${c.pais ? `<span>${esc(c.pais)}</span>` : ''}</div>
+        ${D.ct && D.ct.deal && (!d.deal || !d.deal.contact_id || d.deal.contact_id === D.ct.contact.id) ? segBlock(D.ct) : ''}
         ${dealBox(d.deal)}${d.deal && d.deal.contact ? `<div class="pt-item__s" style="margin:-6px 0 10px">Oportunidad con <button class="pt-who" onclick="PT.drTab('contacto',${d.deal.contact_id})">${esc(d.deal.contact)}</button></div>` : ''}
         ${notesBox(d.notes, true)}
         <h3 class="pt-dr__s">Contactos en la empresa (${d.contacts.length})</h3>${rows}

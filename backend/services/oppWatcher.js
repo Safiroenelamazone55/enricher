@@ -50,7 +50,7 @@ async function preview(pool, cid, lang) {
 async function tick(pool, force) {
   if (process.env.OPP_WATCHER_SEND !== '1') return { skipped: 'apagado (OPP_WATCHER_SEND != 1)' };
   const pr = require('./portalRoutes');
-  const { rows: cls } = await pool.query(`SELECT DISTINCT a.outbound_client_id AS id, oc.timezone FROM client_accounts a JOIN outbound_clients oc ON oc.id=a.outbound_client_id WHERE a.activo`);
+  const { rows: cls } = await pool.query(`SELECT DISTINCT a.outbound_client_id AS id, oc.timezone FROM client_accounts a JOIN outbound_clients oc ON oc.id=a.outbound_client_id WHERE a.activo AND oc.seguimiento_avisos`);
   let sent = 0;
   for (const c of cls) {
     // Horario laboral (8–17, lun–vie) en la zona horaria del cliente; sin definir → Nueva York.
