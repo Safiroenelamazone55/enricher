@@ -850,6 +850,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
     // Idioma del contacto (según su ubicación): base para mensajes por idioma en las secuencias
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS idioma TEXT NOT NULL DEFAULT ''`);
+    // Borrador por aprobar que ya editaste a mano: no se vuelve a redactar solo (solo se le actualiza el nombre/email corregido)
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS editado BOOLEAN NOT NULL DEFAULT FALSE`);
     // Qué hacer si a un contacto le falta el mensaje de SU idioma en un paso por idioma: 'base' = manda el mensaje base; 'detener' = pausa al contacto y avisa.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS idioma_faltante TEXT NOT NULL DEFAULT 'base'`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seguimiento_avisos BOOLEAN NOT NULL DEFAULT TRUE`);

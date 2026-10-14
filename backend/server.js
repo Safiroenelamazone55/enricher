@@ -3731,7 +3731,8 @@ app.post('/api/lm/companies', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!_lmS(b.nombre) && !_lmS(b.dominio)) return res.status(400).json({ error: 'Nombre o dominio requerido' });
   try {
-    const _oldNm = ((await pool.query('SELECT nombre FROM lm_companies WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {}).nombre;
+    const _oldCo = (await pool.query('SELECT * FROM lm_companies WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {};
+    const _oldNm = _oldCo.nombre;
     const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
     const { rows } = await pool.query(`
       INSERT INTO lm_companies (user_id,${LM_CO_COLS.join(',')},outbound_client_id)
@@ -3740,18 +3741,27 @@ app.post('/api/lm/companies', requireAuth, async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[lm-co] POST', err.message); res.status(500).json({ error: 'Error al crear empresa' }); }
 });
-// Al cambiar el nombre de una empresa, los borradores que aún esperan aprobación (con el nombre viejo ya escrito en asunto/cuerpo) se actualizan
-// también: antes quedaban con "PA SOLÀ, S.L" aunque la empresa ya figurara como "Pa Solà". No toca lo ya enviado ni lo ya aprobado.
-async function _renameCompanyInDrafts(uid, companyId, oldName, newName) {
-  oldName = String(oldName || '').trim(); newName = String(newName || '').trim();
-  if (!oldName || !newName || oldName === newName) return 0;
+// REGLA GENERAL: cuando se corrige un dato de un contacto o de su empresa (nombre, cargo, ciudad, email, campos personalizados…), los
+// borradores que aún esperan aprobación no se quedan con el dato viejo ya escrito:
+//  · los que NO editaste a mano se retiran y se vuelven a redactar al instante con los datos actuales;
+//  · los que SÍ editaste conservan tu texto, y solo se les cambia el nombre de empresa viejo por el nuevo y el email de destino.
+// No toca lo ya enviado ni lo ya aprobado. Se llama desde TODOS los caminos que modifican datos (edición, Datos → limpiar, importar…).
+async function _refreshDrafts(uid, contactIds, rename) {
   try {
-    const r = await pool.query(`UPDATE lm_messages m SET asunto = replace(m.asunto, $4, $5), cuerpo = replace(m.cuerpo, $4, $5)
-        FROM lm_contacts k WHERE m.contact_id = k.id AND k.company_id = $1 AND m.user_id = $2 AND m.estado = 'awaiting'
-         AND (position($4 in m.asunto) > 0 OR position($4 in m.cuerpo) > 0)`, [companyId, uid, null, oldName, newName]);
-    return r.rowCount;
-  } catch (e) { console.warn('[rename-drafts]', e.message); return 0; }
+    contactIds = [...new Set((contactIds || []).map(Number).filter(Boolean))];
+    if (!contactIds.length) return 0;
+    if (rename && rename.old && rename.new && rename.old !== rename.new) {
+      await pool.query(`UPDATE lm_messages SET asunto = replace(asunto, $3, $4), cuerpo = replace(cuerpo, $3, $4)
+          WHERE user_id=$1 AND estado='awaiting' AND editado AND contact_id = ANY($2::int[]) AND (position($3 in asunto) > 0 OR position($3 in cuerpo) > 0)`, [uid, contactIds, String(rename.old), String(rename.new)]);
+    }
+    await pool.query(`UPDATE lm_messages m SET to_email = k.email FROM lm_contacts k WHERE k.id = m.contact_id AND m.user_id=$1 AND m.estado='awaiting' AND m.contact_id = ANY($2::int[]) AND COALESCE(k.email,'') <> '' AND m.to_email <> k.email`, [uid, contactIds]);
+    const del = await pool.query(`DELETE FROM lm_messages WHERE user_id=$1 AND estado='awaiting' AND NOT editado AND contact_id = ANY($2::int[]) RETURNING contact_id`, [uid, contactIds]);
+    const eng = require('./services/sendEngine');
+    for (const cid of [...new Set(del.rows.map(r => r.contact_id))]) { try { await eng.draftNowForContact(pool, cid); } catch (e) { console.warn('[refresh-drafts]', e.message); } }
+    return del.rowCount;
+  } catch (e) { console.warn('[refresh-drafts]', e.message); return 0; }
 }
+async function _companyContactIds(uid, companyId) { return (await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$2`, [uid, companyId])).rows.map(r => r.id); }
 app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
@@ -3764,7 +3774,8 @@ app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
     // El nombre de empresa vive duplicado en lm_contacts.empresa_nombre (snapshot de import) —
     // sin esto, editar el nombre acá dejaba desincronizados a sus contactos.
-    if (_lmS(b.nombre)) { await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]); await _renameCompanyInDrafts(req.workspaceOwnerId, req.params.id, _oldNm, _lmS(b.nombre)); }
+    if (_lmS(b.nombre)) { await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]); }
+    if (_oldCo.id && LM_CO_COLS.some(k => String(_oldCo[k] == null ? '' : _oldCo[k]) !== String(rows[0][k] == null ? '' : rows[0][k]))) await _refreshDrafts(req.workspaceOwnerId, await _companyContactIds(req.workspaceOwnerId, req.params.id), { old: _oldNm, new: rows[0].nombre });
     res.json(rows[0]);
   } catch (err) { console.error('[lm-co] PUT', err.message); res.status(500).json({ error: 'Error al actualizar empresa' }); }
 });
@@ -3894,9 +3905,12 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
       if (entity === 'companies' && ch.campo === 'nombre') {
         const r = await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [ch.despues, uid, ch.id]);
         syncedNames += r.rowCount;
-        await _renameCompanyInDrafts(uid, ch.id, ch.antes, ch.despues);
+
       }
     }
+    // Lo limpiado se refleja también en los borradores pendientes (empresa: todos sus contactos; contacto: ese contacto).
+    if (entity === 'companies') { for (const ch of changes) await _refreshDrafts(uid, await _companyContactIds(uid, ch.id), ch.campo === 'nombre' ? { old: ch.antes, new: ch.despues } : null); }
+    else await _refreshDrafts(uid, changes.map(ch => ch.id), null);
     res.json({ preview: false, applied: changes.length, syncedNames, changes });
   } catch (err) { console.error('[lm-clean]', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
 });
@@ -3990,6 +4004,7 @@ app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
     for (const ch of changes) {
       await pool.query(`UPDATE ${table} SET ${ch.campo}=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
     }
+    if (entity === 'companies') { for (const id of [...new Set(changes.map(ch => ch.id))]) await _refreshDrafts(uid, await _companyContactIds(uid, id), null); } else await _refreshDrafts(uid, changes.map(ch => ch.id), null);
     res.json({ preview: false, applied: changes.length, changes });
   } catch (err) { console.error('[lm-enrich]', err.message); res.status(500).json({ error: 'Error al enriquecer' }); }
 });
@@ -4243,7 +4258,7 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
 app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
-    const prev = (await pool.query(`SELECT email, data_issue FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
+    const prev = (await pool.query(`SELECT * FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
     const vals = LM_CT_COLS.map(k => _lmS(b[k]));
     const set = LM_CT_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
     const { rows } = await pool.query(`
@@ -4251,6 +4266,7 @@ app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
       WHERE id=$${LM_CT_COLS.length + 3} AND user_id=$${LM_CT_COLS.length + 4} RETURNING *
     `, [...vals, b.company_id || null, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    if (prev && (LM_CT_COLS.some(k => String(prev[k] == null ? '' : prev[k]) !== String(rows[0][k] == null ? '' : rows[0][k])) || String(prev.company_id || '') !== String(rows[0].company_id || ''))) await _refreshDrafts(req.workspaceOwnerId, [rows[0].id], null);
     // Si el email CAMBIÓ (p. ej. corrigiendo uno que rebotó), el estado anterior deja de valer:
     // se resetea a "sin verificar" y se re-verifica en background.
     const oldE = String((prev && prev.email) || '').trim().toLowerCase();
@@ -6850,8 +6866,8 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
     const estado = action === 'approve' ? 'approved' : 'awaiting';
     if (action === 'approve' && require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar (o escribe el mensaje del paso en la secuencia).' });
     const { rows: [upd] } = await pool.query(
-      `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3 WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,
-      [asunto, cuerpo, estado, m.id]);
+      `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3, editado = (editado OR $5) WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,
+      [asunto, cuerpo, estado, m.id, (asunto !== m.asunto || cuerpo !== m.cuerpo)]);
     res.json({ ok: true, message: upd });
   } catch (err) { console.error('[approvals] PUT', err.message); res.status(500).json({ error: 'Error al actualizar el borrador' }); }
 });
