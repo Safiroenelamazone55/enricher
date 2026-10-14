@@ -37,12 +37,24 @@ function pickVariant(st, ctx) {
   if (vars.length <= 1) return vars[0];
   const mode = st.variant_mode || 'off';
   if (mode === 'segment' && st.variant_field) {
-    const val = String(ctx[st.variant_field] || '').toLowerCase().trim();
-    const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => String(t).toLowerCase().trim() === val));
+    const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const val = nz(ctx[st.variant_field]);
+    const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
     return hit || vars[0];
   }
   if (mode === 'random') return vars[Math.abs((ctx.contact_id || 0) + (st.id || 0)) % vars.length];
   return vars[0];
+}
+
+// Paso "por idioma" (segmento sobre el campo idioma): si el contacto TIENE idioma y ningún mensaje del paso lo cubre, devuelve ese idioma.
+// Sin idioma conocido no se bloquea nada (se usa el mensaje base). Solo se aplica si la secuencia tiene idioma_faltante='detener'.
+function idiomaGap(step, enr) {
+  if (!step || step.variant_mode !== 'segment' || step.variant_field !== 'idioma') return '';
+  if ((enr.idioma_faltante || 'base') !== 'detener') return '';
+  const lang = String(enr.idioma || '').trim(); if (!lang) return '';
+  const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const vars = stepVariants(step);
+  return vars.some(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === nz(lang))) ? '' : lang;
 }
 
 // ── Campos personalizados como variables: cada campo con nombre (Configuración → Campos personalizados) se usa como {{nombre_del_campo}} ──
@@ -325,8 +337,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   const { rows: [enr] } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id,
-           k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma,
+           k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
            s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
@@ -482,6 +494,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
     return false;
   }
 
+  // Paso por idioma sin mensaje para el idioma de este contacto (y la secuencia pide detener): se pausa y se avisa, no se manda en otro idioma.
+  { const gap = idiomaGap(step, enr); if (gap) { await _pauseEnrollment(pool, enr, 'sin_traduccion', `[${enr.seq_nombre}] ${enr.nombre || enr.email}: falta el mensaje en ${gap} (paso ${enr.paso}) — agrégalo en el paso para reanudar`); return false; } }
   // Personalización con IA: si hay un borrador APROBADO para este contacto+paso, se usa
   // en vez de la plantilla (el diferenciador premium — Fable 5/Haiku ya lo redactó).
   let asunto, cuerpoTxt;
@@ -867,8 +881,8 @@ async function _draftPreapprovedBatch(pool, seen) {
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status,
-           k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status, k.idioma,
+           k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante
       FROM lm_contact_sequences cs
       JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -914,6 +928,7 @@ async function _draftPreapprovedBatch(pool, seen) {
         continue;
       }
       if (!step || step.canal !== 'email') continue;
+      if (idiomaGap(step, enr)) continue;
       const { rows: [waiting] } = await pool.query(
         `SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND estado IN ('awaiting','approved') LIMIT 1`,
         [enr.user_id, enr.contact_id, step.id]);
@@ -960,6 +975,16 @@ async function _draftPreapproved(pool) {
   // Barrido (cada ~10 min): las tareas que el sistema abrió para una secuencia que ya NO está activa (pausada, cerrada, archivada) se cierran.
   if (Date.now() - _lastTaskSweep > 10 * 60 * 1000) {
     _lastTaskSweep = Date.now();
+    // Reanudar contactos pausados por falta de traducción en cuanto el mensaje de su idioma existe (o la secuencia deja de exigirlo).
+    try {
+      const { rows: pz } = await pool.query(`SELECT cs.id, cs.paso, cs.sequence_id, k.idioma, s.idioma_faltante
+          FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id JOIN lm_contacts k ON k.id=cs.contact_id
+         WHERE cs.estado='pausado' AND cs.paused_reason='sin_traduccion' AND s.estado='activa' LIMIT 500`);
+      for (const z of pz) {
+        const { rows: sts } = await pool.query(`SELECT id, variants, variant_mode, variant_field, plantilla FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [z.sequence_id]);
+        if (!idiomaGap(sts[(z.paso || 1) - 1], z)) await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW() WHERE id=$1`, [z.id]);
+      }
+    } catch (x) { console.warn('[send-engine] reanudar-traduccion:', x.message); }
     await pool.query(`UPDATE activities a SET estado='hecha' FROM sequences s
         WHERE a.estado='pendiente' AND a.tipo='tarea' AND s.user_id=a.user_id AND s.estado<>'activa'
           AND left(a.nota, length(s.nombre) + 2) = '[' || s.nombre || ']'`).catch(x => console.warn('[send-engine] barrido-tareas:', x.message));
@@ -1096,4 +1121,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

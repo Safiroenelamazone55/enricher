@@ -3544,6 +3544,37 @@ app.post('/api/leads/:id/convert', requireAuth, async (req, res) => {
 // =================================================================
 const OBC_ESTADOS = ['preparacion', 'activo', 'pausado', 'cerrado'];
 
+// Idioma de los contactos: se rellena solo cuando se deduce con seguridad del país/ciudad (nunca pisa un idioma ya puesto).
+// Los pasos "por idioma" y las tareas leen lm_contacts.idioma, así que tiene que estar guardado.
+async function _fillContactIdiomas() {
+  try {
+    const geo = require('./services/geoService');
+    const { rows } = await pool.query(`SELECT id, ciudad, region, pais FROM lm_contacts WHERE COALESCE(idioma,'')='' AND (COALESCE(pais,'')<>'' OR COALESCE(ciudad,'')<>'' OR COALESCE(region,'')<>'') LIMIT 5000`);
+    const byLang = {};
+    for (const r of rows) {
+      const p = geo.normalizeCountry(r.pais || '') || geo.countryFromPlace(r.ciudad, r.region) || '';
+      const pais = p && p === r.pais ? p : (geo.findCountry(p) ? p : (geo.countryFromPlace(r.ciudad, r.region) || ''));
+      const l = geo.languageFor(pais, r.ciudad);
+      if (!l.lang) continue;
+      const nm = geo.LANG_NAMES[l.lang] || l.lang;
+      (byLang[nm] = byLang[nm] || []).push(r.id);
+    }
+    let n = 0;
+    for (const [nm, ids] of Object.entries(byLang)) { const r = await pool.query(`UPDATE lm_contacts SET idioma=$1 WHERE id = ANY($2::int[]) AND COALESCE(idioma,'')=''`, [nm, ids]); n += r.rowCount; }
+    if (n) console.log('[idioma] ' + n + ' contactos con idioma deducido');
+  } catch (e) { console.warn('[idioma]', e.message); }
+}
+setTimeout(_fillContactIdiomas, 45 * 1000);
+setInterval(_fillContactIdiomas, 60 * 60 * 1000);
+// Política cuando falta el mensaje del idioma de un contacto: 'base' (se manda el mensaje base) o 'detener' (se pausa al contacto y se avisa).
+app.patch('/api/sequences/:id/idioma-faltante', requireAuth, async (req, res) => {
+  try {
+    const v = (req.body || {}).valor === 'detener' ? 'detener' : 'base';
+    const r = await pool.query(`UPDATE sequences SET idioma_faltante=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, idioma_faltante`, [v, req.params.id, req.workspaceOwnerId]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
 // Estado del cliente outbound AUTOMÁTICO según su trabajo: con alguna secuencia o campaña activa → Activo; si todas están pausadas /
 // archivadas / cerradas → Pausado; si solo hay borradores → En preparación. 'Cerrado' es manual y no se toca. (Pedido 2026-10-14)
 async function _syncClientEstados() {
@@ -10017,7 +10048,7 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
         const { rows: drafts } = await pool.query(`
           SELECT m.id, m.contact_id,
                  k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
+                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.idioma,
                  co.nombre AS company_nombre
             FROM lm_messages m
             JOIN lm_contacts k ON k.id=m.contact_id

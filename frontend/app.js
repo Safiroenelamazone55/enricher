@@ -22372,7 +22372,28 @@ ${foot}
       + `<div style="margin-top:12px;font-weight:600;font-size:12.5px;margin-bottom:4px">Contactos en cada paso</div>${bars(pasoM, list.length) || ''}`);
     const resp = list.filter(c => c.estado === 'respondido' || c.real_disposition).length;
     const res = card('Resultado', kv([['Respondieron', resp + ' (' + Math.round(100 * resp / (list.length || 1)) + '%)']]) + `<div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqTab('metricas')">Ver métricas completas</button></div>`);
-    return cfg + aud + cal + avance + res;
+    // Mensajes por idioma: qué pasos cubren cada idioma de los contactos, y qué hacer si falta
+    const faltante = s.idioma_faltante === 'detener' ? 'detener' : 'base';
+    const covers = (st, lang) => (Array.isArray(st.variants) ? st.variants : []).some(v => (Array.isArray(v.targets) ? v.targets : []).some(t => _lmNorm(t) === _lmNorm(lang)));
+    const isLangStep = st => st.variant_mode === 'segment' && st.variant_field === 'idioma';
+    const anyLangStep = steps.some(isLangStep);
+    const matrix = idiNames.length && steps.length
+      ? `<div style="overflow-x:auto"><table class="clients-table" style="min-width:420px"><thead><tr><th>Paso</th>${idiNames.map(k => `<th style="text-align:center">${esc(k)}<div style="font-weight:400;font-size:11px;color:#64748B">${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</div></th>`).join('')}</tr></thead><tbody>${steps.map((st, i) => `<tr><td><b>${i + 1}.</b> ${esc(st.titulo || st.canal || 'Paso')} <span style="color:#94A3B8;font-size:11px">${esc(st.canal || '')}${st.dia ? ' · día ' + st.dia : ''}</span></td>${idiNames.map(k => !isLangStep(st) ? '<td style="text-align:center;color:#94A3B8" title="Mensaje único: todos reciben el mismo">·</td>' : covers(st, k) ? '<td style="text-align:center;color:#15803D;font-weight:700" title="Tiene mensaje en este idioma">✓</td>' : `<td style="text-align:center;color:#B45309;font-weight:700" title="${faltante === 'detener' ? 'Falta: los contactos de este idioma se detendrán en este paso' : 'Falta: recibirán el mensaje base'}">⚠</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+      : '<div class="cp-empty2" style="padding:8px 0;text-align:left">Aún no hay idiomas detectados o pasos para comparar.</div>';
+    const idiCard = card('Mensajes e idiomas', `<div style="font-size:12.5px;color:#475569;margin-bottom:10px">${anyLangStep ? '✓ el paso tiene mensaje para ese idioma · ⚠ falta · · mensaje único para todos.' : 'Ningún paso está configurado por idioma todavía: todos los contactos reciben el mismo mensaje. En un paso, elige <b>Mensaje del paso → Por idioma del contacto</b> para escribir una versión por idioma.'}</div>${matrix}
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #EEF1F4"><label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:4px">Si a un contacto le falta el mensaje de su idioma</label>
+        <select class="form-input" style="max-width:420px" onchange="LeadManagerModule.seqIdiomaFaltante(${id},this.value)"><option value="base"${faltante === 'base' ? ' selected' : ''}>Enviarle el mensaje base</option><option value="detener"${faltante === 'detener' ? ' selected' : ''}>Detenerlo y avisarme (pasa a Pausados)</option></select>
+        <div style="font-size:12px;color:#64748B;margin-top:4px">Con “Detener”, nadie recibe un mensaje en un idioma que no habla. Al añadir la traducción, el contacto se reanuda solo.</div></div>`, 'cada contacto recibe el mensaje de su idioma');
+    return cfg + aud + idiCard + cal + avance + res;
+  }
+  async function seqIdiomaFaltante(id, valor) {
+    try {
+      const r = await apiFetch(`${API}/sequences/${id}/idioma-faltante`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const s = (_sequences || []).find(x => x.id === id); if (s) s.idioma_faltante = valor;
+      showBanner(valor === 'detener' ? 'Listo: los contactos sin mensaje en su idioma se detendrán y te avisaré' : 'Listo: los contactos sin mensaje en su idioma recibirán el mensaje base', 'success');
+      _renderBody();
+    } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
   }
   function _seqTabContent(id) {
     const steps = _seqSteps(id);
@@ -24410,8 +24431,9 @@ ${foot}
     if (vars.length <= 1) return vars[0];
     const mode = (st && st.variant_mode) || 'off';
     if (mode === 'segment' && st.variant_field) {
-      const val = String((c && c[st.variant_field]) || '').toLowerCase().trim();
-      const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => String(t).toLowerCase().trim() === val));
+      const _nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+      const val = _nz(c && c[st.variant_field]);
+      const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => _nz(t) === val));
       return hit || vars[0];
     }
     if (mode === 'random') { const idx = Math.abs(((c ? c.id : 0) + (st.id || 0))) % vars.length; return vars[idx]; }
@@ -31315,13 +31337,14 @@ ${foot}
     _stepOpenSeq = seqId; _stepOpenId = stepId || null;
     _stepReplyTo = stepId ? ((_steps.find(x => x.id === stepId) || {}).reply_to_step_id || null) : null;
     setTimeout(() => _stepReplyPickRender(), 0);
+    if (_activeSeq === seqId && !Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
     const st = stepId ? _steps.find(x => x.id === stepId) : null;
     _stepFocusTa = 'step-var-0';
     _stepDraft = {
       seqId,
       postDias: (st && st.post_dias) ? String(st.post_dias) : '',
       reaccion: (st && st.reaccion) || '',
-      mode: (st && st.variant_mode) || 'off',
+      mode: (st && st.variant_mode === 'segment' && st.variant_field === 'idioma') ? 'idioma' : ((st && st.variant_mode) || 'off'),
       field: (st && st.variant_field) || 'buyer_role',
       variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
@@ -31500,7 +31523,7 @@ ${foot}
     const single = isCmt || d.mode === 'off';
     const modeSel = isCmt
       ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Instrucción para la IA (prompt)</span></label>`
-      : `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje del paso</span><select class="form-input" onchange="LeadManagerModule.stepSetMode(this.value)"><option value="off"${d.mode === 'off' ? ' selected' : ''}>Un solo mensaje</option><option value="random"${d.mode === 'random' ? ' selected' : ''}>A/B — repartir al azar</option><option value="segment"${d.mode === 'segment' ? ' selected' : ''}>Por segmento (según un campo)</option></select></label>`;
+      : `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje del paso</span><select class="form-input" onchange="LeadManagerModule.stepSetMode(this.value)"><option value="off"${d.mode === 'off' ? ' selected' : ''}>Un solo mensaje</option><option value="random"${d.mode === 'random' ? ' selected' : ''}>A/B — repartir al azar</option><option value="segment"${d.mode === 'segment' ? ' selected' : ''}>Por segmento (según un campo)</option><option value="idioma"${d.mode === 'idioma' ? ' selected' : ''}>Por idioma del contacto</option></select></label>`;
     let fieldSel = '';
     if (!isCmt && d.mode === 'segment') {
       const opts = _CT_FILTER_FIELDS.map(f => `<option value="${f[0]}"${d.field === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('');
@@ -31514,15 +31537,23 @@ ${foot}
       const _prevS = $('step-reply')?.checked ? _stepPrevSubject() : null;
       const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
+      const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:600;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 && i > 0 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar este idioma">✕</button>` : ''}</div>` : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       // Aquí va el CONTEXTO (por qué comentas), no el tema: el largo, el tono y el
       // "adáptate a lo que sea el post" ya los impone el sistema en el backend.
       const ph = isCmt
         ? 'Ej. Comento para acercarme antes de mandarle la invitación, para que no le llegue en frío. Que encaje con el post sea del tema que sea.'
         : 'Ej. Hola {{first_name}}…';
-      return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${isCmt ? 5 : (single ? 4 : 3)}" placeholder="${esc(ph)}" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
+      return `<div class="step-var-box">${langHd || head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${isCmt ? 5 : (single ? 4 : 3)}" placeholder="${esc(ph)}" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
-    const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
+    const addBtn = single ? '' : (d.mode === 'idioma' ? `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddLang()">＋ Añadir idioma</button>` : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`);
+    // Cobertura: idiomas que hay entre los contactos de esta secuencia y si ya tienen mensaje en este paso.
+    let langInfo = '';
+    if (!single && d.mode === 'idioma') {
+      const counts = _stepLangCounts(), cov = new Set(d.variants.map(v => (v.targets || [])[0]).filter(Boolean));
+      const ks = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+      langInfo = `<div class="step-vars__hint" style="margin-bottom:8px">Cada contacto recibe el mensaje de <b>su idioma</b> (según su ubicación). El primero es el <b>mensaje base</b>.` + (ks.length ? `<br>Contactos de esta secuencia: ${ks.map(k => `<span style="color:${cov.has(k) ? '#15803D' : '#B45309'}">${cov.has(k) ? '✓' : '⚠'} ${esc(k)} · ${counts[k]}</span>`).join(' &nbsp; ')}` : '') + `</div>`;
+    }
     if (isLike) {
       // Reaccionar no lleva texto: solo la ventana de la publicación y qué reacción usar.
       el.innerHTML = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Reaccionar a una publicación</span></label>`
@@ -31533,9 +31564,24 @@ ${foot}
     }
     el.innerHTML = isCmt
       ? `${modeSel}${_liRoleHtml(_stepDraft.seqId)}${varsHtml}${_stepContentOptsHtml(false)}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
-      : `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
+      : `${modeSel}${langInfo}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
+  }
+  const _IDIOMAS_UI = ['Español', 'Inglés', 'Francés', 'Alemán', 'Italiano', 'Portugués', 'Neerlandés', 'Árabe', 'Sueco', 'Noruego', 'Danés', 'Finés', 'Polaco', 'Checo', 'Rumano', 'Griego', 'Turco', 'Ruso', 'Ucraniano', 'Chino', 'Japonés', 'Coreano', 'Hebreo', 'Hindi', 'Indonesio'];
+  // Idiomas de los contactos de la secuencia del paso abierto (con cuántos hay de cada uno), si ya están cargados.
+  function _stepLangCounts() {
+    const d = _stepDraft; if (!d || !Array.isArray(_seqContacts) || _activeSeq !== d.seqId) return {};
+    const m = {}; _seqContacts.forEach(c => { if (c.idioma_ef) m[c.idioma_ef] = (m[c.idioma_ef] || 0) + 1; }); return m;
+  }
+  function stepVarLang(i, v) { _stepSyncDraft(); const x = _stepDraft && _stepDraft.variants[i]; if (!x) return; x.targets = v ? [v] : []; x.nombre = v; _stepRenderMsg(); }
+  function stepAddLang() {
+    _stepSyncDraft();
+    const used = new Set(_stepDraft.variants.map(v => (v.targets || [])[0]).filter(Boolean));
+    const counts = _stepLangCounts();
+    const next = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).find(l => !used.has(l)) || _IDIOMAS_UI.find(l => !used.has(l)) || '';
+    _stepDraft.variants.push({ nombre: next, asunto: '', cuerpo: '', targets: next ? [next] : [], tplId: '' });
+    _stepRenderMsg();
   }
   function _stepSyncDraft() {
     if (!_stepDraft) return;
@@ -31590,7 +31636,18 @@ ${foot}
   }
   function stepTagRemove(i, ti) { if (!_stepDraft || !_stepDraft.variants[i]) return; (_stepDraft.variants[i].targets || []).splice(ti, 1); _stepRefreshChips(i); stepTagInput(i); }
   function stepTagBlur(i) { setTimeout(() => document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'), 130); }
-  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); } _stepRenderMsg(); }
+  function stepSetMode(mode) {
+    _stepSyncDraft(); _stepDraft.mode = mode;
+    if (mode === 'idioma') {
+      // Primer mensaje = base, con el idioma más frecuente entre los contactos; segundo = el siguiente idioma detectado.
+      const counts = _stepLangCounts(), ks = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+      const first = _stepDraft.variants[0] || (_stepDraft.variants[0] = { nombre: '', asunto: '', cuerpo: '', targets: [], tplId: '' });
+      if (!(first.targets || []).length) { const l = ks[0] || 'Español'; first.targets = [l]; first.nombre = l; }
+      _stepDraft.variants.slice(1).forEach(v => { if (!(v.targets || []).length && v.nombre) v.targets = [v.nombre]; });
+      if (_stepDraft.variants.length < 2) { const l2 = ks.find(l => l !== first.targets[0]) || (first.targets[0] === 'Inglés' ? 'Español' : 'Inglés'); _stepDraft.variants.push({ nombre: l2, asunto: '', cuerpo: '', targets: [l2], tplId: '' }); }
+      _stepRenderMsg(); return;
+    }
+    if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); } _stepRenderMsg(); }
   function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
   function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
   function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
@@ -31674,7 +31731,7 @@ ${foot}
     const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
     const ccBox = $('step-cc');
     const replyBox = $('step-reply');
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', cond_step_id: $('step-cond')?.value ? ($('step-cond-ref')?.value || null) : null, accion: $('step-accion')?.value || '',
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode === 'idioma' ? 'segment' : d.mode, variant_field: d.mode === 'idioma' ? 'idioma' : d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', cond_step_id: $('step-cond')?.value ? ($('step-cond-ref')?.value || null) : null, accion: $('step-accion')?.value || '',
       post_dias: $('step-post-dias')?.value || '', reaccion: $('step-reaccion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked), reply_to_step_id: (replyBox && replyBox.checked) ? (($('step-reply-to') || {}).value || null) : null };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
@@ -33014,6 +33071,7 @@ ${foot}
     if (pr === 'reply_received') return 'Esperando revisión de respuesta';
     if (pr.startsWith('disposition_')) { const d = pr.slice('disposition_'.length); return _dispoLabel(d) || d; }
     if (pr.startsWith('dato_')) return 'Falta corregir un dato';
+    if (pr === 'sin_traduccion') return 'Falta el mensaje en su idioma';
     return pr;
   }
   function _cpFmtDate(d) { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }
@@ -35335,7 +35393,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    stepSetMode, stepVarLang, stepAddLang, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
