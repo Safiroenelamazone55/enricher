@@ -23355,7 +23355,7 @@ ${foot}
         <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
         <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at, a.sequence_id)}</b> · ${esc(a.to_email)}</div>
       </div>
-      <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${a.sequence_id})">Revisar / editar</button>
+      <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${a.sequence_id},${a.id})">Revisar / editar</button>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
     </div>`;
   }
@@ -23448,10 +23448,33 @@ ${foot}
       showBanner(`✓ Aprobado — saldrá ${it ? _apFmtDate(it.scheduled_at, it.sequence_id) : 'en su fecha'} desde el buzón del cliente`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function seqGoApprove(id) {
-    openSequence(id);
-    _seqTab = 'aprobar'; _seqApprovals = null; _seqPendingNoEmail = null; _seqNoEmailIdx = 0; _seqNoEmailDone = 0;
-    _renderBody(); _seqLoadApprovals(id); _seqLoadPendingNoEmail(id);
+  // Revisar un email antes de aprobarlo: abre la FICHA del contacto (como cualquier otra tarea) con el mensaje editable y la vista previa;
+  // "Aprobar" pasa al siguiente contacto de la cola y "Siguiente/Anterior" recorre los emails por aprobar.
+  async function seqGoApprove(id, mid) {
+    _activeSeq = id;
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; } catch { _seqApprovals = []; }
+    const pend = _seqApprovals.filter(a => a.estado === 'awaiting');
+    if (!pend.length) { showBanner('No hay emails por aprobar en esta secuencia', 'info'); return; }
+    _seqAppIdx = Math.max(0, pend.findIndex(a => a.id === mid));
+    _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;
+    openContactPage(pend[_seqAppIdx].contact_id, { seqId: id, approve: true });
+  }
+  function apRunNav(d) {
+    if (!_cpTaskCtx || !_cpTaskCtx.approve) return;
+    const pend = (_seqApprovals || []).filter(a => a.estado === 'awaiting'); if (!pend.length) return;
+    _seqAppIdx = Math.max(0, Math.min(pend.length - 1, _seqAppIdx + d));
+    openContactPage(pend[_seqAppIdx].contact_id, { seqId: _cpTaskCtx.seqId, approve: true });
+  }
+  function _cpApproveBar(cid) {
+    const pend = (_seqApprovals || []).filter(a => a.estado === 'awaiting');
+    const i = pend.findIndex(x => x.contact_id === cid), a = i >= 0 ? pend[i] : null;
+    const head = `<div class="cp-taskbar__top"><span class="cp-taskbar__ico">${NI('mail', 15)}</span><div class="cp-taskbar__ttl"><span class="cp-taskbar__t">Revisar email antes de aprobar</span></div><button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button></div>`;
+    if (!a) return `<div class="cp-taskbar cp-taskbar--slim">${head}<div class="cp-empty2" style="padding:12px">Este contacto no tiene un email pendiente de aprobar. <a href="#" onclick="LeadManagerModule.seqDoExit();return false;">Volver a Tareas</a></div></div>`;
+    _seqAppIdx = i;
+    const nav = `<div class="seq-app-nav"><div class="seq-app-nav__count"><b>${i + 1}</b> de ${pend.length} por aprobar</div><div class="seq-app-nav__arrows">
+        <button class="btn btn--ghost btn--sm" ${i <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.apRunNav(-1)">‹ Anterior</button>
+        <button class="btn btn--ghost btn--sm" ${i >= pend.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.apRunNav(1)">Siguiente ›</button></div></div>`;
+    return `<div class="cp-taskbar cp-taskbar--slim">${head}${nav}${_seqAppCard(a)}</div>`;
   }
   // Tarjeta "Revisar aceptaciones de LinkedIn" (con sello de última revisión). Se reutiliza en Tareas comerciales y en la pestaña Tareas de la secuencia.
   function _acceptCtaHtml(seqId) {
@@ -23670,7 +23693,7 @@ ${foot}
           <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
           <div class="ap-row__s">Paso día ${a.paso_dia || '?'} · sale <b>${esc(_apFmtDate(a.scheduled_at, seqId))}</b> · ${esc(a.to_email)}</div>
         </div>
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqTab('aprobar')">Revisar / editar</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${seqId},${a.id})">Revisar / editar</button>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'approve')">✓ Aprobar</button>
       </div>`;
     }).join('');
@@ -23877,6 +23900,15 @@ ${foot}
       }
       // Aprobar o descartar SIEMPRE achica la cola de "por aprobar" en ese índice — se queda
       // mostrando el que ahora ocupa ese lugar (no hace falta avanzar el índice a mano).
+      if (_cpTaskCtx && _cpTaskCtx.approve) {
+        try { _apReload(); } catch (_) {}
+        if (action === 'save') { _renderBody(); showBanner('Borrador guardado.', 'success'); return; }
+        const rest = _seqApprovals.filter(x => x.estado === 'awaiting');
+        showBanner(action === 'approve' ? 'Aprobado. Saldrá respetando el intervalo.' : 'Descartado. El contacto avanza al siguiente paso.', 'success');
+        if (rest.length) { _seqAppIdx = Math.min(_seqAppIdx, rest.length - 1); openContactPage(rest[_seqAppIdx].contact_id, { seqId: _cpTaskCtx.seqId, approve: true }); }
+        else { showBanner('Listo: no quedan emails por aprobar', 'success'); seqDoExit(); }
+        return;
+      }
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
       showBanner(action === 'approve' ? 'Aprobado. Saldrá respetando el intervalo.'
                : action === 'discard' ? 'Descartado. El contacto avanza al siguiente paso.'
@@ -24692,6 +24724,7 @@ ${foot}
   }
   function _cpTaskBar(cid) {
     if (!_cpTaskCtx) return '';
+    if (_cpTaskCtx.approve) return _cpApproveBar(cid);
     const seqId = _cpTaskCtx.seqId;
     const e = (_seqContacts || []).find(x => x.contact_id === cid);
     const steps = _seqSteps(seqId);
@@ -35453,7 +35486,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
