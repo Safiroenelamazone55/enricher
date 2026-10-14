@@ -81,7 +81,7 @@
     ['En negociación', 'In negotiation', 'In Verhandlung', 'Em negociação'],
     ['Nota o comentario', 'Note or comment', 'Notiz oder Kommentar', 'Nota ou comentário'],
     ['Próximo seguimiento', 'Next follow-up', 'Nächstes Follow-up', 'Próximo acompanhamento'],
-    ['No te recordaremos esta oportunidad hasta esa fecha.', "We won't remind you about this opportunity until that date.", 'Wir erinnern Sie bis zu diesem Datum nicht an diese Chance.', 'Não lembraremos você desta oportunidade até essa data.'],
+    ['Opcional. Si la pones, ese día te lo recordamos y hasta entonces no enviamos otros avisos; si no, usamos los plazos automáticos.', 'Optional. If set, we remind you that day and send no other alerts until then; otherwise we use the automatic schedule.', 'Optional. Wenn gesetzt, erinnern wir Sie an diesem Tag und senden bis dahin keine anderen Hinweise; sonst gilt der automatische Zeitplan.', 'Opcional. Se definida, lembramos você nesse dia e não enviamos outros avisos até lá; caso contrário, usamos os prazos automáticos.'],
     ['Guardar seguimiento', 'Save follow-up', 'Follow-up speichern', 'Salvar acompanhamento'],
     ['Notas de tu equipo', 'Notes from your team', 'Notizen Ihres Teams', 'Notas da sua equipe'],
     ['Para el', 'For', 'Für den', 'Para'],

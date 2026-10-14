@@ -737,7 +737,7 @@
       <label class="pt-seg__l">Etapa</label><select id="pt-seg-et" class="pt-seg__i"><option value="">— Sin cambios —</option>${[['propuesta', 'Propuesta enviada'], ['negociacion', 'En negociación'], ['ganado', 'Ganado'], ['perdido', 'Perdido']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
       <label class="pt-seg__l">Nota o comentario</label><textarea id="pt-seg-n" class="pt-seg__i" rows="3" maxlength="2000" placeholder="Ej. Enviamos la propuesta; quedaron en responder el viernes"></textarea>
       <label class="pt-seg__l">Próximo seguimiento</label><input type="date" id="pt-seg-sig" class="pt-seg__i" value="${sg.snooze ? String(sg.snooze).slice(0, 10) : ''}">
-      <div class="pt-item__s" style="margin:4px 0 10px">No te recordaremos esta oportunidad hasta esa fecha.</div>
+      <div class="pt-item__s" style="margin:4px 0 10px">Opcional. Si la pones, ese día te lo recordamos y hasta entonces no enviamos otros avisos; si no, usamos los plazos automáticos.</div>
       <button type="button" class="pt-btn" id="pt-seg-go" style="margin-top:0" onclick="PT.segSave(${c.id})">Guardar seguimiento</button></div>`;
   }
   S.segRes = '';

@@ -26,7 +26,8 @@ async function pending(pool, cid) {
     if (k.opp_snooze_until && new Date(k.opp_snooze_until) > now) continue;
     const dias = bizDays(k.ultimo, now);
     let kind = null;
-    if (k.deal_cierre && !k.opp_reunion_estado && new Date(k.deal_cierre) <= now && k.opp_avisos === 0) kind = 'reunion';
+    if (k.opp_snooze_until) kind = 'fecha';   // la fecha elegida por el cliente llegó: avisa ese día
+    else if (k.deal_cierre && !k.opp_reunion_estado && new Date(k.deal_cierre) <= now && k.opp_avisos === 0) kind = 'reunion';
     else if (k.opp_avisos < TH.length && dias >= TH[k.opp_avisos]) kind = k.opp_avisos === 3 ? 'cierre' : 'dias';
     if (kind) out.push({ ...k, kind, dias, nombre: [k.nombre, k.apellido].filter(Boolean).join(' ') });
   }
@@ -34,7 +35,7 @@ async function pending(pool, cid) {
 }
 
 function itemsFor(items, lang) {
-  return items.map(i => ({ kind: i.kind === 'reunion' ? 'reunion' : 'dias', nombre: i.nombre, empresa: i.empresa, dias: i.dias,
+  return items.map(i => ({ kind: i.kind === 'reunion' || i.kind === 'fecha' ? i.kind : 'dias', nombre: i.nombre, empresa: i.empresa, dias: i.dias,
     fecha: i.deal_cierre ? fmtD(i.deal_cierre, lang) : '', ultimo: fmtD(i.ultimo, lang) }));
 }
 
@@ -69,9 +70,9 @@ async function tick(pool, force) {
     }
     if (!ok) continue;
     for (const i of items) {
-      await pool.query(`UPDATE lm_contacts SET opp_avisos=opp_avisos+1 WHERE id=$1`, [i.id]);
+      await pool.query(`UPDATE lm_contacts SET opp_avisos=opp_avisos+1, opp_snooze_until=NULL WHERE id=$1`, [i.id]);
       await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'seguimiento_aviso',$4,NOW(),'hecha')`,
-        [i.user_id, i.id, c.id, i.kind === 'reunion' ? 'Aviso al cliente: confirmar si se realizó la reunión' : 'Aviso al cliente: ' + i.dias + ' días hábiles sin actividad' + (i.kind === 'cierre' ? ' (sugerir cierre / más adelante)' : '')]);
+        [i.user_id, i.id, c.id, i.kind === 'reunion' ? 'Aviso al cliente: confirmar si se realizó la reunión' : i.kind === 'fecha' ? 'Aviso al cliente: llegó la fecha de seguimiento que programó' : 'Aviso al cliente: ' + i.dias + ' días hábiles sin actividad' + (i.kind === 'cierre' ? ' (sugerir cierre / más adelante)' : '')]);
     }
   }
   return { sent };

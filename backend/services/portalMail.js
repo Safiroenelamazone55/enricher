@@ -78,16 +78,16 @@ const btn = (url, label, bg) => {
 const FU = {
   es: { title: n => n === 1 ? 'Es momento de dar seguimiento' : `Es momento de dar seguimiento a ${n} oportunidades`, intro: 'Estas oportunidades llevan días sin actividad. Entra al portal para ver el historial, registrar lo que hiciste y actualizar el estado.', cta: 'Abrir oportunidades',
     subj: (n, c) => n === 1 ? `Seguimiento pendiente — ${c}` : `${n} seguimientos pendientes — ${c}`,
-    line: i => i.kind === 'reunion' ? `La reunión fue el ${i.fecha}: ¿se realizó? Actualiza el resultado.` : `Hace ${i.dias} días fue el último movimiento (${i.ultimo}).` },
+    line: i => i.kind === 'fecha' ? 'Programaste dar seguimiento hoy.' : i.kind === 'reunion' ? `La reunión fue el ${i.fecha}: ¿se realizó? Actualiza el resultado.` : `Hace ${i.dias} días fue el último movimiento (${i.ultimo}).` },
   en: { title: n => n === 1 ? 'Time to follow up' : `Time to follow up on ${n} opportunities`, intro: 'These opportunities have had no activity for days. Open the portal to see the history, log what you did and update the status.', cta: 'Open opportunities',
     subj: (n, c) => n === 1 ? `Follow-up due — ${c}` : `${n} follow-ups due — ${c}`,
-    line: i => i.kind === 'reunion' ? `The meeting was on ${i.fecha}: did it happen? Please update the result.` : `${i.dias} days since the last activity (${i.ultimo}).` },
+    line: i => i.kind === 'fecha' ? 'You scheduled a follow-up for today.' : i.kind === 'reunion' ? `The meeting was on ${i.fecha}: did it happen? Please update the result.` : `${i.dias} days since the last activity (${i.ultimo}).` },
   de: { title: n => n === 1 ? 'Zeit für das Follow-up' : `Zeit für Follow-ups bei ${n} Chancen`, intro: 'Diese Chancen hatten seit Tagen keine Aktivität. Öffnen Sie das Portal, sehen Sie den Verlauf, tragen Sie Ihre Schritte ein und aktualisieren Sie den Status.', cta: 'Chancen öffnen',
     subj: (n, c) => n === 1 ? `Follow-up fällig — ${c}` : `${n} Follow-ups fällig — ${c}`,
-    line: i => i.kind === 'reunion' ? `Der Termin war am ${i.fecha}: hat er stattgefunden? Bitte Ergebnis eintragen.` : `Vor ${i.dias} Tagen zuletzt Aktivität (${i.ultimo}).` },
+    line: i => i.kind === 'fecha' ? 'Sie haben für heute ein Follow-up geplant.' : i.kind === 'reunion' ? `Der Termin war am ${i.fecha}: hat er stattgefunden? Bitte Ergebnis eintragen.` : `Vor ${i.dias} Tagen zuletzt Aktivität (${i.ultimo}).` },
   pt: { title: n => n === 1 ? 'Hora de fazer o acompanhamento' : `Hora de acompanhar ${n} oportunidades`, intro: 'Estas oportunidades estão há dias sem atividade. Abra o portal para ver o histórico, registrar o que fez e atualizar o status.', cta: 'Abrir oportunidades',
     subj: (n, c) => n === 1 ? `Acompanhamento pendente — ${c}` : `${n} acompanhamentos pendentes — ${c}`,
-    line: i => i.kind === 'reunion' ? `A reunião foi em ${i.fecha}: aconteceu? Atualize o resultado.` : `Há ${i.dias} dias da última atividade (${i.ultimo}).` },
+    line: i => i.kind === 'fecha' ? 'Você programou acompanhar hoje.' : i.kind === 'reunion' ? `A reunião foi em ${i.fecha}: aconteceu? Atualize o resultado.` : `Há ${i.dias} dias da última atividade (${i.ultimo}).` },
 };
 function build(kind, lang, d) {
   if (d.url && lang && lang !== 'es' && LANGS.includes(lang)) d = Object.assign({}, d, { url: d.url.replace('/portal/', '/' + lang + '/portal/') });
