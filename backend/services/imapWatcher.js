@@ -121,6 +121,25 @@ function bounceRecipients(parsed) {
 
 // ── Efectos en el CRM ────────────────────────────────────────────────
 
+// Dominios del lado de ESTE equipo (buzones conectados y el CC/remitente de cada cliente): un correo desde ahí NO es el prospecto.
+const _tdCache = new Map();
+async function _teamDomains(pool, userId) {
+  const hit = _tdCache.get(userId);
+  if (hit && Date.now() - hit.t < 60000) return hit.set;
+  const set = new Set();
+  const add = e => String(e || '').split(/[,;]/).forEach(x => { const m = x.trim().toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/); if (m) set.add(m[1]); });
+  try {
+    (await pool.query(`SELECT email FROM lm_mailboxes WHERE user_id=$1`, [userId])).rows.forEach(r => add(r.email));
+    (await pool.query(`SELECT from_email, cc_email FROM outbound_clients WHERE user_id=$1`, [userId])).rows.forEach(r => { add(r.from_email); add(r.cc_email); });
+  } catch (_) {}
+  _tdCache.set(userId, { t: Date.now(), set });
+  return set;
+}
+async function _isTeamAddr(pool, userId, addr) {
+  const m = String(addr || '').toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/);
+  return !m || (await _teamDomains(pool, userId)).has(m[1]);
+}
+
 async function _onReply(pool, mb, contact, parsed, snippet) {
   // Auto-pausa TODAS las secuencias activas del contacto (jamás seguir tras respuesta).
   // paused_reason normalizado a 'reply_received' (mismo código que usa el endpoint de
@@ -290,7 +309,15 @@ async function _checkMailbox(pool, mb) {
               if (trows[0]) {
                 const { rows: crows } = await pool.query(
                   `SELECT id, email, nombre, apellido FROM lm_contacts WHERE id=$1`, [trows[0].contact_id]);
-                if (crows[0]) { contact = crows[0]; tipo = 'equipo'; }
+                if (crows[0]) {
+                  contact = crows[0];
+                  // Responde DENTRO del hilo que Nova abrió con este contacto: si quien escribe es de fuera de tu equipo, es la RESPUESTA del
+                  // prospecto (desde otra dirección: un alias, un compañero, otro correo suyo), no un mensaje interno. Solo si es de tu lado cuenta como 'equipo'.
+                  if (tipo === 'reply' && !(await _isTeamAddr(pool, mb.user_id, fromAddr))) {
+                    // la nueva dirección queda guardada para reconocerla directamente la próxima vez
+                    await pool.query(`UPDATE lm_contacts SET email_personal=$2 WHERE id=$1 AND COALESCE(email_personal,'')='' AND LOWER(email) <> $2`, [contact.id, fromAddr]).catch(() => {});
+                  } else if (tipo !== 'ooo') tipo = 'equipo';
+                }
               }
             }
             // 2) Si no hay hilo reconocible (mensaje nuevo, no una respuesta), por
@@ -437,4 +464,4 @@ async function backfillTables(pool, days) {
   return { scanned, fixed };
 }
 
-module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables };
+module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, isTeamAddr: _isTeamAddr };
