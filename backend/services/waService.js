@@ -588,6 +588,20 @@ async function _connect(pool, id) {
     }
   });
 
+  // Recibos de entrega/lectura: en algunos chats (p. ej. números ya migrados a LID) WhatsApp NO manda 'messages.update' con el estado, solo el recibo.
+  // Sin esto el mensaje llegaba al otro lado pero Nova lo dejaba con 0 ticks ("No se envió") para siempre.
+  sock.ev.on('message-receipt.update', async (updates) => {
+    for (const u of (updates || [])) {
+      try {
+        const r = u.receipt || {};
+        const st = (r.readTimestamp || r.playedTimestamp) ? 4 : (r.receiptTimestamp ? 3 : null);
+        if (st && u.key?.id && u.key.fromMe) {
+          await pool.query(`UPDATE wa_messages SET ack=$1 WHERE connection_id=$2 AND msg_id=$3 AND ack < $1`, [st, id, u.key.id]);
+        }
+      } catch (e) { console.warn('[wa] message-receipt.update:', e.message); }
+    }
+  });
+
   return sock;
 }
 
