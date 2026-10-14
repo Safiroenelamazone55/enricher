@@ -883,7 +883,9 @@ async function _repararChat(pool, connId, jid) {
   const { rows } = await pool.query("SELECT msg_id, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND from_me AND ack=0 AND COALESCE(media_type,'')='' AND COALESCE(texto,'')<>'' AND ts > NOW() - INTERVAL '3 hours' ORDER BY ts", [connId, jid]);
   let reenviados = 0;
   for (const m of rows) {
-    try { await enviar(pool, connId, jid, m.texto); await pool.query('DELETE FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [connId, m.msg_id]); reenviados++; }
+    // Se reenvía con el MISMO id del mensaje original: WhatsApp descarta un id repetido, así que si el primero sí había llegado NO se duplica,
+    // y si no había llegado, sale ahora. Reintentar es siempre seguro (antes se mandaba como mensaje nuevo y el otro lo recibía dos o tres veces).
+    try { await sock.sendMessage(String(jid).includes('@') ? jid : `${jid}@s.whatsapp.net`, { text: m.texto }, { messageId: m.msg_id }); reenviados++; }
     catch (e) { console.warn('[wa] reenviar tras reparar:', e.message); break; }
   }
   console.log('[wa] reparación: ' + jid + ' (conexión ' + connId + '): ' + addrs.length + ' sesión(es) reiniciadas, ' + reenviados + ' mensaje(s) reenviados');
