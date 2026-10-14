@@ -3670,7 +3670,10 @@ function _lmSplitLocation(raw) {
   if (parts.length === 2) return { ciudad: parts[0], region: '', pais: parts[1] };
   const one = parts[0] || '';
   if (COUNTRIES.test(one)) return { ciudad: '', region: '', pais: one };
-  return { ciudad: one.replace(/^greater\s+/i, '').replace(/\s+(metropolitan\s+)?area$/i, '').trim() || one, region: '', pais: '' };
+  const ciudad1 = one.replace(/^greater\s+/i, '').replace(/\s+(metropolitan\s+)?area$/i, '').trim() || one;
+  // LinkedIn a veces solo da "Greater Alicante Area" (sin país): se deduce de la ciudad con la tabla de lugares.
+  let pais1 = ''; try { pais1 = require('./services/geoService').countryFromPlace(ciudad1, '') || ''; } catch (_) {}
+  return { ciudad: ciudad1, region: '', pais: pais1 };
 }
 function _lmNormDomain(raw) {
   let s = _lmS(raw).toLowerCase();
@@ -3897,10 +3900,11 @@ app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
   const b = req.body || {};
   const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
-  const { enrichableFields, enrichSource, enrichValue } = require('./services/dataCleanService');
+  const { enrichableFields, enrichSource, enrichValue, enrichUsesRow } = require('./services/dataCleanService');
   const DOMAIN_FIELDS = ['dominio', 'website'];
   const allowed = entity === 'companies' ? [...enrichableFields(entity), ...DOMAIN_FIELDS] : enrichableFields(entity);
-  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
+  // el país va antes que el idioma: el idioma se deduce del país recién calculado
+  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f)).sort((a, c) => (a === 'pais' ? -1 : 0) - (c === 'pais' ? -1 : 0));
   const apply = !!b.apply;
   if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
   if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
@@ -3910,17 +3914,19 @@ app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
   const normalFields = fields.filter(f => !domainFields.includes(f));
   const sources = [...new Set(normalFields.map(f => enrichSource(entity, f)))];
   try {
-    const selectCols = [...new Set(['id', ...normalFields, ...sources, ...domainFields])];
+    const needRow = normalFields.some(f => enrichUsesRow(entity, f));
+    const selectCols = [...new Set(['id', ...normalFields, ...sources, ...domainFields, ...(needRow ? ['ciudad', 'region', 'pais'] : [])])];
     const { rows } = await pool.query(
       `SELECT ${selectCols.join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
     const changes = [];
-    for (const row of rows) {
+    for (const row0 of rows) {
+      const row = { ...row0 };   // copia: un campo recién calculado (país) alimenta al siguiente (idioma)
       for (const field of normalFields) {
         const actual = row[field] == null ? '' : String(row[field]);
         if (actual) continue; // ya tiene algo — no se toca
         const src = row[enrichSource(entity, field)] == null ? '' : String(row[enrichSource(entity, field)]);
-        const val = enrichValue(entity, field, src);
-        if (val) changes.push({ id: row.id, campo: field, antes: '', despues: val });
+        const val = enrichValue(entity, field, src, row);
+        if (val) { changes.push({ id: row.id, campo: field, antes: '', despues: val }); row[field] = val; }
       }
     }
     if (domainFields.length) {
@@ -4150,7 +4156,7 @@ app.post('/api/lm/company-sequences/:id/select-primary', requireAuth, async (req
 });
 
 // ── Contactos (lm_contacts) ────────────────────────────────────────
-const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','analisis','notas', ...LM_CUSTOM_KEYS];
+const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','idioma','estado','fuente','contact_priority','buyer_role','analisis','notas', ...LM_CUSTOM_KEYS];
 app.get('/api/lm/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

@@ -1,4 +1,5 @@
 'use strict';
+const geo = require('./geoService');
 
 /**
  * dataCleanService.js
@@ -109,8 +110,8 @@ function cleanPhone(raw) {
 
 // field → limpiador, por entidad.
 const CLEANERS = {
-  companies: { nombre: cleanCompanyName, tamano: cleanEmployeeCount, dominio: cleanDomain, website: cleanDomain, telefono: cleanPhone },
-  contacts:  { cargo: cleanTitle, email: cleanEmail, email_personal: cleanEmail, telefono: cleanPhone, movil: cleanPhone },
+  companies: { nombre: cleanCompanyName, tamano: cleanEmployeeCount, dominio: cleanDomain, website: cleanDomain, telefono: cleanPhone, pais: geo.normalizeCountry },
+  contacts:  { cargo: cleanTitle, email: cleanEmail, email_personal: cleanEmail, telefono: cleanPhone, movil: cleanPhone, pais: geo.normalizeCountry },
 };
 
 function cleanableFields(entity) { return Object.keys(CLEANERS[entity] || {}); }
@@ -153,21 +154,33 @@ function inferDepartamento(cargo) {
 }
 // Igual que CLEANERS pero derivan un campo A PARTIR DE OTRO (no limpian el mismo
 // campo) — por eso llevan su propio nombre de campo fuente.
+// País e idioma se calculan desde la fila completa (ciudad + región + país): 'row: true' → fn(fila).
+// El idioma sale de la ubicación del CONTACTO; si el país tiene varios idiomas de negocio y la ciudad no lo
+// resuelve, queda vacío ("por revisar") en vez de adivinar.
+const _paisDeFila = r => geo.countryFromPlace(r.ciudad, r.region) || '';
+const _idiomaDeFila = r => { const l = geo.languageFor(r.pais, r.ciudad); return l.lang ? (geo.LANG_NAMES[l.lang] || l.lang) : ''; };
 const ENRICHERS = {
   contacts: {
     seniority:    { from: 'cargo', fn: inferSeniority },
     departamento: { from: 'cargo', fn: inferDepartamento },
+    pais:         { from: 'ciudad', row: true, fn: _paisDeFila },
+    idioma:       { from: 'pais', row: true, fn: _idiomaDeFila },
+  },
+  companies: {
+    pais:         { from: 'ciudad', row: true, fn: _paisDeFila },
   },
 };
 function enrichableFields(entity) { return Object.keys(ENRICHERS[entity] || {}); }
 function enrichSource(entity, field) { return (ENRICHERS[entity] || {})[field]?.from || field; }
-function enrichValue(entity, field, sourceRaw) {
+function enrichValue(entity, field, sourceRaw, row) {
   const cfg = (ENRICHERS[entity] || {})[field];
-  return cfg ? cfg.fn(sourceRaw) : sourceRaw;
+  if (!cfg) return sourceRaw;
+  return cfg.row ? cfg.fn(row || {}) : cfg.fn(sourceRaw);
 }
+function enrichUsesRow(entity, field) { return !!((ENRICHERS[entity] || {})[field] || {}).row; }
 
 module.exports = {
   cleanCompanyName, cleanTitle, cleanEmployeeCount, cleanDomain, cleanEmail, cleanPhone,
-  cleanableFields, cleanValue,
+  cleanableFields, cleanValue, enrichUsesRow,
   inferSeniority, inferDepartamento, enrichableFields, enrichSource, enrichValue,
 };

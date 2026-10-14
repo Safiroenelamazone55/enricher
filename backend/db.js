@@ -848,6 +848,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_avisos INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_snooze_until DATE`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
+    // Idioma del contacto (según su ubicación): base para mensajes por idioma en las secuencias
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS idioma TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seguimiento_avisos BOOLEAN NOT NULL DEFAULT TRUE`);
     // Registro de los correos de seguimiento enviados al cliente (qué se mandó, cuándo y a quién)
     await pool.query(`CREATE TABLE IF NOT EXISTS opp_avisos_log (

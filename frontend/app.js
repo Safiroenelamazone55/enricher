@@ -34685,8 +34685,8 @@ ${foot}
   let _dgCleanPreview = null;
   let _dgOnlyIssues = false;
   let _dgSelMode = false;
-  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil'] };
-  const DG_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
+  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono', 'pais'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil', 'pais'] };
+  const DG_ENRICH_FIELDS = { companies: ['dominio', 'website', 'pais'], contacts: ['seniority', 'departamento', 'pais', 'idioma'] };
   // ── Validación (categoría C): SOLO detecta y marca visualmente — nunca corrige
   // sola. Cada validador recibe el valor ya recortado y devuelve '' (ok) o un
   // mensaje corto explicando el problema (se muestra como tooltip en la celda).
@@ -34752,7 +34752,7 @@ ${foot}
   // (ciudad/región/país) son los del propio contacto, no los de su empresa.
   const DG_EXTRA = {
     companies: [['website', 'Sitio web'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['region', 'Región'], ['ingresos', 'Ingresos'], ['fundada', 'Fundada'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['descripcion', 'Descripción'], ['notas', 'Notas']],
-    contacts: [['ciudad', 'Ciudad (contacto)'], ['region', 'Región (contacto)'], ['pais', 'País (contacto)'], ['email_personal', 'Email personal'], ['movil', 'Móvil'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Rol de compra'], ['contact_priority', 'Prioridad'], ['fuente', 'Fuente'], ['notas', 'Notas']],
+    contacts: [['ciudad', 'Ciudad (contacto)'], ['region', 'Región (contacto)'], ['pais', 'País (contacto)'], ['idioma', 'Idioma (contacto)'], ['email_personal', 'Email personal'], ['movil', 'Móvil'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Rol de compra'], ['contact_priority', 'Prioridad'], ['fuente', 'Fuente'], ['notas', 'Notas']],
   };
   function _dgExtraKeys(entity) {
     try { const s = JSON.parse(localStorage.getItem('dg_extra_cols') || '{}'); return Array.isArray(s[entity]) ? s[entity] : []; } catch (_) { return []; }
@@ -34786,7 +34786,7 @@ ${foot}
     const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact').map(f => f.field_key);
     return DG_EDITABLE_BASE[entity].concat(_dgExtraKeys(entity), active);
   }
-  function _dgFieldLabel(field) { return (DG_COLS_FOR(_dgEntity).find(x => x[0] === field) || [field, field])[1]; }
+  function _dgFieldLabel(field) { return (DG_COLS_FOR(_dgEntity).find(x => x[0] === field) || (DG_EXTRA[_dgEntity] || []).find(x => x[0] === field) || [field, field])[1]; }
   // Nombre del registro al que pertenece un cambio — sin esto, una vista previa
   // de 30 filas solo mostraba "antes → después" sin decir DE CUÁL empresa o
   // contacto (feedback de Jenny 2026-09-04: "yo sepa que se está editando").
