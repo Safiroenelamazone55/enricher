@@ -17,7 +17,7 @@ async function pending(pool, cid) {
   const { rows } = await pool.query(`
     SELECT k.id, k.user_id, k.nombre, k.apellido, COALESCE(NULLIF(co.nombre,''),k.empresa_nombre) AS empresa, k.deal_cierre, k.opp_reunion_estado, k.opp_avisos, k.opp_snooze_until,
            GREATEST(COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.estado='hecha' AND a.tipo NOT IN ('seguimiento_aviso','disposition_change')), 'epoch'),
-                    COALESCE(k.deal_cierre::timestamptz,'epoch'), COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
+                    COALESCE(CASE WHEN k.deal_cierre <= CURRENT_DATE THEN k.deal_cierre::timestamptz END,'epoch'), COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
       FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id
      WHERE k.outbound_client_id=$1 AND COALESCE(k.estado,'') NOT IN ('ganado','perdido') AND COALESCE(k.disposition,'') <> ALL($2)
        AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.estado IN ('propuesta','negociacion'))`, [cid, CLOSED_DISPO]);
