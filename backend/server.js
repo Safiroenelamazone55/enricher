@@ -3731,6 +3731,7 @@ app.post('/api/lm/companies', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!_lmS(b.nombre) && !_lmS(b.dominio)) return res.status(400).json({ error: 'Nombre o dominio requerido' });
   try {
+    const _oldNm = ((await pool.query('SELECT nombre FROM lm_companies WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {}).nombre;
     const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
     const { rows } = await pool.query(`
       INSERT INTO lm_companies (user_id,${LM_CO_COLS.join(',')},outbound_client_id)
@@ -3739,6 +3740,18 @@ app.post('/api/lm/companies', requireAuth, async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[lm-co] POST', err.message); res.status(500).json({ error: 'Error al crear empresa' }); }
 });
+// Al cambiar el nombre de una empresa, los borradores que aún esperan aprobación (con el nombre viejo ya escrito en asunto/cuerpo) se actualizan
+// también: antes quedaban con "PA SOLÀ, S.L" aunque la empresa ya figurara como "Pa Solà". No toca lo ya enviado ni lo ya aprobado.
+async function _renameCompanyInDrafts(uid, companyId, oldName, newName) {
+  oldName = String(oldName || '').trim(); newName = String(newName || '').trim();
+  if (!oldName || !newName || oldName === newName) return 0;
+  try {
+    const r = await pool.query(`UPDATE lm_messages m SET asunto = replace(m.asunto, $4, $5), cuerpo = replace(m.cuerpo, $4, $5)
+        FROM lm_contacts k WHERE m.contact_id = k.id AND k.company_id = $1 AND m.user_id = $2 AND m.estado = 'awaiting'
+         AND (position($4 in m.asunto) > 0 OR position($4 in m.cuerpo) > 0)`, [companyId, uid, null, oldName, newName]);
+    return r.rowCount;
+  } catch (e) { console.warn('[rename-drafts]', e.message); return 0; }
+}
 app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
@@ -3751,7 +3764,7 @@ app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
     // El nombre de empresa vive duplicado en lm_contacts.empresa_nombre (snapshot de import) —
     // sin esto, editar el nombre acá dejaba desincronizados a sus contactos.
-    if (_lmS(b.nombre)) await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]);
+    if (_lmS(b.nombre)) { await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]); await _renameCompanyInDrafts(req.workspaceOwnerId, req.params.id, _oldNm, _lmS(b.nombre)); }
     res.json(rows[0]);
   } catch (err) { console.error('[lm-co] PUT', err.message); res.status(500).json({ error: 'Error al actualizar empresa' }); }
 });
@@ -3881,6 +3894,7 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
       if (entity === 'companies' && ch.campo === 'nombre') {
         const r = await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [ch.despues, uid, ch.id]);
         syncedNames += r.rowCount;
+        await _renameCompanyInDrafts(uid, ch.id, ch.antes, ch.despues);
       }
     }
     res.json({ preview: false, applied: changes.length, syncedNames, changes });
