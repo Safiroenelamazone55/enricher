@@ -27900,7 +27900,7 @@ ${foot}
     const leads = _clientLeads(id);
     const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => _dealStage(l) === s).length);
     const pipe = leads.filter(l => !['ganado', 'perdido'].includes(_dealStage(l)));
-    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'WhatsApp', 'Respuestas', 'Reportes', 'Portal', 'Notas'];
+    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'WhatsApp', 'Respuestas', 'Portal', 'Notas'];
     const tabBtns = tabs.map((t, i) => `<button class="lm-ws-tab${i === 0 ? ' active' : ''}" onclick="LeadManagerModule.clientTab(this,'${t}')">${t}</button>`).join('');
     const pipeBar = _ORDER.map(s => `<div class="lm-pipe__seg lm-pipe__seg--${s}"><span class="lm-pipe__n">${byStage[s]}</span><span class="lm-pipe__l">${STAGE_LABELS[s]}</span></div>`).join('');
     const field = (l, v) => `<div class="lm-ws-field"><span class="lm-ws-field__l">${l}</span><span class="lm-ws-field__v">${v || '—'}</span></div>`;
@@ -28279,17 +28279,48 @@ ${foot}
     const row = (r, extra) => `<div style="border-bottom:1px solid #EEF1F4;padding:9px 0;display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}${r.cargo ? ` <span style="color:#64748B;font-weight:400">· ${esc(r.cargo)}</span>` : ''}</div><div style="font-size:12px;color:#64748B">${esc(r.empresa || '')}${extra ? ' · ' + extra : ''}</div>${r.snippet ? `<div style="font-size:12px;background:#F8FAFC;border-left:3px solid #2563EB;padding:5px 8px;margin-top:4px">${esc(r.snippet)}</div>` : ''}</div>
         <input class="lm-inp" style="width:280px;flex:none" maxlength="600" placeholder="Nota visible para el cliente…" value="${esc(r.portal_nota || '')}" onchange="LeadManagerModule.portalNota(${r.contact_id},this)"></div>`;
     const dt = d => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '';
-    return `
-      ${_portalAccessCard(cid, a)}
-      ${_portalUpdatesCard(cid)}
+    const sub = (window.__portalSub && window.__portalSub[cid]) || 'accesos', cl = _clients.find(x => x.id === cid) || {};
+    const SUBS = [['accesos', 'Accesos'], ['ve', 'Qué ve el cliente'], ['avisos', 'Avisos'], ['informes', 'Informes']];
+    const nav = `<div class="pa-subtabs" style="display:flex;gap:4px;border-bottom:1px solid #E1E6EC;margin-bottom:14px">${SUBS.map(([k, l]) => `<button class="pa-subtab${sub === k ? ' on' : ''}" style="border:0;background:none;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:${sub === k ? '#0B1220' : '#64748B'};border-bottom:2px solid ${sub === k ? '#0B1220' : 'transparent'};margin-bottom:-1px" onclick="LeadManagerModule.portalSub(${cid},'${k}')">${l}</button>`).join('')}</div>`;
+    const flag = (key, on, title, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:6px 0"><input type="checkbox" ${on ? 'checked' : ''} onchange="LeadManagerModule.portalFlag(${cid},'${key}',this.checked)" style="margin-top:3px"><span><b style="font-size:13.5px">${title}</b><br><span style="font-size:12px;color:#64748B">${hint}</span></span></label>`;
+    const tzName = cl.timezone || '';
+    let body = '';
+    if (sub === 'accesos') body = `${_portalAccessCard(cid, a)}
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Logo del portal</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">El logo y colores que ve el cliente arriba en su portal y en los correos.</div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalLogoOpen(${cid})">Editar logo</button></div>`;
+    else if (sub === 've') body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Secciones y tareas</div>
+        ${flag('portal_tareas', cl.portal_tareas, 'Mostrar el progreso de tareas', 'Apagado por defecto. Verá «Trabajo de la semana» solo con las tareas que marques como visibles (sin horas ni costos).')}
+        <div style="font-size:12px;color:#64748B;margin-top:6px">Qué secciones ve cada persona se define por usuario en <a href="#" onclick="LeadManagerModule.portalSub(${cid},'accesos');return false;">Accesos › Qué ve</a>.</div></div>
       ${_portalKpisCard(cid)}
-      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
-        <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
-        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
-        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Señales positivas por convertir (${h.positive_pending.filter(r => !r.neutral).length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna.</div>'}
-      </div>
-      <div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación, con fotos y archivos.</div>
+      ${_portalUpdatesCard(cid)}
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Puesta en marcha (Fase 0)</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Checklist de arranque que el cliente puede seguir en su portal.</div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.suOpen(${cid})">Editar puesta en marcha</button></div>
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto</span></div>
+        <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin reuniones próximas</div>'}
+        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas</div>'}
+        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Señales positivas por convertir (${h.positive_pending.filter(r => !r.neutral).length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Nada pendiente</div>'}
       </div>`;
+    else if (sub === 'avisos') body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Recordatorios de seguimiento de oportunidades</div>
+        ${flag('seguimiento_avisos', cl.seguimiento_avisos !== false, 'Avisar al cliente por correo cuando toque dar seguimiento', 'Cuando una reunión pasó sin resultado, o una oportunidad lleva días sin actividad (3, 7 y 14 días hábiles), o llega la fecha que el cliente programó. El correo sale en el idioma de cada usuario y solo en su horario laboral (8–17 h).')}
+        <div style="font-size:12.5px;margin:10px 0 4px"><b>Zona horaria del cliente:</b> ${tzName ? esc(tzName) : 'sin definir (se usa Nueva York)'} · <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">cambiar en Editar cliente</a></div>
+        <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver el correo que recibiría</button></div></div>`;
+    else body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informe semanal</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Resumen por correo con los resultados de la semana: destinatarios, idioma, nota y envío programado.</div><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportOpen(${cid})">Abrir informe semanal</button></div>
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informes de campaña y secuencia</div><div class="cp-empty2" style="padding:6px 0;text-align:left">En pausa: el portal del cliente ya muestra estos datos en vivo.</div></div>`;
+    return nav + body + `<div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación.</div></div>`;
+  }
+  function portalSub(cid, sub) { window.__portalSub = window.__portalSub || {}; window.__portalSub[cid] = sub; const st = window.__portalState, box = _portalBox(); if (st && box) box.innerHTML = _portalHtml(cid, st.a, st.h); }
+  async function portalFlag(cid, key, on) {
+    try {
+      const r = await apiFetch(`${API}/outbound-clients/${cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: !!on }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const c = _clients.find(x => x.id === cid); if (c) c[key] = !!on;
+    } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); portalSub(cid, (window.__portalSub || {})[cid] || 'accesos'); }
+  }
+  async function portalPreviewAviso(cid) {
+    try {
+      const r = await apiFetch(`${API}/portal/admin/followup-preview?client=${cid}&format=html`);
+      if (!r.ok) throw new Error('Error');
+      const w = window.open(URL.createObjectURL(new Blob([await r.text()], { type: 'text/html' })), '_blank');
+      if (!w) showBanner('El navegador bloqueó la ventana', 'error');
+    } catch (e) { showBanner('No se pudo generar la vista previa', 'error'); }
   }
   // Qué KPIs ve cada cliente en su portal ("Esta semana"): se elige aquí, por cliente.
   const _PORTAL_KPI_OPTS = [['contacted', 'Contactos alcanzados'], ['replies', 'Respuestas'], ['meetings', 'Oportunidades'], ['touches', 'Toques realizados'], ['accept', 'Aceptación LinkedIn'], ['opens', 'Apertura de emails'], ['clicks', 'Clics']];
@@ -28745,12 +28776,7 @@ ${foot}
       + item(mbYa ? 'Editar buzón' : 'Conectar buzón', `LeadManagerModule.mbManageOpen(${id})`)
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
-      + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
-      + item('Puesta en marcha', `LeadManagerModule.suOpen(${id})`)
-      + item('Informe semanal', `LeadManagerModule.reportOpen(${id})`)
-      + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
-      + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>`
-      + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de secuencia <span class="cp-off__tag">En pausa</span></button>`
+      + item('Portal del cliente', `LeadManagerModule.openClient(${id});setTimeout(()=>LeadManagerModule._clientGoTab('Portal'),80)`)
       + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
@@ -30819,12 +30845,10 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>${c ? 'Editar cliente outbound' : 'Nuevo cliente outbound'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeClientDrawer()">✕</button></div>
       <div class="fin-pi-form">
         ${fld('obc-nombre', 'Nombre del cliente *', c?.nombre, 'Ej. Tent Softlab', true)}
-        <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="obc-ptareas"${c?.portal_tareas ? ' checked' : ''}><span><b>Mostrar al cliente el progreso de tareas en su portal</b><br><span class="seq-drip-hint">Apagado por defecto. Verá «Trabajo de la semana» solo con las tareas que marques como visibles (sin horas ni costos).</span></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="obc-estado">${_OBC_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-abrev', 'Abreviatura (para los códigos de campaña, ej. GRE)', c?.abrev, 'Se genera sola si la dejas vacía')}
         ${fld('obc-website', 'Website', c?.website, '')}
-        <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="obc-segavisos"${c?.seguimiento_avisos === false ? '' : ' checked'}><span><b>Avisar al cliente por correo cuando toque dar seguimiento a una oportunidad</b> <span class="seq-drip-hint">(reunión sin resultado, o días sin actividad; en su zona horaria)</span></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del cliente</span><select class="form-input" id="obc-tz"><option value="">— Sin definir (usa Nueva York) —</option>${[['America/New_York', 'EE. UU. Este (New York)'], ['America/Chicago', 'EE. UU. Centro (Chicago)'], ['America/Denver', 'EE. UU. Montaña (Denver)'], ['America/Los_Angeles', 'EE. UU. Pacífico (Los Ángeles)'], ['America/Lima', 'Lima'], ['America/Bogota', 'Bogotá'], ['America/Mexico_City', 'Ciudad de México'], ['America/Santiago', 'Santiago'], ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Sao_Paulo', 'São Paulo'], ['Europe/London', 'Londres'], ['Europe/Madrid', 'Madrid'], ['Europe/Berlin', 'Berlín']].map(([v, l]) => `<option value="${v}"${c?.timezone === v ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="seq-drip-hint">Se usa para enviarle los avisos de seguimiento en su horario laboral (8–17 h).</span></label>
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
@@ -30878,7 +30902,6 @@ ${foot}
       website: $('obc-website')?.value.trim() || '', mercado: c0?.mercado || '',
       from_email: $('obc-from')?.value.trim() || '', cc_email: $('obc-cc')?.value.trim() || '',
       timezone: $('obc-tz')?.value || '',
-      seguimiento_avisos: !!$('obc-segavisos')?.checked,
       icp: c0?.icp || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
       notas: c0?.notas || '',
       li_cargo: $('obc-li-cargo')?.value.trim() || '',
@@ -30889,7 +30912,7 @@ ${foot}
     try {
       const res = await apiFetch(`${API}/outbound-clients${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
-      { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = { portal_tareas: !!$('obc-ptareas')?.checked }; { const _ab = ($('obc-abrev')?.value || '').trim(); if (_ab || c0?.abrev) _x.abrev = _ab; } if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
+      { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = {}; { const _ab = ($('obc-abrev')?.value || '').trim(); if (_ab || c0?.abrev) _x.abrev = _ab; } if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
       closeClientDrawer();
       await load();
     } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
@@ -35223,7 +35246,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgColsMenu, dgToggleExtraCol, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    reportPause, reportSkip, openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    reportPause, reportSkip, openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalSub, portalFlag, portalPreviewAviso, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

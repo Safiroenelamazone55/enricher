@@ -3069,6 +3069,7 @@ app.patch('/api/outbound-clients/:id/extra', requireAuth, async (req, res) => {
   try {
     const b = req.body || {}, sets = [], vals = [];
     if (b.portal_tareas !== undefined) { vals.push(!!b.portal_tareas); sets.push('portal_tareas=$' + vals.length); }
+    if (b.seguimiento_avisos !== undefined) { vals.push(!!b.seguimiento_avisos); sets.push('seguimiento_avisos=$' + vals.length); }
     if (b.client_id !== undefined) { vals.push(b.client_id ? parseInt(b.client_id) : null); sets.push('client_id=$' + vals.length); }
     if (b.abrev !== undefined) {
       const ab = String(b.abrev || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
@@ -3077,7 +3078,7 @@ app.patch('/api/outbound-clients/:id/extra', requireAuth, async (req, res) => {
     }
     if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
     vals.push(req.params.id, req.workspaceOwnerId);
-    const { rows } = await pool.query('UPDATE outbound_clients SET ' + sets.join(',') + ' WHERE id=$' + (vals.length - 1) + ' AND user_id=$' + vals.length + ' RETURNING id, portal_tareas, client_id, abrev', vals);
+    const { rows } = await pool.query('UPDATE outbound_clients SET ' + sets.join(',') + ' WHERE id=$' + (vals.length - 1) + ' AND user_id=$' + vals.length + ' RETURNING id, portal_tareas, seguimiento_avisos, client_id, abrev', vals);
     if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
