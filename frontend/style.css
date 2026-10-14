@@ -18219,3 +18219,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .tp-newp__it small{font-size:.72rem;color:#8a867f}
 .tp-newp__it:hover{background:#EEF4FF}
 .tp-newp__none{padding:9px 11px;font-size:.78rem;color:#8a867f}
+
+/* Texto largo colapsable en la ficha de empresa (descripción / análisis / notas) */
+.cp-clamp--on { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-more { align-self: flex-start; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--primary, #00804C); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.cp-more:hover { text-decoration: underline; }

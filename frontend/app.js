@@ -34077,7 +34077,16 @@ ${foot}
   }
   function _coInfoRow(label, val, href) {
     if (!val) return '';
-    return `<div class="cp-f"><span class="cp-f__l">${label}</span><div class="cp-f__i" style="border:none;padding:0;background:transparent">${href ? `<a href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a>` : esc(val)}</div></div>`;
+    const url = href ? (/^https?:\/\//i.test(val) ? val : 'https://' + String(val).replace(/^\/+/, '')) : '';
+    const shown = href ? String(val).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '') : val;
+    return `<div class="cp-f"><span class="cp-f__l">${label}</span><div class="cp-f__i" style="border:none;padding:0;background:transparent">${href ? `<a href="${esc(url)}" target="_blank" rel="noopener" style="word-break:break-all">${esc(shown)}</a>` : esc(val)}</div></div>`;
+  }
+  function _urlFix(u) { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); }
+  // Texto largo (descripción, análisis, notas) recogido a unas líneas con "Ver más" — evita una tarjeta kilométrica.
+  function _coClampField(label, text) {
+    if (!text) return '';
+    const long = String(text).length > 220 || String(text).split('\n').length > 3;
+    return `<div class="cp-f cp-f--full"><span class="cp-f__l">${label}</span><div class="cp-clamp${long ? ' cp-clamp--on' : ''}" style="white-space:pre-wrap;word-break:break-word">${esc(text)}</div>${long ? `<button type="button" class="cp-more" onclick="var d=this.previousElementSibling;d.classList.toggle('cp-clamp--on');this.textContent=d.classList.contains('cp-clamp--on')?'Ver más ▾':'Ver menos ▴'">Ver más ▾</button>` : ''}</div>`;
   }
   function _vCompanyPage(id) {
     const c = (_companies || []).find(x => x.id === id);
@@ -34118,14 +34127,15 @@ ${foot}
         <div class="cp-actions">
           <button class="cp-act" onclick="LeadManagerModule.openCompany(${id})">✎ Editar</button>
           <button class="cp-act" onclick="LeadManagerModule.openContact(null,${id})">＋ Prospecto</button>
-          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
-          ${c.website ? `<a class="cp-act" href="${esc(c.website)}" target="_blank" rel="noopener">Sitio web ›</a>` : ''}
+          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(_urlFix(c.linkedin))}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
+          ${c.website ? `<a class="cp-act" href="${esc(_urlFix(c.website))}" target="_blank" rel="noopener">Sitio web ›</a>` : ''}
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.deleteCompany(${id},1)">Eliminar</button>
         </div>
       </div>
       <div class="cp-grid">
         <div class="cp-left">
           <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
+            ${_coInfoRow('Dominio', c.dominio)}${_coInfoRow('Sitio web', c.website, 1)}${_coInfoRow('LinkedIn', c.linkedin, 1)}${_coInfoRow('Sales Navigator', c.linkedin_sales_nav, 1)}
             ${_coInfoRow('Industria', c.industria)}${_coInfoRow('Nº empleados', c.tamano)}${_coInfoRow('Ingresos anuales', c.ingresos)}
             ${_coInfoRow('Ciudad', c.ciudad)}${_coInfoRow('Región', c.region)}${_coInfoRow('País', c.pais)}
             ${_coInfoRow('Teléfono', c.telefono)}${_coInfoRow('Año fundación', c.fundada)}${_coInfoRow('Funding', c.funding)}
@@ -34134,9 +34144,9 @@ ${foot}
             ${_lmActiveCustomFields('company').map(f => _coInfoRow(f.label, c[f.field_key])).join('')}
           </div></div>
           ${(c.descripcion || c.analisis || c.notas) ? `<div class="cp-card"><div class="cp-card__t">Notas</div><div class="cp-fields">
-            ${c.descripcion ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Descripción</span><div>${esc(c.descripcion)}</div></div>` : ''}
-            ${c.analisis ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Análisis · por qué calificó</span><div style="white-space:pre-wrap;word-break:break-word">${esc(c.analisis)}</div></div>` : ''}
-            ${c.notas ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Notas</span><div style="white-space:pre-wrap;word-break:break-word">${esc(c.notas)}</div></div>` : ''}
+            ${_coClampField('Descripción', c.descripcion)}
+            ${_coClampField('Análisis · por qué calificó', c.analisis)}
+            ${_coClampField('Notas', c.notas)}
           </div></div>` : ''}
         </div>
         <div class="cp-right">
