@@ -732,12 +732,12 @@
     const et = String(c.etapa || '').toLowerCase();
     const RB = [['realizada', 'Se realizó'], ['no_asistio', 'No asistió'], ['reprogramada', 'Se reprogramó']];
     return `<div class="pt-seg"><h3 class="pt-dr__s" style="margin-top:0">Seguimiento</h3>
-      ${asks ? `<div class="pt-seg__q"><b>¿Se realizó la reunión del ${dlong(d.deal.fecha)}?</b><div class="pt-seg__b">${RB.map(([v, l]) => `<button type="button" class="pt-seg__o${S.segRes === v ? ' on' : ''}" onclick="PT.segRes('${v}')">${l}</button>`).join('')}</div>
-        <div id="pt-seg-nf" style="display:${S.segRes === 'reprogramada' ? 'block' : 'none'};margin-top:8px"><label class="pt-seg__l">Nueva fecha</label><input type="date" id="pt-seg-nf-i" class="pt-seg__i"></div></div>` : (sg.reunion ? `<div class="pt-item__s" style="margin-bottom:8px">Reunión: <b>${esc({ realizada: 'realizada', no_asistio: 'no asistió', reprogramada: 'reprogramada' }[sg.reunion] || sg.reunion)}</b></div>` : '')}
+      ${asks ? `<div class="pt-seg__q"><b>¿Se realizó la reunión?</b> <span class="pt-item__s" style="display:inline">${dlong(d.deal.fecha)}</span><div class="pt-seg__b">${RB.map(([v, l]) => `<button type="button" class="pt-seg__o${S.segRes === v ? ' on' : ''}" onclick="PT.segRes('${v}')">${l}</button>`).join('')}</div>
+        <div id="pt-seg-nf" style="display:${S.segRes === 'reprogramada' ? 'block' : 'none'};margin-top:8px"><label class="pt-seg__l">Nueva fecha</label><input type="date" id="pt-seg-nf-i" class="pt-seg__i"></div></div>` : (sg.reunion ? `<div class="pt-item__s" style="margin-bottom:8px"><b>${{ realizada: 'Reunión realizada', no_asistio: 'Reunión: no asistió', reprogramada: 'Reunión reprogramada' }[sg.reunion] || ''}</b></div>` : '')}
       <label class="pt-seg__l">Etapa</label><select id="pt-seg-et" class="pt-seg__i"><option value="">— Sin cambios —</option>${[['propuesta', 'Propuesta enviada'], ['negociacion', 'En negociación'], ['ganado', 'Ganado'], ['perdido', 'Perdido']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
       <label class="pt-seg__l">Nota o comentario</label><textarea id="pt-seg-n" class="pt-seg__i" rows="3" maxlength="2000" placeholder="Ej. Enviamos la propuesta; quedaron en responder el viernes"></textarea>
-      <label class="pt-seg__l">Próximo seguimiento</label><input type="date" id="pt-seg-sig" class="pt-seg__i" value="${sg.snooze ? String(sg.snooze).slice(0, 10) : ''}">
-      <div class="pt-item__s" style="margin:4px 0 10px">Opcional. Si la pones, ese día te lo recordamos y hasta entonces no enviamos otros avisos; si no, usamos los plazos automáticos.</div>
+      <label class="pt-seg__l">Próximo seguimiento (opcional)</label><input type="date" id="pt-seg-sig" class="pt-seg__i" value="${sg.snooze ? String(sg.snooze).slice(0, 10) : ''}">
+      <div class="pt-item__s" style="margin:4px 0 10px">Te enviaremos recordatorios de seguimiento a tu correo automáticamente. Si prefieres elegir el día, indícalo aquí: ese día te avisamos y hasta entonces no enviamos otros.</div>
       <button type="button" class="pt-btn" id="pt-seg-go" style="margin-top:0" onclick="PT.segSave(${c.id})">Guardar seguimiento</button></div>`;
   }
   S.segRes = '';
@@ -745,11 +745,11 @@
   window.PT.segSave = async id => {
     const g = i => { const e = document.getElementById(i); return e ? e.value : ''; };
     const body = { reunion_estado: S.segRes || undefined, nueva_fecha: g('pt-seg-nf-i') || undefined, etapa: g('pt-seg-et') || undefined, nota: g('pt-seg-n'), siguiente: g('pt-seg-sig') };
-    if (S.segRes === 'reprogramada' && !body.nueva_fecha) { alert('Indica la nueva fecha'); return; }
-    if (!S.segRes && !body.etapa && !body.nota.trim() && !body.siguiente) { alert('Agrega una nota, cambia la etapa o fija una fecha'); return; }
-    const b = document.getElementById('pt-seg-go'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
+    if (S.segRes === 'reprogramada' && !body.nueva_fecha) { alert(PT_I18N.t('Indica la nueva fecha')); return; }
+    if (!S.segRes && !body.etapa && !body.nota.trim() && !body.siguiente) { alert(PT_I18N.t('Agrega una nota, cambia la etapa o fija una fecha')); return; }
+    const b = document.getElementById('pt-seg-go'); if (b) { b.disabled = true; b.textContent = PT_I18N.t('Guardando…'); }
     try { await api('/portal/contact/' + id + '/seguimiento', { method: 'POST', body: JSON.stringify(body) }); S.segRes = ''; await drLoadContact(id); drPaint(); load(true); }
-    catch (e) { alert(e.message || 'No se pudo guardar'); drPaint(); }
+    catch (e) { alert(PT_I18N.t(e.message || 'No se pudo guardar')); drPaint(); }
   };
   function drBody() {
     const D = S.dr;
