@@ -20,7 +20,7 @@ async function pending(pool, cid) {
                     COALESCE(CASE WHEN k.deal_cierre <= CURRENT_DATE THEN k.deal_cierre::timestamptz END,'epoch'), COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
       FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id
      WHERE k.outbound_client_id=$1 AND COALESCE(k.estado,'') NOT IN ('ganado','perdido') AND COALESCE(k.disposition,'') <> ALL($2)
-       AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.estado IN ('propuesta','negociacion'))`, [cid, CLOSED_DISPO]);
+       AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.estado IN ('propuesta','negociacion'))`, [cid, CLOSED_DISPO]);
   const now = new Date(), out = [];
   for (const k of rows) {
     if (k.opp_snooze_until && new Date(k.opp_snooze_until) > now) continue;
