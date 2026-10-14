@@ -9276,6 +9276,29 @@ app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) =
 // siempre: todo el borrador de una vez, y lo marca 'promovido'.
 // Cada dato extra investigado en Cantera pasa a un campo personalizado de la EMPRESA (Configuración → Campos personalizados):
 // reutiliza el slot que ya tenga ese nombre o toma el primero libre y lo nombra. "No verificado" nunca pasa al CRM.
+// Todos los datos de la empresa de Cantera → columnas de lm_companies (ubicación partida en ciudad/región/país, la razón del tier como
+// descripción, el análisis completo con su evidencia, y la procedencia/confianza/prioridad en notas). Pedido 2026-10-14: antes pasaban solo 8 campos.
+function _canteraCoData(co, batch) {
+  const nm = String(co.nota_manual || '');
+  const sec = re => { const m = nm.match(re); return m ? m[1].trim() : ''; };
+  const razon = sec(/^Raz[oó]n:\s*(.+)$/m), nota = sec(/^Nota:\s*(.+)$/m);
+  const ev = (Array.isArray(co.evidencia) ? co.evidencia : []).map(e => `${e.fuente}: ${e.resumen}`).join(' · ');
+  const loc = _lmSplitLocation(co.ubicacion || '');
+  const head = `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}` + (co.prioridad ? ` · prioridad ${co.prioridad}` : '') + (co.puntaje != null ? ` · puntaje ${co.puntaje}` : '');
+  return {
+    ciudad: co.ciudad || loc.ciudad || '', region: loc.region || '', pais: co.pais || loc.pais || '',
+    tamano: co.tamano || '', descripcion: razon,
+    analisis: [nm.trim(), ev].filter(Boolean).join('\n\n'),
+    notas: head + (nota ? '\n' + nota : ''),
+    website: co.website || '', industria: co.industria || '', linkedin: co.linkedin || '', target_tier: co.tier_clave || '',
+  };
+}
+// Rellena SOLO lo que está vacío en la empresa del CRM (nunca pisa lo que ya se editó a mano).
+async function _fillCoFromCantera(cl, uid, coId, d) {
+  const cols = ['ciudad', 'region', 'pais', 'tamano', 'descripcion', 'analisis', 'notas', 'website', 'industria', 'linkedin', 'target_tier'];
+  const sets = cols.map((c, i) => `${c} = CASE WHEN COALESCE(${c},'') = '' THEN $${i + 3} ELSE ${c} END`).join(', ');
+  await cl.query(`UPDATE lm_companies SET ${sets}, updated_at = NOW() WHERE id=$1 AND user_id=$2`, [coId, uid, ...cols.map(c => d[c] || '')]);
+}
 async function _promoteDatosExtra(cl, uid, coId, datos) {
   try {
     const entries = Object.entries(datos || {}).filter(([, v]) => String(v || '').trim() && !/^no verificado\b/i.test(String(v).trim()));
@@ -9334,14 +9357,15 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       if (existing) {
         coId = existing.id;
       } else {
-        const ev = (co.evidencia || []).map(e => `${e.fuente}: ${e.resumen}`).join(' · ');
+        const dd = _canteraCoData(co, batch);
         const ins = await cl.query(`
-          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,pais,target_tier,analisis,outbound_client_id,notas)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
-        `, [uid, co.nombre, dominio, co.website, co.industria, co.tamano, co.linkedin, co.ciudad, co.pais, co.tier_clave,
-            ev, outboundClientId, `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}`]);
+          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,region,pais,target_tier,analisis,descripcion,outbound_client_id,notas)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id
+        `, [uid, co.nombre, dominio, dd.website, dd.industria, dd.tamano, dd.linkedin, dd.ciudad, dd.region, dd.pais, dd.target_tier,
+            dd.analisis, dd.descripcion, outboundClientId, dd.notas]);
         coId = ins.rows[0].id;
       }
+      if (existing) await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
@@ -9455,14 +9479,15 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
       if (existing) {
         coId = existing.id;
       } else {
-        const ev = (co.evidencia || []).map(e => `${e.fuente}: ${e.resumen}`).join(' · ');
+        const dd = _canteraCoData(co, batch);
         const ins = await cl.query(`
-          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,pais,target_tier,analisis,outbound_client_id,notas)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
-        `, [uid, co.nombre, dominio, co.website, co.industria, co.tamano, co.linkedin, co.ciudad, co.pais, co.tier_clave,
-            ev, outboundClientId, `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}`]);
+          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,region,pais,target_tier,analisis,descripcion,outbound_client_id,notas)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id
+        `, [uid, co.nombre, dominio, dd.website, dd.industria, dd.tamano, dd.linkedin, dd.ciudad, dd.region, dd.pais, dd.target_tier,
+            dd.analisis, dd.descripcion, outboundClientId, dd.notas]);
         coId = ins.rows[0].id;
       }
+      if (existing) await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;

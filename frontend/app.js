@@ -34130,11 +34130,13 @@ ${foot}
             ${_coInfoRow('Ciudad', c.ciudad)}${_coInfoRow('Región', c.region)}${_coInfoRow('País', c.pais)}
             ${_coInfoRow('Teléfono', c.telefono)}${_coInfoRow('Año fundación', c.fundada)}${_coInfoRow('Funding', c.funding)}
             ${_coInfoRow('Target Tier / Focus', c.target_tier)}${_coInfoRow('Segmento / ICP', c.segmento)}
+            ${_coInfoRow('Dirección', c.direccion)}${_coInfoRow('Código postal', c.codigo_postal)}${_coInfoRow('Tecnologías', c.tecnologias)}
+            ${_lmActiveCustomFields('company').map(f => _coInfoRow(f.label, c[f.field_key])).join('')}
           </div></div>
           ${(c.descripcion || c.analisis || c.notas) ? `<div class="cp-card"><div class="cp-card__t">Notas</div><div class="cp-fields">
             ${c.descripcion ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Descripción</span><div>${esc(c.descripcion)}</div></div>` : ''}
-            ${c.analisis ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Análisis · por qué calificó</span><div>${esc(c.analisis)}</div></div>` : ''}
-            ${c.notas ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Notas</span><div>${esc(c.notas)}</div></div>` : ''}
+            ${c.analisis ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Análisis · por qué calificó</span><div style="white-space:pre-wrap;word-break:break-word">${esc(c.analisis)}</div></div>` : ''}
+            ${c.notas ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Notas</span><div style="white-space:pre-wrap;word-break:break-word">${esc(c.notas)}</div></div>` : ''}
           </div></div>` : ''}
         </div>
         <div class="cp-right">
