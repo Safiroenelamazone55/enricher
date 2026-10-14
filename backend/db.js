@@ -843,6 +843,11 @@ async function initDb() {
     // en sendEngine.js.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa_paso INTEGER NOT NULL DEFAULT 0;`);
+    // Seguimiento de oportunidades (el cliente hace el seguimiento; Nova le avisa): resultado de la reunión, avisos enviados y pausa.
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_reunion_estado TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_avisos INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_snooze_until DATE`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
     // Estado 'completada': la secuencia terminó su trabajo (distinto de 'archivada', que es sacarla de la lista).
     await pool.query(`ALTER TABLE sequences DROP CONSTRAINT IF EXISTS sequences_estado_check;`);
     await pool.query(`ALTER TABLE sequences ADD CONSTRAINT sequences_estado_check CHECK (estado IN ('draft','activa','pausada','completada','archivada'));`);

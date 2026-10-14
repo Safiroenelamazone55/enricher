@@ -2877,6 +2877,7 @@ async function _slackReconcileTick() {
 }
 setTimeout(_slackReconcileTick, 60 * 1000);
 setInterval(_slackReconcileTick, 10 * 60 * 1000);
+try { require('./services/oppWatcher').start(pool); } catch (e) { console.warn('[opp-watcher] start', e.message); }
 app.post('/api/mgmt/projects/:id/slack', requireAuth, async (req, res) => {
   try {
     const { rows: [p] } = await pool.query('SELECT id, client_id, nombre, slack_channel_id FROM projects WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
@@ -3567,6 +3568,7 @@ app.post('/api/outbound-clients', requireAuth, async (req, res) => {
     `, [req.workspaceOwnerId, b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
         b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', _lmS(b.from_email), _lmS(b.cc_email),
         _lmS(b.li_cargo), _lmS(b.li_empresa), _lmS(b.li_que_hace)]);
+    if (b.timezone) { await pool.query('UPDATE outbound_clients SET timezone=$1 WHERE id=$2', [String(b.timezone).slice(0, 60), rows[0].id]); rows[0].timezone = String(b.timezone).slice(0, 60); }
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[obc] POST error:', err.message);
@@ -3594,6 +3596,7 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
     `, [b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
         b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', _lmS(b.from_email), _lmS(b.cc_email),
         _lmS(b.li_cargo), _lmS(b.li_empresa), _lmS(b.li_que_hace), req.params.id, req.workspaceOwnerId]);
+    if (rows.length && b.timezone !== undefined) { rows[0].timezone = String(b.timezone || '').slice(0, 60); await pool.query('UPDATE outbound_clients SET timezone=$1 WHERE id=$2', [rows[0].timezone, rows[0].id]); }
     if (!rows.length) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
     res.json(rows[0]);
   } catch (err) {

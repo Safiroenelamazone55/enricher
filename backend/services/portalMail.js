@@ -75,9 +75,30 @@ const btn = (url, label, bg) => {
 };
 
 // kind: 'invite' | 'reset' | 'code'; d: { nombre, cliente, to, pw, code, url, brand }
+const FU = {
+  es: { title: n => n === 1 ? 'Es momento de dar seguimiento' : `Es momento de dar seguimiento a ${n} oportunidades`, intro: 'Estas oportunidades llevan días sin actividad. Entra al portal para ver el historial, registrar lo que hiciste y actualizar el estado.', cta: 'Abrir oportunidades',
+    subj: (n, c) => n === 1 ? `Seguimiento pendiente — ${c}` : `${n} seguimientos pendientes — ${c}`,
+    line: i => i.kind === 'reunion' ? `La reunión fue el ${i.fecha}: ¿se realizó? Actualiza el resultado.` : `Hace ${i.dias} días fue el último movimiento (${i.ultimo}).` },
+  en: { title: n => n === 1 ? 'Time to follow up' : `Time to follow up on ${n} opportunities`, intro: 'These opportunities have had no activity for days. Open the portal to see the history, log what you did and update the status.', cta: 'Open opportunities',
+    subj: (n, c) => n === 1 ? `Follow-up due — ${c}` : `${n} follow-ups due — ${c}`,
+    line: i => i.kind === 'reunion' ? `The meeting was on ${i.fecha}: did it happen? Please update the result.` : `${i.dias} days since the last activity (${i.ultimo}).` },
+  de: { title: n => n === 1 ? 'Zeit für das Follow-up' : `Zeit für Follow-ups bei ${n} Chancen`, intro: 'Diese Chancen hatten seit Tagen keine Aktivität. Öffnen Sie das Portal, sehen Sie den Verlauf, tragen Sie Ihre Schritte ein und aktualisieren Sie den Status.', cta: 'Chancen öffnen',
+    subj: (n, c) => n === 1 ? `Follow-up fällig — ${c}` : `${n} Follow-ups fällig — ${c}`,
+    line: i => i.kind === 'reunion' ? `Der Termin war am ${i.fecha}: hat er stattgefunden? Bitte Ergebnis eintragen.` : `Vor ${i.dias} Tagen zuletzt Aktivität (${i.ultimo}).` },
+  pt: { title: n => n === 1 ? 'Hora de fazer o acompanhamento' : `Hora de acompanhar ${n} oportunidades`, intro: 'Estas oportunidades estão há dias sem atividade. Abra o portal para ver o histórico, registrar o que fez e atualizar o status.', cta: 'Abrir oportunidades',
+    subj: (n, c) => n === 1 ? `Acompanhamento pendente — ${c}` : `${n} acompanhamentos pendentes — ${c}`,
+    line: i => i.kind === 'reunion' ? `A reunião foi em ${i.fecha}: aconteceu? Atualize o resultado.` : `Há ${i.dias} dias da última atividade (${i.ultimo}).` },
+};
 function build(kind, lang, d) {
   if (d.url && lang && lang !== 'es' && LANGS.includes(lang)) d = Object.assign({}, d, { url: d.url.replace('/portal/', '/' + lang + '/portal/') });
   const L = T[LANGS.includes(lang) ? lang : 'es'], c = esc(d.cliente), brand = d.brand || {};
+  if (kind === 'followup') {
+    const F = FU[LANGS.includes(lang) ? lang : 'es'];
+    const rows = (d.items || []).map(i => `<tr><td style="padding:10px 0;border-bottom:1px solid #E1E6EC"><div style="font-size:14.5px;font-weight:700;color:#0F172A">${esc(i.nombre)}${i.empresa ? ' · ' + esc(i.empresa) : ''}</div><div style="font-size:13px;color:#475569;margin-top:2px">${esc(F.line(i))}</div></td></tr>`).join('');
+    const inner = `<h1 style="margin:0 0 12px;font-size:21px">${F.title(d.items.length)}</h1><p style="margin:0 0 14px;font-size:14.5px;line-height:1.6;color:#334155">${F.intro}</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px">${rows}</table>${btn(d.url, F.cta, brand.bg)}`;
+    return { subject: F.subj(d.items.length, d.cliente), html: shell(brand, inner, L, d.cliente), text: d.items.map(i => '- ' + i.nombre + ': ' + F.line(i)).join(String.fromCharCode(10)) + String.fromCharCode(10) + d.url };
+  }
   if (kind === 'code') {
     const inner = `<h1 style="margin:0 0 12px;font-size:22px">${L.codeTitle}</h1><p style="margin:0 0 20px;font-size:14.5px;line-height:1.6;color:#334155">${L.codeBody(c)}</p>
       <div style="background:#F6F8FB;border:1px solid #E1E6EC;padding:18px;text-align:center;font:800 34px 'Courier New',monospace;letter-spacing:9px;color:#0F172A;margin-bottom:22px">${esc(d.code)}</div>`;

@@ -30824,6 +30824,7 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-abrev', 'Abreviatura (para los códigos de campaña, ej. GRE)', c?.abrev, 'Se genera sola si la dejas vacía')}
         ${fld('obc-website', 'Website', c?.website, '')}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del cliente</span><select class="form-input" id="obc-tz"><option value="">— Sin definir (usa Nueva York) —</option>${[['America/New_York', 'EE. UU. Este (New York)'], ['America/Chicago', 'EE. UU. Centro (Chicago)'], ['America/Denver', 'EE. UU. Montaña (Denver)'], ['America/Los_Angeles', 'EE. UU. Pacífico (Los Ángeles)'], ['America/Lima', 'Lima'], ['America/Bogota', 'Bogotá'], ['America/Mexico_City', 'Ciudad de México'], ['America/Santiago', 'Santiago'], ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Sao_Paulo', 'São Paulo'], ['Europe/London', 'Londres'], ['Europe/Madrid', 'Madrid'], ['Europe/Berlin', 'Berlín']].map(([v, l]) => `<option value="${v}"${c?.timezone === v ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="seq-drip-hint">Se usa para enviarle los avisos de seguimiento en su horario laboral (8–17 h).</span></label>
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
         ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
@@ -30875,6 +30876,7 @@ ${foot}
       responsable: $('obc-responsable')?.value.trim() || '', canal: c0?.canal || '',
       website: $('obc-website')?.value.trim() || '', mercado: c0?.mercado || '',
       from_email: $('obc-from')?.value.trim() || '', cc_email: $('obc-cc')?.value.trim() || '',
+      timezone: $('obc-tz')?.value || '',
       icp: c0?.icp || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
       notas: c0?.notas || '',
       li_cargo: $('obc-li-cargo')?.value.trim() || '',
