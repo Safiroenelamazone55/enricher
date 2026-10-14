@@ -20754,7 +20754,7 @@ const LeadManagerModule = (() => {
   let _repChartData = null;   // datos calculados para los charts de Reportes
   let _taskView = 'list';     // 'list' | 'calendar' | 'priority' en Tareas comerciales
   let _tiData = null;         // cache de GET /api/lm/tasks/inbox (Bloque 8: Centro de tareas por prioridad)
-  let _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (campaña / secuencia)
+  let _taskFCli = '', _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (cliente / campaña / secuencia)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
   let _lmBootRestored = false; // solo restaura la última sección UNA vez por carga de página, no en cada clic a Outreach
@@ -25159,20 +25159,22 @@ ${foot}
   // ── Filtro por campaña/secuencia en Tareas comerciales (lista y calendario) ──
   // El mismo filtro vale para las tareas de secuencia, los emails por aprobar y los contactos por corregir.
   function _tkSeqPass(seqId) {
+    if (_taskFCli) { const s = (_sequences || []).find(x => x.id === seqId); if (String((s && s.outbound_client_id) || '') !== String(_taskFCli)) return false; }
     if (_taskFSeq && String(seqId) !== String(_taskFSeq)) return false;
     if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === seqId); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
     return true;
   }
   function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id)) : []; }
   function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))); }
-  function _taskFilterPass(t) {
-    if (_taskFSeq && String(t.sq.id) !== String(_taskFSeq)) return false;
-    if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === t.sq.id); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
-    return true;
-  }
+  function _taskFilterPass(t) { return _tkSeqPass(t.sq.id); }
   function taskSetFilter(kind, val) {
-    if (kind === 'clear') { _taskFCamp = ''; _taskFSeq = ''; _renderBody(); return; }
-    if (kind === 'camp') {
+    if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _renderBody(); return; }
+    if (kind === 'cli') {
+      _taskFCli = val;
+      // la campaña y la secuencia elegidas se limpian si no pertenecen al cliente nuevo
+      if (val && _taskFCamp) { const c = (_campaigns || []).find(x => String(x.id) === String(_taskFCamp)); if (!c || String(c.outbound_client_id || '') !== String(val)) _taskFCamp = ''; }
+      if (val && _taskFSeq) { const s = (_sequences || []).find(x => String(x.id) === String(_taskFSeq)); if (!s || String(s.outbound_client_id || '') !== String(val)) _taskFSeq = ''; }
+    } else if (kind === 'camp') {
       _taskFCamp = val;
       // si la secuencia elegida no pertenece a la campaña nueva, se limpia
       if (val && _taskFSeq) { const s = (_sequences || []).find(x => String(x.id) === String(_taskFSeq)); if (!s || String(s.campaign_id || '') !== String(val)) _taskFSeq = ''; }
@@ -25183,7 +25185,7 @@ ${foot}
     if (_tiData === null) setTimeout(() => { if (_tiData === null) _tiReload(); }, 0);   // para que el recuadro Prioridad ya traiga su número
 
     const allRaw = _allSeqTasks();
-    const hasFilter = !!(_taskFCamp || _taskFSeq);
+    const hasFilter = !!(_taskFCli || _taskFCamp || _taskFSeq);
     const all = hasFilter ? allRaw.filter(_taskFilterPass) : allRaw;
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
@@ -25211,9 +25213,19 @@ ${foot}
     if (_sc === 'accept') _pendingAccept().forEach(x => (x.seqs || []).forEach(sq => _bump(sq.id)));
     const _campCnt = {}; Object.keys(_cnt).forEach(k => { const s0 = (_sequences || []).find(x => String(x.id) === k); const c0 = s0 && s0.campaign_id; if (c0) _campCnt[c0] = (_campCnt[c0] || 0) + _cnt[k]; });
     const optSort = (m, cnt) => [...m.entries()].sort((a, b) => ((cnt && cnt[b[0]]) || 0) - ((cnt && cnt[a[0]]) || 0) || String(a[1]).localeCompare(String(b[1])));
-    const seqOpts = optSort(seqMap, _cnt).filter(([id]) => { if (!_taskFCamp) return true; const s = (_sequences || []).find(x => x.id === id); return String((s && s.campaign_id) || '') === String(_taskFCamp); });
+    const _cliOf = sid => { const s0 = (_sequences || []).find(x => x.id === sid); return s0 && s0.outbound_client_id; };
+    const cliMap = new Map(); seqMap.forEach((nm, sid) => { const cid0 = _cliOf(sid); if (cid0 && !cliMap.has(cid0)) { const c0 = (_clients || []).find(x => x.id === cid0); cliMap.set(cid0, c0 ? c0.nombre : ('Cliente ' + cid0)); } });
+    const _cliCnt = {}; Object.keys(_cnt).forEach(k => { const c0 = _cliOf(+k); if (c0) _cliCnt[c0] = (_cliCnt[c0] || 0) + _cnt[k]; });
+    const campOpts = optSort(campMap, _campCnt).filter(([id]) => { if (!_taskFCli) return true; const c = (_campaigns || []).find(x => x.id === id); return String((c && c.outbound_client_id) || '') === String(_taskFCli); });
+    const seqOpts = optSort(seqMap, _cnt).filter(([id]) => {
+      const s = (_sequences || []).find(x => x.id === id);
+      if (_taskFCli && String((s && s.outbound_client_id) || '') !== String(_taskFCli)) return false;
+      if (_taskFCamp && String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false;
+      return true;
+    });
     const filterRow = (seqMap.size > 1 || campMap.size > 1 || hasFilter) ? `<div class="lm-task-filters">
-      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${optSort(campMap, _campCnt).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)} · ${_campCnt[id] || 0}</option>`).join('')}</select>` : ''}
+      ${cliMap.size > 1 || _taskFCli ? `<select onchange="LeadManagerModule.taskSetFilter('cli',this.value)"><option value="">Todos los clientes</option>${optSort(cliMap, _cliCnt).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCli) ? ' selected' : ''}>${esc(nm)} · ${_cliCnt[id] || 0}</option>`).join('')}</select>` : ''}
+      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${campOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)} · ${_campCnt[id] || 0}</option>`).join('')}</select>` : ''}
       <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)} · ${_cnt[id] || 0}</option>`).join('')}</select>
       ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
     </div>` : '';
