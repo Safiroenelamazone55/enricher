@@ -80,13 +80,20 @@ async function attachCustom(pool, ctx, uidFallback) {
   try {
     const uid = ctx.user_id || uidFallback, cid = ctx.contact_id;
     if (!uid || !cid) return ctx;
-    const labels = await _cfLabels(pool, uid);
-    if (!labels.length) { ctx._custom = {}; return ctx; }
-    const cols = _CF_KEYS.join(', ');
-    const { rows: [k] } = await pool.query('SELECT company_id, ' + cols + ' FROM lm_contacts WHERE id=$1 AND user_id=$2', [cid, uid]);
+    const { rows: [k] } = await pool.query('SELECT * FROM lm_contacts WHERE id=$1 AND user_id=$2', [cid, uid]);
     if (!k) return ctx;
     let co = {};
-    if (k.company_id) { const r = await pool.query('SELECT ' + cols + ' FROM lm_companies WHERE id=$1 AND user_id=$2', [k.company_id, uid]); co = r.rows[0] || {}; }
+    if (k.company_id) { const r = await pool.query('SELECT * FROM lm_companies WHERE id=$1 AND user_id=$2', [k.company_id, uid]); co = r.rows[0] || {}; }
+    // Datos para TODAS las variables del selector (contacto y empresa): antes el motor solo conocía unas pocas y el resto salía en blanco.
+    ctx._extra = {
+      personal_email: k.email_personal, phone: k.telefono, mobile: k.movil, seniority: k.seniority, department: k.departamento, departamento: k.departamento,
+      buyer_role: k.buyer_role, contact_priority: k.contact_priority, linkedin: k.linkedin, region: k.region, stage: k.estado, source: k.fuente,
+      company_name: co.nombre || k.empresa_nombre, company_domain: co.dominio, company_website: co.website, company_industry: co.industria,
+      company_size: co.tamano, company_revenue: co.ingresos, company_city: co.ciudad, company_country: co.pais, company_target_tier: co.target_tier,
+      company_segmento: co.segmento, company_linkedin: co.linkedin,
+    };
+    const labels = await _cfLabels(pool, uid);
+    if (!labels.length) { ctx._custom = {}; return ctx; }
     const out = {};
     for (const l of labels) {
       const src = l.entity === 'company' ? co : k;
@@ -111,11 +118,19 @@ function renderTemplate(str, ctx) {
     nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo,
     empresa: ctx.company_nombre || ctx.empresa_nombre, ciudad: ctx.ciudad, pais: ctx.pais,
   };
-  const custom = ctx._custom || {};
-  return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => {
-    const v = map[k.toLowerCase()] != null && map[k.toLowerCase()] !== '' ? map[k.toLowerCase()] : custom[k.toLowerCase()];
+  const custom = ctx._custom || {}, extra = ctx._extra || {};
+  return String(str || '').replace(/\{\{\s*([\w ]+?)\s*\}\}/g, (m, k0) => {
+    const k = k0.toLowerCase().replace(/\s+/g, '_');
+    const pick = o => (o[k] != null && o[k] !== '' ? o[k] : null);
+    const v = pick(map) != null ? pick(map) : (pick(extra) != null ? pick(extra) : pick(custom));
     return (v == null || v === '') ? '' : String(v);
   });
+}
+// Variables de un texto que NO tienen valor para este contacto (o que no existen): salen en blanco, y eso casi siempre es un error.
+function emptyVars(str, ctx) {
+  const out = [];
+  String(str || '').replace(/\{\{\s*([\w ]+?)\s*\}\}/g, (m, k0) => { if (!renderTemplate('{{' + k0 + '}}', ctx)) out.push(k0.trim()); return m; });
+  return [...new Set(out)];
 }
 
 function _esc(s) {
@@ -1147,4 +1162,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

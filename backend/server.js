@@ -6813,6 +6813,21 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
        WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.estado IN ('awaiting','approved')
        ORDER BY m.created_at ASC
     `, [req.workspaceOwnerId, req.params.id]);
+    // Variables que quedarían en BLANCO en el borrador (dato faltante o variable inexistente): se avisa al revisar.
+    try {
+      const eng = require('./services/sendEngine');
+      const stepIds = [...new Set(rows.map(r => r.step_id).filter(Boolean))];
+      const stp = {}; (await pool.query('SELECT id, plantilla, asunto, variants FROM sequence_steps WHERE id = ANY($1::int[])', [stepIds])).rows.forEach(x => { stp[x.id] = x; });
+      for (const r of rows) {
+        const st = stp[r.step_id]; r.vars_vacias = [];
+        if (!st) continue;
+        const ctx = { user_id: req.workspaceOwnerId, contact_id: r.contact_id, nombre: r.nombre, apellido: r.apellido, email: r.to_email, cargo: r.cargo, company_nombre: r.empresa, empresa_nombre: r.empresa };
+        await eng.attachCustom(pool, ctx);
+        const k = (await pool.query('SELECT ciudad, pais FROM lm_contacts WHERE id=$1', [r.contact_id])).rows[0] || {}; ctx.ciudad = k.ciudad; ctx.pais = k.pais;
+        // se revisa el texto REAL del borrador contra lo que dice la plantilla: variables de la plantilla que no tienen valor para este contacto
+        r.vars_vacias = eng.emptyVars((st.plantilla || '') + ' ' + (st.asunto || ''), ctx);
+      }
+    } catch (e) { console.warn('[approvals] vars_vacias', e.message); }
     // Si el paso responde en el mismo hilo, el asunto REAL del envío es "Re: <asunto del email anterior>" (lo fija el motor al enviar);
     // se calcula aquí para mostrarlo tal cual lo verá el prospecto en vez del asunto provisional del borrador.
     for (const r of rows) {

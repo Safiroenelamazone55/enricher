@@ -23990,6 +23990,7 @@ ${foot}
         <div class="seq-app__who">${meta}</div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
+      ${(a.vars_vacias && a.vars_vacias.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEF3C7;border:1px solid #F5D9A0;font-size:12.5px;color:#92400E"><b>⚠ Hay huecos en este mensaje.</b> Estas variables no tienen valor para este contacto y salen en blanco: ${a.vars_vacias.map(v => '<code>{{' + esc(v) + '}}</code>').join(', ')}. Corrige el dato del contacto o edita el texto antes de aprobar.</div>` : ''}
       ${a.reply_to_prev && a.reply_subject
         ? `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px;flex-wrap:wrap"><span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px">Asunto</span>
             <div style="flex:1;min-width:240px;border:1px solid #E1E6EC;background:#F8FAFC;padding:8px 10px;font-size:13.5px"><b>${esc(a.reply_subject)}</b></div>
@@ -31849,7 +31850,7 @@ ${foot}
   }
   // ── Vista previa del email del paso: De/CC/Para reales + variables resueltas ──
   function _rvPrev(str, ctx) {
-    const map = { first_name: ctx.nombre, last_name: ctx.apellido, full_name: [ctx.nombre, ctx.apellido].filter(Boolean).join(' '), email: ctx.email, title: ctx.cargo, company: ctx.empresa, city: ctx.ciudad, country: ctx.pais, nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo, empresa: ctx.empresa, ciudad: ctx.ciudad, pais: ctx.pais };
+    const map = { first_name: ctx.nombre, last_name: ctx.apellido, full_name: [ctx.nombre, ctx.apellido].filter(Boolean).join(' '), email: ctx.email, title: ctx.cargo, company: ctx.empresa, company_name: ctx.empresa, city: ctx.ciudad, country: ctx.pais, nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo, empresa: ctx.empresa, ciudad: ctx.ciudad, pais: ctx.pais };
     return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => { const v = map[k.toLowerCase()]; return (v == null || v === '') ? `<span class="step-prev-miss">${m}</span>` : `<b class="step-prev-var">${esc(String(v))}</b>`; });
   }
   // Emails de la secuencia que vienen ANTES del paso que se edita (candidatos a "hilo" al que responder), en orden.
