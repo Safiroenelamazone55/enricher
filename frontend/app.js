@@ -21770,7 +21770,7 @@ const LeadManagerModule = (() => {
         // (antes se sumaba el contador del servidor, que incluye a todos los enrolados sin email aunque su paso de email
         // no toque aún → la pestaña decía 67 y la lista mostraba 25).
         + (s.estado === 'activa' && steps.length
-            ? _seqApprovals.filter(a => a.estado === 'awaiting').length + _seqPendingNoEmail.length
+            ? _seqApprovals.filter(a => a.estado === 'awaiting').length + _seqPendingNoEmail.length + _fixOfSeq(id).length
             : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
@@ -22501,7 +22501,7 @@ ${foot}
       const _tRow = t => t.kind === 'company' ? _seqCoTaskRow(t, id, today) : _seqTaskRow(t, id, today);
       const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(_tRow).join('')}</div>` : '')
                 + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(_tRow).join('')}</div>` : '');
-      return `${_seqNoEmailRowsHtml()}${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
+      return `${_seqNoEmailRowsHtml()}${_seqFixRowsHtml(id)}${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -23382,15 +23382,25 @@ ${foot}
       if (['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
       const bad = !c.email ? 'sin' : (c.email_status === 'invalid' ? 'rebote' : '');
       if (!bad) return;
-      const seqs = (c.sequences || []).filter(sq => act.has(sq.id) && ['activo', 'pausado'].includes(sq.estado)
-        && _seqSteps(sq.id).slice(Math.max(0, (sq.paso || 1) - 1)).some(st => (st.canal || 'email') === 'email'));
+      // Solo cuenta lo que toca resolver AHORA: su paso ACTUAL es un email, y no está en espera por otra razón
+      // (en cola de rotación por empresa, pausado a mano, cerrado por disposición, sin mensaje/traducción en el paso).
+      // Esta es la misma definición que usa la secuencia (pestañas Tareas/Bloqueos): así los números coinciden en las dos pantallas.
+      const _noAccionable = r => r === 'rotacion_empresa' || r === 'pausada_manual' || /^disposition_/.test(r || '') || r === 'sin_traduccion' || r === 'paso_sin_mensaje' || r === 'reply_received';
+      const seqs = (c.sequences || []).filter(sq => act.has(sq.id) && ['activo', 'pausado'].includes(sq.estado) && !_noAccionable(sq.paused_reason)
+        && (() => { const st = _seqSteps(sq.id)[(sq.paso || 1) - 1]; return !!st && (st.canal || 'email') === 'email'; })());
       if (seqs.length) out.push({ c, bad, seqs });
     });
     return out;
   }
-  function _fixSectionHtml() {
-    const list = _fixF(); if (!list.length) return '';
-    const shown = (_taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
+  // De una secuencia: lo que su pantalla debe contar y mostrar de "Por corregir" (rebotes siempre; "sin email" solo si la secuencia no usa la lista de aprobación, que ya los muestra aparte).
+  function _fixOfSeq(id) {
+    const sq = (_sequences || []).find(x => x.id === id), pre = !!sq && sq.send_mode === 'preaprobado' && sq.estado === 'activa';
+    return _fixList().filter(x => (x.seqs || []).some(s => s.id === id)).filter(x => !pre || x.bad === 'rebote');
+  }
+  function _seqFixRowsHtml(id) { const l = _fixOfSeq(id); return l.length ? _fixSectionHtml(l) : ''; }
+  function _fixSectionHtml(listOverride) {
+    const list = listOverride || _fixF(); if (!list.length) return '';
+    const shown = (listOverride || _taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
     const rows = shown.map(({ c, bad, seqs }) => {
       const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
       const co = (_companies || []).find(x => String(x.id) === String(c.company_id));
