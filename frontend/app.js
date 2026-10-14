@@ -28302,11 +28302,34 @@ ${foot}
         ${flag('seguimiento_avisos', cl.seguimiento_avisos !== false, 'Avisar al cliente por correo cuando toque dar seguimiento', 'Cuando una reunión pasó sin resultado, o una oportunidad lleva días sin actividad (3, 7 y 14 días hábiles), o llega la fecha que el cliente programó. El correo sale en el idioma de cada usuario y solo en su horario laboral (8–17 h).')}
         <div style="font-size:12.5px;margin:10px 0 4px"><b>Zona horaria del cliente:</b> ${tzName ? esc(tzName) : 'sin definir (se usa Nueva York)'} · <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">cambiar en Editar cliente</a></div>
         <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver el correo que recibiría</button></div></div>
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Próximo envío</div><div id="pa-avnext"><div class="cp-empty2" style="padding:10px">Calculando…</div></div></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Avisos enviados</div><div id="pa-avlog"><div class="cp-empty2" style="padding:10px">Cargando…</div></div></div>`;
-    if (sub === 'avisos') setTimeout(() => _paAvLog(cid), 0);
+    if (sub === 'avisos') setTimeout(() => { _paAvNext(cid); _paAvLog(cid); }, 0);
     else body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informe semanal</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Resumen por correo con los resultados de la semana: destinatarios, idioma, nota y envío programado.</div><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportOpen(${cid})">Abrir informe semanal</button></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informes de campaña y secuencia</div><div class="cp-empty2" style="padding:6px 0;text-align:left">En pausa: el portal del cliente ya muestra estos datos en vivo.</div></div>`;
     return nav + body + `<div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación.</div></div>`;
+  }
+  async function _paAvNext(cid) {
+    const box = document.getElementById('pa-avnext'); if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/portal/admin/followup-next?client=${cid}`); const n = await r.json();
+      if (!r.ok) throw new Error(n.error || 'Error');
+      const LN = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
+      const fmt = d => new Date(d).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      const loc = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let cuando;
+      if (!n.items.length) cuando = 'No hay nada pendiente: no se enviará ningún aviso por ahora.';
+      else if (!n.activo) cuando = 'Los avisos están desactivados para este cliente: no se enviará nada.';
+      else if (!n.global) cuando = 'El envío global está apagado: no se enviará nada.';
+      else if (!n.recipients.length) cuando = 'Este cliente no tiene usuarios activos en el portal: no hay a quién avisar.';
+      else if (n.when_now) cuando = `<b>Ahora mismo</b> está dentro del horario laboral del cliente (8–17 h, ${esc(n.tz)}): se enviará en la próxima revisión, que corre cada hora.`;
+      else if (n.when) cuando = `Se enviará a partir de las <b>8:00 en ${esc(n.tz)}</b>${n.tz_definida ? '' : ' (zona sin definir, se usa esa por defecto)'} → <b>${esc(fmt(n.when))}</b> en tu hora (${esc(loc)}). La revisión corre cada hora, así que puede salir dentro de esa hora.`;
+      else cuando = 'No se pudo calcular el horario.';
+      const KL = { reunion: 'Reunión pendiente de resultado', fecha: 'Llegó la fecha de seguimiento que programó', dias: 'Días sin actividad', cierre: 'Días sin actividad (sugerir cierre)' };
+      box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">${cuando}</div>
+        ${n.items.length ? `<div style="font-size:12.5px;margin-bottom:8px"><b>Oportunidades que se avisarían:</b><ul style="margin:4px 0 0 18px;padding:0">${n.items.map(i => `<li>${esc(i.nombre)}${i.empresa ? ' (' + esc(i.empresa) + ')' : ''} — ${esc(KL[i.kind] || i.kind)}${i.kind === 'dias' || i.kind === 'cierre' ? ' · ' + i.dias + ' días hábiles' : ''}</li>`).join('')}</ul></div>` : ''}
+        ${n.recipients.map(x => `<details style="border-top:1px solid #EEF1F4;padding:8px 0"${n.recipients.length === 1 ? ' open' : ''}><summary style="cursor:pointer;font-size:12.5px"><b>${esc(x.email)}</b> · ${esc(LN[x.lang] || x.lang)} · <span style="color:#64748B">${esc(x.subject)}</span></summary><iframe sandbox="" style="width:100%;height:420px;border:1px solid #E1E6EC;margin-top:8px;background:#fff" srcdoc="${esc(x.html)}"></iframe></details>`).join('')}`;
+    } catch (e) { box.innerHTML = '<div class="cp-empty2" style="padding:10px">No se pudo calcular el próximo envío.</div>'; }
   }
   async function _paAvLog(cid) {
     const box = document.getElementById('pa-avlog'); if (!box) return;

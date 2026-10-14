@@ -48,6 +48,36 @@ async function preview(pool, cid, lang) {
   return { subject: m.subject, html: m.html, text: m.text, n: items.length, items: items.map(i => ({ id: i.id, nombre: i.nombre, empresa: i.empresa, kind: i.kind, dias: i.dias })) };
 }
 
+// Próximo envío: qué se avisaría, a quién, en qué idioma y cuándo (primer momento dentro del horario laboral del cliente).
+function _localParts(tz, d) {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, weekday: 'short', hour: '2-digit' }).formatToParts(d);
+  const g = t => (f.find(p => p.type === t) || {}).value;
+  return { wd: g('weekday'), h: parseInt(g('hour')) % 24 };
+}
+function nextWindow(tz) {
+  let zone = tz || 'America/New_York'; try { new Intl.DateTimeFormat('en', { timeZone: zone }); } catch (_) { zone = 'America/New_York'; }
+  const now = new Date();
+  for (let m = 0; m < 9 * 24 * 60; m += 15) {
+    const t = new Date(now.getTime() + m * 60000), p = _localParts(zone, t);
+    if (p.wd !== 'Sat' && p.wd !== 'Sun' && p.h >= 8 && p.h < 17) return { at: m === 0 ? now : t, now: m === 0, tz: zone };
+  }
+  return { at: null, now: false, tz: zone };
+}
+async function nextInfo(pool, cid) {
+  const pr = require('./portalRoutes');
+  const { rows: [c] } = await pool.query(`SELECT nombre, timezone, seguimiento_avisos FROM outbound_clients WHERE id=$1`, [cid]);
+  const items = await pending(pool, cid);
+  const { rows: accs } = await pool.query(`SELECT email, lang, sections FROM client_accounts WHERE outbound_client_id=$1 AND activo ORDER BY id`, [cid]);
+  const w = nextWindow(c.timezone), url = 'https://app.novacentrax.com/portal/' + pr.slugOf(c.nombre);
+  const recipients = accs.filter(a => !(a.sections && a.sections.reuniones === false)).map(a => {
+    const lang = a.lang || 'es';
+    const m = require('./portalMail').build('followup', lang, { cliente: c.nombre, url, items: itemsFor(items, lang), brand: {} });
+    return { email: a.email, lang, subject: m.subject, html: m.html };
+  });
+  return { activo: !!c.seguimiento_avisos, global: process.env.OPP_WATCHER_SEND === '1', tz: w.tz, tz_definida: !!c.timezone, when: w.at, when_now: w.now,
+    items: items.map(i => ({ nombre: i.nombre, empresa: i.empresa, kind: i.kind, dias: i.dias })), recipients };
+}
+
 async function tick(pool, force) {
   if (process.env.OPP_WATCHER_SEND !== '1') return { skipped: 'apagado (OPP_WATCHER_SEND != 1)' };
   const pr = require('./portalRoutes');
@@ -87,4 +117,4 @@ async function tick(pool, force) {
 function start(pool) {
   setInterval(() => tick(pool).catch(e => console.warn('[opp-watcher]', e.message)), 60 * 60 * 1000);
 }
-module.exports = { start, tick, pending, preview, bizDays };
+module.exports = { start, tick, pending, preview, bizDays, nextInfo };
