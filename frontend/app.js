@@ -22348,6 +22348,7 @@ ${foot}
         .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')" title="Nadie en la cadena de derivados respondió de verdad">Sin respuesta real · ${dNone}</button>`] : [])
         .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
       let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+      if (_seqCtLang) fl = fl.filter(e => _seqCtLang === '_none' ? !e.idioma_ef : e.idioma_ef === _seqCtLang);
       if (_seqCtDisp) fl = _seqCtEffective(fl);   // el referido reemplaza al contacto original
       if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition);
       else if (_seqCtDisp === '_pend') { fl = fl.filter(_seqPend); fl = fl.slice().sort((x, y) => ((y.real_disposition === 'respondio') - (x.real_disposition === 'respondio'))); }   // primero los que respondieron y esperan decisión
@@ -22362,8 +22363,15 @@ ${foot}
           <button class="lm-bulk-ghost" onclick="LeadManagerModule.seqCtSelClear()">Ninguno</button>
           <button class="lm-bulk-act" onclick="LeadManagerModule.seqCtSelAddToSeq(${id})">＋ Agregar a otra secuencia</button>
         </div>` : '';
+      // Idiomas presentes en la secuencia (según la ubicación del contacto): base de los mensajes por idioma
+      const lCounts = {}; let lNone = 0, lDed = 0;
+      list.forEach(e => { if (e.idioma_ef) { lCounts[e.idioma_ef] = (lCounts[e.idioma_ef] || 0) + 1; if (e.idioma_origen === 'deducido') lDed++; } else lNone++; });
+      const lChips = Object.keys(lCounts).sort((a, b) => lCounts[b] - lCounts[a])
+        .map(k => `<button class="lm-filter-btn${_seqCtLang === k ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetLang('${esc(k)}')">${esc(k)} · ${lCounts[k]}</button>`)
+        .concat(lNone ? [`<button class="lm-filter-btn${_seqCtLang === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetLang('_none')" title="Sin país ni ciudad reconocible, o país con varios idiomas: asígnalo en Datos → Idioma">Idioma por revisar · ${lNone}</button>`] : []).join('');
+      const langRow = `<div class="seq-chiprow seq-chiprow--2" style="align-items:center"><span style="font-size:12px;color:#64748B;margin-right:6px" title="Idioma según la ubicación del contacto${lDed ? '. ' + lDed + ' deducidos del país/ciudad; se guardan con Datos → Enriquecer → Idioma' : ''}">Idiomas</span>${lChips || '<span style="font-size:12px;color:#64748B">Sin datos de ubicación</span>'}</div>`;
       return `<div class="seq-chiprow">${chips}</div>
-        <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${bar}` +
+        <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${langRow}${bar}` +
         (fl.length
           ? `<div class="clients-table-wrap seq-ct-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${_seqPageSlice(fl, _seqCtPage, p => { _seqCtPage = p; }).map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>${_pagerHtml(fl.length, _seqCtPage, 'seqCtGoPage')}`
           : `<div class="cp-empty2" style="padding:16px">Nadie con este filtro.</div>`);
@@ -23887,6 +23895,7 @@ ${foot}
   }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; _seqCtPage = 0; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function _seqCtRepaint() { const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  function seqCtSetLang(v) { _seqCtPage = 0; _seqCtLang = (v && _seqCtLang === v) ? '' : (v || ''); _seqCtRepaint(); }
   function seqCtSetDisp(v) { _seqCtPage = 0; _seqCtDisp = (v && _seqCtDisp === v) ? '' : (v || ''); _seqCtRepaint(); }   // pulsar el chip activo lo quita
   function seqCtSelToggle(cid, on, seqId) { if (on) _seqCtSel.add(cid); else _seqCtSel.delete(cid); _seqCtRepaint(); }
   function seqCtSelAll(on, seqId) {
@@ -31828,6 +31837,7 @@ ${foot}
   let _seqSignals = {};   // {contacto: {paso: {r, o, c}}} de la secuencia abierta (respondió/aceptó, abrió, hizo clic)
   let _stepFormSteps = [];
   let _stepFormSeqId = null;
+  let _seqCtLang = '';   // filtro por idioma del contacto ('' = todos, '_none' = sin idioma)
   let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
   let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
@@ -35294,7 +35304,7 @@ ${foot}
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
-    lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
+    lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,

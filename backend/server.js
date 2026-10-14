@@ -5555,7 +5555,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     const TERMINAL = "('respondio','interesado','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, cs.paused_reason, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
-        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, f.kd AS disposition, co.nombre AS company_nombre,
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.ciudad, k.idioma, f.kd AS disposition, co.nombre AS company_nombre,
         CASE WHEN COALESCE(k.disposition,'')<>'' AND f.kd IS NULL THEN k.disposition END AS prev_disposition,
         CASE WHEN f.kd IN ${TERMINAL} THEN f.kd
              WHEN c1.disposition IN ${TERMINAL} THEN c1.disposition
@@ -5578,6 +5578,13 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
       WHERE cs.user_id=$1 AND cs.sequence_id=$2
       ORDER BY cs.created_at DESC
     `, [req.workspaceOwnerId, req.params.id]);
+    // Idioma efectivo: el guardado (confirmado/editado) o, si no hay, el deducido de la ubicación del contacto.
+    const geo = require('./services/geoService');
+    for (const r of rows) {
+      if (r.idioma) { r.idioma_ef = r.idioma; r.idioma_origen = 'guardado'; continue; }
+      const l = geo.languageFor(r.pais || geo.countryFromPlace(r.ciudad, r.region) || '', r.ciudad);
+      r.idioma_ef = l.lang ? (geo.LANG_NAMES[l.lang] || l.lang) : ''; r.idioma_origen = l.lang ? 'deducido' : '';
+    }
     res.json(rows);
   } catch (err) { console.error('[lm-seq-ct] GET', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });
