@@ -6815,6 +6815,7 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
     const asunto = String(b.asunto ?? m.asunto).trim() || m.asunto;
     const cuerpo = String(b.cuerpo ?? m.cuerpo);
     const estado = action === 'approve' ? 'approved' : 'awaiting';
+    if (action === 'approve' && require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar (o escribe el mensaje del paso en la secuencia).' });
     const { rows: [upd] } = await pool.query(
       `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3 WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,
       [asunto, cuerpo, estado, m.id]);
@@ -6863,6 +6864,7 @@ async function _pendingNoEmailRows(pool, userId, seqId) {
     const asunto = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr)
       || `Seguimiento — ${enr.empresa_nombre || enr.nombre || ''}`;
     const cuerpo = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
+    if (require('./services/sendEngine').blankBody(cuerpo)) continue;   // el paso no tiene mensaje: lo que falta es escribirlo, no el email del contacto
     out.push({
       enr_id: enr.enr_id, contact_id: enr.contact_id, step_id: step.id,
       nombre: enr.nombre, apellido: enr.apellido, cargo: enr.cargo, empresa: enr.empresa_nombre,
@@ -6901,6 +6903,7 @@ app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth
     if (!row) return res.status(409).json({ error: 'Este paso ya no está pendiente — recarga la lista' });
     const asunto = String((req.body || {}).asunto || row.asunto);
     const cuerpo = String((req.body || {}).cuerpo || row.cuerpo);
+    if (require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar.' });
     const { rows: [mbq] } = await pool.query(
       `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
         WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, req.workspaceOwnerId]);

@@ -24958,6 +24958,8 @@ ${foot}
     if (pct > 0) return 'var(--sq-amber, #B45309)';
     return '#E2E8F0';
   }
+  // ¿El paso tiene un mensaje escrito? Un paso de email sin texto no genera nada útil: se avisa en la lista de pasos.
+  function _stepHasCopy(st) { const nb = x => !String(x || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim(); return nb(st.plantilla) || (Array.isArray(st.variants) ? st.variants : []).some(v => v && nb(v.cuerpo)); }
   function _stepRow(st, state, prog) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
@@ -24970,7 +24972,7 @@ ${foot}
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
       <span class="lm-step__ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}</div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}${st.canal === 'email' && !_stepHasCopy(st) ? '<span title="Este paso de email no tiene mensaje escrito: no se enviará nada ni se generarán borradores hasta que lo escribas. Pulsa el paso para escribirlo." style="margin-left:8px;font-size:11px;font-weight:700;color:#B45309;background:#FEF3C7;padding:1px 7px">⚠ Sin mensaje</span>' : ''}</div>
         ${progHtml}
       </div>
       <div class="lm-step__status">
@@ -33108,6 +33110,7 @@ ${foot}
     if (pr.startsWith('disposition_')) { const d = pr.slice('disposition_'.length); return _dispoLabel(d) || d; }
     if (pr.startsWith('dato_')) return 'Falta corregir un dato';
     if (pr === 'sin_traduccion') return 'Falta el mensaje en su idioma';
+    if (pr === 'paso_sin_mensaje') return 'El paso no tiene mensaje escrito';
     return pr;
   }
   function _cpFmtDate(d) { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }

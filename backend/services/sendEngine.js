@@ -46,6 +46,13 @@ function pickVariant(st, ctx) {
   return vars[0];
 }
 
+// Un email sin texto no se redacta ni se envía NUNCA: el paso no tiene mensaje escrito (o quedó vacío tras reemplazar variables).
+const blankBody = x => !String(x == null ? '' : x).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+function stepHasCopy(st) {
+  if (!st) return false;
+  if (!blankBody(st.plantilla)) return true;
+  return (Array.isArray(st.variants) ? st.variants : []).some(v => v && !blankBody(v.cuerpo));
+}
 // Paso "por idioma" (segmento sobre el campo idioma): si el contacto TIENE idioma y ningún mensaje del paso lo cubre, devuelve ese idioma.
 // Sin idioma conocido no se bloquea nada (se usa el mensaje base). Solo se aplica si la secuencia tiene idioma_faltante='detener'.
 function idiomaGap(step, enr) {
@@ -523,6 +530,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
     cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
     variantName = multi ? String(variant.nombre || 'A') : '';
   }
+  if (blankBody(cuerpoTxt)) { await _pauseEnrollment(pool, enr, 'paso_sin_mensaje', null); return false; }
   const token = crypto.randomBytes(12).toString('hex');
 
   // ── Modo PRE-APROBADO: el motor deja el email redactado como borrador y espera.
@@ -770,6 +778,7 @@ async function _flushApproved(pool, apiBase) {
       LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
       LEFT JOIN sequence_steps st ON st.id = m.step_id
      WHERE m.estado='approved'
+       AND btrim(regexp_replace(COALESCE(m.cuerpo,''), '<[^>]*>', ' ', 'g')) <> ''
        -- Respetar la fecha del paso: aprobar con anticipación NO adelanta el envío.
        AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW())
        AND NOT EXISTS (
@@ -953,6 +962,7 @@ async function _draftPreapprovedBatch(pool, seen) {
         cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
         variantName = multi ? String(variant.nombre || 'A') : '';
       }
+      if (blankBody(cuerpoTxt)) continue;   // paso sin mensaje: no se genera borrador vacío
       const { rows: [mbq] } = await pool.query(
         `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
           WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, enr.user_id]);
@@ -975,6 +985,19 @@ async function _draftPreapproved(pool) {
   // Barrido (cada ~10 min): las tareas que el sistema abrió para una secuencia que ya NO está activa (pausada, cerrada, archivada) se cierran.
   if (Date.now() - _lastTaskSweep > 10 * 60 * 1000) {
     _lastTaskSweep = Date.now();
+    // Borradores vacíos (de pasos sin mensaje) estorban en "Por aprobar": se retiran; vuelven a generarse cuando el paso tenga texto.
+    await pool.query(`DELETE FROM lm_messages WHERE estado='awaiting' AND btrim(regexp_replace(COALESCE(cuerpo,''), '<[^>]*>', ' ', 'g')) = ''`)
+      .then(r => { if (r.rowCount) console.log(`[send-engine] ${r.rowCount} borrador(es) vacío(s) retirados`); }).catch(x => console.warn('[send-engine] borradores-vacios:', x.message));
+    // Reanudar contactos que esperaban un mensaje en el paso (paso_sin_mensaje) en cuanto el paso ya tiene texto.
+    try {
+      const { rows: pm } = await pool.query(`SELECT cs.id, cs.paso, cs.sequence_id FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
+         WHERE cs.estado='pausado' AND cs.paused_reason='paso_sin_mensaje' AND s.estado='activa' LIMIT 1000`);
+      const cache = {};
+      for (const z of pm) {
+        const sts = cache[z.sequence_id] || (cache[z.sequence_id] = (await pool.query(`SELECT id, plantilla, variants FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [z.sequence_id])).rows);
+        if (stepHasCopy(sts[(z.paso || 1) - 1])) await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW() WHERE id=$1`, [z.id]);
+      }
+    } catch (x) { console.warn('[send-engine] reanudar-sin-mensaje:', x.message); }
     // Reanudar contactos pausados por falta de traducción en cuanto el mensaje de su idioma existe (o la secuencia deja de exigirlo).
     try {
       const { rows: pz } = await pool.query(`SELECT cs.id, cs.paso, cs.sequence_id, k.idioma, s.idioma_faltante
@@ -1121,4 +1144,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
