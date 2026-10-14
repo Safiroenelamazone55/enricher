@@ -596,6 +596,15 @@ async function iniciar(pool, id) {
   await _connect(pool, id);
 }
 
+// Antes de escribir a un número normal (1:1) se comprueba que tenga WhatsApp: si no, el mensaje quedaba "enviándose" para siempre sin que nadie supiera por qué.
+async function _verificarNumero(sock, jidFull) {
+  if (!String(jidFull).endsWith('@s.whatsapp.net')) return;
+  try {
+    const r = await Promise.race([sock.onWhatsApp(jidFull), new Promise(res => setTimeout(() => res(null), 6000))]);
+    if (Array.isArray(r) && r[0] && r[0].exists === false) throw Object.assign(new Error('Ese número no tiene WhatsApp. Revisa el número del contacto.'), { noWa: true });
+  } catch (e) { if (e && e.noWa) throw e; /* si la consulta falla o tarda, no se bloquea el envío */ }
+}
+
 async function enviar(pool, id, jid, texto, respondeA) {
   const sock = _socks.get(id);
   if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
@@ -611,6 +620,7 @@ async function enviar(pool, id, jid, texto, respondeA) {
     if (orig) quoted = { key: { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
   }
 
+  await _verificarNumero(sock, jidFull);
   const res = await sock.sendMessage(jidFull, { text: texto }, quoted ? { quoted } : undefined);
   await pool.query(`
     INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto)
