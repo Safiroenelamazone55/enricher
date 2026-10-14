@@ -143,15 +143,16 @@ async function _isTeamAddr(pool, userId, addr) {
 // ── Respuesta automática de ausencia: se detecta la fecha de regreso y se aplazan sus próximos pasos hasta que vuelva ──
 const _MESES = { enero: 1, ene: 1, febrero: 2, feb: 2, marzo: 3, mar: 3, abril: 4, abr: 4, mayo: 5, junio: 6, jun: 6, julio: 7, jul: 7, agosto: 8, ago: 8, septiembre: 9, setiembre: 9, sep: 9, sept: 9, octubre: 10, oct: 10, noviembre: 11, nov: 11, diciembre: 12, dic: 12,
   january: 1, jan: 1, february: 2, march: 3, april: 4, apr: 4, may: 5, june: 6, july: 7, august: 8, aug: 8, september: 9, october: 10, november: 11, december: 12, dec: 12 };
-function parseReturnDate(text, ref) {
+function parseReturnDate(text, ref, opts) {
   ref = ref || new Date();
+  const pastMode = !!(opts && opts.past);   // true: busca fechas YA PASADAS (respuesta automática desactualizada)
   const t = String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 2500);
-  const lo = new Date(ref.getTime() - 86400000), hi = new Date(ref.getTime() + 150 * 86400000), found = [];
+  const lo = pastMode ? new Date(ref.getTime() - 150 * 86400000) : new Date(ref.getTime() - 86400000), hi = pastMode ? new Date(ref.getTime() - 86400000) : new Date(ref.getTime() + 150 * 86400000), found = [];
   const push = (d, mo, y) => {
     if (!(d >= 1 && d <= 31 && mo >= 1 && mo <= 12)) return;
     let yy = y ? (y < 100 ? 2000 + y : y) : ref.getUTCFullYear();
     let dt = new Date(Date.UTC(yy, mo - 1, d, 12));
-    if (!y && dt < lo) dt = new Date(Date.UTC(yy + 1, mo - 1, d, 12));
+    if (!y && !pastMode && dt < lo) dt = new Date(Date.UTC(yy + 1, mo - 1, d, 12));
     if (dt >= lo && dt <= hi) found.push(dt);
   };
   let m;
@@ -165,7 +166,14 @@ function parseReturnDate(text, ref) {
 }
 async function _onOoo(pool, mb, contact, parsed, snippet, imapUid) {
   try {
-    const ret = parseReturnDate((parsed.subject || '') + ' ' + snippet, parsed.date || new Date());
+    const txtOoo = (parsed.subject || '') + ' ' + snippet, refOoo = parsed.date || new Date();
+    const ret = parseReturnDate(txtOoo, refOoo);
+    // Respuesta automática DESACTUALIZADA: solo menciona fechas que ya pasaron (la ausencia terminó o es un aviso viejo): no hay nada que aplazar.
+    if (!ret && parseReturnDate(txtOoo, refOoo, { past: true })) {
+      await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','email',$3,NOW(),'hecha')`,
+        [mb.user_id, contact.id, 'Respuesta automática de ausencia con fechas ya pasadas (aviso desactualizado) — no se aplazó nada']);
+      return 0;
+    }
     if (ret) await pool.query(`UPDATE lm_inbox_messages SET ooo_hasta=$3 WHERE mailbox_id=$1 AND imap_uid=$2`, [mb.id, imapUid, ret.toISOString().slice(0, 10)]);
     // Sus pasos pendientes se aplazan hasta el día siguiente a su regreso (sin fecha reconocible: 7 días). No cambia su disposición ni pausa la secuencia.
     const r = await pool.query(
