@@ -24959,7 +24959,7 @@ ${foot}
     return '#E2E8F0';
   }
   // ¿El paso tiene un mensaje escrito? Un paso de email sin texto no genera nada útil: se avisa en la lista de pasos.
-  function _stepHasCopy(st) { const nb = x => !String(x || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim(); return nb(st.plantilla) || (Array.isArray(st.variants) ? st.variants : []).some(v => v && nb(v.cuerpo)); }
+  function _stepHasCopy(st) { const nb = x => !!String(x || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim(); return nb(st.plantilla) || (Array.isArray(st.variants) ? st.variants : []).some(v => v && nb(v.cuerpo)); }
   function _stepRow(st, state, prog) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
