@@ -23061,7 +23061,8 @@ ${foot}
     // en mis contactos" DESDE la tarea de LinkedIn, sin ir a la revisión
     // masiva aparte. Reusa la disposición 'aceptado' ya existente (dispara el
     // mismo re-enrutado a los pasos "si respondió" que ya usa esa revisión).
-    if (canal === 'linkedin') probItems.push(iitem('linkedin', 'Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
+    // También desde tareas de otros canales (email, WhatsApp…): si a este contacto ya se le envió la conexión de LinkedIn en una secuencia y aún no figura aceptada.
+    if (canal === 'linkedin' || (cid && _pendingAccept().some(x => x.c.id === cid))) probItems.push(iitem('linkedin', 'Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
     if (canal === 'linkedin') probItems.push(iitem('ban', 'LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
     if (canal === 'email') probItems.push(iitem('reply', 'Email rebotó', 'LeadManagerModule.seqDoBounced()'));
     if (canal === 'whatsapp') probItems.push(iitem('ban', 'WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
