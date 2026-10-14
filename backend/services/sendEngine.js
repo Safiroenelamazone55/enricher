@@ -825,6 +825,18 @@ async function _flushApproved(pool, apiBase) {
       // configurada; si no, cae a la del workspace de la usuaria. Antes usaba siempre la
       // del workspace — causaba envíos a horas inapropiadas para el prospecto (reporte
       // de Jenny 2026-09-12: email a las 17:00 hora de Perú, medianoche en España).
+      // Última guarda antes de enviar: el contacto NO puede haber respondido ni haber salido de la secuencia desde que se aprobó el mensaje.
+      {
+        const { rows: [g] } = await pool.query(
+          `SELECT (EXISTS (SELECT 1 FROM lm_inbox_messages im WHERE im.contact_id = $1 AND im.tipo = 'reply' AND im.received_at > (SELECT created_at FROM lm_messages WHERE id = $3))) AS respondio,
+                  (SELECT cs.estado FROM lm_contact_sequences cs WHERE cs.user_id = $2 AND cs.contact_id = $1 AND cs.sequence_id = $4 LIMIT 1) AS enr_estado`,
+          [m.contact_id, m.user_id, m.id, m.sequence_id]);
+        if (g && (g.respondio || ['respondido', 'terminado'].includes(g.enr_estado))) {
+          await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`, ['No enviado: el contacto respondió o salió de la secuencia mientras este mensaje esperaba', m.id]);
+          console.log(`[send-engine] approved SKIP → ${m.to_email} (respondió / fuera de la secuencia)`);
+          continue;
+        }
+      }
       const { hour, weekend, wdIdx } = _localNow(m.seq_timezone || m.timezone);
       if (hour < (m.window_start ?? 9) || hour >= (m.window_end ?? 18)) continue;
       if (weekend && !m.send_weekends) continue;
@@ -1001,6 +1013,14 @@ async function _draftPreapproved(pool) {
   // Barrido (cada ~10 min): las tareas que el sistema abrió para una secuencia que ya NO está activa (pausada, cerrada, archivada) se cierran.
   if (Date.now() - _lastTaskSweep > 10 * 60 * 1000) {
     _lastTaskSweep = Date.now();
+    // Red de seguridad: ningún mensaje en cola (por aprobar o ya aprobado) sale hacia alguien que respondió o salió de la secuencia mientras esperaba.
+    await pool.query(`UPDATE lm_messages m SET estado='failed', error='No enviado: el contacto respondió o salió de la secuencia mientras este mensaje esperaba'
+        FROM lm_contacts k
+       WHERE k.id = m.contact_id AND m.estado IN ('awaiting','approved')
+         AND ( k.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar')
+            OR EXISTS (SELECT 1 FROM lm_contact_sequences cs WHERE cs.user_id = m.user_id AND cs.contact_id = m.contact_id AND cs.sequence_id = m.sequence_id AND cs.estado IN ('respondido','terminado'))
+            OR EXISTS (SELECT 1 FROM lm_inbox_messages im WHERE im.contact_id = m.contact_id AND im.tipo = 'reply' AND im.received_at > m.created_at) )`)
+      .then(r => { if (r.rowCount) console.log(`[send-engine] ${r.rowCount} mensaje(s) en cola cancelados: el contacto ya respondió`); }).catch(x => console.warn('[send-engine] cancelar-en-cola:', x.message));
     // Borradores vacíos (de pasos sin mensaje) estorban en "Por aprobar": se retiran; vuelven a generarse cuando el paso tenga texto.
     await pool.query(`DELETE FROM lm_messages WHERE estado='awaiting' AND btrim(regexp_replace(COALESCE(cuerpo,''), '<[^>]*>', ' ', 'g')) = ''`)
       .then(r => { if (r.rowCount) console.log(`[send-engine] ${r.rowCount} borrador(es) vacío(s) retirados`); }).catch(x => console.warn('[send-engine] borradores-vacios:', x.message));
