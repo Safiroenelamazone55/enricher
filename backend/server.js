@@ -6774,7 +6774,8 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at, m.scheduled_at,
              k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
-             st.dia AS paso_dia, st.titulo AS paso_titulo, COALESCE(st.cc_off, FALSE) AS cc_off
+             st.dia AS paso_dia, st.titulo AS paso_titulo, COALESCE(st.cc_off, FALSE) AS cc_off,
+             COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev, st.reply_to_step_id
         FROM lm_messages m
         JOIN lm_contacts k ON k.id = m.contact_id
         LEFT JOIN lm_companies co ON co.id = k.company_id
@@ -6782,6 +6783,17 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
        WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.estado IN ('awaiting','approved')
        ORDER BY m.created_at ASC
     `, [req.workspaceOwnerId, req.params.id]);
+    // Si el paso responde en el mismo hilo, el asunto REAL del envío es "Re: <asunto del email anterior>" (lo fija el motor al enviar);
+    // se calcula aquí para mostrarlo tal cual lo verá el prospecto en vez del asunto provisional del borrador.
+    for (const r of rows) {
+      r.reply_subject = '';
+      if (!r.reply_to_prev) continue;
+      const { rows: [prev] } = await pool.query(
+        `SELECT asunto FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced') AND id <> $4
+          ORDER BY (CASE WHEN $5::int IS NOT NULL AND step_id = $5::int THEN 0 ELSE 1 END), sent_at DESC NULLS LAST, id DESC LIMIT 1`,
+        [req.workspaceOwnerId, r.contact_id, req.params.id, r.id, r.reply_to_step_id || null]);
+      if (prev) r.reply_subject = prev.asunto ? 'Re: ' + String(prev.asunto).replace(/^((re|rv)\s*:\s*)+/i, '').trim() : (/^re:\s/i.test(r.asunto) ? r.asunto : 'Re: ' + r.asunto);
+    }
     res.json(rows);
   } catch (err) { console.error('[approvals] GET', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
 });

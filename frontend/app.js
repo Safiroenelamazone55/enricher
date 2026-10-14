@@ -23990,7 +23990,15 @@ ${foot}
         <div class="seq-app__who">${meta}</div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
-      <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
+      ${a.reply_to_prev && a.reply_subject
+        ? `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px;flex-wrap:wrap"><span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px">Asunto</span>
+            <div style="flex:1;min-width:240px;border:1px solid #E1E6EC;background:#F8FAFC;padding:8px 10px;font-size:13.5px"><b>${esc(a.reply_subject)}</b></div>
+            <span style="font-size:11.5px;font-weight:600;color:#1D4ED8;background:#DBEAFE;padding:3px 8px" title="Este email se envía como respuesta dentro del hilo del email anterior">↩ Respuesta en el mismo hilo</span></div>
+          <div style="font-size:11.5px;color:#64748B;margin:0 0 6px 68px">El asunto lo fija el hilo del email anterior, no se edita aquí.</div>
+          <input type="hidden" id="app-subj-${a.id}" value="${esc(a.asunto)}">`
+        : `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px"><label for="app-subj-${a.id}" style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px;flex:none">Asunto</label>
+            <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto del email" style="flex:1;margin:0"></div>
+          ${a.reply_to_prev ? '<div style="font-size:11.5px;color:#B45309;margin:0 0 6px 68px">Este paso está pensado como respuesta a un email anterior, pero no hay ninguno enviado: saldrá como un correo nuevo.</div>' : ''}`}
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
       ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved)}
       <div class="seq-app__ft">
