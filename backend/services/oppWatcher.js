@@ -66,6 +66,12 @@ async function tick(pool, force) {
       try {
         await pr.sendClientMail(c.id, 'followup', lang, { to: a.email, cliente: a.cliente, url: 'https://app.novacentrax.com/portal/' + pr.slugOf(a.cliente), items: itemsFor(items, lang) });
         ok = true; sent++;
+        try {
+          const its = itemsFor(items, lang);
+          const m = require('./portalMail').build('followup', lang, { cliente: a.cliente, url: '', items: its, brand: {} });
+          await pool.query(`INSERT INTO opp_avisos_log (outbound_client_id, to_email, lang, subject, body, items) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [c.id, a.email, lang, m.subject, m.text, JSON.stringify(items.map((i, k) => ({ contact_id: i.id, nombre: i.nombre, empresa: i.empresa, kind: i.kind, dias: i.dias, linea: its[k] && its[k].kind })))]);
+        } catch (e) { console.warn('[opp-watcher] log', e.message); }
       } catch (e) { console.warn('[opp-watcher] envío', a.email, e.message); }
     }
     if (!ok) continue;

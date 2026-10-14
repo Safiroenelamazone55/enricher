@@ -849,6 +849,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_snooze_until DATE`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seguimiento_avisos BOOLEAN NOT NULL DEFAULT TRUE`);
+    // Registro de los correos de seguimiento enviados al cliente (qué se mandó, cuándo y a quién)
+    await pool.query(`CREATE TABLE IF NOT EXISTS opp_avisos_log (
+      id SERIAL PRIMARY KEY, outbound_client_id INTEGER NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+      to_email TEXT NOT NULL DEFAULT '', lang TEXT NOT NULL DEFAULT 'es', subject TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
+      items JSONB NOT NULL DEFAULT '[]', sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS opp_avisos_log_cli_idx ON opp_avisos_log (outbound_client_id, sent_at DESC)`);
     // Estado 'completada': la secuencia terminó su trabajo (distinto de 'archivada', que es sacarla de la lista).
     await pool.query(`ALTER TABLE sequences DROP CONSTRAINT IF EXISTS sequences_estado_check;`);
     await pool.query(`ALTER TABLE sequences ADD CONSTRAINT sequences_estado_check CHECK (estado IN ('draft','activa','pausada','completada','archivada'));`);

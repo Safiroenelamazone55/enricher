@@ -28301,10 +28301,24 @@ ${foot}
     else if (sub === 'avisos') body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Recordatorios de seguimiento de oportunidades</div>
         ${flag('seguimiento_avisos', cl.seguimiento_avisos !== false, 'Avisar al cliente por correo cuando toque dar seguimiento', 'Cuando una reunión pasó sin resultado, o una oportunidad lleva días sin actividad (3, 7 y 14 días hábiles), o llega la fecha que el cliente programó. El correo sale en el idioma de cada usuario y solo en su horario laboral (8–17 h).')}
         <div style="font-size:12.5px;margin:10px 0 4px"><b>Zona horaria del cliente:</b> ${tzName ? esc(tzName) : 'sin definir (se usa Nueva York)'} · <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">cambiar en Editar cliente</a></div>
-        <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver el correo que recibiría</button></div></div>`;
+        <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver el correo que recibiría</button></div></div>
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Avisos enviados</div><div id="pa-avlog"><div class="cp-empty2" style="padding:10px">Cargando…</div></div></div>`;
+    if (sub === 'avisos') setTimeout(() => _paAvLog(cid), 0);
     else body = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informe semanal</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Resumen por correo con los resultados de la semana: destinatarios, idioma, nota y envío programado.</div><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportOpen(${cid})">Abrir informe semanal</button></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Informes de campaña y secuencia</div><div class="cp-empty2" style="padding:6px 0;text-align:left">En pausa: el portal del cliente ya muestra estos datos en vivo.</div></div>`;
     return nav + body + `<div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación.</div></div>`;
+  }
+  async function _paAvLog(cid) {
+    const box = document.getElementById('pa-avlog'); if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/portal/admin/followup-log?client=${cid}`); const list = await r.json();
+      if (!Array.isArray(list)) throw new Error('Error');
+      const LN = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
+      box.innerHTML = list.length ? list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:10px 0"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:13px">${esc(x.subject)}</b><span style="font-size:12px;color:#64748B">${new Date(x.sent_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+          <div style="font-size:12px;color:#475569;margin:2px 0">Para: <b>${esc(x.to_email)}</b> · ${esc(LN[x.lang] || x.lang)} · ${(x.items || []).map(i => esc(i.nombre) + (i.empresa ? ' (' + esc(i.empresa) + ')' : '')).join(', ')}</div>
+          <details><summary style="font-size:12px;color:#2563EB;cursor:pointer">Ver mensaje</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;background:#F8FAFC;border:1px solid #E1E6EC;padding:10px;margin:6px 0 0">${esc(x.body)}</pre></details></div>`).join('')
+        : '<div class="cp-empty2" style="padding:10px;text-align:left">Todavía no se ha enviado ningún aviso a este cliente.</div>';
+    } catch (e) { box.innerHTML = '<div class="cp-empty2" style="padding:10px">No se pudo cargar el registro.</div>'; }
   }
   function portalSub(cid, sub) { window.__portalSub = window.__portalSub || {}; window.__portalSub[cid] = sub; const st = window.__portalState, box = _portalBox(); if (st && box) box.innerHTML = _portalHtml(cid, st.a, st.h); }
   async function portalFlag(cid, key, on) {
