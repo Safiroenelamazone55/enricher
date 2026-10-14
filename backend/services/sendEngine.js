@@ -886,7 +886,7 @@ async function _flushApproved(pool, apiBase) {
 // ── Borradores ANTICIPADOS (modo pre-aprobado): el email aparece en "Aprobar"
 // hasta 3 días antes de su fecha de envío (cubre el fin de semana: el viernes ya
 // ves lo del lunes). Aprobarlo antes no lo adelanta — scheduled_at manda. ──
-async function _draftPreapprovedBatch(pool, seen) {
+async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
@@ -899,6 +899,7 @@ async function _draftPreapprovedBatch(pool, seen) {
      WHERE cs.estado='activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW() + interval '3 days')
        AND NOT (cs.id = ANY($1::int[]))
+       AND ($2::int IS NULL OR cs.contact_id = $2)
        -- Solo quien REALMENTE puede tener borrador: antes los ~400 enrolados viejos que nunca podían redactarse
        -- (paso no-email, sin buzón, sin email…) ocupaban los 25 cupos de cada pasada y dejaban sin borrador a las secuencias nuevas.
        AND k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid'
@@ -908,7 +909,7 @@ async function _draftPreapprovedBatch(pool, seen) {
        AND NOT EXISTS (SELECT 1 FROM lm_messages w WHERE w.user_id = cs.user_id AND w.contact_id = cs.contact_id AND w.sequence_id = cs.sequence_id AND w.estado IN ('awaiting','approved'))
      ORDER BY cs.next_action_at ASC NULLS FIRST
      LIMIT 500
-  `, [seen]);
+  `, [seen, onlyContactId || null]);
   enrs.forEach(e => seen.push(e.enr_id));   // lo ya visto en esta pasada no vuelve a entrar al lote
   // Horizonte por secuencia: aparece lo de HOY y la tanda del próximo día de envío (según los días de cadencia), no todo de golpe.
   // Así el arranque escalonado se ve como es: 20 hoy, 13 mañana… y no los 33 juntos.
@@ -1144,4 +1145,6 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+// Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
+async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
+module.exports = { draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

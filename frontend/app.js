@@ -21770,7 +21770,7 @@ const LeadManagerModule = (() => {
         // (antes se sumaba el contador del servidor, que incluye a todos los enrolados sin email aunque su paso de email
         // no toque aún → la pestaña decía 67 y la lista mostraba 25).
         + (s.estado === 'activa' && steps.length
-            ? _seqApprovals.filter(a => a.estado === 'awaiting').length + _seqPendingNoEmail.length + _fixOfSeq(id).length
+            ? _seqApprovals.filter(a => a.estado === 'awaiting').length + _fixOfSeq(id).length
             : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
@@ -22462,7 +22462,7 @@ ${foot}
         else if (!list.length) { msg = 'Aún no hay nadie enrolado en esta secuencia. Enrola contactos para generar tareas.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
         else if (!activos.length) { msg = 'Los contactos enrolados están pausados o terminados; no hay tareas activas. Reactívalos (►) en la pestaña “Contactos”.'; }
         else { msg = 'Los contactos activos ya completaron todos los pasos definidos. Agrega más pasos o enrola contactos nuevos.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
-        const ap = _seqNoEmailRowsHtml() + _seqApRowsHtml(id);
+        const ap = _seqFixRowsHtml(id) + _seqApRowsHtml(id);
         return ap ? ap : _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
       }
       const todoAll = tasks.filter(t => t.due <= today);
@@ -22501,7 +22501,7 @@ ${foot}
       const _tRow = t => t.kind === 'company' ? _seqCoTaskRow(t, id, today) : _seqTaskRow(t, id, today);
       const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(_tRow).join('')}</div>` : '')
                 + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(_tRow).join('')}</div>` : '');
-      return `${_seqNoEmailRowsHtml()}${_seqFixRowsHtml(id)}${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
+      return `${_seqFixRowsHtml(id)}${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -23369,8 +23369,12 @@ ${foot}
       const c = _contacts.find(x => x.id === cid);
       if (c) { c.email = d.email; c.email_status = ''; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
       _activities = (_activities || []).map(a => (a.contact_id === cid && a.estado === 'pendiente' && a.tipo === 'tarea' && String(a.nota || '').startsWith('Rebote:')) ? { ...a, estado: 'hecha' } : a);
+      // El borrador ya está redactado (sin aprobar): se recargan las listas para que aparezca al instante en "Emails por aprobar".
+      try { await _reloadContacts(); } catch (_) {}
+      try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
+      try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
       _renderBody();
-      showBanner('✓ Email corregido' + (d.resumed ? ' — ' + d.resumed + ' secuencia(s) reanudada(s)' : ''), 'success');
+      showBanner('✓ Email guardado' + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
@@ -23392,10 +23396,9 @@ ${foot}
     });
     return out;
   }
-  // De una secuencia: lo que su pantalla debe contar y mostrar de "Por corregir" (rebotes siempre; "sin email" solo si la secuencia no usa la lista de aprobación, que ya los muestra aparte).
+  // De una secuencia: lo que su pantalla cuenta y muestra de "Por corregir" (sin email Y rebotados): la misma lista, con la misma casilla para poner el email, que en Tareas comerciales.
   function _fixOfSeq(id) {
-    const sq = (_sequences || []).find(x => x.id === id), pre = !!sq && sq.send_mode === 'preaprobado' && sq.estado === 'activa';
-    return _fixList().filter(x => (x.seqs || []).some(s => s.id === id)).filter(x => !pre || x.bad === 'rebote');
+    return _fixList().filter(x => (x.seqs || []).some(s => s.id === id));
   }
   function _seqFixRowsHtml(id) { const l = _fixOfSeq(id); return l.length ? _fixSectionHtml(l) : ''; }
   function _fixSectionHtml(listOverride) {

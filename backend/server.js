@@ -5522,7 +5522,14 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
       [uid, cid, r.rows[0].outbound_client_id || null, 'Email corregido: ' + email + (p.rowCount ? ' — ' + p.rowCount + ' secuencia(s) reanudada(s)' : '')]);
-    res.json({ ok: true, email, resumed: p.rowCount });
+    // Con el email ya corregido, su borrador se redacta AHORA (no aprobado): aparece al instante en "Emails por aprobar" para previsualizarlo.
+    let drafted = 0;
+    try {
+      const before = (await pool.query(`SELECT count(*)::int n FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting'`, [uid, cid])).rows[0].n;
+      await require('./services/sendEngine').draftNowForContact(pool, cid);
+      drafted = (await pool.query(`SELECT count(*)::int n FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting'`, [uid, cid])).rows[0].n - before;
+    } catch (e) { console.warn('[fix-email] borrador inmediato:', e.message); }
+    res.json({ ok: true, email, resumed: p.rowCount, drafted });
   } catch (err) { console.error('[fix-email]', err.message); res.status(500).json({ error: 'No se pudo guardar el email' }); }
 });
 app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
