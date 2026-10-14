@@ -21810,6 +21810,7 @@ const LeadManagerModule = (() => {
   // cada tarjeta es a la vez el número y el selector de esa sección.
   function _seqStatTabs(id, s, taskN) {
     const ICO = {
+      config: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
       empresas: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18M3 9h6"/>',
       contactos: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
       tareas: '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -21833,6 +21834,7 @@ const LeadManagerModule = (() => {
       ['tareas', 'Tareas', taskN],
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
+      ['config', 'Configuración', null],
     ];
     const apN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : 0;
     const blN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : 0;
@@ -22324,9 +22326,58 @@ ${foot}
     w.document.open(); w.document.write(html); w.document.close();
     document.getElementById('lm-rpt-modal')?.remove();
   }
+  // ════════════ CONFIGURACIÓN DE LA SECUENCIA (resumen: configuración, audiencia, calidad de datos, avance) ════════════
+  function _seqConfigTab(id) {
+    const s = (_sequences || []).find(x => x.id === id); if (!s) return '';
+    const list = Array.isArray(_seqContacts) ? _seqContacts : null;
+    const cli = (_clients || []).find(c => c.id === s.outbound_client_id), cmp = (_campaigns || []).find(c => c.id === s.campaign_id);
+    const steps = _seqSteps(id);
+    const card = (t, inner, sub) => `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">${t}${sub ? ` <span style="font-weight:400;font-size:12px;color:#64748B">— ${sub}</span>` : ''}</div>${inner}</div>`;
+    const kv = (rows) => `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px">${rows.filter(r => r[1] !== '' && r[1] != null).map(([k, v]) => `<div><div style="font-size:11px;color:#64748B;font-weight:600">${k}</div><div style="font-size:13.5px">${v}</div></div>`).join('')}</div>`;
+    const MODE = { manual: 'Manual (yo envío)', auto: 'Automático', preaprobado: 'Pre-aprobado (yo apruebo)' };
+    const ES = { draft: 'Borrador', activa: 'Activa', pausada: 'Pausada', completada: 'Culminada', archivada: 'Archivada' };
+    const dias = ['L', 'M', 'X', 'J', 'V', 'S', 'D'], mask = _sanSendDays(s.send_days);
+    const sendDays = dias.filter((_, i) => mask[i] === '1').join(' · ');
+    const lastDia = steps.length ? Math.max(...steps.map(x => x.dia || 0)) : 0;
+    const cfg = card('Configuración', kv([
+      ['Estado', esc(ES[s.estado] || s.estado || '')], ['Cliente', cli ? esc(cli.nombre) : ''], ['Campaña', cmp ? esc(cmp.nombre) : ''],
+      ['Modo de envío', esc(MODE[s.send_mode] || MODE.manual)], ['Zona horaria', esc(s.timezone || '')], ['Días de envío', sendDays],
+      ['Inicio', s.starts_on ? esc(String(s.starts_on).slice(0, 10)) : ''], ['Contactos que arrancan por día', s.drip_per_day ? s.drip_per_day : ''],
+      ['Límite diario de envíos', s.daily_limit ? s.daily_limit : ''], ['Pasos', steps.length ? steps.length + (lastDia ? ' · último paso el día ' + lastDia : '') : 'Sin pasos'],
+    ]) + `<div style="margin-top:12px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${id})">Editar configuración</button></div>`);
+    if (!list) return cfg + `<div class="cp-empty2" style="padding:22px">Cargando contactos…</div>`;
+    const empresasN = new Set(list.map(c => c.company_id != null ? 'i' + c.company_id : 'n' + (c.company_nombre || '').toLowerCase())).size;
+    const count = (arr, fn) => { const m = {}; arr.forEach(x => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; }); return m; };
+    const bars = (m, total, empty) => { const ks = Object.keys(m).sort((a, b) => m[b] - m[a]); return ks.map(k => `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:3px 0"><span style="width:130px;flex:none">${esc(k)}</span><span style="flex:1;background:#EEF1F4;height:8px"><span style="display:block;height:8px;width:${Math.round(100 * m[k] / (total || 1))}%;background:#0B1220"></span></span><b style="width:34px;text-align:right">${m[k]}</b></div>`).join('') + (empty ? `<div style="font-size:12px;color:#B45309;margin-top:4px">${empty}</div>` : ''); };
+    const conEmail = list.filter(c => c.email).length, sinEmail = list.length - conEmail;
+    const porPais = count(list, c => c.pais), sinPais = list.filter(c => !c.pais).length;
+    const porIdi = count(list, c => c.idioma_ef), sinIdi = list.filter(c => !c.idioma_ef).length;
+    const idiNames = Object.keys(porIdi).sort((a, b) => porIdi[b] - porIdi[a]);
+    const idiBlock = idiNames.map(k => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px"><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
+      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
+    const aud = card('Audiencia', kv([['Empresas', empresasN], ['Contactos', list.length], ['Con email', conEmail + ' (' + Math.round(100 * conEmail / (list.length || 1)) + '%)'], ['Idiomas distintos', idiNames.length || '']])
+      + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:14px"><div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por país</div>${bars(porPais, list.length, sinPais ? sinPais + ' sin país' : '') || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos</div>'}</div>
+        <div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
+    // Calidad de los datos
+    const emails = {}; list.forEach(c => { const e = String(c.email || '').toLowerCase(); if (e) emails[e] = (emails[e] || 0) + 1; });
+    const dup = Object.values(emails).filter(n => n > 1).length;
+    const q = (n, lbl, hint) => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;border-top:1px solid #EEF1F4"><span style="width:20px;flex:none">${n ? '⚠' : '✓'}</span><span style="flex:1">${lbl}${n && hint ? ` <span style="color:#64748B;font-size:12px">— ${hint}</span>` : ''}</span><b style="color:${n ? '#B45309' : '#15803D'}">${n}</b></div>`;
+    const cal = card('Calidad de los datos', q(sinEmail, 'Contactos sin email', 'bloquean los pasos de email') + q(sinPais, 'Contactos sin país', 'corrígelo en Datos → Enriquecer → País') + q(sinIdi, 'Contactos con idioma por revisar', 'Datos → Enriquecer → Idioma') + q(dup, 'Emails repetidos', 'el mismo email en más de un contacto'), 'qué conviene arreglar antes de lanzar');
+    // Avance
+    const porEstado = count(list, c => c.estado || 'activo'), porPaso = count(list, c => c.paso ? 'Paso ' + c.paso : 'Sin empezar');
+    const ELBL = { activo: 'Activos', pausado: 'Pausados', respondido: 'Respondieron', terminado: 'Terminados', bounce: 'Rebotados' };
+    const pasoKeys = Object.keys(porPaso).sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
+    const pasoM = {}; pasoKeys.forEach(k => { pasoM[k] = porPaso[k]; });
+    const avance = card('Avance', kv(Object.keys(porEstado).map(k => [ELBL[k] || k, porEstado[k]]))
+      + `<div style="margin-top:12px;font-weight:600;font-size:12.5px;margin-bottom:4px">Contactos en cada paso</div>${bars(pasoM, list.length) || ''}`);
+    const resp = list.filter(c => c.estado === 'respondido' || c.real_disposition).length;
+    const res = card('Resultado', kv([['Respondieron', resp + ' (' + Math.round(100 * resp / (list.length || 1)) + '%)']]) + `<div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqTab('metricas')">Ver métricas completas</button></div>`);
+    return cfg + aud + cal + avance + res;
+  }
   function _seqTabContent(id) {
     const steps = _seqSteps(id);
     if (_seqTab === 'empresas') return _seqEmpresasTab(id);
+    if (_seqTab === 'config') return _seqConfigTab(id);
     if (_seqTab === 'contactos') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
       if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -22371,7 +22422,7 @@ ${foot}
         .concat(lNone ? [`<button class="lm-filter-btn${_seqCtLang === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetLang('_none')" title="Sin país ni ciudad reconocible, o país con varios idiomas: asígnalo en Datos → Idioma">Idioma por revisar · ${lNone}</button>`] : []).join('');
       const langRow = `<div class="seq-chiprow seq-chiprow--2" style="align-items:center"><span style="font-size:12px;color:#64748B;margin-right:6px" title="Idioma según la ubicación del contacto${lDed ? '. ' + lDed + ' deducidos del país/ciudad; se guardan con Datos → Enriquecer → Idioma' : ''}">Idiomas</span>${lChips || '<span style="font-size:12px;color:#64748B">Sin datos de ubicación</span>'}</div>`;
       return `<div class="seq-chiprow">${chips}</div>
-        <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${langRow}${bar}` +
+        <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${bar}` +
         (fl.length
           ? `<div class="clients-table-wrap seq-ct-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${_seqPageSlice(fl, _seqCtPage, p => { _seqCtPage = p; }).map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>${_pagerHtml(fl.length, _seqCtPage, 'seqCtGoPage')}`
           : `<div class="cp-empty2" style="padding:16px">Nadie con este filtro.</div>`);
@@ -23566,7 +23617,7 @@ ${foot}
       </div>
       <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas' || t === 'config') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
