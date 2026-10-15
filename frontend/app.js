@@ -44305,10 +44305,12 @@ const TimerModule = (() => {
       // Filas ordenadas: cada tarea con su total y, justo debajo, sus subtareas (y el tiempo anotado directamente en la tarea, si lo hay).
       const _taskRows = pg => {
         const out = [];
-        [...pg.tasks.values()].sort((a, b) => b.sec - a.sec).forEach(n => {
+        // Orden ALFABÉTICO (sin distinguir mayúsculas ni tildes, y con los números en su orden natural: "semana 2" antes que "semana 10"), igual para tareas y subtareas.
+        const _az = (x, y) => String(x).localeCompare(String(y), 'es', { sensitivity: 'base', numeric: true });
+        [...pg.tasks.values()].sort((a, b) => _az(a.titulo, b.titulo)).forEach(n => {
           out.push({ titulo: n.titulo, sec: n.sec, lvl: 0 });
           if (n.subs.size) {
-            [...n.subs.entries()].sort((a, b) => b[1] - a[1]).forEach(([t, sc]) => out.push({ titulo: t, sec: sc, lvl: 1 }));
+            [...n.subs.entries()].sort((a, b) => _az(a[0], b[0])).forEach(([t, sc]) => out.push({ titulo: t, sec: sc, lvl: 1 }));
             if (n.direct > 0) out.push({ titulo: '(tiempo en la propia tarea)', sec: n.direct, lvl: 1 });
           }
         });
