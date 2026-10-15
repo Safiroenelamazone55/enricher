@@ -26894,8 +26894,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Inbox</h2></div>
         ${_data.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta manual</button>` : ''}
       </div>
-      ${_ibWrapHtml()}
-      ${reps.length ? `<div class="lm-dash-head" style="margin-top:14px"><h3 class="lm-dash-h3">Respuestas registradas a mano</h3></div><div class="lm-inbox-grid">${reps.map(_inboxCard).join('')}</div>` : ''}`;
+      ${_ibWrapHtml()}`;
   }
   async function setReplySentiment(actId, sent) {
     const a = _activities.find(x => x.id === actId); if (!a) return;
