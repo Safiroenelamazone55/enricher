@@ -25511,7 +25511,7 @@ ${foot}
   // ── Inbox unificado (Mailboxes F3): hilos reales entrantes/salientes ──
   let _ibThreads = null;   // null = cargando
   let _ibPoll    = null;   // refresco periódico del contador sin-leer
-  let _ibTab     = 'sin';  // sin | resp | auto | env | reb
+  let _ibTab     = 'sin';  // todos | sin | resp | auto | env | reb
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
   let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
   // Filtros extra (apertura/leído/secuencia) — mismo patrón compacto (ícono + popover)
@@ -26549,16 +26549,16 @@ ${foot}
 
   function _ibListHtml() {
     if (_ibThreads === null) return `<div class="ibx-empty">Cargando hilos…</div>`;
-    const rows = _ibFiltered().filter(t => _ibCat(t) === _ibTab);
+    const rows = _ibFiltered().filter(t => _ibTab === 'todos' ? ['sin', 'resp', 'auto'].includes(_ibCat(t)) : _ibCat(t) === _ibTab);   // 'Todos' = toda conversación con algún mensaje entrante (sin responder, respondidas y automáticas)
     if (!rows.length) {
-      const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', auto: 'No hay respuestas automáticas (fuera de oficina) por ahora.', env: '' };
+      const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', auto: 'No hay respuestas automáticas (fuera de oficina) por ahora.', todos: 'Aún no hay conversaciones con respuestas.', env: '' };
       return `<div class="ibx-empty">${M[_ibTab] || 'Sin conversaciones.'}</div>`;
     }
     return rows.map(_ibRow).join('');
   }
   function _ibCounts() {
-    const f = _ibFiltered(); const n = { sin: 0, resp: 0, auto: 0, env: 0, reb: 0 };
-    f.forEach(t => n[_ibCat(t)]++);
+    const f = _ibFiltered(); const n = { todos: 0, sin: 0, resp: 0, auto: 0, env: 0, reb: 0 };
+    f.forEach(t => { const c = _ibCat(t); n[c]++; if (c === 'sin' || c === 'resp' || c === 'auto') n.todos++; });
     return n;
   }
   function _ibPaint() {
@@ -26569,7 +26569,7 @@ ${foot}
   function _ibWrapHtml() {
     const n = _ibCounts();
     const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
-    const TABS = [['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
+    const TABS = [['todos', 'Todos', n.todos], ['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
     return `<div id="ibx-wrap">
       <div class="ibx-top">
         <div class="ibx-tabs">${TABS.map(([k, l, c]) => `<button class="ibx-tab${_ibTab === k ? ' active' : ''}${k === 'reb' && c ? ' ibx-tab--warn' : ''}" onclick="LeadManagerModule.ibTab('${k}')">${l}${c ? ` <span class="ibx-tab__n">${c}</span>` : ''}</button>`).join('')}</div>
