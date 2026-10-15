@@ -25511,7 +25511,7 @@ ${foot}
   // ── Inbox unificado (Mailboxes F3): hilos reales entrantes/salientes ──
   let _ibThreads = null;   // null = cargando
   let _ibPoll    = null;   // refresco periódico del contador sin-leer
-  let _ibTab     = 'sin';  // sin | resp | env | reb
+  let _ibTab     = 'sin';  // sin | resp | auto | env | reb
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
   let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
   // Filtros extra (apertura/leído/secuencia) — mismo patrón compacto (ícono + popover)
@@ -25547,7 +25547,7 @@ ${foot}
     const inAt  = t.last_in_at  ? new Date(t.last_in_at).getTime()  : 0;
     const outAt = t.last_out_at ? new Date(t.last_out_at).getTime() : 0;
     if (t.bounces > 0 && !inAt) return 'reb';
-    if (inAt && inAt >= outAt) return t.last_in_tipo === 'ooo' ? 'env' : 'sin';   // una respuesta automática (fuera de oficina) no pide respuesta tuya
+    if (inAt && inAt >= outAt) return t.last_in_tipo === 'ooo' ? 'auto' : 'sin';   // una respuesta automática (fuera de oficina) no pide respuesta tuya: tiene su propia pestaña, nunca queda escondida
     if (inAt) return 'resp';
     return 'env';
   }
@@ -26551,13 +26551,13 @@ ${foot}
     if (_ibThreads === null) return `<div class="ibx-empty">Cargando hilos…</div>`;
     const rows = _ibFiltered().filter(t => _ibCat(t) === _ibTab);
     if (!rows.length) {
-      const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', env: '' };
+      const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', auto: 'No hay respuestas automáticas (fuera de oficina) por ahora.', env: '' };
       return `<div class="ibx-empty">${M[_ibTab] || 'Sin conversaciones.'}</div>`;
     }
     return rows.map(_ibRow).join('');
   }
   function _ibCounts() {
-    const f = _ibFiltered(); const n = { sin: 0, resp: 0, env: 0, reb: 0 };
+    const f = _ibFiltered(); const n = { sin: 0, resp: 0, auto: 0, env: 0, reb: 0 };
     f.forEach(t => n[_ibCat(t)]++);
     return n;
   }
@@ -26569,7 +26569,7 @@ ${foot}
   function _ibWrapHtml() {
     const n = _ibCounts();
     const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
-    const TABS = [['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
+    const TABS = [['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
     return `<div id="ibx-wrap">
       <div class="ibx-top">
         <div class="ibx-tabs">${TABS.map(([k, l, c]) => `<button class="ibx-tab${_ibTab === k ? ' active' : ''}${k === 'reb' && c ? ' ibx-tab--warn' : ''}" onclick="LeadManagerModule.ibTab('${k}')">${l}${c ? ` <span class="ibx-tab__n">${c}</span>` : ''}</button>`).join('')}</div>
