@@ -13623,10 +13623,11 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
     const sel = `SELECT te.id, te.user_id, te.task_id, te.task_titulo, te.project_nombre,
               te.started_at, te.ended_at, te.duration_s, te.active_s, te.idle_s, te.notes,
               te.source, te.activity_type, te.metadata, te.approved, te.approved_at, te.approved_by,
-              t.project_id, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
+              t.project_id, t.parent_task_id, pt.titulo AS parent_titulo, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
               c.nombre AS client_nombre
        FROM time_entries te
        LEFT JOIN tasks t     ON t.id = te.task_id
+       LEFT JOIN tasks pt    ON pt.id = t.parent_task_id
        LEFT JOIN projects p  ON p.id = t.project_id
        LEFT JOIN clients c   ON c.id = p.client_id`;
     const overlapClause = 'te.started_at < $3 AND (te.ended_at IS NULL OR te.ended_at > $2)';

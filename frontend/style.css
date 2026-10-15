@@ -18229,3 +18229,14 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .ibx-m__frame{background:transparent;color-scheme:light}
 .ibx-m__imgs{font-size:12px;color:#92400E;background:#FEF3C7;border:1px solid #F5D9A0;padding:6px 10px;margin:6px 0}
 .ibx-m__imgs a{color:#1D4ED8;font-weight:600}
+
+/* Tarea → subtarea en el reporte de tiempo (pantalla e impresión) */
+.ttb-trow--task td { color: #2B2926; font-weight: 600; }
+.ttb-trow--sub td.ttb-c1 { padding-left: 40px; }
+.ttb-trow--sub td { color: #8A857D; }
+@media print {
+  #tt-print .ttp-trow--task td { color: #2B2926; font-weight: 600; }
+  #tt-print .ttp-trow--sub td.c1 { padding-left: 40px; }
+  #tt-print .ttp-trow--sub td { color: #8A857D; font-size: .96em; }
+  #tt-print .ttp-trow--sub td.c1::before { left: 29px; background: #E8E4DD; }
+}
