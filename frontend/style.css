@@ -18240,3 +18240,15 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
   #tt-print .ttp-trow--sub td { color: #8A857D; font-size: .96em; }
   #tt-print .ttp-trow--sub td.c1::before { left: 29px; background: #E8E4DD; }
 }
+
+/* Desglose por semana real de trabajo */
+.ttb-trow--week td { color: #2B2926; font-weight: 700; background: rgba(0,0,0,.025); }
+.ttb-par, .ttp-par { color: #A8A29A; font-weight: 400; }
+@media print {
+  #tt-print .ttp-trow--week td { color: #2B2926; font-weight: 700; background: #F6F4F0; padding-top: 5px; }
+  #tt-print .ttp-trow--week td.c1::before { display: none; }
+  #tt-print .ttp-trow--week td.c1 { padding-left: 14px; }
+  #tt-print .ttp-trow--sub td.c1 { padding-left: 30px; }
+  #tt-print .ttp-trow--sub td.c1::before { left: 20px; }
+  #tt-print .ttp-par { color: #A8A29A; font-size: .9em; }
+}

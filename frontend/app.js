@@ -43988,6 +43988,20 @@ const TimerModule = (() => {
     if (focusTarget) focusTarget.focus();
   }
 
+  // Semana (lunes–domingo) de una fecha, como 'AAAA-MM-DD' del lunes, en hora local.
+  function _wkStart(d) {
+    const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  }
+  const _wkWord = lang => (lang === 'en' ? 'Week' : lang === 'de' ? 'Woche' : 'Semana');
+  function _wkLabel(wk, locale) {
+    const a = new Date(wk + 'T12:00:00'), b = new Date(a.getTime() + 6 * 86400000);
+    try {
+      const mo = new Intl.DateTimeFormat(locale, { month: 'short' }), dd = new Intl.DateTimeFormat(locale, { day: 'numeric' });
+      const ma = mo.format(a).replace('.', ''), mb = mo.format(b).replace('.', '');
+      return ma === mb ? `${dd.format(a)}–${dd.format(b)} ${ma}` : `${dd.format(a)} ${ma} – ${dd.format(b)} ${mb}`;
+    } catch (_) { return wk; }
+  }
   function _doPrintReport(lang) {
     const t = PRINT_I18N[lang] || PRINT_I18N.es;
     const locale = t.locale;
@@ -44016,7 +44030,9 @@ const TimerModule = (() => {
         : [[t.totalHours, s.totalStr, ''], [t.projects, String(s.projCount), ''], [t.tasks, String(s.totalTasks), ''], [t.balance, '—', '']];
       kpisHtml = kpis.map(([l, v, acc]) => `<div class="ttp-kpi${acc}"><div class="ttp-kpi__l">${esc(l)}</div><div class="ttp-kpi__v">${esc(v)}</div></div>`).join('');
       const rows = s.projects.map(pg => {
-        const tRows = pg.tasks.map(tk => `<tr class="ttp-trow ttp-trow--${tk.lvl ? 'sub' : 'task'}"><td class="c1">${esc(tk.titulo)}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`).join('');
+        const tRows = pg.tasks.map(tk => tk.kind === 'week'
+          ? `<tr class="ttp-trow ttp-trow--week"><td class="c1">${esc(_wkWord(lang))} ${esc(_wkLabel(tk.wk, locale))}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`
+          : `<tr class="ttp-trow ttp-trow--sub"><td class="c1">${esc(tk.titulo)}${tk.parent ? `<span class="ttp-par"> · ${esc(tk.parent)}</span>` : ''}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`).join('');
         return `<tbody class="ttp-grp"><tr class="ttp-prow"><td>${esc(pg.nombre)}${pg.rateStr ? `<span class="ttp-rate">${esc(pg.rateStr)}</span>` : ''}</td><td class="r">${esc(pg.secStr)}</td><td class="r">${esc(pg.montoStr)}</td></tr>${tRows}</tbody>`;
       }).join('');
       tableHtml = `<table class="ttp-table"><thead><tr><th>${esc(t.thProjectTask)}</th><th class="r">${esc(t.thHours)}</th><th class="r">${esc(t.thAmount)}</th></tr></thead>${rows}<tfoot><tr class="ttp-total"><td>${esc(t.total)}</td><td class="r">${esc(s.totalStr)}</td><td class="r">${esc(s.saldoStr)}</td></tr></tfoot></table>`;
@@ -44282,15 +44298,16 @@ const TimerModule = (() => {
         const hourly = e.tipo_proyecto === 'horas' && _bnum(e.tarifa_hora) > 0;
         const cur = e.moneda || 'USD', tarifa = _bnum(e.tarifa_hora);
         const pid = e.project_id != null ? 'p' + e.project_id : ('n:' + (e.proj_nombre || e.project_nombre || 'Sin proyecto'));
-        if (!projs.has(pid)) projs.set(pid, { nombre: e.proj_nombre || e.project_nombre || 'Sin proyecto', moneda: cur, tarifa, hourly, sec: 0, tasks: new Map() });
+        if (!projs.has(pid)) projs.set(pid, { nombre: e.proj_nombre || e.project_nombre || 'Sin proyecto', moneda: cur, tarifa, hourly, sec: 0, weeks: new Map(), taskIds: new Set() });
         const pg = projs.get(pid); pg.sec += dur;
-        // Tarea → subtarea: el tiempo de una subtarea se cuenta DENTRO de su tarea (que muestra el total) y se detalla debajo.
-        const isSub = e.parent_task_id != null && !!e.parent_titulo;
-        const tkey = isSub ? 'p' + e.parent_task_id : 't' + (e.task_id != null ? e.task_id : (e.task_titulo || 'Sin tarea'));
-        let node = pg.tasks.get(tkey);
-        if (!node) { node = { titulo: isSub ? e.parent_titulo : (e.task_titulo || 'Sin tarea'), sec: 0, direct: 0, subs: new Map() }; pg.tasks.set(tkey, node); }
-        node.sec += dur;
-        if (isSub) { const st = e.task_titulo || 'Subtarea'; node.subs.set(st, (node.subs.get(st) || 0) + dur); } else node.direct += dur;
+        // Desglose por la SEMANA en que realmente se trabajó (lunes–domingo) → tarea/subtarea de esa semana.
+        const wk = _wkStart(e.started_at);
+        let wob = pg.weeks.get(wk); if (!wob) { wob = { sec: 0, rows: new Map() }; pg.weeks.set(wk, wob); }
+        wob.sec += dur;
+        const rk = e.task_id != null ? 't' + e.task_id : 'n:' + (e.task_titulo || 'Sin tarea');
+        let row = wob.rows.get(rk);
+        if (!row) { row = { titulo: e.task_titulo || 'Sin tarea', parent: (e.parent_task_id != null && e.parent_titulo) ? e.parent_titulo : '', sec: 0 }; wob.rows.set(rk, row); }
+        row.sec += dur; pg.taskIds.add(rk);
         const day = _isoDay(new Date(e.started_at));
         perDayHours[day] = (perDayHours[day] || 0) + dur / 3600;
         if (hourly) {
@@ -44301,18 +44318,14 @@ const TimerModule = (() => {
           curSec[cur] = (curSec[cur] || 0) + dur;
         }
       }
-      projs.forEach(pg => { totalTasks += pg.tasks.size; });
-      // Filas ordenadas: cada tarea con su total y, justo debajo, sus subtareas (y el tiempo anotado directamente en la tarea, si lo hay).
+      projs.forEach(pg => { totalTasks += pg.taskIds.size; });
+      // Filas: cada SEMANA (cronológica) con su subtotal y, debajo, sus tareas/subtareas en orden alfabético (sin distinguir mayúsculas ni tildes; números en orden natural).
+      const _az = (x, y) => String(x).localeCompare(String(y), 'es', { sensitivity: 'base', numeric: true });
       const _taskRows = pg => {
         const out = [];
-        // Orden ALFABÉTICO (sin distinguir mayúsculas ni tildes, y con los números en su orden natural: "semana 2" antes que "semana 10"), igual para tareas y subtareas.
-        const _az = (x, y) => String(x).localeCompare(String(y), 'es', { sensitivity: 'base', numeric: true });
-        [...pg.tasks.values()].sort((a, b) => _az(a.titulo, b.titulo)).forEach(n => {
-          out.push({ titulo: n.titulo, sec: n.sec, lvl: 0 });
-          if (n.subs.size) {
-            [...n.subs.entries()].sort((a, b) => _az(a[0], b[0])).forEach(([t, sc]) => out.push({ titulo: t, sec: sc, lvl: 1 }));
-            if (n.direct > 0) out.push({ titulo: '(tiempo en la propia tarea)', sec: n.direct, lvl: 1 });
-          }
+        [...pg.weeks.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).forEach(([wk, w]) => {
+          out.push({ kind: 'week', wk, sec: w.sec });
+          [...w.rows.values()].sort((a, b) => _az(a.titulo, b.titulo)).forEach(r => out.push({ kind: 'task', titulo: r.titulo, parent: r.parent, sec: r.sec }));
         });
         return out;
       };
@@ -44327,8 +44340,9 @@ const TimerModule = (() => {
         ? { mode: 'money', cur: domCur, labels: dayKeys.map(_lbl), values: dayKeys.map(d => Math.round(((perDayMonto[domCur] || {})[d] || 0) * 100) / 100) }
         : { mode: 'hours', labels: dayKeys.map(_lbl), values: dayKeys.map(d => Math.round((perDayHours[d] || 0) * 100) / 100) };
       const grpRows = [...projs.values()].sort((a, b) => b.sec - a.sec).map(pg => {
-        const tRows = _taskRows(pg).map(({ titulo: tk, sec, lvl }) =>
-          `<tr class="ttb-trow ttb-trow--${lvl ? 'sub' : 'task'}"><td class="ttb-c1">${esc(tk)}</td><td class="ttb-c2">${_fmtDur(sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>`).join('');
+        const tRows = _taskRows(pg).map(r => r.kind === 'week'
+          ? `<tr class="ttb-trow ttb-trow--week"><td class="ttb-c1">${esc(_wkWord('es'))} ${esc(_wkLabel(r.wk, 'es'))}</td><td class="ttb-c2">${_fmtDur(r.sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(r.sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>`
+          : `<tr class="ttb-trow ttb-trow--sub"><td class="ttb-c1">${esc(r.titulo)}${r.parent ? `<span class="ttb-par"> · ${esc(r.parent)}</span>` : ''}</td><td class="ttb-c2">${_fmtDur(r.sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(r.sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>`).join('');
         return `<tbody class="ttb-grp">
           <tr class="ttb-prow"><td class="ttb-c1"><span class="ttb-pname">${esc(pg.nombre)}</span>${pg.hourly ? `<span class="ttb-rate">${_bmoney(pg.tarifa, pg.moneda)}/h</span>` : ''}</td><td class="ttb-c2">${_fmtDur(pg.sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(pg.sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>
           ${tRows}
@@ -44346,9 +44360,9 @@ const TimerModule = (() => {
           rateStr: pg.hourly ? _bmoney(pg.tarifa, pg.moneda) + '/h' : '',
           secStr:  _fmtDur(pg.sec) || '0m',
           montoStr: pg.hourly ? _bmoney(pg.sec / 3600 * pg.tarifa, pg.moneda) : '—',
-          tasks: _taskRows(pg).map(({ titulo: tk, sec, lvl }) => ({
-            titulo: tk, lvl, secStr: _fmtDur(sec) || '0m',
-            montoStr: pg.hourly ? _bmoney(sec / 3600 * pg.tarifa, pg.moneda) : '—',
+          tasks: _taskRows(pg).map(r => ({
+            kind: r.kind, wk: r.wk || '', titulo: r.titulo || '', parent: r.parent || '', secStr: _fmtDur(r.sec) || '0m',
+            montoStr: pg.hourly ? _bmoney(r.sec / 3600 * pg.tarifa, pg.moneda) : '—',
           })),
         })),
       };
