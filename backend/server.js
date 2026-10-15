@@ -6490,6 +6490,27 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
   }
 });
 
+// Aplazar a un contacto (p. ej. está de vacaciones o fuera de oficina): sus próximos pasos se mueven al día siguiente de la fecha elegida,
+// la secuencia SIGUE activa (no se pausa) y todo lo que ya esté aprobado en cola para él espera hasta entonces.
+app.post('/api/lm/contacts/:id/aplazar', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id), b = req.body || {};
+  try {
+    const { rows: [k] } = await pool.query('SELECT id, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2', [cid, uid]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    let ret = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(b.fecha || '')) ret = new Date(b.fecha + 'T12:00:00Z');
+    else if (parseInt(b.dias) > 0) ret = new Date(Date.now() + Math.min(parseInt(b.dias), 365) * 86400e3);
+    if (!ret || isNaN(ret)) return res.status(400).json({ error: 'Indica una fecha o un número de días' });
+    if (ret.getTime() < Date.now() - 86400e3) return res.status(400).json({ error: 'La fecha ya pasó' });
+    const target = new Date(ret.getTime() + 36 * 3600e3);   // el día siguiente a su regreso
+    const r = await pool.query(`UPDATE lm_contact_sequences SET next_action_at=$3::timestamptz WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid, target.toISOString()]);
+    const iso = ret.toISOString().slice(0, 10);
+    await pool.query(`UPDATE lm_inbox_messages SET ooo_hasta=$3 WHERE id = (SELECT id FROM lm_inbox_messages WHERE user_id=$1 AND contact_id=$2 AND tipo='ooo' ORDER BY received_at DESC LIMIT 1)`, [uid, cid, iso]);
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, k.outbound_client_id || null, 'Aplazado hasta el ' + iso + (r.rowCount ? ' — sus próximos pasos se mueven al día siguiente; la secuencia sigue activa' : ' (no tenía secuencias activas)') + (b.nota ? ' · ' + String(b.nota).slice(0, 200) : '')]);
+    res.json({ ok: true, hasta: iso, aplazadas: r.rowCount });
+  } catch (e) { console.error('[aplazar]', e.message); res.status(500).json({ error: 'No se pudo aplazar' }); }
+});
 app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

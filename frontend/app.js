@@ -25798,6 +25798,7 @@ ${foot}
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
       <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">`
       + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('')
+      + `<div class="cp-mark-menu__sep"></div>` + item('Aplazar hasta… (fuera de oficina / vacaciones)', `LeadManagerModule.ldAplazar(${cid})`, '#0E7490')
       + `</div></div>
     </div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
@@ -30232,6 +30233,44 @@ ${foot}
     }
   }
   // "Más adelante" (nurturing): pide CUÁNDO retomarlo, con atajos de 1/3/6 meses.
+  // Aplazar a un contacto sin sacarlo de la secuencia: elige la fecha en que vuelve (o cuántos días).
+  function ldAplazar(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const nom = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
+    const enDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    document.getElementById('lm-apl-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-apl-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>Aplazar hasta que vuelva</h3><button class="fin-pi-x" onclick="document.getElementById('lm-apl-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <div class="fin-pi-full seq-drip-hint" style="margin:0 0 6px"><b>${esc(nom)}</b> <b>sigue en la secuencia</b>: sus próximos pasos (y lo que ya tengas aprobado para él) esperan hasta el día siguiente a su regreso.</div>
+        <div class="fin-pi-full" style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[7, 14, 21, 30].map(n => `<button type="button" class="seq-days-preset" onclick="document.getElementById('apl-fecha').value='${enDias(n)}';document.getElementById('apl-dias').value=''">En ${n} días</button>`).join('')}
+        </div>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Vuelve el</span><input class="form-input" type="date" id="apl-fecha" value="${enDias(7)}" onchange="document.getElementById('apl-dias').value=''"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">…o en cuántos días</span><input class="form-input" type="number" min="1" max="365" id="apl-dias" placeholder="Ej. 10" oninput="if(this.value)document.getElementById('apl-fecha').value=''"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="apl-nota" placeholder="Ej. de viaje hasta el lunes"></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="apl-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-apl-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="apl-save" onclick="LeadManagerModule.ldAplazarSave(${cid})">Aplazar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function ldAplazarSave(cid) {
+    const fecha = ($('apl-fecha') || {}).value || '', dias = parseInt(($('apl-dias') || {}).value) || 0, nota = (($('apl-nota') || {}).value || '').trim();
+    const hint = $('apl-hint'), btn = $('apl-save');
+    if (!fecha && !dias) { if (hint) { hint.textContent = 'Elige una fecha o un número de días'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/${cid}/aplazar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dias ? { dias, nota } : { fecha, nota }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      document.getElementById('lm-apl-modal')?.remove();
+      try { await _ibReload(); } catch (_) {}
+      showBanner('✓ Aplazado hasta el ' + new Date(d.hasta + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }) + (d.aplazadas ? ' — la secuencia sigue activa' : ''), 'success');
+    } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
+  }
   function ldNurture(cid) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const nom = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
@@ -35524,7 +35563,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
+    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
