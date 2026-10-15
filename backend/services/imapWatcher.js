@@ -41,6 +41,29 @@ const BOUNCE_SUBJ = /undeliver|delivery (status|failure|has failed)|returned mai
 const OOO_SUBJ    = /out of office|automatic reply|auto[- ]?reply|autoreply|away from|vacation|fuera de (la )?oficina|respuesta automática|ausen(te|cia)/i;
 
 // "Nombre <a@b.com>, otro@c.com" -> ["a@b.com","otro@c.com"], dedupeado.
+// HTML del correo para mostrarlo en el Inbox con su formato original. Se limpia lo peligroso (la pantalla además lo muestra en un marco aislado
+// y sin scripts, con las imágenes externas bloqueadas hasta que las pidas) y las imágenes incrustadas (cid:) se convierten en datos para que se vean.
+const HTML_MAX = 400000;
+function htmlOf(parsed) {
+  try {
+    let h = String(parsed.html || '');
+    if (!h.trim()) return '';
+    let budget = 700000;
+    for (const a of (Array.isArray(parsed.attachments) ? parsed.attachments : [])) {
+      const cid = String(a.cid || a.contentId || '').replace(/[<>]/g, '');
+      if (!cid || !a.content || !/^image\//i.test(a.contentType || '')) continue;
+      if (a.content.length > 250000 || a.content.length > budget) continue;
+      budget -= a.content.length;
+      h = h.split('cid:' + cid).join('data:' + a.contentType + ';base64,' + a.content.toString('base64'));
+    }
+    h = h.replace(/<(script|iframe|object|embed|applet|noscript)\b[\s\S]*?<\/\1\s*>/gi, '')
+         .replace(/<(script|iframe|object|embed|applet|link|meta|base|form|input|button)\b[^>]*>/gi, '')
+         .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+         .replace(/(href|src|action|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1=$2#$2');
+    return h.length > HTML_MAX ? h.slice(0, HTML_MAX) : h;
+  } catch (_) { return ''; }
+}
+
 function _addrList(campo) {
   if (!campo) return [];
   const arr = Array.isArray(campo) ? campo : [campo];
@@ -392,13 +415,13 @@ async function _checkMailbox(pool, mb) {
           `INSERT INTO lm_inbox_messages
              (user_id, mailbox_id, outbound_client_id, contact_id, imap_uid, message_id,
               in_reply_to, from_email, from_name, asunto, cuerpo, tipo, received_at,
-              to_emails, cc_emails)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+              to_emails, cc_emails, cuerpo_html)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            ON CONFLICT (mailbox_id, imap_uid) DO NOTHING`,
           [mb.user_id, mb.id, mb.outbound_client_id, contact ? contact.id : null, msg.uid,
            parsed.messageId || '', parsed.inReplyTo || '', fromAddr, fromName,
            (parsed.subject || '').slice(0, 500), snippet, tipo,
-           parsed.date || new Date(), _dirs(parsed.to), _dirs(parsed.cc)]
+           parsed.date || new Date(), _dirs(parsed.to), _dirs(parsed.cc), htmlOf(parsed)]
         );
 
         if (tipo === 'reply' && contact) await _onReply(pool, mb, contact, parsed, snippet);
@@ -512,4 +535,36 @@ async function backfillTables(pool, days) {
   return { scanned, fixed };
 }
 
-module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, onOoo: _onOoo, parseReturnDate, isTeamAddr: _isTeamAddr };
+// Vuelve a leer de IMAP los correos YA guardados y les añade su HTML (para ver los anteriores con formato).
+async function backfillHtml(pool, days) {
+  const { rows: mbs } = await pool.query('SELECT * FROM lm_mailboxes');
+  let done = 0, scanned = 0;
+  for (const mb of mbs) {
+    const { rows } = await pool.query("SELECT id, imap_uid FROM lm_inbox_messages WHERE mailbox_id=$1 AND cuerpo_html IS NULL AND imap_uid > 0 AND received_at > NOW() - ($2 || ' days')::interval ORDER BY imap_uid", [mb.id, String(days || 90)]);
+    if (!rows.length) continue;
+    const byUid = new Map(rows.map(r => [Number(r.imap_uid), r.id]));
+    let client;
+    try {
+      const authBlock = await getMailboxAuth(pool, mb);
+      const auth = authBlock.accessToken ? { user: authBlock.user, accessToken: authBlock.accessToken } : { user: authBlock.user, pass: authBlock.pass };
+      client = new ImapFlow({ host: mb.imap_host, port: mb.imap_port, secure: true, auth, logger: false, emitLogs: false });
+      await client.connect();
+      await client.mailboxOpen('INBOX');
+      const seen = new Set();
+      for await (const msg of client.fetch([...byUid.keys()].join(','), { uid: true, source: { maxLength: MAX_SOURCE } }, { uid: true })) {
+        scanned++;
+        const id = byUid.get(Number(msg.uid)); if (!id) continue;
+        seen.add(id);
+        const parsed = await simpleParser(msg.source);
+        await pool.query('UPDATE lm_inbox_messages SET cuerpo_html=$1 WHERE id=$2', [htmlOf(parsed), id]);
+        done++;
+      }
+      // los que ya no están en el buzón se marcan vacíos para no reintentarlos siempre
+      for (const id of byUid.values()) if (!seen.has(id)) await pool.query("UPDATE lm_inbox_messages SET cuerpo_html='' WHERE id=$1 AND cuerpo_html IS NULL", [id]);
+    } catch (e) { console.log('[backfillHtml] buzón ' + mb.id + ': ' + e.message); }
+    finally { try { if (client) await client.logout(); } catch (_) {} }
+  }
+  return { scanned, done };
+}
+
+module.exports = { backfillHtml, htmlOf, startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, onOoo: _onOoo, parseReturnDate, isTeamAddr: _isTeamAddr };

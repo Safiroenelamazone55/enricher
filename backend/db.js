@@ -854,6 +854,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS editado BOOLEAN NOT NULL DEFAULT FALSE`);
     // Respuesta automática de ausencia (OOO): fecha de regreso detectada en el texto, para aplazar sus próximos pasos hasta que vuelva
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS ooo_hasta DATE`);
+    // Correo tal como lo envió quien escribió (HTML con su formato, listas, enlaces y firma con logo), para verlo en el Inbox igual que en el buzón
+    await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS cuerpo_html TEXT`);
     // Qué hacer si a un contacto le falta el mensaje de SU idioma en un paso por idioma: 'base' = manda el mensaje base; 'detener' = pausa al contacto y avisa.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS idioma_faltante TEXT NOT NULL DEFAULT 'base'`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seguimiento_avisos BOOLEAN NOT NULL DEFAULT TRUE`);

@@ -25715,6 +25715,29 @@ ${foot}
     try { await navigator.clipboard.writeText(texto); showBanner(`✓ Conversación copiada (${msgs.length} mensaje${msgs.length === 1 ? '' : 's'})`, 'success'); }
     catch (e) { showBanner('No se pudo copiar', 'error'); }
   }
+  // Correo recibido con su formato original (como en el buzón): se dibuja en un marco aislado, sin scripts y con las imágenes externas
+  // bloqueadas hasta que las pidas (igual que Zoho/Gmail), y se ajusta solo a su alto.
+  let _ibImgOk = {};
+  function _ibFrameDoc(m, showImg) {
+    const html = String(m.cuerpo_html || '');
+    const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (showImg ? ' https: http:' : '');
+    return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><base target="_blank"><style>html,body{margin:0;padding:0;background:transparent}'
+      + 'body{font:14px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1D4ED8}'
+      + 'blockquote{margin:8px 0 8px 2px;padding-left:12px;border-left:3px solid #CBD5E1;color:#475569}pre{white-space:pre-wrap}</style></head><body>' + html + '</body></html>';
+  }
+  function _ibMailFrame(m) {
+    const html = String(m.cuerpo_html || ''), on = !!_ibImgOk[m.id];
+    const remote = /<img[^>]+src\s*=\s*["']?https?:/i.test(html) || /url\(\s*["']?https?:/i.test(html) || /background\s*=\s*["']?https?:/i.test(html);
+    return (remote && !on ? `<div class="ibx-m__imgs" id="ibf-n-${m.id}">Se bloquearon las imágenes externas (logos, fotos) · <a href="javascript:void(0)" onclick="LeadManagerModule.ibShowImgs(${m.id})">Mostrar imágenes</a></div>` : '')
+      + `<iframe class="ibx-m__frame" id="ibf-${m.id}" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin" srcdoc="${esc(_ibFrameDoc(m, on))}" onload="LeadManagerModule.ibFrameFit(this)" style="width:100%;border:0;height:80px;display:block"></iframe>`;
+  }
+  function ibFrameFit(f) { try { const d = f.contentDocument; if (d) f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px'; } catch (_) {} }
+  function ibShowImgs(id) {
+    _ibImgOk[id] = true;
+    const m = ((_ibThread && _ibThread.messages) || []).find(x => x.dir === 'in' && x.id === id);
+    const f = document.getElementById('ibf-' + id); if (m && f) f.srcdoc = _ibFrameDoc(m, true);
+    document.getElementById('ibf-n-' + id)?.remove();
+  }
   function _ibMsg(m) {
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     // Nota interna: nunca se envió nada, por eso se ve distinta a proposito (ni
@@ -25753,7 +25776,7 @@ ${foot}
       <div class="ibx-m__meta">${esc(inMsg ? (m.buzon || '') : ('Tú · ' + (m.buzon || '')))}${tag} · ${when}</div>
       ${!inMsg && m.cc_emails ? `<div class="ibx-m__subj" style="font-weight:400;color:var(--text-secondary)">CC: ${esc(m.cc_emails)}</div>` : ''}
       ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
-      ${_ibBodyHtml(m.cuerpo)}
+      ${inMsg && m.cuerpo_html ? _ibMailFrame(m) : _ibBodyHtml(m.cuerpo)}
     </div>`;
   }
   // ── Bloque 5: acciones rápidas de "Resolver respuesta" dentro del chat — sin salir de la conversación ──
@@ -35563,7 +35586,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, ldOpenDispoMenu,
+    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,

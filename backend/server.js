@@ -6570,21 +6570,21 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     const { rows: msgs } = await pool.query(`
       SELECT * FROM (
         SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, m.estado, '' AS tipo,
-               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails
+               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails, '' AS cuerpo_html
           FROM lm_messages m
           LEFT JOIN sequences s ON s.id = m.sequence_id
           LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
          WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed','scheduled')
         UNION ALL
-        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email, ''
+        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email, '', COALESCE(im.cuerpo_html,'')
           FROM lm_inbox_messages im
          WHERE im.user_id=$1 AND im.contact_id=$2
         UNION ALL
-        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor, ''
+        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor, '', ''
           FROM lm_notes n
          WHERE n.user_id=$1 AND n.contact_id=$2
         UNION ALL
-        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email, ''
+        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email, '', ''
           FROM lm_forwards f
          WHERE f.user_id=$1 AND f.contact_id=$2
       ) t ORDER BY at ASC NULLS FIRST
