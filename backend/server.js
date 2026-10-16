@@ -6916,7 +6916,8 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
       SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at, m.scheduled_at,
              k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
              st.dia AS paso_dia, st.titulo AS paso_titulo, COALESCE(st.cc_off, FALSE) AS cc_off,
-             COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev, st.reply_to_step_id
+             COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev, st.reply_to_step_id,
+             k.idioma AS idioma, m.variant AS variant
         FROM lm_messages m
         JOIN lm_contacts k ON k.id = m.contact_id
         LEFT JOIN lm_companies co ON co.id = k.company_id

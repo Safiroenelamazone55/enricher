@@ -141,11 +141,14 @@ function _esc(s) {
 
 // Texto plano → HTML: escapa, enlaza URLs (con tracking opcional) y respeta saltos.
 // Firma del buzón según el idioma del contacto: la de su idioma si existe; si no, la predeterminada del buzón.
-function pickSignature(signatureHtml, signatures, idioma) {
+function pickSignature(signatureHtml, signatures, idioma, variantName) {
   try {
     const sg = (signatures && typeof signatures === 'object') ? signatures : {};
     const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    const want = nz(idioma);
+    // La firma sigue al idioma del MENSAJE: si el nombre de la variante es un idioma («Español», «Inglés B»), manda ese; si no, el idioma del contacto.
+    const vn = nz(String(variantName || '').replace(/\s+[A-Za-z]$/, ''));
+    let want = nz(idioma);
+    if (vn && Object.keys(sg).some(x => nz(x) === vn)) want = vn;
     if (want) { const k = Object.keys(sg).find(x => nz(x) === want); if (k && String(sg[k]).trim()) return sg[k]; }
   } catch (_) {}
   return signatureHtml || '';
@@ -601,7 +604,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 
   // Firma: la del buzón (si el cliente puso una) pisa a la global del user.
   // Así cada cliente tiene su propia firma personalizada.
-  const firmaEfectiva = (mbx && (mbx.signature_html || (mbx.signatures && Object.keys(mbx.signatures).length))) ? (pickSignature(mbx.signature_html, mbx.signatures, enr.idioma) || cfg.firma) : cfg.firma;
+  const firmaEfectiva = (mbx && (mbx.signature_html || (mbx.signatures && Object.keys(mbx.signatures).length))) ? (pickSignature(mbx.signature_html, mbx.signatures, enr.idioma, variantName) || cfg.firma) : cfg.firma;
 
   const html = buildHtml({
     text: cuerpoTxt, firma: firmaEfectiva, trackToken: token, apiBase,
@@ -787,7 +790,7 @@ async function _mailboxFull(pool, clientId, tz) {
 async function _flushApproved(pool, apiBase) {
   const { rows: due } = await pool.query(`
     SELECT DISTINCT ON (m.sequence_id) s.outbound_client_id AS ocid, m.scheduled_at,
-           m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token,
+           m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token, m.variant,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
@@ -872,7 +875,7 @@ async function _flushApproved(pool, apiBase) {
       await new Promise(r => setTimeout(r, Math.floor(Math.random() * 20000)));
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       // Firma: la del buzón pisa a la del user (misma regla que el auto-sender).
-      const firmaEfectiva = pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma) || m.firma;
+      const firmaEfectiva = pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma, m.variant) || m.firma;
       const html = buildHtml({
         text: m.cuerpo, firma: firmaEfectiva, trackToken: m.track_token, apiBase,
         trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,

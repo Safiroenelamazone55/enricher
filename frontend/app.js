@@ -23918,12 +23918,13 @@ ${foot}
   }
 
   // Firma que se añadirá al enviar: la del buzón del cliente de esta secuencia; si no tiene, la global de Configuración.
-  function _seqSigFor(idioma) {
+  function _seqSigFor(idioma, variant) {
     const s = (_sequences || []).find(x => x.id === _activeSeq);
     const cli = s && s.outbound_client_id ? (_clients || []).find(c => c.id === s.outbound_client_id) : null;
     const mb = cli ? _mbFor(cli.id) : null;
     const sg = (mb && mb.signatures) || {}, nz = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    const lk = idioma ? Object.keys(sg).find(k => nz(k) === nz(idioma)) : '';
+    const vn = nz(String(variant || '').replace(/\s+[A-Za-z]$/, ''));
+    const lk = (vn && Object.keys(sg).find(k => nz(k) === vn)) || (idioma ? Object.keys(sg).find(k => nz(k) === nz(idioma)) : '');
     if (lk && String(sg[lk]).trim()) return sg[lk];
     return (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
   }
@@ -23940,8 +23941,8 @@ ${foot}
       });
     });
   }
-  function _seqMailHtml(bodyId, text, locked, idioma) {
-    const sig = _seqSigFor(idioma);
+  function _seqMailHtml(bodyId, text, locked, idioma, variant) {
+    const sig = _seqSigFor(idioma, variant);
     const sigHtml = sig ? _linkifySig(sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
     return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
       '<div class="seq-app__mail">' +
@@ -24005,7 +24006,7 @@ ${foot}
             <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto del email" style="flex:1;margin:0"></div>
           ${a.reply_to_prev ? '<div style="font-size:11.5px;color:#B45309;margin:0 0 6px 68px">Este paso está pensado como respuesta a un email anterior, pero no hay ninguno enviado: saldrá como un correo nuevo.</div>' : ''}`}
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
-      ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved, a.idioma)}
+      ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved, a.idioma, a.variant)}
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
