@@ -22355,8 +22355,9 @@ ${foot}
     const porPais = count(list, c => c.pais), sinPais = list.filter(c => !c.pais).length;
     const porIdi = count(list, c => c.idioma_ef), sinIdi = list.filter(c => !c.idioma_ef).length;
     const idiNames = Object.keys(porIdi).sort((a, b) => porIdi[b] - porIdi[a]);
-    const idiBlock = idiNames.map(k => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px"><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
-      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
+    const _idiAsig = (n, key) => `<div style="margin:8px 0 2px 14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:12px;color:#64748B">Asignar a todo este grupo:</span><select class="form-input" id="idi-to-${n}" style="width:auto;min-width:130px;padding:3px 8px;font-size:12.5px">${_IDIOMAS_UI.map(l => `<option value="${esc(l)}"${l === 'Español' ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqIdiAsignar(${id},'${encodeURIComponent(key)}',${n})">Aplicar</button></div>`;
+    const idiBlock = idiNames.map((k, n) => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px"><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div>${_idiAsig(n, k)}</details>`).join('')
+      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div>${_idiAsig(99, '_none')}</details>` : '');
     const aud = card('Audiencia', kv([['Empresas', empresasN], ['Contactos', list.length], ['Con email', conEmail + ' (' + Math.round(100 * conEmail / (list.length || 1)) + '%)'], ['Idiomas distintos', idiNames.length || '']])
       + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:14px"><div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por país</div>${bars(porPais, list.length, sinPais ? sinPais + ' sin país' : '') || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos</div>'}</div>
         <div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
@@ -24024,6 +24025,19 @@ ${foot}
   }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; _seqCtPage = 0; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function _seqCtRepaint() { const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  async function seqIdiAsignar(seqId, keyEnc, n) {
+    const desde = decodeURIComponent(keyEnc), a = ($('idi-to-' + n) || {}).value || '';
+    if (!a) return;
+    const quien = desde === '_none' ? 'los contactos sin idioma' : `los contactos en «${desde}»`;
+    const ok = await novaConfirm({ title: 'Asignar idioma al grupo', message: `Se asignará <b>${esc(a)}</b> a ${esc(quien)} de esta secuencia. Queda guardado en cada contacto y manda sobre el idioma deducido por su país. Los borradores pendientes se rehacen.`, ok: 'Asignar', cancel: 'Cancelar' });
+    if (!ok) return;
+    try {
+      const r = await apiFetch(`${API}/lm/sequences/${seqId}/contacts-idioma`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desde, a }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ ${d.actualizados} contacto${d.actualizados !== 1 ? 's' : ''} → ${a}`, 'success');
+      _seqContacts = null; await _seqLoadContacts(seqId); try { await _reloadContacts(); } catch (_) {}
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function seqCtSetLang(v) { _seqCtPage = 0; _seqCtLang = (v && _seqCtLang === v) ? '' : (v || ''); _seqCtRepaint(); }
   function seqCtSetDisp(v) { _seqCtPage = 0; _seqCtDisp = (v && _seqCtDisp === v) ? '' : (v || ''); _seqCtRepaint(); }   // pulsar el chip activo lo quita
   function seqCtSelToggle(cid, on, seqId) { if (on) _seqCtSel.add(cid); else _seqCtSel.delete(cid); _seqCtRepaint(); }
@@ -31936,7 +31950,7 @@ ${foot}
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
   }
-  const _IDIOMAS_UI = ['Español', 'Inglés', 'Francés', 'Alemán', 'Italiano', 'Portugués', 'Neerlandés', 'Árabe', 'Sueco', 'Noruego', 'Danés', 'Finés', 'Polaco', 'Checo', 'Rumano', 'Griego', 'Turco', 'Ruso', 'Ucraniano', 'Chino', 'Japonés', 'Coreano', 'Hebreo', 'Hindi', 'Indonesio'];
+  const _IDIOMAS_UI = ['Español', 'Inglés', 'Francés', 'Alemán', 'Italiano', 'Portugués', 'Neerlandés', 'Árabe', 'Sueco', 'Noruego', 'Danés', 'Finés', 'Polaco', 'Checo', 'Rumano', 'Griego', 'Turco', 'Ruso', 'Ucraniano', 'Chino', 'Japonés', 'Coreano', 'Hebreo', 'Hindi', 'Indonesio', 'Filipino'];
   // Idiomas de los contactos de la secuencia del paso abierto (con cuántos hay de cada uno), si ya están cargados.
   function _stepLangCounts() {
     const d = _stepDraft; if (!d || !Array.isArray(_seqContacts) || _activeSeq !== d.seqId) return {};
@@ -32404,7 +32418,7 @@ ${foot}
         ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'],
         ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
         ['buyer_role', 'Rol de compra (Buyer Role)'],
-        ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
+        ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'], ['idioma', 'Idioma del contacto'],
         ['estado', 'Etapa / Estado'], ['contact_priority', 'Prioridad (Contact Priority)'], ['fuente', 'Fuente'], ['analisis', 'Análisis (por qué calificó)'], ['notas', 'Notas'],
       ] },
       { g: 'Empresa (se crea y enlaza)', opts: [
@@ -32445,6 +32459,7 @@ ${foot}
     ciudad: ['city', 'ciudad', 'localidad'],
     region: ['state', 'region', 'provincia', 'state region', 'estado region'],
     pais: ['country', 'pais', 'country region'],
+    idioma: ['language', 'idioma', 'lang', 'preferred language', 'idioma preferido', 'contact language', 'idioma del contacto', 'lengua'],
     estado: ['stage', 'lead stage', 'status', 'estado', 'lifecycle', 'lifecycle stage', 'lead status', 'etapa'],
     fuente: ['source', 'fuente', 'lead source', 'original source', 'origen'],
     notas: ['notes', 'notas', 'comments', 'comentarios', 'observaciones'],
@@ -35782,7 +35797,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,

@@ -6554,6 +6554,27 @@ app.delete('/api/lm/clients/:id/notes/:nid', requireAuth, async (req, res) => {
     res.json({ ok: true, borradas: r.rowCount });
   } catch (e) { console.error('[client-notes]', e.message); res.status(500).json({ error: 'No se pudo borrar' }); }
 });
+// Asignar idioma a todo un grupo de contactos de una secuencia (p. ej. los «Neerlandés» pasan a «Español» porque la secuencia solo tiene mensajes en español e inglés).
+// Cambia el idioma GUARDADO del contacto (el que manda sobre el deducido por país) y rehace sus borradores.
+app.patch('/api/lm/sequences/:id/contacts-idioma', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {};
+  try {
+    const geo = require('./services/geoService');
+    const a = geo.normalizeLanguage(b.a); if (!a) return res.status(400).json({ error: 'Elige el idioma a asignar' });
+    const desde = b.desde === '_none' ? '' : geo.normalizeLanguage(b.desde);
+    const { rows } = await pool.query(`SELECT DISTINCT k.id, k.idioma, k.pais, k.ciudad, k.region FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id WHERE cs.user_id=$1 AND cs.sequence_id=$2`, [uid, parseInt(req.params.id)]);
+    const ids = [];
+    for (const r of rows) {
+      let ef = r.idioma ? geo.normalizeLanguage(r.idioma) : '';
+      if (!ef) { const l = geo.languageFor(r.pais || geo.countryFromPlace(r.ciudad, r.region) || '', r.ciudad); ef = l.lang ? (geo.LANG_NAMES[l.lang] || l.lang) : ''; }
+      if (ef === desde) ids.push(r.id);
+    }
+    if (!ids.length) return res.json({ ok: true, actualizados: 0 });
+    await pool.query(`UPDATE lm_contacts SET idioma=$1, updated_at=NOW() WHERE user_id=$2 AND id = ANY($3::int[])`, [a, uid, ids]);
+    try { await _refreshDrafts(uid, ids, null); } catch (_) {}
+    res.json({ ok: true, actualizados: ids.length, idioma: a });
+  } catch (e) { console.error('[contacts-idioma]', e.message); res.status(500).json({ error: 'No se pudo asignar el idioma' }); }
+});
 app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -7825,6 +7846,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
             estado: _lmS(f.estado), fuente: _lmS(f.fuente),
             contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), analisis: _lmS(f.analisis), notas: _lmS(f.notas),
+            idioma: require('./services/geoService').normalizeLanguage(f.idioma),   // el idioma del archivo manda sobre el deducido por país
           };
           for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
           // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
@@ -7861,10 +7883,10 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
         });
         await pool.query(`
-          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch,idioma)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
-            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '']);
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', require('./services/geoService').normalizeLanguage(f.idioma)]);
         summary.contactsCreated++;
       }
     } catch (e) {

@@ -184,6 +184,20 @@ function languageFor(pais, ciudad) {
   return { lang: '', ambiguous: true, candidates: c.cands || [] };
 }
 
-const LANG_NAMES = { es: 'Español', en: 'Inglés', fr: 'Francés', de: 'Alemán', it: 'Italiano', pt: 'Portugués', nl: 'Neerlandés', ar: 'Árabe', sv: 'Sueco', no: 'Noruego', da: 'Danés', fi: 'Finés', pl: 'Polaco', cs: 'Checo', sk: 'Eslovaco', hu: 'Húngaro', ro: 'Rumano', bg: 'Búlgaro', el: 'Griego', hr: 'Croata', sr: 'Serbio', sl: 'Esloveno', et: 'Estonio', lv: 'Letón', lt: 'Lituano', uk: 'Ucraniano', ru: 'Ruso', tr: 'Turco', zh: 'Chino', ja: 'Japonés', ko: 'Coreano', vi: 'Vietnamita', th: 'Tailandés', id: 'Indonesio', ms: 'Malayo', fa: 'Persa', bn: 'Bengalí', si: 'Cingalés' };
+const LANG_NAMES = { es: 'Español', en: 'Inglés', fr: 'Francés', de: 'Alemán', it: 'Italiano', pt: 'Portugués', nl: 'Neerlandés', ar: 'Árabe', sv: 'Sueco', no: 'Noruego', da: 'Danés', fi: 'Finés', pl: 'Polaco', cs: 'Checo', sk: 'Eslovaco', hu: 'Húngaro', ro: 'Rumano', bg: 'Búlgaro', el: 'Griego', hr: 'Croata', sr: 'Serbio', sl: 'Esloveno', et: 'Estonio', lv: 'Letón', lt: 'Lituano', uk: 'Ucraniano', ru: 'Ruso', tr: 'Turco', zh: 'Chino', ja: 'Japonés', ko: 'Coreano', vi: 'Vietnamita', th: 'Tailandés', id: 'Indonesio', ms: 'Malayo', fa: 'Persa', bn: 'Bengalí', si: 'Cingalés', tl: 'Filipino', he: 'Hebreo', hi: 'Hindi' };
 
-module.exports = { normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES };
+// Idioma escrito de cualquier forma (código ISO, nombre en español/inglés/nativo) → el nombre en español que usa Nova ("Neerlandés", "Inglés"...).
+// Lo que no se reconoce se deja tal cual (con la primera letra en mayúscula) para no perder lo que trajo el archivo.
+const _LN_ALIAS = { english: 'en', ingles: 'en', spanish: 'es', espanol: 'es', castellano: 'es', french: 'fr', francais: 'fr', german: 'de', deutsch: 'de', italian: 'it', italiano: 'it', portuguese: 'pt', portugues: 'pt', dutch: 'nl', nederlands: 'nl', holandes: 'nl', arabic: 'ar', swedish: 'sv', svenska: 'sv', norwegian: 'no', norsk: 'no', danish: 'da', dansk: 'da', finnish: 'fi', suomi: 'fi', polish: 'pl', polski: 'pl', czech: 'cs', slovak: 'sk', hungarian: 'hu', romanian: 'ro', bulgarian: 'bg', greek: 'el', croatian: 'hr', serbian: 'sr', slovenian: 'sl', estonian: 'et', latvian: 'lv', lithuanian: 'lt', ukrainian: 'uk', russian: 'ru', turkish: 'tr', chinese: 'zh', mandarin: 'zh', japanese: 'ja', korean: 'ko', vietnamese: 'vi', thai: 'th', indonesian: 'id', malay: 'ms', persian: 'fa', farsi: 'fa', bengali: 'bn', sinhala: 'si', filipino: 'tl', tagalog: 'tl', pilipino: 'tl', hebrew: 'he', hindi: 'hi' };
+function normalizeLanguage(v) {
+  const raw = String(v == null ? '' : v).trim(); if (!raw) return '';
+  const k = norm(raw).replace(/\s+/g, ' ');
+  const code = k.split(/[ _-]/)[0];
+  if (LANG_NAMES[code] && k.length <= 5) return LANG_NAMES[code];
+  if (_LN_ALIAS[k]) return LANG_NAMES[_LN_ALIAS[k]];
+  const hit = Object.values(LANG_NAMES).find(n => norm(n) === k);
+  if (hit) return hit;
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+module.exports = { normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES, normalizeLanguage };
