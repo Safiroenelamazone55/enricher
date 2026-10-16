@@ -29085,10 +29085,12 @@ ${foot}
           </div></div></div>`;
     };
     box.innerHTML = `
-      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap">
-        <textarea id="cn-new" class="form-input" rows="2" placeholder="Escribe una nota del cliente… (Ctrl+Enter para guardar)" style="flex:1;min-width:260px" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')LeadManagerModule.cnAdd()"></textarea>
-        <select id="cn-est" class="form-input" style="width:auto">${Object.keys(_CN_EST).filter(k => k !== 'hecha').map(k => `<option value="${k}">${_CN_EST[k][0]}</option>`).join('')}</select>
-        <button class="btn btn--primary btn--sm" id="cn-add" onclick="LeadManagerModule.cnAdd()">＋ Agregar</button>
+      <div style="margin-bottom:14px">
+        <textarea id="cn-new" class="form-input" rows="6" placeholder="Escribe una nota del cliente… (Ctrl+Enter para guardar)" style="width:100%;min-height:140px;resize:vertical;font-size:14px;line-height:1.5;display:block" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,420)+'px'" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')LeadManagerModule.cnAdd()"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+          <select id="cn-est" class="form-input" style="width:auto">${Object.keys(_CN_EST).filter(k => k !== 'hecha').map(k => `<option value="${k}">${_CN_EST[k][0]}</option>`).join('')}</select>
+          <button class="btn btn--primary btn--sm" id="cn-add" onclick="LeadManagerModule.cnAdd()">＋ Agregar</button>
+        </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>
       ${list.length ? list.map(row).join('') : '<div class="cp-empty2" style="padding:18px">Sin notas en esta vista.</div>'}`;
@@ -29112,7 +29114,7 @@ ${foot}
   async function cnSet(id, estado) { try { await _cnPatch(id, { estado }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); _cnRender(); } }
   function cnEdit(id) {
     const n = _cnNotes.find(x => x.id === id), el = $('cn-t-' + id); if (!n || !el) return;
-    el.outerHTML = `<div id="cn-t-${id}"><textarea id="cn-e-${id}" class="form-input" rows="3" style="width:100%">${esc(n.texto)}</textarea>
+    el.outerHTML = `<div id="cn-t-${id}"><textarea id="cn-e-${id}" class="form-input" rows="6" style="width:100%;min-height:120px;resize:vertical;font-size:14px;line-height:1.5">${esc(n.texto)}</textarea>
       <div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cnEditSave(${id})">Guardar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cnFilter(LeadManagerModule.cnCurFilter())">Cancelar</button></div></div>`;
   }
   async function cnEditSave(id) {
