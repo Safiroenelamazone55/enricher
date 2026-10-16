@@ -29005,6 +29005,7 @@ ${foot}
     if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
     if (tab === 'WhatsApp' && c) ObcWaModule.load(c.id);
     if (tab === 'Portal' && c) _portalLoad(c.id);
+    if (tab === 'Notas' && c) _cnLoad(c.id);
   }
   function _clientGoTab(tabName) {
     const btn = [...document.querySelectorAll('.lm-ws-tab')].find(b => b.textContent.trim() === tabName);
@@ -29050,7 +29051,85 @@ ${foot}
       <td class="ldh-date">${_ldFmtDate(c.updated_at)}</td>
     </tr>`;
   }
+  // ── Notas del cliente outbound: apuntes internos con estado (por revisar / por aprobar / tarea / hecha) ──
+  const _CN_EST = { nota: ['Nota', '#64748B', '#F1F5F9'], por_revisar: ['Por revisar', '#B45309', '#FEF3C7'], por_aprobar: ['Por aprobar', '#1D4ED8', '#DBEAFE'], tarea: ['Tarea', '#7C3AED', '#EDE9FE'], hecha: ['Hecha', '#15803D', '#DCFCE7'] };
+  let _cnNotes = [], _cnFilter = 'abiertas', _cnCid = 0;
+  const _cnEmpty = '<div class="cp-empty2" style="padding:18px">Cargando notas…</div>';
+  async function _cnLoad(cid) {
+    _cnCid = cid;
+    try {
+      const r = await apiFetch(`${API}/lm/clients/${cid}/notes`); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _cnNotes = d;
+    } catch (e) { const b = $('cn-box'); if (b) b.innerHTML = `<div class="cp-empty2" style="padding:18px">No se pudieron cargar las notas: ${esc(e.message)}</div>`; return; }
+    _cnRender();
+  }
+  function _cnRender() {
+    const box = $('cn-box'); if (!box) return;
+    const cnt = k => k === 'todas' ? _cnNotes.length : k === 'abiertas' ? _cnNotes.filter(n => n.estado !== 'hecha').length : _cnNotes.filter(n => n.estado === k).length;
+    const chips = [['abiertas', 'Abiertas'], ['por_revisar', 'Por revisar'], ['por_aprobar', 'Por aprobar'], ['tarea', 'Tareas'], ['nota', 'Notas'], ['hecha', 'Hechas'], ['todas', 'Todas']]
+      .map(([k, l]) => `<button type="button" class="seq-days-preset${_cnFilter === k ? ' on' : ''}" style="${_cnFilter === k ? 'background:#0B1220;color:#fff;border-color:#0B1220' : ''}" onclick="LeadManagerModule.cnFilter('${k}')">${l} <b>${cnt(k)}</b></button>`).join('');
+    const list = _cnNotes.filter(n => _cnFilter === 'todas' ? true : _cnFilter === 'abiertas' ? n.estado !== 'hecha' : n.estado === _cnFilter);
+    const row = n => {
+      const e = _CN_EST[n.estado] || _CN_EST.nota, done = n.estado === 'hecha';
+      const when = new Date(n.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+      return `<div class="cn-row" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #E5E7EB;background:#fff;margin-bottom:8px">
+        <input type="checkbox" ${done ? 'checked' : ''} title="${done ? 'Reabrir' : 'Marcar como hecha'}" style="margin-top:4px" onchange="LeadManagerModule.cnSet(${n.id},'${done ? 'tarea' : 'hecha'}')">
+        <div style="flex:1;min-width:0">
+          <div id="cn-t-${n.id}" style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;${done ? 'text-decoration:line-through;color:#94A3B8' : ''}">${esc(n.texto)}</div>
+          <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:#94A3B8">
+            <select class="form-input" style="width:auto;padding:2px 6px;font-size:11.5px;font-weight:700;color:${e[1]};background:${e[2]}" onchange="LeadManagerModule.cnSet(${n.id},this.value)">
+              ${Object.keys(_CN_EST).map(k => `<option value="${k}" ${k === n.estado ? 'selected' : ''}>${_CN_EST[k][0]}</option>`).join('')}</select>
+            <span>${when}${n.autor ? ' · ' + esc(n.autor) : ''}</span>
+            <a href="javascript:void(0)" onclick="LeadManagerModule.cnEdit(${n.id})">Editar</a>
+            <a href="javascript:void(0)" style="color:#DC2626" onclick="LeadManagerModule.cnDel(${n.id})">Borrar</a>
+          </div></div></div>`;
+    };
+    box.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap">
+        <textarea id="cn-new" class="form-input" rows="2" placeholder="Escribe una nota del cliente… (Ctrl+Enter para guardar)" style="flex:1;min-width:260px" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')LeadManagerModule.cnAdd()"></textarea>
+        <select id="cn-est" class="form-input" style="width:auto">${Object.keys(_CN_EST).filter(k => k !== 'hecha').map(k => `<option value="${k}">${_CN_EST[k][0]}</option>`).join('')}</select>
+        <button class="btn btn--primary btn--sm" id="cn-add" onclick="LeadManagerModule.cnAdd()">＋ Agregar</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>
+      ${list.length ? list.map(row).join('') : '<div class="cp-empty2" style="padding:18px">Sin notas en esta vista.</div>'}`;
+  }
+  function cnFilter(k) { _cnFilter = k; _cnRender(); }
+  async function cnAdd() {
+    const t = $('cn-new'), est = $('cn-est'); const texto = (t && t.value || '').trim();
+    if (!texto) { if (t) t.focus(); return; }
+    const btn = $('cn-add'); if (btn) btn.disabled = true;
+    try {
+      const r = await apiFetch(`${API}/lm/clients/${_cnCid}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, estado: est ? est.value : 'nota' }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _cnNotes.unshift(d); if (_cnFilter === 'hecha') _cnFilter = 'abiertas'; _cnRender();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) btn.disabled = false; }
+  }
+  async function _cnPatch(id, body) {
+    const r = await apiFetch(`${API}/lm/clients/${_cnCid}/notes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+    const i = _cnNotes.findIndex(n => n.id === id); if (i >= 0) _cnNotes[i] = d;
+  }
+  async function cnSet(id, estado) { try { await _cnPatch(id, { estado }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); _cnRender(); } }
+  function cnEdit(id) {
+    const n = _cnNotes.find(x => x.id === id), el = $('cn-t-' + id); if (!n || !el) return;
+    el.outerHTML = `<div id="cn-t-${id}"><textarea id="cn-e-${id}" class="form-input" rows="3" style="width:100%">${esc(n.texto)}</textarea>
+      <div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cnEditSave(${id})">Guardar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cnFilter(LeadManagerModule.cnCurFilter())">Cancelar</button></div></div>`;
+  }
+  async function cnEditSave(id) {
+    const v = ($('cn-e-' + id) || {}).value || '';
+    try { await _cnPatch(id, { texto: v }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function cnDel(id) {
+    const ok = await novaConfirm({ title: '¿Borrar esta nota?', message: 'No se puede deshacer.', ok: 'Borrar', cancel: 'Cancelar', tone: 'danger' });
+    if (!ok) return;
+    try {
+      const r = await apiFetch(`${API}/lm/clients/${_cnCid}/notes/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      _cnNotes = _cnNotes.filter(n => n.id !== id); _cnRender();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function _clientTabBody(tab, c, leads) {
+    if (tab === 'Notas') return '<div id="cn-box">' + _cnEmpty + '</div>';
     if (tab === 'Portal') return '<div id="lm-portal-box"><div class="cp-empty2" style="padding:20px">Cargando…</div></div>';
     if (tab === 'Leads') {
       if (!leads.length) return _empty('leads', 'Sin leads para este cliente', 'Se asocian por "Cliente outbound" desde Contactos, o al enrolarlos en una secuencia de este cliente.', '', '');
@@ -35585,7 +35664,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
+    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,

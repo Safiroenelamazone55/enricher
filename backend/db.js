@@ -854,6 +854,18 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS editado BOOLEAN NOT NULL DEFAULT FALSE`);
     // Respuesta automática de ausencia (OOO): fecha de regreso detectada en el texto, para aplazar sus próximos pasos hasta que vuelva
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS ooo_hasta DATE`);
+    // Notas internas del cliente outbound (por revisar / por aprobar / tarea / hecha)
+    await pool.query(`CREATE TABLE IF NOT EXISTS lm_client_notes (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      outbound_client_id INTEGER NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+      texto TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'nota',
+      autor TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_client_notes_cli ON lm_client_notes (outbound_client_id, created_at DESC)`);
     // Correo tal como lo envió quien escribió (HTML con su formato, listas, enlaces y firma con logo), para verlo en el Inbox igual que en el buzón
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS cuerpo_html TEXT`);
     // Qué hacer si a un contacto le falta el mensaje de SU idioma en un paso por idioma: 'base' = manda el mensaje base; 'detener' = pausa al contacto y avisa.
