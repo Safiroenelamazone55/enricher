@@ -29136,12 +29136,16 @@ ${foot}
   const _cnMarks = n => Array.isArray(n.marcas) ? n.marcas : [];
   function _cnText(n) {
     const t = String(n.texto || ''), ms = _cnMarks(n);
-    if (!ms.length) return esc(t);
-    const cuts = new Set([0, t.length]); ms.forEach(m => { cuts.add(Math.max(0, Math.min(t.length, m.ini))); cuts.add(Math.max(0, Math.min(t.length, m.fin))); });
+    const urls = []; const ure = /(?:https?:\/\/|www\.)[^\s<>"']+/gi; let um;
+    while ((um = ure.exec(t))) { let u = um[0].replace(/[.,;:!?)\]}»]+$/, ''); if (u.length > 4) urls.push({ ini: um.index, fin: um.index + u.length, u }); }
+    if (!ms.length && !urls.length) return esc(t);
+    const cuts = new Set([0, t.length]); urls.forEach(u => { cuts.add(u.ini); cuts.add(u.fin); }); ms.forEach(m => { cuts.add(Math.max(0, Math.min(t.length, m.ini))); cuts.add(Math.max(0, Math.min(t.length, m.fin))); });
     const pts = [...cuts].sort((a, b) => a - b); let out = '';
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1]; if (b <= a) continue;
-      const cov = ms.filter(m => m.ini <= a && m.fin >= b), seg = esc(t.slice(a, b));
+      const cov = ms.filter(m => m.ini <= a && m.fin >= b), uu = urls.find(u => u.ini <= a && u.fin >= b);
+      let seg = esc(t.slice(a, b));
+      if (uu) seg = `<a href="${esc(/^www\./i.test(uu.u) ? 'https://' + uu.u : uu.u)}" target="_blank" rel="noopener noreferrer" style="color:#1D4ED8;text-decoration:underline" onclick="event.stopPropagation()">${seg}</a>`;
       if (!cov.length) { out += seg; continue; }
       const col = [...cov].reverse().find(m => m.color), cm = cov.find(m => m.c);
       const st = (col ? `background:${_CN_COL[col.color][0]};` : '') + (cm ? 'border-bottom:2px dashed #7C3AED;cursor:pointer;' : '');
