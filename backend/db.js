@@ -865,6 +865,7 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
+    await pool.query(`ALTER TABLE lm_client_notes ADD COLUMN IF NOT EXISTS marcas JSONB NOT NULL DEFAULT '[]'`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_client_notes_cli ON lm_client_notes (outbound_client_id, created_at DESC)`);
     // Correo tal como lo envió quien escribió (HTML con su formato, listas, enlaces y firma con logo), para verlo en el Inbox igual que en el buzón
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS cuerpo_html TEXT`);

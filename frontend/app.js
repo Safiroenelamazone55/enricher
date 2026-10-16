@@ -29061,7 +29061,7 @@ ${foot}
       const r = await apiFetch(`${API}/lm/clients/${cid}/notes`); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       _cnNotes = d;
     } catch (e) { const b = $('cn-box'); if (b) b.innerHTML = `<div class="cp-empty2" style="padding:18px">No se pudieron cargar las notas: ${esc(e.message)}</div>`; return; }
-    _cnRender();
+    _cnBindSel(); _cnRender();
   }
   function _cnRender() {
     const box = $('cn-box'); if (!box) return;
@@ -29075,7 +29075,7 @@ ${foot}
       return `<div class="cn-row" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #E5E7EB;background:#fff;margin-bottom:8px">
         <input type="checkbox" ${done ? 'checked' : ''} title="${done ? 'Reabrir' : 'Marcar como hecha'}" style="margin-top:4px" onchange="LeadManagerModule.cnSet(${n.id},'${done ? 'tarea' : 'hecha'}')">
         <div style="flex:1;min-width:0">
-          <div id="cn-t-${n.id}" style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;${done ? 'text-decoration:line-through;color:#94A3B8' : ''}">${esc(n.texto)}</div>
+          <div id="cn-t-${n.id}" style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;${done ? 'text-decoration:line-through;color:#94A3B8' : ''}">${_cnText(n)}</div>${_cnComments(n)}
           <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:#94A3B8">
             <select class="form-input" style="width:auto;padding:2px 6px;font-size:11.5px;font-weight:700;color:${e[1]};background:${e[2]}" onchange="LeadManagerModule.cnSet(${n.id},this.value)">
               ${Object.keys(_CN_EST).map(k => `<option value="${k}" ${k === n.estado ? 'selected' : ''}>${_CN_EST[k][0]}</option>`).join('')}</select>
@@ -29119,7 +29119,7 @@ ${foot}
   }
   async function cnEditSave(id) {
     const v = ($('cn-e-' + id) || {}).value || '';
-    try { await _cnPatch(id, { texto: v }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    try { const n = _cnNotes.find(x => x.id === id); await _cnPatch(id, { texto: v.trim(), marcas: _cnRelocate(_cnMarks(n || {}), v.trim()) }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function cnDel(id) {
     const ok = await novaConfirm({ title: '¿Borrar esta nota?', message: 'No se puede deshacer.', ok: 'Borrar', cancel: 'Cancelar', tone: 'danger' });
@@ -29129,6 +29129,119 @@ ${foot}
       if (!r.ok) throw new Error((await r.json()).error || 'Error');
       _cnNotes = _cnNotes.filter(n => n.id !== id); _cnRender();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Resaltado (3 colores pastel) y comentarios por selección dentro de una nota, como en Word ──
+  const _CN_COL = { amarillo: ['#FEF08A', 'Amarillo'], verde: ['#BBF7D0', 'Verde'], rosa: ['#FBCFE8', 'Rosa'] };
+  let _cnSel = null, _cnBound = false;
+  const _cnMarks = n => Array.isArray(n.marcas) ? n.marcas : [];
+  function _cnText(n) {
+    const t = String(n.texto || ''), ms = _cnMarks(n);
+    if (!ms.length) return esc(t);
+    const cuts = new Set([0, t.length]); ms.forEach(m => { cuts.add(Math.max(0, Math.min(t.length, m.ini))); cuts.add(Math.max(0, Math.min(t.length, m.fin))); });
+    const pts = [...cuts].sort((a, b) => a - b); let out = '';
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1]; if (b <= a) continue;
+      const cov = ms.filter(m => m.ini <= a && m.fin >= b), seg = esc(t.slice(a, b));
+      if (!cov.length) { out += seg; continue; }
+      const col = [...cov].reverse().find(m => m.color), cm = cov.find(m => m.c);
+      const st = (col ? `background:${_CN_COL[col.color][0]};` : '') + (cm ? 'border-bottom:2px dashed #7C3AED;cursor:pointer;' : '');
+      out += `<span class="cn-mk" style="${st}"${cm ? ` title="${esc(cm.c)}" onclick="LeadManagerModule.cnMarkClick(event,${_cnNoteOf(n)},'${cm.id}')"` : ''}>${seg}</span>`;
+    }
+    return out;
+  }
+  const _cnNoteOf = n => n.id;
+  function _cnComments(n) {
+    const cs = _cnMarks(n).filter(m => m.c);
+    if (!cs.length) return '';
+    return `<div style="margin-top:8px;border-left:3px solid #C4B5FD;padding-left:10px">${cs.map(m => `<div style="font-size:12.5px;margin-bottom:5px;cursor:pointer" onclick="LeadManagerModule.cnMarkClick(event,${n.id},'${m.id}')"><span style="${m.color ? `background:${_CN_COL[m.color][0]};` : ''}color:#64748B">«${esc(m.q.length > 60 ? m.q.slice(0, 60) + '…' : m.q)}»</span> <span style="color:#7C3AED">💬</span> ${esc(m.c)}</div>`).join('')}</div>`;
+  }
+  function _cnOff(el, node, off) { const r = document.createRange(); r.selectNodeContents(el); r.setEnd(node, off); return r.toString().length; }
+  function _cnBindSel() {
+    if (_cnBound) return; _cnBound = true;
+    document.addEventListener('mouseup', ev => {
+      if (ev.target.closest && ev.target.closest('#cn-bar,#cn-pop')) return;
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) { _cnBarClose(); return; }
+        const rg = sel.getRangeAt(0), host = (rg.commonAncestorContainer.nodeType === 1 ? rg.commonAncestorContainer : rg.commonAncestorContainer.parentElement);
+        const el = host && host.closest ? host.closest('[id^="cn-t-"]') : null;
+        if (!el || el.querySelector('textarea')) { _cnBarClose(); return; }
+        const id = parseInt(el.id.slice(5)), ini = _cnOff(el, rg.startContainer, rg.startOffset), fin = _cnOff(el, rg.endContainer, rg.endOffset);
+        if (!(fin > ini)) { _cnBarClose(); return; }
+        _cnSel = { id, ini, fin };
+        _cnBarOpen(rg.getBoundingClientRect());
+      }, 0);
+    });
+  }
+  function _cnBarClose() { document.getElementById('cn-bar')?.remove(); }
+  function _cnBarOpen(rect) {
+    _cnBarClose();
+    const b = document.createElement('div'); b.id = 'cn-bar';
+    b.style.cssText = `position:fixed;z-index:9999;background:#fff;border:1px solid #CBD5E1;box-shadow:0 6px 20px rgba(15,23,42,.18);padding:6px 8px;display:flex;gap:8px;align-items:center;left:${Math.max(8, Math.min(rect.left, window.innerWidth - 250))}px;top:${Math.max(8, rect.top - 46)}px`;
+    b.onmousedown = e => e.preventDefault();
+    b.innerHTML = Object.keys(_CN_COL).map(k => `<button type="button" title="Resaltar ${_CN_COL[k][1].toLowerCase()}" style="width:22px;height:22px;border:1px solid #CBD5E1;background:${_CN_COL[k][0]};cursor:pointer" onclick="LeadManagerModule.cnMark('${k}')"></button>`).join('')
+      + `<button type="button" title="Quitar resaltado" style="border:1px solid #CBD5E1;background:#fff;cursor:pointer;font-size:12px;padding:2px 6px" onclick="LeadManagerModule.cnMark('')">⌫ Quitar</button>`
+      + `<button type="button" style="border:1px solid #7C3AED;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;padding:3px 8px" onclick="LeadManagerModule.cnCommentNew()">💬 Comentar</button>`;
+    document.body.appendChild(b);
+  }
+  const _cnRid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  async function _cnSaveMarks(id, marcas, texto) {
+    try { await _cnPatch(id, texto !== undefined ? { texto, marcas } : { marcas }); _cnRender(); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); _cnRender(); }
+  }
+  async function cnMark(color) {
+    const s = _cnSel; if (!s) return; const n = _cnNotes.find(x => x.id === s.id); if (!n) return;
+    let ms = _cnMarks(n).map(m => Object.assign({}, m));
+    if (!color) {   // quitar resaltado: los comentarios se conservan (solo pierden el color)
+      ms = ms.map(m => (m.ini < s.fin && m.fin > s.ini) ? Object.assign(m, { color: '' }) : m).filter(m => m.color || m.c);
+    } else {
+      ms = ms.filter(m => !(m.ini >= s.ini && m.fin <= s.fin && !m.c && m.color));   // un resaltado nuevo reemplaza los que cubre del todo
+      ms.push({ id: _cnRid(), ini: s.ini, fin: s.fin, color, c: '', q: n.texto.slice(s.ini, s.fin).slice(0, 200) });
+    }
+    _cnBarClose(); window.getSelection().removeAllRanges(); _cnSel = null;
+    await _cnSaveMarks(n.id, ms);
+  }
+  function _cnPopOpen(rect, title, val, onSave, onDel) {
+    document.getElementById('cn-pop')?.remove();
+    const p = document.createElement('div'); p.id = 'cn-pop';
+    p.style.cssText = `position:fixed;z-index:10000;width:300px;background:#fff;border:1px solid #C4B5FD;box-shadow:0 10px 30px rgba(15,23,42,.22);padding:10px;left:${Math.max(8, Math.min(rect.left, window.innerWidth - 316))}px;top:${Math.min(rect.bottom + 8, window.innerHeight - 200)}px`;
+    p.innerHTML = `<div style="font-size:11.5px;color:#64748B;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</div>
+      <textarea id="cn-pop-t" class="form-input" rows="4" style="width:100%;resize:vertical" placeholder="Escribe tu comentario…">${esc(val)}</textarea>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">${onDel ? '<button class="btn btn--ghost btn--sm" style="margin-right:auto;color:#DC2626" id="cn-pop-d">Eliminar</button>' : ''}<button class="btn btn--ghost btn--sm" id="cn-pop-x">Cancelar</button><button class="btn btn--primary btn--sm" id="cn-pop-s">Guardar</button></div>`;
+    document.body.appendChild(p);
+    const t = document.getElementById('cn-pop-t'); t.focus();
+    document.getElementById('cn-pop-x').onclick = () => p.remove();
+    document.getElementById('cn-pop-s').onclick = () => { const v = t.value.trim(); if (!v) { t.focus(); return; } p.remove(); onSave(v); };
+    if (onDel) document.getElementById('cn-pop-d').onclick = () => { p.remove(); onDel(); };
+    t.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') document.getElementById('cn-pop-s').click(); if (e.key === 'Escape') p.remove(); };
+  }
+  function cnCommentNew() {
+    const s = _cnSel; if (!s) return; const n = _cnNotes.find(x => x.id === s.id); if (!n) return;
+    const rect = (document.getElementById('cn-bar') || document.body).getBoundingClientRect();
+    _cnBarClose(); window.getSelection().removeAllRanges(); _cnSel = null;
+    _cnPopOpen(rect, '«' + n.texto.slice(s.ini, s.fin).slice(0, 80) + '»', '', v => {
+      const ms = _cnMarks(n).map(m => Object.assign({}, m)); ms.push({ id: _cnRid(), ini: s.ini, fin: s.fin, color: '', c: v, q: n.texto.slice(s.ini, s.fin).slice(0, 200) });
+      _cnSaveMarks(n.id, ms);
+    });
+  }
+  function cnMarkClick(ev, nid, mid) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    if (String(window.getSelection() || '').length) return;
+    const n = _cnNotes.find(x => x.id === nid); if (!n) return; const m = _cnMarks(n).find(x => x.id === mid); if (!m) return;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    _cnPopOpen(rect, '«' + m.q.slice(0, 80) + '»', m.c, v => _cnSaveMarks(n.id, _cnMarks(n).map(x => x.id === mid ? Object.assign({}, x, { c: v }) : x)),
+      () => _cnSaveMarks(n.id, _cnMarks(n).map(x => x.id === mid ? Object.assign({}, x, { c: '' }) : x).filter(x => x.color || x.c)));
+  }
+  // al editar el texto de una nota, cada marca se recoloca buscando su fragmento cerca de donde estaba; si ya no existe, se descarta
+  function _cnRelocate(marcas, nuevo) {
+    const out = [];
+    marcas.forEach(m => {
+      if (!m.q) return;
+      let best = -1, i = nuevo.indexOf(m.q);
+      while (i >= 0) { if (best < 0 || Math.abs(i - m.ini) < Math.abs(best - m.ini)) best = i; i = nuevo.indexOf(m.q, i + 1); }
+      if (best >= 0) out.push(Object.assign({}, m, { ini: best, fin: best + m.q.length }));
+    });
+    return out;
   }
   function _clientTabBody(tab, c, leads) {
     if (tab === 'Notas') return '<div id="cn-box">' + _cnEmpty + '</div>';
@@ -35666,7 +35779,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
+    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,

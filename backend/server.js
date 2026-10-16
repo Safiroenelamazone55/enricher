@@ -6515,7 +6515,7 @@ app.post('/api/lm/contacts/:id/aplazar', requireAuth, async (req, res) => {
 const _NOTE_ESTADOS = ['nota', 'por_revisar', 'por_aprobar', 'tarea', 'hecha'];
 app.get('/api/lm/clients/:id/notes', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, texto, estado, autor, created_at, updated_at FROM lm_client_notes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY created_at DESC LIMIT 500`, [req.workspaceOwnerId, parseInt(req.params.id)]);
+    const { rows } = await pool.query(`SELECT id, texto, estado, marcas, autor, created_at, updated_at FROM lm_client_notes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY created_at DESC LIMIT 500`, [req.workspaceOwnerId, parseInt(req.params.id)]);
     res.json(rows);
   } catch (e) { console.error('[client-notes]', e.message); res.status(500).json({ error: 'No se pudieron cargar las notas' }); }
 });
@@ -6527,7 +6527,7 @@ app.post('/api/lm/clients/:id/notes', requireAuth, async (req, res) => {
     const { rows: [c] } = await pool.query('SELECT id FROM outbound_clients WHERE id=$1 AND user_id=$2', [parseInt(req.params.id), req.workspaceOwnerId]);
     if (!c) return res.status(404).json({ error: 'Cliente no encontrado' });
     const autor = String((req.user && (req.user.nombre || req.user.name || req.user.email)) || '').slice(0, 120);
-    const { rows: [n] } = await pool.query(`INSERT INTO lm_client_notes (user_id, outbound_client_id, texto, estado, autor) VALUES ($1,$2,$3,$4,$5) RETURNING id, texto, estado, autor, created_at, updated_at`, [req.workspaceOwnerId, c.id, texto, estado, autor]);
+    const { rows: [n] } = await pool.query(`INSERT INTO lm_client_notes (user_id, outbound_client_id, texto, estado, autor) VALUES ($1,$2,$3,$4,$5) RETURNING id, texto, estado, marcas, autor, created_at, updated_at`, [req.workspaceOwnerId, c.id, texto, estado, autor]);
     res.json(n);
   } catch (e) { console.error('[client-notes]', e.message); res.status(500).json({ error: 'No se pudo guardar la nota' }); }
 });
@@ -6535,9 +6535,15 @@ app.patch('/api/lm/clients/:id/notes/:nid', requireAuth, async (req, res) => {
   const b = req.body || {}, sets = [], vals = [req.workspaceOwnerId, parseInt(req.params.id), parseInt(req.params.nid)];
   if (b.texto !== undefined) { const t = String(b.texto).trim().slice(0, 5000); if (!t) return res.status(400).json({ error: 'La nota no puede quedar vacía' }); vals.push(t); sets.push(`texto=$${vals.length}`); }
   if (b.estado !== undefined) { if (!_NOTE_ESTADOS.includes(b.estado)) return res.status(400).json({ error: 'Estado no válido' }); vals.push(b.estado); sets.push(`estado=$${vals.length}`); }
+  if (b.marcas !== undefined) {
+    if (!Array.isArray(b.marcas)) return res.status(400).json({ error: 'Marcas no válidas' });
+    const ok = b.marcas.slice(0, 300).map(m => ({ id: String((m && m.id) || '').slice(0, 24), ini: parseInt(m && m.ini), fin: parseInt(m && m.fin), color: ['amarillo', 'verde', 'rosa'].includes(m && m.color) ? m.color : '', c: String((m && m.c) || '').slice(0, 1500), q: String((m && m.q) || '').slice(0, 200) }))
+      .filter(m => m.id && m.ini >= 0 && m.fin > m.ini && (m.color || m.c));
+    vals.push(JSON.stringify(ok)); sets.push(`marcas=$${vals.length}::jsonb`);
+  }
   if (!sets.length) return res.status(400).json({ error: 'Nada que cambiar' });
   try {
-    const { rows: [n] } = await pool.query(`UPDATE lm_client_notes SET ${sets.join(',')}, updated_at=NOW() WHERE user_id=$1 AND outbound_client_id=$2 AND id=$3 RETURNING id, texto, estado, autor, created_at, updated_at`, vals);
+    const { rows: [n] } = await pool.query(`UPDATE lm_client_notes SET ${sets.join(',')}, updated_at=NOW() WHERE user_id=$1 AND outbound_client_id=$2 AND id=$3 RETURNING id, texto, estado, marcas, autor, created_at, updated_at`, vals);
     if (!n) return res.status(404).json({ error: 'Nota no encontrada' });
     res.json(n);
   } catch (e) { console.error('[client-notes]', e.message); res.status(500).json({ error: 'No se pudo actualizar' }); }
