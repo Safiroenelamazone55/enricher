@@ -39,8 +39,10 @@ function pickVariant(st, ctx) {
   if (mode === 'segment' && st.variant_field) {
     const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const val = nz(ctx[st.variant_field]);
-    const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
-    return hit || vars[0];
+    // Varios mensajes del MISMO idioma = test A/B dentro de ese idioma (se reparten al azar de forma estable por contacto)
+    const hits = vars.filter(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
+    if (hits.length > 1) return hits[Math.abs((ctx.contact_id || 0) + (st.id || 0)) % hits.length];
+    return hits[0] || vars[0];
   }
   if (mode === 'random') return vars[Math.abs((ctx.contact_id || 0) + (st.id || 0)) % vars.length];
   return vars[0];
