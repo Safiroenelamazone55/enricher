@@ -140,6 +140,17 @@ function _esc(s) {
 }
 
 // Texto plano → HTML: escapa, enlaza URLs (con tracking opcional) y respeta saltos.
+// Firma del buzón según el idioma del contacto: la de su idioma si existe; si no, la predeterminada del buzón.
+function pickSignature(signatureHtml, signatures, idioma) {
+  try {
+    const sg = (signatures && typeof signatures === 'object') ? signatures : {};
+    const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const want = nz(idioma);
+    if (want) { const k = Object.keys(sg).find(x => nz(x) === want); if (k && String(sg[k]).trim()) return sg[k]; }
+  } catch (_) {}
+  return signatureHtml || '';
+}
+
 function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }) {
   let html = _esc(text);
   html = html.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
@@ -590,7 +601,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 
   // Firma: la del buzón (si el cliente puso una) pisa a la global del user.
   // Así cada cliente tiene su propia firma personalizada.
-  const firmaEfectiva = (mbx && mbx.signature_html) ? mbx.signature_html : cfg.firma;
+  const firmaEfectiva = (mbx && (mbx.signature_html || (mbx.signatures && Object.keys(mbx.signatures).length))) ? (pickSignature(mbx.signature_html, mbx.signatures, enr.idioma) || cfg.firma) : cfg.firma;
 
   const html = buildHtml({
     text: cuerpoTxt, firma: firmaEfectiva, trackToken: token, apiBase,
@@ -780,7 +791,7 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           mb.signature_html AS mb_signature, mb.from_name AS mb_from_name,
+           mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, k.idioma AS k_idioma, mb.from_name AS mb_from_name,
            cfg.from_name AS cfg_from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days, s.timezone AS seq_timezone,
@@ -861,7 +872,7 @@ async function _flushApproved(pool, apiBase) {
       await new Promise(r => setTimeout(r, Math.floor(Math.random() * 20000)));
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       // Firma: la del buzón pisa a la del user (misma regla que el auto-sender).
-      const firmaEfectiva = m.mb_signature || m.firma;
+      const firmaEfectiva = pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma) || m.firma;
       const html = buildHtml({
         text: m.cuerpo, firma: firmaEfectiva, trackToken: m.track_token, apiBase,
         trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,
@@ -1184,4 +1195,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

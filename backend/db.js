@@ -1734,6 +1734,8 @@ async function initDb() {
     // a lm_send_settings.firma del user (comportamiento previo). Se edita desde
     // la tarjeta del buzón en el detalle del cliente outbound.
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS signature_html TEXT NOT NULL DEFAULT '';`);
+    // Firmas por idioma del contacto: { "Español": html, "Inglés": html }. signature_html es la predeterminada (idioma sin firma propia).
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS signatures JSONB NOT NULL DEFAULT '{}'::jsonb;`);
     // Solicitud de admin consent: si el tenant del cliente exige aprobación del admin
     // (AADSTS65001 en el OAuth), el buzón queda marcado y la UI ofrece enviarle un
     // correo al admin con el link de admin-consent listo. El timestamp evita spam.

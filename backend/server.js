@@ -5746,7 +5746,7 @@ app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
 const mailboxSvc = require('./services/mailboxService');
 app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name, ramp_on, ramp_start, ramp_step, ramp_target, daily_limit FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, signatures, from_name, ramp_on, ramp_start, ramp_step, ramp_target, daily_limit FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
@@ -5814,9 +5814,21 @@ app.put('/api/lm/mailboxes/:id/signature', requireAuth, async (req, res) => {
     const html = String((req.body || {}).signature_html || '');
     if (html.length > 524288) return res.status(400).json({ error: 'La firma pesa más de 512KB — reduce el tamaño de la imagen (usa una URL en vez de base64, o comprímela).' });
     const fromName = String((req.body || {}).from_name || '').trim().slice(0, 120);
+    // Firmas por idioma: las claves se normalizan al nombre de idioma de Nova y se descartan las vacías
+    const geo = require('./services/geoService'), sigs = {};
+    const inSigs = (req.body || {}).signatures;
+    if (inSigs && typeof inSigs === 'object') {
+      for (const [k, v] of Object.entries(inSigs)) {
+        const key = geo.normalizeLanguage(k), val = String(v || '');
+        if (!key || !val.trim()) continue;
+        if (val.length > 524288) return res.status(400).json({ error: `La firma en ${key} pesa más de 512KB — reduce la imagen.` });
+        sigs[key] = val;
+      }
+    }
     const { rowCount } = await pool.query(
-      `UPDATE lm_mailboxes SET signature_html=$1, from_name=$2 WHERE id=$3 AND user_id=$4`,
-      [html, fromName, req.params.id, req.workspaceOwnerId]);
+      inSigs === undefined ? `UPDATE lm_mailboxes SET signature_html=$1, from_name=$2 WHERE id=$3 AND user_id=$4`
+                           : `UPDATE lm_mailboxes SET signature_html=$1, from_name=$2, signatures=$5::jsonb WHERE id=$3 AND user_id=$4`,
+      inSigs === undefined ? [html, fromName, req.params.id, req.workspaceOwnerId] : [html, fromName, req.params.id, req.workspaceOwnerId, JSON.stringify(sigs)]);
     if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
     res.json({ ok: true, length: html.length, from_name: fromName });
   } catch (err) { console.error('[mailbox] signature PUT', err.message); res.status(500).json({ error: 'Error al guardar la firma' }); }
@@ -6991,7 +7003,7 @@ async function _pendingNoEmailRows(pool, userId, seqId) {
   if (!steps.length) return [];
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.contact_id, cs.paso, cs.next_action_at,
-           k.nombre, k.apellido, k.cargo, k.linkedin, co.linkedin_sales_nav AS company_linkedin_sales_nav, k.ciudad, k.pais,
+           k.nombre, k.apellido, k.cargo, k.linkedin, co.linkedin_sales_nav AS company_linkedin_sales_nav, k.ciudad, k.pais, k.idioma AS idioma,
            k.disposition, k.li_aceptado_at, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id

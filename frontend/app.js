@@ -23918,10 +23918,13 @@ ${foot}
   }
 
   // Firma que se añadirá al enviar: la del buzón del cliente de esta secuencia; si no tiene, la global de Configuración.
-  function _seqSigFor() {
+  function _seqSigFor(idioma) {
     const s = (_sequences || []).find(x => x.id === _activeSeq);
     const cli = s && s.outbound_client_id ? (_clients || []).find(c => c.id === s.outbound_client_id) : null;
     const mb = cli ? _mbFor(cli.id) : null;
+    const sg = (mb && mb.signatures) || {}, nz = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const lk = idioma ? Object.keys(sg).find(k => nz(k) === nz(idioma)) : '';
+    if (lk && String(sg[lk]).trim()) return sg[lk];
     return (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
   }
   // El correo tal como lo verá el prospecto: mensaje (editable) + firma del buzón (fija), en Verdana, con el mismo
@@ -23937,8 +23940,8 @@ ${foot}
       });
     });
   }
-  function _seqMailHtml(bodyId, text, locked) {
-    const sig = _seqSigFor();
+  function _seqMailHtml(bodyId, text, locked, idioma) {
+    const sig = _seqSigFor(idioma);
     const sigHtml = sig ? _linkifySig(sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
     return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
       '<div class="seq-app__mail">' +
@@ -24002,7 +24005,7 @@ ${foot}
             <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto del email" style="flex:1;margin:0"></div>
           ${a.reply_to_prev ? '<div style="font-size:11.5px;color:#B45309;margin:0 0 6px 68px">Este paso está pensado como respuesta a un email anterior, pero no hay ninguno enviado: saldrá como un correo nuevo.</div>' : ''}`}
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
-      ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved)}
+      ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved, a.idioma)}
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
@@ -27749,9 +27752,38 @@ ${foot}
       const m2 = document.getElementById('mbh-msg'); if (m2) m2.textContent = '✓ Guardado';
     } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
   }
+  // ── Firmas por idioma: pestañas «Predeterminada» + una por idioma. El envío usa la del idioma del contacto; si no hay, la predeterminada. ──
+  let _sigD = null;
+  function _sigSync() { const ta = $('mbx-sig-html'); if (ta && _sigD) { if (_sigD.cur === '') _sigD.def = ta.value; else _sigD.langs[_sigD.cur] = ta.value; } }
+  function _sigTabsHtml() {
+    const d = _sigD, tab = (k, label, extra) => `<button type="button" class="seq-days-preset" style="${d.cur === k ? 'background:#0B1220;color:#fff;border-color:#0B1220' : ''}" onclick="LeadManagerModule.mbSigTab(${JSON.stringify(k).replace(/"/g, '&quot;')})">${esc(label)}${extra || ''}</button>`;
+    const langs = Object.keys(d.langs);
+    const cands = (d.cands || []).filter(l => !(l in d.langs)), pool = _IDIOMAS_UI.filter(l => !(l in d.langs));
+    return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">${tab('', 'Predeterminada')}${langs.map(l => tab(l, l)).join('')}
+      <select class="form-input" id="mbx-sig-newlang" style="width:auto;padding:3px 8px;font-size:12.5px"><option value="">＋ Firma en otro idioma…</option>${cands.length ? `<optgroup label="Idiomas de tus contactos">${cands.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup>` : ''}<optgroup label="Todos">${pool.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup></select>
+      <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSigAddLang()">Añadir (copia la actual)</button>
+      ${cands.length ? `<button type="button" class="btn btn--ghost btn--sm" title="Crea una firma para cada idioma de tus contactos que aún no tiene, copiando la predeterminada para que cambies los textos" onclick="LeadManagerModule.mbSigFill()">Rellenar idiomas que faltan (${cands.length})</button>` : ''}
+      ${d.cur !== '' ? `<button type="button" class="btn btn--ghost btn--sm" style="color:#DC2626" onclick="LeadManagerModule.mbSigDel()">Quitar esta firma</button>` : ''}</div>
+      <div class="dle-hd__s" style="margin:0 0 8px">${d.cur === '' ? 'Se usa para los contactos cuyo idioma no tiene firma propia.' : 'Se usa para los contactos cuyo idioma es <b>' + esc(d.cur) + '</b>. Edita los textos (cargo, lema, saludo) a ese idioma.'}</div>`;
+  }
+  function _sigRender() { const el = $('mbx-sig-tabs'); if (el) el.innerHTML = _sigTabsHtml(); const ta = $('mbx-sig-html'); if (ta && _sigD) { ta.value = _sigD.cur === '' ? _sigD.def : (_sigD.langs[_sigD.cur] || ''); mbSignaturePreview(); } }
+  function mbSigTab(k) { _sigSync(); _sigD.cur = k; _sigRender(); }
+  function mbSigAddLang() {
+    _sigSync(); const l = ($('mbx-sig-newlang') || {}).value; if (!l) return;
+    if (!(l in _sigD.langs)) _sigD.langs[l] = _sigD.cur === '' ? _sigD.def : (_sigD.langs[_sigD.cur] || _sigD.def);
+    _sigD.cur = l; _sigRender();
+  }
+  function mbSigFill() {
+    _sigSync(); (_sigD.cands || []).forEach(l => { if (!(l in _sigD.langs)) _sigD.langs[l] = _sigD.def; });
+    const first = (_sigD.cands || []).find(l => _sigD.langs[l] !== undefined); if (first) _sigD.cur = first; _sigRender();
+    showBanner('Se crearon las firmas que faltaban copiando la predeterminada: cambia los textos a cada idioma y guarda', 'success');
+  }
+  function mbSigDel() { if (_sigD.cur === '') return; delete _sigD.langs[_sigD.cur]; _sigD.cur = ''; _sigRender(); }
   async function mbSignatureOpen(mbId) {
     const mb = (_mailboxes || []).find(x => x.id === mbId);
     if (!mb) return;
+    { const cands = [...new Set((_contacts || []).filter(c => c.outbound_client_id === mb.outbound_client_id && c.idioma).map(c => c.idioma))];
+      _sigD = { def: mb.signature_html || '', langs: Object.assign({}, mb.signatures || {}), cur: '', cands }; }
     document.getElementById('mbx-sig-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mbx-sig-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) m.remove(); };
@@ -27766,7 +27798,7 @@ ${foot}
       <div style="flex:1 1 auto;overflow-y:auto;padding:18px 22px">
         <div class="dle-grid">
           <label class="dle-f dle-f--full"><span class="dle-l">Nombre del remitente (así lo ve el destinatario)</span><input class="dle-i" id="mbx-from-name" value="${esc(mb.from_name || '')}" placeholder="Ej. Jenny · MWH Advertising — vacío usa el nombre global de Configuración"></label>
-          <div class="dle-f dle-f--full">
+          <div class="dle-f dle-f--full"><div id="mbx-sig-tabs">${_sigTabsHtml()}</div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span class="dle-l" style="margin:0">HTML de la firma</span>
               <div style="display:flex;gap:6px">
@@ -27836,14 +27868,15 @@ ${foot}
     r.readAsDataURL(f);
   }
   async function mbSignatureSave(mbId) {
-    const html = ($('mbx-sig-html')?.value || '');
+    _sigSync();
+    const html = _sigD ? _sigD.def : ($('mbx-sig-html')?.value || '');
     const fromName = ($('mbx-from-name')?.value || '').trim();
     const err = $('mbx-sig-err');
     const btn = $('mbx-sig-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/signature`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature_html: html, from_name: fromName })
+        body: JSON.stringify({ signature_html: html, from_name: fromName, signatures: _sigD ? _sigD.langs : undefined })
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error');
@@ -35797,7 +35830,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    mbSigTab, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
