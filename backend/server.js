@@ -6587,6 +6587,20 @@ app.patch('/api/lm/sequences/:id/contacts-idioma', requireAuth, async (req, res)
     res.json({ ok: true, actualizados: ids.length, idioma: a });
   } catch (e) { console.error('[contacts-idioma]', e.message); res.status(500).json({ error: 'No se pudo asignar el idioma' }); }
 });
+// Idiomas que usa un cliente outbound: los de los mensajes por idioma de sus secuencias + los idiomas de sus contactos.
+// Sirve para saber en qué idiomas hace falta firma (y otros recursos por idioma).
+app.get('/api/lm/clients/:id/idiomas', requireAuth, async (req, res) => {
+  try {
+    const geo = require('./services/geoService'), uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+    const out = {};   // idioma → { secuencias: Set(nombre), contactos: n }
+    const add = l => (out[l] = out[l] || { secuencias: new Set(), contactos: 0 });
+    const { rows: st } = await pool.query(`SELECT s.nombre AS seq, st.variants FROM sequence_steps st JOIN sequences s ON s.id = st.sequence_id WHERE s.user_id=$1 AND s.outbound_client_id=$2 AND st.variant_mode='segment' AND st.variant_field='idioma'`, [uid, cid]);
+    for (const r of st) for (const v of (Array.isArray(r.variants) ? r.variants : [])) for (const t of (Array.isArray(v.targets) ? v.targets : [])) { const l = geo.normalizeLanguage(t); if (l) add(l).secuencias.add(String(r.seq).split(' - ')[0]); }
+    const { rows: ct } = await pool.query(`SELECT idioma, COUNT(*)::int n FROM lm_contacts WHERE user_id=$1 AND outbound_client_id=$2 AND COALESCE(idioma,'')<>'' GROUP BY idioma`, [uid, cid]);
+    for (const r of ct) { const l = geo.normalizeLanguage(r.idioma); if (l) add(l).contactos += r.n; }
+    res.json(Object.entries(out).map(([idioma, v]) => ({ idioma, secuencias: [...v.secuencias], contactos: v.contactos })).sort((a, b) => b.secuencias.length - a.secuencias.length || b.contactos - a.contactos));
+  } catch (e) { console.error('[client-idiomas]', e.message); res.status(500).json({ error: 'No se pudieron leer los idiomas del cliente' }); }
+});
 app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

@@ -27759,7 +27759,11 @@ ${foot}
     const d = _sigD, tab = (k, label, extra) => `<button type="button" class="seq-days-preset" style="${d.cur === k ? 'background:#0B1220;color:#fff;border-color:#0B1220' : ''}" onclick="LeadManagerModule.mbSigTab(${JSON.stringify(k).replace(/"/g, '&quot;')})">${esc(label)}${extra || ''}</button>`;
     const langs = Object.keys(d.langs);
     const cands = (d.cands || []).filter(l => !(l in d.langs)), pool = _IDIOMAS_UI.filter(l => !(l in d.langs));
-    return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">${tab('', 'Predeterminada')}${langs.map(l => tab(l, l)).join('')}
+    const nz = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    const has = l => Object.keys(d.langs).some(k => nz(k) === nz(l)) && String(d.langs[Object.keys(d.langs).find(k => nz(k) === nz(l))] || '').trim();
+    const info = d.info || [];
+    const status = info.length ? `<div style="border:1px solid #E5E7EB;background:#F8FAFC;padding:8px 10px;margin-bottom:10px;font-size:12.5px"><div style="margin-bottom:6px"><b>Idiomas de este cliente</b> <span style="color:#64748B">(según los mensajes por idioma de sus secuencias y sus contactos)</span></div>${info.map(x => `<div style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="width:16px">${has(x.idioma) ? '✓' : '⚠'}</span><b style="min-width:92px">${esc(x.idioma)}</b><span style="color:#64748B;flex:1">${x.secuencias.length ? 'en ' + x.secuencias.length + ' secuencia' + (x.secuencias.length !== 1 ? 's' : '') + ' · ' : ''}${x.contactos} contacto${x.contactos !== 1 ? 's' : ''}</span>${has(x.idioma) ? '<span style="color:#15803D">tiene firma</span>' : `<button type="button" class="btn btn--ghost btn--sm" style="color:#B45309" onclick="LeadManagerModule.mbSigMake(${JSON.stringify(x.idioma).replace(/"/g, '&quot;')})">Falta firma · Crear</button>`}</div>`).join('')}</div>` : '';
+    return status + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">${tab('', 'Predeterminada')}${langs.map(l => tab(l, l)).join('')}
       <select class="form-input" id="mbx-sig-newlang" style="width:auto;padding:3px 8px;font-size:12.5px"><option value="">＋ Firma en otro idioma…</option>${cands.length ? `<optgroup label="Idiomas de tus contactos">${cands.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup>` : ''}<optgroup label="Todos">${pool.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup></select>
       <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSigAddLang()">Añadir (copia la actual)</button>
       ${cands.length ? `<button type="button" class="btn btn--ghost btn--sm" title="Crea una firma para cada idioma de tus contactos que aún no tiene, copiando la predeterminada para que cambies los textos" onclick="LeadManagerModule.mbSigFill()">Rellenar idiomas que faltan (${cands.length})</button>` : ''}
@@ -27773,6 +27777,7 @@ ${foot}
     if (!(l in _sigD.langs)) _sigD.langs[l] = _sigD.cur === '' ? _sigD.def : (_sigD.langs[_sigD.cur] || _sigD.def);
     _sigD.cur = l; _sigRender();
   }
+  function mbSigMake(l) { _sigSync(); if (!(l in _sigD.langs)) _sigD.langs[l] = _sigD.def; _sigD.cur = l; _sigRender(); }
   function mbSigFill() {
     _sigSync(); (_sigD.cands || []).forEach(l => { if (!(l in _sigD.langs)) _sigD.langs[l] = _sigD.def; });
     const first = (_sigD.cands || []).find(l => _sigD.langs[l] !== undefined); if (first) _sigD.cur = first; _sigRender();
@@ -27782,8 +27787,9 @@ ${foot}
   async function mbSignatureOpen(mbId) {
     const mb = (_mailboxes || []).find(x => x.id === mbId);
     if (!mb) return;
-    { const cands = [...new Set((_contacts || []).filter(c => c.outbound_client_id === mb.outbound_client_id && c.idioma).map(c => c.idioma))];
-      _sigD = { def: mb.signature_html || '', langs: Object.assign({}, mb.signatures || {}), cur: '', cands }; }
+    let info = [];
+    try { const r = await apiFetch(`${API}/lm/clients/${mb.outbound_client_id}/idiomas`); if (r && r.ok) info = await r.json(); } catch (_) {}
+    _sigD = { def: mb.signature_html || '', langs: Object.assign({}, mb.signatures || {}), cur: '', cands: info.map(x => x.idioma), info };
     document.getElementById('mbx-sig-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mbx-sig-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) m.remove(); };
@@ -35830,7 +35836,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    mbSigTab, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
