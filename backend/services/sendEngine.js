@@ -154,6 +154,20 @@ function pickSignature(signatureHtml, signatures, idioma, variantName) {
   return signatureHtml || '';
 }
 
+// Hace responsiva cualquier firma HTML al enviarla (se pegue como se pegue): el texto puede saltar de línea, las imágenes y tablas nunca
+// pasan del ancho de la pantalla y mantienen su proporción. Solo toca estilos en línea; el contenido no cambia.
+function responsiveSig(html) {
+  let h = String(html || ''); if (!h.includes('<')) return h;
+  const addStyle = (a, extra) => {
+    a = a.replace(/\/\s*$/, '');
+    return /style\s*=\s*"/i.test(a) ? a.replace(/style\s*=\s*"([^"]*)"/i, (x, s) => `style="${s.replace(/;?\s*$/, ';')}${extra}"`) : `${a} style="${extra}"`;
+  };
+  h = h.replace(/white-space\s*:\s*nowrap\s*;?/gi, '');
+  h = h.replace(/<img\b([^>]*)>/gi, (m, a) => `<img${addStyle(a, 'max-width:100%;height:auto;')}>`);
+  h = h.replace(/<table\b([^>]*)>/gi, (m, a) => `<table${addStyle(a, 'max-width:100%;')}>`);
+  return h;
+}
+
 function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }) {
   let html = _esc(text);
   html = html.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
@@ -164,7 +178,7 @@ function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }
   });
   html = html.replace(/\n/g, '<br>');
   let out = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${html}`;
-  if (firma) out += `<br><br>${firma.includes('<') ? firma : _esc(firma).replace(/\n/g, '<br>')}`;
+  if (firma) out += `<br><br>${firma.includes('<') ? responsiveSig(firma) : _esc(firma).replace(/\n/g, '<br>')}`;
   out += '</div>';
   if (trackOpens) out += `<img src="${apiBase}/t/o/${trackToken}.png" width="1" height="1" alt="" style="display:none">`;
   return out;
@@ -1198,4 +1212,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

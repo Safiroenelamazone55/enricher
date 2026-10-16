@@ -23943,7 +23943,7 @@ ${foot}
   }
   function _seqMailHtml(bodyId, text, locked, idioma, variant) {
     const sig = _seqSigFor(idioma, variant);
-    const sigHtml = sig ? _linkifySig(sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
+    const sigHtml = sig ? _linkifySig(sig.includes('<') ? _sigResponsive(sig) : esc(sig).replace(/\n/g, '<br>')) : '';
     return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
       '<div class="seq-app__mail">' +
         '<div class="seq-app__mail-body" id="mail-' + bodyId + '" contenteditable="' + (locked ? 'false' : 'plaintext-only') + '" spellcheck="true" oninput="LeadManagerModule.seqMailSync(\'' + bodyId + '\')">' + esc(text || '') + '</div>' +
@@ -27821,8 +27821,13 @@ ${foot}
             <div style="margin-top:4px;color:#918C85;font-size:.72rem" id="mbx-sig-size">${mb.signature_html ? (mb.signature_html.length / 1024).toFixed(1) + ' KB' : 'Vacía'}</div>
           </div>
           <div class="dle-f dle-f--full">
-            <span class="dle-l">Vista previa (así lo verá el destinatario, después del cuerpo del correo)</span>
-            <div id="mbx-sig-prev" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:16px 18px;min-height:100px;max-height:280px;overflow-y:auto;font-family:Verdana,Geneva,sans-serif">${mb.signature_html || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>'}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="dle-l" style="margin:0 8px 0 0">Vista previa — así se ve en:</span>
+              <button type="button" class="btn btn--ghost btn--sm mbx-dev" data-w="375" onclick="LeadManagerModule.mbSigDevice(375)">📱 Móvil</button>
+              <button type="button" class="btn btn--ghost btn--sm mbx-dev" data-w="768" onclick="LeadManagerModule.mbSigDevice(768)">Tablet</button>
+              <button type="button" class="btn btn--ghost btn--sm mbx-dev" data-w="1100" onclick="LeadManagerModule.mbSigDevice(1100)">💻 Laptop</button></div>
+            <div style="background:#F1F5F9;border:1px solid #E5E4E1;padding:10px;overflow:auto"><iframe id="mbx-sig-prevf" style="width:375px;max-width:100%;height:120px;border:0;background:#fff;display:block"></iframe></div>
+            <div id="mbx-sig-meas" style="margin-top:6px;font-size:12px;color:#64748B"></div>
+            <div style="margin-top:4px;font-size:11.5px;color:#918C85">Al enviar, Nova adapta la firma sola: el texto puede saltar de línea y las imágenes y tablas nunca pasan del ancho de la pantalla.</div>
           </div>
           <div class="dle-f dle-f--full" id="mbx-sig-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
         </div>
@@ -27834,12 +27839,30 @@ ${foot}
       </div>
     </div>`;
     document.body.appendChild(m);
+    mbSignaturePreview();
     setTimeout(() => $('mbx-sig-html')?.focus(), 60);
   }
+  // Misma normalización que hace el envío: la firma nunca desborda en pantallas pequeñas.
+  function _sigResponsive(html) {
+    let h = String(html || ''); if (!h.includes('<')) return h;
+    const addStyle = (a, extra) => { a = a.replace(/\/\s*$/, ''); return /style\s*=\s*"/i.test(a) ? a.replace(/style\s*=\s*"([^"]*)"/i, (x, s) => `style="${s.replace(/;?\s*$/, ';')}${extra}"`) : `${a} style="${extra}"`; };
+    h = h.replace(/white-space\s*:\s*nowrap\s*;?/gi, '');
+    h = h.replace(/<img\b([^>]*)>/gi, (m, a) => `<img${addStyle(a, 'max-width:100%;height:auto;')}>`);
+    h = h.replace(/<table\b([^>]*)>/gi, (m, a) => `<table${addStyle(a, 'max-width:100%;')}>`);
+    return h;
+  }
+  let _sigDev = 375;
+  function mbSigDevice(w) { _sigDev = w; mbSignaturePreview(); }
   function mbSignaturePreview() {
-    const ta = $('mbx-sig-html'), prev = $('mbx-sig-prev'), size = $('mbx-sig-size');
-    if (prev) prev.innerHTML = ta.value || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>';
-    if (size) size.textContent = ta.value ? (ta.value.length / 1024).toFixed(1) + ' KB' : 'Vacía';
+    const ta = $('mbx-sig-html'), f = $('mbx-sig-prevf'), size = $('mbx-sig-size'), info = $('mbx-sig-meas');
+    if (size && ta) size.textContent = ta.value ? (ta.value.length / 1024).toFixed(1) + ' KB' : 'Vacía';
+    document.querySelectorAll('.mbx-dev').forEach(b => { const on = +b.dataset.w === _sigDev; b.style.background = on ? '#0B1220' : ''; b.style.color = on ? '#fff' : ''; });
+    if (!f || !ta) return;
+    f.style.width = _sigDev + 'px';
+    const body = ta.value ? _sigResponsive(ta.value) : '<div style="color:#B4AFA8;font-style:italic;font:13px Arial">— sin firma —</div>';
+    f.onload = () => { try { const d = f.contentDocument, h = Math.ceil(d.body.scrollHeight); f.style.height = (h + 4) + 'px'; const over = d.documentElement.scrollWidth > f.clientWidth + 1;
+      if (info) info.innerHTML = ta.value ? `Alto en ${_sigDev === 375 ? 'móvil' : _sigDev === 768 ? 'tablet' : 'laptop'}: <b>${h} px</b>${h > 300 && _sigDev === 375 ? ' · <span style="color:#B45309">⚠ alta para móvil: reduce el logo/sello o el espacio entre líneas</span>' : ''}${over ? ' · <span style="color:#DC2626">⚠ se sale del ancho</span>' : ''}` : ''; } catch (_) {} };
+    f.srcdoc = '<!doctype html><html><head><meta name="viewport" content="width=device-width"><style>html,body{margin:0}body{padding:12px 14px;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e}</style></head><body>' + body + '</body></html>';
   }
   function mbSignatureClear() {
     const ta = $('mbx-sig-html'); if (ta) { ta.value = ''; mbSignaturePreview(); ta.focus(); }
@@ -35837,7 +35860,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
