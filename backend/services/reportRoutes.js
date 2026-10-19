@@ -22,6 +22,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
     const hl = await highlights(pool, cid, { withNotes: false });
     const { rows: sq } = await pool.query(`SELECT nombre FROM sequences WHERE outbound_client_id=$1 AND estado='activa' ORDER BY id`, [cid]);
     const { rows: cl } = await pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]);
+    const { rows: sqc } = await pool.query(`SELECT s.nombre AS seq, c.id AS camp_id, c.nombre AS camp FROM sequences s LEFT JOIN campaigns c ON c.id = s.campaign_id WHERE s.outbound_client_id=$1 AND s.estado='activa' ORDER BY c.id NULLS LAST, s.id`, [cid]);
     const { rows: [cp] } = await pool.query(`SELECT COUNT(DISTINCT campaign_id)::int AS n FROM sequences WHERE outbound_client_id=$1 AND estado='activa' AND campaign_id IS NOT NULL`, [cid]);
     const loc = LOCALE[lang] || 'es-ES', fmt = (d, o) => new Date(d).toLocaleDateString(loc, o);
     const cur = (dash.kpi && dash.kpi.cur) || {}, prev = (dash.kpi && dash.kpi.prev) || {}, dl = dash.deals || {};
@@ -34,6 +35,13 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       prev: { touches: prev.touches, contacted: prev.contacted, replies: prev.replies, agendadas: dl.agendadas_prev },
       seqs: sq.map(s => s.nombre),
       campanas: (cp && cp.n) || 0,
+      // Nombres para el informe, sin el código interno (C0001-PRO-S1 - …): campañas activas con sus secuencias, y las secuencias sin campaña.
+      estructura: (() => {
+        const clean = x => String(x || '').replace(/^C\d{4}-[A-Za-z]{2,5}(?:-S\d+)?\s*-\s*/, '').replace(/\s+/g, ' ').trim();
+        const byC = new Map(), sueltas = [];
+        sqc.forEach(r => { if (r.camp_id == null) sueltas.push(clean(r.seq)); else { if (!byC.has(r.camp_id)) byC.set(r.camp_id, { nombre: clean(r.camp), seqs: [] }); byC.get(r.camp_id).seqs.push(clean(r.seq)); } });
+        return { campaigns: [...byC.values()], sueltas };
+      })(),
       // disposition + derivado_nombre viajan para que el copy pueda distinguir un
       // avance concreto (derivó a alguien puntual) de "sigue en seguimiento" en vez
       // de la misma frase genérica para todos — pedido explícito 2026-09-28 (caso
