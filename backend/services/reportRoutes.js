@@ -36,7 +36,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       // avance concreto (derivó a alguien puntual) de "sigue en seguimiento" en vez
       // de la misma frase genérica para todos — pedido explícito 2026-09-28 (caso
       // Zukán: Alejandro derivó a Jaime Bellot, no es solo "buena señal").
-      positives: (hl.positive_pending || []).filter(p => !p.neutral).map(p => ({ empresa: p.empresa, nombre: [p.nombre, p.apellido].filter(Boolean).join(' '), estado: p.estado, disposition: p.disposition, derivado_nombre: p.derivado_nombre || '' })),
+      positives: (hl.positive_pending || []).filter(p => !p.neutral).map(p => ({ empresa: p.empresa, nombre: [p.nombre, p.apellido].filter(Boolean).join(' '), estado: p.estado, disposition: p.disposition, derivado_nombre: p.derivado_nombre || '', reciente: !!(p.derivado_fecha && new Date(p.derivado_fecha).getTime() >= Date.now() - 7 * 864e5) })),
       meetings: (hl.next_meetings || []).map(m => ({ empresa: m.empresa, nombre: [m.nombre, m.apellido].filter(Boolean).join(' '), dia: fmt(m.fecha, { day: 'numeric' }), mes: fmt(m.fecha, { month: 'short' }).replace('.', ''), fecha_txt: fmt(m.fecha, { weekday: 'long' }) })),
       url: 'https://app.novacentrax.com' + (lang === 'es' ? '' : '/' + lang) + '/portal/' + slugOf(cliente),
     };

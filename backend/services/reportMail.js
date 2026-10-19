@@ -40,10 +40,10 @@ const COPY = {
     // derivó a Jaime Bellot — eso es una historia, no solo "buena señal").
     sig: (positives) => {
       if (!positives.length) return '';
-      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `En ${p.empresa || 'la empresa'}, ${p.nombre} te conectó con ${p.derivado_nombre}.`);
-      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `${rest.length === 1 ? 'También sigue en seguimiento' : 'También siguen en seguimiento'} ${list(names, 'y')}.` : `Hay ${rest.length} ${rest.length === 1 ? 'empresa con buenas señales' : 'empresas con buenas señales'}: ${list(names, 'y')}.`); }
+      if (rest.length) { const all = rest.map(p => p.empresa || p.nombre).filter(Boolean), names = all.slice(0, 3), mas = all.length - names.length; parts.push(`${der.length ? 'También ' : ''}${rest.length === 1 ? (der.length ? 'sigue' : 'Sigue') : (der.length ? 'siguen' : 'Siguen')} en seguimiento ${mas > 0 ? names.join(', ') + ` y ${mas} más` : list(names, 'y')}.`); }
       return parts.join(' ');
     },
     meet: m => m ? `La próxima reunión es con ${m.empresa || m.nombre}, el ${m.fecha_txt} ${m.dia} de ${m.mes}.` : '',
@@ -59,7 +59,7 @@ const COPY = {
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Your week at ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' meeting booked' : ' meetings booked') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' company showing good signals' : ' companies showing good signals') : ''}` : (k.replies || 0) > 0 ? `Your week at ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'reply' : 'replies'}` : `Weekly summary for ${d.cliente} · ${d.rango}`,
     sig: (positives) => {
       if (!positives.length) return '';
-      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `At ${p.empresa || 'the company'}, ${p.nombre} connected you with ${p.derivado_nombre}.`);
       if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Also still in follow-up: ${list(names, 'and')}.` : `${rest.length} ${rest.length === 1 ? 'company is' : 'companies are'} showing good signals: ${list(names, 'and')}.`); }
@@ -78,7 +78,7 @@ const COPY = {
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Ihre Woche bei ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' Termin vereinbart' : ' Termine vereinbart') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + ' Unternehmen mit guten Signalen' : ''}` : (k.replies || 0) > 0 ? `Ihre Woche bei ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'Antwort' : 'Antworten'}` : `Wochenzusammenfassung für ${d.cliente} · ${d.rango}`,
     sig: (positives) => {
       if (!positives.length) return '';
-      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `Bei ${p.empresa || 'dem Unternehmen'} hat ${p.nombre} Sie mit ${p.derivado_nombre} verbunden.`);
       if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Weiterhin in Nachverfolgung: ${list(names, 'und')}.` : `${rest.length} ${rest.length === 1 ? 'Unternehmen zeigt' : 'Unternehmen zeigen'} gute Signale: ${list(names, 'und')}.`); }
@@ -97,7 +97,7 @@ const COPY = {
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Sua semana na ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' reunião agendada' : ' reuniões agendadas') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' empresa com bons sinais' : ' empresas com bons sinais') : ''}` : (k.replies || 0) > 0 ? `Sua semana na ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'resposta' : 'respostas'}` : `Resumo semanal de ${d.cliente} · ${d.rango}`,
     sig: (positives) => {
       if (!positives.length) return '';
-      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `Na ${p.empresa || 'empresa'}, ${p.nombre} te conectou com ${p.derivado_nombre}.`);
       if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Também seguem em acompanhamento: ${list(names, 'e')}.` : `${rest.length} ${rest.length === 1 ? 'empresa está com bons sinais' : 'empresas estão com bons sinais'}: ${list(names, 'e')}.`); }
