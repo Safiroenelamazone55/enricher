@@ -27523,7 +27523,7 @@ ${foot}
     _wamClientId = clientId;
     const m = document.createElement('div'); m.id = 'wam-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) wamClose(); };
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:560px;max-height:92vh;overflow:auto">
       <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">WhatsApp de ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.wamClose()">✕</button></div>
       <div id="wam-body" class="mbx" style="padding:16px 20px 20px"><div class="mbx-sub">Cargando…</div></div>
     </div>`;
@@ -27538,6 +27538,7 @@ ${foot}
       const rows = r.ok ? await r.json() : [];
       const conn = rows.find(x => x.estado === 'conectado') || rows.find(x => x.estado === 'esperando_qr') || rows[rows.length - 1] || null;
       body.innerHTML = _wamBodyHtml(clientId, conn);
+      if (conn && conn.estado === 'conectado') _wamColaLoad(conn.id);
     } catch (e) { body.innerHTML = `<div class="mbx-sub">Error al cargar: ${esc(e.message)}</div>`; }
   }
   function _wamBodyHtml(clientId, conn) {
@@ -27553,7 +27554,81 @@ ${foot}
       <div class="mbx-acts">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamClose();LeadManagerModule._clientGoTab('WhatsApp')">${conectado ? 'Abrir WhatsApp ›' : 'Ir a escanear ›'}</button>
         <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.wamDesconectar(${clientId},${conn.id})">Desconectar</button>
-      </div>`;
+      </div>
+      ${!conectado && conn.ultimo_error ? `<div class="wamq__warn" style="margin-top:10px">${esc(conn.ultimo_error)}</div>` : ''}
+      ${conectado ? '<div id="wam-cola" style="margin-top:14px;border-top:1px solid #E5E7EB;padding-top:12px"><div class="mbx-sub">Cargando ritmo de envío…</div></div>' : ''}`;
+  }
+
+  // ── Ritmo de envío y cola de la línea de WhatsApp ──
+  let _wamConnId = 0, _wamCola = null;
+  async function _wamColaLoad(connId) {
+    _wamConnId = connId;
+    const box = document.getElementById('wam-cola'); if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${connId}/cola`); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _wamCola = d; box.innerHTML = _wamColaHtml(d);
+    } catch (e) { box.innerHTML = `<div class="mbx-sub">No se pudo cargar el ritmo de envío: ${esc(e.message)}</div>`; }
+  }
+  function _wamColaHtml(d) {
+    const A = d.ajustes, L = d.linea, cuando = t => t ? new Date(t).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    const estado = L.abierto ? '<span class="mbx-chip mbx-chip--ok">✓ Línea lista</span>' : (L.conectando ? '<span class="mbx-chip mbx-chip--warn">⏳ Reconectando…</span>' : '<span class="mbx-chip mbx-chip--warn">⚠ Línea no conectada</span>');
+    const item = (i, tipo) => `<div class="wamq__it"><div class="wamq__top"><b>${esc(i.nombre || i.chat_jid.split('@')[0])}</b><span class="wamq__t">${tipo === 'cola' ? (i.estado === 'enviando' ? 'enviando…' : '~' + cuando(i.scheduled_at)) : '⚠'}</span></div>
+      <div class="wamq__tx">${esc(i.texto)}</div>${i.ultimo_error ? `<div class="wamq__er">${esc(i.ultimo_error)}</div>` : ''}
+      <div class="wamq__bt">${tipo === 'cola' ? `<button class="rp-lnk" onclick="LeadManagerModule.wamColaItem(${i.id},'enviar-ya')">Enviar ya</button><button class="rp-lnk" style="color:#DC2626" onclick="LeadManagerModule.wamColaItem(${i.id},'cancelar')">Cancelar</button>`
+        : `<button class="rp-lnk" onclick="LeadManagerModule.wamColaItem(${i.id},'reintentar')">Reintentar</button><button class="rp-lnk" style="color:#DC2626" onclick="LeadManagerModule.wamColaItem(${i.id},'cancelar')">Quitar</button>`}</div></div>`;
+    let tzOpts = ''; try { tzOpts = _tzIndex().filter(e => !e.tz.startsWith('Etc/')).map(e => `<option value="${esc(e.tz)}">${esc(e.label)}</option>`).join(''); } catch (_) {}
+    return `<div class="wamq">
+      <div class="wamq__hd"><div class="wamq__h">Ritmo de envío</div>${estado}</div>
+      ${L.ultimo_error && !L.abierto ? `<div class="wamq__warn">${esc(L.ultimo_error)}</div>` : ''}
+      ${A.pausada ? `<div class="wamq__warn">⏸ <b>Línea en pausa.</b> ${esc(A.pausa_motivo || '')} <button class="rp-lnk" onclick="LeadManagerModule.wamColaPausa(false)">Reanudar</button></div>` : ''}
+      <div class="wamq__stats"><div><b>${d.hoy.enviados}/${d.hoy.tope}</b><span>enviados hoy</span></div><div><b>${d.cola.length}</b><span>en cola</span></div><div><b>${d.proximo_envio ? cuando(d.proximo_envio) : '—'}</b><span>próximo envío</span></div></div>
+      <div class="wamq__hint">Los mensajes que pones «con ritmo» salen de a uno, separados por este intervalo, solo en este horario y sin pasar del tope diario. Así la línea se comporta como una persona y WhatsApp no la bloquea.</div>
+      <div class="wamq__grid">
+        <label>Un mensaje cada<span><input class="dle-i" id="wamq-int" type="number" min="3" max="720" value="${A.intervalo_min}"> min</span></label>
+        <label>Variación<span><input class="dle-i" id="wamq-jit" type="number" min="0" max="80" value="${A.jitter_pct}"> %</span></label>
+        <label>Máximo por día<span><input class="dle-i" id="wamq-tope" type="number" min="1" max="500" value="${A.tope_diario}"> mensajes</span></label>
+        <label>Horario de envío<span><input class="dle-i" id="wamq-hi" type="number" min="0" max="23" value="${A.hora_ini}"> a <input class="dle-i" id="wamq-hf" type="number" min="1" max="24" value="${A.hora_fin}"> h</span></label>
+        <label class="wamq__w">Zona horaria<span><input class="dle-i" id="wamq-tz" list="wamq-tz-list" value="${esc(A.tz)}" autocomplete="off"><datalist id="wamq-tz-list">${tzOpts}</datalist></span></label>
+        <div class="wamq__w"><span class="wamq__l">Días</span><div class="wamq__dias">${DIAS.map((x, k) => `<label class="wamq__d"><input type="checkbox" class="wamq-dia" data-k="${k}"${A.dias[k] === '1' ? ' checked' : ''}><span>${x}</span></label>`).join('')}</div></div>
+        <label class="wamq__w wamq__ck"><input type="checkbox" id="wamq-ramp"${A.rampa_on ? ' checked' : ''}> Línea nueva: empezar con pocos y subir cada semana <span class="wamq__sub">(<input class="dle-i" id="wamq-ri" type="number" min="1" max="500" value="${A.rampa_inicio}" style="width:56px"> el 1.er día, +<input class="dle-i" id="wamq-rp" type="number" min="0" max="200" value="${A.rampa_paso}" style="width:56px"> por semana, hasta el máximo)</span></label>
+        <label class="wamq__w wamq__ck"><input type="checkbox" id="wamq-act"${A.cola_activa ? ' checked' : ''}> Proponer el envío con ritmo por defecto a los contactos nuevos</label>
+      </div>
+      <div class="wamq__acts"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.wamColaSave()">Guardar ritmo</button>${A.pausada ? '' : '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamColaPausa(true)">⏸ Pausar la cola</button>'}</div>
+      ${d.atencion.length ? `<div class="wamq__h" style="margin-top:14px">Con problema (${d.atencion.length})</div>${d.atencion.map(i => item(i, 'atencion')).join('')}` : ''}
+      <div class="wamq__h" style="margin-top:14px">En cola (${d.cola.length})</div>
+      ${d.cola.length ? d.cola.map(i => item(i, 'cola')).join('') : '<div class="mbx-sub">No hay mensajes esperando.</div>'}
+    </div>`;
+  }
+  async function wamColaSave() {
+    const g = id => document.getElementById(id), v = id => (g(id) || {}).value;
+    const dias = Array.from({ length: 7 }, (_, k) => (document.querySelector(`.wamq .wamq-dia[data-k="${k}"]`) || {}).checked ? '1' : '0').join('');
+    if (!dias.includes('1')) { showBanner('Elige al menos un día de envío', 'error'); return; }
+    const hi = +v('wamq-hi'), hf = +v('wamq-hf'); if (!(hf > hi)) { showBanner('El horario no es válido: la hora final debe ser mayor que la inicial', 'error'); return; }
+    const tz = String(v('wamq-tz') || '').trim();
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); } catch (_) { showBanner('Zona horaria no válida: elige una de la lista (ej. America/Lima)', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_wamConnId}/ajustes`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        intervalo_min: +v('wamq-int'), jitter_pct: +v('wamq-jit'), tope_diario: +v('wamq-tope'), hora_ini: hi, hora_fin: hf, tz, dias,
+        rampa_on: !!(g('wamq-ramp') || {}).checked, rampa_inicio: +v('wamq-ri'), rampa_paso: +v('wamq-rp'), cola_activa: !!(g('wamq-act') || {}).checked }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _wamCola = d; const box = document.getElementById('wam-cola'); if (box) box.innerHTML = _wamColaHtml(d);
+      showBanner('✓ Ritmo de envío guardado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function wamColaPausa(pausar) {
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_wamConnId}/cola/pausa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pausar: !!pausar, motivo: 'Pausada a mano' }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _wamCola = d; const box = document.getElementById('wam-cola'); if (box) box.innerHTML = _wamColaHtml(d);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function wamColaItem(rowId, accion) {
+    try {
+      if (accion === 'cancelar') { const r = await apiFetch(`${API}/wa/connections/${_wamConnId}/scheduled/${rowId}`, { method: 'DELETE' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error'); }
+      else await _waColaAccion(_wamConnId, rowId, accion);
+      await _wamColaLoad(_wamConnId);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function wamDesconectar(clientId, connId) {
     const ok = await novaConfirm({ title: '¿Desconectar este WhatsApp?', message: 'Vas a tener que escanear un QR nuevo para volver a usarlo con este cliente.', ok: 'Desconectar', cancel: 'Cancelar', tone: 'danger' });
@@ -36000,7 +36075,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, wamColaSave, wamColaPausa, wamColaItem, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
@@ -38581,6 +38656,32 @@ const SlackChat = (() => {
 // de quien hacía clic — esto usa el WhatsApp de NEGOCIO ya conectado en Nova.
 // Resuelve la conexión: el del cliente outbound del contacto si existe y está
 // conectado, si no el de Operaciones (pedido explícito 2026-09-01).
+// ── WhatsApp: mensajes EN COLA / programados / con problema — burbuja y acciones compartidas por los 3 chats ──
+// (cola = sale al ritmo de la línea; programado = a una hora exacta; con problema = agotó los reintentos y espera una decisión)
+function _waSchedBubble(m, mod) {
+  const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const nota = m.ultimo_error ? `<span class="wa-msg__sched-note" title="${esc(m.ultimo_error)}">· ${esc(String(m.ultimo_error).slice(0, 70))}</span>` : '';
+  const btn = (txt, fn, cls) => `<button class="wa-msg__cancel${cls ? ' ' + cls : ''}" onclick="${mod}.${fn}(${m.id})">${txt}</button>`;
+  let badge, btns;
+  if (m.estado === 'error_programado') {
+    badge = `⚠ No salió${m.ultimo_error ? ': ' + esc(String(m.ultimo_error).slice(0, 90)) : ''}`;
+    btns = btn('Reintentar', 'reintentarCola', 'wa-msg__cancel--ok') + btn('Quitar', 'cancelarProgramado');
+  } else if (m.estado === 'enviando') {
+    badge = `${NI('clock', 11)} Enviando…`; btns = '';
+  } else if (m.via_cola) {
+    badge = `${NI('clock', 11)} En cola · saldrá ~${fecha}${nota}`;
+    btns = btn('Enviar ya', 'enviarYaCola', 'wa-msg__cancel--ok') + btn('Cancelar', 'cancelarProgramado');
+  } else {
+    badge = `${NI('clock', 11)} Programado · saldrá el ${fecha}${nota}`;
+    btns = btn('Cancelar', 'cancelarProgramado');
+  }
+  return `<div class="wa-msg wa-msg--out wa-msg--sched${m.estado === 'error_programado' ? ' wa-msg--fail' : ''}"><div class="wa-msg__bubble"><div class="wa-msg__sched-badge">${badge}${btns}</div>${esc(m.texto)}</div></div>`;
+}
+async function _waColaAccion(connId, rowId, accion) {
+  const r = await apiFetch(`${API}/wa/connections/${connId}/cola/${rowId}/${accion}`, { method: 'POST' });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo');
+}
+
 const QuickWaModule = (() => {
   let _conn = null, _jid = null, _nombre = '', _poll = null, _contactId = null;
   let _replyTo = null;
@@ -38622,7 +38723,40 @@ const QuickWaModule = (() => {
     const sub = $$('qwa-sub'); if (sub) sub.textContent = `+${String(telefono || '').replace(/\D/g, '')} · desde +${_conn.numero || ''}`;
     await _cargarMensajes();
     _cargarPrioridad();
+    await _cargarCola(true);
     _poll = setInterval(() => _cargarMensajes(true), 5000);
+  }
+
+  // ── Envío con ritmo (cola de la línea) ──
+  // Por defecto, los primeros contactos (prospección) salen con el ritmo de la línea para no arriesgar el número; en una conversación ya activa
+  // (el contacto escribió en las últimas 48 h) el envío es inmediato. Se puede cambiar en cada mensaje.
+  let _cola = { disponible: false, usar: false, info: null };
+  async function _cargarCola(decidir) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/cola?ligero=1`);
+      if (!r.ok) throw new Error('x');
+      const info = await r.json();
+      const activa = (_lastRows || []).some(m => !m.from_me && m.ts && Date.now() - new Date(m.ts).getTime() < 48 * 3600 * 1000);
+      _cola = { disponible: true, info, usar: decidir ? (!!info.cola_activa && !activa) : _cola.usar };
+    } catch (_) { _cola = { disponible: false, usar: false, info: null }; }
+    _pintarModoCola();
+  }
+  function modoCola(usar) { _cola.usar = !!usar; _pintarModoCola(); }
+  function _pintarModoCola() {
+    const el = $$('qwa-cola-bar'); if (!el) return;
+    const i = _cola.info;
+    if (!_cola.disponible || !i) { el.innerHTML = ''; return; }
+    const cuando = t => t ? new Date(t).toLocaleString('es-PE', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    let h = '';
+    if (i.pausada) h += `<div class="qwa-cola qwa-cola--warn">⏸ Esta línea está en pausa${i.pausa_motivo ? ': ' + esc(i.pausa_motivo) : ''}. Lo que pongas en cola espera hasta que se reanude.</div>`;
+    if (_cola.usar) {
+      const fuera = !i.en_ventana ? ' Ahora está fuera del horario de envío: saldrá en la próxima jornada.' : '';
+      h += `<div class="qwa-cola">🕒 <b>Con ritmo</b>: 1 cada ~${i.intervalo_min} min · hoy ${i.hoy}/${i.tope}${i.en_cola ? ` · ${i.en_cola} antes en la cola` : ''}.${fuera} <a href="javascript:void(0)" onclick="QuickWaModule.modoCola(false)">Enviar al instante</a></div>`;
+    } else {
+      h += `<div class="qwa-cola qwa-cola--off">Envío al instante · <a href="javascript:void(0)" onclick="QuickWaModule.modoCola(true)">Usar el ritmo de la línea</a> <span title="Recomendado para contactos nuevos: WhatsApp puede bloquear números que escriben a muchos desconocidos seguidos">ⓘ</span></div>`;
+    }
+    el.innerHTML = h;
   }
 
   const _QWA_PRIO = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
@@ -38688,6 +38822,7 @@ const QuickWaModule = (() => {
         <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
         <div id="qwa-quote" class="rchat-quote hidden"></div>
         <div id="qwa-img-preview" class="wa-img-prev hidden"></div>
+        <div id="qwa-cola-bar"></div>
         <div class="qwa-panel__composer">
           <button class="wa-clock" title="Adjuntar foto" onclick="QuickWaModule.pickImage()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -38874,15 +39009,7 @@ const QuickWaModule = (() => {
       if (m.eliminado) {
         return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
       }
-      if (m.estado === 'programado' || m.estado === 'error_programado') {
-        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        const badge = m.estado === 'error_programado'
-          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
-          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
-        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="QuickWaModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
-        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
-        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
-      }
+      if (m.estado === 'programado' || m.estado === 'error_programado' || m.estado === 'enviando') return `${sep}${_waSchedBubble(m, 'QuickWaModule')}`;
 
       const quien = m.from_me ? 'Tú' : (m.nombre || _nombre || 'Este contacto');
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
@@ -38933,6 +39060,7 @@ const QuickWaModule = (() => {
     // aunque el mensaje salió bien, así que ahí no se marca "No entregado" (y Reintentar reenviaría mensajes que sí llegaron).
     if (jid && !String(jid).endsWith('@s.whatsapp.net') && a < 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 25 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="WhatsApp no confirmó la entrega. Puede haber llegado igual: comprueba en tu teléfono antes de reintentar, porque reintentar lo vuelve a enviar." onclick="event.stopPropagation();QuickWaModule.reparar()">Sin confirmar · Reintentar</button>`; }
+    if (a === 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 20 * 60 * 1000 && age < 3 * 864e5) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="wa-msg__pend" title="WhatsApp recibió el mensaje pero todavía no lo entregó al teléfono del contacto. Suele ser que tiene el teléfono apagado o sin datos; Nova ya intentó reparar la conexión con este contacto.">aún sin entregar</span>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;
@@ -39136,6 +39264,15 @@ const QuickWaModule = (() => {
     const p = $$('qwa-sched'); if (p) p.style.display = 'none';
     enviar(d.toISOString());
   }
+  async function reintentarCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'reintentar'); await _cargarMensajes(true); _cargarCola(); } catch (e) { alert('Error: ' + e.message); }
+  }
+  async function enviarYaCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'enviar-ya'); await _cargarMensajes(true); _cargarCola(); } catch (e) { alert('Error: ' + e.message); }
+  }
+
   async function cancelarProgramado(rowId) {
     if (!_conn) return;
     try {
@@ -39158,15 +39295,23 @@ const QuickWaModule = (() => {
     // el mensaje solo aparecía después del POST + un segundo GET de recarga completo.
     // Se pinta ya mismo con un id temporal; _cargarMensajes lo reemplaza por el real
     // en cuanto responde el servidor (o lo quita si falló, ver catch).
-    if (!scheduledAt) {
+    const conRitmo = !scheduledAt && _cola.disponible && _cola.usar;
+    if (!scheduledAt && !conRitmo) {
       _pintar([..._lastRows, { id: '_tmp', msg_id: '_tmp', from_me: true, texto, ts: new Date().toISOString(), estado: 'enviado', reply_to_texto: replyTextoLocal }]);
     }
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(conRitmo ? { texto, respondeA, cola: true, contact_id: _contactId, origen: 'tarea' } : { texto, respondeA, scheduledAt })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      const j = await r.json().catch(() => ({}));
       await _cargarMensajes(true);
+      if (conRitmo) {
+        const t = j.scheduledAt ? new Date(j.scheduledAt).toLocaleString('es-PE', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        showBanner(j.duplicado ? 'Ese mensaje ya estaba en la cola' : `✓ En cola con el ritmo de la línea${t ? ' · saldrá ~' + t : ''}`, 'success');
+        _cargarCola();
+      }
     } catch (e) { alert('Error: ' + e.message); input.value = texto; _pintar(_lastRows); }
   }
 
@@ -39179,7 +39324,7 @@ const QuickWaModule = (() => {
 
   return { reparar,
     open, close, enviar, onPasteInput, pickImage, editPendingImg, cancelImg,
-    responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado,
+    responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado, reintentarCola, enviarYaCola, modoCola,
     reactPop, reaccionar, emojiPicker, _emojiIns, msgMenu, toggleImportante,
     menuAcciones, setPrioridad, vincularAbrir, vincularPick, _vincularFiltrar,
   };
@@ -40929,15 +41074,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
         return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
       }
 
-      if (m.estado === 'programado' || m.estado === 'error_programado') {
-        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        const badge = m.estado === 'error_programado'
-          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
-          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
-        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="WaChatModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
-        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
-        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
-      }
+      if (m.estado === 'programado' || m.estado === 'error_programado' || m.estado === 'enviando') return `${sep}${_waSchedBubble(m, 'WaChatModule')}`;
 
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
@@ -40983,6 +41120,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     if (jid && !String(jid).endsWith('@s.whatsapp.net') && a < 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     // Más de 5 min sin confirmación (y no es historial viejo): se avisa en rojo en vez de dejar el relojito eterno.
     if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 25 * 1000 && age < 3 * 864e5) return `<button type="button" class="wa-msg__fail" title="WhatsApp no confirmó la entrega. Puede haber llegado igual: comprueba en tu teléfono antes de reintentar, porque reintentar lo vuelve a enviar." onclick="event.stopPropagation();WaChatModule.reparar()">Sin confirmar · Reintentar</button>`; }
+    if (a === 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 20 * 60 * 1000 && age < 3 * 864e5) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="wa-msg__pend" title="WhatsApp recibió el mensaje pero todavía no lo entregó al teléfono del contacto. Suele ser que tiene el teléfono apagado o sin datos; Nova ya intentó reparar la conexión con este contacto.">aún sin entregar</span>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;
@@ -41177,6 +41315,15 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     }
     const p = $$('wa-sched'); if (p) p.style.display = 'none';
     enviar(d.toISOString());
+  }
+
+  async function reintentarCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'reintentar'); await _cargarMensajes(_chatAct, true); await _cargarChats(true); } catch (e) { alert('Error: ' + e.message); }
+  }
+  async function enviarYaCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'enviar-ya'); await _cargarMensajes(_chatAct, true); await _cargarChats(true); } catch (e) { alert('Error: ' + e.message); }
   }
 
   async function cancelarProgramado(rowId) {
@@ -41416,7 +41563,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
-           programarToggle, programarPick, cancelarProgramado,
+           programarToggle, programarPick, cancelarProgramado, reintentarCola, enviarYaCola,
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
@@ -41821,15 +41968,7 @@ const ObcWaModule = (() => {
         return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
       }
 
-      if (m.estado === 'programado' || m.estado === 'error_programado') {
-        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        const badge = m.estado === 'error_programado'
-          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
-          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
-        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="ObcWaModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
-        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
-        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
-      }
+      if (m.estado === 'programado' || m.estado === 'error_programado' || m.estado === 'enviando') return `${sep}${_waSchedBubble(m, 'ObcWaModule')}`;
 
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
@@ -42046,6 +42185,15 @@ const ObcWaModule = (() => {
     enviar(d.toISOString());
   }
 
+  async function reintentarCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'reintentar'); await _cargarMensajes(_chatAct, true); await _cargarChats(true); } catch (e) { alert('Error: ' + e.message); }
+  }
+  async function enviarYaCola(rowId) {
+    if (!_conn) return;
+    try { await _waColaAccion(_conn.id, rowId, 'enviar-ya'); await _cargarMensajes(_chatAct, true); await _cargarChats(true); } catch (e) { alert('Error: ' + e.message); }
+  }
+
   async function cancelarProgramado(rowId) {
     if (!_conn) return;
     try {
@@ -42178,7 +42326,7 @@ const ObcWaModule = (() => {
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
-           programarToggle, programarPick, cancelarProgramado,
+           programarToggle, programarPick, cancelarProgramado, reintentarCola, enviarYaCola,
            reactPop, reaccionar, emojiPicker, _emojiIns,
            abrirVisPop, refrescarVis,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };

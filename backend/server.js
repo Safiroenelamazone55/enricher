@@ -12360,6 +12360,8 @@ app.post('/api/slack/workspaces/:id/canales/:canal/estrella', requireAuth, async
 // con quien ya escribió — no para prospección fría masiva (ver waService.js).
 // =================================================================
 const waSvc = require('./services/waService');
+const waQueue = require('./services/waQueue');
+waQueue.mount(app, { pool, requireAuth, cargarConexion: (req, res, id) => _cargarConexionAutorizada(req, res, id) });
 
 // ?outboundClientId= trae SOLO las conexiones asignadas a ESE cliente (Outreach),
 // vía wa_connection_clients — una conexión puede estar asignada a varios clientes a
@@ -12373,13 +12375,13 @@ app.get('/api/wa/connections', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       ocid
         ? `SELECT c.id, c.nombre, c.numero, c.estado, c.qr_actual, c.connected_at, c.created_at,
-                  c.connected_by, c.visibilidad, c.visibilidad_niveles, c.visibilidad_miembros
+                  c.connected_by, c.visibilidad, c.visibilidad_niveles, c.visibilidad_miembros, c.ultimo_error
              FROM wa_connections c
              JOIN wa_connection_clients wcc ON wcc.connection_id = c.id AND wcc.outbound_client_id = $2
             WHERE c.user_id=$1 AND c.archivada_at IS NULL
             ORDER BY c.id`
         : `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at,
-                  connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros
+                  connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros, ultimo_error
              FROM wa_connections
             WHERE user_id=$1 AND archivada_at IS NULL
             ORDER BY id`,
@@ -13303,7 +13305,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
-             m.media_url, m.media_type, m.importante, m.contact_phone, m.ack,
+             m.media_url, m.media_type, m.importante, m.contact_phone, m.ack, m.via_cola, m.ultimo_error, m.intentos, m.reparado_at,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE
@@ -13322,6 +13324,13 @@ app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req,
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+
+    // En cola con ritmo: no sale ahora, sale cuando le toque a la línea (intervalo, horario y tope diario). Lo usan los pasos de secuencia.
+    if ((req.body || {}).cola === true) {
+      const b = req.body || {};
+      const q = await waQueue.encolar(pool, { connId: +req.params.id, jid: req.params.jid, texto, respondeA, contactId: parseInt(b.contact_id) || null, sequenceId: parseInt(b.sequence_id) || null, stepId: parseInt(b.step_id) || null, origen: String(b.origen || 'manual').slice(0, 30), userId: req.user && req.user.id });
+      return res.status(201).json({ ok: true, queued: true, id: q.id, scheduledAt: q.scheduledAt, duplicado: !!q.duplicado });
+    }
 
     // Programado: se guarda para que lo mande waService.flushProgramados cuando toque,
     // en vez de enviarlo ya. Igual que en el Inbox de correo, <30s en el futuro se trata
@@ -13372,9 +13381,10 @@ app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, 
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const r = await pool.query(
-      `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado='programado'`,
+      `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado IN ('programado','error_programado') RETURNING via_cola`,
       [req.params.msgId, req.params.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'No encontrado o ya se envió' });
+    if (r.rows[0].via_cola) await waQueue.replanificar(pool, +req.params.id);   // los demás de la cola se reacomodan
     res.json({ ok: true });
   } catch (err) { console.error('[wa] cancelar programado', err.message); res.status(500).json({ error: 'No se pudo cancelar' }); }
 });

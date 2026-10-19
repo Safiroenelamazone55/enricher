@@ -2267,6 +2267,47 @@ async function initDb() {
     // dato en messages.update (u.update.status: 1 pendiente, 2 enviado al server,
     // 3 entregado, 4 leído); antes se descartaba. Solo aplica a from_me=TRUE.
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS ack SMALLINT NOT NULL DEFAULT 0;`);
+    // ── WhatsApp: cola de envío con ritmo + reintentos ──────────────────────────────────────────────────────────
+    // Los mensajes en cola/programados viven en wa_messages (estado 'programado'): así el chat ya los muestra y se pueden cancelar.
+    //  via_cola=TRUE  → sale al ritmo de la línea (intervalo, ventana, tope diario); FALSE → programado a una hora exacta por una persona.
+    //  wa_id → id de WhatsApp generado ANTES de enviar: si algo falla a mitad, el reintento usa el MISMO id y WhatsApp no lo duplica.
+    //  reparado_at → la sesión con ese contacto ya se reparó por no entregarse (para no repetirlo en bucle).
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS via_cola BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS intentos SMALLINT NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS proximo_intento_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS ultimo_error TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS wa_id TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS contact_id INTEGER;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS sequence_id INTEGER;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS step_id INTEGER;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reparado_at TIMESTAMPTZ;`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_cola_idx ON wa_messages (connection_id, scheduled_at) WHERE estado IN ('programado','enviando','error_programado');`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS ultimo_error TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS ultimo_corte_at TIMESTAMPTZ;`);
+    // Ajustes de ritmo por línea de WhatsApp (equivalente a los límites del buzón de correo).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_line_settings (
+        connection_id    INTEGER PRIMARY KEY REFERENCES wa_connections(id) ON DELETE CASCADE,
+        cola_activa      BOOLEAN NOT NULL DEFAULT TRUE,
+        intervalo_min    INTEGER NOT NULL DEFAULT 40,
+        jitter_pct       INTEGER NOT NULL DEFAULT 30,
+        tope_diario      INTEGER NOT NULL DEFAULT 15,
+        rampa_on         BOOLEAN NOT NULL DEFAULT FALSE,
+        rampa_inicio     INTEGER NOT NULL DEFAULT 5,
+        rampa_paso       INTEGER NOT NULL DEFAULT 5,
+        rampa_desde      DATE,
+        hora_ini         SMALLINT NOT NULL DEFAULT 9,
+        hora_fin         SMALLINT NOT NULL DEFAULT 18,
+        tz               TEXT NOT NULL DEFAULT 'America/Lima',
+        dias             TEXT NOT NULL DEFAULT '1111100',
+        pausada          BOOLEAN NOT NULL DEFAULT FALSE,
+        pausa_motivo     TEXT NOT NULL DEFAULT '',
+        fallos_seguidos  INTEGER NOT NULL DEFAULT 0,
+        proximo_envio_at TIMESTAMPTZ,
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
     // Participantes de una conversación — alguien que la sigue SIN ser el
     // responsable (asignado_a ya cubre eso). Pedido explícito 2026-09-04.

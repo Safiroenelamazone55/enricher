@@ -21,6 +21,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const pino = require('pino');
 
 const SESSIONS_DIR = path.join(__dirname, '..', 'data', 'wa-sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -37,6 +38,50 @@ const MAX_REINTENTOS = 5; // pasado esto, una sesión que nunca llegó a "open" 
                            // mejor dejarla desconectada que reintentar por siempre.
 
 function _sessionDir(id) { return path.join(SESSIONS_DIR, String(id)); }
+
+// ── Un SOLO socket vivo por línea ───────────────────────────────────────────────────────────────────────────────────
+// Dos sockets con las mismas credenciales (p. ej. el vigilante y el evento «close» reconectando a la vez) se pisan las claves de cifrado:
+// es la causa típica de los «Bad MAC» y del «Esperando el mensaje…» en el teléfono. Por eso toda reconexión pasa por _connect (con candado),
+// el socket anterior se marca como «viejo» (sus eventos se ignoran) y solo existe un temporizador de reconexión por línea.
+const _conectando = new Set();     // líneas que están creando su socket ahora mismo
+const _reconTimer = new Map();     // id → temporizador de reconexión pendiente (uno por línea)
+const _qrCiclos = new Map();       // id → cuántos QR vencieron sin escanearse
+const _reemplazos = new Map();     // id → marcas de tiempo de cierres «sesión abierta en otro lugar»
+const MAX_QR_CICLOS = 3;
+function _cerrarSock(sock) {
+  if (!sock) return;
+  sock.__stale = true;             // desde ahora ninguno de sus eventos se procesa
+  try { sock.end(undefined); } catch (_) { /* ya estaba cerrado */ }
+}
+function _programarReconexion(pool, id, ms) {
+  clearTimeout(_reconTimer.get(id));
+  _reconTimer.set(id, setTimeout(() => {
+    _reconTimer.delete(id);
+    _connect(pool, id).catch(e => console.warn('[wa] reconectar ' + id + ':', e.message));
+  }, ms));
+}
+function _abierto(sock) { return !!(sock && !sock.__stale && !sock.__cerrado && sock.__abierto && sock.ws && sock.ws.isOpen); }
+// Estado real de la línea: sirve a la cola para decidir si puede enviar ahora o debe esperar.
+function estadoSock(id) {
+  const s = _socks.get(id);
+  return { abierto: _abierto(s), conectando: _conectando.has(id) || !!(s && !s.__cerrado && !s.__stale && !s.__abierto) || _reconTimer.has(id) };
+}
+// Espera (hasta ms) a que la línea esté lista; si no hay socket arranca la reconexión. Lanza error con code='sin_conexion'.
+async function esperarListo(pool, id, ms) {
+  const t0 = Date.now();
+  if (!_socks.get(id)) {
+    // Sin socket: solo se intenta reconectar si la línea debería estar conectada. Una línea desconectada a propósito (o sin QR) no se levanta sola.
+    try { const { rows: [c] } = await pool.query('SELECT estado FROM wa_connections WHERE id=$1', [id]); if (!c || c.estado !== 'conectado') throw Object.assign(new Error('Este WhatsApp no está conectado ahora mismo'), { code: 'sin_conexion' }); }
+    catch (e) { if (e.code === 'sin_conexion') throw e; }
+  }
+  for (;;) {
+    const s = _socks.get(id);
+    if (_abierto(s)) return s;
+    if (!s && !_conectando.has(id) && !_reconTimer.has(id)) iniciar(pool, id).catch(() => {});
+    if (Date.now() - t0 >= ms) throw Object.assign(new Error('Este WhatsApp no está conectado ahora mismo'), { code: 'sin_conexion' });
+    await new Promise(r => setTimeout(r, 400));
+  }
+}
 
 function _esChatValido(jid) {
   return !!jid && jid !== 'status@broadcast' && !jid.endsWith('@broadcast');
@@ -366,8 +411,21 @@ async function _backfillNombresGrupo(pool, sock, connId) {
 }
 
 async function _connect(pool, id) {
+  if (_conectando.has(id)) return _socks.get(id);
+  const vivo = _socks.get(id);
+  // Ya hay uno sano (o recién creado y conectando): NUNCA se abre un segundo con las mismas credenciales.
+  if (vivo && !vivo.__stale && !vivo.__cerrado && ((vivo.ws && vivo.ws.isOpen) || Date.now() - (vivo.__creado || 0) < 45000)) return vivo;
+  _conectando.add(id);
+  try {
+    clearTimeout(_reconTimer.get(id)); _reconTimer.delete(id);
+    if (vivo) { _cerrarSock(vivo); _socks.delete(id); }
+    return await _connectInner(pool, id);
+  } finally { _conectando.delete(id); }
+}
+
+async function _connectInner(pool, id) {
   // Import perezoso: Baileys es pesado y solo hace falta cuando de verdad se usa esto.
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } =
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } =
     require('@whiskeysockets/baileys');
 
   const dir = _sessionDir(id);
@@ -388,12 +446,22 @@ async function _connect(pool, id) {
       return (m && m.texto) ? { conversation: m.texto } : undefined;
     } catch (e) { return undefined; }
   };
-  const sock = makeWASocket({ auth: state, syncFullHistory: true, keepAliveIntervalMs: 25000, getMessage });
+  // Recomendado por Baileys para producción: claves de cifrado con caché (menos lecturas de disco y lecturas siempre coherentes), logger sin ruido
+  // (antes volcaba miles de líneas «info» al log) y NO marcarse «en línea» al conectar (así el celular sigue recibiendo sus notificaciones).
+  const logger = pino({ level: process.env.WA_LOG_LEVEL || 'warn' });
+  const sock = makeWASocket({
+    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+    logger, syncFullHistory: true, keepAliveIntervalMs: 25000, markOnlineOnConnect: false, getMessage,
+  });
+  sock.__creado = Date.now(); sock.__abierto = false; sock.__cerrado = false; sock.__stale = false;
   _socks.set(id, sock);
   sock.__connId = id; sock.__pool = pool;
+  // Todo evento pasa por aquí: si este socket ya fue reemplazado o cerrado a propósito, sus eventos se ignoran (también creds.update:
+  // un socket viejo guardando credenciales encima de las del nuevo corrompería la sesión).
+  const on = (ev, fn) => sock.ev.on(ev, (...a) => { if (sock.__stale) return; return fn(...a); });
   await _cargarLidMap(pool, id);
 
-  sock.ev.on('creds.update', saveCreds);
+  on('creds.update', saveCreds);
 
   const _chatsPares = async (arr) => {
     let n = 0;
@@ -406,8 +474,8 @@ async function _connect(pool, id) {
     }
     if (n) _unificarLidPronto();
   };
-  sock.ev.on('chats.upsert', _chatsPares);
-  sock.ev.on('chats.update', _chatsPares);
+  on('chats.upsert', _chatsPares);
+  on('chats.update', _chatsPares);
   // Cuando WhatsApp entrega la relación @lid ↔ número, se unifica al instante (con un
   // pequeño debounce) en vez de esperar al watchdog: la conversación nunca queda partida.
   let _lidTimer = null;
@@ -415,10 +483,10 @@ async function _connect(pool, id) {
     clearTimeout(_lidTimer);
     _lidTimer = setTimeout(() => _normalizarLid(pool, sock, id).catch(() => {}), 2000);
   };
-  sock.ev.on('lid-mapping.update', _unificarLidPronto);
-  sock.ev.on('chats.phoneNumberShare', async (ev) => { if (ev && await _aprenderLid(pool, id, ev.lid, ev.jid)) _unificarLidPronto(); });
+  on('lid-mapping.update', _unificarLidPronto);
+  on('chats.phoneNumberShare', async (ev) => { if (ev && await _aprenderLid(pool, id, ev.lid, ev.jid)) _unificarLidPronto(); });
 
-  sock.ev.on('connection.update', async (update) => {
+  on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
     try {
       if (qr) {
@@ -428,10 +496,11 @@ async function _connect(pool, id) {
           [qrPng, id]);
       }
       if (connection === 'open') {
+        sock.__abierto = true; _qrCiclos.delete(id); _reemplazos.delete(id);
         _reintentos.delete(id); // ya conectó bien — se olvida cualquier corte anterior
         const numero = (sock.user && sock.user.id) ? sock.user.id.split(':')[0] : '';
         await pool.query(
-          `UPDATE wa_connections SET estado='conectado', numero=$1, numero_linea=$1, qr_actual='', connected_at=NOW(), updated_at=NOW() WHERE id=$2`,
+          `UPDATE wa_connections SET estado='conectado', numero=$1, numero_linea=$1, qr_actual='', ultimo_error='', connected_at=NOW(), updated_at=NOW() WHERE id=$2`,
           [numero, id]);
         _adoptarLineaAnterior(pool, id, numero).catch(() => {});   // si ya existió esta línea, recupera su historial
         console.log(`[wa] conexión ${id} vinculada (${numero})`);
@@ -451,32 +520,65 @@ async function _connect(pool, id) {
         _backfillNombresGrupo(pool, sock, id).catch(e => console.warn('[wa] backfillNombresGrupo:', e.message));
       }
       if (connection === 'close') {
-        _socks.delete(id);
+        sock.__cerrado = true; sock.__abierto = false;
+        if (_socks.get(id) === sock) _socks.delete(id);
         const code = lastDisconnect?.error?.output?.statusCode;
-        const loggedOut = code === DisconnectReason.loggedOut;
-        const intentos = (_reintentos.get(id) || 0) + 1;
-        if (loggedOut) {
+        const detalle = lastDisconnect?.error?.message || 'sin detalle';
+        const sinVincular = !(state.creds && state.creds.me);   // una sesión que nunca llegó a vincularse (QR sin escanear)
+        const registrarCorte = (msg) => pool.query(`UPDATE wa_connections SET ultimo_error=$2, ultimo_corte_at=NOW() WHERE id=$1`, [id, String(msg).slice(0, 300)]).catch(() => {});
+        if (code === DisconnectReason.loggedOut) {
           // SOLO si el teléfono revocó la vinculación (o "cerrar sesión" nuestro) hace
           // falta un QR nuevo. Cualquier otro corte NUNCA borra la sesión: antes, 5 cortes
           // seguidos (red, reinicio) la borraban y obligaban a re-vincular.
-          _reintentos.delete(id);
+          _reintentos.delete(id); _qrCiclos.delete(id);
           await pool.query(
-            `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', updated_at=NOW() WHERE id=$1`,
+            `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', ultimo_error='', updated_at=NOW() WHERE id=$1`,
             [id]);
           fs.rmSync(dir, { recursive: true, force: true });
           console.log(`[wa] conexión ${id} cerró sesión — hace falta un QR nuevo`);
+        } else if (code === DisconnectReason.restartRequired) {
+          // 515: tras vincular (o al actualizar claves) WhatsApp pide reiniciar el socket. No es un fallo: se reconecta al instante.
+          _reintentos.delete(id);
+          _programarReconexion(pool, id, 400);
+        } else if (sinVincular) {
+          // QR que nadie escaneó: cada ciclo vence solo. Tras MAX_QR_CICLOS se detiene y lo dice (antes reintentaba cada 60 s para siempre).
+          const ciclos = (_qrCiclos.get(id) || 0) + 1; _qrCiclos.set(id, ciclos);
+          if (ciclos >= MAX_QR_CICLOS) {
+            _qrCiclos.delete(id); _reintentos.delete(id);
+            await pool.query(`UPDATE wa_connections SET estado='desconectado', qr_actual='', ultimo_error=$2, ultimo_corte_at=NOW(), updated_at=NOW() WHERE id=$1`,
+              [id, 'El QR venció sin escanearse. Pulsa «Conectar» para generar uno nuevo.']);
+            console.log(`[wa] conexión ${id}: el QR venció ${ciclos} veces sin escanearse — se detiene (pulsar «Conectar» para generar otro)`);
+          } else {
+            console.log(`[wa] conexión ${id}: QR vencido (${ciclos}/${MAX_QR_CICLOS}) — se genera otro`);
+            _programarReconexion(pool, id, 3000);
+          }
+        } else if (code === DisconnectReason.connectionReplaced) {
+          // 440: otro dispositivo/proceso abrió esta misma sesión. Reconectar sin parar genera un «tira y afloja» que daña las claves: máx. 3 en 10 min.
+          const marcas = (_reemplazos.get(id) || []).filter(t => Date.now() - t < 10 * 60 * 1000); marcas.push(Date.now()); _reemplazos.set(id, marcas);
+          if (marcas.length >= 3) {
+            _reemplazos.delete(id); _reintentos.delete(id);
+            await pool.query(`UPDATE wa_connections SET estado='desconectado', ultimo_error=$2, ultimo_corte_at=NOW(), updated_at=NOW() WHERE id=$1`,
+              [id, 'WhatsApp cerró esta línea porque la sesión se abrió en otro lugar (3 veces en 10 min). Revisa que no esté abierta en otro servidor y pulsa «Reconectar».']);
+            console.warn(`[wa] conexión ${id}: sesión reemplazada ${marcas.length} veces seguidas — se detiene para no dañar las claves`);
+          } else {
+            await registrarCorte('La sesión se abrió en otro lugar; reconectando…');
+            _programarReconexion(pool, id, 20000);
+          }
         } else {
-          // Corte de red/servidor: reintenta para siempre con espera creciente (3s → 60s máx).
+          // Corte de red/servidor: reintenta para siempre con espera creciente (3s → 60s máx), con algo de variación para no sincronizar reintentos.
+          const intentos = (_reintentos.get(id) || 0) + 1;
           _reintentos.set(id, intentos);
-          const espera = Math.min(3000 * Math.pow(2, Math.min(intentos - 1, 5)), 60000);
-          console.log(`[wa] conexión ${id} se cortó, reintentando en ${espera / 1000}s (#${intentos}) — código ${code || '?'}: ${lastDisconnect?.error?.message || 'sin detalle'}`);
-          setTimeout(() => _connect(pool, id).catch(e => console.warn('[wa] reconectar:', e.message)), espera);
+          const base = Math.min(3000 * Math.pow(2, Math.min(intentos - 1, 5)), 60000);
+          const espera = Math.round(base * (0.85 + Math.random() * 0.3));
+          console.log(`[wa] conexión ${id} se cortó, reintentando en ${Math.round(espera / 1000)}s (#${intentos}) — código ${code || '?'}: ${detalle}`);
+          if (intentos >= 2) await registrarCorte(`Corte de conexión (código ${code || '?'}): ${detalle}`);
+          _programarReconexion(pool, id, espera);
         }
       }
     } catch (e) { console.warn('[wa] connection.update:', e.message); }
   });
 
-  sock.ev.on('messages.upsert', async (ev) => {
+  on('messages.upsert', async (ev) => {
     // 'notify' = mensajes nuevos en vivo. El volcado de historial llega aparte,
     // por 'messaging-history.set' (abajo) — así no se procesan dos veces.
     if (ev.type !== 'notify') return;
@@ -486,7 +588,7 @@ async function _connect(pool, id) {
   // Reacciones (👍❤️😂...) puestas desde el OTRO lado (el teléfono de la contraparte,
   // o el mío si reacciono desde el celular en vez de acá). key = el mensaje original
   // reaccionado; reaction.key.fromMe distingue si fui yo o la otra persona.
-  sock.ev.on('messages.reaction', async (reacciones) => {
+  on('messages.reaction', async (reacciones) => {
     for (const r of (reacciones || [])) {
       try {
         const jid = await _resolverJid(sock, r.key?.remoteJid || '', r.key?.senderPn || r.key?.remoteJidAlt);
@@ -527,7 +629,7 @@ async function _connect(pool, id) {
   // Se dispara una vez tras conectar (puede repetirse en tandas: progress/isLatest)
   // con lo que el teléfono ya trae: contactos guardados y mensajes recientes de cada
   // chat. Es lo que llena "chats previos" sin que Jenny tenga que escribir primero.
-  sock.ev.on('messaging-history.set', async (ev) => {
+  on('messaging-history.set', async (ev) => {
     try {
       const { chats, contacts, messages } = ev || {};
       console.log(`[wa] historial recibido (conexión ${id}): ${contacts?.length || 0} contactos, ${chats?.length || 0} chats, ${messages?.length || 0} mensajes`);
@@ -565,14 +667,14 @@ async function _connect(pool, id) {
   const _sincronizarContactos = async (contactos) => {
     for (const c of (contactos || [])) await _guardarContactoEv(c);
   };
-  sock.ev.on('contacts.upsert', _sincronizarContactos);
-  sock.ev.on('contacts.update', _sincronizarContactos);
+  on('contacts.upsert', _sincronizarContactos);
+  on('contacts.update', _sincronizarContactos);
 
   // Respaldo del caso de arriba: algunas versiones/momentos entregan la eliminación
   // como una ACTUALIZACIÓN del mensaje existente en vez de un protocolMessage nuevo
   // (messageStubType===1 confirmado contra la versión instalada, o directamente
   // update.message===null).
-  sock.ev.on('messages.update', async (updates) => {
+  on('messages.update', async (updates) => {
     for (const u of (updates || [])) {
       try {
         const eliminado = u.update?.messageStubType === 1 || u.update?.message === null;
@@ -590,7 +692,7 @@ async function _connect(pool, id) {
 
   // Recibos de entrega/lectura: en algunos chats (p. ej. números ya migrados a LID) WhatsApp NO manda 'messages.update' con el estado, solo el recibo.
   // Sin esto el mensaje llegaba al otro lado pero Nova lo dejaba con 0 ticks ("No se envió") para siempre.
-  sock.ev.on('message-receipt.update', async (updates) => {
+  on('message-receipt.update', async (updates) => {
     for (const u of (updates || [])) {
       try {
         const r = u.receipt || {};
@@ -606,7 +708,9 @@ async function _connect(pool, id) {
 }
 
 async function iniciar(pool, id) {
-  if (_socks.has(id)) return; // ya está corriendo
+  const s = _socks.get(id);
+  if (s && !s.__cerrado && !s.__stale) return; // ya está corriendo
+  _qrCiclos.delete(id);                         // una orden explícita empieza de cero los ciclos de QR
   await _connect(pool, id);
 }
 
@@ -615,13 +719,12 @@ async function _verificarNumero(sock, jidFull) {
   if (!String(jidFull).endsWith('@s.whatsapp.net')) return;
   try {
     const r = await Promise.race([sock.onWhatsApp(jidFull), new Promise(res => setTimeout(() => res(null), 6000))]);
-    if (Array.isArray(r) && r[0] && r[0].exists === false) throw Object.assign(new Error('Ese número no tiene WhatsApp. Revisa el número del contacto.'), { noWa: true });
+    if (Array.isArray(r) && r[0] && r[0].exists === false) throw Object.assign(new Error('Ese número no tiene WhatsApp. Revisa el número del contacto.'), { noWa: true, code: 'sin_whatsapp' });
   } catch (e) { if (e && e.noWa) throw e; /* si la consulta falla o tarda, no se bloquea el envío */ }
 }
 
 async function enviar(pool, id, jid, texto, respondeA) {
-  const sock = _socks.get(id);
-  if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  const sock = await esperarListo(pool, id, 8000);   // si justo se está reconectando, espera unos segundos en vez de fallar
   const jidFull = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
 
   let quoted;
@@ -641,6 +744,41 @@ async function enviar(pool, id, jid, texto, respondeA) {
     VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
     [id, jidFull, res.key.id, texto, quoted ? respondeA : '', quoted ? quoted.message.conversation : '']);
   return { jid: jidFull, msg_id: res.key.id };
+}
+
+// Clasifica el error de Baileys en algo accionable para la cola de envío.
+function _clasificarErrorEnvio(e) {
+  const code = e && e.output && e.output.statusCode;
+  const msg = String((e && e.message) || e || '');
+  let tipo = 'otro';
+  if (e && e.code === 'sin_whatsapp') tipo = 'sin_whatsapp';
+  else if (e && e.code === 'sin_conexion') tipo = 'sin_conexion';
+  else if (code === 428 || code === 408 || code === 503 || /connection closed|timed out|not connected|socket|ECONN|ETIMEDOUT|stream errored/i.test(msg)) tipo = 'sin_conexion';
+  else if (code === 429 || code === 403 || /rate-overlimit|forbidden|too many|spam|blocked|ban/i.test(msg)) tipo = 'limite';
+  const err = new Error(msg || 'No se pudo enviar'); err.code = tipo; err.statusCode = code;
+  return err;
+}
+// Envío para la cola: espera a que la línea esté lista, comprueba que el número tenga WhatsApp y manda con un id PROPIO (idempotente:
+// reintentar con el mismo id nunca duplica el mensaje). NO escribe en wa_messages: de eso se encarga quien llama.
+async function enviarSeguro(pool, id, jid, texto, { messageId, respondeA } = {}) {
+  const sock = await esperarListo(pool, id, 15000);
+  const jidFull = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+  let quoted;
+  if (respondeA) {
+    const { rows: [orig] } = await pool.query(`SELECT msg_id, from_me, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`, [id, jidFull, respondeA]);
+    if (orig) quoted = { key: { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
+  }
+  try { await _verificarNumero(sock, jidFull); } catch (e) { throw _clasificarErrorEnvio(e); }
+  const opts = {}; if (quoted) opts.quoted = quoted; if (messageId) opts.messageId = messageId;
+  let res;
+  try { res = await sock.sendMessage(jidFull, { text: texto }, Object.keys(opts).length ? opts : undefined); }
+  catch (e) { throw _clasificarErrorEnvio(e); }
+  return { jid: jidFull, msg_id: res.key.id };
+}
+function nuevoIdMensaje(id) {
+  const { generateMessageIDV2, generateMessageID } = require('@whiskeysockets/baileys');
+  const s = _socks.get(id);
+  return (typeof generateMessageIDV2 === 'function') ? generateMessageIDV2(s && s.user && s.user.id) : generateMessageID();
 }
 
 // Foto (pegada/adjunta, editada o no en el navegador). El archivo ya está guardado
@@ -780,53 +918,13 @@ async function _adoptarLineaAnterior(pool, id, numero) {
 }
 
 async function desconectar(pool, id) {
+  clearTimeout(_reconTimer.get(id)); _reconTimer.delete(id); _qrCiclos.delete(id); _reemplazos.delete(id); _reintentos.delete(id);
   const sock = _socks.get(id);
   if (sock) { try { await sock.logout(); } catch (_) { /* logout dispara connection.update igual */ } }
   _socks.delete(id);
   fs.rmSync(_sessionDir(id), { recursive: true, force: true });
   await pool.query(
-    `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', updated_at=NOW() WHERE id=$1`, [id]);
-}
-
-// Envía los mensajes programados que ya cumplieron su hora. A diferencia del correo
-// (que solo necesita las credenciales guardadas), acá hace falta que el socket siga
-// vivo AHORA MISMO — si se desconectó el WhatsApp, se marca error en vez de perderlo.
-async function flushProgramados(pool) {
-  try {
-    const { rows: due } = await pool.query(`
-      SELECT id, connection_id, chat_jid, texto, reply_to_id FROM wa_messages
-       WHERE estado='programado' AND scheduled_at <= NOW()
-       ORDER BY scheduled_at ASC LIMIT 20`);
-    for (const m of due) {
-      // Reclamo atómico antes de mandar: si un tick se demora más de 30s (conexión
-      // lenta) y se solapa con el siguiente, esto evita que los dos manden el MISMO
-      // programado — solo el que gana este UPDATE sigue adelante.
-      const { rowCount } = await pool.query(`UPDATE wa_messages SET estado='enviando' WHERE id=$1 AND estado='programado'`, [m.id]);
-      if (!rowCount) continue; // otro tick (o una cancelación) ya se lo llevó
-      const sock = _socks.get(m.connection_id);
-      if (!sock) {
-        await pool.query(`UPDATE wa_messages SET estado='error_programado' WHERE id=$1`, [m.id]);
-        console.warn(`[wa] programado ${m.id}: la conexión ${m.connection_id} no está conectada ahora, no se pudo enviar`);
-        continue;
-      }
-      try {
-        let quoted;
-        if (m.reply_to_id) {
-          const { rows: [orig] } = await pool.query(
-            `SELECT msg_id, from_me, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`,
-            [m.connection_id, m.chat_jid, m.reply_to_id]);
-          if (orig) quoted = { key: { remoteJid: m.chat_jid, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
-        }
-        const res = await sock.sendMessage(m.chat_jid, { text: m.texto }, quoted ? { quoted } : undefined);
-        await pool.query(
-          `UPDATE wa_messages SET msg_id=$1, estado='enviado', ts=NOW() WHERE id=$2`,
-          [res.key.id, m.id]);
-      } catch (e) {
-        await pool.query(`UPDATE wa_messages SET estado='error_programado' WHERE id=$1`, [m.id]);
-        console.warn(`[wa] programado ${m.id} falló:`, e.message);
-      }
-    }
-  } catch (e) { console.warn('[wa] flushProgramados:', e.message); }
+    `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', ultimo_error='', updated_at=NOW() WHERE id=$1`, [id]);
 }
 
 let _tickerProgramados = null;
@@ -847,10 +945,11 @@ async function _watchdogTick(pool) {
   for (const [id, sock] of _socks) {
     try {
       if (!sock?.ws?.isOpen) { // undefined también entra acá — no arriesgar un false positive de "vivo"
+        // Un socket que todavía está conectando (recién creado) no está muerto: se le da tiempo antes de tocarlo.
+        if (sock && !sock.__cerrado && !sock.__stale && Date.now() - (sock.__creado || 0) < 90000) continue;
         console.warn(`[wa] watchdog: conexión ${id} tiene el socket muerto — forzando reconexión`);
-        _socks.delete(id);
-        try { sock.end(new Error('watchdog: socket no está abierto')); } catch (_) {}
-        setTimeout(() => iniciar(pool, id).catch(e => console.warn(`[wa] watchdog reconectar ${id}:`, e.message)), 1000);
+        _cerrarSock(sock); _socks.delete(id);          // el cierre queda marcado como «viejo»: su evento close NO dispara una segunda reconexión
+        _programarReconexion(pool, id, 1000);
         continue;
       }
       // _normalizarLid antes solo corría al ABRIR la conexión — un @lid que llegó sin
@@ -880,7 +979,8 @@ async function _repararChat(pool, connId, jid) {
   try { addrs = fs.readdirSync(_sessionDir(connId)).filter(f => f.startsWith('session-' + user + '.') && f.endsWith('.json')).map(f => f.slice(8, -5)); } catch (e) {}
   if (addrs.length) await sock.authState.keys.set({ session: Object.fromEntries(addrs.map(a => [a, null])) });
   await new Promise(r => setTimeout(r, 1500));
-  const { rows } = await pool.query("SELECT msg_id, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND from_me AND ack=0 AND COALESCE(media_type,'')='' AND COALESCE(texto,'')<>'' AND ts > NOW() - INTERVAL '3 hours' ORDER BY ts", [connId, jid]);
+  const { rows } = await pool.query("SELECT msg_id, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND from_me AND estado='enviado' AND ack < 3 AND COALESCE(media_type,'')='' AND COALESCE(texto,'')<>'' AND msg_id NOT LIKE 'sched_%' AND ts > NOW() - INTERVAL '3 hours' ORDER BY ts", [connId, jid]);
+  await pool.query("UPDATE wa_messages SET reparado_at=NOW() WHERE connection_id=$1 AND chat_jid=$2 AND from_me AND estado='enviado' AND ack < 3 AND ts > NOW() - INTERVAL '3 hours'", [connId, jid]);
   let reenviados = 0;
   for (const m of rows) {
     // Se reenvía con el MISMO id del mensaje original: WhatsApp descarta un id repetido, así que si el primero sí había llegado NO se duplica,
@@ -896,8 +996,16 @@ async function _repararChat(pool, connId, jid) {
 async function _healStuck(pool) {
   try {
     if (Date.now() - _bootAt < 10 * 60 * 1000) return;
+    // Solo mensajes YA enviados (nunca los programados/en cola: esos todavía no salieron).
+    //  · sin ninguna confirmación (ack<2) tras 2 min → la sesión con ese contacto se dañó.
+    //  · confirmado por el servidor pero sin entregar (ack=2) tras 20 min, y aún sin reparar → el teléfono del contacto pudo no descifrarlo
+    //    («Esperando el mensaje…»). Una sola reparación por mensaje: si el contacto simplemente tiene el teléfono apagado, no se insiste.
     const { rows } = await pool.query(
-      "SELECT connection_id, chat_jid, COUNT(*)::int AS n FROM wa_messages WHERE from_me AND ack = 0 AND chat_jid LIKE '%@s.whatsapp.net' AND ts BETWEEN NOW() - INTERVAL '3 hours' AND NOW() - INTERVAL '2 minutes' GROUP BY 1,2");
+      `SELECT connection_id, chat_jid, COUNT(*)::int AS n FROM wa_messages
+        WHERE from_me AND estado='enviado' AND chat_jid LIKE '%@s.whatsapp.net'
+          AND ts BETWEEN NOW() - INTERVAL '3 hours' AND NOW() - INTERVAL '2 minutes'
+          AND ( ack < 2 OR (ack = 2 AND reparado_at IS NULL AND ts <= NOW() - INTERVAL '20 minutes') )
+        GROUP BY 1,2`);
     for (const r of rows) {
       const key = r.connection_id + ':' + r.chat_jid;
       if (Date.now() - (_healed.get(key) || 0) < 15 * 60 * 1000) continue;
@@ -917,9 +1025,9 @@ async function reanudarTodas(pool) {
       iniciar(pool, r.id).catch(e => console.warn(`[wa] reanudar ${r.id}:`, e.message));
     }
   } catch (e) { console.warn('[wa] reanudarTodas:', e.message); }
-  if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
+  if (!_tickerProgramados) _tickerProgramados = setInterval(() => require('./waQueue').tick(pool), 15000);
   if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 60 * 1000);
   setInterval(() => _healStuck(pool), 60 * 1000);
 }
 
-module.exports = { repararChat: _repararChat, participantesGrupo, iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
+module.exports = { estadoSock, esperarListo, enviarSeguro, nuevoIdMensaje, repararChat: _repararChat, participantesGrupo, iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
