@@ -30,10 +30,10 @@ const list = (arr, and) => arr.length <= 1 ? (arr[0] || '') : arr.slice(0, -1).j
 // Campañas activas con sus secuencias, por nombre (sin códigos internos). Nombres largos se acortan.
 const _short = s => { s = String(s || ''); return s.length > 70 ? s.slice(0, 68).trim() + '…' : s; };
 const STRUCT = {
-  es: { and: 'y', one: (n, k, ss) => `Tenemos 1 campaña activa, «${n}», con ${k} ${k === 1 ? 'secuencia' : 'secuencias'}: ${ss}.`, many: (c, it) => `Tenemos ${c} campañas activas: ${it}.`, item: (n, ss) => `«${n}» (${ss})`, loose: ss => `Otras secuencias activas: ${ss}.` },
-  en: { and: 'and', one: (n, k, ss) => `We have 1 active campaign, “${n}”, running ${k} ${k === 1 ? 'sequence' : 'sequences'}: ${ss}.`, many: (c, it) => `We have ${c} active campaigns: ${it}.`, item: (n, ss) => `“${n}” (${ss})`, loose: ss => `Other active sequences: ${ss}.` },
-  de: { and: 'und', one: (n, k, ss) => `Wir haben 1 aktive Kampagne, „${n}“, mit ${k} ${k === 1 ? 'Sequenz' : 'Sequenzen'}: ${ss}.`, many: (c, it) => `Wir haben ${c} aktive Kampagnen: ${it}.`, item: (n, ss) => `„${n}“ (${ss})`, loose: ss => `Weitere aktive Sequenzen: ${ss}.` },
-  pt: { and: 'e', one: (n, k, ss) => `Temos 1 campanha ativa, “${n}”, com ${k} ${k === 1 ? 'sequência' : 'sequências'}: ${ss}.`, many: (c, it) => `Temos ${c} campanhas ativas: ${it}.`, item: (n, ss) => `“${n}” (${ss})`, loose: ss => `Outras sequências ativas: ${ss}.` },
+  es: { and: 'y', one: (n, k, ss) => `Tenemos 1 campaña activa, «${n}», con ${k} ${k === 1 ? 'secuencia' : 'secuencias'}: ${ss}.`, many: (c, it) => `Tenemos ${c} campañas activas: ${it}.`, item: (n, ss) => `«${n}» (secuencias: ${ss})`, loose: ss => `Otras secuencias activas: ${ss}.` },
+  en: { and: 'and', one: (n, k, ss) => `We have 1 active campaign, “${n}”, running ${k} ${k === 1 ? 'sequence' : 'sequences'}: ${ss}.`, many: (c, it) => `We have ${c} active campaigns: ${it}.`, item: (n, ss) => `“${n}” (sequences: ${ss})`, loose: ss => `Other active sequences: ${ss}.` },
+  de: { and: 'und', one: (n, k, ss) => `Wir haben 1 aktive Kampagne, „${n}“, mit ${k} ${k === 1 ? 'Sequenz' : 'Sequenzen'}: ${ss}.`, many: (c, it) => `Wir haben ${c} aktive Kampagnen: ${it}.`, item: (n, ss) => `„${n}“ (Sequenzen: ${ss})`, loose: ss => `Weitere aktive Sequenzen: ${ss}.` },
+  pt: { and: 'e', one: (n, k, ss) => `Temos 1 campanha ativa, “${n}”, com ${k} ${k === 1 ? 'sequência' : 'sequências'}: ${ss}.`, many: (c, it) => `Temos ${c} campanhas ativas: ${it}.`, item: (n, ss) => `“${n}” (sequências: ${ss})`, loose: ss => `Outras sequências ativas: ${ss}.` },
 };
 function structSentence(lang, est) {
   const L = STRUCT[lang]; if (!L || !est || !(est.campaigns || []).length) return '';

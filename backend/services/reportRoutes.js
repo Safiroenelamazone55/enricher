@@ -12,6 +12,14 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
   const iso = d => d.toISOString().slice(0, 10);
 
   // Datos de los últimos 7 días (mismas cifras que el dashboard del cliente)
+// Nombre presentable: sin código interno, separadores unificados (« · ») y, si venía todo en MAYÚSCULAS, en formato título.
+const _pretty = x => {
+  let t = String(x || '').replace(/^C\d{4}-[A-Za-z]{2,5}(?:-S\d+)?\s*-\s*/, '').replace(/\s*\|\s*/g, ' · ').replace(/\s+[-–—]\s+/g, ' · ').replace(/\s*·\s*/g, ' · ').replace(/\s+/g, ' ').trim();
+  const letters = t.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  if (letters.length >= 4 && letters === letters.toUpperCase()) t = t.toLowerCase().replace(/(^|[\s·(\-])([a-záéíóúüñ])([a-záéíóúüñ]*)/g, (m, p, f, r) => p + f.toUpperCase() + r).replace(/\b([A-Za-z])\b/g, c => c.toUpperCase());
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
   async function reportData(uid, cid, lang) {
     const to = new Date(), from = new Date(Date.now() - 6 * 864e5);
     const dash = await new Promise(resolve => {
@@ -33,11 +41,11 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       rango: `${fmt(from, { day: 'numeric', month: 'short' })} – ${fmt(to, { day: 'numeric', month: 'short' })}`,
       kpi: { touches: cur.touches, contacted: cur.contacted, replies: cur.replies, agendadas: dl.agendadas },
       prev: { touches: prev.touches, contacted: prev.contacted, replies: prev.replies, agendadas: dl.agendadas_prev },
-      seqs: sq.map(s => s.nombre),
+      seqs: sq.map(s => _pretty(s.nombre)),
       campanas: (cp && cp.n) || 0,
       // Nombres para el informe, sin el código interno (C0001-PRO-S1 - …): campañas activas con sus secuencias, y las secuencias sin campaña.
       estructura: (() => {
-        const clean = x => String(x || '').replace(/^C\d{4}-[A-Za-z]{2,5}(?:-S\d+)?\s*-\s*/, '').replace(/\s+/g, ' ').trim();
+        const clean = _pretty;
         const byC = new Map(), sueltas = [];
         sqc.forEach(r => { if (r.camp_id == null) sueltas.push(clean(r.seq)); else { if (!byC.has(r.camp_id)) byC.set(r.camp_id, { nombre: clean(r.camp), seqs: [] }); byC.get(r.camp_id).seqs.push(clean(r.seq)); } });
         return { campaigns: [...byC.values()], sueltas };
