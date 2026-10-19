@@ -1054,6 +1054,10 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_moneda      TEXT NOT NULL DEFAULT 'USD';`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_prob        INTEGER;`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_cierre      DATE;`);
+    // Reunión PACTADA (fecha acordada con el prospecto): es lo único que cuenta como reunión en informes y portal.
+    // deal_cierre es la fecha de cierre ESTIMADA del negocio: dato interno, nunca se presenta como reunión.
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS reunion_fecha DATE;`);
+    await pool.query(`UPDATE lm_contacts k SET reunion_fecha = (m.starts_at AT TIME ZONE COALESCE(NULLIF(m.tz,''),'UTC'))::date FROM lm_meetings m WHERE m.contact_id = k.id AND k.reunion_fecha IS NULL`);
     // Backfill del pipeline automático (idempotente; red de seguridad en cada boot):
     // 1er paso completado → contactado; disposición positiva → respondio; descartes → perdido.
     // Solo desde etapas anteriores — nunca toca propuesta/negociación/ganado (manual).

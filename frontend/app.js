@@ -30892,10 +30892,10 @@ ${foot}
           <label class="dle-f"><span class="dle-l">Valor estimado (opcional)</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
           <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
-          <label class="dle-f"><span class="dle-l">Fecha de la reunión / cierre estimado</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
-          <div class="dle-f dle-f--full" style="border-top:1px solid #F1EFEB;padding-top:10px;margin-top:2px"><span class="dle-l">Reunión agendada — con esto se programan los recordatorios al prospecto (día anterior y 30 min antes)</span>
-            <div style="display:flex;gap:8px;margin-top:4px"><input class="dle-i" id="dle-mt-hora" type="time" style="flex:1" title="Hora de la reunión"><select class="dle-i" id="dle-mt-tz" style="flex:1">${_dlTzOpts(c, '')}</select></div>
-            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Hora de la reunión en la zona horaria del prospecto (la fecha es la de arriba). Al guardar podrás ver y editar los mensajes.</div></div>
+          <label class="dle-f"><span class="dle-l">Fecha de cierre estimada <span style="font-weight:500;color:#B45309">· interna</span></span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"><span class="dle-hint" style="color:#94A3B8;font-size:.72rem;margin-top:3px;display:block">Cuándo esperas cerrar el negocio. No sale en el informe ni en el portal del cliente.</span></label>
+          <div class="dle-f dle-f--full" style="border-top:1px solid #F1EFEB;padding-top:10px;margin-top:2px"><span class="dle-l">Reunión pactada — solo si ya hay fecha acordada con el prospecto. Esta SÍ aparece en el informe y programa los recordatorios (día anterior y 30 min antes)</span>
+            <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><input class="dle-i" id="dle-mt-fecha" type="date" style="flex:1;min-width:140px" title="Fecha de la reunión" value="${c.reunion_fecha ? String(c.reunion_fecha).slice(0, 10) : ''}"><input class="dle-i" id="dle-mt-hora" type="time" style="flex:1;min-width:110px" title="Hora de la reunión"><select class="dle-i" id="dle-mt-tz" style="flex:1;min-width:150px">${_dlTzOpts(c, '')}</select></div>
+            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Fecha y hora en la zona horaria del prospecto. Déjala vacía si todavía no hay reunión: así no cuenta como reunión en el informe. Al guardar con hora podrás ver y editar los mensajes.</div></div>
         </div>
         <div class="dle-notas-col">
           <span class="dle-l">Notas y comentarios</span>
@@ -30977,12 +30977,13 @@ ${foot}
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const g = id => document.getElementById(id);
     const valor = g('dle-valor').value.trim(), moneda = g('dle-moneda').value, prob = g('dle-prob').value, cierre = g('dle-cierre').value, estado = g('dle-estado').value;
-    const mtHora = (g('dle-mt-hora') || {}).value || '', mtLocal = (cierre && mtHora) ? cierre + 'T' + mtHora : '', mtTz = (g('dle-mt-tz') || {}).value || '';
+    const reunion = (g('dle-mt-fecha') || {}).value || '';
+    const mtHora = (g('dle-mt-hora') || {}).value || '', mtLocal = (reunion && mtHora) ? reunion + 'T' + mtHora : '', mtTz = (g('dle-mt-tz') || {}).value || '';
     try {
-      const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre, motivo_perdida: estado === 'perdido' ? (g('dle-motivo')?.value || '') : '' }) });
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre, reunion, motivo_perdida: estado === 'perdido' ? (g('dle-motivo')?.value || '') : '' }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const d = await res.json();
-      c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre; c.deal_motivo_perdida = d.deal_motivo_perdida;
+      c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre; c.reunion_fecha = d.reunion_fecha; c.deal_motivo_perdida = d.deal_motivo_perdida;
       // "Reunión" no es una etapa guardada: si venía de Propuesta/Negociación vuelve a "Respondió"; si no, se queda como está.
       if (estado === 'reunion') { if (_DL_STAGES.includes(c.estado)) await cpSetStage(cid, 'respondio', true); }
       else if (estado && estado !== c.estado) await cpSetStage(cid, estado, true);
@@ -31131,7 +31132,7 @@ ${foot}
       '<div class="mt-hd"><div><div class="mt-t">Reunión · ' + esc(full) + '</div><div class="mt-s">Recordatorios al prospecto, en su hora: el día anterior y 30 minutos antes.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
       '<div class="mt-body">' +
         '<div class="mt-sec"><div class="mt-sec__t">Cuándo</div>' + inhNote + '<div class="mt-row">' +
-          fld('Fecha y hora', '<input class="mt-i" id="mt-local" type="datetime-local" value="' + (_mtLocalVal(m) || (c.deal_cierre ? String(c.deal_cierre).slice(0, 10) + 'T10:00' : '')) + '" oninput="LeadManagerModule.mtTimes()">', 'g2') +
+          fld('Fecha y hora', '<input class="mt-i" id="mt-local" type="datetime-local" value="' + (_mtLocalVal(m) || (c.reunion_fecha ? String(c.reunion_fecha).slice(0, 10) + 'T10:00' : '')) + '" oninput="LeadManagerModule.mtTimes()">', 'g2') +
           fld('Zona horaria del prospecto', '<select class="mt-i" id="mt-tz" onchange="LeadManagerModule.mtTimes()">' + tzOpts + '</select>', 'g2') + '</div></div>' +
         '<div class="mt-sec"><div class="mt-sec__t">Dónde y quién</div><div class="mt-row">' +
           fld('Lugar', sel('mt-tipo', _MT_TIPOS, m ? (m.tipo === 'otro' && !m.enlace ? '' : m.tipo) : '')) +
@@ -33396,7 +33397,7 @@ ${foot}
         <div class="cp-actions" style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
-          <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
+          <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de cierre, reunión pactada y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
           <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">Reunión</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>

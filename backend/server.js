@@ -5337,15 +5337,18 @@ app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {
   const prob = Number.isFinite(probN) ? Math.max(0, Math.min(100, probN)) : null;
   const moneda = ['USD', 'PEN', 'EUR'].includes(b.moneda) ? b.moneda : 'USD';
   const cierre = b.cierre ? String(b.cierre).slice(0, 10) : null;
+  const setReunion = b.reunion !== undefined;   // reunión pactada: solo se toca si el cliente la manda
+  const reunion = (setReunion && b.reunion) ? String(b.reunion).slice(0, 10) : null;
   const motivoPerdida = b.motivo_perdida == null ? null : _lmS(b.motivo_perdida).slice(0, 60);
   if (valor != null && (!isFinite(valor) || valor < 0)) return res.status(400).json({ error: 'Valor inválido' });
   try {
     const { rows } = await pool.query(
       `UPDATE lm_contacts SET deal_valor=$1, deal_moneda=$2, deal_prob=$3, deal_cierre=$4, updated_at=NOW(),
          deal_motivo_perdida=COALESCE($7, deal_motivo_perdida),
-         reunion_agendada_at=CASE WHEN $4::date IS NOT NULL AND reunion_agendada_at IS NULL THEN NOW() ELSE reunion_agendada_at END
-       WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre, deal_motivo_perdida`,
-      [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId, motivoPerdida]);
+         reunion_fecha=CASE WHEN $8::boolean THEN $9::date ELSE reunion_fecha END,
+         reunion_agendada_at=CASE WHEN $8::boolean AND $9::date IS NOT NULL AND reunion_agendada_at IS NULL THEN NOW() ELSE reunion_agendada_at END
+       WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre, reunion_fecha, deal_motivo_perdida`,
+      [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId, motivoPerdida, setReunion, reunion]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
     // Un deal implica conversación real: si seguía en "Respondió" (o sin estado) pasa a "Interesado",
     // así no queda en la lista "Por calificar" mientras ya está en Deals (reportado 2026-10-03).
@@ -5413,7 +5416,7 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
       [uid, cid, start.toISOString(), tz, tipo, f(b.enlace).slice(0, 500), f(b.anfitrion).slice(0, 120), idioma, canal, modo, f(b.cc).slice(0, 300),
        f(b.msg1).slice(0, 3000), f(b.msg2).slice(0, 3000), t.rem1_at ? t.rem1_at.toISOString() : null, t.rem2_at.toISOString(), r1, r2]);
     await pool.query('UPDATE lm_meetings SET subj1=$3, subj2=$4 WHERE contact_id=$1 AND user_id=$2', [cid, uid, f(b.subj1).slice(0, 200), f(b.subj2).slice(0, 200)]);
-    await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()), updated_at=NOW() WHERE id=$1`, [cid]);
+    await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()), reunion_fecha=($2::timestamptz AT TIME ZONE $3)::date, updated_at=NOW() WHERE id=$1`, [cid, start.toISOString(), tz]);
     res.json({ ok: true, meeting: await _mtView(pool, uid, cid) });
   } catch (e) { console.error('[meeting]', e.message); res.status(500).json({ error: 'No se pudo guardar la reunión' }); }
 });
@@ -5452,6 +5455,7 @@ app.delete('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
   try {
     await pool.query(`UPDATE activities SET estado='hecha' WHERE contact_id=$1 AND user_id=$2 AND tipo='tarea' AND estado='pendiente' AND nota LIKE '[Reunión #%'`, [+req.params.id, req.workspaceOwnerId]);
     await pool.query('DELETE FROM lm_meetings WHERE contact_id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    await pool.query('UPDATE lm_contacts SET reunion_fecha=NULL WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'No se pudo cancelar' }); }
 });
@@ -7418,7 +7422,7 @@ const _lmDashHandler = async (req, res) => {
                          COUNT(DISTINCT cs.contact_id) FILTER (WHERE cs.estado='activo')::int AS activos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.reunion_fecha IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
                     FROM sequences s JOIN lm_contact_sequences cs ON cs.sequence_id=s.id
                     JOIN lm_contacts k ON k.id=cs.contact_id
                     LEFT JOIN outbound_clients oc ON oc.id=s.outbound_client_id
@@ -7428,14 +7432,14 @@ const _lmDashHandler = async (req, res) => {
                          COUNT(DISTINCT k.id)::int AS contactos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.reunion_fecha IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
                     FROM outbound_clients oc JOIN lm_contacts k ON k.outbound_client_id=oc.id
                     LEFT JOIN activities a ON a.contact_id=k.id
                    WHERE ${kw} GROUP BY oc.id, oc.nombre ORDER BY contactados DESC, contactos DESC`, params),
       pool.query(`SELECT COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.created_at::date BETWEEN ${iF}::date AND ${iT}::date))::int AS enrolados,
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND ((${OUT.replace(/a\./g, 'z.')}) OR (${REPLY.replace(/a\./g, 'z.')})) AND z.fecha::date BETWEEN ${iF}::date AND ${iT}::date))::int AS contactados,
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND (${REPLY.replace(/a\./g, 'z.')}) AND z.fecha::date BETWEEN ${iF}::date AND ${iT}::date))::int AS respondieron,
-                         COUNT(DISTINCT k.id) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL) OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion' AND z.fecha::date BETWEEN ${iF}::date AND ${iT}::date))::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date AND (k.disposition='reunion' OR k.reunion_fecha IS NOT NULL) OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion' AND z.fecha::date BETWEEN ${iF}::date AND ${iT}::date))::int AS reuniones
                     FROM lm_contacts k WHERE ${kw}`, params),
       pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND (${OUT} OR a.tipo='email') AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
       pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (r.fecha - f.first))/86400)::numeric,1)::float AS days FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id JOIN LATERAL (SELECT MIN(a.fecha) AS first FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT}) f ON f.first IS NOT NULL AND r.fecha>=f.first WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date`, params),
@@ -7452,7 +7456,7 @@ const _lmDashHandler = async (req, res) => {
           JOIN lm_contacts k ON k.id=l.contact_id
          WHERE w.from_me=FALSE AND ${kw} AND w.ts::date BETWEEN ${iF}::date AND ${iT}::date
       ) t GROUP BY 1,2`, params),
-      pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
+      pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE (k.disposition='reunion' OR k.reunion_fecha IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion')) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE (k.disposition='reunion' OR k.reunion_fecha IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion')) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
                     FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.estado IN ('propuesta','negociacion','ganado') OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
       pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>''${dispScope} GROUP BY 1 ORDER BY 2 DESC`, params),
     ]);

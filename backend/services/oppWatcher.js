@@ -15,9 +15,9 @@ const fmtD = (d, lang) => new Date(d).toLocaleDateString(lang === 'es' ? 'es-ES'
 // Oportunidades abiertas de un cliente con lo que les falta (reunión sin resultado / días sin actividad).
 async function pending(pool, cid) {
   const { rows } = await pool.query(`
-    SELECT k.id, k.user_id, k.nombre, k.apellido, COALESCE(NULLIF(co.nombre,''),k.empresa_nombre) AS empresa, k.deal_cierre, k.opp_reunion_estado, k.opp_avisos, k.opp_snooze_until,
+    SELECT k.id, k.user_id, k.nombre, k.apellido, COALESCE(NULLIF(co.nombre,''),k.empresa_nombre) AS empresa, k.deal_cierre, k.reunion_fecha, k.opp_reunion_estado, k.opp_avisos, k.opp_snooze_until,
            GREATEST(COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.estado='hecha' AND a.tipo NOT IN ('seguimiento_aviso','disposition_change')), 'epoch'),
-                    COALESCE(CASE WHEN k.deal_cierre <= CURRENT_DATE THEN k.deal_cierre::timestamptz END,'epoch'), COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
+                    COALESCE(CASE WHEN k.reunion_fecha <= CURRENT_DATE THEN k.reunion_fecha::timestamptz END,'epoch'), COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
       FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id
      WHERE k.outbound_client_id=$1 AND COALESCE(k.estado,'') NOT IN ('ganado','perdido') AND COALESCE(k.disposition,'') <> ALL($2)
        AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.estado IN ('propuesta','negociacion'))`, [cid, CLOSED_DISPO]);
@@ -27,7 +27,7 @@ async function pending(pool, cid) {
     const dias = bizDays(k.ultimo, now);
     let kind = null;
     if (k.opp_snooze_until) kind = 'fecha';   // la fecha elegida por el cliente llegó: avisa ese día
-    else if (k.deal_cierre && !k.opp_reunion_estado && new Date(k.deal_cierre) <= now && k.opp_avisos === 0) kind = 'reunion';
+    else if (k.reunion_fecha && !k.opp_reunion_estado && new Date(k.reunion_fecha) <= now && k.opp_avisos === 0) kind = 'reunion';
     else if (k.opp_avisos < TH.length && dias >= TH[k.opp_avisos]) kind = k.opp_avisos === 3 ? 'cierre' : 'dias';
     if (kind) out.push({ ...k, kind, dias, nombre: [k.nombre, k.apellido].filter(Boolean).join(' ') });
   }
@@ -36,7 +36,7 @@ async function pending(pool, cid) {
 
 function itemsFor(items, lang) {
   return items.map(i => ({ kind: i.kind === 'reunion' || i.kind === 'fecha' ? i.kind : 'dias', nombre: i.nombre, empresa: i.empresa, dias: i.dias,
-    fecha: i.deal_cierre ? fmtD(i.deal_cierre, lang) : '', ultimo: fmtD(i.ultimo, lang) }));
+    fecha: i.reunion_fecha ? fmtD(i.reunion_fecha, lang) : '', ultimo: fmtD(i.ultimo, lang) }));
 }
 
 // Vista previa EXACTA del correo (sin enviar ni marcar nada).
