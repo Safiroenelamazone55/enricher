@@ -62,7 +62,7 @@ const COPY = {
       const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `At ${p.empresa || 'the company'}, ${p.nombre} connected you with ${p.derivado_nombre}.`);
-      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Also still in follow-up: ${list(names, 'and')}.` : `${rest.length} ${rest.length === 1 ? 'company is' : 'companies are'} showing good signals: ${list(names, 'and')}.`); }
+      if (rest.length) { const all = rest.map(p => p.empresa || p.nombre).filter(Boolean), names = all.slice(0, 3), mas = all.length - names.length; parts.push(`${der.length ? 'Also still' : 'Still'} in follow-up: ${mas > 0 ? names.join(', ') + ` and ${mas} more` : list(names, 'and')}.`); }
       return parts.join(' ');
     },
     meet: m => m ? `The next meeting is with ${m.empresa || m.nombre}, on ${m.fecha_txt}, ${m.mes} ${m.dia}.` : '',
@@ -81,7 +81,7 @@ const COPY = {
       const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `Bei ${p.empresa || 'dem Unternehmen'} hat ${p.nombre} Sie mit ${p.derivado_nombre} verbunden.`);
-      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Weiterhin in Nachverfolgung: ${list(names, 'und')}.` : `${rest.length} ${rest.length === 1 ? 'Unternehmen zeigt' : 'Unternehmen zeigen'} gute Signale: ${list(names, 'und')}.`); }
+      if (rest.length) { const all = rest.map(p => p.empresa || p.nombre).filter(Boolean), names = all.slice(0, 3), mas = all.length - names.length; parts.push(`${der.length ? 'Außerdem weiterhin' : 'Weiterhin'} in Nachverfolgung: ${mas > 0 ? names.join(', ') + ` und ${mas} weitere` : list(names, 'und')}.`); }
       return parts.join(' ');
     },
     meet: m => m ? `Der nächste Termin ist mit ${m.empresa || m.nombre}, am ${m.fecha_txt}, ${m.dia}. ${m.mes}.` : '',
@@ -100,7 +100,7 @@ const COPY = {
       const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre && p.reciente);   // «te conectó con» solo si es noticia de esta semana; lo anterior va a «siguen en seguimiento»
       const rest = positives.filter(p => !der.includes(p));
       const parts = der.map(p => `Na ${p.empresa || 'empresa'}, ${p.nombre} te conectou com ${p.derivado_nombre}.`);
-      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Também seguem em acompanhamento: ${list(names, 'e')}.` : `${rest.length} ${rest.length === 1 ? 'empresa está com bons sinais' : 'empresas estão com bons sinais'}: ${list(names, 'e')}.`); }
+      if (rest.length) { const all = rest.map(p => p.empresa || p.nombre).filter(Boolean), names = all.slice(0, 3), mas = all.length - names.length; parts.push(`${der.length ? 'Também ' : ''}${rest.length === 1 ? (der.length ? 'segue' : 'Segue') : (der.length ? 'seguem' : 'Seguem')} em acompanhamento: ${mas > 0 ? names.join(', ') + ` e mais ${mas}` : list(names, 'e')}.`); }
       return parts.join(' ');
     },
     meet: m => m ? `A próxima reunião é com ${m.empresa || m.nombre}, em ${m.fecha_txt}, ${m.dia} de ${m.mes}.` : '',
