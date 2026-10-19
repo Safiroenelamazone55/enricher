@@ -12672,7 +12672,9 @@ app.delete('/api/wa/connections/:id', requireAuth, async (req, res) => {
   try {
     const conn = await _cargarConexionAutorizada(req, res, req.params.id);
     if (!conn) return;
-    if (conn.estado !== 'desconectado') {
+    // Una línea con el QR pendiente (nunca llegó a vincularse) se puede quitar directo: se detiene su conexión y se elimina.
+    if (conn.estado === 'esperando_qr') { try { await waSvc.desconectar(pool, conn.id); } catch (_) {} }
+    else if (conn.estado !== 'desconectado') {
       return res.status(400).json({ error: 'Desconéctala primero para poder eliminarla' });
     }
     const { rows: [cnt] } = await pool.query('SELECT COUNT(*)::int AS n FROM wa_messages WHERE connection_id=$1', [conn.id]);

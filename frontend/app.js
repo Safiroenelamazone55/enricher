@@ -39663,12 +39663,12 @@ const WaChatModule = (() => {
       const unread = _connUnread[c.id] || 0;
       const unreadHtml = unread ? `<span class="wa-accts-alert" style="margin-left:auto">${unread > 99 ? '99+' : unread}</span>` : '';
       const check  = c.id === _conn?.id ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:${unread ? '6px' : 'auto'}"><polyline points="20 6 9 17 4 12"/></svg>` : '';
-      if (c.estado !== 'desconectado') {
+      if (c.estado === 'conectado') {
         return `<button class="chat-ctx-item" onclick="WaChatModule._pickConn(${c.id})">
           <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${unreadHtml}${check}
         </button>`;
       }
-      // Desconectada: se puede reconectar (elegirla) o quitarla de la lista.
+      // Desconectada o con el QR pendiente (sin vincular): se puede elegir (reconectar / ver el QR) o quitarla de la lista.
       return `<div class="chat-ctx-item wa-acct-row">
         <button class="wa-acct-row__main" onclick="WaChatModule._pickConn(${c.id})">
           <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
