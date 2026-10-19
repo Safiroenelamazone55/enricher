@@ -72,6 +72,22 @@ function _inicioDiaSiguiente(date, S) {
 }
 function inicioDiaLocal(date, tz) { const p = partes(date, tz); return zonedToUtc(p.y, p.mo, p.d, 0, 0, tz); }
 
+
+// ── Zona horaria del destinatario, por el prefijo telefónico de su número ─────────────────────────────────────────
+// La ventana de envío se mide en la hora LOCAL del contacto: escribirle a un contacto de España a las 5 a. m. (las 10 p. m. en Lima) es mala
+// práctica y más sospechoso para WhatsApp. Países con varias zonas usan su zona principal (+1 → Nueva York). Sin prefijo conocido → zona de la línea.
+const _CC = { '1': 'America/New_York', '7': 'Europe/Moscow', '20': 'Africa/Cairo', '27': 'Africa/Johannesburg', '30': 'Europe/Athens', '31': 'Europe/Amsterdam', '32': 'Europe/Brussels', '33': 'Europe/Paris', '34': 'Europe/Madrid', '36': 'Europe/Budapest', '39': 'Europe/Rome', '40': 'Europe/Bucharest', '41': 'Europe/Zurich', '43': 'Europe/Vienna', '44': 'Europe/London', '45': 'Europe/Copenhagen', '46': 'Europe/Stockholm', '47': 'Europe/Oslo', '48': 'Europe/Warsaw', '49': 'Europe/Berlin',
+  '51': 'America/Lima', '52': 'America/Mexico_City', '53': 'America/Havana', '54': 'America/Argentina/Buenos_Aires', '55': 'America/Sao_Paulo', '56': 'America/Santiago', '57': 'America/Bogota', '58': 'America/Caracas', '60': 'Asia/Kuala_Lumpur', '61': 'Australia/Sydney', '62': 'Asia/Jakarta', '63': 'Asia/Manila', '64': 'Pacific/Auckland', '65': 'Asia/Singapore', '66': 'Asia/Bangkok', '81': 'Asia/Tokyo', '82': 'Asia/Seoul', '84': 'Asia/Ho_Chi_Minh', '86': 'Asia/Shanghai', '90': 'Europe/Istanbul', '91': 'Asia/Kolkata', '92': 'Asia/Karachi', '93': 'Asia/Kabul', '94': 'Asia/Colombo', '98': 'Asia/Tehran',
+  '212': 'Africa/Casablanca', '213': 'Africa/Algiers', '216': 'Africa/Tunis', '233': 'Africa/Accra', '234': 'Africa/Lagos', '254': 'Africa/Nairobi', '351': 'Europe/Lisbon', '352': 'Europe/Luxembourg', '353': 'Europe/Dublin', '354': 'Atlantic/Reykjavik', '358': 'Europe/Helsinki', '370': 'Europe/Vilnius', '371': 'Europe/Riga', '372': 'Europe/Tallinn', '380': 'Europe/Kyiv', '420': 'Europe/Prague', '421': 'Europe/Bratislava',
+  '502': 'America/Guatemala', '503': 'America/El_Salvador', '504': 'America/Tegucigalpa', '505': 'America/Managua', '506': 'America/Costa_Rica', '507': 'America/Panama', '591': 'America/La_Paz', '593': 'America/Guayaquil', '595': 'America/Asuncion', '598': 'America/Montevideo', '966': 'Asia/Riyadh', '971': 'Asia/Dubai', '972': 'Asia/Jerusalem', '974': 'Asia/Qatar' };
+function tzDeJid(jid) {
+  const d = String(jid || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+  if (!String(jid || '').includes('@s.whatsapp.net') && !/^\d+$/.test(String(jid || ''))) return '';   // @lid y grupos: sin número real, sin zona
+  if (d.length < 8) return '';
+  for (const n of [3, 2, 1]) { const z = _CC[d.slice(0, n)]; if (z) return z; }
+  return '';
+}
+
 // ── Ajustes por línea ───────────────────────────────────────────────────────────────────────────────────────────
 function _validTz(z) { try { if (typeof z !== 'string' || !z || z.length > 64) return false; new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch (_) { return false; } }
 async function getSettings(pool, connId) {
@@ -144,25 +160,33 @@ function intervaloMs(S, rowId) {
   return Math.max(MIN_INTERVALO_MS, S.intervalo_min * 60000 * (1 + (u * 2 - 1) * j));
 }
 
-// Reparte la hora estimada de salida de cada mensaje en cola respetando intervalo, ventana, días y tope diario.
+// Reparte la hora estimada de salida de cada mensaje en cola respetando: intervalo entre mensajes, ventana horaria EN LA HORA DEL CONTACTO,
+// días permitidos y tope diario. Un mensaje que por su zona horaria debe esperar (p. ej. un contacto de España de madrugada) NO frena a los demás:
+// cada uno toma el primer hueco libre que le sirve.
 async function replanificar(pool, connId) {
   const S = await getSettings(pool, connId);
-  const { rows } = await pool.query(`SELECT id FROM wa_messages WHERE connection_id=$1 AND estado='programado' AND via_cola ORDER BY id`, [connId]);
+  const { rows } = await pool.query(`SELECT id, tz_destino FROM wa_messages WHERE connection_id=$1 AND estado='programado' AND via_cola ORDER BY id`, [connId]);
   if (!rows.length) return;
   const ahora = new Date();
-  let t = new Date(Math.max(ahora.getTime(), S.proximo_envio_at ? new Date(S.proximo_envio_at).getTime() : 0));
+  const base = new Date(Math.max(ahora.getTime(), S.proximo_envio_at ? new Date(S.proximo_envio_at).getTime() : 0));
   const porDia = {};
   porDia[_dayKey(ahora, S.tz)] = await enviadosHoy(pool, connId, S, ahora);
-  const ids = [], horas = [];
+  const usados = [], ids = [], horas = [];
   for (const r of rows) {
-    for (let guard = 0; guard < 60; guard++) {
-      t = ajustarVentana(t, S);
-      const k = _dayKey(t, S.tz);
-      if ((porDia[k] || 0) < topeEfectivo(S, t)) { porDia[k] = (porDia[k] || 0) + 1; break; }
-      t = _inicioDiaSiguiente(t, S);   // día lleno → arranca la siguiente jornada
+    const Sr = Object.assign({}, S, { tz: r.tz_destino || S.tz });     // ventana y días: hora local del contacto
+    const hueco = intervaloMs(S, r.id);
+    let c = new Date(base);
+    for (let guard = 0; guard < 300; guard++) {
+      c = ajustarVentana(c, Sr);
+      const k = _dayKey(c, S.tz);                                       // el tope diario cuenta por día de la línea
+      if ((porDia[k] || 0) >= topeEfectivo(S, c)) { c = _inicioDiaSiguiente(c, S); continue; }
+      const choque = usados.find(u => Math.abs(u - c.getTime()) < hueco);
+      if (choque !== undefined) { c = new Date(Math.max(c.getTime() + 1000, choque + hueco)); continue; }
+      break;
     }
-    ids.push(r.id); horas.push(t.toISOString());
-    t = new Date(t.getTime() + intervaloMs(S, r.id));
+    const kf = _dayKey(c, S.tz);
+    porDia[kf] = (porDia[kf] || 0) + 1;
+    usados.push(c.getTime()); ids.push(r.id); horas.push(c.toISOString());
   }
   await pool.query(
     `UPDATE wa_messages m SET scheduled_at = x.t FROM (SELECT unnest($1::int[]) AS id, unnest($2::timestamptz[]) AS t) x WHERE m.id = x.id AND m.estado='programado' AND m.via_cola`,
@@ -183,9 +207,9 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
   }
   const placeholder = 'sched_' + require('crypto').randomUUID();
   const { rows: [row] } = await pool.query(
-    `INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, estado, scheduled_at, via_cola, contact_id, sequence_id, step_id, origen)
-     VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,'programado',NOW(),TRUE,$7,$8,$9,$10) RETURNING id`,
-    [connId, jidFull, placeholder, texto, respondeA || '', replyToTexto, contactId || null, sequenceId || null, stepId || null, origen || 'manual']);
+    `INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, estado, scheduled_at, via_cola, contact_id, sequence_id, step_id, origen, tz_destino)
+     VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,'programado',NOW(),TRUE,$7,$8,$9,$10,$11) RETURNING id`,
+    [connId, jidFull, placeholder, texto, respondeA || '', replyToTexto, contactId || null, sequenceId || null, stepId || null, origen || 'manual', tzDeJid(jidFull)]);
   await replanificar(pool, connId);
   const { rows: [r2] } = await pool.query('SELECT scheduled_at FROM wa_messages WHERE id=$1', [row.id]);
   return { id: row.id, scheduledAt: r2 && r2.scheduled_at };
@@ -195,7 +219,7 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
 // El mensaje ya salió: se guarda su id real. Si justo apareció otra fila con ese mismo id (p. ej. una sincronización), se conserva UNA sola.
 async function _marcarEnviado(pool, m, msgId) {
   try {
-    await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), ultimo_error='' WHERE id=$1`, [m.id, msgId]);
+    await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), scheduled_at=NULL, ultimo_error='' WHERE id=$1`, [m.id, msgId]);
   } catch (e) {
     if (e && e.code === '23505') {
       await pool.query(`UPDATE wa_messages SET via_cola=$3, contact_id=$4, sequence_id=$5, step_id=$6, origen=$7 WHERE connection_id=(SELECT connection_id FROM wa_messages WHERE id=$1) AND msg_id=$2`,
@@ -244,7 +268,7 @@ async function _manejarFallo(pool, connId, m, intentos, e) {
 async function procesarLinea(pool, connId) {
   const S = await getSettings(pool, connId);
   const { rows } = await pool.query(
-    `SELECT id, chat_jid, texto, reply_to_id, via_cola, contact_id, sequence_id, step_id, origen FROM wa_messages
+    `SELECT id, chat_jid, texto, reply_to_id, via_cola, contact_id, sequence_id, step_id, origen, tz_destino FROM wa_messages
       WHERE connection_id=$1 AND estado='programado' AND scheduled_at <= NOW() AND (proximo_intento_at IS NULL OR proximo_intento_at <= NOW())
       ORDER BY via_cola ASC, scheduled_at ASC, id ASC LIMIT 20`, [connId]);
   let salioDeCola = false;
@@ -252,7 +276,7 @@ async function procesarLinea(pool, connId) {
     if (m.via_cola) {
       const ahora = new Date();
       if (salioDeCola || S.pausada) continue;                                  // máx. UNO de la cola por pasada; línea pausada: espera (lo en cola no se pierde)
-      if (!enVentana(ahora, S)) continue;                                      // fuera de horario/día: espera a la próxima jornada
+      if (!enVentana(ahora, Object.assign({}, S, { tz: m.tz_destino || S.tz }))) continue;   // fuera de horario/día EN LA HORA DEL CONTACTO: espera su próxima jornada
       if (S.proximo_envio_at && new Date(S.proximo_envio_at) > ahora) continue; // aún no pasó el intervalo desde el anterior
       if (await enviadosHoy(pool, connId, S, ahora) >= topeEfectivo(S, ahora)) continue;   // tope del día alcanzado
     }
@@ -376,4 +400,4 @@ function mount(app, { pool, requireAuth, cargarConexion }) {
   });
 }
 
-module.exports = { _procesarLinea: procesarLinea, mount, tick, encolar, replanificar, getSettings, saveSettings, pausarLinea, reanudarLinea, resumen, partes, zonedToUtc, ajustarVentana, enVentana, intervaloMs, topeEfectivo };
+module.exports = { tzDeJid, _procesarLinea: procesarLinea, mount, tick, encolar, replanificar, getSettings, saveSettings, pausarLinea, reanudarLinea, resumen, partes, zonedToUtc, ajustarVentana, enVentana, intervaloMs, topeEfectivo };

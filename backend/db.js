@@ -2282,6 +2282,7 @@ async function initDb() {
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS step_id INTEGER;`);
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reparado_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS tz_destino TEXT NOT NULL DEFAULT '';`);   // zona horaria del destinatario (por su prefijo telefónico): la ventana de envío se mide en SU hora
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_cola_idx ON wa_messages (connection_id, scheduled_at) WHERE estado IN ('programado','enviando','error_programado');`);
     await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS ultimo_error TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS ultimo_corte_at TIMESTAMPTZ;`);
