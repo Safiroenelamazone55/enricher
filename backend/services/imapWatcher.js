@@ -30,7 +30,7 @@ const { decPass, _friendlyErr, getMailboxAuth } = require('./mailboxService');
 let _timer = null;
 let _running = false;
 
-const TICK_MS        = 3 * 60 * 1000;  // cada 3 min
+const TICK_MS        = 60 * 1000;  // cada minuto: las respuestas llegan a Nova casi al instante
 const MAX_PER_TICK   = 50;             // máx mensajes nuevos procesados por buzón por tick
 const MAX_SOURCE     = 512 * 1024;     // no descargar cuerpos gigantes (512 KB)
 const BODY_MAX_CHARS = 20000;          // texto guardado en DB (suficiente para el Inbox)

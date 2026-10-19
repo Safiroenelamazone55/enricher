@@ -20819,7 +20819,11 @@ const LeadManagerModule = (() => {
     }
     // Contador de Inbox en la barra: carga al entrar al módulo y refresca cada 3 min.
     _ibReload();
-    if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
+    // Inbox casi en vivo: cada 20 s mientras lo miras (solo repinta si algo cambió); en otras secciones cada 3 min para el contador. Al volver a la pestaña se actualiza de inmediato.
+    if (!_ibPoll) {
+      _ibPoll = setInterval(() => { if (document.hidden) return; if (_section === 'inbox' || Date.now() - _ibLastAt > 3 * 60 * 1000) _ibReload(true); }, 20 * 1000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - _ibLastAt > 5000) _ibReload(true); });
+    }
     // WhatsApp de Outreach: mismo patrón, pero cada 45s — es el canal donde una
     // respuesta "en tiempo real" importa más que en email.
     _waReload();
@@ -22945,6 +22949,7 @@ ${foot}
     // un cambio exitoso, no importa desde qué flujo se haya llamado (task-runner,
     // ficha, Pendientes de aceptación, botones inline). Await para que los renders
     // posteriores usen datos ya frescos y no muestren estado optimista viejo.
+    _ibSyncAfterChange(cid, disp);   // la lista del Inbox cambia al instante
     await Promise.all([_reloadContacts(), _reloadActivities()]);
     return out;
   }
@@ -25551,11 +25556,49 @@ ${foot}
   // (toggle en la barra superior), no la de entrada.
   let _ibEnvShowTable = false;
 
-  async function _ibReload() {
+  let _ibSig = '', _ibLastAt = 0;
+  // Firma de lo que se ve en la lista: si no cambió nada, un refresco en segundo plano no repinta nada.
+  const _ibSigOf = arr => Array.isArray(arr) ? arr.map(t => [t.contact_id, t.last_in_at, t.last_out_at, t.unread, t.disposition, t.last_in_tipo, t.bounces, t.sent_count, t.abierto, t.tiene_programado, t.ooo_hasta].join('|')).join(';') : '';
+  // Repinta solo la barra superior (pestañas y contadores) y la lista, SIN tocar la conversación abierta: así un refresco automático nunca borra lo que estás escribiendo.
+  function _ibPaintSoft() {
+    const top = document.querySelector('#ibx-wrap .ibx-top'), list = document.querySelector('#ibx-wrap .ibx-list');
+    if (!top || !list) return _ibPaint();
+    const tmp = document.createElement('div'); tmp.innerHTML = _ibWrapHtml();
+    const nt = tmp.querySelector('.ibx-top'), nl = tmp.querySelector('.ibx-list');
+    if (nt) top.innerHTML = nt.innerHTML;
+    if (nl) { const sc = list.scrollTop; list.innerHTML = nl.innerHTML; list.scrollTop = sc; }
+  }
+  async function _ibReload(silent) {
+    _ibLastAt = Date.now();
     try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
     catch { _ibThreads = []; }
-    if (_section === 'inbox') _ibPaint();
+    const sig = _ibSigOf(_ibThreads), changed = sig !== _ibSig; _ibSig = sig;
+    if (_section === 'inbox' && (changed || silent !== true)) { if (silent === true) _ibPaintSoft(); else _ibPaint(); }
     _refreshNav(); // contador "sin leer" junto a Inbox en la barra lateral
+    // Si llegó (o salió) un correo en la conversación abierta, aparece solo, sin tocar lo que estás escribiendo.
+    if (silent === true && _section === 'inbox' && _ibActive && _ibThread) {
+      const t = (_ibThreads || []).find(x => x.contact_id === _ibActive), stamp = t ? (t.last_in_at + '|' + t.last_out_at) : '';
+      if (t && stamp !== _ibThreadStamp) {
+        _ibThreadStamp = stamp; const cid = _ibActive;
+        try {
+          const r = await apiFetch(`${API}/lm/inbox/thread/${cid}`);
+          if (r && r.ok && _ibActive === cid) {
+            const fresh = await r.json(), oldN = (_ibThread.messages || []).length;
+            _ibThread = fresh; if ((fresh.messages || []).length !== oldN) _ibMsgIdx = Math.max(0, (fresh.messages || []).length - 1);
+            const box = document.getElementById('ibx-msgs'), hd = document.querySelector('.ibx-conv__hd .ibx-pager');
+            if (hd) hd.outerHTML = _ibPagerHtml();
+            if (box && fresh.messages && fresh.messages.length) box.innerHTML = _ibMsg(fresh.messages[Math.min(_ibMsgIdx, fresh.messages.length - 1)]);
+          }
+        } catch (_) {}
+      }
+    }
+  }
+  let _ibThreadStamp = '';
+  // Tras cambiar una etiqueta/estado de un contacto desde cualquier lugar: la fila del Inbox se actualiza AL INSTANTE (sin esperar al servidor) y luego se confirma en segundo plano.
+  function _ibSyncAfterChange(cid, disp) {
+    const t = Array.isArray(_ibThreads) ? _ibThreads.find(x => x.contact_id === cid) : null;
+    if (t) { t.disposition = disp || ''; if (_section === 'inbox') _ibPaintSoft(); }
+    _ibReload(true);
   }
   function _ibUnreadTotal() {
     return Array.isArray(_ibThreads) ? _ibThreads.reduce((s, t) => s + (t.unread || 0), 0) : 0;
@@ -26643,6 +26686,7 @@ ${foot}
   async function ibOpen(cid) {
     _ibActive = cid; _ibThread = null; _ibMsgIdx = 0; _ibMode = 'reply';
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
+    _ibThreadStamp = t ? (t.last_in_at + '|' + t.last_out_at) : '';
     _ibPaint(); _refreshNav();
     try {
       const r = await apiFetch(`${API}/lm/inbox/thread/${cid}`);
