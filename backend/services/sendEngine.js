@@ -846,6 +846,14 @@ async function _flushApproved(pool, apiBase) {
   `);
   for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
     try {
+      // Lista de exclusión: aunque el borrador ya esté aprobado, si ahora su empresa/contacto está excluido NO sale.
+      try {
+        if (await require('./exclusions').isEnrollmentExcluded(pool, { user_id: m.user_id, sequence_id: m.sequence_id, contact_id: m.contact_id })) {
+          await pool.query(`UPDATE lm_messages SET estado='failed', error='No enviado: la empresa está en la lista de exclusión' WHERE id=$1`, [m.id]);
+          await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='excluida' WHERE sequence_id=$1 AND contact_id=$2`, [m.sequence_id, m.contact_id]);
+          continue;
+        }
+      } catch (e) { console.warn('[flush] exclusiones:', e.message); }
       // El buzón es compartido: si ya está lleno hoy (por esta o por otra secuencia), este queda para mañana, en su orden.
       if (await _mailboxFull(pool, m.ocid, m.timezone || 'America/Lima')) continue;
       // Ventana horaria, fin de semana y DÍAS DE CADENCIA de la secuencia: aprobar un
@@ -980,6 +988,8 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
       if (!enr.email || enr.email_status === 'invalid') continue;
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
       if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
+      // Lista de exclusión: si la empresa/contacto quedó excluido DESPUÉS de inscribirse (o entró por otra vía), no se redacta ni el borrador.
+      try { if (await require('./exclusions').isEnrollmentExcluded(pool, enr)) { await _pauseEnrollment(pool, enr, 'excluida', null); continue; } } catch (e) { console.warn('[draft] exclusiones:', e.message); }
       const { rows: steps } = await pool.query(
         `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, cond, cond_step_id
            FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [enr.sequence_id]);
