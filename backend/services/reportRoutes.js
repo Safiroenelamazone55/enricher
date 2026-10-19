@@ -5,6 +5,8 @@ const { previewPng } = require('./reportImage');
 
 const LANGS = ['es', 'en', 'de', 'pt'];
 const LOCALE = { es: 'es-ES', en: 'en-GB', de: 'de-DE', pt: 'pt-BR' };
+// Cualquier zona horaria real (IANA) es válida: se comprueba con el propio motor de fechas, ya no contra una lista corta.
+const _validTz = z => { try { if (typeof z !== 'string' || !z || z.length > 64) return false; new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch (_) { return false; } };
 const TZS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo', 'America/Argentina/Buenos_Aires', 'America/Santiago', 'Europe/London', 'Europe/Madrid', 'Europe/Berlin', 'UTC'];
 const okEmail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e) && e.length <= 160;
 
@@ -132,7 +134,7 @@ const _pretty = x => {
       const sc = (req.body && req.body.schedule) || null;
       let on = null, dow = null, hour = null, tz = 'America/Lima';
       if (sc) {
-        tz = TZS.includes(sc.tz) ? sc.tz : 'America/Lima';
+        tz = _validTz(sc.tz) ? sc.tz : 'America/Lima';
         on = !!sc.on; dow = Math.min(6, Math.max(0, parseInt(sc.dow))); hour = Math.min(23, Math.max(0, parseInt(sc.hour)));
         if (isNaN(dow)) dow = 1; if (isNaN(hour)) hour = 9;
         if (on) {

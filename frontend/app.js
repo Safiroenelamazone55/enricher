@@ -28796,7 +28796,102 @@ ${foot}
   // ── Informe semanal para el equipo del cliente (destinatarios + vista previa + envío desde el buzón del cliente) ──
   const _RP = { cid: 0, recipients: [], lang: 'es', note: '', busy: false, t: null, seq: 0, sched: { on: false, dow: 1, hour: 9, tz: 'America/Lima', draft: false } };
   const _RP_TZ = [['America/Lima', 'Lima (UTC−5)'], ['America/Bogota', 'Bogotá (UTC−5)'], ['America/Mexico_City', 'Ciudad de México'], ['America/New_York', 'Nueva York (Este)'], ['America/Chicago', 'Chicago (Centro)'], ['America/Denver', 'Denver (Montaña)'], ['America/Los_Angeles', 'Los Ángeles (Pacífico)'], ['America/Sao_Paulo', 'São Paulo'], ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Santiago', 'Santiago'], ['Europe/London', 'Londres'], ['Europe/Madrid', 'Madrid'], ['Europe/Berlin', 'Berlín'], ['UTC', 'UTC']];
-  const _rpTzName = z => (_RP_TZ.find(x => x[0] === z) || [0, z])[1];
+
+  // Capitales y ciudades clave del mundo → zona horaria. El PRIMER nombre es el que se muestra; el resto (español, inglés, país) solo sirve para encontrarla al escribir.
+  const _CAPITALS = [
+    ['America/New_York', ['Nueva York', 'New York', 'Washington D. C.', 'Washington DC', 'Miami', 'Boston', 'Atlanta', 'Estados Unidos', 'United States', 'USA', 'EE. UU.']],
+    ['America/Chicago', ['Chicago', 'Dallas', 'Houston', 'Austin', 'Nueva Orleans', 'New Orleans']], ['America/Denver', ['Denver', 'Salt Lake City']], ['America/Phoenix', ['Phoenix', 'Arizona']],
+    ['America/Los_Angeles', ['Los Ángeles', 'Los Angeles', 'San Francisco', 'Seattle', 'Las Vegas', 'San Diego']], ['America/Anchorage', ['Alaska', 'Anchorage']], ['Pacific/Honolulu', ['Hawái', 'Hawaii', 'Honolulu']],
+    ['America/Toronto', ['Toronto', 'Ottawa', 'Montreal', 'Canadá', 'Canada']], ['America/Vancouver', ['Vancouver', 'Calgary']],
+    ['America/Mexico_City', ['Ciudad de México', 'Mexico City', 'CDMX', 'México', 'Mexico', 'Guadalajara', 'Monterrey']],
+    ['America/Guatemala', ['Ciudad de Guatemala', 'Guatemala City', 'Guatemala']], ['America/El_Salvador', ['San Salvador', 'El Salvador']], ['America/Tegucigalpa', ['Tegucigalpa', 'Honduras']], ['America/Managua', ['Managua', 'Nicaragua']],
+    ['America/Costa_Rica', ['San José (Costa Rica)', 'San Jose Costa Rica', 'Costa Rica']], ['America/Panama', ['Ciudad de Panamá', 'Panama City', 'Panamá', 'Panama']],
+    ['America/Havana', ['La Habana', 'Havana', 'Cuba']], ['America/Santo_Domingo', ['Santo Domingo', 'República Dominicana', 'Dominican Republic']], ['America/Puerto_Rico', ['San Juan', 'Puerto Rico']],
+    ['America/Jamaica', ['Kingston', 'Jamaica']], ['America/Port-au-Prince', ['Puerto Príncipe', 'Port-au-Prince', 'Haití', 'Haiti']],
+    ['America/Bogota', ['Bogotá', 'Bogota', 'Colombia', 'Medellín', 'Medellin']], ['America/Caracas', ['Caracas', 'Venezuela']], ['America/Guayaquil', ['Quito', 'Guayaquil', 'Ecuador']],
+    ['America/Lima', ['Lima', 'Perú', 'Peru']], ['America/La_Paz', ['La Paz', 'Sucre', 'Bolivia']], ['America/Santiago', ['Santiago de Chile', 'Santiago', 'Chile']],
+    ['America/Argentina/Buenos_Aires', ['Buenos Aires', 'Argentina']], ['America/Montevideo', ['Montevideo', 'Uruguay']], ['America/Asuncion', ['Asunción', 'Asuncion', 'Paraguay']],
+    ['America/Sao_Paulo', ['São Paulo', 'Sao Paulo', 'Brasilia', 'Brasília', 'Río de Janeiro', 'Rio de Janeiro', 'Brasil', 'Brazil']], ['America/Guyana', ['Georgetown', 'Guyana']], ['America/Paramaribo', ['Paramaribo', 'Surinam', 'Suriname']],
+    ['Europe/Madrid', ['Madrid', 'Barcelona', 'España', 'Spain']], ['Atlantic/Canary', ['Islas Canarias', 'Canary Islands', 'Las Palmas']], ['Europe/Lisbon', ['Lisboa', 'Lisbon', 'Portugal', 'Oporto', 'Porto']],
+    ['Europe/Paris', ['París', 'Paris', 'Francia', 'France']], ['Europe/London', ['Londres', 'London', 'Reino Unido', 'United Kingdom', 'UK', 'Inglaterra', 'England']], ['Europe/Dublin', ['Dublín', 'Dublin', 'Irlanda', 'Ireland']],
+    ['Europe/Brussels', ['Bruselas', 'Brussels', 'Bélgica', 'Belgium']], ['Europe/Amsterdam', ['Ámsterdam', 'Amsterdam', 'Países Bajos', 'Netherlands', 'Holanda', 'Holland']], ['Europe/Luxembourg', ['Luxemburgo', 'Luxembourg']],
+    ['Europe/Berlin', ['Berlín', 'Berlin', 'Alemania', 'Germany', 'Múnich', 'Munich', 'Fráncfort', 'Frankfurt']], ['Europe/Zurich', ['Zúrich', 'Zurich', 'Berna', 'Bern', 'Suiza', 'Switzerland', 'Ginebra', 'Geneva']],
+    ['Europe/Vienna', ['Viena', 'Vienna', 'Austria']], ['Europe/Rome', ['Roma', 'Rome', 'Italia', 'Italy', 'Milán', 'Milan']], ['Europe/Malta', ['La Valeta', 'Valletta', 'Malta']],
+    ['Europe/Athens', ['Atenas', 'Athens', 'Grecia', 'Greece']], ['Europe/Stockholm', ['Estocolmo', 'Stockholm', 'Suecia', 'Sweden']], ['Europe/Oslo', ['Oslo', 'Noruega', 'Norway']],
+    ['Europe/Copenhagen', ['Copenhague', 'Copenhagen', 'Dinamarca', 'Denmark']], ['Europe/Helsinki', ['Helsinki', 'Finlandia', 'Finland']], ['Atlantic/Reykjavik', ['Reikiavik', 'Reykjavik', 'Islandia', 'Iceland']],
+    ['Europe/Warsaw', ['Varsovia', 'Warsaw', 'Polonia', 'Poland']], ['Europe/Prague', ['Praga', 'Prague', 'República Checa', 'Chequia', 'Czech Republic', 'Czechia']], ['Europe/Bratislava', ['Bratislava', 'Eslovaquia', 'Slovakia']],
+    ['Europe/Budapest', ['Budapest', 'Hungría', 'Hungary']], ['Europe/Bucharest', ['Bucarest', 'Bucharest', 'Rumanía', 'Romania']], ['Europe/Sofia', ['Sofía', 'Sofia', 'Bulgaria']],
+    ['Europe/Belgrade', ['Belgrado', 'Belgrade', 'Serbia']], ['Europe/Zagreb', ['Zagreb', 'Croacia', 'Croatia']], ['Europe/Ljubljana', ['Liubliana', 'Ljubljana', 'Eslovenia', 'Slovenia']],
+    ['Europe/Kyiv', ['Kiev', 'Kyiv', 'Ucrania', 'Ukraine']], ['Europe/Moscow', ['Moscú', 'Moscow', 'Rusia', 'Russia']], ['Europe/Minsk', ['Minsk', 'Bielorrusia', 'Belarus']],
+    ['Europe/Vilnius', ['Vilna', 'Vilnius', 'Lituania', 'Lithuania']], ['Europe/Riga', ['Riga', 'Letonia', 'Latvia']], ['Europe/Tallinn', ['Tallin', 'Tallinn', 'Estonia']],
+    ['Europe/Istanbul', ['Estambul', 'Istanbul', 'Ankara', 'Turquía', 'Turkey', 'Türkiye']],
+    ['Africa/Cairo', ['El Cairo', 'Cairo', 'Egipto', 'Egypt']], ['Africa/Casablanca', ['Rabat', 'Casablanca', 'Marruecos', 'Morocco']], ['Africa/Algiers', ['Argel', 'Algiers', 'Argelia', 'Algeria']],
+    ['Africa/Tunis', ['Túnez', 'Tunis', 'Tunisia']], ['Africa/Lagos', ['Lagos', 'Abuya', 'Abuja', 'Nigeria']], ['Africa/Accra', ['Acra', 'Accra', 'Ghana']], ['Africa/Dakar', ['Dakar', 'Senegal']],
+    ['Africa/Nairobi', ['Nairobi', 'Kenia', 'Kenya']], ['Africa/Addis_Ababa', ['Adís Abeba', 'Addis Ababa', 'Etiopía', 'Ethiopia']], ['Africa/Johannesburg', ['Johannesburgo', 'Johannesburg', 'Pretoria', 'Ciudad del Cabo', 'Cape Town', 'Sudáfrica', 'South Africa']],
+    ['Asia/Jerusalem', ['Jerusalén', 'Jerusalem', 'Tel Aviv', 'Israel']], ['Asia/Beirut', ['Beirut', 'Líbano', 'Lebanon']], ['Asia/Amman', ['Amán', 'Amman', 'Jordania', 'Jordan']],
+    ['Asia/Riyadh', ['Riad', 'Riyadh', 'Arabia Saudita', 'Saudi Arabia']], ['Asia/Dubai', ['Dubái', 'Dubai', 'Abu Dabi', 'Abu Dhabi', 'Emiratos Árabes', 'UAE', 'Emiratos']], ['Asia/Qatar', ['Doha', 'Catar', 'Qatar']],
+    ['Asia/Kuwait', ['Kuwait']], ['Asia/Baghdad', ['Bagdad', 'Baghdad', 'Irak', 'Iraq']], ['Asia/Tehran', ['Teherán', 'Tehran', 'Irán', 'Iran']],
+    ['Asia/Karachi', ['Karachi', 'Islamabad', 'Pakistán', 'Pakistan']], ['Asia/Kolkata', ['Nueva Delhi', 'New Delhi', 'Delhi', 'Bombay', 'Mumbai', 'Calcuta', 'Kolkata', 'Calcutta', 'Bangalore', 'India']], ['Asia/Dhaka', ['Daca', 'Dhaka', 'Bangladés', 'Bangladesh']],
+    ['Asia/Kathmandu', ['Katmandú', 'Kathmandu', 'Nepal']], ['Asia/Colombo', ['Colombo', 'Sri Lanka']], ['Asia/Bangkok', ['Bangkok', 'Tailandia', 'Thailand']],
+    ['Asia/Ho_Chi_Minh', ['Hanói', 'Hanoi', 'Ho Chi Minh', 'Vietnam']], ['Asia/Jakarta', ['Yakarta', 'Jakarta', 'Indonesia']], ['Asia/Kuala_Lumpur', ['Kuala Lumpur', 'Malasia', 'Malaysia']],
+    ['Asia/Singapore', ['Singapur', 'Singapore']], ['Asia/Manila', ['Manila', 'Filipinas', 'Philippines']], ['Asia/Shanghai', ['Pekín', 'Beijing', 'Shanghái', 'Shanghai', 'China']],
+    ['Asia/Hong_Kong', ['Hong Kong']], ['Asia/Taipei', ['Taipéi', 'Taipei', 'Taiwán', 'Taiwan']], ['Asia/Seoul', ['Seúl', 'Seoul', 'Corea del Sur', 'South Korea', 'Corea', 'Korea']],
+    ['Asia/Tokyo', ['Tokio', 'Tokyo', 'Japón', 'Japan', 'Osaka']], ['Asia/Ulaanbaatar', ['Ulán Bator', 'Ulaanbaatar', 'Mongolia']], ['Asia/Tashkent', ['Taskent', 'Tashkent', 'Uzbekistán', 'Uzbekistan']],
+    ['Asia/Almaty', ['Almaty', 'Astaná', 'Astana', 'Kazajistán', 'Kazakhstan']],
+    ['Australia/Sydney', ['Sídney', 'Sydney', 'Canberra', 'Australia']], ['Australia/Melbourne', ['Melbourne']], ['Australia/Brisbane', ['Brisbane']], ['Australia/Perth', ['Perth']], ['Australia/Adelaide', ['Adelaida', 'Adelaide']],
+    ['Pacific/Auckland', ['Wellington', 'Auckland', 'Nueva Zelanda', 'New Zealand']], ['Pacific/Fiji', ['Suva', 'Fiyi', 'Fiji']],
+    ['UTC', ['UTC', 'GMT', 'Hora universal']],
+  ];
+  const _tzNz = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[_/.,()-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  let _tzIdx = null;
+  const _tzCanon = tz => { try { return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone; } catch (_) { return tz; } };
+  function _tzIndex() {
+    if (_tzIdx) return _tzIdx;
+    // Algunos navegadores devuelven el nombre antiguo de la zona (Asia/Calcutta en vez de Asia/Kolkata): se unifican para que cada zona salga UNA sola vez.
+    const by = new Map(), add = (tz, names) => { const k = _tzCanon(tz); let e = by.get(k); if (!e) { e = { tz, names: [] }; by.set(k, e); } names.forEach(n => { if (n && !e.names.includes(n)) e.names.push(n); }); };
+    _CAPITALS.forEach(([tz, names]) => add(tz, names));
+    try { _LOC_DB.forEach(x => add(x.tz, [x.name])); } catch (_) {}
+    _RP_TZ.forEach(([tz, l]) => add(tz, [l.replace(/\s*\(.*\)$/, '')]));
+    let all = []; try { all = Intl.supportedValuesOf('timeZone'); } catch (_) {}
+    all.forEach(tz => { const p = tz.split('/'); add(tz, [p[p.length - 1].replace(/_/g, ' '), tz]); });
+    _tzIdx = [...by.values()].map(e => ({ tz: e.tz, label: e.names[0], names: e.names, norm: e.names.map(_tzNz).join(' | ') }));
+    return _tzIdx;
+  }
+  function _tzSearch(q) {
+    const nq = _tzNz(q), idx = _tzIndex();
+    if (!nq) return _RP_TZ.map(([tz]) => idx.find(e => _tzCanon(e.tz) === _tzCanon(tz))).filter(Boolean);
+    const toks = nq.split(' ').filter(Boolean), out = [];
+    idx.forEach(e => {
+      if (!toks.every(t => e.norm.includes(t))) return;
+      const ns = e.names.map(_tzNz); let sc = 3;
+      if (ns.includes(nq)) sc = 0; else if (ns.some(n => n.startsWith(nq))) sc = 1; else if (ns.some(n => n.split(' ').some(w => w.startsWith(toks[0])))) sc = 2;
+      const hit = e.names.find(n => _tzNz(n).includes(toks[0])) || '';
+      out.push({ e, sc, hit });
+    });
+    out.sort((a, b) => a.sc - b.sc || a.e.label.length - b.e.label.length);
+    return out.slice(0, 8).map(x => Object.assign({}, x.e, { hit: x.hit && x.hit !== x.e.label ? x.hit : '' }));
+  }
+  const _tzUtc = tz => { try { const m = _tzOffsetMin(tz, new Date()), a = Math.abs(m); return 'UTC' + (m < 0 ? '−' : '+') + Math.floor(a / 60) + (a % 60 ? ':' + String(a % 60).padStart(2, '0') : ''); } catch (_) { return ''; } };
+  const _rpTzName = z => { const c = _tzCanon(z), e = _tzIndex().find(x => _tzCanon(x.tz) === c); return e ? e.label : z; };
+  let _rpTzRes = [], _rpTzAct = 0;
+  function _rpTzRender(q) {
+    const box = document.getElementById('rp-tz-list'); if (!box) return;
+    _rpTzRes = _tzSearch(q); _rpTzAct = 0;
+    box.innerHTML = _rpTzRes.length ? _rpTzRes.map((e, i) => `<div class="rp-tzi${i === 0 ? ' on' : ''}" data-i="${i}" onmousedown="event.preventDefault();LeadManagerModule.rpTzPick('${e.tz}')" onmouseenter="LeadManagerModule.rpTzHover(${i})"><b>${_rpEsc(e.label)}</b>${e.hit ? ` <span class="rp-tzi__hit">${_rpEsc(e.hit)}</span>` : ''}<span class="rp-tzi__o">${_tzUtc(e.tz)}</span></div>`).join('')
+      : `<div class="rp-tzi rp-tzi--none">Sin coincidencias. Prueba con una ciudad o un país (en español o inglés).</div>`;
+    box.style.display = '';
+  }
+  function rpTzOpen(inp) { try { inp.select(); } catch (_) {} _rpTzRender(''); }
+  function rpTzInput(v) { _rpTzRender(v); }
+  function rpTzHover(i) { _rpTzAct = i; document.querySelectorAll('#rp-tz-list .rp-tzi').forEach((x, k) => x.classList.toggle('on', k === i)); }
+  function rpTzKey(ev) {
+    const n = _rpTzRes.length;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); if (n) rpTzHover((_rpTzAct + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); if (_rpTzRes[_rpTzAct]) rpTzPick(_rpTzRes[_rpTzAct].tz); }
+    else if (ev.key === 'Escape') { ev.target.blur(); }
+  }
+  function rpTzBlur(inp) { const b = document.getElementById('rp-tz-list'); if (b) b.style.display = 'none'; if (inp) inp.value = _rpTzName((_RP.sched || {}).tz); }
+  function rpTzPick(tz) { const b = document.getElementById('rp-tz-list'); if (b) b.style.display = 'none'; reportSched('tz', tz); }
   const _RP_LANGN = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
   const _RP_DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const _rpMail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e);
@@ -28968,7 +29063,7 @@ ${foot}
         <select class="pa-sel" onchange="LeadManagerModule.reportSched('dow',this.value)">${_RP_DAYS.map((d, k) => `<option value="${k}"${k === S.dow ? ' selected' : ''}>${d}</option>`).join('')}</select>
         <span>a las</span>
         <select class="pa-sel" onchange="LeadManagerModule.reportSched('hour',this.value)">${Array.from({ length: 17 }, (_, k) => k + 6).map(hh => `<option value="${hh}"${hh === S.hour ? ' selected' : ''}>${String(hh).padStart(2, '0')}:00</option>`).join('')}</select>
-        <select class="pa-sel rp-hero__tz" onchange="LeadManagerModule.reportSched('tz',this.value)">${_RP_TZ.map(z => `<option value="${z[0]}"${z[0] === S.tz ? ' selected' : ''}>${z[1]}</option>`).join('')}</select></div>`;
+        <div class="rp-tzbox"><input class="pa-sel rp-hero__tz" id="rp-tz-inp" value="${_rpEsc(_rpTzName(S.tz))}" placeholder="Escribe una ciudad o país…" autocomplete="off" spellcheck="false" onfocus="LeadManagerModule.rpTzOpen(this)" oninput="LeadManagerModule.rpTzInput(this.value)" onkeydown="LeadManagerModule.rpTzKey(event)" onblur="LeadManagerModule.rpTzBlur(this)"><div class="rp-tzlist" id="rp-tz-list" style="display:none"></div></div></div>`;
     }
     if (draft) body += `<div class="rp-hero__btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportActivate()">Activar envío automático</button><button class="rp-lnk" onclick="LeadManagerModule.reportMode(false)">Cancelar</button></div>`;
     if (i.schedule && i.schedule.error) body += `<div class="rp-from rp-from--bad" style="margin-top:8px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>`;
@@ -35905,7 +36000,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
