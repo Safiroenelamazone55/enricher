@@ -135,6 +135,8 @@ async function pausarLinea(pool, connId, motivo) {
 async function reanudarLinea(pool, connId) {
   await getSettings(pool, connId);
   await pool.query(`UPDATE wa_line_settings SET pausada=FALSE, pausa_motivo='', fallos_seguidos=0, updated_at=NOW() WHERE connection_id=$1`, [connId]);
+  // lo que esperaba por la pausa (p. ej. 30 min tras un límite de WhatsApp) vuelve a estar disponible al reanudar
+  await pool.query(`UPDATE wa_messages SET proximo_intento_at=NULL, ultimo_error='' WHERE connection_id=$1 AND estado='programado' AND via_cola`, [connId]);
   await replanificar(pool, connId);
 }
 
