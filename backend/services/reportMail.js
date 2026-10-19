@@ -47,7 +47,7 @@ const COPY = {
       return parts.join(' ');
     },
     meet: m => m ? `La próxima reunión es con ${m.empresa || m.nombre}, el ${m.fecha_txt} ${m.dia} de ${m.mes}.` : '',
-    seq: n => n ? `Tenemos ${n} ${n === 1 ? 'secuencia activa' : 'secuencias activas'} en marcha.` : '',
+    seq: (n, c) => !n ? '' : c > 0 ? `Tenemos ${c} ${c === 1 ? 'campaña activa' : 'campañas activas'} con ${n} ${n === 1 ? 'secuencia' : 'secuencias'} en marcha.` : `Tenemos ${n} ${n === 1 ? 'secuencia activa' : 'secuencias activas'} en marcha.`,
     below: 'Abajo te dejo una vista previa. En tu portal encuentras el detalle completo: las acciones, las secuencias activas, las empresas y los contactos.',
     cta: 'Abrir el informe completo', close: 'Si tienes cualquier duda, respóndeme por aquí o escríbenos por el chat del portal.', bye: 'Saludos,', team: 'Equipo Novacentrax', by: 'Portal de seguimiento por Novacentrax',
   },
@@ -66,7 +66,7 @@ const COPY = {
       return parts.join(' ');
     },
     meet: m => m ? `The next meeting is with ${m.empresa || m.nombre}, on ${m.fecha_txt}, ${m.mes} ${m.dia}.` : '',
-    seq: n => n ? `We have ${n} active ${n === 1 ? 'sequence' : 'sequences'} running.` : '',
+    seq: (n, c) => !n ? '' : c > 0 ? `We have ${c} active ${c === 1 ? 'campaign' : 'campaigns'} running ${n} ${n === 1 ? 'sequence' : 'sequences'}.` : `We have ${n} active ${n === 1 ? 'sequence' : 'sequences'} running.`,
     below: "Below is a quick preview. In your portal you'll find the full detail: actions, active sequences, companies and contacts.",
     cta: 'Open the full report', close: 'If you have any questions, just reply to this email or message us in the portal chat.', bye: 'Best,', team: 'The Novacentrax team', by: 'Tracking portal by Novacentrax',
   },
@@ -85,7 +85,7 @@ const COPY = {
       return parts.join(' ');
     },
     meet: m => m ? `Der nächste Termin ist mit ${m.empresa || m.nombre}, am ${m.fecha_txt}, ${m.dia}. ${m.mes}.` : '',
-    seq: n => n ? `Aktuell laufen ${n} aktive ${n === 1 ? 'Sequenz' : 'Sequenzen'}.` : '',
+    seq: (n, c) => !n ? '' : c > 0 ? `Aktuell laufen ${c} aktive ${c === 1 ? 'Kampagne' : 'Kampagnen'} mit ${n} ${n === 1 ? 'Sequenz' : 'Sequenzen'}.` : `Aktuell laufen ${n} aktive ${n === 1 ? 'Sequenz' : 'Sequenzen'}.`,
     below: 'Unten sehen Sie eine kurze Vorschau. In Ihrem Portal finden Sie alle Details: Aktionen, aktive Sequenzen, Unternehmen und Kontakte.',
     cta: 'Vollständigen Bericht öffnen', close: 'Bei Fragen antworten Sie einfach auf diese E-Mail oder schreiben Sie uns im Portal-Chat.', bye: 'Viele Grüße', team: 'Das Novacentrax-Team', by: 'Tracking-Portal von Novacentrax',
   },
@@ -104,7 +104,7 @@ const COPY = {
       return parts.join(' ');
     },
     meet: m => m ? `A próxima reunião é com ${m.empresa || m.nombre}, em ${m.fecha_txt}, ${m.dia} de ${m.mes}.` : '',
-    seq: n => n ? `Temos ${n} ${n === 1 ? 'sequência ativa' : 'sequências ativas'} em andamento.` : '',
+    seq: (n, c) => !n ? '' : c > 0 ? `Temos ${c} ${c === 1 ? 'campanha ativa' : 'campanhas ativas'} com ${n} ${n === 1 ? 'sequência' : 'sequências'} em andamento.` : `Temos ${n} ${n === 1 ? 'sequência ativa' : 'sequências ativas'} em andamento.`,
     below: 'Abaixo vai uma prévia. No seu portal você encontra o detalhe completo: as ações, as sequências ativas, as empresas e os contatos.',
     cta: 'Abrir o relatório completo', close: 'Em caso de dúvida, é só responder a este e-mail ou escrever pelo chat do portal.', bye: 'Abraços,', team: 'Equipe Novacentrax', by: 'Portal de acompanhamento por Novacentrax',
   },
@@ -126,13 +126,13 @@ function buildReport(lang, d) {
   const button = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px"><tr><td style="background:${accent}"><a href="${esc(d.url)}" style="display:inline-block;padding:11px 24px;color:${lum(accent) > 0.45 ? '#0F172A' : '#FFFFFF'};${F}font-size:14px;font-weight:700;text-decoration:none">${esc(C.cta)}</a></td></tr></table>`;
   const body = `<div style="max-width:560px;margin:0 auto;padding:28px 20px">${logo}
     <p style="margin:0 0 14px;${F}font-size:15px;line-height:1.65;color:#1E293B">${esc(C.hi(d.cliente))}</p>
-    ${note}${P(C.lead(d, k))}${P([C.sig(d.positives || []), C.meet((d.meetings || [])[0])].filter(Boolean).join(' '))}${P([C.seq((d.seqs || []).length), C.below].filter(Boolean).join(' '))}
+    ${note}${P(C.lead(d, k))}${P([C.sig(d.positives || []), C.meet((d.meetings || [])[0])].filter(Boolean).join(' '))}${P([C.seq((d.seqs || []).length, d.campanas || 0), C.below].filter(Boolean).join(' '))}
     ${img}${button}
     <p style="margin:0 0 18px;${F}font-size:15px;line-height:1.65;color:#1E293B">${esc(C.close)}</p>
     <p style="margin:0;${F}font-size:15px;line-height:1.5;color:#1E293B">${esc(C.bye)}<br><b>${esc(C.team)}</b></p>
     <p style="margin:26px 0 0;padding-top:14px;border-top:1px solid #EEF1F6;${F}font-size:11.5px;color:#94A3B8">${esc(C.by)}</p></div>`;
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#FFFFFF">${body}</body></html>`;
-  const text = [C.hi(d.cliente), '', C.lead(d, k), C.sig(d.positives || []), C.meet((d.meetings || [])[0]), C.seq((d.seqs || []).length), '', `${C.cta}: ${d.url}`, '', C.bye, C.team].filter((x, j, a) => x !== '' || a[j - 1] !== '').join('\n');
+  const text = [C.hi(d.cliente), '', C.lead(d, k), C.sig(d.positives || []), C.meet((d.meetings || [])[0]), C.seq((d.seqs || []).length, d.campanas || 0), '', `${C.cta}: ${d.url}`, '', C.bye, C.team].filter((x, j, a) => x !== '' || a[j - 1] !== '').join('\n');
   return { subject: C.subj(d, k, (d.positives || []).length), html, text, accent };
 }
 module.exports = { buildReport };

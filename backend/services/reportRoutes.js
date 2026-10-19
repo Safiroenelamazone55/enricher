@@ -22,6 +22,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
     const hl = await highlights(pool, cid, { withNotes: false });
     const { rows: sq } = await pool.query(`SELECT nombre FROM sequences WHERE outbound_client_id=$1 AND estado='activa' ORDER BY id`, [cid]);
     const { rows: cl } = await pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]);
+    const { rows: [cp] } = await pool.query(`SELECT COUNT(DISTINCT campaign_id)::int AS n FROM sequences WHERE outbound_client_id=$1 AND estado='activa' AND campaign_id IS NOT NULL`, [cid]);
     const loc = LOCALE[lang] || 'es-ES', fmt = (d, o) => new Date(d).toLocaleDateString(loc, o);
     const cur = (dash.kpi && dash.kpi.cur) || {}, prev = (dash.kpi && dash.kpi.prev) || {}, dl = dash.deals || {};
     const cliente = (cl[0] && cl[0].nombre) || '';
@@ -32,6 +33,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       kpi: { touches: cur.touches, contacted: cur.contacted, replies: cur.replies, agendadas: dl.agendadas },
       prev: { touches: prev.touches, contacted: prev.contacted, replies: prev.replies, agendadas: dl.agendadas_prev },
       seqs: sq.map(s => s.nombre),
+      campanas: (cp && cp.n) || 0,
       // disposition + derivado_nombre viajan para que el copy pueda distinguir un
       // avance concreto (derivó a alguien puntual) de "sigue en seguimiento" en vez
       // de la misma frase genérica para todos — pedido explícito 2026-09-28 (caso
