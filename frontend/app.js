@@ -38892,7 +38892,7 @@ const PlantillasModule = (() => {
     const vista = g.langs.length > 1 ? `<div class="pl-vista">Vista previa: ${g.langs.map(k => `<button class="hrm-lnk${g.vista === k ? ' on' : ''}" onclick="PlantillasModule.vista('${k}')">${LANGS[k]}</button>`).join(' · ')}</div>` : '';
     let campos;
     if (pago) {
-      campos = `${f('cliente', 'Preparado para (opcional)', 'text', 'Nombre del cliente')}
+      campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}
         <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_methods.map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Crea métodos en «Métodos de pago».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
@@ -39088,7 +39088,8 @@ const PlantillasModule = (() => {
     const sel = (idd, cur) => `<select class="pl-in" id="${idd}">${[['blanco', 'Blanco'], ['negro', 'Negro'], ['color', 'Color']].map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
     _modal(id ? 'Editar empresa' : 'Nueva empresa', `
       <label class="pl-l">Nombre de la empresa</label><input class="pl-in" id="plb-nombre" value="${E(b.nombre)}">
-      <div class="pl-row3"><div><label class="pl-l">Correo de contacto</label><input class="pl-in" id="plb-email" value="${E(b.email)}" placeholder="contact@empresa.com"></div><div><label class="pl-l">Teléfono / WhatsApp</label><input class="pl-in" id="plb-tel" value="${E(b.telefono || '')}" placeholder="+51 999 999 999"></div><div><label class="pl-l">Sitio web</label><input class="pl-in" id="plb-web" value="${E(b.web)}" placeholder="empresa.com"></div></div>
+      <div class="pl-row3"><div><label class="pl-l">Correo de la empresa</label><input class="pl-in" id="plb-email" value="${E(b.email)}" placeholder="contact@empresa.com"></div><div><label class="pl-l">WhatsApp de la empresa</label><input class="pl-in" id="plb-tel" value="${E(b.telefono || '')}" placeholder="+51 999 999 999"></div><div><label class="pl-l">Sitio web</label><input class="pl-in" id="plb-web" value="${E(b.web)}" placeholder="empresa.com"></div></div>
+      <div class="pl-row"><div><label class="pl-l">Correo para pagos (comprobantes)</label><input class="pl-in" id="plb-pemail" value="${E(b.pago_email || '')}" placeholder="vacío = el de la empresa"></div><div><label class="pl-l">WhatsApp para pagos</label><input class="pl-in" id="plb-ptel" value="${E(b.pago_telefono || '')}" placeholder="vacío = el de la empresa"></div></div>
       <div class="pl-row3"><div><label class="pl-l">Color principal</label><input type="color" class="pl-col" id="plb-cp" value="${E(b.color_primary)}"></div><div><label class="pl-l">Color claro</label><input type="color" class="pl-col" id="plb-cl" value="${E(b.color_light)}"></div><div><label class="pl-l">Color oscuro (fondos)</label><input type="color" class="pl-col" id="plb-cd" value="${E(b.color_dark)}"></div></div>
       <label class="pl-l">Logos</label><div class="pl-slots">${slot('blanco', 'Blanco', '#0F172A')}${slot('negro', 'Negro', '#F1F5F9')}${slot('color', 'Color', '#fff')}</div>
       <div class="pl-row"><div><label class="pl-l">Sobre fondo oscuro usar</label>${sel('plb-lo', b.logo_oscuro)}</div><div><label class="pl-l">Sobre fondo claro usar</label>${sel('plb-lc', b.logo_claro)}</div></div>
@@ -39103,7 +39104,7 @@ const PlantillasModule = (() => {
   function quitarLogo(k) { _logoDraft[k] = null; const el = $('pls-' + k); if (el) el.innerHTML = '<i>Sin logo</i>'; }
   async function saveBrand(id) {
     const v = k => $('plb-' + k).value;
-    const data = { nombre: v('nombre'), email: v('email'), telefono: v('tel'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
+    const data = { nombre: v('nombre'), email: v('email'), telefono: v('tel'), pago_email: v('pemail'), pago_telefono: v('ptel'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
     for (const k of ['blanco', 'negro', 'color']) if (k in _logoDraft) data['logo_' + (k === 'blanco' ? 'white' : k === 'negro' ? 'black' : 'color')] = _logoDraft[k];
     try { await _j(id ? `/tpl/brands/${id}` : '/tpl/brands', _body({ method: id ? 'PUT' : 'POST', data })); _closeModal(); showBanner('Empresa guardada', 'success'); render(_host.id); }
     catch (e) { showBanner(e.message, 'error'); }

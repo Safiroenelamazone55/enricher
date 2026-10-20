@@ -25,6 +25,8 @@ async function init(pool) {
     params JSONB DEFAULT '{}'::jsonb, html TEXT NOT NULL, token TEXT UNIQUE NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query('CREATE INDEX IF NOT EXISTS tpl_copies_user ON tpl_copies (user_id, created_at DESC)');
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''");
+  await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_email TEXT DEFAULT ''");
+  await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_telefono TEXT DEFAULT ''");
   await pool.query("ALTER TABLE tpl_templates ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'propuesta'");
   await pool.query(`CREATE TABLE IF NOT EXISTS tpl_pay_methods (
     id SERIAL PRIMARY KEY, user_id INT NOT NULL, nombre TEXT NOT NULL, preferido BOOLEAN DEFAULT FALSE, orden INT DEFAULT 0,
@@ -86,19 +88,19 @@ function mount(app, { pool, requireAuth }) {
     const { rows } = await pool.query('SELECT * FROM tpl_brands WHERE user_id=$1 ORDER BY id', [uid(req)]);
     res.json(rows.map(brandOut));
   }));
-  const brandFields = b => ({ nombre: S(b.nombre, 80), email: S(b.email, 160), telefono: S(b.telefono, 40), web: S(b.web, 160), cp: hexOk(b.color_primary, '#0F9F8F'), cl: hexOk(b.color_light, '#2DD4BF'), cd: hexOk(b.color_dark, '#0F172A'),
+  const brandFields = b => ({ nombre: S(b.nombre, 80), email: S(b.email, 160), telefono: S(b.telefono, 40), pe: S(b.pago_email, 160), pt: S(b.pago_telefono, 40), web: S(b.web, 160), cp: hexOk(b.color_primary, '#0F9F8F'), cl: hexOk(b.color_light, '#2DD4BF'), cd: hexOk(b.color_dark, '#0F172A'),
     lo: VARIANT.includes(b.logo_oscuro) ? b.logo_oscuro : 'blanco', lc: VARIANT.includes(b.logo_claro) ? b.logo_claro : 'color' });
   function logoVal(v) { if (v === null || v === '') return null; return logoOk(v) && v.length < 1500000 ? v : undefined; }
   app.post('/api/tpl/brands', A, wrap(async (req, res) => {
     const f = brandFields(req.body || {}); if (!f.nombre) return res.status(400).json({ error: 'Falta el nombre de la empresa' });
-    const { rows: [r] } = await pool.query(`INSERT INTO tpl_brands (user_id,nombre,email,web,color_primary,color_light,color_dark,logo_oscuro,logo_claro,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [uid(req), f.nombre, f.email, f.web, f.cp, f.cl, f.cd, f.lo, f.lc, f.telefono]);
+    const { rows: [r] } = await pool.query(`INSERT INTO tpl_brands (user_id,nombre,email,web,color_primary,color_light,color_dark,logo_oscuro,logo_claro,telefono,pago_email,pago_telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [uid(req), f.nombre, f.email, f.web, f.cp, f.cl, f.cd, f.lo, f.lc, f.telefono, f.pe, f.pt]);
     res.json(brandOut(r));
   }));
   app.put('/api/tpl/brands/:id', A, wrap(async (req, res) => {
     const f = brandFields(req.body || {}); if (!f.nombre) return res.status(400).json({ error: 'Falta el nombre de la empresa' });
-    const sets = ['nombre=$3', 'email=$4', 'web=$5', 'color_primary=$6', 'color_light=$7', 'color_dark=$8', 'logo_oscuro=$9', 'logo_claro=$10', 'telefono=$11'];
-    const vals = [req.params.id, uid(req), f.nombre, f.email, f.web, f.cp, f.cl, f.cd, f.lo, f.lc, f.telefono];
+    const sets = ['nombre=$3', 'email=$4', 'web=$5', 'color_primary=$6', 'color_light=$7', 'color_dark=$8', 'logo_oscuro=$9', 'logo_claro=$10', 'telefono=$11', 'pago_email=$12', 'pago_telefono=$13'];
+    const vals = [req.params.id, uid(req), f.nombre, f.email, f.web, f.cp, f.cl, f.cd, f.lo, f.lc, f.telefono, f.pe, f.pt];
     for (const [k, col] of [['logo_white', 'logo_white'], ['logo_black', 'logo_black'], ['logo_color', 'logo_color']]) {
       if (req.body && Object.prototype.hasOwnProperty.call(req.body, k)) {
         const v = logoVal(req.body[k]);

@@ -37,6 +37,10 @@ function render(brand, p, lang, methods) {
   const b = brand || {};
   const prim = hex(b.color_primary, '#0F9F8F'), light = hex(b.color_light, '#2DD4BF'), dark = hex(b.color_dark, '#0F172A');
   const marca = b.nombre || '', mail = b.email || '', tel = b.telefono || '';
+  const pmail = b.pago_email || mail, ptel = b.pago_telefono || tel;      // contacto personal para pagos (comprobante y dudas)
+  const wa = t => 'https://wa.me/' + String(t).replace(/\D/g, '');
+  const waLink = t => `<a href="${esc(wa(t))}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>`;
+  const mailLink = m => `<a href="mailto:${esc(m)}">${esc(m)}</a>`;
   const logos = { blanco: b.logo_white, negro: b.logo_black, color: b.logo_color };
   const pick = (el, orden) => { for (const k of [el, ...orden]) if (logoOk(logos[k])) return logos[k]; return ''; };
   const dataW = pick(b.logo_oscuro || 'blanco', ['blanco', 'color', 'negro']);
@@ -68,20 +72,23 @@ ${pasos.length ? `<div class="hw">${x('Cómo enviar', 'How to send', 'So geht es
   };
 
   // pasos finales (los que marcas) + extras
-  const contactoTxt = [mail && esc(mail), tel && esc(tel)].filter(Boolean);
+  const contactoTxt = [pmail && mailLink(pmail), ptel && waLink(ptel)].filter(Boolean);
   const after = [];
   const ps = p.pasos || {};
-  if (ps.comprobante && (mail || tel)) after.push(x(
-    `Envía el comprobante de pago a ${esc(mail || tel)}${mail && tel ? ' o por WhatsApp al ' + esc(tel) : ''}.`,
-    `Send the proof of payment to ${esc(mail || tel)}${mail && tel ? ' or by WhatsApp to ' + esc(tel) : ''}.`,
-    `Senden Sie den Zahlungsnachweis an ${esc(mail || tel)}${mail && tel ? ' oder per WhatsApp an ' + esc(tel) : ''}.`,
-    `Envie o comprovante de pagamento para ${esc(mail || tel)}${mail && tel ? ' ou por WhatsApp para ' + esc(tel) : ''}.`));
+  if (ps.comprobante && (pmail || ptel)) {
+    const em = pmail ? mailLink(pmail) : '', ph = ptel ? waLink(ptel) : '';
+    after.push(x(
+      `Envía el comprobante de pago a ${em || ph}${em && ph ? ' o por WhatsApp al ' + ph : ''}.`,
+      `Send the proof of payment to ${em || ph}${em && ph ? ' or by WhatsApp to ' + ph : ''}.`,
+      `Senden Sie den Zahlungsnachweis an ${em || ph}${em && ph ? ' oder per WhatsApp an ' + ph : ''}.`,
+      `Envie o comprovante de pagamento para ${em || ph}${em && ph ? ' ou por WhatsApp para ' + ph : ''}.`));
+  }
   if (ps.referencia && p.ref) after.push(x(`Incluye en el mensaje la referencia: <b>${esc(p.ref)}</b>.`, `Include this reference in your message: <b>${esc(p.ref)}</b>.`, `Geben Sie in Ihrer Nachricht die Referenz an: <b>${esc(p.ref)}</b>.`, `Inclua na mensagem a referência: <b>${esc(p.ref)}</b>.`));
   if (ps.plazo) { const h = Math.max(1, parseInt(p.plazoHoras, 10) || 24); after.push(x(`Confirmaremos la recepción del pago en un plazo de ${h} horas hábiles.`, `We will confirm receipt of your payment within ${h} business hours.`, `Wir bestätigen den Zahlungseingang innerhalb von ${h} Geschäftsstunden.`, `Confirmaremos o recebimento do pagamento em até ${h} horas úteis.`)); }
   (Array.isArray(p.extra) ? p.extra : []).forEach(t => { if (String(t).trim()) after.push(esc(String(t).trim().slice(0, 300))); });
 
   const info = [];
-  if (p.cliente) info.push([x('Preparado para', 'Prepared for', 'Erstellt für', 'Preparado para'), esc(p.cliente)]);
+  if (p.cliente) info.push([x('Cliente', 'Client', 'Kunde', 'Cliente'), esc(p.cliente)]);
   if (p.monto) info.push([x('Monto a pagar', 'Amount due', 'Zu zahlender Betrag', 'Valor a pagar'), esc(p.monto)]);
   if (p.ref) info.push([x('Concepto / referencia', 'Reference', 'Verwendungszweck', 'Referência'), esc(p.ref)]);
 
@@ -110,9 +117,9 @@ body{font-family:'Inter','Segoe UI',sans-serif;color:var(--ink);-webkit-font-smo
 .st{list-style:none;margin-top:8px}.st li{display:grid;grid-template-columns:30px 1fr;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.55;color:var(--text)}
 .st i{width:24px;height:24px;background:var(--teal);color:#fff;font-style:normal;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
 .af{margin-bottom:22px;break-inside:avoid;page-break-inside:avoid}.af h3{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--teal);font-weight:600}
-.ft{border-top:1px solid var(--line);padding:14px 0 0;text-align:center;font-size:11px;color:var(--mute);break-inside:avoid}.ft b{color:var(--ink);font-weight:600;margin-left:8px}`;
+.ft{border-top:1px solid var(--line);padding:14px 0 0;text-align:center;font-size:11px;color:var(--mute);break-inside:avoid}.ft b{color:var(--ink);font-weight:600;margin-left:8px}.ft a,.top .c a,.st a{color:inherit;text-decoration:none;border-bottom:1px solid currentColor}.ft a{color:var(--ink)}`;
   const stripe = [light, prim, prim, dark].map((c, i) => `<i style="background:${c};flex:${[3, 2, 1.4, 2][i]};opacity:${i === 2 ? .8 : 1}"></i>`).join('');
-  const html = `<div class="sheet"><div class="top"><div class="l">${logo}</div><div class="t">${esc(title)}</div><div class="c"><b>${esc(marca)}</b>${mail ? `<span>${esc(mail)}</span>` : ''}${tel ? `<span>${esc(tel)}</span>` : ''}</div></div><div class="bar">${stripe}</div>
+  const html = `<div class="sheet"><div class="top"><div class="l">${logo}</div><div class="t">${esc(title)}</div><div class="c"><b>${esc(marca)}</b>${mail ? `<span>${mailLink(mail)}</span>` : ''}${tel ? `<span>${waLink(tel)}</span>` : ''}</div></div><div class="bar">${stripe}</div>
 <table class="flow"><thead><tr class="sp"><td></td></tr></thead><tfoot><tr class="sp"><td></td></tr></tfoot><tbody><tr><td>
 ${info.length ? `<div class="info">${info.map(r => `<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>` : ''}
 ${methods.map(methodHtml).join('\n')}
