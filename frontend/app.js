@@ -38867,8 +38867,8 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id); if (!t) return;
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
-      ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
+      ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: '', monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
     _draw(); _preview();
   }
   function _faltan() {
@@ -38890,15 +38890,18 @@ const PlantillasModule = (() => {
     const f = (k, l, type, ph) => `<label class="pl-l">${l}</label><input class="pl-in" data-k="${k}" type="${type || 'text'}" value="${E(p[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.set('${k}',this.value)">`;
     const chips = Object.entries(LANGS).map(([k, v]) => `<label class="pl-chk${g.langs.includes(k) ? ' on' : ''}"><input type="checkbox" ${g.langs.includes(k) ? 'checked' : ''} onchange="PlantillasModule.toggleLang('${k}',this.checked)">${v}</label>`).join('');
     const vista = g.langs.length > 1 ? `<div class="pl-vista">Vista previa: ${g.langs.map(k => `<button class="hrm-lnk${g.vista === k ? ' on' : ''}" onclick="PlantillasModule.vista('${k}')">${LANGS[k]}</button>`).join(' · ')}</div>` : '';
+    const logoBox = `<label class="pl-l">Logo del cliente (opcional)</label><div class="pl-clog">
+      <span class="pl-clog__box">${p.logoCliente ? `<img src="${p.logoCliente}" alt="">` : '<i>Sin logo</i>'}</span>
+      <label class="hrm-lnk">Subir<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logoCliente(this)"></label>${p.logoCliente ? ' <button class="hrm-lnk" onclick="PlantillasModule.logoCliente(null)">Quitar</button>' : ''}</div>`;
     let campos;
     if (pago) {
-      campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}
+      campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
         <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_methods.map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Crea métodos en «Métodos de pago».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
     } else {
-      campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
+      campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
         <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
           <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
           <div class="pl-row"><div>${f('modelo', 'Modelo de compensación', 'text', 'Fee fijo + comisiones')}</div><div>${f('nota', 'Nota de pago', 'text', 'Pago al inicio de cada periodo')}</div></div></div>
@@ -38920,6 +38923,12 @@ const PlantillasModule = (() => {
     const g = _gen; if (!g || g.t.tipo !== 'pago') return;
     g.p.pasos = { comprobante: _chk('plg-comp'), referencia: _chk('plg-ref'), plazo: _chk('plg-plazo') }; g.p.plazoHoras = $('plg-horas').value;
     clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
+  }
+  function logoCliente(input) {
+    if (!input) { _gen.p.logoCliente = ''; _drawGen(); _preview(); return; }
+    const f = input.files && input.files[0]; if (!f) return;
+    if (f.size > 600000) { showBanner('El logo pesa demasiado (máx. ~600 KB): usa una versión más liviana', 'error'); return; }
+    const r = new FileReader(); r.onload = () => { _gen.p.logoCliente = r.result; _drawGen(); _preview(); }; r.readAsDataURL(f);
   }
   function toggleMetodo(id, on) {
     const g = _gen; g.p.metodos = on ? [...g.p.metodos, id] : g.p.metodos.filter(x => x !== id);
@@ -39123,7 +39132,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, logoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

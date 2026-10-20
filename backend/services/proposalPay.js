@@ -88,6 +88,7 @@ ${pasos.length ? `<div class="hw">${x('Cómo enviar', 'How to send', 'So geht es
   (Array.isArray(p.extra) ? p.extra : []).forEach(t => { if (String(t).trim()) after.push(esc(String(t).trim().slice(0, 300))); });
 
   const info = [];
+  const cli = logoOk(p.logoCliente) ? `<img class="cl" alt="" src="${p.logoCliente}">` : '';
   if (p.cliente) info.push([x('Cliente', 'Client', 'Kunde', 'Cliente'), esc(p.cliente)]);
   if (p.monto) info.push([x('Monto a pagar', 'Amount due', 'Zu zahlender Betrag', 'Valor a pagar'), esc(p.monto)]);
   if (p.ref) info.push([x('Concepto / referencia', 'Reference', 'Verwendungszweck', 'Referência'), esc(p.ref)]);
@@ -104,7 +105,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;color:var(--ink);-webkit-font-smo
 .top .c{background:rgba(255,255,255,.06);padding:36px 40px 36px 28px;font-size:11px;line-height:1.7;text-align:right;color:rgba(255,255,255,.75);min-width:230px;display:flex;flex-direction:column;justify-content:center}.top .c b{color:var(--tl);font-weight:600;font-size:12px}
 .bar{display:flex;height:34px}.bar i{display:block;flex:1}
 .flow{width:100%;border-collapse:collapse}.flow td{padding:0 56px}.sp td{height:30px;padding:0}
-.info{display:flex;gap:34px;flex-wrap:wrap;margin-bottom:22px;padding:14px 18px;background:var(--soft);border-left:3px solid var(--teal)}.info div{display:flex;flex-direction:column;gap:2px}.info span{font-size:10px;color:var(--mute);font-weight:500}.info b{font-size:14px;font-weight:600}
+.info{display:flex;gap:34px;flex-wrap:wrap;margin-bottom:22px;padding:14px 18px;background:var(--soft);border-left:3px solid var(--teal)}.info div{display:flex;flex-direction:column;gap:2px}.info{align-items:center}.info .cl{max-height:40px;max-width:150px;object-fit:contain;margin-right:8px}.info span{font-size:10px;color:var(--mute);font-weight:500}.info b{font-size:14px;font-weight:600}
 .mt{margin-bottom:26px;break-inside:avoid;page-break-inside:avoid}
 .mh{display:flex;justify-content:space-between;align-items:stretch;background:var(--navy);color:#fff}.mh b{padding:12px 18px;font-size:14px;font-weight:600}
 .mh .bd{background:#334155;padding:0 16px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;text-align:center}.pref .mh .bd{background:var(--teal)}
@@ -121,7 +122,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;color:var(--ink);-webkit-font-smo
   const stripe = [light, prim, prim, dark].map((c, i) => `<i style="background:${c};flex:${[3, 2, 1.4, 2][i]};opacity:${i === 2 ? .8 : 1}"></i>`).join('');
   const html = `<div class="sheet"><div class="top"><div class="l">${logo}</div><div class="t">${esc(title)}</div><div class="c"><b>${esc(marca)}</b>${mail ? `<span>${mailLink(mail)}</span>` : ''}${tel ? `<span>${waLink(tel)}</span>` : ''}</div></div><div class="bar">${stripe}</div>
 <table class="flow"><thead><tr class="sp"><td></td></tr></thead><tfoot><tr class="sp"><td></td></tr></tfoot><tbody><tr><td>
-${info.length ? `<div class="info">${info.map(r => `<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>` : ''}
+${info.length || cli ? `<div class="info">${cli}${info.map(r => `<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>` : ''}
 ${methods.map(methodHtml).join('\n')}
 ${after.length ? `<div class="af"><h3>${x('Después de pagar', 'After you pay', 'Nach der Zahlung', 'Depois de pagar')}</h3><ol class="st">${after.map((t, i) => `<li><i>${i + 1}</i><span>${t}</span></li>`).join('')}</ol></div>` : ''}
 ${contactoTxt.length ? `<div class="ft">${x('¿Dudas con el pago? Escríbeme:', 'Questions about your payment? Write to me:', 'Fragen zur Zahlung? Schreiben Sie mir:', 'Dúvidas sobre o pagamento? Escreva-me:')}<b>${contactoTxt.join(' · ')}</b></div>` : ''}

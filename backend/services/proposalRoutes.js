@@ -34,13 +34,21 @@ async function init(pool) {
 }
 
 async function seedIfEmpty(pool, uid) {
-  const { rows: [c] } = await pool.query('SELECT COUNT(*)::int n FROM tpl_brands WHERE user_id=$1', [uid]);
-  if (c.n) return;
-  const { rows: [b] } = await pool.query(
-    `INSERT INTO tpl_brands (user_id,nombre,email,web,logo_white,logo_color) VALUES ($1,'NovaCentrax','contact@novacentrax.com','novacentrax.com',$2,$3) RETURNING id`,
-    [uid, SEEDLOGOS.white, SEEDLOGOS.color]);
-  await pool.query(`INSERT INTO tpl_templates (user_id,nombre,oferta,brand_id,lang,defaults) VALUES ($1,$2,$3,$4,'es',$5)`,
-    [uid, 'Adquisición comercial B2B', 'Outbound + validación comercial', b.id, JSON.stringify({ fee: 550, plazo: 3, moneda: 'US$' })]);
+  // dos peticiones simultáneas (marcas y plantillas) no deben sembrar dos veces: se serializa por usuario
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    await cl.query('SELECT pg_advisory_xact_lock($1, 7311)', [uid]);
+    const { rows: [c] } = await cl.query('SELECT COUNT(*)::int n FROM tpl_brands WHERE user_id=$1', [uid]);
+    if (!c.n) {
+      const { rows: [b] } = await cl.query(
+        `INSERT INTO tpl_brands (user_id,nombre,email,web,logo_white,logo_color) VALUES ($1,'NovaCentrax','contact@novacentrax.com','novacentrax.com',$2,$3) RETURNING id`,
+        [uid, SEEDLOGOS.white, SEEDLOGOS.color]);
+      await cl.query(`INSERT INTO tpl_templates (user_id,nombre,oferta,brand_id,lang,defaults) VALUES ($1,$2,$3,$4,'es',$5)`,
+        [uid, 'Adquisición comercial B2B', 'Outbound + validación comercial', b.id, JSON.stringify({ fee: 550, plazo: 3, moneda: 'US$' })]);
+    }
+    await cl.query('COMMIT');
+  } catch (e) { try { await cl.query('ROLLBACK'); } catch (_) {} throw e; } finally { cl.release(); }
 }
 
 const brandOut = b => ({ ...b, logos: { blanco: !!b.logo_white, negro: !!b.logo_black, color: !!b.logo_color },
@@ -50,7 +58,7 @@ const brandOut = b => ({ ...b, logos: { blanco: !!b.logo_white, negro: !!b.logo_
 function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
-    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120) };
+    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: logoOk(p.logoCliente) && p.logoCliente.length < 900000 ? p.logoCliente : '' };
 }
 
 function payDefaults(d) {
@@ -191,7 +199,7 @@ function mount(app, { pool, requireAuth }) {
       const pr = params || {}, d = payDefaults({ ...(t.defaults || {}), ...(Array.isArray(pr.metodos) ? { metodos: pr.metodos } : {}), ...(pr.pasos ? { pasos: pr.pasos } : {}), ...(pr.plazoHoras ? { plazoHoras: pr.plazoHoras } : {}) });
       const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND id = ANY($2::int[])', [uid(req), d.metodos]) : { rows: [] };
       const ms = d.metodos.map(id => rows.find(r => r.id === id)).filter(Boolean);
-      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), pasos: d.pasos, plazoHoras: d.plazoHoras, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
+      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: logoOk(pr.logoCliente) && pr.logoCliente.length < 900000 ? pr.logoCliente : '', pasos: d.pasos, plazoHoras: d.plazoHoras, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
       return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms) };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];

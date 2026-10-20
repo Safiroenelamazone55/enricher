@@ -18402,3 +18402,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .md-fld .md-lbl { grid-column: 2; }
 .md-fld .md-val { grid-column: 2; }
 .pl-modal { max-width: 640px; }
+.pl-clog { display: flex; align-items: center; gap: 10px; }
+.pl-clog__box { width: 120px; height: 52px; border: 1px solid var(--border2); background: #fff; display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--muted); overflow: hidden; }
+.pl-clog__box img { max-width: 92%; max-height: 42px; }
