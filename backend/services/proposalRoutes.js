@@ -5,8 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { render, LANGS, logoOk } = require('./proposalTemplate');
 
-const SEED = path.join(__dirname, 'tplseed');
-const png = f => { try { return 'data:image/png;base64,' + fs.readFileSync(path.join(SEED, f)).toString('base64'); } catch (_) { return null; } };
+const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
 const S = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const VARIANT = ['blanco', 'negro', 'color'];
@@ -31,7 +30,7 @@ async function seedIfEmpty(pool, uid) {
   if (c.n) return;
   const { rows: [b] } = await pool.query(
     `INSERT INTO tpl_brands (user_id,nombre,email,web,logo_white,logo_color) VALUES ($1,'NovaCentrax','contact@novacentrax.com','novacentrax.com',$2,$3) RETURNING id`,
-    [uid, png('white.png'), png('color.png')]);
+    [uid, SEEDLOGOS.white, SEEDLOGOS.color]);
   await pool.query(`INSERT INTO tpl_templates (user_id,nombre,oferta,brand_id,lang,defaults) VALUES ($1,$2,$3,$4,'es',$5)`,
     [uid, 'Adquisición comercial B2B', 'Outbound + validación comercial', b.id, JSON.stringify({ fee: 550, plazo: 3, moneda: 'US$' })]);
 }
@@ -132,8 +131,8 @@ function mount(app, { pool, requireAuth }) {
     if (!t) return null;
     const { rows: [b] } = await pool.query('SELECT * FROM tpl_brands WHERE id=$1 AND user_id=$2', [t.brand_id, uid(req)]);
     if (!b) return null;
-    const p = { ...(t.defaults || {}), ...cleanParams(params) };
-    if (!params || params.fee === '' || params.fee == null) p.fee = (t.defaults || {}).fee || 0;
+    const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
+    const p = cleanParams({ ...(t.defaults || {}), ...given });
     return { t, p, html: render(b, p, lang) };
   }
   app.post('/api/tpl/preview', A, wrap(async (req, res) => {

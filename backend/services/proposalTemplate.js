@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const CSS = fs.readFileSync(path.join(__dirname, 'proposalTemplate.css'), 'utf8');
+const CSS = require('./proposalCss');
 const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
 const IDX = { es: 0, en: 1, de: 2, pt: 3 };
 
