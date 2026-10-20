@@ -810,7 +810,7 @@ const MatchSuggest = (() => {
   return { close: _close };
 })();
 
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -900,6 +900,8 @@ const HOME_MODULES = [
   // Herramientas: extensiones y apps de escritorio que se conectan con Nova (descarga + vista previa).
   { id: 'herramientas',   tab: 'herramientas',   name: 'Herramientas',   desc: 'Extensiones y apps: scraper de LinkedIn y tracking de tiempo', color: 'teal',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
+  { id: 'plantillas',     tab: 'plantillas',     name: 'Plantillas',     desc: 'Propuestas comerciales por oferta, en varios idiomas y con tu logo', color: 'teal',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
@@ -38745,6 +38747,236 @@ const HerramientasModule = (() => {
 })();
 window.HerramientasModule = HerramientasModule;
 
+// ── Plantillas: propuestas comerciales por oferta (nombre editable), marca/logos, idiomas y copias generadas ──
+const PlantillasModule = (() => {
+  const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
+  let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {};
+  const $ = id => document.getElementById(id);
+
+  async function _j(url, opts) {
+    const r = await apiFetch(API + url, opts);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No se pudo completar');
+    return d;
+  }
+  const _body = o => ({ method: o.method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o.data || {}) });
+
+  async function render(hostId) {
+    _host = $(hostId); if (!_host) return;
+    _host.innerHTML = '<div class="pl-wrap"><p class="hrm-sub">Cargando…</p></div>';
+    try {
+      [_brands, _tpls] = await Promise.all([_j('/tpl/brands'), _j('/tpl/templates')]);
+      if (_tab === 'copias') _copies = await _j('/tpl/copies');
+    } catch (e) { _host.innerHTML = `<div class="pl-wrap"><p class="hrm-sub">${E(e.message)}</p></div>`; return; }
+    _draw();
+  }
+
+  function _draw() {
+    if (!_host) return;
+    if (_gen) return _drawGen();
+    const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['marcas', 'Empresas y logos']]
+      .map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="PlantillasModule.tab('${k}')">${l}</button>`).join('');
+    let inner = '';
+    if (_tab === 'plantillas') inner = _viewPlantillas();
+    else if (_tab === 'copias') inner = _viewCopias();
+    else inner = _viewMarcas();
+    _host.innerHTML = `<div class="pl-wrap"><div class="hrm-hd"><h1 class="hrm-h1">Plantillas</h1>
+      <p class="hrm-sub">Propuestas comerciales listas para personalizar, exportar en varios idiomas y guardar como copia.</p></div>
+      <div class="pl-tabs">${tabs}</div>${inner}</div>`;
+  }
+
+  // ── Plantillas ──
+  function _viewPlantillas() {
+    const cards = _tpls.map(t => {
+      const b = _brands.find(x => x.id === t.brand_id);
+      const d = t.defaults || {};
+      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${E(b ? b.nombre : 'Sin empresa')}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
+        <h3 class="hrm-card__t">${E(t.nombre)}</h3>
+        <p class="hrm-card__d">${E(t.oferta || 'Sin descripción de la oferta')}</p>
+        <p class="hrm-card__meta">${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · idioma base ${LANGS[t.lang] || 'Español'}</p>
+        <div class="hrm-card__acts"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar propuesta</button>
+          <button class="hrm-lnk" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
+          <button class="hrm-lnk" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
+    }).join('');
+    return `<div class="pl-bar"><span class="hrm-sub">Crea una plantilla por cada oferta; cada una guarda su nombre, empresa, tarifa y plazo.</span>
+      <button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Nueva plantilla</button></div>
+      <div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay plantillas.</p>'}</div>`;
+  }
+
+  function editTpl(id) {
+    const t = _tpls.find(x => x.id === id) || { nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
+    const d = t.defaults || {};
+    _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
+      <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
+      <label class="pl-l">Oferta (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué servicio vende esta propuesta">
+      <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
+        <div><label class="pl-l">Idioma base</label><select class="pl-in" id="plt-lang">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}"${k === t.lang ? ' selected' : ''}>${v}</option>`).join('')}</select></div></div>
+      <div class="pl-row3"><div><label class="pl-l">Moneda</label><input class="pl-in" id="plt-mon" value="${E(d.moneda || 'US$')}"></div>
+        <div><label class="pl-l">Tarifa mensual</label><input class="pl-in" id="plt-fee" type="number" min="0" value="${d.fee || 0}"></div>
+        <div><label class="pl-l">Plazo (meses)</label><input class="pl-in" id="plt-plazo" type="number" min="1" value="${d.plazo || 3}"></div></div>
+      <div class="pl-row"><div><label class="pl-l">Título de la portada</label><input class="pl-in" id="plt-serv" value="${E(d.servicio || '')}" placeholder="(por defecto del idioma)"></div>
+        <div><label class="pl-l">…parte resaltada</label><input class="pl-in" id="plt-servem" value="${E(d.servicioEm || '')}" placeholder="Ej. Go-to-Market"></div></div>
+      <p class="hrm-card__meta">Si dejas el título vacío se usa «Sistema de Adquisición Comercial B2B» traducido a cada idioma.</p>`,
+      [id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delTpl(${id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveTpl(${id})">Guardar</button>`]);
+  }
+  async function saveTpl(id) {
+    const v = k => $('plt-' + k).value;
+    try {
+      await _j(id ? `/tpl/templates/${id}` : '/tpl/templates', _body({ method: id ? 'PUT' : 'POST', data: { nombre: v('nombre'), oferta: v('oferta'), brand_id: v('brand'), lang: v('lang'), defaults: { moneda: v('mon'), fee: v('fee'), plazo: v('plazo'), servicio: v('serv'), servicioEm: v('servem') } } }));
+      _closeModal(); showBanner('Plantilla guardada', 'success'); render(_host.id);
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function dupTpl(id) { try { await _j(`/tpl/templates/${id}/duplicate`, { method: 'POST' }); showBanner('Plantilla duplicada: edítala para cambiar el nombre', 'success'); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+  async function delTpl(id) {
+    if (!confirm('¿Eliminar esta plantilla? Las copias ya generadas se conservan.')) return;
+    try { await _j(`/tpl/templates/${id}`, { method: 'DELETE' }); _closeModal(); render(_host.id); } catch (e) { showBanner(e.message, 'error'); }
+  }
+
+  // ── Generar ──
+  function generar(id) {
+    const t = _tpls.find(x => x.id === id); if (!t) return;
+    const d = t.defaults || {};
+    _gen = { t, langs: [t.lang], vista: t.lang, p: { empresa: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '' } };
+    _draw(); _preview();
+  }
+  function _drawGen() {
+    const g = _gen, p = g.p;
+    const f = (k, l, type, ph) => `<label class="pl-l">${l}</label><input class="pl-in" data-k="${k}" type="${type || 'text'}" value="${E(p[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.set('${k}',this.value)">`;
+    const chips = Object.entries(LANGS).map(([k, v]) => `<label class="pl-chk${g.langs.includes(k) ? ' on' : ''}"><input type="checkbox" ${g.langs.includes(k) ? 'checked' : ''} onchange="PlantillasModule.toggleLang('${k}',this.checked)">${v}</label>`).join('');
+    const vista = g.langs.length > 1 ? `<div class="pl-vista">Vista previa: ${g.langs.map(k => `<button class="hrm-lnk${g.vista === k ? ' on' : ''}" onclick="PlantillasModule.vista('${k}')">${LANGS[k]}</button>`).join(' · ')}</div>` : '';
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.t.nombre)}</h1></div>
+      <div class="pl-gen"><div class="pl-form">
+        ${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
+        <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
+        ${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}
+        <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>
+        <label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>
+        <div class="pl-acts"><button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>
+          <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
+          <button class="btn btn-ghost" onclick="PlantillasModule.exportar('pdf')">PDF / Imprimir</button></div>
+        <p class="hrm-card__meta">«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir. En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
+      </div><div class="pl-prevcol">${vista}<div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div>`;
+    _fit();
+  }
+  function _fit() {
+    const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
+    const s = Math.min(1, (box.clientWidth - 4) / 850);
+    fr.style.width = '850px'; fr.style.height = '9200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
+    inn.style.width = (850 * s) + 'px'; inn.style.height = (9200 * s) + 'px';
+    if (_gen && _gen.html) fr.srcdoc = _gen.html;
+  }
+  function set(k, v) { _gen.p[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  function toggleLang(k, on) {
+    const g = _gen; g.langs = on ? [...new Set([...g.langs, k])] : g.langs.filter(x => x !== k);
+    if (!g.langs.length) { g.langs = [k]; }
+    if (!g.langs.includes(g.vista)) g.vista = g.langs[0];
+    const keep = { ...g.p }; _drawGen(); Object.assign(_gen.p, keep); _preview();
+  }
+  function vista(k) { _gen.vista = k; _drawGen(); _preview(); }
+  async function _preview() {
+    if (!_gen) return; const seq = ++_prevSeq;
+    try {
+      const d = await _j('/tpl/preview', _body({ data: { template_id: _gen.t.id, lang: _gen.vista, params: _gen.p } }));
+      if (seq !== _prevSeq || !_gen) return;
+      _gen.html = d.html; const fr = $('pl-frame'); if (fr) fr.srcdoc = d.html;
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function guardar() {
+    try {
+      const out = await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p } }));
+      showBanner(`${out.length} copia${out.length === 1 ? '' : 's'} guardada${out.length === 1 ? '' : 's'}`, 'success');
+      _gen = null; _tab = 'copias'; render(_host.id);
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function exportar(fmt) {
+    if (!_gen.html) return;
+    const nombre = `${_gen.t.nombre} - ${_gen.p.empresa || 'Cliente'} - ${_gen.vista.toUpperCase()}`;
+    _abrir(_gen.html, nombre, fmt);
+  }
+  function _abrir(html, nombre, fmt) {
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    if (fmt === 'html') { const a = document.createElement('a'); a.href = url; a.download = nombre.replace(/[^\w.\- ]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
+    else { const w = window.open(url, '_blank'); if (w) w.addEventListener('load', () => setTimeout(() => w.print(), 600)); else showBanner('Permite las ventanas emergentes para imprimir', 'error'); }
+  }
+  function salir() { _gen = null; _draw(); }
+
+  // ── Copias ──
+  function _viewCopias() {
+    const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
+        <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
+    return `<p class="hrm-sub" style="margin-bottom:12px">Versiones ya generadas: no cambian aunque edites la plantilla después.</p>${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}`;
+  }
+  async function _htmlCopia(id) { const r = await apiFetch(`${API}/tpl/copies/${id}/html`); if (!r.ok) throw new Error('No se pudo abrir la copia'); return r.text(); }
+  async function verCopia(id) { try { const h = await _htmlCopia(id); const w = window.open(URL.createObjectURL(new Blob([h], { type: 'text/html;charset=utf-8' })), '_blank'); if (!w) showBanner('Permite las ventanas emergentes', 'error'); } catch (e) { showBanner(e.message, 'error'); } }
+  async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
+  function enlace(token) {
+    const u = `${API}/tpl/public/${token}`;
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => showBanner('Enlace copiado: cualquiera con él puede ver la propuesta', 'success')).catch(() => prompt('Copia el enlace:', u));
+  }
+  async function renCopia(id) {
+    const c = _copies.find(x => x.id === id); const n = prompt('Nuevo nombre de la copia:', c.titulo); if (!n || !n.trim()) return;
+    try { await _j(`/tpl/copies/${id}`, _body({ method: 'PATCH', data: { titulo: n } })); render(_host.id); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function delCopia(id) { if (!confirm('¿Eliminar esta copia? El enlace compartido dejará de funcionar.')) return; try { await _j(`/tpl/copies/${id}`, { method: 'DELETE' }); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+
+  // ── Empresas y logos ──
+  function _viewMarcas() {
+    const cards = _brands.map(b => {
+      const lg = ['blanco', 'negro', 'color'].map(k => `<span class="pl-lg pl-lg--${k}">${b.prev[k] ? `<img src="${b.prev[k]}" alt="${k}">` : '<i>—</i>'}</span>`).join('');
+      return `<div class="pl-card"><div class="pl-card__top"><span class="pl-sw" style="background:${E(b.color_primary)}"></span><span class="pl-sw" style="background:${E(b.color_light)}"></span><span class="pl-sw" style="background:${E(b.color_dark)}"></span></div>
+        <h3 class="hrm-card__t">${E(b.nombre)}</h3><p class="hrm-card__meta">${E(b.email || 'sin correo')} · ${E(b.web || 'sin web')}</p><div class="pl-lgs">${lg}</div>
+        <div class="hrm-card__acts"><button class="btn btn-ghost" onclick="PlantillasModule.editBrand(${b.id})">Editar</button></div></div>`;
+    }).join('');
+    return `<div class="pl-bar"><span class="hrm-sub">Cada empresa guarda sus logos (blanco, negro, color), colores y correo. Las plantillas eligen cuál empresa firma la propuesta.</span><button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button></div><div class="hrm-grid">${cards}</div>`;
+  }
+  function editBrand(id) {
+    const b = _brands.find(x => x.id === id) || { nombre: '', email: '', web: '', color_primary: '#0F9F8F', color_light: '#2DD4BF', color_dark: '#0F172A', logo_oscuro: 'blanco', logo_claro: 'color', prev: {} };
+    _logoDraft = {};
+    const slot = (k, lbl, bg) => `<div class="pl-slot"><div class="pl-slot__box" style="background:${bg}" id="pls-${k}">${b.prev && b.prev[k] ? `<img src="${b.prev[k]}">` : '<i>Sin logo</i>'}</div>
+      <div class="pl-slot__t">${lbl}</div><label class="hrm-lnk">Subir<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logo('${k}',this)"></label> <button class="hrm-lnk" onclick="PlantillasModule.quitarLogo('${k}')">Quitar</button></div>`;
+    const sel = (idd, cur) => `<select class="pl-in" id="${idd}">${[['blanco', 'Blanco'], ['negro', 'Negro'], ['color', 'Color']].map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    _modal(id ? 'Editar empresa' : 'Nueva empresa', `
+      <label class="pl-l">Nombre de la empresa</label><input class="pl-in" id="plb-nombre" value="${E(b.nombre)}">
+      <div class="pl-row"><div><label class="pl-l">Correo de contacto</label><input class="pl-in" id="plb-email" value="${E(b.email)}" placeholder="contact@empresa.com"></div><div><label class="pl-l">Sitio web</label><input class="pl-in" id="plb-web" value="${E(b.web)}" placeholder="empresa.com"></div></div>
+      <div class="pl-row3"><div><label class="pl-l">Color principal</label><input type="color" class="pl-col" id="plb-cp" value="${E(b.color_primary)}"></div><div><label class="pl-l">Color claro</label><input type="color" class="pl-col" id="plb-cl" value="${E(b.color_light)}"></div><div><label class="pl-l">Color oscuro (fondos)</label><input type="color" class="pl-col" id="plb-cd" value="${E(b.color_dark)}"></div></div>
+      <label class="pl-l">Logos</label><div class="pl-slots">${slot('blanco', 'Blanco', '#0F172A')}${slot('negro', 'Negro', '#F1F5F9')}${slot('color', 'Color', '#fff')}</div>
+      <div class="pl-row"><div><label class="pl-l">Sobre fondo oscuro usar</label>${sel('plb-lo', b.logo_oscuro)}</div><div><label class="pl-l">Sobre fondo claro usar</label>${sel('plb-lc', b.logo_claro)}</div></div>
+      <p class="hrm-card__meta">Si el logo elegido no está cargado se usa otro disponible; sin logos se escribe el nombre. PNG, JPG, SVG o WebP, hasta ~1 MB.</p>`,
+      [id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delBrand(${id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveBrand(${id})">Guardar</button>`]);
+  }
+  function logo(k, input) {
+    const f = input.files && input.files[0]; if (!f) return;
+    if (f.size > 1000000) { showBanner('El logo pesa más de 1 MB: usa una versión más liviana', 'error'); return; }
+    const r = new FileReader(); r.onload = () => { _logoDraft[k] = r.result; const el = $('pls-' + k); if (el) el.innerHTML = `<img src="${r.result}">`; }; r.readAsDataURL(f);
+  }
+  function quitarLogo(k) { _logoDraft[k] = null; const el = $('pls-' + k); if (el) el.innerHTML = '<i>Sin logo</i>'; }
+  async function saveBrand(id) {
+    const v = k => $('plb-' + k).value;
+    const data = { nombre: v('nombre'), email: v('email'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
+    for (const k of ['blanco', 'negro', 'color']) if (k in _logoDraft) data['logo_' + (k === 'blanco' ? 'white' : k === 'negro' ? 'black' : 'color')] = _logoDraft[k];
+    try { await _j(id ? `/tpl/brands/${id}` : '/tpl/brands', _body({ method: id ? 'PUT' : 'POST', data })); _closeModal(); showBanner('Empresa guardada', 'success'); render(_host.id); }
+    catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function delBrand(id) { if (!confirm('¿Eliminar esta empresa?')) return; try { await _j(`/tpl/brands/${id}`, { method: 'DELETE' }); _closeModal(); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+
+  // ── modal propio ──
+  function _modal(titulo, html, acts) {
+    _closeModal();
+    const m = document.createElement('div'); m.className = 'pl-ovl'; m.id = 'pl-modal';
+    m.innerHTML = `<div class="pl-modal"><div class="pl-modal__h"><b>${E(titulo)}</b><button class="hrm-lnk" onclick="PlantillasModule.closeModal()">✕</button></div><div class="pl-modal__b">${html}</div><div class="pl-modal__f">${acts.join('')}</div></div>`;
+    m.addEventListener('mousedown', ev => { if (ev.target === m) _closeModal(); });
+    document.body.appendChild(m);
+  }
+  function _closeModal() { const m = $('pl-modal'); if (m) m.remove(); }
+
+  function tab(k) { _gen = null; _tab = k; render(_host.id); }
+  window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
+  return { render, tab, editTpl, saveTpl, dupTpl, delTpl, generar, set, toggleLang, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia, editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
+})();
+window.PlantillasModule = PlantillasModule;
+
 // ── WhatsApp: mensajes EN COLA / programados / con problema — burbuja y acciones compartidas por los 3 chats ──
 // (cola = sale al ritmo de la línea; programado = a una hora exacta; con problema = agotó los reintentos y espera una decisión)
 function _waSchedBubble(m, mod) {
@@ -45503,6 +45735,7 @@ function initApp() {
     if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
     if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
     if (tabName === 'herramientas') HerramientasModule.render('herramientas-body');
+    if (tabName === 'plantillas') PlantillasModule.render('plantillas-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();
