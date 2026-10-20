@@ -38747,11 +38747,14 @@ const HerramientasModule = (() => {
 })();
 window.HerramientasModule = HerramientasModule;
 
-// ── Plantillas: propuestas comerciales por oferta (nombre editable), marca/logos, idiomas y copias generadas ──
+// ── Plantillas: propuestas comerciales y métodos de pago por oferta (nombre editable), marca/logos, idiomas y copias generadas ──
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-  let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {};
+  const TIPOS = { propuesta: 'Propuesta comercial', pago: 'Métodos de pago' };
+  const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
+  const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
+  let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
   const $ = id => document.getElementById(id);
 
   async function _j(url, opts) {
@@ -38766,7 +38769,7 @@ const PlantillasModule = (() => {
     _host = $(hostId); if (!_host) return;
     _host.innerHTML = '<div class="pl-wrap"><p class="hrm-sub">Cargando…</p></div>';
     try {
-      [_brands, _tpls] = await Promise.all([_j('/tpl/brands'), _j('/tpl/templates')]);
+      [_brands, _tpls, _methods] = await Promise.all([_j('/tpl/brands'), _j('/tpl/templates'), _j('/tpl/methods')]);
       if (_tab === 'copias') _copies = await _j('/tpl/copies');
     } catch (e) { _host.innerHTML = `<div class="pl-wrap"><p class="hrm-sub">${E(e.message)}</p></div>`; return; }
     _draw();
@@ -38775,14 +38778,11 @@ const PlantillasModule = (() => {
   function _draw() {
     if (!_host) return;
     if (_gen) return _drawGen();
-    const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['marcas', 'Empresas y logos']]
+    const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['metodos', 'Métodos de pago'], ['marcas', 'Empresas y logos']]
       .map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="PlantillasModule.tab('${k}')">${l}</button>`).join('');
-    let inner = '';
-    if (_tab === 'plantillas') inner = _viewPlantillas();
-    else if (_tab === 'copias') inner = _viewCopias();
-    else inner = _viewMarcas();
+    const inner = _tab === 'plantillas' ? _viewPlantillas() : _tab === 'copias' ? _viewCopias() : _tab === 'metodos' ? _viewMetodos() : _viewMarcas();
     _host.innerHTML = `<div class="pl-wrap"><div class="hrm-hd"><h1 class="hrm-h1">Plantillas</h1>
-      <p class="hrm-sub">Propuestas comerciales listas para personalizar, exportar en varios idiomas y guardar como copia.</p></div>
+      <p class="hrm-sub">Propuestas y métodos de pago listos para personalizar, exportar en varios idiomas y guardar como copia.</p></div>
       <div class="pl-tabs">${tabs}</div>${inner}</div>`;
   }
 
@@ -38791,39 +38791,68 @@ const PlantillasModule = (() => {
     const cards = _tpls.map(t => {
       const b = _brands.find(x => x.id === t.brand_id);
       const d = t.defaults || {};
-      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${E(b ? b.nombre : 'Sin empresa')}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
+      const meta = t.tipo === 'pago'
+        ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'} · idioma base ${LANGS[t.lang] || 'Español'}`
+        : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · idioma base ${LANGS[t.lang] || 'Español'}`;
+      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${E(b ? b.nombre : 'Sin empresa')} · ${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
         <h3 class="hrm-card__t">${E(t.nombre)}</h3>
-        <p class="hrm-card__d">${E(t.oferta || 'Sin descripción de la oferta')}</p>
-        <p class="hrm-card__meta">${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · idioma base ${LANGS[t.lang] || 'Español'}</p>
-        <div class="hrm-card__acts"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar propuesta</button>
+        <p class="hrm-card__d">${E(t.oferta || 'Sin descripción')}</p>
+        <p class="hrm-card__meta">${meta}</p>
+        <div class="hrm-card__acts"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button>
           <button class="hrm-lnk" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
           <button class="hrm-lnk" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
     }).join('');
-    return `<div class="pl-bar"><span class="hrm-sub">Crea una plantilla por cada oferta; cada una guarda su nombre, empresa, tarifa y plazo.</span>
+    return `<div class="pl-bar"><span class="hrm-sub">Crea una plantilla por cada oferta o documento; cada una guarda su nombre, empresa y valores por defecto.</span>
       <button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Nueva plantilla</button></div>
       <div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay plantillas.</p>'}</div>`;
   }
 
+  function _pasosChecks(pre, pasos, horas) {
+    pasos = pasos || {};
+    return `<label class="pl-ck"><input type="checkbox" id="${pre}-comp" ${pasos.comprobante !== false ? 'checked' : ''}> Pedir que envíe el comprobante (a tu correo / WhatsApp)</label>
+      <label class="pl-ck"><input type="checkbox" id="${pre}-ref" ${pasos.referencia ? 'checked' : ''}> Pedir que incluya la referencia</label>
+      <label class="pl-ck"><input type="checkbox" id="${pre}-plazo" ${pasos.plazo ? 'checked' : ''}> Avisar que confirmas la recepción en <input class="pl-in pl-mini" id="${pre}-horas" type="number" min="1" value="${horas || 24}"> horas hábiles</label>`;
+  }
+  function _metodosChecks(pre, sel) {
+    if (!_methods.length) return '<p class="hrm-card__meta">Aún no tienes métodos de pago: créalos en la pestaña «Métodos de pago».</p>';
+    return _methods.map(m => `<label class="pl-ck"><input type="checkbox" class="${pre}-m" value="${m.id}" ${(sel || []).includes(m.id) ? 'checked' : ''}> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('');
+  }
+
   function editTpl(id) {
-    const t = _tpls.find(x => x.id === id) || { nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
+    const t = _tpls.find(x => x.id === id) || { tipo: 'propuesta', nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
     const d = t.defaults || {};
     _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
+      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="pago">Métodos de pago</option></select>`}
       <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
-      <label class="pl-l">Oferta (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué servicio vende esta propuesta">
+      <label class="pl-l">Descripción (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué oferta o documento es">
       <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
         <div><label class="pl-l">Idioma base</label><select class="pl-in" id="plt-lang">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}"${k === t.lang ? ' selected' : ''}>${v}</option>`).join('')}</select></div></div>
-      <div class="pl-row3"><div><label class="pl-l">Moneda</label><input class="pl-in" id="plt-mon" value="${E(d.moneda || 'US$')}"></div>
-        <div><label class="pl-l">Tarifa mensual</label><input class="pl-in" id="plt-fee" type="number" min="0" value="${d.fee || 0}"></div>
-        <div><label class="pl-l">Plazo (meses)</label><input class="pl-in" id="plt-plazo" type="number" min="1" value="${d.plazo || 3}"></div></div>
-      <div class="pl-row"><div><label class="pl-l">Título de la portada</label><input class="pl-in" id="plt-serv" value="${E(d.servicio || '')}" placeholder="(por defecto del idioma)"></div>
-        <div><label class="pl-l">…parte resaltada</label><input class="pl-in" id="plt-servem" value="${E(d.servicioEm || '')}" placeholder="Ej. Go-to-Market"></div></div>
-      <p class="hrm-card__meta">Si dejas el título vacío se usa «Sistema de Adquisición Comercial B2B» traducido a cada idioma.</p>`,
+      <div id="plt-sec-propuesta" ${t.tipo === 'pago' ? 'hidden' : ''}>
+        <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
+        <div class="pl-row3"><div><label class="pl-l">Moneda</label><input class="pl-in" id="plt-mon" value="${E(d.moneda || 'US$')}"></div>
+          <div><label class="pl-l">Tarifa mensual</label><input class="pl-in" id="plt-fee" type="number" min="0" value="${d.fee || 0}"></div>
+          <div><label class="pl-l">Plazo (meses)</label><input class="pl-in" id="plt-plazo" type="number" min="1" value="${d.plazo || 3}"></div></div>
+        <div class="pl-row"><div><label class="pl-l">Modelo de compensación</label><input class="pl-in" id="plt-modelo" value="${E(d.modelo || '')}" placeholder="Fee fijo + comisiones (por defecto)"></div>
+          <div><label class="pl-l">Nota de pago</label><input class="pl-in" id="plt-nota" value="${E(d.nota || '')}" placeholder="Pago al inicio de cada periodo (por defecto)"></div></div></div>
+        <div class="pl-row"><div><label class="pl-l">Título de la portada</label><input class="pl-in" id="plt-serv" value="${E(d.servicio || '')}" placeholder="(por defecto del idioma)"></div>
+          <div><label class="pl-l">…parte resaltada</label><input class="pl-in" id="plt-servem" value="${E(d.servicioEm || '')}" placeholder="Ej. Go-to-Market"></div></div>
+        <p class="hrm-card__meta">Si dejas el título vacío se usa «Sistema de Adquisición Comercial B2B» traducido a cada idioma. Modelo y nota vacíos usan el texto traducido por defecto.</p></div>
+      <div id="plt-sec-pago" ${t.tipo === 'pago' ? '' : 'hidden'}>
+        <label class="pl-l">Métodos de pago que incluye por defecto</label><div class="pl-ckw">${_metodosChecks('plt', d.metodos)}</div>
+        <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plt', d.pasos, d.plazoHoras)}</div></div>`,
       [id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delTpl(${id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveTpl(${id})">Guardar</button>`]);
+  }
+  function tipoChange(v) { $('plt-sec-propuesta').hidden = v === 'pago'; $('plt-sec-pago').hidden = v !== 'pago'; }
+  const _chk = id => !!($(id) && $(id).checked);
+  function _payFromForm(pre) {
+    return { metodos: [...document.querySelectorAll(`.${pre}-m:checked`)].map(i => +i.value), pasos: { comprobante: _chk(pre + '-comp'), referencia: _chk(pre + '-ref'), plazo: _chk(pre + '-plazo') }, plazoHoras: $(pre + '-horas').value };
   }
   async function saveTpl(id) {
     const v = k => $('plt-' + k).value;
+    const tipo = id ? (_tpls.find(x => x.id === id) || {}).tipo : v('tipo');
+    const defaults = tipo === 'pago' ? _payFromForm('plt') : { moneda: v('mon'), fee: v('fee'), plazo: v('plazo'), servicio: v('serv'), servicioEm: v('servem'), modelo: v('modelo'), nota: v('nota') };
     try {
-      await _j(id ? `/tpl/templates/${id}` : '/tpl/templates', _body({ method: id ? 'PUT' : 'POST', data: { nombre: v('nombre'), oferta: v('oferta'), brand_id: v('brand'), lang: v('lang'), defaults: { moneda: v('mon'), fee: v('fee'), plazo: v('plazo'), servicio: v('serv'), servicioEm: v('servem') } } }));
+      await _j(id ? `/tpl/templates/${id}` : '/tpl/templates', _body({ method: id ? 'PUT' : 'POST', data: { tipo, nombre: v('nombre'), oferta: v('oferta'), brand_id: v('brand'), lang: v('lang'), defaults } }));
       _closeModal(); showBanner('Plantilla guardada', 'success'); render(_host.id);
     } catch (e) { showBanner(e.message, 'error'); }
   }
@@ -38837,33 +38866,75 @@ const PlantillasModule = (() => {
   function generar(id) {
     const t = _tpls.find(x => x.id === id); if (!t) return;
     const d = t.defaults || {};
-    _gen = { t, langs: [t.lang], vista: t.lang, p: { empresa: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '' } };
+    _gen = t.tipo === 'pago'
+      ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
     _draw(); _preview();
   }
+  function _faltan() {
+    const g = _gen; if (g.t.tipo !== 'pago') return '';
+    const out = [];
+    for (const id of g.p.metodos) {
+      const m = _methods.find(x => x.id === id); if (!m) continue;
+      const tx = m.textos || {}, base = tx.es || {};
+      for (const l of g.langs) {
+        if (l === 'es') continue;
+        const t = tx[l] || {};
+        if (((base.nota && !t.nota) || ((base.pasos || []).length && !(t.pasos || []).length) || (base.badge && !t.badge))) out.push(`«${m.nombre}» sin traducir a ${LANGS[l]}`);
+      }
+    }
+    return out.length ? `<p class="pl-warn">⚠ ${E([...new Set(out)].join(' · '))}. Se usará el texto en español; tradúcelo en «Métodos de pago».</p>` : '';
+  }
   function _drawGen() {
-    const g = _gen, p = g.p;
+    const g = _gen, p = g.p, pago = g.t.tipo === 'pago';
     const f = (k, l, type, ph) => `<label class="pl-l">${l}</label><input class="pl-in" data-k="${k}" type="${type || 'text'}" value="${E(p[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.set('${k}',this.value)">`;
     const chips = Object.entries(LANGS).map(([k, v]) => `<label class="pl-chk${g.langs.includes(k) ? ' on' : ''}"><input type="checkbox" ${g.langs.includes(k) ? 'checked' : ''} onchange="PlantillasModule.toggleLang('${k}',this.checked)">${v}</label>`).join('');
     const vista = g.langs.length > 1 ? `<div class="pl-vista">Vista previa: ${g.langs.map(k => `<button class="hrm-lnk${g.vista === k ? ' on' : ''}" onclick="PlantillasModule.vista('${k}')">${LANGS[k]}</button>`).join(' · ')}</div>` : '';
-    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.t.nombre)}</h1></div>
-      <div class="pl-gen"><div class="pl-form">
-        ${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
-        <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
+    let campos;
+    if (pago) {
+      campos = `${f('cliente', 'Preparado para (opcional)', 'text', 'Nombre del cliente')}
+        <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
+        <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_methods.map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Crea métodos en «Métodos de pago».</span>'}</div>
+        <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
+        <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
+    } else {
+      campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
+        <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
+          <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
+          <div class="pl-row"><div>${f('modelo', 'Modelo de compensación', 'text', 'Fee fijo + comisiones')}</div><div>${f('nota', 'Nota de pago', 'text', 'Pago al inicio de cada periodo')}</div></div></div>
         ${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}
-        <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>
+        <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>`;
+    }
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.t.nombre)}</h1></div>
+      <div class="pl-gen"><div class="pl-form">${campos}
         <label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>
         <div class="pl-acts"><button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('pdf')">PDF / Imprimir</button></div>
         <p class="hrm-card__meta">«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir. En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
       </div><div class="pl-prevcol">${vista}<div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div>`;
+    if (pago) document.querySelectorAll('#plg-comp,#plg-ref,#plg-plazo,#plg-horas').forEach(i => i.addEventListener('change', _readPagoPasos));
     _fit();
+  }
+  function _readPagoPasos() {
+    const g = _gen; if (!g || g.t.tipo !== 'pago') return;
+    g.p.pasos = { comprobante: _chk('plg-comp'), referencia: _chk('plg-ref'), plazo: _chk('plg-plazo') }; g.p.plazoHoras = $('plg-horas').value;
+    clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
+  }
+  function toggleMetodo(id, on) {
+    const g = _gen; g.p.metodos = on ? [...g.p.metodos, id] : g.p.metodos.filter(x => x !== id);
+    g.p.metodos = _methods.map(m => m.id).filter(x => g.p.metodos.includes(x));   // el orden es el de la lista de métodos
+    const w = document.querySelector('.pl-warn'); if (w) w.remove();
+    const ta = document.querySelector('textarea[data-k="extra"]'); if (ta) ta.insertAdjacentHTML('afterend', _faltan());
+    clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
   }
   function _fit() {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
     const s = Math.min(1, (box.clientWidth - 4) / 850);
-    fr.style.width = '850px'; fr.style.height = '9200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
-    inn.style.width = (850 * s) + 'px'; inn.style.height = (9200 * s) + 'px';
+    const size = () => { try { const h = fr.contentDocument.documentElement.scrollHeight + 20; fr.style.height = h + 'px'; inn.style.height = (h * s) + 'px'; } catch (_) {} };
+    fr.style.width = '850px'; fr.style.height = '1200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
+    inn.style.width = (850 * s) + 'px'; inn.style.height = (1200 * s) + 'px';
+    fr.onload = () => { size(); setTimeout(size, 400); };
     if (_gen && _gen.html) fr.srcdoc = _gen.html;
   }
   function set(k, v) { _gen.p[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
@@ -38871,7 +38942,7 @@ const PlantillasModule = (() => {
     const g = _gen; g.langs = on ? [...new Set([...g.langs, k])] : g.langs.filter(x => x !== k);
     if (!g.langs.length) { g.langs = [k]; }
     if (!g.langs.includes(g.vista)) g.vista = g.langs[0];
-    const keep = { ...g.p }; _drawGen(); Object.assign(_gen.p, keep); _preview();
+    _drawGen(); _preview();
   }
   function vista(k) { _gen.vista = k; _drawGen(); _preview(); }
   async function _preview() {
@@ -38891,7 +38962,7 @@ const PlantillasModule = (() => {
   }
   async function exportar(fmt) {
     if (!_gen.html) return;
-    const nombre = `${_gen.t.nombre} - ${_gen.p.empresa || 'Cliente'} - ${_gen.vista.toUpperCase()}`;
+    const nombre = [_gen.t.nombre, _gen.p.empresa || _gen.p.cliente, _gen.vista.toUpperCase()].filter(Boolean).join(' - ');
     _abrir(_gen.html, nombre, fmt);
   }
   function _abrir(html, nombre, fmt) {
@@ -38913,7 +38984,7 @@ const PlantillasModule = (() => {
   async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
   function enlace(token) {
     const u = `${API}/tpl/public/${token}`;
-    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => showBanner('Enlace copiado: cualquiera con él puede ver la propuesta', 'success')).catch(() => prompt('Copia el enlace:', u));
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => showBanner('Enlace copiado: cualquiera con él puede ver el documento', 'success')).catch(() => prompt('Copia el enlace:', u));
   }
   async function renCopia(id) {
     const c = _copies.find(x => x.id === id); const n = prompt('Nuevo nombre de la copia:', c.titulo); if (!n || !n.trim()) return;
@@ -38921,25 +38992,103 @@ const PlantillasModule = (() => {
   }
   async function delCopia(id) { if (!confirm('¿Eliminar esta copia? El enlace compartido dejará de funcionar.')) return; try { await _j(`/tpl/copies/${id}`, { method: 'DELETE' }); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
 
+  // ── Métodos de pago ──
+  function _viewMetodos() {
+    const cards = _methods.map(m => {
+      const idiomas = Object.keys(LANGS).filter(l => (m.textos || {})[l] && ((m.textos[l].nota || '') || (m.textos[l].pasos || []).length || (m.textos[l].badge || ''))).map(l => l.toUpperCase()).join(' · ') || '—';
+      const monedas = (m.accounts || []).map(a => a.moneda).filter(Boolean).join(' · ');
+      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${m.preferido ? '★ Preferido' : 'Método'}</span><span class="hrm-card__meta">${E(monedas)}</span></div>
+        <h3 class="hrm-card__t">${E(m.nombre)}</h3><p class="hrm-card__meta">${(m.accounts || []).length} cuenta${(m.accounts || []).length === 1 ? '' : 's'} · textos en ${idiomas}</p>
+        <div class="hrm-card__acts"><button class="btn btn-ghost" onclick="PlantillasModule.editMetodo(${m.id})">Editar</button></div></div>`;
+    }).join('');
+    return `<div class="pl-bar"><span class="hrm-sub">Cuentas y formas de cobro. Al generar un documento eliges cuáles mostrar; los números se escriben una sola vez y las etiquetas se traducen solas.</span>
+      <button class="btn btn-primary" onclick="PlantillasModule.editMetodo(0)">+ Nuevo método</button></div><div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay métodos.</p>'}</div>`;
+  }
+  function editMetodo(id) {
+    const m = _methods.find(x => x.id === id);
+    _md = m ? JSON.parse(JSON.stringify({ nombre: m.nombre, preferido: m.preferido, accounts: m.accounts || [], textos: m.textos || {} })) : { nombre: '', preferido: false, accounts: [{ moneda: '', fields: [{ k: 'account', label: '', value: '' }] }], textos: {} };
+    _md.id = id; _mdLang = 'es';
+    _mdDraw();
+  }
+  function _mdRead() {
+    if (!$('md-nombre')) return;
+    _md.nombre = $('md-nombre').value; _md.preferido = $('md-pref').checked;
+    document.querySelectorAll('.md-acc').forEach(box => {
+      const a = _md.accounts[+box.dataset.i]; if (!a) return;
+      a.moneda = box.querySelector('.md-mon').value;
+      a.fields = [...box.querySelectorAll('.md-fld')].map(r => ({ k: r.querySelector('.md-k').value, label: r.querySelector('.md-lbl').value, value: r.querySelector('.md-val').value }));
+    });
+    const t = _md.textos[_mdLang] = _md.textos[_mdLang] || {};
+    t.badge = $('md-badge').value; t.nota = $('md-nota').value; t.pasos = $('md-pasos').value.split('\n').map(x => x.trim()).filter(Boolean);
+  }
+  function _mdDraw() {
+    const t = _md.textos[_mdLang] || {};
+    const accs = _md.accounts.map((a, i) => `<div class="md-acc pl-box" data-i="${i}"><div class="pl-row"><div><label class="pl-l">Moneda de esta cuenta</label><select class="pl-in md-mon">${Object.entries(MON).map(([k, l]) => `<option value="${k}"${k === (a.moneda || '') ? ' selected' : ''}>${l}</option>`).join('')}</select></div><div style="align-self:end;text-align:right"><button class="hrm-lnk pl-danger" onclick="PlantillasModule.mdDelAcc(${i})">Quitar cuenta</button></div></div>
+      ${(a.fields || []).map((f, j) => `<div class="md-fld"><select class="pl-in md-k" onchange="PlantillasModule.mdRefresh()">${Object.entries(FL).map(([k, l]) => `<option value="${k}"${k === f.k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <input class="pl-in md-lbl" placeholder="Etiqueta" value="${E(f.label || '')}" ${f.k === 'custom' ? '' : 'hidden'}>
+        ${f.k === 'type' ? `<select class="pl-in md-val"><option value="checking"${f.value === 'checking' ? ' selected' : ''}>Corriente / Checking</option><option value="savings"${f.value === 'savings' ? ' selected' : ''}>Ahorros / Savings</option></select>` : `<input class="pl-in md-val" placeholder="Valor" value="${E(f.value || '')}">`}
+        <button class="hrm-lnk pl-danger" onclick="PlantillasModule.mdDelFld(${i},${j})">✕</button></div>`).join('')}
+      <button class="hrm-lnk" onclick="PlantillasModule.mdAddFld(${i})">+ Campo</button></div>`).join('');
+    const tabs = Object.entries(LANGS).map(([k, v]) => `<button class="pl-tab${_mdLang === k ? ' on' : ''}" onclick="PlantillasModule.mdLang('${k}')">${v}${(_md.textos[k] && (_md.textos[k].nota || (_md.textos[k].pasos || []).length || _md.textos[k].badge)) ? ' ✓' : ''}</button>`).join('');
+    _modal(_md.id ? 'Editar método de pago' : 'Nuevo método de pago', `
+      <div class="pl-row"><div><label class="pl-l">Nombre (ej. Interbank, PayPal, Global66)</label><input class="pl-in" id="md-nombre" value="${E(_md.nombre)}"></div><div style="align-self:end"><label class="pl-ck"><input type="checkbox" id="md-pref" ${_md.preferido ? 'checked' : ''}> Método preferido ★</label></div></div>
+      <label class="pl-l">Cuentas y datos</label>${accs}<button class="hrm-lnk" onclick="PlantillasModule.mdAddAcc()">+ Otra cuenta / moneda</button>
+      <label class="pl-l" style="margin-top:14px">Textos por idioma</label><div class="pl-tabs" style="margin-bottom:8px">${tabs}</div>
+      <label class="pl-l">Etiqueta corta (ej. Transferencia bancaria)</label><input class="pl-in" id="md-badge" value="${E(t.badge || '')}">
+      <label class="pl-l">Nota / aviso</label><textarea class="pl-in" id="md-nota" rows="3">${E(t.nota || '')}</textarea>
+      <label class="pl-l">Pasos para pagar (uno por línea, opcional)</label><textarea class="pl-in" id="md-pasos" rows="4">${E((t.pasos || []).join('\n'))}</textarea>
+      <div style="margin-top:8px"><button class="btn btn-ghost" onclick="PlantillasModule.mdTraducir()">Traducir desde Español a los demás idiomas</button></div>
+      <p class="hrm-card__meta">Las etiquetas de los campos (Titular, IBAN, Banco…) y las monedas ya salen traducidas solas. Solo la etiqueta corta, la nota y los pasos necesitan texto por idioma.</p>`,
+      [_md.id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delMetodo(${_md.id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveMetodo()">Guardar</button>`]);
+  }
+  function mdRefresh() { _mdRead(); _mdDraw(); }
+  function mdLang(l) { _mdRead(); _mdLang = l; _mdDraw(); }
+  function mdAddAcc() { _mdRead(); _md.accounts.push({ moneda: '', fields: [{ k: 'account', label: '', value: '' }] }); _mdDraw(); }
+  function mdDelAcc(i) { _mdRead(); _md.accounts.splice(i, 1); _mdDraw(); }
+  function mdAddFld(i) { _mdRead(); _md.accounts[i].fields.push({ k: 'account', label: '', value: '' }); _mdDraw(); }
+  function mdDelFld(i, j) { _mdRead(); _md.accounts[i].fields.splice(j, 1); _mdDraw(); }
+  async function mdTraducir() {
+    _mdRead();
+    const src = _md.textos.es || {};
+    if (!(src.badge || src.nota || (src.pasos || []).length)) { showBanner('Primero escribe los textos en Español', 'error'); return; }
+    const tr = async (text, target, kind) => { if (!String(text || '').trim()) return ''; const r = await apiFetch(`${API}/translate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, target, kind }) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'No se pudo traducir'); return d.text; };
+    showBanner('Traduciendo…', 'info');
+    try {
+      for (const l of ['en', 'de', 'pt']) {
+        _md.textos[l] = { badge: await tr(src.badge, l, 'subject'), nota: await tr(src.nota, l, 'email'), pasos: [] };
+        for (const p of (src.pasos || [])) _md.textos[l].pasos.push(await tr(p, l, 'email'));
+      }
+      showBanner('Traducido: revisa los textos de cada idioma antes de guardar', 'success'); _mdDraw();
+    } catch (e) { showBanner(e.message, 'error'); _mdDraw(); }
+  }
+  async function saveMetodo() {
+    _mdRead();
+    try {
+      await _j(_md.id ? `/tpl/methods/${_md.id}` : '/tpl/methods', _body({ method: _md.id ? 'PUT' : 'POST', data: _md }));
+      _closeModal(); showBanner('Método guardado', 'success'); render(_host.id);
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function delMetodo(id) { if (!confirm('¿Eliminar este método? Las plantillas que lo usan dejarán de mostrarlo; las copias ya generadas no cambian.')) return; try { await _j(`/tpl/methods/${id}`, { method: 'DELETE' }); _closeModal(); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+
   // ── Empresas y logos ──
   function _viewMarcas() {
     const cards = _brands.map(b => {
       const lg = ['blanco', 'negro', 'color'].map(k => `<span class="pl-lg pl-lg--${k}">${b.prev[k] ? `<img src="${b.prev[k]}" alt="${k}">` : '<i>—</i>'}</span>`).join('');
       return `<div class="pl-card"><div class="pl-card__top"><span class="pl-sw" style="background:${E(b.color_primary)}"></span><span class="pl-sw" style="background:${E(b.color_light)}"></span><span class="pl-sw" style="background:${E(b.color_dark)}"></span></div>
-        <h3 class="hrm-card__t">${E(b.nombre)}</h3><p class="hrm-card__meta">${E(b.email || 'sin correo')} · ${E(b.web || 'sin web')}</p><div class="pl-lgs">${lg}</div>
+        <h3 class="hrm-card__t">${E(b.nombre)}</h3><p class="hrm-card__meta">${E(b.email || 'sin correo')} · ${E(b.telefono || 'sin teléfono')} · ${E(b.web || 'sin web')}</p><div class="pl-lgs">${lg}</div>
         <div class="hrm-card__acts"><button class="btn btn-ghost" onclick="PlantillasModule.editBrand(${b.id})">Editar</button></div></div>`;
     }).join('');
-    return `<div class="pl-bar"><span class="hrm-sub">Cada empresa guarda sus logos (blanco, negro, color), colores y correo. Las plantillas eligen cuál empresa firma la propuesta.</span><button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button></div><div class="hrm-grid">${cards}</div>`;
+    return `<div class="pl-bar"><span class="hrm-sub">Cada empresa guarda sus logos (blanco, negro, color), colores, correo y teléfono. Las plantillas eligen cuál empresa firma el documento.</span><button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button></div><div class="hrm-grid">${cards}</div>`;
   }
   function editBrand(id) {
-    const b = _brands.find(x => x.id === id) || { nombre: '', email: '', web: '', color_primary: '#0F9F8F', color_light: '#2DD4BF', color_dark: '#0F172A', logo_oscuro: 'blanco', logo_claro: 'color', prev: {} };
+    const b = _brands.find(x => x.id === id) || { nombre: '', email: '', telefono: '', web: '', color_primary: '#0F9F8F', color_light: '#2DD4BF', color_dark: '#0F172A', logo_oscuro: 'blanco', logo_claro: 'color', prev: {} };
     _logoDraft = {};
     const slot = (k, lbl, bg) => `<div class="pl-slot"><div class="pl-slot__box" style="background:${bg}" id="pls-${k}">${b.prev && b.prev[k] ? `<img src="${b.prev[k]}">` : '<i>Sin logo</i>'}</div>
       <div class="pl-slot__t">${lbl}</div><label class="hrm-lnk">Subir<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logo('${k}',this)"></label> <button class="hrm-lnk" onclick="PlantillasModule.quitarLogo('${k}')">Quitar</button></div>`;
     const sel = (idd, cur) => `<select class="pl-in" id="${idd}">${[['blanco', 'Blanco'], ['negro', 'Negro'], ['color', 'Color']].map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
     _modal(id ? 'Editar empresa' : 'Nueva empresa', `
       <label class="pl-l">Nombre de la empresa</label><input class="pl-in" id="plb-nombre" value="${E(b.nombre)}">
-      <div class="pl-row"><div><label class="pl-l">Correo de contacto</label><input class="pl-in" id="plb-email" value="${E(b.email)}" placeholder="contact@empresa.com"></div><div><label class="pl-l">Sitio web</label><input class="pl-in" id="plb-web" value="${E(b.web)}" placeholder="empresa.com"></div></div>
+      <div class="pl-row3"><div><label class="pl-l">Correo de contacto</label><input class="pl-in" id="plb-email" value="${E(b.email)}" placeholder="contact@empresa.com"></div><div><label class="pl-l">Teléfono / WhatsApp</label><input class="pl-in" id="plb-tel" value="${E(b.telefono || '')}" placeholder="+51 999 999 999"></div><div><label class="pl-l">Sitio web</label><input class="pl-in" id="plb-web" value="${E(b.web)}" placeholder="empresa.com"></div></div>
       <div class="pl-row3"><div><label class="pl-l">Color principal</label><input type="color" class="pl-col" id="plb-cp" value="${E(b.color_primary)}"></div><div><label class="pl-l">Color claro</label><input type="color" class="pl-col" id="plb-cl" value="${E(b.color_light)}"></div><div><label class="pl-l">Color oscuro (fondos)</label><input type="color" class="pl-col" id="plb-cd" value="${E(b.color_dark)}"></div></div>
       <label class="pl-l">Logos</label><div class="pl-slots">${slot('blanco', 'Blanco', '#0F172A')}${slot('negro', 'Negro', '#F1F5F9')}${slot('color', 'Color', '#fff')}</div>
       <div class="pl-row"><div><label class="pl-l">Sobre fondo oscuro usar</label>${sel('plb-lo', b.logo_oscuro)}</div><div><label class="pl-l">Sobre fondo claro usar</label>${sel('plb-lc', b.logo_claro)}</div></div>
@@ -38954,7 +39103,7 @@ const PlantillasModule = (() => {
   function quitarLogo(k) { _logoDraft[k] = null; const el = $('pls-' + k); if (el) el.innerHTML = '<i>Sin logo</i>'; }
   async function saveBrand(id) {
     const v = k => $('plb-' + k).value;
-    const data = { nombre: v('nombre'), email: v('email'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
+    const data = { nombre: v('nombre'), email: v('email'), telefono: v('tel'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
     for (const k of ['blanco', 'negro', 'color']) if (k in _logoDraft) data['logo_' + (k === 'blanco' ? 'white' : k === 'negro' ? 'black' : 'color')] = _logoDraft[k];
     try { await _j(id ? `/tpl/brands/${id}` : '/tpl/brands', _body({ method: id ? 'PUT' : 'POST', data })); _closeModal(); showBanner('Empresa guardada', 'success'); render(_host.id); }
     catch (e) { showBanner(e.message, 'error'); }
@@ -38973,7 +39122,9 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, saveTpl, dupTpl, delTpl, generar, set, toggleLang, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia, editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+    editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
+    editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
 window.PlantillasModule = PlantillasModule;
 
