@@ -53,7 +53,7 @@ function render(brand, p, lang) {
 
   const titulo = p.servicio
     ? `${esc(p.servicio)} <em>${esc(p.servicioEm || '')}</em>`
-    : x('Sistema de Adquisición <em>Comercial B2B</em>', 'B2B Commercial <em>Acquisition System</em>', 'B2B-<em>Kundengewinnungssystem</em>', 'Sistema de Aquisição <em>Comercial B2B</em>');
+    : x('Sistema de Adquisición <em>Comercial B2B</em>', 'B2B Commercial <em>Acquisition System</em>', 'B2B-<em>Vertriebssystem</em>', 'Sistema de Aquisição <em>Comercial B2B</em>');
 
   const subj = x('Inicio del Servicio Comercial B2B', 'Start of the B2B Commercial Service', 'Start der B2B-Vertriebsdienstleistung', 'Início do Serviço Comercial B2B');
   const body = x(
@@ -246,7 +246,8 @@ ${st('03', x('Preparar mensajes, cuentas objetivo e iniciar la ejecución.', 'Pr
   const title = `${x('Propuesta Comercial B2B', 'B2B Commercial Proposal', 'B2B-Geschäftsangebot', 'Proposta Comercial B2B')} | ${empresa}`;
   return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>${rootVars}\n${CSS}\n.wm{font-weight:700;font-size:18px;letter-spacing:-.02em;height:auto}</style></head><body>\n${pages.join('\n')}\n</body></html>`;
+<style>${rootVars}\n${CSS}\n.wm{font-weight:700;font-size:18px;letter-spacing:-.02em;height:auto}
+.pf .ch2 svg{height:168px}.dl div{min-height:66px;padding-top:14px;padding-bottom:14px}.two{margin-top:20px}.rp{padding:22px 24px}.t3 .road .rs{padding:6px 0}.t3 .lead{margin-top:12px}</style></head><body>\n${pages.join('\n')}\n</body></html>`;
 }
 
 module.exports = { render, LANGS, logoOk };

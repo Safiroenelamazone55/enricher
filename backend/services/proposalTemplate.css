@@ -157,4 +157,3 @@ ul.l li:before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;
 .f3 b{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
 .f3 span{font-size:10.8px;line-height:1.6;color:var(--text)}
 .t3 .body,.t7 .body{top:120px}.t3 .lead{margin-top:14px}.t7 h2{font-size:34px}.t7 .terms{margin-top:26px}.t7 .why{margin-top:16px}
-@media print{
