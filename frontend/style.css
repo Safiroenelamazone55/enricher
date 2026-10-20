@@ -18405,3 +18405,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .pl-clog { display: flex; align-items: center; gap: 10px; }
 .pl-clog__box { width: 120px; height: 52px; border: 1px solid var(--border2); background: #fff; display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--muted); overflow: hidden; }
 .pl-clog__box img { max-width: 92%; max-height: 42px; }
+.pl-cls { display: flex; flex-direction: column; gap: 6px; }
+.pl-cs { display: grid; grid-template-columns: 90px 96px 1fr; gap: 10px; align-items: center; }
+.pl-cs__use { font-size: .8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.pl-cs__box { height: 40px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--muted); overflow: hidden; }
+.pl-cs__box img { max-width: 90%; max-height: 30px; }

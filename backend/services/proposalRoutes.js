@@ -10,6 +10,14 @@ const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
 const S = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const VARIANT = ['blanco', 'negro', 'color'];
+// logo del cliente: hasta 3 variantes + cuál usar; acepta también un data URI suelto (se toma como «color»)
+function cleanLogoCliente(v) {
+  if (typeof v === 'string') v = { color: v, usar: 'color' };
+  v = v || {}; const o = {};
+  for (const k of VARIANT) if (logoOk(v[k]) && v[k].length < 600000) o[k] = v[k];
+  const usar = VARIANT.includes(v.usar) && o[v.usar] ? v.usar : VARIANT.find(k => o[k]);
+  return usar ? { ...o, usar } : null;
+}
 
 async function init(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS tpl_brands (
@@ -58,7 +66,7 @@ const brandOut = b => ({ ...b, logos: { blanco: !!b.logo_white, negro: !!b.logo_
 function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
-    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: logoOk(p.logoCliente) && p.logoCliente.length < 900000 ? p.logoCliente : '' };
+    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente) };
 }
 
 function payDefaults(d) {
@@ -199,7 +207,7 @@ function mount(app, { pool, requireAuth }) {
       const pr = params || {}, d = payDefaults({ ...(t.defaults || {}), ...(Array.isArray(pr.metodos) ? { metodos: pr.metodos } : {}), ...(pr.pasos ? { pasos: pr.pasos } : {}), ...(pr.plazoHoras ? { plazoHoras: pr.plazoHoras } : {}) });
       const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND id = ANY($2::int[])', [uid(req), d.metodos]) : { rows: [] };
       const ms = d.metodos.map(id => rows.find(r => r.id === id)).filter(Boolean);
-      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: logoOk(pr.logoCliente) && pr.logoCliente.length < 900000 ? pr.logoCliente : '', pasos: d.pasos, plazoHoras: d.plazoHoras, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
+      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: cleanLogoCliente(pr.logoCliente), pasos: d.pasos, plazoHoras: d.plazoHoras, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
       return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms) };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];

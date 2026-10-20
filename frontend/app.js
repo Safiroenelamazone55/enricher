@@ -38867,8 +38867,8 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id); if (!t) return;
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
-      ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: '', monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: '', contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
+      ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
     _draw(); _preview();
   }
   function _faltan() {
@@ -38890,9 +38890,12 @@ const PlantillasModule = (() => {
     const f = (k, l, type, ph) => `<label class="pl-l">${l}</label><input class="pl-in" data-k="${k}" type="${type || 'text'}" value="${E(p[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.set('${k}',this.value)">`;
     const chips = Object.entries(LANGS).map(([k, v]) => `<label class="pl-chk${g.langs.includes(k) ? ' on' : ''}"><input type="checkbox" ${g.langs.includes(k) ? 'checked' : ''} onchange="PlantillasModule.toggleLang('${k}',this.checked)">${v}</label>`).join('');
     const vista = g.langs.length > 1 ? `<div class="pl-vista">Vista previa: ${g.langs.map(k => `<button class="hrm-lnk${g.vista === k ? ' on' : ''}" onclick="PlantillasModule.vista('${k}')">${LANGS[k]}</button>`).join(' · ')}</div>` : '';
-    const logoBox = `<label class="pl-l">Logo del cliente (opcional)</label><div class="pl-clog">
-      <span class="pl-clog__box">${p.logoCliente ? `<img src="${p.logoCliente}" alt="">` : '<i>Sin logo</i>'}</span>
-      <label class="hrm-lnk">Subir<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logoCliente(this)"></label>${p.logoCliente ? ' <button class="hrm-lnk" onclick="PlantillasModule.logoCliente(null)">Quitar</button>' : ''}</div>`;
+    const lc = p.logoCliente || {};
+    const slotC = (k, lbl, bg) => `<div class="pl-cs"><label class="pl-cs__use"><input type="radio" name="plcl" ${lc.usar === k ? 'checked' : ''} ${lc[k] ? '' : 'disabled'} onchange="PlantillasModule.usarLogoCliente('${k}')"> ${lbl}</label>
+        <span class="pl-cs__box" style="background:${bg}">${lc[k] ? `<img src="${lc[k]}" alt="">` : '<i>—</i>'}</span>
+        <span><label class="hrm-lnk">${lc[k] ? 'Cambiar' : 'Subir'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logoCliente('${k}',this)"></label>${lc[k] ? ' <button class="hrm-lnk" onclick="PlantillasModule.logoCliente(\'' + k + '\',null)">Quitar</button>' : ''}</span></div>`;
+    const logoBox = `<label class="pl-l">Logo del cliente (opcional)</label><div class="pl-cls">${slotC('blanco', 'Blanco', '#0F172A')}${slotC('negro', 'Negro', '#F1F5F9')}${slotC('color', 'Color', '#fff')}</div>
+      <p class="hrm-card__meta">Sube las versiones que tengas y marca cuál usar. En la portada oscura el blanco se ve directo; el negro o el color van sobre un recuadro blanco.</p>`;
     let campos;
     if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
@@ -38924,12 +38927,14 @@ const PlantillasModule = (() => {
     g.p.pasos = { comprobante: _chk('plg-comp'), referencia: _chk('plg-ref'), plazo: _chk('plg-plazo') }; g.p.plazoHoras = $('plg-horas').value;
     clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
   }
-  function logoCliente(input) {
-    if (!input) { _gen.p.logoCliente = ''; _drawGen(); _preview(); return; }
+  function logoCliente(k, input) {
+    const g = _gen; g.p.logoCliente = g.p.logoCliente || {};
+    if (!input) { delete g.p.logoCliente[k]; if (g.p.logoCliente.usar === k) g.p.logoCliente.usar = ['blanco', 'negro', 'color'].find(x => g.p.logoCliente[x]) || ''; _drawGen(); _preview(); return; }
     const f = input.files && input.files[0]; if (!f) return;
-    if (f.size > 600000) { showBanner('El logo pesa demasiado (máx. ~600 KB): usa una versión más liviana', 'error'); return; }
-    const r = new FileReader(); r.onload = () => { _gen.p.logoCliente = r.result; _drawGen(); _preview(); }; r.readAsDataURL(f);
+    if (f.size > 350000) { showBanner('El logo pesa demasiado (máx. ~350 KB): usa una versión más liviana', 'error'); return; }
+    const r = new FileReader(); r.onload = () => { g.p.logoCliente[k] = r.result; if (!g.p.logoCliente.usar || !g.p.logoCliente[g.p.logoCliente.usar]) g.p.logoCliente.usar = k; _drawGen(); _preview(); }; r.readAsDataURL(f);
   }
+  function usarLogoCliente(k) { _gen.p.logoCliente.usar = k; _preview(); }
   function toggleMetodo(id, on) {
     const g = _gen; g.p.metodos = on ? [...g.p.metodos, id] : g.p.metodos.filter(x => x !== id);
     g.p.metodos = _methods.map(m => m.id).filter(x => g.p.metodos.includes(x));   // el orden es el de la lista de métodos
@@ -39132,7 +39137,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, logoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, logoCliente, usarLogoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
