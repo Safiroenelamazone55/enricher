@@ -8,8 +8,8 @@ const DIR = path.join(__dirname, '..', 'tools_files');
 // id → archivo guardado, nombre con el que se descarga y versión (se muestra en la pantalla).
 const TOOLS = {
   'linkedin-scraper':      { file: 'linkedin-sales-scraper-1.0.5.zip',   nombre: 'LinkedIn-Sales-Scraper-1.0.5.zip',   version: '1.0.5' },
-  'nova-activity-web':     { file: 'nova-activity-extension-0.1.2.zip',  nombre: 'Nova-Activity-Extension-0.1.2.zip',  version: '0.1.2' },
-  'nova-activity-desktop': { file: 'NovaActivitySetup-1.0.1.exe',        nombre: 'NovaActivitySetup-1.0.1.exe',        version: '1.0.1' },
+  'nova-activity-web':     { file: 'elevn-activity-extension-0.1.3.zip', nombre: 'Elevn-Activity-Extension-0.1.3.zip', version: '0.1.3' },
+  'nova-activity-desktop': { file: 'ElevnActivitySetup-1.0.2.exe',       nombre: 'ElevnActivitySetup-1.0.2.exe',       version: '1.0.2' },
 };
 
 function info(id) {

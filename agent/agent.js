@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════
-// Nova Activity — Desktop Agent · FASE 3 del Time Tracking de Nova
+// Elevn Activity — Desktop Agent · FASE 3 del Time Tracking de Nova
 // ════════════════════════════════════════════════════════════════
 // Qué hace:
 //   - Lee del SO (vía probe.ps1) la APP en primer plano + el IDLE real.
@@ -227,7 +227,7 @@ function startTray() {
 }
 
 // ── arranque ──
-log(`Nova Activity Agent · ${cfg.apiBase} · poll ${cfg.pollSeconds}s · idle ${cfg.idleThresholdSeconds}s · solo con timer PRENDIDO · ${buffer.length} pendientes${IS_PACKAGED ? ' · (exe)' : ''}`);
+log(`Elevn Activity Agent · ${cfg.apiBase} · poll ${cfg.pollSeconds}s · idle ${cfg.idleThresholdSeconds}s · solo con timer PRENDIDO · ${buffer.length} pendientes${IS_PACKAGED ? ' · (exe)' : ''}`);
 writeStatus();
 startTray();
 startProbe();

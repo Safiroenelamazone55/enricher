@@ -1,4 +1,4 @@
-# Nova Activity — Desktop Agent (Fase 3)
+# Elevn Activity — Desktop Agent (Fase 3)
 
 Programa **local** que corre en tu PC (Windows) en segundo plano y registra en
 Nova el tiempo que usas **apps de escritorio** (Figma, VS Code, Photoshop, Word…)
@@ -61,7 +61,7 @@ probe.ps1 (Win32: app activa + idle)  ──líneas JSON──►  agent.js
 2. En Nova → **Time Tracking → Fuentes de actividad → Conectar** → copia tu token.
 3. Pega el token en `config.json` (campo `"token"`). Ajusta `apiBase` si hace falta.
 4. **Probar** (ventana visible con log): doble clic en **`start.bat`**.
-   - Deberías ver `Nova Activity Agent · …` y, al cambiar de app, `enviados N bloque(s)`.
+   - Deberías ver `Elevn Activity Agent · …` y, al cambiar de app, `enviados N bloque(s)`.
 5. **Dejarlo automático** (sin ventana, arranca al iniciar sesión):
    ```
    powershell -ExecutionPolicy Bypass -File install-autostart.ps1

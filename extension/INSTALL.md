@@ -1,4 +1,4 @@
-# Instalar “Nova Activity” (3 pasos)
+# Instalar “Elevn Activity” (3 pasos)
 
 Esta extensión registra en Nova el tiempo que trabajas por sitio web, asociado a
 la tarea que tengas cronometrando. Solo guarda **dominio, título y tiempo** — nunca

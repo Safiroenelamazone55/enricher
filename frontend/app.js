@@ -38679,21 +38679,21 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__btn">Start Scraping</div>
         <div class="hrm-sc__h" style="margin-top:12px">Scraping Accounts from Sales Navigator</div>
         <div class="hrm-sc__btn">Start Scraping</div></div></div>`,
-    web: `<div class="hrm-shot"><img src="herramientas/prev-nova-activity.jpg" alt="Popup de Nova Activity (web)" loading="lazy"></div>`,
+    web: `<div class="hrm-shot"><img src="herramientas/prev-elevn-activity.png" alt="Popup de Elevn Activity (web)" loading="lazy"></div>`,
     tray: `<div class="hrm-tray"><div class="hrm-menu">
         <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
-        <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Nova</div>
+        <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Elevn</div>
         <div class="hrm-menu__sep"></div><div class="hrm-menu__row">Salir</div></div>
-        <div class="hrm-tbar"><span class="hrm-tbar__ico hrm-tbar__ico--nova">N</span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__t">11:19 a. m.</span></div></div>`,
+        <div class="hrm-tbar"><span class="hrm-tbar__ico hrm-tbar__ico--nova">E</span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__t">11:19 a. m.</span></div></div>`,
   };
   const TOOLS = [
     { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
       desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
-    { id: 'nova-activity-web', nombre: 'Nova Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
+    { id: 'nova-activity-web', nombre: 'Elevn Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
       desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
-    { id: 'nova-activity-desktop', nombre: 'Nova Activity · Escritorio', tipo: 'App de Windows', ico: 'win', prev: 'tray', token: true,
+    { id: 'nova-activity-desktop', nombre: 'Elevn Activity · Escritorio', tipo: 'App de Windows', ico: 'win', prev: 'tray', token: true,
       desc: 'Mide el tiempo por aplicación (Figma, VS Code, Word…) y funciona con varios perfiles de Chrome. Corre en la bandeja y solo captura con el timer encendido.',
       pasos: ['Descarga y ejecuta el instalador. Si Windows muestra «Windows protegió tu PC», pulsa <b>Más información → Ejecutar de todas formas</b> (el instalador aún no tiene firma digital).', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Pégalo cuando el asistente lo pida. Queda un icono en la bandeja y arranca solo con Windows.', 'Enciende un timer en Nova: desde ese momento registra las apps que usas.'] },
   ];
@@ -45383,7 +45383,7 @@ const TimerModule = (() => {
       <div class="ttx-hd"><div><h3 class="ttx-t">Token de Nova</h3><p class="ttx-s">Un mismo token conecta el <b>Desktop Agent</b> y la extensión del navegador. Cópialo:</p></div><button class="ttx-x" onclick="this.closest('.ttx-back').remove()" aria-label="Cerrar">✕</button></div>
       <div class="ttx-token"><code>${esc(token)}</code><button class="ttx-copy" onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='Copiado ✓'})">Copiar</button></div>
       <ol class="ttx-steps">
-        <li><b>Desktop Agent (recomendado):</b> pégalo en el instalador <b>Nova Activity</b>, en el campo "Token".</li>
+        <li><b>Desktop Agent (recomendado):</b> pégalo en el instalador <b>Elevn Activity</b>, en el campo "Token".</li>
         <li><b>Extensión del navegador:</b> abre su popup → pégalo en <b>Token de Nova</b> y activa el switch.</li>
       </ol>
       <p class="ttx-note">Guárdalo ahora: por seguridad no se vuelve a mostrar. Puedes generar otro cuando quieras.</p>

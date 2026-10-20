@@ -1,23 +1,23 @@
 ; ════════════════════════════════════════════════════════════════
-; Nova Activity — instalador (Inno Setup 6).
+; Elevn Activity — instalador (Inno Setup 6).
 ; Compilar:  ISCC installer.iss   (o simplemente:  build.ps1)
 ; Instala por-usuario (sin admin), con página para pegar el token,
 ; arranque con Windows, acceso directo y desinstalador.
 ; ════════════════════════════════════════════════════════════════
-#define AppName "Nova Activity"
-#define AppVer  "1.0.1"
+#define AppName "Elevn Activity"
+#define AppVer  "1.0.2"
 #define ExeName "nova-activity.exe"
 
 [Setup]
 AppId={{A7F3C2E1-9B4D-4E8A-B6C1-2F9D7E0A1B23}
 AppName={#AppName}
 AppVersion={#AppVer}
-AppPublisher=Nova
+AppPublisher=Elevn
 DefaultDirName={localappdata}\Programs\Nova Activity
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=NovaActivitySetup
+OutputBaseFilename=ElevnActivitySetup
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\{#ExeName}
 UninstallDisplayName={#AppName}
@@ -36,7 +36,7 @@ Source: "dist\icon.ico";          DestDir: "{app}"; Flags: ignoreversion
 Source: "launch-hidden.vbs";      DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{userprograms}\Nova Activity"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-hidden.vbs"""; IconFilename: "{app}\icon.ico"; Comment: "Iniciar Nova Activity (icono de bandeja)"
+Name: "{userprograms}\Elevn Activity"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-hidden.vbs"""; IconFilename: "{app}\icon.ico"; Comment: "Iniciar Nova Activity (icono de bandeja)"
 
 [Registry]
 ; Arranque con Windows (por-usuario), lanzado oculto vía wscript.
@@ -44,7 +44,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 ; Iniciar ahora al terminar la instalación.
-Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-hidden.vbs"""; Description: "Iniciar Nova Activity ahora"; Flags: nowait postinstall skipifsilent runhidden
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-hidden.vbs"""; Description: "Iniciar Elevn Activity ahora"; Flags: nowait postinstall skipifsilent runhidden
 
 [UninstallRun]
 ; Detiene el agente (y sus procesos hijos: probe/tray) antes de borrar archivos.
@@ -65,8 +65,8 @@ var TokenPage: TInputQueryWizardPage;
 procedure InitializeWizard;
 begin
   TokenPage := CreateInputQueryPage(wpSelectDir,
-    'Token de Nova', 'Conecta el agente con tu cuenta de Nova',
-    'Pega tu token de Nova (en Nova > Time Tracking > Fuentes de actividad > Conectar). Se guarda unicamente en tu equipo, en config.json.');
+    'Token de Elevn', 'Conecta el agente con tu cuenta de Elevn',
+    'Pega tu token de Elevn (en Time Tracking > Fuentes de actividad > Conectar). Se guarda unicamente en tu equipo, en config.json.');
   TokenPage.Add('Token:', False);
 end;
 
@@ -75,7 +75,7 @@ begin
   Result := True;
   if CurPageID = TokenPage.ID then begin
     if Trim(TokenPage.Values[0]) = '' then begin
-      MsgBox('Pega tu token de Nova para continuar.', mbError, MB_OK);
+      MsgBox('Pega tu token de Elevn para continuar.', mbError, MB_OK);
       Result := False;
     end;
   end;

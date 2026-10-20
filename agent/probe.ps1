@@ -1,4 +1,4 @@
-# probe.ps1 — sonda nativa de Windows para Nova Activity (Desktop Agent / Fase 3).
+# probe.ps1 — sonda nativa de Windows para Elevn Activity (Desktop Agent / Fase 3).
 # Emite una línea JSON {"app","title","idleMs"} cada -Interval segundos.
 # Solo lee: nombre del proceso en primer plano, título de la ventana y el idle real
 # del sistema (GetLastInputInfo). NO lee contenido, teclas ni hace capturas.

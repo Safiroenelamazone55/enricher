@@ -1,4 +1,4 @@
-# Nova Activity — Browser Extension (Fase 2)
+# Elevn Activity — Browser Extension (Fase 2)
 
 Cliente de la **Fase 2** del Time Tracking de Nova. Envía a Nova el tiempo real
 de uso por **sitio web / pestaña activa**, asociándolo con la tarea que estás

@@ -1,5 +1,5 @@
 # ════════════════════════════════════════════════════════════════
-# Nova Activity — icono de bandeja (system tray) para el agente.
+# Elevn Activity — icono de bandeja (system tray) para el agente.
 # Lo lanza agent.js (powershell -STA -File tray.ps1 -Dir <appdir>).
 # Lee <Dir>\.status (JSON que escribe el agente) para el estado/tooltip,
 # y escribe <Dir>\.cmd (pause|resume|quit) que el agente lee y ejecuta.
@@ -24,24 +24,24 @@ $icon = if (Test-Path $iconPath) { New-Object System.Drawing.Icon $iconPath } el
 
 $ni = New-Object System.Windows.Forms.NotifyIcon
 $ni.Icon = $icon
-$ni.Text = "Nova Activity"
+$ni.Text = "Elevn Activity"
 $ni.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
-$miTitle  = New-Object System.Windows.Forms.ToolStripMenuItem "Nova Activity"
+$miTitle  = New-Object System.Windows.Forms.ToolStripMenuItem "Elevn Activity"
 $miTitle.Enabled = $false
 $miStatus = New-Object System.Windows.Forms.ToolStripMenuItem "Estado: iniciando..."
 $miStatus.Enabled = $false
 $sep1 = New-Object System.Windows.Forms.ToolStripSeparator
 $miPause = New-Object System.Windows.Forms.ToolStripMenuItem "Pausar"
 $miLog   = New-Object System.Windows.Forms.ToolStripMenuItem "Ver registro (log)"
-$miNova  = New-Object System.Windows.Forms.ToolStripMenuItem "Abrir Nova"
+$miNova  = New-Object System.Windows.Forms.ToolStripMenuItem "Abrir Elevn"
 $sep2 = New-Object System.Windows.Forms.ToolStripSeparator
 $miExit  = New-Object System.Windows.Forms.ToolStripMenuItem "Salir"
 
 $script:paused = $false
 $miPause.add_Click({ if ($script:paused) { Write-Cmd "resume" } else { Write-Cmd "pause" } })
-$miLog.add_Click({ if (Test-Path $Log) { Start-Process notepad.exe $Log } else { [System.Windows.Forms.MessageBox]::Show("Todavia no hay registro.", "Nova Activity") | Out-Null } })
+$miLog.add_Click({ if (Test-Path $Log) { Start-Process notepad.exe $Log } else { [System.Windows.Forms.MessageBox]::Show("Todavia no hay registro.", "Elevn Activity") | Out-Null } })
 $miNova.add_Click({ Start-Process $Url })
 $miExit.add_Click({ Write-Cmd "quit"; $ni.Visible = $false; $ni.Dispose(); [System.Windows.Forms.Application]::Exit() })
 
@@ -63,7 +63,7 @@ $timer.add_Tick({
       }
       $miStatus.Text = "Estado: $label"
       $miPause.Text  = if ($script:paused) { "Reanudar" } else { "Pausar" }
-      $t = "Nova Activity - $label"
+      $t = "Elevn Activity - $label"
       if ($t.Length -gt 62) { $t = $t.Substring(0, 62) }
       $ni.Text = $t
     }
