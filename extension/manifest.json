@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Nova Activity — Time Tracking",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Envía a Nova el tiempo real por sitio web y pestaña activa, asociado a la tarea que estás cronometrando. Solo dominio + título + tiempo (sin contenido, sin keylogging, sin capturas).",
   "permissions": ["tabs", "idle", "storage", "alarms"],
-  "host_permissions": ["https://api.kiwoc.com/*"],
+  "host_permissions": ["https://api.novacentrax.com/*"],
   "background": { "service_worker": "background.js" },
   "action": {
     "default_popup": "popup.html",

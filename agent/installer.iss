@@ -5,7 +5,7 @@
 ; arranque con Windows, acceso directo y desinstalador.
 ; ════════════════════════════════════════════════════════════════
 #define AppName "Nova Activity"
-#define AppVer  "1.0.0"
+#define AppVer  "1.0.1"
 #define ExeName "nova-activity.exe"
 
 [Setup]
@@ -88,8 +88,8 @@ begin
     token := Trim(TokenPage.Values[0]);
     cfg :=
       '{' + #13#10 +
-      '  "apiBase": "https://api.kiwoc.com/api",' + #13#10 +
-      '  "webUrl": "https://enricher.kiwoc.com",' + #13#10 +
+      '  "apiBase": "https://api.novacentrax.com/api",' + #13#10 +
+      '  "webUrl": "https://app.novacentrax.com",' + #13#10 +
       '  "token": "' + token + '",' + #13#10 +
       '  "pollSeconds": 15,' + #13#10 +
       '  "idleThresholdSeconds": 60,' + #13#10 +

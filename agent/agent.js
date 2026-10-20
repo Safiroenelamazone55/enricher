@@ -69,8 +69,9 @@ function loadConfig() {
   try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^﻿/, '')); }   // tolera BOM
   catch (e) { console.error('[agente] config.json no es JSON válido:', e.message); process.exit(1); }
   const cfg = {
-    apiBase: (c.apiBase || 'https://api.kiwoc.com/api').replace(/\/+$/, ''),
-    webUrl: (c.webUrl || 'https://enricher.kiwoc.com').replace(/\/+$/, ''),
+    // kiwoc.com ya no existe: un config.json viejo con ese dominio se corrige solo al de Nova.
+    apiBase: (/kiwoc\.com/i.test(c.apiBase || '') ? 'https://api.novacentrax.com/api' : (c.apiBase || 'https://api.novacentrax.com/api')).replace(/\/+$/, ''),
+    webUrl: (/kiwoc\.com/i.test(c.webUrl || '') ? 'https://app.novacentrax.com' : (c.webUrl || 'https://app.novacentrax.com')).replace(/\/+$/, ''),
     token: (c.token || '').trim(),
     pollSeconds: +c.pollSeconds || 15,
     idleThresholdSeconds: +c.idleThresholdSeconds || 60,

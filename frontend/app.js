@@ -810,7 +810,7 @@ const MatchSuggest = (() => {
   return { close: _close };
 })();
 
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -897,6 +897,9 @@ const HOME_MODULES = [
   // (pedido explícito 2026-09-04: evitar confundir lo real con lo investigado).
   { id: 'cantera',        tab: 'cantera',        name: 'Cantera',        desc: 'Prospección en borrador: calificar antes de sumar al CRM', color: 'stone',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>' },
+  // Herramientas: extensiones y apps de escritorio que se conectan con Nova (descarga + vista previa).
+  { id: 'herramientas',   tab: 'herramientas',   name: 'Herramientas',   desc: 'Extensiones y apps: scraper de LinkedIn y tracking de tiempo', color: 'teal',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
@@ -38656,6 +38659,92 @@ const SlackChat = (() => {
 // de quien hacía clic — esto usa el WhatsApp de NEGOCIO ya conectado en Nova.
 // Resuelve la conexión: el del cliente outbound del contacto si existe y está
 // conectado, si no el de Operaciones (pedido explícito 2026-09-01).
+
+// ── Herramientas: extensiones y apps que se conectan con Nova (vista previa + descarga) ──
+const HerramientasModule = (() => {
+  const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let _info = null;
+  const ICO = {
+    chrome: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8h8.2M8.2 14.4 4 7.2M13.6 14.6l-4.1 7"/></svg>',
+    win: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>',
+    dl: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 20h16"/></svg>',
+  };
+  // Vistas previas: la de Nova Activity (web) es una captura real de su popup; las otras dos son réplicas fieles de lo que se ve.
+  const PREV = {
+    scraper: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Elevn Scraper LinkedIn Sales</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Scraping Leads from Sales Navigator</div>
+        <div class="hrm-sc__l">Enter the number of pages to scrape: <span class="hrm-sc__in">1</span></div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Scrape Company Website (Slower)</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Profile details: LinkedIn URL, languages (Slower)</div>
+        <div class="hrm-sc__btn">Start Scraping</div>
+        <div class="hrm-sc__h" style="margin-top:12px">Scraping Accounts from Sales Navigator</div>
+        <div class="hrm-sc__btn">Start Scraping</div></div></div>`,
+    web: `<div class="hrm-shot"><img src="herramientas/prev-nova-activity.jpg" alt="Popup de Nova Activity (web)" loading="lazy"></div>`,
+    tray: `<div class="hrm-tray"><div class="hrm-menu">
+        <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
+        <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Nova</div>
+        <div class="hrm-menu__sep"></div><div class="hrm-menu__row">Salir</div></div>
+        <div class="hrm-tbar"><span class="hrm-tbar__ico hrm-tbar__ico--nova">N</span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__t">11:19 a. m.</span></div></div>`,
+  };
+  const TOOLS = [
+    { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
+      desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
+    { id: 'nova-activity-web', nombre: 'Nova Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
+      desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
+    { id: 'nova-activity-desktop', nombre: 'Nova Activity · Escritorio', tipo: 'App de Windows', ico: 'win', prev: 'tray', token: true,
+      desc: 'Mide el tiempo por aplicación (Figma, VS Code, Word…) y funciona con varios perfiles de Chrome. Corre en la bandeja y solo captura con el timer encendido.',
+      pasos: ['Descarga y ejecuta el instalador. Si Windows muestra «Windows protegió tu PC», pulsa <b>Más información → Ejecutar de todas formas</b> (el instalador aún no tiene firma digital).', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Pégalo cuando el asistente lo pida. Queda un icono en la bandeja y arranca solo con Windows.', 'Enciende un timer en Nova: desde ese momento registra las apps que usas.'] },
+  ];
+  const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+  function _card(t) {
+    const i = (_info || []).find(x => x.id === t.id);
+    const meta = i ? `v${_esc(i.version)} · ${i.disponible ? _size(i.size) : 'no disponible'}` : '';
+    const ok = !i || i.disponible;
+    return `<article class="hrm-card" id="hrm-${t.id}">
+      <div class="hrm-card__prev">${PREV[t.prev]}</div>
+      <div class="hrm-card__body">
+        <div class="hrm-card__top"><span class="hrm-chip">${ICO[t.ico]} ${t.tipo}</span><span class="hrm-card__meta" id="hrm-meta-${t.id}">${meta}</span></div>
+        <h3 class="hrm-card__t">${t.nombre}</h3>
+        <p class="hrm-card__d">${t.desc}</p>
+        <div class="hrm-card__acts">
+          <button class="btn btn--primary btn--sm" id="hrm-dl-${t.id}" ${ok ? '' : 'disabled'} onclick="HerramientasModule.descargar('${t.id}')">${ICO.dl} Descargar</button>
+          <button class="btn btn--ghost btn--sm" onclick="HerramientasModule.pasos('${t.id}')">Cómo instalarla</button>
+          ${t.token ? `<button class="hrm-lnk" onclick="HerramientasModule.abrirTT()">Obtener mi token ›</button>` : ''}
+        </div>
+        <ol class="hrm-steps" id="hrm-steps-${t.id}" hidden>${t.pasos.map(p => `<li>${p}</li>`).join('')}</ol>
+      </div></article>`;
+  }
+  function _html() {
+    return `<div class="hrm">
+      <div class="hrm-hd"><h1 class="hrm-h1">Herramientas</h1><p class="hrm-sub">Extensiones y aplicaciones que se conectan con Nova. Descárgalas, instálalas y listo.</p></div>
+      <div class="hrm-grid">${TOOLS.map(_card).join('')}</div>
+      <p class="hrm-foot">Las extensiones funcionan en Chrome, Edge y Brave. Las tres se instalan por tu cuenta y solo envían a Nova lo que ves descrito arriba.</p>
+    </div>`;
+  }
+  async function render(id) {
+    const el = document.getElementById(id); if (!el) return;
+    el.innerHTML = _html();
+    try {
+      const r = await apiFetch(`${API}/tools`); if (!r.ok) throw new Error('x');
+      _info = await r.json();
+      el.innerHTML = _html();
+    } catch (_) { /* sin datos de versión: las tarjetas igual se ven y se puede intentar descargar */ }
+  }
+  function pasos(id) { const o = document.getElementById('hrm-steps-' + id); if (o) o.hidden = !o.hidden; }
+  function descargar(id) {
+    const i = (_info || []).find(x => x.id === id);
+    if (i && !i.disponible) { showBanner('Este archivo todavía no está disponible', 'error'); return; }
+    // Navegación directa: el navegador baja el archivo con su propia barra de progreso (sin cargarlo en memoria) y la sesión viaja en la cookie.
+    const a = document.createElement('a'); a.href = `${API}/tools/${id}/download`; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+    showBanner('Descargando… revisa tu carpeta de Descargas', 'success');
+  }
+  function abrirTT() { if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab('mgmt-timetracking'); }
+  return { render, descargar, pasos, abrirTT };
+})();
+window.HerramientasModule = HerramientasModule;
+
 // ── WhatsApp: mensajes EN COLA / programados / con problema — burbuja y acciones compartidas por los 3 chats ──
 // (cola = sale al ritmo de la línea; programado = a una hora exacta; con problema = agotó los reintentos y espera una decisión)
 function _waSchedBubble(m, mod) {
@@ -45413,6 +45502,7 @@ function initApp() {
     if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
     if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
     if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
+    if (tabName === 'herramientas') HerramientasModule.render('herramientas-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();

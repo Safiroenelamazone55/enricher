@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026101452"/>
+  <link rel="stylesheet" href="style.css?v=2026101456"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -336,6 +336,9 @@
       <button class="snav-mod" data-module="cantera" onclick="selectModule('cantera')" data-tip="Cantera" aria-label="Cantera">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
       </button>
+      <button class="snav-mod" data-module="herramientas" onclick="selectModule('herramientas')" data-tip="Herramientas" aria-label="Herramientas">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </button>
     </div>
     <div class="snav-rail__spacer"></div>
     <!-- Modulo propio (no un boton que abre algo encima) -- pedido explicito:
@@ -633,6 +636,17 @@
           <span class="snav-item__label">Configuración</span>
         </button>
 
+      </div>
+
+      <!-- Herramientas: extensiones y apps que se conectan con Nova (descarga + vista previa). -->
+      <div class="snav-group" data-module="herramientas" id="snav-body-herramientas">
+        <div class="snav-cat">Descargas</div>
+        <button class="snav-item" data-tab="herramientas" data-tooltip="Herramientas">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </span>
+          <span class="snav-item__label">Herramientas</span>
+        </button>
       </div>
 
       <!-- Finanzas: las 8 secciones que antes eran pestañas horizontales arriba del
@@ -2037,6 +2051,10 @@
       <div id="cantera-config-body"></div>
     </div><!-- /pane-cantera-config -->
 
+    <div class="pane" id="pane-herramientas">
+      <div id="herramientas-body"></div>
+    </div><!-- /pane-herramientas -->
+
     <!-- Lead Manager vive FUERA de .content-wrap (full-width workspace) — ver abajo -->
 
 
@@ -2398,6 +2416,10 @@
     <button class="snav-mod ws-mod" data-module="cantera" onclick="selectModule('cantera');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></span>
       <span class="ws-mod__lbl">Cantera</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="herramientas" onclick="selectModule('herramientas');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span class="ws-mod__lbl">Herramientas</span><span class="ws-mod__chk"></span>
     </button>
   </div>
 
@@ -3375,7 +3397,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026101454"></script>
+<script src="app.js?v=2026101455"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>

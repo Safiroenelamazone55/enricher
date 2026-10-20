@@ -1,8 +1,8 @@
 const $ = id => document.getElementById(id);
-const DEFAULT_API = 'https://api.kiwoc.com/api';
+const DEFAULT_API = 'https://api.novacentrax.com/api';
 
-// La API de Nova vive SIEMPRE en api.kiwoc.com/api. Corrige el error común de
-// pegar la URL de la web (enricher.kiwoc.com / app / www) en vez de la API,
+// La API de Nova vive SIEMPRE en api.novacentrax.com/api. Corrige el error común de
+// pegar la URL de la web (app / www / enricher) o el dominio anterior (kiwoc.com) en vez de la API,
 // y garantiza el sufijo /api. Sin esto, los envíos van a un 404 → "Sin conexión".
 function normalizeApi(raw) {
   let v = (raw || '').trim();
@@ -10,7 +10,7 @@ function normalizeApi(raw) {
   if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
   try {
     const u = new URL(v);
-    if (/(^|\.)kiwoc\.com$/i.test(u.hostname)) return DEFAULT_API;
+    if (/(^|\.)kiwoc\.com$/i.test(u.hostname) || /^(app|www|enricher)\.novacentrax\.com$/i.test(u.hostname)) return DEFAULT_API;
     let path = u.pathname.replace(/\/+$/, '');
     if (!/\/api$/i.test(path)) path += '/api';
     return u.origin + path;

@@ -71,8 +71,8 @@ probe.ps1 (Win32: app activa + idle)  ──líneas JSON──►  agent.js
 ## Configuración (`config.json`)
 | Campo | Qué es | Default |
 |---|---|---|
-| `apiBase` | API de Nova | `https://api.kiwoc.com/api` |
-| `webUrl` | Web de Nova (botón "Abrir Nova" de la bandeja) | `https://enricher.kiwoc.com` |
+| `apiBase` | API de Nova | `https://api.novacentrax.com/api` |
+| `webUrl` | Web de Nova (botón "Abrir Nova" de la bandeja) | `https://app.novacentrax.com` |
 | `token` | Tu token de extensión (de Nova → Conectar) | — |
 | `pollSeconds` | Cada cuánto mira la app activa | `15` |
 | `idleThresholdSeconds` | Segundos sin teclado/ratón = idle | `60` |
@@ -101,5 +101,5 @@ equivalente (en macOS pide permiso de **Accesibilidad** para leer títulos de ve
 
 ## Privacidad
 Igual que la extensión: solo metadatos de uso (app + título + tiempo), enviados
-únicamente a tu Nova (`api.kiwoc.com`). Se puede pausar (cerrar el agente) y los
+únicamente a tu Nova (`api.novacentrax.com`). Se puede pausar (cerrar el agente) y los
 datos viven en tu propia instancia.

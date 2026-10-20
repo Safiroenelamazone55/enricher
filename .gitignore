@@ -28,3 +28,7 @@ _upload_only.py
 __pycache__/
 *.pyc
 portal_media/
+
+# Paquetes descargables de Herramientas (se suben al servidor, no al repo público)
+_tools_build/
+backend/tools_files/

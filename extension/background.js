@@ -17,19 +17,19 @@
 //   source 'desktop_agent' y activity_type 'app_usage'.
 // ════════════════════════════════════════════════════════════════
 
-const DEFAULTS = { apiBase: 'https://api.kiwoc.com/api', enabled: true };
+const DEFAULTS = { apiBase: 'https://api.novacentrax.com/api', enabled: true };
 const MIN_SEGMENT_S    = 15;   // ignora micro-visitas (<15s)
 const IDLE_THRESHOLD_S = 60;   // el sistema pasa a "idle" tras 60s sin actividad
 
-// La API de Nova vive SIEMPRE en api.kiwoc.com/api. Corrige el error común de
-// haber guardado la URL de la web (enricher.kiwoc.com / app / www) en vez de la API.
+// La API de Nova vive SIEMPRE en api.novacentrax.com/api. Corrige el error común de haber guardado la URL de la web
+// (app / www / enricher) o el dominio anterior (kiwoc.com, ya dado de baja) en vez de la API.
 function normalizeApi(raw) {
   let v = (raw || '').trim();
   if (!v) return DEFAULTS.apiBase;
   if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
   try {
     const u = new URL(v);
-    if (/(^|\.)kiwoc\.com$/i.test(u.hostname)) return DEFAULTS.apiBase;
+    if (/(^|\.)kiwoc\.com$/i.test(u.hostname) || /^(app|www|enricher)\.novacentrax\.com$/i.test(u.hostname)) return DEFAULTS.apiBase;
     let path = u.pathname.replace(/\/+$/, '');
     if (!/\/api$/i.test(path)) path += '/api';
     return u.origin + path;
@@ -108,7 +108,7 @@ chrome.alarms.onAlarm.addListener(async (a) => { if (a.name === 'flush') { await
 // Envía los bloques acumulados a Nova. Usa la sesión de Nova del navegador (credentials:include).
 async function flush(force) {
   const { apiBase: rawApiBase, enabled, buffer = [], extToken = '', lastFlush = 0 } = await chrome.storage.local.get(['apiBase', 'enabled', 'buffer', 'extToken', 'lastFlush']);
-  const apiBase = normalizeApi(rawApiBase);   // enruta a api.kiwoc.com/api aunque esté mal guardado
+  const apiBase = normalizeApi(rawApiBase);   // enruta a api.novacentrax.com/api aunque esté mal guardado
   if (apiBase !== rawApiBase) chrome.storage.local.set({ apiBase });
   if (!enabled || !buffer.length) return;
   if (!force && Date.now() - lastFlush < 20000) return;   // debounce: no reenvía en ráfaga al cambiar de pestaña

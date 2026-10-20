@@ -7,7 +7,7 @@
 # ════════════════════════════════════════════════════════════════
 param(
   [string]$Dir = (Split-Path -Parent $MyInvocation.MyCommand.Path),
-  [string]$Url = "https://enricher.kiwoc.com",
+  [string]$Url = "https://app.novacentrax.com",
   [string]$Log = ""
 )
 Add-Type -AssemblyName System.Windows.Forms

@@ -7,7 +7,7 @@ sobre todo el papeleo de la tienda (cuenta, política de privacidad, listing).
 - Manifest V3 válido.
 - **Iconos** 16/32/48/128 (`icons/`, generados con `node icons/make-icons.js`).
 - Sin código remoto (MV3 lo prohíbe): solo hace `fetch` de datos a tu API, no ejecuta scripts externos.
-- Permisos mínimos: `tabs`, `idle`, `storage`, `alarms` + `host_permissions` solo a `https://api.kiwoc.com/*`.
+- Permisos mínimos: `tabs`, `idle`, `storage`, `alarms` + `host_permissions` solo a `https://api.novacentrax.com/*`.
 - Auth por token (no depende de cookies).
 
 ## ⛔ Lo que falta para subirla
@@ -20,9 +20,9 @@ Usas el permiso `tabs` (lees URLs/dominios) → Google exige una **URL pública 
 política de privacidad**. Debe decir, como mínimo:
 - Qué recoges: **dominio, título de pestaña y tiempo** de uso (no contenido, no keystrokes, no capturas).
 - Para qué: registrar tu tiempo de trabajo en tu propia instancia de Nova.
-- Dónde va: solo a tu servidor Nova (`api.kiwoc.com`); no se vende ni se comparte.
+- Dónde va: solo a tu servidor Nova (`api.novacentrax.com`); no se vende ni se comparte.
 - Que se puede desactivar y borrar.
-> Puedes alojarla en `kiwoc.com/privacy-extension` o una página de Notion pública.
+> Puedes alojarla en `novacentrax.com/privacy-extension` o una página de Notion pública.
 
 ### 3. Declaración de prácticas de datos (en el dashboard)
 - **Single purpose:** "Registrar el tiempo de trabajo por sitio web en Nova".

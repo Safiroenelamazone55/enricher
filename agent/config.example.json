@@ -1,6 +1,6 @@
 {
-  "apiBase": "https://api.kiwoc.com/api",
-  "webUrl": "https://enricher.kiwoc.com",
+  "apiBase": "https://api.novacentrax.com/api",
+  "webUrl": "https://app.novacentrax.com",
   "token": "PEGA_AQUI_TU_TOKEN_de_Nova",
   "pollSeconds": 15,
   "idleThresholdSeconds": 60,
