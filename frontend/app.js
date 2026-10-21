@@ -23401,6 +23401,34 @@ ${foot}
   let _fixAll = false;   // "Por corregir": false = solo las primeras 5 (jerarquía, sin saturar)
   function fixShowAll() { _fixAll = true; _renderBody(); }
   // Corrige el email de un contacto sin salir de Tareas: lo guarda, reanuda lo que estaba pausado por eso y cierra su aviso.
+  // «Patrón»: ¿hay en el sistema correos de esa empresa que dejen deducir cómo arma sus emails? Con % de confianza según lo comprobado.
+  async function fixHints(cid) {
+    const box = $('fix-hints-' + cid); if (!box) return;
+    if (!box.hidden && box.dataset.loaded) { box.hidden = true; return; }
+    box.hidden = false; box.innerHTML = '<div class="lm-fix-hints__msg">Buscando en el sistema…</div>';
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + cid + '/email-hints'); const h = await r.json();
+      if (!r.ok) throw new Error(h.error || 'Error');
+      box.dataset.loaded = '1'; box.innerHTML = _fixHintsHtml(cid, h);
+    } catch (e) { box.innerHTML = '<div class="lm-fix-hints__msg">No se pudo consultar: ' + esc(e.message) + '</div>'; }
+  }
+  function _fixHintsHtml(cid, h) {
+    const use = em => `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixHintUse(${cid},'${esc(em).replace(/'/g, '')}')">Usar</button>`;
+    const pctBadge = (pct, nivel) => `<span class="lm-conf lm-conf--${nivel}" title="Confianza estimada: ${nivel}"><i style="width:${pct}%"></i><b>${pct}%</b><em>${nivel === 'alta' ? 'Alta' : nivel === 'media' ? 'Media' : 'Baja'}</em></span>`;
+    if (!h.domain) return `<div class="lm-fix-hints__msg">Esta empresa no tiene dominio registrado y no hay otros correos suyos en el sistema. Complétalo en la ficha (sitio web o dominio) y vuelve a probar.</div>`;
+    const dom = '@' + esc(h.domain);
+    let out = `<div class="lm-fix-hints__hd">Correos conocidos de <b>${dom}</b> en el sistema: <b>${h.known.length}</b>${h.generico.length ? ' · genéricos: ' + h.generico.map(esc).join(', ') : ''}</div>`;
+    if (h.existing) out += `<div class="lm-fix-hint lm-fix-hint--ok"><span class="lm-fix-hint__e">${esc(h.existing.email)}</span><span class="lm-fix-hint__d">Ya existe en el sistema el correo de esta persona (${esc(h.existing.source)} · ${esc(h.existing.prueba)}).</span>${use(h.existing.email)}</div>`;
+    h.suggestions.forEach(sg => {
+      const t = sg.tally || {}, proof = [t.respondio && t.respondio + ' respondieron', t.abierto && t.abierto + ' abiertos', t.verificado && t.verificado + ' verificados', t.entregado && t.entregado + ' entregados'].filter(Boolean);
+      out += `<div class="lm-fix-hint"><span class="lm-fix-hint__e">${esc(sg.email)}</span>${pctBadge(sg.pct, sg.nivel)}
+        <span class="lm-fix-hint__d">Patrón <b>${esc(sg.label)}</b>: lo usan ${sg.count} de ${sg.of} correos del dominio${proof.length ? ' · ' + proof.join(', ') : ' · ninguno comprobado todavía (sin envíos, aperturas ni verificación)'}.${sg.examples && sg.examples.length ? ' Ej.: ' + sg.examples.map(x => esc(x.email) + ' (' + esc(x.prueba) + ')').join(', ') : ''}${sg.bad ? ' <b style="color:#B42318">⚠ este correo ya rebotó antes.</b>' : ''}</span>${sg.bad ? '' : use(sg.email)}</div>`;
+    });
+    if (!h.suggestions.length && h.reference) out += `<div class="lm-fix-hint"><span class="lm-fix-hint__e">${esc(h.reference.email)}</span>${pctBadge(h.reference.pct, h.reference.nivel)}<span class="lm-fix-hint__d">Sin correos propios de ${dom}. Referencia: patrón <b>${esc(h.reference.label)}</b>, ${esc(h.reference.source)}. Es una estimación.</span>${use(h.reference.email)}</div>`;
+    if (!h.suggestions.length && !h.reference && !h.existing) out += `<div class="lm-fix-hints__msg">No hay ningún otro correo de ${dom} en el sistema (CRM, Cantera, exclusiones ni envíos), así que no hay patrón que deducir.${h.domainSource && h.domainSource !== 'empresa' ? ' El dominio salió de: ' + esc(h.domainSource) + '.' : ''}</div>`;
+    return out;
+  }
+  function fixHintUse(cid, email) { const inp = $('fix-em-' + cid); if (inp) { inp.value = email; inp.focus(); } }
   async function fixEmailSave(cid) {
     const inp = $('fix-em-' + cid), email = ((inp && inp.value) || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showBanner('Escribe un email válido', 'error'); if (inp) inp.focus(); return; }
@@ -23466,7 +23494,7 @@ ${foot}
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
         : '<span class="lm-fix-tag" title="' + esc(sq) + '">Sin email</span>';
       return '<div class="lm-fix-row"><div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (empresa ? '<span class="lm-fix-row__co"> · ' + esc(empresa) + '</span>' : '') + '<span class="lm-fix-ics">' + icons + '</span></div>' + tag +
-        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="nuevo@email.com" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a></span></div>';
+        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="nuevo@email.com" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a><a href="#" class="lm-fix-row__a" title="Buscar en todo el sistema si hay un patrón de email para esta empresa" onclick="event.preventDefault();LeadManagerModule.fixHints(' + c.id + ')">Patrón</a></span></div><div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
     return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="seq-tasks">' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
@@ -36169,7 +36197,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

@@ -12363,6 +12363,7 @@ const waSvc = require('./services/waService');
 const waQueue = require('./services/waQueue');
 waQueue.mount(app, { pool, requireAuth, cargarConexion: (req, res, id) => _cargarConexionAutorizada(req, res, id) });
 require('./services/proposalRoutes').mount(app, { pool, requireAuth });
+require('./services/emailHints').mount(app, { pool, requireAuth });
 require('./services/toolsRoutes').mount(app, { requireAuth });   // Herramientas: descargas de extensiones/apps (solo con sesión)
 
 // ?outboundClientId= trae SOLO las conexiones asignadas a ESE cliente (Outreach),
