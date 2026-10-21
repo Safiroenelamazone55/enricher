@@ -23440,14 +23440,14 @@ ${foot}
       const r = await apiFetch(API + '/lm/contacts/' + cid + '/fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, email_personal: personal }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       const c = _contacts.find(x => x.id === cid);
-      if (c) { c.email = d.email; c.email_personal = d.email_personal || c.email_personal; c.email_status = ''; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
+      if (c) { if (d.email) { c.email = d.email; c.email_status = ''; } c.email_personal = d.email_personal || c.email_personal; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
       _activities = (_activities || []).map(a => (a.contact_id === cid && a.estado === 'pendiente' && a.tipo === 'tarea' && String(a.nota || '').startsWith('Rebote:')) ? { ...a, estado: 'hecha' } : a);
       // El borrador ya está redactado (sin aprobar): se recargan las listas para que aparezca al instante en "Emails por aprobar".
       try { await _reloadContacts(); } catch (_) {}
       try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
       try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
       _renderBody();
-      showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — los envíos irán a este' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
+      showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — se usará solo si no hay profesional disponible' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
@@ -23459,6 +23459,8 @@ ${foot}
       if (['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
       const bad = !c.email ? 'sin' : (c.email_status === 'invalid' ? 'rebote' : '');
       if (!bad) return;
+      // Sin profesional utilizable pero con email personal válido: el motor envía al personal, así que no hay nada que corregir.
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(c.email_personal || '').trim())) return;
       // Solo cuenta lo que toca resolver AHORA: su paso ACTUAL es un email, y no está en espera por otra razón
       // (en cola de rotación por empresa, pausado a mano, cerrado por disposición, sin mensaje/traducción en el paso).
       // Esta es la misma definición que usa la secuencia (pestañas Tareas/Bloqueos): así los números coinciden en las dos pantallas.

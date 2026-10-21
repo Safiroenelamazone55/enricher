@@ -116,6 +116,19 @@ async function attachCustom(pool, ctx, uidFallback) {
   return ctx;
 }
 
+// Destino del envío: SIEMPRE el email profesional. El personal solo entra cuando el profesional no está disponible
+// (vacío o rebotado) Y el personal no rebotó ya. Con eso el contacto sigue en la secuencia en vez de quedar pausado.
+async function _destino(pool, enr) {
+  const pers = String(enr.email_personal || '').trim();
+  const profOk = enr.email && enr.email_status !== 'invalid';
+  if (profOk || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pers)) return enr;
+  const { rows: [rb] } = await pool.query(`SELECT 1 FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='bounced' AND lower(to_email)=lower($3) LIMIT 1`, [enr.user_id, enr.contact_id, pers]);
+  if (rb) return enr;   // el personal ya rebotó: no se insiste
+  enr.email_profesional = enr.email || '';
+  enr.email = pers; enr.email_status = ''; enr.destino_personal = true;
+  return enr;
+}
+
 // ── Render de plantillas: {{first_name}}, {{company}}, {{title}}, … ──
 function renderTemplate(str, ctx) {
   const map = {
@@ -396,7 +409,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   // Solo secuencias ACTIVAS: pausar la secuencia detiene todos sus envíos.
   const { rows: [enr] } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
-           k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
+           k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
            s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id
@@ -454,6 +467,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
      LIMIT 1
   `, [uid, cfg.timezone || 'America/Lima', served]);
   if (!enr) return false;
+  await _destino(pool, enr);
   cfg._lastSeq = enr.sequence_id;
 
   // Espaciado mínimo entre envíos del MISMO cliente/buzón (antes era global y una sola secuencia lo acaparaba).
@@ -968,7 +982,7 @@ async function _flushApproved(pool, apiBase) {
 async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
-           k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
+           k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status, k.idioma,
            k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante
       FROM lm_contact_sequences cs
@@ -981,7 +995,7 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
        AND ($2::int IS NULL OR cs.contact_id = $2)
        -- Solo quien REALMENTE puede tener borrador: antes los ~400 enrolados viejos que nunca podían redactarse
        -- (paso no-email, sin buzón, sin email…) ocupaban los 25 cupos de cada pasada y dejaban sin borrador a las secuencias nuevas.
-       AND k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid'
+       AND ((k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid') OR COALESCE(k.email_personal,'') <> '')
        AND COALESCE(k.disposition,'') NOT IN ('no_interesado','no_contactar')
        AND (SELECT st3.canal FROM sequence_steps st3 WHERE st3.sequence_id = cs.sequence_id ORDER BY st3.dia ASC, st3.orden ASC, st3.id ASC OFFSET GREATEST(COALESCE(cs.paso,1),1) - 1 LIMIT 1) = 'email'
        AND EXISTS (SELECT 1 FROM lm_mailboxes mb2 WHERE mb2.user_id = s.user_id AND mb2.outbound_client_id = s.outbound_client_id AND mb2.estado IN ('conectado','solo_envio'))
@@ -999,6 +1013,7 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
       if (enr.next_action_at && new Date(enr.next_action_at).getTime() >= _horizon(_sanSendDays(enr.send_days))) continue;
       // Solo se salta sin email o con email que ya rebotó (invalid). "Sin verificar" SÍ
       // genera borrador (se confía en el dato; el rebote real lo detecta el vigilante).
+      await _destino(pool, enr);
       if (!enr.email || enr.email_status === 'invalid') continue;
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
       if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
