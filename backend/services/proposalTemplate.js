@@ -259,6 +259,7 @@ ${st('03', x('Preparar mensajes, cuentas objetivo e iniciar la ejecución.', 'Pr
   return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>${rootVars}\n${CSS}\n.wm{font-weight:700;font-size:18px;letter-spacing:-.02em;height:auto}
+@media print{.page{height:1054px}.page:last-of-type{break-after:auto;page-break-after:auto}}
 .logo{height:30px}.cover .logo{height:40px}.cover .for .cl{display:block;margin:6px 0 0 auto;max-height:46px;max-width:180px;object-fit:contain;background:#fff;padding:9px 14px;border-radius:6px}.cover .for .cl--w{background:none;padding:0;border-radius:0;max-height:52px}.pf .ch2 svg{height:168px}.dl div{min-height:66px;padding-top:14px;padding-bottom:14px}.two{margin-top:20px}.rp{padding:22px 24px}.t3 .road .rs{padding:6px 0}.t3 .lead{margin-top:12px}</style></head><body>\n${pages.join('\n')}\n</body></html>`;
 }
 
