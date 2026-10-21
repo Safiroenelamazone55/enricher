@@ -18411,3 +18411,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .pl-cs__box { height: 40px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--muted); overflow: hidden; }
 .pl-cs__box img { max-width: 90%; max-height: 30px; }
 .pl-mrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pl-gen { align-items: stretch; }
+.pl-prevcol { display: flex; flex-direction: column; min-width: 0; }
+.pl-prevwrap { position: relative; flex: 1 1 auto; min-height: 520px; }
+.pl-prevwrap .pl-prev { position: absolute; inset: 0; max-height: none; }
+@media (max-width: 960px) { .pl-prevwrap { min-height: 70vh; } }

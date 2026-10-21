@@ -38921,7 +38921,7 @@ const PlantillasModule = (() => {
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('pdf')">PDF / Imprimir</button></div>
         <p class="hrm-card__meta">«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir. En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
-      </div><div class="pl-prevcol">${vista}<div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div>`;
+      </div><div class="pl-prevcol">${vista}<div class="pl-prevwrap"><div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div></div>`;
     if (pago) document.querySelectorAll('#plg-comp,#plg-ref,#plg-plazo,#plg-horas').forEach(i => i.addEventListener('change', _readPagoPasos));
     _fit();
   }
