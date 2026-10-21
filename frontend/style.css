@@ -18438,3 +18438,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .lm-conf--media i { background: #D97706; } .lm-conf--media b { color: #B45309; }
 .lm-conf--baja i { background: #DC2626; } .lm-conf--baja b { color: #B42318; }
 @media (max-width: 900px) { .lm-fix-hint, .lm-fix-hint--ok { grid-template-columns: 1fr; } }
+.lm-fix-row__f .lm-fix-row__in { width: 178px; }
+.lm-fix-row__in--p { border-style: dashed; }

@@ -23430,20 +23430,24 @@ ${foot}
   }
   function fixHintUse(cid, email) { const inp = $('fix-em-' + cid); if (inp) { inp.value = email; inp.focus(); } }
   async function fixEmailSave(cid) {
-    const inp = $('fix-em-' + cid), email = ((inp && inp.value) || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showBanner('Escribe un email válido', 'error'); if (inp) inp.focus(); return; }
+    const inp = $('fix-em-' + cid), inpP = $('fix-emp-' + cid);
+    const email = ((inp && inp.value) || '').trim(), personal = ((inpP && inpP.value) || '').trim();
+    const ok = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    if (!email && !personal) { showBanner('Escribe el email profesional o el personal', 'error'); if (inp) inp.focus(); return; }
+    if (email && !ok(email)) { showBanner('El email profesional no es válido', 'error'); if (inp) inp.focus(); return; }
+    if (personal && !ok(personal)) { showBanner('El email personal no es válido', 'error'); if (inpP) inpP.focus(); return; }
     try {
-      const r = await apiFetch(API + '/lm/contacts/' + cid + '/fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const r = await apiFetch(API + '/lm/contacts/' + cid + '/fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, email_personal: personal }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       const c = _contacts.find(x => x.id === cid);
-      if (c) { c.email = d.email; c.email_status = ''; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
+      if (c) { c.email = d.email; c.email_personal = d.email_personal || c.email_personal; c.email_status = ''; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
       _activities = (_activities || []).map(a => (a.contact_id === cid && a.estado === 'pendiente' && a.tipo === 'tarea' && String(a.nota || '').startsWith('Rebote:')) ? { ...a, estado: 'hecha' } : a);
       // El borrador ya está redactado (sin aprobar): se recargan las listas para que aparezca al instante en "Emails por aprobar".
       try { await _reloadContacts(); } catch (_) {}
       try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
       try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
       _renderBody();
-      showBanner('✓ Email guardado' + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
+      showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — los envíos irán a este' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
@@ -23494,7 +23498,7 @@ ${foot}
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
         : '<span class="lm-fix-tag" title="' + esc(sq) + '">Sin email</span>';
       return '<div class="lm-fix-row"><div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (empresa ? '<span class="lm-fix-row__co"> · ' + esc(empresa) + '</span>' : '') + '<span class="lm-fix-ics">' + icons + '</span></div>' + tag +
-        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="nuevo@email.com" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a><a href="#" class="lm-fix-row__a" title="Buscar en todo el sistema si hay un patrón de email para esta empresa" onclick="event.preventDefault();LeadManagerModule.fixHints(' + c.id + ')">Patrón</a></span></div><div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
+        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="Email profesional" title="Email de trabajo (el que se usa para enviar)" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><input class="lm-fix-row__in lm-fix-row__in--p" id="fix-emp-' + c.id + '" type="email" placeholder="Email personal" value="' + esc(c.email_personal || '') + '" title="Email personal (gmail, outlook…). Si no hay profesional, los envíos van a este." onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a><a href="#" class="lm-fix-row__a" title="Buscar en todo el sistema si hay un patrón de email para esta empresa" onclick="event.preventDefault();LeadManagerModule.fixHints(' + c.id + ')">Patrón</a></span></div><div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
     return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="seq-tasks">' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }

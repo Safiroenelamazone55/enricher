@@ -5539,13 +5539,19 @@ app.put('/api/lm/portal/kpis', requireAuth, async (req, res) => {
 });
 app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
-  const email = String((req.body || {}).email || '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Escribe un email válido' });
+  // Acepta el email profesional y/o el personal. El destino de los envíos es el profesional; si solo hay personal, se usa ese.
+  const _ok = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const prof = String((req.body || {}).email || '').trim().toLowerCase();
+  const pers = String((req.body || {}).email_personal || '').trim().toLowerCase();
+  if (prof && !_ok(prof)) return res.status(400).json({ error: 'El email profesional no es válido' });
+  if (pers && !_ok(pers)) return res.status(400).json({ error: 'El email personal no es válido' });
+  if (!prof && !pers) return res.status(400).json({ error: 'Escribe al menos un email (profesional o personal)' });
+  const email = prof || pers;
   try {
     const r = await pool.query(
-      `UPDATE lm_contacts SET email=$1, email_status='', email_score=NULL, email_verified_at=NULL,
+      `UPDATE lm_contacts SET email=$1, email_personal=COALESCE(NULLIF($4,''), email_personal), email_status='', email_score=NULL, email_verified_at=NULL,
               data_issue = CASE WHEN data_issue IN ('falta_email','dato_incorrecto') THEN '' ELSE data_issue END, updated_at=NOW()
-        WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [email, cid, uid]);
+        WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id, email_personal`, [email, cid, uid, pers]);
     if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
     const p = await pool.query(
       `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=COALESCE(next_action_at, NOW())
@@ -5555,7 +5561,7 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
           AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%')`, [uid, cid]);
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
-      [uid, cid, r.rows[0].outbound_client_id || null, 'Email corregido: ' + email + (p.rowCount ? ' — ' + p.rowCount + ' secuencia(s) reanudada(s)' : '')]);
+      [uid, cid, r.rows[0].outbound_client_id || null, 'Email corregido: ' + email + (!prof ? ' (personal: se enviará a este)' : (pers ? ' · personal: ' + pers : '')) + (p.rowCount ? ' — ' + p.rowCount + ' secuencia(s) reanudada(s)' : '')]);
     // Con el email ya corregido, su borrador se redacta AHORA (no aprobado): aparece al instante en "Emails por aprobar" para previsualizarlo.
     let drafted = 0;
     try {
@@ -5563,7 +5569,7 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
       await require('./services/sendEngine').draftNowForContact(pool, cid);
       drafted = (await pool.query(`SELECT count(*)::int n FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting'`, [uid, cid])).rows[0].n - before;
     } catch (e) { console.warn('[fix-email] borrador inmediato:', e.message); }
-    res.json({ ok: true, email, resumed: p.rowCount, drafted });
+    res.json({ ok: true, email, email_personal: r.rows[0].email_personal || '', usado_personal: !prof, resumed: p.rowCount, drafted });
   } catch (err) { console.error('[fix-email]', err.message); res.status(500).json({ error: 'No se pudo guardar el email' }); }
 });
 app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
