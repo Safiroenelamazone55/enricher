@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { render, LANGS, logoOk } = require('./proposalTemplate');
+const { render, LANGS, logoOk, docName } = require('./proposalTemplate');
 const pay = require('./proposalPay');
 
 const SEEDLOGOS = require('./tplSeedLogos');
@@ -33,6 +33,7 @@ async function init(pool) {
     params JSONB DEFAULT '{}'::jsonb, html TEXT NOT NULL, token TEXT UNIQUE NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query('CREATE INDEX IF NOT EXISTS tpl_copies_user ON tpl_copies (user_id, created_at DESC)');
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''");
+  await pool.query('ALTER TABLE tpl_copies ADD COLUMN IF NOT EXISTS archivo TEXT');
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_email TEXT DEFAULT ''");
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_telefono TEXT DEFAULT ''");
   await pool.query("ALTER TABLE tpl_templates ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'propuesta'");
@@ -220,17 +221,17 @@ function mount(app, { pool, requireAuth }) {
       const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND template_id=$3 AND id = ANY($2::int[])', [uid(req), d.metodos, t.id]) : { rows: [] };
       const ms = d.metodos.map(id => rows.find(r => r.id === id)).filter(Boolean);
       const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: cleanLogoCliente(pr.logoCliente), pasos: d.pasos, plazoHoras: d.plazoHoras, pagoEmail: d.pagoEmail, pagoTel: d.pagoTel, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
-      return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms) };
+      return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms), archivo: docName(b.nombre, p.cliente, lang, 'pago') };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given });
-    return { t, p, html: render(b, p, lang) };
+    return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };
   }
   app.post('/api/tpl/preview', A, wrap(async (req, res) => {
     const lang = LANGS[req.body.lang] ? req.body.lang : 'es';
     const r = await build(req, parseInt(req.body.template_id, 10), req.body.params, lang);
     if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
-    res.json({ html: r.html });
+    res.json({ html: r.html, nombre: r.archivo });
   }));
   app.post('/api/tpl/copies', A, wrap(async (req, res) => {
     const langs = [...new Set((Array.isArray(req.body.langs) ? req.body.langs : [req.body.lang]).filter(l => LANGS[l]))];
@@ -240,14 +241,14 @@ function mount(app, { pool, requireAuth }) {
       const r = await build(req, parseInt(req.body.template_id, 10), req.body.params, lang);
       if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
       const titulo = [r.t.nombre, r.p.empresa || (r.t.tipo === 'pago' ? '' : 'Cliente'), lang.toUpperCase()].filter(Boolean).join(' · ');
-      const { rows: [c] } = await pool.query('INSERT INTO tpl_copies (user_id,template_id,titulo,cliente,lang,params,html,token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,titulo,cliente,lang,token,created_at',
-        [uid(req), r.t.id, titulo, r.p.empresa || '', lang, JSON.stringify(r.p), r.html, crypto.randomBytes(18).toString('hex')]);
+      const { rows: [c] } = await pool.query('INSERT INTO tpl_copies (user_id,template_id,titulo,cliente,lang,params,html,token,archivo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,titulo,cliente,lang,token,created_at,archivo',
+        [uid(req), r.t.id, titulo, r.p.empresa || '', lang, JSON.stringify(r.p), r.html, crypto.randomBytes(18).toString('hex'), r.archivo]);
       out.push(c);
     }
     res.json(out);
   }));
   app.get('/api/tpl/copies', A, wrap(async (req, res) => {
-    const { rows } = await pool.query(`SELECT c.id,c.titulo,c.cliente,c.lang,c.token,c.created_at,c.template_id,t.nombre AS plantilla FROM tpl_copies c LEFT JOIN tpl_templates t ON t.id=c.template_id WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 300`, [uid(req)]);
+    const { rows } = await pool.query(`SELECT c.id,c.titulo,c.archivo,c.cliente,c.lang,c.token,c.created_at,c.template_id,t.nombre AS plantilla FROM tpl_copies c LEFT JOIN tpl_templates t ON t.id=c.template_id WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 300`, [uid(req)]);
     res.json(rows);
   }));
   app.patch('/api/tpl/copies/:id', A, wrap(async (req, res) => {
@@ -263,13 +264,13 @@ function mount(app, { pool, requireAuth }) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-    if (descarga) res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[^\w.\- ]+/g, '_')}.html"`);
+    if (descarga) res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[\\/:*?"<>|\r\n]+/g, '_')}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`);
     res.send(html);
   };
   app.get('/api/tpl/copies/:id/html', A, wrap(async (req, res) => {
-    const { rows: [c] } = await pool.query('SELECT titulo,html FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
+    const { rows: [c] } = await pool.query('SELECT titulo,archivo,html FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
     if (!c) return res.status(404).json({ error: 'No encontrada' });
-    sendHtml(res, c.html, c.titulo, req.query.download === '1');
+    sendHtml(res, c.html, c.archivo || c.titulo, req.query.download === '1');
   }));
   // enlace público (sin sesión) para compartir con el cliente: el token es largo e impredecible
   app.get('/api/tpl/public/:token', wrap(async (req, res) => {

@@ -38967,7 +38967,7 @@ const PlantillasModule = (() => {
     try {
       const d = await _j('/tpl/preview', _body({ data: { template_id: _gen.t.id, lang: _gen.vista, params: _gen.p } }));
       if (seq !== _prevSeq || !_gen) return;
-      _gen.html = d.html; const fr = $('pl-frame'); if (fr) fr.srcdoc = d.html;
+      _gen.html = d.html; _gen.nombre = d.nombre; const fr = $('pl-frame'); if (fr) fr.srcdoc = d.html;
     } catch (e) { showBanner(e.message, 'error'); }
   }
   async function guardar() {
@@ -38979,12 +38979,11 @@ const PlantillasModule = (() => {
   }
   async function exportar(fmt) {
     if (!_gen.html) return;
-    const nombre = [_gen.t.nombre, _gen.p.empresa || _gen.p.cliente, _gen.vista.toUpperCase()].filter(Boolean).join(' - ');
-    _abrir(_gen.html, nombre, fmt);
+    _abrir(_gen.html, _gen.nombre || _gen.t.nombre, fmt);
   }
   function _abrir(html, nombre, fmt) {
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-    if (fmt === 'html') { const a = document.createElement('a'); a.href = url; a.download = nombre.replace(/[^\w.\- ]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
+    if (fmt === 'html') { const a = document.createElement('a'); a.href = url; a.download = nombre.replace(/[\\/:*?"<>|\r\n]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
     else { const w = window.open(url, '_blank'); if (w) w.addEventListener('load', () => setTimeout(() => w.print(), 600)); else showBanner('Permite las ventanas emergentes para imprimir', 'error'); }
   }
   function salir() { _gen = null; _draw(); }
@@ -38998,7 +38997,7 @@ const PlantillasModule = (() => {
   }
   async function _htmlCopia(id) { const r = await apiFetch(`${API}/tpl/copies/${id}/html`); if (!r.ok) throw new Error('No se pudo abrir la copia'); return r.text(); }
   async function verCopia(id) { try { const h = await _htmlCopia(id); const w = window.open(URL.createObjectURL(new Blob([h], { type: 'text/html;charset=utf-8' })), '_blank'); if (!w) showBanner('Permite las ventanas emergentes', 'error'); } catch (e) { showBanner(e.message, 'error'); } }
-  async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
+  async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.archivo || c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
   function enlace(token) {
     const u = `${API}/tpl/public/${token}`;
     (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => showBanner('Enlace copiado: cualquiera con él puede ver el documento', 'success')).catch(() => prompt('Copia el enlace:', u));

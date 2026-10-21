@@ -13,6 +13,15 @@ const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : d);
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
 const logoOk = v => typeof v === 'string' && /^data:image\/(png|jpe?g|svg\+xml|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
 
+// nombre del archivo exportado: «Cliente_Propuesta comercial Marca» en el idioma del documento (también es el <title>, que usa «Guardar como PDF»)
+const DOC = { propuesta: ['Propuesta comercial', 'Commercial Proposal', 'Geschäftsangebot', 'Proposta comercial'], pago: ['Métodos de pago', 'Payment Methods', 'Zahlungsmethoden', 'Métodos de pagamento'] };
+function docName(marca, cliente, lang, tipo) {
+  const clean = v => String(v || '').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const doc = (DOC[tipo] || DOC.propuesta)[IDX[lang] != null ? IDX[lang] : 0];
+  const c = clean(cliente), m = clean(marca);
+  return `${c ? c + '_' : ''}${doc}${m ? ' ' + m : ''}`.slice(0, 120);
+}
+
 function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
 // brand: {nombre,email,web,color_primary,color_light,color_dark,logo_white,logo_black,logo_color,logo_oscuro,logo_claro}
@@ -246,11 +255,11 @@ ${st('03', x('Preparar mensajes, cuentas objetivo e iniciar la ejecución.', 'Pr
 <div class="foot"><div>${esc(marca)}<br>${esc(mail)}<br>${esc(web)}</div><div class="conf">${x('Confidencial', 'Confidential', 'Vertraulich', 'Confidencial')}<br>${x('Preparada para ', 'Prepared for ', 'Erstellt für ', 'Preparada para ')}${esc(empresa)} · 08</div></div></section>`);
 
   const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--sans:'Inter','Segoe UI',sans-serif}`;
-  const title = `${x('Propuesta Comercial B2B', 'B2B Commercial Proposal', 'B2B-Geschäftsangebot', 'Proposta Comercial B2B')} | ${empresa}`;
+  const title = docName(b.nombre, p.empresa, lang, 'propuesta');
   return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>${rootVars}\n${CSS}\n.wm{font-weight:700;font-size:18px;letter-spacing:-.02em;height:auto}
 .logo{height:30px}.cover .logo{height:40px}.cover .for .cl{display:block;margin:6px 0 0 auto;max-height:46px;max-width:180px;object-fit:contain;background:#fff;padding:9px 14px;border-radius:6px}.cover .for .cl--w{background:none;padding:0;border-radius:0;max-height:52px}.pf .ch2 svg{height:168px}.dl div{min-height:66px;padding-top:14px;padding-bottom:14px}.two{margin-top:20px}.rp{padding:22px 24px}.t3 .road .rs{padding:6px 0}.t3 .lead{margin-top:12px}</style></head><body>\n${pages.join('\n')}\n</body></html>`;
 }
 
-module.exports = { render, LANGS, logoOk };
+module.exports = { render, LANGS, logoOk, docName };

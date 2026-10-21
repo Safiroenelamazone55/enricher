@@ -1,6 +1,7 @@
 'use strict';
 // Plantilla «Métodos de pago»: una hoja que se adapta a los métodos elegidos, en ES / EN / DE / PT.
 const IDX = { es: 0, en: 1, de: 2, pt: 3 };
+const { docName } = require('./proposalTemplate');
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : d);
 const logoOk = v => typeof v === 'string' && /^data:image\/(png|jpe?g|svg\+xml|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
@@ -128,7 +129,7 @@ ${methods.map(methodHtml).join('\n')}
 ${after.length ? `<div class="af"><h3>${x('Después de pagar', 'After you pay', 'Nach der Zahlung', 'Depois de pagar')}</h3><ol class="st">${after.map((t, i) => `<li><i>${i + 1}</i><span>${t}</span></li>`).join('')}</ol></div>` : ''}
 ${contactoTxt.length ? `<div class="ft">${x('¿Dudas con el pago? Escríbeme:', 'Questions about your payment? Write to me:', 'Fragen zur Zahlung? Schreiben Sie mir:', 'Dúvidas sobre o pagamento? Escreva-me:')}<b>${contactoTxt.join(' · ')}</b></div>` : ''}
 </td></tr></tbody></table></div>`;
-  return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}${marca ? ' | ' + esc(marca) : ''}</title>
+  return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(docName(marca, p.cliente, lang, 'pago'))}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"><style>${css}</style></head><body>${html}</body></html>`;
 }
 
