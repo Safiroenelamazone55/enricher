@@ -251,6 +251,21 @@ function mount(app, { pool, requireAuth }) {
     const { rows } = await pool.query(`SELECT c.id,c.titulo,c.archivo,c.cliente,c.lang,c.token,c.created_at,c.template_id,t.nombre AS plantilla FROM tpl_copies c LEFT JOIN tpl_templates t ON t.id=c.template_id WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 300`, [uid(req)]);
     res.json(rows);
   }));
+  app.get('/api/tpl/copies/:id', A, wrap(async (req, res) => {
+    const { rows: [c] } = await pool.query('SELECT id,template_id,titulo,lang,params FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
+    if (!c) return res.status(404).json({ error: 'No encontrada' });
+    res.json(c);
+  }));
+  // editar una copia ya guardada: se regenera con los datos nuevos y se conserva el mismo enlace
+  app.put('/api/tpl/copies/:id', A, wrap(async (req, res) => {
+    const { rows: [c] } = await pool.query('SELECT id,template_id,lang FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
+    if (!c) return res.status(404).json({ error: 'No encontrada' });
+    if (!c.template_id) return res.status(409).json({ error: 'La plantilla de esta copia ya no existe, así que no se puede editar. Genera una nueva desde otra plantilla.' });
+    const r = await build(req, c.template_id, req.body.params, LANGS[c.lang] ? c.lang : 'es');
+    if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
+    await pool.query('UPDATE tpl_copies SET params=$3,html=$4,archivo=$5,cliente=$6 WHERE id=$1 AND user_id=$2', [c.id, uid(req), JSON.stringify(r.p), r.html, r.archivo, r.p.empresa || '']);
+    res.json({ ok: true });
+  }));
   app.patch('/api/tpl/copies/:id', A, wrap(async (req, res) => {
     const titulo = S(req.body.titulo, 160); if (!titulo) return res.status(400).json({ error: 'Falta el título' });
     const { rowCount } = await pool.query('UPDATE tpl_copies SET titulo=$3 WHERE id=$1 AND user_id=$2', [req.params.id, uid(req), titulo]);

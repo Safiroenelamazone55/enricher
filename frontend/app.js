@@ -38874,6 +38874,21 @@ const PlantillasModule = (() => {
       : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
     _draw(); _preview();
   }
+  // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
+  async function editCopia(id) {
+    try {
+      const cp = await _j(`/tpl/copies/${id}`);
+      const t = _tpls.find(x => x.id === cp.template_id);
+      if (!t) { showBanner('La plantilla de esta copia ya no existe: no se puede editar. Genera una nueva.', 'error'); return; }
+      const pr = cp.params || {};
+      const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
+      const p = t.tipo === 'pago'
+        ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '' };
+      _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
+      _draw(); _preview();
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
   function _faltan() {
     const g = _gen; if (g.t.tipo !== 'pago') return '';
     const out = [];
@@ -38914,13 +38929,13 @@ const PlantillasModule = (() => {
         ${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}
         <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>`;
     }
-    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.t.nombre)}</h1></div>
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
-        <label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>
-        <div class="pl-acts"><button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>
+        ${g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
+        <div class="pl-acts">${g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('pdf')">PDF / Imprimir</button></div>
-        <p class="hrm-card__meta">«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir. En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
+        <p class="hrm-card__meta">${g.copiaId ? '«Guardar cambios» actualiza esta copia y conserva su enlace para compartir.' : '«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir.'} En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
       </div><div class="pl-prevcol">${vista}<div class="pl-prevwrap"><div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div></div>`;
     if (pago) document.querySelectorAll('#plg-comp,#plg-ref,#plg-plazo,#plg-horas').forEach(i => i.addEventListener('change', _readPagoPasos));
     _fit();
@@ -38971,9 +38986,24 @@ const PlantillasModule = (() => {
     } catch (e) { showBanner(e.message, 'error'); }
   }
   async function guardar() {
+    if (_gen.copiaId) {
+      try {
+        await _j(`/tpl/copies/${_gen.copiaId}`, _body({ method: 'PUT', data: { params: _gen.p } }));
+        showBanner('Cambios guardados: el enlace sigue siendo el mismo', 'success');
+        _gen = null; _tab = 'copias'; render(_host.id);
+      } catch (e) { showBanner(e.message, 'error'); }
+      return;
+    }
     try {
       const out = await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p } }));
       showBanner(`${out.length} copia${out.length === 1 ? '' : 's'} guardada${out.length === 1 ? '' : 's'}`, 'success');
+      _gen = null; _tab = 'copias'; render(_host.id);
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function guardarNueva() {
+    try {
+      await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p } }));
+      showBanner('Copia nueva guardada; la original no cambió', 'success');
       _gen = null; _tab = 'copias'; render(_host.id);
     } catch (e) { showBanner(e.message, 'error'); }
   }
@@ -38986,12 +39016,12 @@ const PlantillasModule = (() => {
     if (fmt === 'html') { const a = document.createElement('a'); a.href = url; a.download = nombre.replace(/[\\/:*?"<>|\r\n]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
     else { const w = window.open(url, '_blank'); if (w) w.addEventListener('load', () => setTimeout(() => w.print(), 600)); else showBanner('Permite las ventanas emergentes para imprimir', 'error'); }
   }
-  function salir() { _gen = null; _draw(); }
+  function salir() { const volver = _gen && _gen.copiaId; _gen = null; if (volver) { _tab = 'copias'; render(_host.id); } else _draw(); }
 
   // ── Copias ──
   function _viewCopias() {
     const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
+      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
         <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
     return `<p class="hrm-sub" style="margin-bottom:12px">Versiones ya generadas: no cambian aunque edites la plantilla después.</p>${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}`;
   }
@@ -39129,7 +39159,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, set, logoCliente, usarLogoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
