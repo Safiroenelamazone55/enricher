@@ -24425,12 +24425,21 @@ ${foot}
   }
   // Campos personalizados con nombre (Configuración) como variables {{nombre_del_campo}}: de la empresa (company_campoN) o del contacto (campoN).
   function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+// Un campo personalizado se puede escribir en español o en inglés dentro del mensaje: {{competidor_1}} o {{competitor_1}}.
+// (Las variantes por idioma suelen llevar el nombre traducido; sin esto el dato existe pero la variable sale sin resolver.)
+  const _VAR_WORDS = { competidor: 'competitor', competidores: 'competitors', empresa: 'company', ciudad: 'city', pais: 'country', cliente: 'client', clientes: 'clients', agencia: 'agency', agencias: 'agencies', ubicacion: 'location', industria: 'industry', zona: 'area', sitio: 'site', producto: 'product', servicio: 'service' };
+    const _VAR_WORDS_REV = Object.fromEntries(Object.entries(_VAR_WORDS).map(([a, b]) => [b, a]));
+  function _slugAliases(slug) {
+  const w = String(slug).split('_');
+  return [...new Set([w.map(x => _VAR_WORDS[x] || x).join('_'), w.map(x => _VAR_WORDS_REV[x] || x).join('_')])].filter(a => a && a !== slug);
+}
   function _customVarMap(s) {
     const out = {};
     ['company', 'contact'].forEach(ent => (_lmCustomFields[ent] || []).forEach(f => {
       const slug = _slugVar(f.label); if (!slug) return;
       const v = ent === 'company' ? (s || {})['company_' + f.field_key] : (s || {})[f.field_key];
       out[slug] = v;
+      _slugAliases(slug).forEach(a => { if (!(a in out)) out[a] = v; });
     }));
     return out;
   }

@@ -69,6 +69,14 @@ function idiomaGap(step, enr) {
 // ── Campos personalizados como variables: cada campo con nombre (Configuración → Campos personalizados) se usa como {{nombre_del_campo}} ──
 const _CF_KEYS = Array.from({ length: 10 }, (_, i) => 'campo' + (i + 1));
 function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+// Un campo personalizado se puede escribir en español o en inglés dentro del mensaje: {{competidor_1}} o {{competitor_1}}.
+// (Las variantes por idioma suelen llevar el nombre traducido; sin esto el dato existe pero la variable sale sin resolver.)
+const _VAR_WORDS = { competidor: 'competitor', competidores: 'competitors', empresa: 'company', ciudad: 'city', pais: 'country', cliente: 'client', clientes: 'clients', agencia: 'agency', agencias: 'agencies', ubicacion: 'location', industria: 'industry', zona: 'area', sitio: 'site', producto: 'product', servicio: 'service' };
+const _VAR_WORDS_REV = Object.fromEntries(Object.entries(_VAR_WORDS).map(([a, b]) => [b, a]));
+function _slugAliases(slug) {
+  const w = String(slug).split('_');
+  return [...new Set([w.map(x => _VAR_WORDS[x] || x).join('_'), w.map(x => _VAR_WORDS_REV[x] || x).join('_')])].filter(a => a && a !== slug);
+}
 const _cfLabelCache = new Map();   // user_id → { t, rows }
 async function _cfLabels(pool, uid) {
   const hit = _cfLabelCache.get(uid);
@@ -101,7 +109,7 @@ async function attachCustom(pool, ctx, uidFallback) {
       const src = l.entity === 'company' ? co : k;
       const v = src[l.field_key];
       const slug = _slugVar(l.label);
-      if (slug && v) out[slug] = v;
+      if (slug && v) { out[slug] = v; _slugAliases(slug).forEach(a => { if (!(a in out)) out[a] = v; }); }
     }
     ctx._custom = out;
   } catch (err) { console.warn('[sendEngine] campos personalizados:', err.message); }
