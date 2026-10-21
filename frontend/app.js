@@ -6004,8 +6004,17 @@ const CanteraModule = (() => {
     if (s.has(key)) s.delete(key); else s.add(key);
     _saveVisibleCols(); _paint();
   }
+  function _deFaltantes() {
+    const defs = (_current && _current.datos_extra) || [];
+    return (_companies || []).map(c => [c, window._cantDe.calif(c) ? window._cantDe.falta(c, defs) : []]).filter(([, f]) => f.length);
+  }
+  function _deBanner() {
+    const mal = _deFaltantes(); if (!mal.length) return '';
+    const n = mal.length;
+    return `<div class="cant-de-warn" role="alert"><b>⚠ ${n} empresa${n === 1 ? '' : 's'} calificada${n === 1 ? '' : 's'} sin todos los datos a investigar:</b> ${mal.slice(0, 6).map(([c, f]) => `${esc(c.nombre)} <span class="cant-de-warn__f">(${esc(f.join(', '))})</span>`).join(' · ')}${n > 6 ? ' · …' : ''}<span class="cant-de-warn__sub">Si las pasas al CRM así, sus mensajes saldrán con huecos. Vuelve a investigarlas antes de moverlas.</span></div>`;
+  }
   function _colCellHtml(c, key) {
-    if (key.startsWith('de:')) { const v = (c.datos_extra || {})[key.slice(3)]; return v ? `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>` : '—'; }
+    if (key.startsWith('de:')) return window._cantDe.cell(c, (c.datos_extra || {})[key.slice(3)]);
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
       case 'pais': return esc(c.pais || '—');
@@ -6346,6 +6355,7 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
+        ${_deBanner()}
         ${(() => {
           const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
           if (!_coSel.size && !hasFiltros) return '';
@@ -7651,6 +7661,19 @@ const CanteraModule = (() => {
 
   // Cascada Cliente → Campaña → Secuencia en los modales de Cantera: la campaña solo muestra las del cliente elegido y la
   // secuencia solo las de esa campaña (sin campaña: las del cliente). Pedido 2026-10-13: antes salían TODAS las de todos los clientes.
+  // «Datos a investigar» que faltan: una empresa calificada cuyo dato está vacío o dice «No verificado» llegaría al mensaje con un hueco.
+  window._cantDe = {
+    calif: c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual',
+    falta: (c, defs) => {
+      const nombres = (defs || []).map(d => String(d.nombre || '').trim()).filter(Boolean);
+      const v = c.datos_extra || {};
+      return nombres.filter(n => { const x = String(v[n] == null ? '' : v[n]).trim(); return !x || /^no verificado\b/i.test(x); });
+    },
+    cell: (c, v) => {
+      if (!v) return window._cantDe.calif(c) ? '<span class="cant-de-miss" title="Esta empresa calificó pero no tiene este dato: su mensaje saldría con un hueco">⚠ falta</span>' : '—';
+      return /^no verificado\b/i.test(String(v)) ? `<span class="cant-nota-cell cant-de-miss cant-de-miss--soft" title="${esc(v)}: no se encontró evidencia">⚠ ${esc(v)}</span>` : `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>`;
+    },
+  };
   window._cantCascade = window._cantCascade || {
     data: {},
     init(p, d) { this.data[p] = d; this.change(p, 'init'); },
@@ -7701,6 +7724,11 @@ const CanteraModule = (() => {
       <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="CanteraModule.closePromote()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s)${_coSel.size ? ' de tu selección' : ''} se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
+        ${(() => {
+          const defs = _current.datos_extra || [];
+          const mal = _promoteScope.filter(window._cantDe.calif).map(c => [c, window._cantDe.falta(c, defs)]).filter(([, f]) => f.length);
+          return mal.length ? `<div class="cant-de-warn" role="alert"><b>⚠ ${mal.length} de ellas sin todos los datos a investigar:</b> ${mal.slice(0, 5).map(([c, f]) => `${esc(c.nombre)} <span class="cant-de-warn__f">(${esc(f.join(', '))})</span>`).join(' · ')}${mal.length > 5 ? ' · …' : ''}<span class="cant-de-warn__sub">Sus mensajes saldrán con huecos. Puedes moverlas igual o investigarlas antes.</span></div>` : '';
+        })()}
         <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input" onchange="_cantCascade.change('cant-pr','client')">
           <option value="">— elegir —</option>
           ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
@@ -8018,7 +8046,7 @@ const CanteraMesaModule = (() => {
   }
   function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado_manual' ? 'Descartado manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function _colCellHtml(c, key) {
-    if (key.startsWith('de:')) { const v = (c.datos_extra || {})[key.slice(3)]; return v ? `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>` : '—'; }
+    if (key.startsWith('de:')) return window._cantDe.cell(c, (c.datos_extra || {})[key.slice(3)]);
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
       case 'pais': return esc(c.pais || '—');
