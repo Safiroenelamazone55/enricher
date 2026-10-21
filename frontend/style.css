@@ -18416,3 +18416,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .pl-prevwrap { position: relative; flex: 1 1 auto; min-height: 520px; }
 .pl-prevwrap .pl-prev { position: absolute; inset: 0; max-height: none; }
 @media (max-width: 960px) { .pl-prevwrap { min-height: 70vh; } }
+.seqdo-miss--empty { background: #FDECEA; color: #B42318; border: 1px solid #F5B8B1; border-radius: 4px; padding: 0 5px; font-weight: 700; white-space: nowrap; }
+.seqdo-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 8px; padding: 8px 10px; background: #FDECEA; border: 1px solid #F5B8B1; color: #B42318; font-size: .82rem; }
+.seqdo-warn__sub { flex-basis: 100%; font-size: .76rem; color: #7A271A; font-weight: 500; }

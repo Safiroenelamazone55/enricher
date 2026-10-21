@@ -24382,7 +24382,7 @@ ${foot}
     } catch (err) { showBanner('Error: ' + err.message, 'error'); }
   }
   // ── Panel de ejecución de tarea (task flow estilo Outreach) ──
-  function _seqRenderTpl(tpl, s) {
+  function _seqRenderTpl(tpl, s, mark) {
     s = s || {};
     const full = [s.nombre, s.apellido].filter(Boolean).join(' ');
     const empresa = s.company_nombre || s.empresa_nombre || '';
@@ -24416,11 +24416,11 @@ ${foot}
       const k = tok.trim().toLowerCase().replace(/[\s-]+/g, '_');
       if (!(k in MAP)) {
         const CM = _customVarMap(s);
-        if (k in CM) { const cv = CM[k]; return cv == null ? '' : String(cv); }
+        if (k in CM) { const cv = CM[k]; return (cv == null || cv === '') ? (mark ? '\u0001' + tok.trim() + '\u0002' : '') : String(cv); }
         return m;
       }
       const v = MAP[k];
-      return v == null ? '' : String(v);
+      return (v == null || v === '') ? (mark ? '\u0001' + tok.trim() + '\u0002' : '') : String(v);
     });
   }
   // Campos personalizados con nombre (Configuración) como variables {{nombre_del_campo}}: de la empresa (company_campoN) o del contacto (campoN).
@@ -24433,6 +24433,26 @@ ${foot}
   const w = String(slug).split('_');
   return [...new Set([w.map(x => _VAR_WORDS[x] || x).join('_'), w.map(x => _VAR_WORDS_REV[x] || x).join('_')])].filter(a => a && a !== slug);
 }
+  // Mensaje con datos vacíos: cada hueco se ve como una etiqueta roja «⚠ falta X» y el mensaje lleva un aviso arriba.
+  let _seqDoMissing = [];
+  function _seqMarkHtml(marked) {
+    return esc(marked)
+      .replace(/\u0001([^\u0002]*)\u0002/g, (m, n) => `<span class="seqdo-miss seqdo-miss--empty" title="Este dato está vacío para este contacto o empresa: el mensaje saldría con un hueco">⚠ falta ${n}</span>`)
+      .replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+  }
+  function _seqMissingOf(marked) {
+    const out = [];
+    String(marked || '').replace(/\u0001([^\u0002]*)\u0002/g, (m, n) => { out.push(n.trim()); return m; });
+    String(marked || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m, n) => { out.push(n.trim()); return m; });
+    return [...new Set(out)];
+  }
+  function _seqMissBanner(list) {
+    if (!list || !list.length) return '';
+    return `<div class="seqdo-warn" role="alert"><b>⚠ Faltan datos en este mensaje:</b> ${list.map(n => `<span class="seqdo-miss">${esc(n)}</span>`).join(' ')}<span class="seqdo-warn__sub">Se enviaría con huecos. Completa el dato en la ficha o salta este contacto.</span></div>`;
+  }
+  function seqDoConfirmMissing() {
+    return !_seqDoMissing.length || confirm('Este mensaje tiene datos vacíos (' + _seqDoMissing.join(', ') + ') y saldría con huecos.\n\n¿Continuar de todos modos?');
+  }
   function _customVarMap(s) {
     const out = {};
     ['company', 'contact'].forEach(ent => (_lmCustomFields[ent] || []).forEach(f => {
@@ -24798,6 +24818,8 @@ ${foot}
 
     const variant = _stepVariant(st, c);
     const rendered = draft ? (draft.cuerpo || '') : _seqRenderTpl(variant.cuerpo || '', src);
+    const markedTxt = draft ? null : _seqRenderTpl(variant.cuerpo || '', src, true);
+    _seqDoMissing = markedTxt != null ? _seqMissingOf(markedTxt) : [];
     _seqDoText = rendered;
     const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : '';
     _seqDoSubject = subject;
@@ -24807,7 +24829,7 @@ ${foot}
     const isCmt = _isCommentStep(st.canal, st.accion);
     const vtag = draft ? ` <span class="cp-var-tag" style="background:#EAE7E2;color:#5B21B6">${NI('sparkles')} Mensaje IA</span>`
                : (_stepVariants(st).length > 1 ? ` <span class="cp-var-tag">Variante ${esc(variant.nombre || '?')}</span>` : '');
-    const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+    const disp = markedTxt != null ? _seqMarkHtml(markedTxt) : esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
 
     // Buzón/CC del cliente outbound (informativos, para el envío manual desde Zoho/etc.)
     const obc = _clients.find(x => x.id === (seq && seq.outbound_client_id)) || {};
@@ -24866,7 +24888,7 @@ ${foot}
       ${isCmt
         ? _cpCmtHtml(cid, st, seqId)
         : hasMsg
-        ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
+        ? `<div class="cp-taskbar__tpl">${_seqMissBanner(_seqDoMissing)}<div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
         ${chanHtml}
@@ -24899,8 +24921,10 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const pos = queue.findIndex(t => t.e.contact_id === cid);
     const rendered = _seqRenderTpl(st.plantilla, src);
+    const markedTxt2 = _seqRenderTpl(st.plantilla, src, true);
+    _seqDoMissing = _seqMissingOf(markedTxt2);
     _seqDoText = rendered;
-    const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+    const disp = _seqMarkHtml(markedTxt2);
     const chip = (lbl, val) => val ? `<span class="seqdo-chip"><b>${lbl}:</b> ${esc(val)}</span>` : '';
     document.getElementById('seq-do-modal')?.remove();
     const m = document.createElement('div'); m.id = 'seq-do-modal'; m.className = 'fin-pi-backdrop';
@@ -24927,7 +24951,7 @@ ${foot}
         <div class="seqdo-tplwrap">
           <div class="seqdo-tpl-hd"><span>Mensaje del paso</span>${st.plantilla ? `<button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button>` : ''}</div>
           ${st.plantilla
-            ? `<div class="seqdo-tpl">${disp}</div>`
+            ? `${_seqMissBanner(_seqDoMissing)}<div class="seqdo-tpl">${disp}</div>`
             : `<div class="seqdo-tpl seqdo-tpl--empty">Este paso aún no tiene plantilla. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádela en el paso</a> usando variables como <code>//nombre//</code>.</div>`}
         </div>
       </div>
@@ -24940,6 +24964,7 @@ ${foot}
   }
   function seqDoCopy() {
     const txt = _seqDoText || ''; if (!txt) return;
+    if (!seqDoConfirmMissing()) return;
     const ok = () => showBanner('✓ Mensaje copiado', 'success');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => _seqDoCopyFallback(txt, ok));
     else _seqDoCopyFallback(txt, ok);
@@ -24972,6 +24997,7 @@ ${foot}
   }
   async function seqDoDone() {
     if (!_cpTaskCtx) return;
+    if (!seqDoConfirmMissing()) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
     try {
@@ -33768,6 +33794,7 @@ ${foot}
     if (pr.startsWith('dato_')) return 'Falta corregir un dato';
     if (pr === 'sin_traduccion') return 'Falta el mensaje en su idioma';
     if (pr === 'paso_sin_mensaje') return 'El paso no tiene mensaje escrito';
+    if (pr === 'variables_vacias') return 'Faltan datos para el mensaje (variable vacía)';
     return pr;
   }
   function _cpFmtDate(d) { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }

@@ -582,6 +582,12 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
     asunto    = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr) || `Seguimiento — ${enr.company_nombre || enr.empresa_nombre || enr.nombre || enr.email}`;
     cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
     variantName = multi ? String(variant.nombre || 'A') : '';
+    // Nunca se envía solo un mensaje con huecos («…versus  y …»): se pausa el contacto y queda una tarea que dice qué dato falta.
+    const faltan = emptyVars(((variant && variant.cuerpo) || step.plantilla || '') + ' ' + ((variant && variant.asunto) || step.asunto || ''), enr);
+    if (faltan.length) {
+      await _pauseEnrollment(pool, enr, 'variables_vacias', `Mensaje sin enviar: faltan datos (${faltan.join(', ')}) para ${enr.nombre || enr.email || 'este contacto'} en «${enr.seq_nombre}». Complétalos en la ficha o salta el paso.`);
+      return false;
+    }
   }
   if (blankBody(cuerpoTxt)) { await _pauseEnrollment(pool, enr, 'paso_sin_mensaje', null); return false; }
   const token = crypto.randomBytes(12).toString('hex');
