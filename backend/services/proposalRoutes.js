@@ -282,6 +282,8 @@ function mount(app, { pool, requireAuth }) {
     if (descarga) { const ascii = nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]|[\/:*?"<>|]/g, '_'); res.setHeader('Content-Disposition', `attachment; filename="${ascii}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`); }
     // Cloudflare reescribe los correos del HTML como «[email protected]» (se ve así al imprimir a PDF o al guardar el archivo).
     // Con la arroba como entidad (&#64;) no los detecta, y el navegador la muestra y enlaza como una arroba normal.
+    // copias guardadas antes del arreglo: sin salto de página tras la última hoja (evita una página en blanco al final del PDF)
+    if (/class="page/.test(html) && !/page:last-of-type\{break-after/.test(html)) html = String(html).replace('</style></head>', '@media print{.page{height:1054px}.page:last-of-type{break-after:auto;page-break-after:auto}}</style></head>');
     res.send(String(html).replace(/([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, '$1&#64;$2'));
   };
   app.get('/api/tpl/copies/:id/html', A, wrap(async (req, res) => {
