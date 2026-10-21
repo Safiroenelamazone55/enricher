@@ -24013,14 +24013,43 @@ ${foot}
       });
     });
   }
+  // Selector de dispositivo para ver el correo tal como se verá: escritorio (editable, por defecto), tablet y móvil (iframe del ancho real).
+  const _DEV_ICO = {
+    desktop: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>',
+    tablet: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M11 18.5h2"/></svg>',
+    mobile: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="2.5" width="9" height="19" rx="2"/><path d="M11 18.5h2"/></svg>',
+  };
+  const _DEV_W = { tablet: 768, mobile: 390 };
   function _seqMailHtml(bodyId, text, locked, idioma, variant) {
     const sig = _seqSigFor(idioma, variant);
     const sigHtml = sig ? _linkifySig(sig.includes('<') ? _sigResponsive(sig) : esc(sig).replace(/\n/g, '<br>')) : '';
-    return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
-      '<div class="seq-app__mail">' +
+    const devBtns = ['desktop', 'tablet', 'mobile'].map(d => '<button type="button" class="seq-dev' + (d === 'desktop' ? ' on' : '') + '" data-dev="' + d + '" title="' + ({ desktop: 'Escritorio', tablet: 'Tablet (768 px)', mobile: 'Móvil (390 px)' })[d] + '" onclick="LeadManagerModule.seqMailDevice(\'' + bodyId + '\',\'' + d + '\')">' + _DEV_ICO[d] + '</button>').join('');
+    return '<div class="seq-app__sigl"><span>Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</span><span class="seq-devs" id="devs-' + bodyId + '">' + devBtns + '</span></div>' +
+      '<div class="seq-app__mail" id="mailbox-' + bodyId + '">' +
         '<div class="seq-app__mail-body" id="mail-' + bodyId + '" contenteditable="' + (locked ? 'false' : 'plaintext-only') + '" spellcheck="true" oninput="LeadManagerModule.seqMailSync(\'' + bodyId + '\')">' + esc(text || '') + '</div>' +
         (sigHtml ? '<div class="seq-app__mail-sig" contenteditable="false">' + sigHtml + '</div>' : '') +
-      '</div>';
+      '</div>' +
+      '<div class="seq-devprev" id="devprev-' + bodyId + '" hidden></div>';
+  }
+  // Cambia entre escritorio (editable) y tablet/móvil (vista previa de solo lectura, con el ancho real del dispositivo).
+  function seqMailDevice(bodyId, dev) {
+    const mail = $('mailbox-' + bodyId), prev = $('devprev-' + bodyId), devs = $('devs-' + bodyId);
+    if (!mail || !prev) return;
+    if (devs) devs.querySelectorAll('.seq-dev').forEach(b => b.classList.toggle('on', b.dataset.dev === dev));
+    if (dev === 'desktop') { prev.hidden = true; prev.innerHTML = ''; mail.hidden = false; _seqFitSoon(); return; }
+    const w = _DEV_W[dev] || 390;
+    const body = $('mail-' + bodyId), sigEl = mail.querySelector('.seq-app__mail-sig');
+    const txt = body ? body.innerText : '';
+    // igual que el envío real: texto con enlaces y saltos de línea + dos saltos + firma
+    const html = esc(txt).replace(/(https?:\/\/[^\s<]+)/g, u => '<a href="' + u + '" style="color:#00804C">' + u + '</a>').replace(/\n/g, '<br>');
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:14px;background:#fff">'
+      + '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">' + html + (sigEl ? '<br><br>' + sigEl.innerHTML : '') + '</div></body></html>';
+    mail.hidden = true; prev.hidden = false;
+    prev.innerHTML = '<div class="seq-devprev__lbl">' + (dev === 'tablet' ? 'Tablet' : 'Móvil') + ' · ' + w + ' px · vista previa de solo lectura (para editar vuelve a Escritorio)</div>'
+      + '<div class="seq-devprev__frame seq-devprev__frame--' + dev + '" style="width:' + w + 'px"><iframe sandbox="allow-same-origin" title="Vista previa" style="width:' + w + 'px;height:420px"></iframe></div>';
+    const fr = prev.querySelector('iframe');
+    fr.onload = () => { try { fr.style.height = Math.min(fr.contentDocument.documentElement.scrollHeight + 4, 720) + 'px'; } catch (_) {} };
+    fr.srcdoc = doc;
   }
   // El correo por aprobar / corregir debe verse COMPLETO en pantalla, sin hacer scroll: si la tarjeta no cabe en el alto de la ventana,
   // se reduce el zoom SOLO del recuadro del correo (mínimo 85%) hasta que cabe. Se recalcula al escribir, al cambiar de tarjeta y al redimensionar.
@@ -36203,7 +36232,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

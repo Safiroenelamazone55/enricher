@@ -18440,3 +18440,15 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 @media (max-width: 900px) { .lm-fix-hint, .lm-fix-hint--ok { grid-template-columns: 1fr; } }
 .lm-fix-row__f .lm-fix-row__in { width: 178px; }
 .lm-fix-row__in--p { border-style: dashed; }
+.seq-app__sigl { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.seq-devs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); background: var(--surface); }
+.seq-dev { border: none; background: none; padding: 4px 8px; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; }
+.seq-dev:hover { color: var(--text); background: var(--surface-secondary); }
+.seq-dev.on { color: var(--primary); background: var(--surface-secondary); }
+.seq-devprev { margin-top: 8px; padding: 14px 10px 18px; background: #EEF0F3; border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 10px; overflow-x: auto; }
+.seq-devprev[hidden], .seq-app__mail[hidden] { display: none; }
+.seq-devprev__lbl { font-size: .72rem; color: var(--muted); }
+.seq-devprev__frame { background: #fff; border: 8px solid #1f2937; box-shadow: 0 8px 28px rgba(15, 23, 42, .22); box-sizing: content-box; max-width: none; }
+.seq-devprev__frame--mobile { border-radius: 26px; border-width: 10px; }
+.seq-devprev__frame--tablet { border-radius: 16px; }
+.seq-devprev__frame iframe { display: block; border: 0; background: #fff; }
