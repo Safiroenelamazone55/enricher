@@ -264,7 +264,7 @@ function mount(app, { pool, requireAuth }) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-    if (descarga) res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[\\/:*?"<>|\r\n]+/g, '_')}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`);
+    if (descarga) { const ascii = nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]|[\/:*?"<>|]/g, '_'); res.setHeader('Content-Disposition', `attachment; filename="${ascii}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`); }
     res.send(html);
   };
   app.get('/api/tpl/copies/:id/html', A, wrap(async (req, res) => {
