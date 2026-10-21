@@ -280,7 +280,9 @@ function mount(app, { pool, requireAuth }) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     if (descarga) { const ascii = nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]|[\/:*?"<>|]/g, '_'); res.setHeader('Content-Disposition', `attachment; filename="${ascii}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`); }
-    res.send(html);
+    // Cloudflare reescribe los correos del HTML como «[email protected]» (se ve así al imprimir a PDF o al guardar el archivo).
+    // Con la arroba como entidad (&#64;) no los detecta, y el navegador la muestra y enlaza como una arroba normal.
+    res.send(String(html).replace(/([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, '$1&#64;$2'));
   };
   app.get('/api/tpl/copies/:id/html', A, wrap(async (req, res) => {
     const { rows: [c] } = await pool.query('SELECT titulo,archivo,html FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
