@@ -39,6 +39,7 @@ async function init(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS tpl_pay_methods (
     id SERIAL PRIMARY KEY, user_id INT NOT NULL, nombre TEXT NOT NULL, preferido BOOLEAN DEFAULT FALSE, orden INT DEFAULT 0,
     accounts JSONB DEFAULT '[]'::jsonb, textos JSONB DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`);
+  await pool.query('ALTER TABLE tpl_pay_methods ADD COLUMN IF NOT EXISTS template_id INT');
 }
 
 async function seedIfEmpty(pool, uid) {
@@ -73,7 +74,7 @@ function payDefaults(d) {
   d = d || {}; const ps = d.pasos || {};
   return { metodos: (Array.isArray(d.metodos) ? d.metodos : []).map(n => parseInt(n, 10)).filter(n => n > 0).slice(0, 20),
     pasos: { comprobante: ps.comprobante !== false, referencia: !!ps.referencia, plazo: !!ps.plazo },
-    plazoHoras: Math.min(240, Math.max(1, parseInt(d.plazoHoras, 10) || 24)) };
+    plazoHoras: Math.min(240, Math.max(1, parseInt(d.plazoHoras, 10) || 24)), pagoEmail: S(d.pagoEmail, 160), pagoTel: S(d.pagoTel, 40) };
 }
 // método de pago: cuentas con campos estándar (etiquetas traducidas) + textos por idioma (insignia, nota, pasos)
 function cleanMethod(b) {
@@ -138,11 +139,13 @@ function mount(app, { pool, requireAuth }) {
   // ---- métodos de pago
   app.get('/api/tpl/methods', A, wrap(async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 ORDER BY preferido DESC, orden, id', [uid(req)]);
-    res.json(rows);
+    res.json(rows);   // todos; cada uno trae template_id (la plantilla/persona a la que pertenece)
   }));
   app.post('/api/tpl/methods', A, wrap(async (req, res) => {
     const m = cleanMethod(req.body); if (!m.nombre) return res.status(400).json({ error: 'Ponle un nombre al método (ej. Interbank, PayPal)' });
-    const { rows: [r] } = await pool.query('INSERT INTO tpl_pay_methods (user_id,nombre,preferido,accounts,textos) VALUES ($1,$2,$3,$4,$5) RETURNING *', [uid(req), m.nombre, m.preferido, JSON.stringify(m.accounts), JSON.stringify(m.textos)]);
+    const { rows: [t] } = await pool.query("SELECT id FROM tpl_templates WHERE id=$1 AND user_id=$2 AND tipo='pago'", [parseInt(req.body.template_id, 10) || 0, uid(req)]);
+    if (!t) return res.status(400).json({ error: 'El método debe pertenecer a una plantilla de pagos' });
+    const { rows: [r] } = await pool.query('INSERT INTO tpl_pay_methods (user_id,nombre,preferido,accounts,textos,template_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [uid(req), m.nombre, m.preferido, JSON.stringify(m.accounts), JSON.stringify(m.textos), t.id]);
     res.json(r);
   }));
   app.put('/api/tpl/methods/:id', A, wrap(async (req, res) => {
@@ -189,10 +192,19 @@ function mount(app, { pool, requireAuth }) {
   app.post('/api/tpl/templates/:id/duplicate', A, wrap(async (req, res) => {
     const { rows: [r] } = await pool.query(`INSERT INTO tpl_templates (user_id,nombre,oferta,brand_id,lang,defaults,tipo) SELECT user_id, LEFT(nombre||' (copia)',100), oferta, brand_id, lang, defaults, tipo FROM tpl_templates WHERE id=$1 AND user_id=$2 RETURNING *`, [req.params.id, uid(req)]);
     if (!r) return res.status(404).json({ error: 'No encontrada' });
+    if (r.tipo === 'pago') {
+      const { rows: olds } = await pool.query('SELECT * FROM tpl_pay_methods WHERE template_id=$1 AND user_id=$2 ORDER BY id', [req.params.id, uid(req)]);
+      const map = {};
+      for (const m of olds) { const { rows: [n] } = await pool.query('INSERT INTO tpl_pay_methods (user_id,nombre,preferido,orden,accounts,textos,template_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [uid(req), m.nombre, m.preferido, m.orden, JSON.stringify(m.accounts), JSON.stringify(m.textos), r.id]); map[m.id] = n.id; }
+      const d = r.defaults || {}; d.metodos = (d.metodos || []).map(i => map[i]).filter(Boolean);
+      await pool.query('UPDATE tpl_templates SET defaults=$2 WHERE id=$1', [r.id, JSON.stringify(d)]);
+      r.defaults = d;
+    }
     res.json(tplOut({ ...r, copias: 0 }));
   }));
   app.delete('/api/tpl/templates/:id', A, wrap(async (req, res) => {
     await pool.query('UPDATE tpl_copies SET template_id=NULL WHERE template_id=$1 AND user_id=$2', [req.params.id, uid(req)]);   // las copias generadas se conservan
+    await pool.query('DELETE FROM tpl_pay_methods WHERE template_id=$1 AND user_id=$2', [req.params.id, uid(req)]);
     await pool.query('DELETE FROM tpl_templates WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
     res.json({ ok: true });
   }));
@@ -205,9 +217,9 @@ function mount(app, { pool, requireAuth }) {
     if (!b) return null;
     if (t.tipo === 'pago') {
       const pr = params || {}, d = payDefaults({ ...(t.defaults || {}), ...(Array.isArray(pr.metodos) ? { metodos: pr.metodos } : {}), ...(pr.pasos ? { pasos: pr.pasos } : {}), ...(pr.plazoHoras ? { plazoHoras: pr.plazoHoras } : {}) });
-      const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND id = ANY($2::int[])', [uid(req), d.metodos]) : { rows: [] };
+      const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND template_id=$3 AND id = ANY($2::int[])', [uid(req), d.metodos, t.id]) : { rows: [] };
       const ms = d.metodos.map(id => rows.find(r => r.id === id)).filter(Boolean);
-      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: cleanLogoCliente(pr.logoCliente), pasos: d.pasos, plazoHoras: d.plazoHoras, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
+      const p = { cliente: S(pr.cliente, 120), monto: S(pr.monto, 60), ref: S(pr.ref, 80), logoCliente: cleanLogoCliente(pr.logoCliente), pasos: d.pasos, plazoHoras: d.plazoHoras, pagoEmail: d.pagoEmail, pagoTel: d.pagoTel, extra: String(pr.extra || '').split('\n').map(x => S(x, 300)).filter(Boolean).slice(0, 6), metodos: d.metodos };
       return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms) };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];

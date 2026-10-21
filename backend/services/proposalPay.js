@@ -37,7 +37,7 @@ function render(brand, p, lang, methods) {
   const b = brand || {};
   const prim = hex(b.color_primary, '#0F9F8F'), light = hex(b.color_light, '#2DD4BF'), dark = hex(b.color_dark, '#0F172A');
   const marca = b.nombre || '', mail = b.email || '', tel = b.telefono || '';
-  const pmail = b.pago_email || mail, ptel = b.pago_telefono || tel;      // contacto personal para pagos (comprobante y dudas)
+  const pmail = p.pagoEmail || b.pago_email || mail, ptel = p.pagoTel || b.pago_telefono || tel;      // contacto personal para pagos (comprobante y dudas)
   const wa = t => 'https://wa.me/' + String(t).replace(/\D/g, '');
   const waLink = t => `<a href="${esc(wa(t))}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>`;
   const mailLink = m => `<a href="mailto:${esc(m)}">${esc(m)}</a>`;

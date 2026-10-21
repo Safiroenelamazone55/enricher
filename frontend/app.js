@@ -38778,9 +38778,9 @@ const PlantillasModule = (() => {
   function _draw() {
     if (!_host) return;
     if (_gen) return _drawGen();
-    const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['metodos', 'Métodos de pago'], ['marcas', 'Empresas y logos']]
+    const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['marcas', 'Empresas y logos']]
       .map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="PlantillasModule.tab('${k}')">${l}</button>`).join('');
-    const inner = _tab === 'plantillas' ? _viewPlantillas() : _tab === 'copias' ? _viewCopias() : _tab === 'metodos' ? _viewMetodos() : _viewMarcas();
+    const inner = _tab === 'plantillas' ? _viewPlantillas() : _tab === 'copias' ? _viewCopias() : _viewMarcas();
     _host.innerHTML = `<div class="pl-wrap"><div class="hrm-hd"><h1 class="hrm-h1">Plantillas</h1>
       <p class="hrm-sub">Propuestas y métodos de pago listos para personalizar, exportar en varios idiomas y guardar como copia.</p></div>
       <div class="pl-tabs">${tabs}</div>${inner}</div>`;
@@ -38813,9 +38813,11 @@ const PlantillasModule = (() => {
       <label class="pl-ck"><input type="checkbox" id="${pre}-ref" ${pasos.referencia ? 'checked' : ''}> Pedir que incluya la referencia</label>
       <label class="pl-ck"><input type="checkbox" id="${pre}-plazo" ${pasos.plazo ? 'checked' : ''}> Avisar que confirmas la recepción en <input class="pl-in pl-mini" id="${pre}-horas" type="number" min="1" value="${horas || 24}"> horas hábiles</label>`;
   }
-  function _metodosChecks(pre, sel) {
-    if (!_methods.length) return '<p class="hrm-card__meta">Aún no tienes métodos de pago: créalos en la pestaña «Métodos de pago».</p>';
-    return _methods.map(m => `<label class="pl-ck"><input type="checkbox" class="${pre}-m" value="${m.id}" ${(sel || []).includes(m.id) ? 'checked' : ''}> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('');
+  const _mios = tid => _methods.filter(m => m.template_id === tid);
+  function _metodosSeccion(tid, sel) {
+    if (!tid) return '<p class="hrm-card__meta">Guarda la plantilla y vuelve a abrirla con «Editar»: ahí agregas las cuentas y métodos de esta persona.</p>';
+    const rows = _mios(tid).map(m => `<div class="pl-mrow"><label class="pl-ck"><input type="checkbox" class="plt-m" value="${m.id}" ${(sel || []).includes(m.id) ? 'checked' : ''}> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label><button class="hrm-lnk" onclick="PlantillasModule.editMetodo(${m.id},${tid})">Editar</button></div>`).join('');
+    return `${rows || '<p class="hrm-card__meta">Esta plantilla aún no tiene cuentas.</p>'}<button class="hrm-lnk" onclick="PlantillasModule.editMetodo(0,${tid})">+ Agregar método de pago</button>`;
   }
 
   function editTpl(id) {
@@ -38838,14 +38840,15 @@ const PlantillasModule = (() => {
           <div><label class="pl-l">…parte resaltada</label><input class="pl-in" id="plt-servem" value="${E(d.servicioEm || '')}" placeholder="Ej. Go-to-Market"></div></div>
         <p class="hrm-card__meta">Si dejas el título vacío se usa «Sistema de Adquisición Comercial B2B» traducido a cada idioma. Modelo y nota vacíos usan el texto traducido por defecto.</p></div>
       <div id="plt-sec-pago" ${t.tipo === 'pago' ? '' : 'hidden'}>
-        <label class="pl-l">Métodos de pago que incluye por defecto</label><div class="pl-ckw">${_metodosChecks('plt', d.metodos)}</div>
+        <label class="pl-l">Cuentas y métodos de esta persona (marca los que se muestran por defecto)</label><div class="pl-ckw">${_metodosSeccion(id, d.metodos)}</div>
+        <div class="pl-row"><div><label class="pl-l">Correo para el comprobante</label><input class="pl-in" id="plt-pemail" value="${E(d.pagoEmail || '')}" placeholder="vacío = el de la empresa"></div><div><label class="pl-l">WhatsApp para el comprobante</label><input class="pl-in" id="plt-ptel" value="${E(d.pagoTel || '')}" placeholder="vacío = el de la empresa"></div></div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plt', d.pasos, d.plazoHoras)}</div></div>`,
       [id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delTpl(${id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveTpl(${id})">Guardar</button>`]);
   }
   function tipoChange(v) { $('plt-sec-propuesta').hidden = v === 'pago'; $('plt-sec-pago').hidden = v !== 'pago'; }
   const _chk = id => !!($(id) && $(id).checked);
   function _payFromForm(pre) {
-    return { metodos: [...document.querySelectorAll(`.${pre}-m:checked`)].map(i => +i.value), pasos: { comprobante: _chk(pre + '-comp'), referencia: _chk(pre + '-ref'), plazo: _chk(pre + '-plazo') }, plazoHoras: $(pre + '-horas').value };
+    return { metodos: [...document.querySelectorAll(`.${pre}-m:checked`)].map(i => +i.value), pasos: { comprobante: _chk(pre + '-comp'), referencia: _chk(pre + '-ref'), plazo: _chk(pre + '-plazo') }, plazoHoras: $(pre + '-horas').value, pagoEmail: ($('plt-pemail') || {}).value || '', pagoTel: ($('plt-ptel') || {}).value || '' };
   }
   async function saveTpl(id) {
     const v = k => $('plt-' + k).value;
@@ -38900,7 +38903,7 @@ const PlantillasModule = (() => {
     if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
         <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
-        <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_methods.map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Crea métodos en «Métodos de pago».</span>'}</div>
+        <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_mios(g.t.id).map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Esta plantilla aún no tiene cuentas: agrégalas en «Editar».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
     } else {
@@ -38937,7 +38940,7 @@ const PlantillasModule = (() => {
   function usarLogoCliente(k) { _gen.p.logoCliente.usar = k; _preview(); }
   function toggleMetodo(id, on) {
     const g = _gen; g.p.metodos = on ? [...g.p.metodos, id] : g.p.metodos.filter(x => x !== id);
-    g.p.metodos = _methods.map(m => m.id).filter(x => g.p.metodos.includes(x));   // el orden es el de la lista de métodos
+    g.p.metodos = _mios(g.t.id).map(m => m.id).filter(x => g.p.metodos.includes(x));   // el orden es el de la lista de métodos
     const w = document.querySelector('.pl-warn'); if (w) w.remove();
     const ta = document.querySelector('textarea[data-k="extra"]'); if (ta) ta.insertAdjacentHTML('afterend', _faltan());
     clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
@@ -39006,22 +39009,11 @@ const PlantillasModule = (() => {
   }
   async function delCopia(id) { if (!confirm('¿Eliminar esta copia? El enlace compartido dejará de funcionar.')) return; try { await _j(`/tpl/copies/${id}`, { method: 'DELETE' }); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
 
-  // ── Métodos de pago ──
-  function _viewMetodos() {
-    const cards = _methods.map(m => {
-      const idiomas = Object.keys(LANGS).filter(l => (m.textos || {})[l] && ((m.textos[l].nota || '') || (m.textos[l].pasos || []).length || (m.textos[l].badge || ''))).map(l => l.toUpperCase()).join(' · ') || '—';
-      const monedas = (m.accounts || []).map(a => a.moneda).filter(Boolean).join(' · ');
-      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${m.preferido ? '★ Preferido' : 'Método'}</span><span class="hrm-card__meta">${E(monedas)}</span></div>
-        <h3 class="hrm-card__t">${E(m.nombre)}</h3><p class="hrm-card__meta">${(m.accounts || []).length} cuenta${(m.accounts || []).length === 1 ? '' : 's'} · textos en ${idiomas}</p>
-        <div class="hrm-card__acts"><button class="btn btn-ghost" onclick="PlantillasModule.editMetodo(${m.id})">Editar</button></div></div>`;
-    }).join('');
-    return `<div class="pl-bar"><span class="hrm-sub">Cuentas y formas de cobro. Al generar un documento eliges cuáles mostrar; los números se escriben una sola vez y las etiquetas se traducen solas.</span>
-      <button class="btn btn-primary" onclick="PlantillasModule.editMetodo(0)">+ Nuevo método</button></div><div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay métodos.</p>'}</div>`;
-  }
-  function editMetodo(id) {
+  // ── Métodos de pago (pertenecen a una plantilla/persona; se editan desde «Editar plantilla») ──
+  function editMetodo(id, tid) {
     const m = _methods.find(x => x.id === id);
     _md = m ? JSON.parse(JSON.stringify({ nombre: m.nombre, preferido: m.preferido, accounts: m.accounts || [], textos: m.textos || {} })) : { nombre: '', preferido: false, accounts: [{ moneda: '', fields: [{ k: 'account', label: '', value: '' }] }], textos: {} };
-    _md.id = id; _mdLang = 'es';
+    _md.id = id; _md.template_id = id ? m.template_id : tid; _mdLang = 'es';
     _mdDraw();
   }
   function _mdRead() {
@@ -39079,10 +39071,11 @@ const PlantillasModule = (() => {
     _mdRead();
     try {
       await _j(_md.id ? `/tpl/methods/${_md.id}` : '/tpl/methods', _body({ method: _md.id ? 'PUT' : 'POST', data: _md }));
-      _closeModal(); showBanner('Método guardado', 'success'); render(_host.id);
+      showBanner('Método guardado', 'success'); await _volverATpl();
     } catch (e) { showBanner(e.message, 'error'); }
   }
-  async function delMetodo(id) { if (!confirm('¿Eliminar este método? Las plantillas que lo usan dejarán de mostrarlo; las copias ya generadas no cambian.')) return; try { await _j(`/tpl/methods/${id}`, { method: 'DELETE' }); _closeModal(); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+  async function _volverATpl() { const tid = _md.template_id; _methods = await _j('/tpl/methods'); _tpls = await _j('/tpl/templates'); _draw(); editTpl(tid); }
+  async function delMetodo(id) { if (!confirm('¿Eliminar este método? Las plantillas que lo usan dejarán de mostrarlo; las copias ya generadas no cambian.')) return; try { await _j(`/tpl/methods/${id}`, { method: 'DELETE' }); await _volverATpl(); } catch (e) { showBanner(e.message, 'error'); } }
 
   // ── Empresas y logos ──
   function _viewMarcas() {

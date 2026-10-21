@@ -18410,3 +18410,4 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .pl-cs__use { font-size: .8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .pl-cs__box { height: 40px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--muted); overflow: hidden; }
 .pl-cs__box img { max-width: 90%; max-height: 30px; }
+.pl-mrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
