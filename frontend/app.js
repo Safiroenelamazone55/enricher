@@ -24611,6 +24611,7 @@ ${foot}
       const win = window.open(url, 'nova_linkedin', `width=${pw},height=${h},left=${w - pw},top=0`);
       if (win) win.focus(); else window.open(url, '_blank');
     } catch (e) { window.open(url, '_blank'); }
+    _cpMarkDone('open');
   }
   // Vínculo con plantilla — automático:
   //  · Si la variante tiene tplId → texto/asunto EN VIVO de esa plantilla.
@@ -24892,6 +24893,15 @@ ${foot}
   }
   // CC efectivo de un paso: el del cliente, salvo que el paso lo tenga desactivado (cc_off). Única regla para runner, revisión y envío.
   function _ccFor(st, obc) { return (st && st.cc_off) ? '' : String((obc && obc.cc_email) || '').trim(); }
+  // Lo que ya hiciste en ESTA tarea (copiar el mensaje, abrir el LinkedIn): se ve en el propio botón (cambia de color e icono), sin avisos arriba.
+  const _cpFlags = {}; let _cpKey = '';
+  const _cpFlag = k => !!(_cpFlags[_cpKey] && _cpFlags[_cpKey][k]);
+  function _cpMarkDone(act) {
+    (_cpFlags[_cpKey] = _cpFlags[_cpKey] || {})[act] = true;
+    if (act === 'copy') document.querySelectorAll('[data-act="copy"]').forEach(b => { b.classList.add('is-done'); b.innerHTML = NI('check', 13) + ' Copiado'; b.title = 'Ya copiado: pulsa para copiar otra vez'; });
+    if (act === 'subj') document.querySelectorAll('[data-act="subj"]').forEach(b => { b.classList.add('is-done'); b.innerHTML = NI('check', 13); b.title = 'Asunto copiado'; });
+    if (act === 'open') document.querySelectorAll('.cp-taskbar__mt--liopen').forEach(b => { b.classList.add('is-done'); const o = b.querySelector('.cp-taskbar__open'); if (o) o.innerHTML = NI('check', 12) + 'Abierto'; b.title = 'Ya abierto: pulsa para abrirlo otra vez'; });
+  }
   function _cpTaskBar(cid) {
     if (!_cpTaskCtx) return '';
     if (_cpTaskCtx.approve) return _cpApproveBar(cid);
@@ -24901,6 +24911,7 @@ ${foot}
     const eff = e ? _effIdx(steps, cid, (e.paso || 1) - 1) : -1;
     const st = eff >= 0 ? steps[eff] : null;
     if (!e || !st) return '';
+    _cpKey = cid + ':' + st.id;
     const c = _contacts.find(x => x.id === cid) || {};
     const src = c;
     const touch = _TOUCH[st.canal] || _TOUCH.email;
@@ -24973,10 +24984,10 @@ ${foot}
       </div>` : ''}
       ${st.canal === 'linkedin' ? `<div class="cp-taskbar__mailto">
         ${c.linkedin
-          ? `<button class="cp-taskbar__mt cp-taskbar__mt--liopen" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado para enviar la conexión o la nota"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v cp-taskbar__mt-v--li">${esc(c.linkedin)}</span><span class="cp-taskbar__open"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Abrir</span></button>`
+          ? `<button class="cp-taskbar__mt cp-taskbar__mt--liopen${_cpFlag('open') ? ' is-done' : ''}" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado para enviar la conexión o la nota"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v cp-taskbar__mt-v--li">${esc(c.linkedin)}</span><span class="cp-taskbar__open">${_cpFlag("open") ? NI("check", 12) + "Abierto" : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Abrir`}</span></button>`
           : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
       </div>` : ''}
-      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
+      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs${_cpFlag('subj') ? ' is-done' : ''}" data-act="subj" onclick="LeadManagerModule.seqDoCopySubject()" title="Copiar el asunto">${_cpFlag('subj') ? NI('check', 13) : NI('copy')}</button></div>` : ''}
       ${_isContentStep(st.canal, st.accion) ? (() => {
         const dias = parseInt(st.post_dias) || 0;
         const re = _reaccionLabel(st.reaccion);
@@ -24989,7 +25000,7 @@ ${foot}
       ${isCmt
         ? _cpCmtHtml(cid, st, seqId)
         : hasMsg
-        ? `<div class="cp-taskbar__tpl">${_seqMissBanner(_seqDoMissing)}<div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
+        ? `<div class="cp-taskbar__tpl">${_seqMissBanner(_seqDoMissing)}<div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs${_cpFlag('copy') ? ' is-done' : ''}" data-act="copy" onclick="LeadManagerModule.seqDoCopy()">${_cpFlag('copy') ? NI('check', 13) + ' Copiado' : NI('copy') + ' Copiar'}</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
         ${chanHtml}
@@ -25003,7 +25014,7 @@ ${foot}
   }
   function seqDoCopySubject() {
     const s = _seqDoSubject || ''; if (!s) return;
-    const ok = () => showBanner('✓ Asunto copiado', 'success');
+    const ok = () => _cpMarkDone('subj');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).then(ok).catch(() => _seqDoCopyFallback(s, ok));
     else _seqDoCopyFallback(s, ok);
   }
@@ -25066,7 +25077,7 @@ ${foot}
   function seqDoCopy() {
     const txt = _seqDoText || ''; if (!txt) return;
     if (!seqDoConfirmMissing()) return;
-    const ok = () => showBanner('✓ Mensaje copiado', 'success');
+    const ok = () => _cpMarkDone('copy');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => _seqDoCopyFallback(txt, ok));
     else _seqDoCopyFallback(txt, ok);
   }
