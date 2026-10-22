@@ -32557,11 +32557,7 @@ ${foot}
     // El primer mensaje de un paso «por idioma» es el BASE: lo reciben los contactos cuyo idioma no coincide con ninguno. Se puede eliminar, pero se avisa de quién lo reemplaza.
     if (_stepDraft.mode === 'idioma' && i === 0 && _stepDraft.variants.length > 1 && _stepAbPos(0).n < 2) {
       const sig = _stepDraft.variants[1], nm = ((sig.targets || [])[0]) || sig.nombre || 'el siguiente';
-      if (!confirm('Este es el mensaje base: lo reciben los contactos cuyo idioma no tiene mensaje propio.
-
-Si lo eliminas, «' + nm + '» pasa a ser el mensaje base.
-
-¿Eliminarlo?')) return;
+      if (!confirm('Este es el mensaje base: lo reciben los contactos cuyo idioma no tiene mensaje propio.\n\nSi lo eliminas, «' + nm + '» pasa a ser el mensaje base.\n\n¿Eliminarlo?')) return;
     }
     _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); if (_stepDraft.mode === 'idioma') _stepAbNames(); _stepRenderMsg(); }
   function stepCanalChange() {
