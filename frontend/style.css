@@ -18480,3 +18480,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .seqdo-copy.is-done:hover { background: #DCFCE7; color: #166534; border-color: #4ADE80; }
 .cp-taskbar__mt--liopen.is-done .cp-taskbar__open { background: #DCFCE7; color: #15803D; }
 .cp-taskbar__mt--liopen.is-done:hover .cp-taskbar__open { background: #15803D; color: #fff; }
+.wa-msg__spin { animation: wa-spin .9s linear infinite; vertical-align: -1px; }
+@keyframes wa-spin { to { transform: rotate(360deg); } }

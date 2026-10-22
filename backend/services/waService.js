@@ -681,6 +681,14 @@ async function _connectInner(pool, id) {
         if (eliminado) { await _marcarEliminado(pool, id, u.key?.id); continue; }
         // Ticks de entrega/leído — solo sube (1 pendiente → 4 leído), nunca baja,
         // por si las actualizaciones llegan desordenadas.
+        // status 0 = el servidor de WhatsApp RECHAZÓ el mensaje («nack»). Antes se ignoraba y el mensaje quedaba en 0 sin que se supiera por qué.
+        if (u.update?.status === 0 && u.key?.id && u.key.fromMe) {
+          const code = (u.update.messageStubParameters || [])[0] || '?';
+          console.warn('[wa] el servidor rechazó el mensaje ' + u.key.id + ' (código ' + code + ') · ' + u.key.remoteJid + ' · conexión ' + id);
+          pool.query(`UPDATE wa_messages SET ultimo_error=$1 WHERE connection_id=$2 AND msg_id=$3 AND ack < 2`, ['WhatsApp rechazó el mensaje (código ' + code + ')', id, u.key.id]).catch(() => {});
+          if (String(u.key.remoteJid || '').endsWith('@s.whatsapp.net')) setTimeout(() => _reintentarMsg(pool, id, u.key.remoteJid, u.key.id, 'rechazo código ' + code).catch(() => {}), 1500);
+          continue;
+        }
         if (u.update?.status != null && u.key?.id) {
           _anotarAck(id, u.key.id, u.update.status);
           await pool.query(
@@ -730,20 +738,48 @@ async function _verificarNumero(sock, jidFull) {
 // Tras CADA envío de texto a un contacto: si en ~12 s el servidor de WhatsApp no confirmó ni que lo recibió (ack<2), la sesión con ese contacto o la
 // línea están mal y el mensaje no va a llegar solo. Se repara y se reenvía YA (con el mismo id: nunca duplica), en vez de esperar los 2 min del vigilante
 // y que Jenny tenga que pulsar «Reintentar». Máx. una vez cada 15 min por contacto (compartido con la auto-reparación).
+const _intentosMsg = new Map();   // «conexión:msg» → intentos automáticos ya hechos
+// Un reintento automático del MISMO mensaje (mismo id: si el anterior sí había llegado, WhatsApp lo descarta y NO se duplica). Va subiendo de nivel:
+//   1 · pedir claves nuevas del contacto (assertSessions forzado) y reenviar  → arregla una sesión de cifrado vieja sin tocar nada
+//   2 · borrar la sesión con ese contacto y reenviar (reparación completa)
+//   3 · reconectar la línea entera y reenviar
+async function _reintentarMsg(pool, connId, jidFull, msgId, motivo) {
+  const k = connId + ':' + msgId, n = (_intentosMsg.get(k) || 0) + 1;
+  if (n > 4) return false;
+  if (_ackDe(connId, msgId) >= 2) return false;
+  const { rows: [m] } = await pool.query('SELECT texto, estado, ack FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [connId, msgId]);
+  if (!m || m.estado !== 'enviado' || m.ack >= 2 || !m.texto) return false;
+  _intentosMsg.set(k, n);
+  if (_intentosMsg.size > 2000) for (const key of [..._intentosMsg.keys()].slice(0, 800)) _intentosMsg.delete(key);
+  console.warn('[wa] reintento automático ' + n + ' (' + motivo + ') → ' + jidFull + ' · conexión ' + connId);
+  try {
+    let sock = _socks.get(connId);
+    if (n >= 3 || !_abierto(sock)) {
+      if (sock) { _cerrarSock(sock); _socks.delete(connId); }
+      _programarReconexion(pool, connId, 0);
+      sock = await esperarListo(pool, connId, 20000);
+    } else if (n === 2) {
+      await _repararChat(pool, connId, jidFull);      // borra la sesión y reenvía lo que siga sin entregar de ese chat
+      return true;
+    } else {
+      await Promise.race([sock.assertSessions([jidFull], true), new Promise((_, rej) => setTimeout(() => rej(new Error('assertSessions tardó')), 8000))]).catch(e => console.warn('[wa] assertSessions:', e.message));
+    }
+    await sock.sendMessage(jidFull, { text: m.texto }, { messageId: msgId });
+    return true;
+  } catch (e) { console.warn('[wa] reintento automático falló:', e.message); return false; }
+}
+// Tras CADA envío de texto a un contacto se vigila la confirmación del servidor (ack≥2) y se reintenta sola, cada vez más a fondo:
+// a los 5 s, 15 s, 40 s y 90 s. Así el mensaje sale a la primera o se recupera en segundos, sin que nadie tenga que pulsar «Reintentar».
 function _vigilarEntrega(pool, connId, jidFull, msgId) {
   if (!msgId || !String(jidFull).endsWith('@s.whatsapp.net')) return;
-  setTimeout(async () => {
+  [5000, 15000, 40000, 90000].forEach(ms => setTimeout(async () => {
     try {
       if (_ackDe(connId, msgId) >= 2) return;
       const { rows: [m] } = await pool.query('SELECT ack, estado FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [connId, msgId]);
       if (!m || m.estado !== 'enviado' || m.ack >= 2) return;
-      const key = connId + ':' + jidFull;
-      if (Date.now() - (_healed.get(key) || 0) < 15 * 60 * 1000) return;
-      _healed.set(key, Date.now());
-      console.warn('[wa] sin confirmación a los 12 s → reparando y reenviando ' + jidFull + ' (conexión ' + connId + ')');
-      await _repararChat(pool, connId, jidFull);
+      await _reintentarMsg(pool, connId, jidFull, msgId, 'sin confirmación a los ' + Math.round(ms / 1000) + ' s');
     } catch (e) { console.warn('[wa] vigilar entrega:', e.message); }
-  }, 12000);
+  }, ms));
 }
 // La sonda de «¿tiene WhatsApp?» también prueba que la línea RESPONDE. Un socket «abierto» pero mudo (conexión caída sin avisar) deja pasar los envíos
 // sin error y sin llegar: si no contesta, se reconecta y se envía recién cuando la línea está viva.
