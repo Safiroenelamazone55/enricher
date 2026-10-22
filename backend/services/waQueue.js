@@ -45,6 +45,19 @@ function zonedToUtc(y, mo, d, h, mi, tz) {
   return new Date(t);
 }
 const _dayKey = (date, tz) => { const p = partes(date, tz); return p.y + '-' + p.mo + '-' + p.d; };
+// La ventana de UN mensaje: la secuencia manda (como en el email): sus días de envío (send_days) y su zona horaria (la del prospecto) si la tiene;
+// sin zona en la secuencia, la hora local del contacto por su prefijo telefónico; sin eso, la zona de la línea. Las HORAS (hora_ini–hora_fin) son las de la línea.
+// Los días permitidos son los de la línea Y los de la secuencia; si se contradijeran del todo (ningún día en común) se usan los de la línea.
+function ventanaMsg(S, r) {
+  const tz = (r && (r.seq_tz || r.tz_destino)) || S.tz;
+  let dias = S.dias;
+  const sd = r && r.seq_dias;
+  if (/^[01]{7}$/.test(sd || '')) {
+    const comun = [...S.dias].map((ch, i) => (ch === '1' && sd[i] === '1') ? '1' : '0').join('');
+    if (comun.includes('1')) dias = comun;
+  }
+  return Object.assign({}, S, { tz, dias });
+}
 function enVentana(date, S) {
   const p = partes(date, S.tz);
   return S.dias[p.dow] === '1' && p.h >= S.hora_ini && p.h < S.hora_fin;
@@ -167,7 +180,7 @@ function intervaloMs(S, rowId) {
 // cada uno toma el primer hueco libre que le sirve.
 async function replanificar(pool, connId) {
   const S = await getSettings(pool, connId);
-  const { rows } = await pool.query(`SELECT id, tz_destino FROM wa_messages WHERE connection_id=$1 AND estado='programado' AND via_cola ORDER BY id`, [connId]);
+  const { rows } = await pool.query(`SELECT m.id, m.tz_destino, sq.timezone AS seq_tz, sq.send_days AS seq_dias FROM wa_messages m LEFT JOIN sequences sq ON sq.id = m.sequence_id WHERE m.connection_id=$1 AND m.estado='programado' AND m.via_cola ORDER BY m.id`, [connId]);
   if (!rows.length) return;
   const ahora = new Date();
   const base = new Date(Math.max(ahora.getTime(), S.proximo_envio_at ? new Date(S.proximo_envio_at).getTime() : 0));
@@ -175,7 +188,7 @@ async function replanificar(pool, connId) {
   porDia[_dayKey(ahora, S.tz)] = await enviadosHoy(pool, connId, S, ahora);
   const usados = [], ids = [], horas = [];
   for (const r of rows) {
-    const Sr = Object.assign({}, S, { tz: r.tz_destino || S.tz });     // ventana y días: hora local del contacto
+    const Sr = ventanaMsg(S, r);                                      // ventana y días: los de su secuencia (o la hora local del contacto)
     const hueco = intervaloMs(S, r.id);
     let c = new Date(base);
     for (let guard = 0; guard < 300; guard++) {
@@ -206,6 +219,13 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
   if (respondeA) {
     const { rows: [orig] } = await pool.query(`SELECT texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`, [connId, jidFull, respondeA]);
     replyToTexto = (orig && orig.texto) || '';
+  }
+  // Sin secuencia explícita (p. ej. se escribió desde el chat): se toma la de su inscripción activa más reciente, para que valga su zona y sus días.
+  if (!sequenceId && contactId) {
+    try {
+      const { rows: [en] } = await pool.query(`SELECT cs.sequence_id FROM lm_contact_sequences cs JOIN sequences sq ON sq.id = cs.sequence_id AND sq.estado='activa' WHERE cs.contact_id=$1 AND cs.estado='activo' ORDER BY cs.id DESC LIMIT 1`, [contactId]);
+      if (en) sequenceId = en.sequence_id;
+    } catch (_) { /* sin secuencia: vale la ventana de la línea */ }
   }
   const placeholder = 'sched_' + require('crypto').randomUUID();
   const { rows: [row] } = await pool.query(
@@ -270,17 +290,17 @@ async function _manejarFallo(pool, connId, m, intentos, e) {
 async function procesarLinea(pool, connId) {
   const S = await getSettings(pool, connId);
   const { rows } = await pool.query(
-    `SELECT id, chat_jid, texto, reply_to_id, via_cola, contact_id, sequence_id, step_id, origen, tz_destino FROM wa_messages
-      WHERE connection_id=$1 AND estado='programado' AND scheduled_at <= NOW() AND (proximo_intento_at IS NULL OR proximo_intento_at <= NOW())
-      ORDER BY via_cola ASC, scheduled_at ASC, id ASC LIMIT 20`, [connId]);
-  let salioDeCola = false;
+    `SELECT m.id, m.chat_jid, m.texto, m.reply_to_id, m.via_cola, m.contact_id, m.sequence_id, m.step_id, m.origen, m.tz_destino, sq.timezone AS seq_tz, sq.send_days AS seq_dias FROM wa_messages m LEFT JOIN sequences sq ON sq.id = m.sequence_id
+      WHERE m.connection_id=$1 AND m.estado='programado' AND m.scheduled_at <= NOW() AND (m.proximo_intento_at IS NULL OR m.proximo_intento_at <= NOW())
+      ORDER BY m.via_cola ASC, m.scheduled_at ASC, m.id ASC LIMIT 20`, [connId]);
+  let salioDeCola = false, bloqueadoPorVentana = false;
   for (const m of rows) {
     if (m.via_cola) {
       const ahora = new Date();
       if (salioDeCola || S.pausada) continue;                                  // máx. UNO de la cola por pasada; línea pausada: espera (lo en cola no se pierde)
-      if (!enVentana(ahora, Object.assign({}, S, { tz: m.tz_destino || S.tz }))) continue;   // fuera de horario/día EN LA HORA DEL CONTACTO: espera su próxima jornada
+      if (!enVentana(ahora, ventanaMsg(S, m))) { bloqueadoPorVentana = true; continue; }   // fuera de horario/día de su secuencia (o del contacto): espera su próxima jornada
       if (S.proximo_envio_at && new Date(S.proximo_envio_at) > ahora) continue; // aún no pasó el intervalo desde el anterior
-      if (await enviadosHoy(pool, connId, S, ahora) >= topeEfectivo(S, ahora)) continue;   // tope del día alcanzado
+      if (await enviadosHoy(pool, connId, S, ahora) >= topeEfectivo(S, ahora)) { bloqueadoPorVentana = true; continue; }   // tope del día alcanzado
     }
     if (!waSvc.estadoSock(connId).abierto) {
       // Línea no lista: no gasta intentos, se vuelve a mirar en 1 min y se pide la reconexión (no bloquea).
@@ -311,6 +331,7 @@ async function procesarLinea(pool, connId) {
       await _manejarFallo(pool, connId, m, c.intentos, e);
     }
   }
+  if (bloqueadoPorVentana && !salioDeCola) await replanificar(pool, connId).catch(e => console.warn('[wa-cola] replanificar:', e.message));
 }
 
 let _tickEnCurso = false;

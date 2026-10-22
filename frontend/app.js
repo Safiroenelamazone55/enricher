@@ -24720,7 +24720,9 @@ ${foot}
     let conns = [];
     try { conns = (await (await apiFetch(`${API}/wa/connections?outboundClientId=${c.outbound_client_id}`)).json()).filter(x => x.estado === 'conectado'); } catch (_) {}
     if (!conns.length) { _openWaAssignPrompt(c.outbound_client_id); return; }
-    QuickWaModule.open({ contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id, prefill: prefill || '', connectionId: conns[0].id });
+    // Desde una tarea: la cola usa los días y la zona de ESA secuencia (igual que el email).
+    const _stId = (_cpKey || '').startsWith(cid + ':') ? parseInt(_cpKey.split(':')[1], 10) || null : null;
+    QuickWaModule.open({ contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id, prefill: prefill || '', connectionId: conns[0].id, sequenceId: _cpTaskCtx && _cpTaskCtx.seqId || null, stepId: _stId });
   }
   function _openWaAssignPrompt(clientId) {
     document.getElementById('lm-wapick-modal')?.remove();
@@ -39457,14 +39459,15 @@ async function _waColaAccion(connId, rowId, accion) {
 }
 
 const QuickWaModule = (() => {
+  let _seqCtx = { sequenceId: null, stepId: null };
   let _conn = null, _jid = null, _nombre = '', _poll = null, _contactId = null;
   let _replyTo = null;
   let _pendingImg = null, _pendingImgUrl = null;
   const $$ = id => document.getElementById(id);
 
-  async function open({ contactId, nombre, telefono, outboundClientId, prefill, connectionId }) {
+  async function open({ contactId, nombre, telefono, outboundClientId, prefill, connectionId, sequenceId, stepId }) {
     close();
-    _nombre = nombre || 'Contacto'; _contactId = contactId;
+    _nombre = nombre || 'Contacto'; _contactId = contactId; _seqCtx = { sequenceId: sequenceId || null, stepId: stepId || null };
     _jid = `${telefono}@s.whatsapp.net`;
     _render(prefill || '');
     // connectionId: elegido a mano en el picker "¿Con cuál WhatsApp?" (pedido
@@ -40076,7 +40079,7 @@ const QuickWaModule = (() => {
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(conRitmo ? { texto, respondeA, cola: true, contact_id: _contactId, origen: 'tarea' } : { texto, respondeA, scheduledAt })
+        body: JSON.stringify(conRitmo ? { texto, respondeA, cola: true, contact_id: _contactId, origen: 'tarea', sequence_id: _seqCtx.sequenceId, step_id: _seqCtx.stepId } : { texto, respondeA, scheduledAt })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
       const j = await r.json().catch(() => ({}));
