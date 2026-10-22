@@ -18456,3 +18456,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .lm-task-canales__l { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
 .lm-task-canales__sep { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
 .lm-filter-btn--sp { border-style: dashed; }
+.step-var-hd { flex-wrap: wrap; row-gap: 6px; }
+.flt-del--ico { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; padding: 5px 7px; color: var(--muted, #94A3B8); }
+.flt-del--ico:hover { color: #B42318; background: #FDECEA; }
