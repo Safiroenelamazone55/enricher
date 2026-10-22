@@ -23006,7 +23006,7 @@ ${foot}
     if (!_cpTaskCtx) return false;
     const seqId = _cpTaskCtx.seqId;
     const next = _cpNextTask(seqId, cid);
-    if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    if (next) _cpOpenNext(next, seqId); else seqDoExit();
     return true;
   }
   async function seqDoDisposition(disp) {
@@ -23022,7 +23022,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`✓ ${_dispoLabel(disp)}${r.stage ? ` · Estado → ${STAGE_LABELS[r.stage] || r.stage}` : ''}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── Canal LinkedIn no válido / email rebotado / email manual ──
@@ -23157,7 +23157,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`⚠ ${lbl} — pausado; queda en Contactos → Por corregir`, 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Marca (o corrige) el resultado de ESTE paso puntual — reusable en cualquier
@@ -23211,7 +23211,7 @@ ${foot}
       const undo = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
       showBanner('⤼ Paso omitido — sin actividad reciente' + undo, 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); return; }
+      if (next) { _cpOpenNext(next, seqId); return; }
       const nextCo = _cpNextCoTask(seqId);
       if (nextCo) seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); else seqDoExit();
     } catch (err) { showBanner('Error: ' + err.message, 'error'); if (btn) btn.disabled = false; }
@@ -23243,7 +23243,7 @@ ${foot}
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_linkedin = true;
       showBanner('🚫 LinkedIn no válido — este contacto sigue por email (Ruta B)', 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Mismo patrón que seqDoNoLinkedIn, para cuando el número de WhatsApp/teléfono SÍ existe
@@ -23257,7 +23257,7 @@ ${foot}
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_whatsapp = true;
       showBanner('📵 WhatsApp no válido — salta sus pasos de WhatsApp', 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function seqDoNoPhone() {
@@ -23269,7 +23269,7 @@ ${foot}
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_phone = true;
       showBanner('📵 Teléfono no válido — salta sus pasos de llamada', 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Desde la barra de tarea (paso email): el email rebotó → pausa y va a la lista Rebotados.
@@ -23284,7 +23284,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner('↩ Email rebotado — pausado; corrígelo en Contactos → Rebotados', 'success');
       const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function lmToggleNoLinkedIn(cid) {
@@ -24563,8 +24563,10 @@ ${foot}
     });
     return g;
   }
-  async function seqTaskOpen(seqId, cid) {
+  async function seqTaskOpenG(seqId, cid) { await seqTaskOpen(seqId, cid, true); }
+  async function seqTaskOpen(seqId, cid, fromGlobal) {
     if (!cid) return;
+    _cpFromGlobal = !!fromGlobal; _cpHistSeq.clear();
     _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;   // corrida nueva
     const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
     if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
@@ -24592,7 +24594,12 @@ ${foot}
     if (!queue.some(t => t.e.contact_id === _contactView)) openContactPage(queue[0].e.contact_id, { seqId });
     else _renderBody();
   }
-  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
+  function seqDoExit() {
+    const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; const global = _cpFromGlobal; _cpFromGlobal = false;
+    _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId;
+    if (global) { _section = 'tasks'; _renderBody(); return; }   // se vuelve a la lista de Tareas comerciales, con los filtros como los dejaste
+    _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
+  }
   function seqOpenLinkedIn(cid) {
     const c = _contacts.find(x => x.id === cid);
     const url = c && c.linkedin; if (!url) return;
@@ -25077,12 +25084,32 @@ ${foot}
     return [...rest, ...tail];
   }
   function _cpNextTask(seqId, excludeCid) {
+    if (_cpFromGlobal) return _cpNextGlobal(seqId, excludeCid);
     return _cpOrderedQueue(seqId).find(t => t.e.contact_id !== excludeCid) || null;
+  }
+  // «Siguiente» desde Tareas comerciales: la próxima tarea de la lista que ves (cliente/campaña/secuencia + canal + paso), en el mismo orden;
+  // los saltados van al final. Devuelve la misma forma que la cola de una secuencia, más seqId para saltar entre secuencias.
+  function _cpNextGlobal(seqId, excludeCid) {
+    const today = _dayOf(new Date());
+    let q = _allSeqTasks().filter(_taskFilterPass).filter(t => _taskStat === 'over' ? t.due < today : _taskStat === 'today' ? t.due.getTime() === today.getTime() : t.due <= today);
+    q = q.filter(t => !(t.sq.id === seqId && t.c.id === excludeCid));
+    const sk = new Set(_cpSkipped);
+    const rest = q.filter(t => !sk.has(t.c.id)), tail = _cpSkipped.map(id => q.find(t => t.c.id === id)).filter(Boolean);
+    const t = [...rest, ...tail][0];
+    return t ? { e: { contact_id: t.c.id }, seqId: t.sq.id, st: t.st } : null;
+  }
+  // Abre la siguiente tarea; si es de OTRA secuencia, carga primero sus contactos para que el runner la reconozca.
+  async function _cpOpenNext(next, seqId) {
+    const sid = (next && next.seqId) || seqId;
+    if (_contactView) _cpHistSeq.set(_contactView, seqId);
+    if (sid !== seqId) { _activeSeq = sid; _seqContacts = null; try { await _seqLoadContacts(sid); } catch (_) {} }
+    openContactPage(next.e.contact_id, { seqId: sid });
   }
   // Cuando ya no quedan tareas de CONTACTO por hoy, sigue con la cola de EMPRESAS (Paso 1) —
   // para que trabajar una secuencia "empresa primero" sea fluido: hecha una tarea, sigue la
   // siguiente empresa sola, sin volver a la lista.
   function _cpNextCoTask(seqId) {
+    if (_cpFromGlobal) return null;   // desde la lista global no se mezclan las tareas de empresa
     const today = new Date(new Date().toDateString());
     const list = _seqCoTasks(seqId).filter(t => t.due <= today);
     return list.length ? list[0] : null;
@@ -25098,7 +25125,7 @@ ${foot}
       await _reloadContacts();
       const next = _cpNextTask(seqId, cid);
       const undoLink = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
-      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); return; }
+      if (next) { _cpOpenNext(next, seqId); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); return; }
       const nextCo = _cpNextCoTask(seqId);
       if (nextCo) { seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); showBanner('✓ Hecha · siguiente empresa' + undoLink, 'success'); }
       else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!' + undoLink, 'success'); }
@@ -25110,15 +25137,18 @@ ${foot}
     // Saltar = mandarlo al FINAL de la cola de la corrida (para retomarlo al final, no enseguida).
     _cpSkipped = _cpSkipped.filter(x => x !== cid); _cpSkipped.push(cid);
     const next = _cpNextTask(seqId, cid);
-    if (next) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); return; }
+    if (next) { _cpTaskHist.push(cid); _cpOpenNext(next, seqId); return; }
     const nextCo = _cpNextCoTask(seqId);
     if (nextCo) { _cpTaskHist.push(cid); seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); }
     else seqDoExit();
   }
-  function seqDoPrev() {
+  async function seqDoPrev() {
     if (!_cpTaskCtx || !_cpTaskHist.length) return;
     const prev = _cpTaskHist.pop();
-    if (prev) openContactPage(prev, { seqId: _cpTaskCtx.seqId });
+    if (!prev) return;
+    const sid = _cpHistSeq.get(prev) || _cpTaskCtx.seqId;
+    if (sid !== _cpTaskCtx.seqId) { _activeSeq = sid; _seqContacts = null; try { await _seqLoadContacts(sid); } catch (_) {} }
+    openContactPage(prev, { seqId: sid });
   }
   // Fecha calendario del paso: fecha de inicio de la secuencia + (día-1), rodada a la
   // cadencia permitida. Solo si la secuencia tiene fecha de inicio (si no, el día 1 es
@@ -25378,7 +25408,7 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
-    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})">
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpenG(${sq.id},${c.id})">
       <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
       ${_taskTimeHtml(st, sq.id, c)}
@@ -25649,7 +25679,7 @@ ${foot}
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const seq = _sequences.find(s => s.id === sq.id);
     const hr = (seq && seq.timezone) ? _suggestWindow(seq.timezone).her.split('–')[0] : '';
-    return `<button class="cal-chip" style="border-left-color:${touch[1]}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="${esc(full)} · ${esc(sq.nombre)}${hr ? ' · sugerido ' + hr : ''}">${hr ? `<span class="cal-chip__hr">${hr}</span>` : ''}<span class="cal-chip__ico" style="color:${touch[1]}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span><span class="cal-chip__nm">${esc(full)}</span></button>`;
+    return `<button class="cal-chip" style="border-left-color:${touch[1]}" onclick="LeadManagerModule.seqTaskOpenG(${sq.id},${c.id})" title="${esc(full)} · ${esc(sq.nombre)}${hr ? ' · sugerido ' + hr : ''}">${hr ? `<span class="cal-chip__hr">${hr}</span>` : ''}<span class="cal-chip__ico" style="color:${touch[1]}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span><span class="cal-chip__nm">${esc(full)}</span></button>`;
   }
   function _vTaskCalendar() {
     const ref = _calRef || _monthStart(new Date());
@@ -32794,6 +32824,8 @@ ${foot}
   function _bulkAddAfterCreate(saved) { bulkAddDo(_bulkAddKind, saved.id); }
   let _cpActs = null;
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
+  const _cpHistSeq = new Map();   // contacto → secuencia desde la que se hizo (para «Anterior» cuando la corrida global cambia de secuencia)
+  let _cpFromGlobal = false;  // la corrida empezó en Tareas comerciales: «siguiente» sigue el MISMO filtro y orden de esa lista, aunque cambie de secuencia
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
   // De qué sección se abrió la ficha (Leads, Deals, Contactos…) — el botón "‹ Volver"
   // regresa AHÍ en vez de ir siempre a Contactos (bug reportado 2026-09-01: abrir un
@@ -36290,7 +36322,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
