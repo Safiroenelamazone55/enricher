@@ -25399,6 +25399,7 @@ ${foot}
     if (_taskFAcc && _taskFAcc.startsWith('__')) return false;       // se eligió una sección especial (por corregir…): las tareas normales no van
     if (!_taskFCanal) return true;
     if ((canal || 'email') !== _taskFCanal) return false;
+    if (_taskFAcc === '_none') return !accion;
     return !_taskFAcc || (accion || '') === _taskFAcc;
   }
   // Secciones que también son tareas: cada una pertenece a un canal (corregir/aprobar = email, aceptar = LinkedIn) y se elige como «paso».
@@ -25415,6 +25416,7 @@ ${foot}
     if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _taskFCanal = ''; _taskFAcc = ''; _renderBody(); return; }
     if (kind === 'canal') { _taskFCanal = val; if (_taskFAcc && _taskFAcc.startsWith('__') && _SPECIAL[_taskFAcc][1] !== val && val) _taskFAcc = ''; else if (!_taskFAcc || !_taskFAcc.startsWith('__')) _taskFAcc = ''; _renderBody(); return; }
     if (kind === 'acc') { _taskFAcc = val; _renderBody(); return; }
+    if (kind === 'combo') { const [cn, ac] = String(val).split('|'); _taskFCanal = cn; _taskFAcc = ac || ''; _renderBody(); return; }
     if (kind === 'cli') {
       _taskFCli = val;
       // la campaña y la secuencia elegidas se limpian si no pertenecen al cliente nuevo
@@ -25492,11 +25494,23 @@ ${foot}
       let h = `<div class="lm-task-filters lm-task-canales"><span class="lm-task-canales__l">Canal</span>` + chip(!_taskFCanal, `Todos · ${total}`, "LeadManagerModule.taskSetFilter('canal','')")
         + present.map(k => chip(_taskFCanal === k, `${(_TOUCH[k] || [k])[0]} · ${cnt[k]}`, `LeadManagerModule.taskSetFilter('canal','${k}')`)).join('');
       // pasos del canal elegido (InMail, mensaje, invitación…) + las secciones que también son tareas de ese canal (por corregir, por aprobar, por aceptar)
-      const acts = _taskFCanal && acc[_taskFCanal] ? Object.entries(acc[_taskFCanal]).sort((a, b) => b[1] - a[1]) : [];
+      const none = {};   // tareas de un canal sin tipo de paso definido
+      allRaw.filter(t => _tkSeqPass(t.sq.id) && t.due <= today && !t.st.accion).forEach(t => { const k = t.st.canal || 'email'; none[k] = (none[k] || 0) + 1; });
+      const cName = k => (_TOUCH[k] || [k])[0];
+      const accLbl = (k, a) => a === '_none' ? 'Sin tipo definido' : (_accionLabel(k, a) || a);
+      // con un canal elegido: sus pasos; sin canal: todas las combinaciones canal · paso disponibles
+      const ordered = k => Object.entries(acc[k] || {}).sort((x, y) => y[1] - x[1]);
+      const paso = [];
+      if (_taskFCanal) {
+        ordered(_taskFCanal).forEach(([a, n]) => paso.push([a, `${esc(accLbl(_taskFCanal, a))} · ${n}`, `LeadManagerModule.taskSetFilter('acc','${a}')`]));
+        if (none[_taskFCanal] && (acc[_taskFCanal] && Object.keys(acc[_taskFCanal]).length)) paso.push(['_none', `Sin tipo definido · ${none[_taskFCanal]}`, "LeadManagerModule.taskSetFilter('acc','_none')"]);
+      } else {
+        present.forEach(k => ordered(k).forEach(([a, n]) => paso.push([k + '|' + a, `${cName(k)} · ${esc(accLbl(k, a))} · ${n}`, `LeadManagerModule.taskSetFilter('combo','${k}|${a}')`])));
+      }
       const sp = Object.keys(special).filter(k => special[k] && (!_taskFCanal || _SPECIAL[k][1] === _taskFCanal));
-      if (acts.length > 1 || (acts.length === 1 && _taskFAcc) || sp.length) {
-        h += `<span class="lm-task-canales__sep"></span><span class="lm-task-canales__l">Paso</span>` + chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')")
-          + acts.map(([a, n]) => chip(_taskFAcc === a, `${esc(_accionLabel(_taskFCanal, a) || a)} · ${n}`, `LeadManagerModule.taskSetFilter('acc','${a}')`)).join('')
+      if (paso.length || sp.length) {
+        h += `<span class="lm-task-canales__sep"></span><span class="lm-task-canales__l">Paso</span>` + (_taskFCanal || _taskFAcc ? chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')") : '')
+          + paso.map(([key, lbl, js]) => chip(_taskFCanal ? _taskFAcc === key : false, lbl, js)).join('')
           + sp.map(k => chip(_taskFAcc === k, `${_SPECIAL[k][0]} · ${special[k]}`, `LeadManagerModule.taskSetFilter('acc','${k}')`, 'lm-filter-btn--sp')).join('');
       }
       return h + '</div>';
