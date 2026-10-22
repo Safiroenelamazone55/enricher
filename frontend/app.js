@@ -32419,7 +32419,7 @@ ${foot}
       const _prevS = $('step-reply')?.checked ? _stepPrevSubject() : null;
       const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
-      const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:600;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${_stepAbBadge(i)}<span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${(v.targets || [])[0] ? `<button type="button" class="flt-add" style="margin:0 6px 0 0;padding:2px 8px;font-size:11.5px" title="Añade otro mensaje en este mismo idioma para probar A/B" onclick="LeadManagerModule.stepAddAB(${i})">＋ Variante A/B</button>` : ''}${d.variants.length > 1 && (i > 0 || _stepAbPos(i).n >= 2) ? _delVarBtn(i, _stepAbPos(i).n >= 2 ? 'Eliminar esta variante A/B' : 'Quitar este idioma') : ''}</div>` : '';
+      const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:600;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${_stepAbBadge(i)}<span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${(v.targets || [])[0] ? `<button type="button" class="flt-add" style="margin:0 6px 0 0;padding:2px 8px;font-size:11.5px" title="Añade otro mensaje en este mismo idioma para probar A/B" onclick="LeadManagerModule.stepAddAB(${i})">＋ Variante A/B</button>` : ''}${d.variants.length > 1 ? _delVarBtn(i, _stepAbPos(i).n >= 2 ? 'Eliminar esta variante A/B' : (i === 0 ? 'Eliminar el mensaje base (el siguiente pasa a ser el base)' : 'Quitar este idioma')) : ''}</div>` : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       // Aquí va el CONTEXTO (por qué comentas), no el tema: el largo, el tono y el
       // "adáptate a lo que sea el post" ya los impone el sistema en el backend.
@@ -32552,7 +32552,18 @@ ${foot}
     if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); } _stepRenderMsg(); }
   function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
   function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
-  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); if (_stepDraft.mode === 'idioma') _stepAbNames(); _stepRenderMsg(); }
+  function stepDelVariant(i) {
+    _stepSyncDraft();
+    // El primer mensaje de un paso «por idioma» es el BASE: lo reciben los contactos cuyo idioma no coincide con ninguno. Se puede eliminar, pero se avisa de quién lo reemplaza.
+    if (_stepDraft.mode === 'idioma' && i === 0 && _stepDraft.variants.length > 1 && _stepAbPos(0).n < 2) {
+      const sig = _stepDraft.variants[1], nm = ((sig.targets || [])[0]) || sig.nombre || 'el siguiente';
+      if (!confirm('Este es el mensaje base: lo reciben los contactos cuyo idioma no tiene mensaje propio.
+
+Si lo eliminas, «' + nm + '» pasa a ser el mensaje base.
+
+¿Eliminarlo?')) return;
+    }
+    _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); if (_stepDraft.mode === 'idioma') _stepAbNames(); _stepRenderMsg(); }
   function stepCanalChange() {
     _stepSyncDraft(); _stepRenderMsg();
     // El toggle "responder en el mismo hilo" solo aplica a pasos email.
