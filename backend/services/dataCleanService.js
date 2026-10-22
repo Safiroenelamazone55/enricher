@@ -78,6 +78,32 @@ function cleanTitle(raw) {
   return s;
 }
 
+// ── Nombres de personas (nombre / apellido) ──────────────────────────────────
+// Errores típicos que traen LinkedIn / Apollo / HubSpot: «Sasha (Alexandra)», TODO MAYÚSCULAS, «Dr. Juan», «Ana García, MBA», emojis, comillas.
+// Con paréntesis se conserva lo de FUERA (el nombre con que la persona se presenta) y solo si no queda nada se usa lo de dentro.
+const NAME_PREFIX_RE = /^(?:dr|dra|doctor|doctora|mr|mrs|ms|miss|mx|sr|sra|srta|ing|lic|licda|prof|eng|arq|mtro|mtra)\.?\s+/i;
+const NAME_CRED_RE = /(?:[,;]\s*|\s+)(?:mba|ph\.?\s?d|msc|m\.?sc|cpa|pmp|cfa|esq|m\.?d|dds|cissp|csm|cfp|rn)\.?(?:\s*,?\s*(?:mba|ph\.?\s?d|msc|cpa|pmp|cfa|esq|md|dds|cissp|csm|cfp|rn)\.?)*\s*$/i;
+function _nameBase(raw, keepInsideIfEmpty) {
+  let s = String(raw == null ? '' : raw).replace(/[ ​  ]/g, ' ');
+  s = s.replace(/[\p{Extended_Pictographic}‍️]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!s) return s;
+  const inside = (s.match(/\(([^)]*)\)/) || [])[1] || '';
+  s = s.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s && keepInsideIfEmpty) s = inside.trim();
+  s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();
+  s = s.replace(NAME_PREFIX_RE, '').replace(NAME_CRED_RE, '');
+  s = s.replace(/^[\s,;:.\-–—|*_]+|[\s,;:\-–—|*_]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+  const letters = s.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇçÃÕÀÈÌÒÙÂÊÎÔÛãõàèìòùâêîôû]/g, '');
+  if (letters.length > 1) {
+    const allUp = s === s.toUpperCase() && s !== s.toLowerCase();
+    const allLow = s === s.toLowerCase() && s !== s.toUpperCase();
+    if (allUp || allLow) s = titleCaseName(s);
+  }
+  return s;
+}
+const cleanFirstName = raw => _nameBase(raw, true);
+const cleanLastName = raw => _nameBase(raw, false);
+
 function cleanEmployeeCount(raw) {
   let s = String(raw == null ? '' : raw).trim();
   if (!s) return s;
@@ -111,7 +137,7 @@ function cleanPhone(raw) {
 // field → limpiador, por entidad.
 const CLEANERS = {
   companies: { nombre: cleanCompanyName, tamano: cleanEmployeeCount, dominio: cleanDomain, website: cleanDomain, telefono: cleanPhone, pais: geo.normalizeCountry },
-  contacts:  { cargo: cleanTitle, email: cleanEmail, email_personal: cleanEmail, telefono: cleanPhone, movil: cleanPhone, pais: geo.normalizeCountry },
+  contacts:  { nombre: cleanFirstName, apellido: cleanLastName, cargo: cleanTitle, email: cleanEmail, email_personal: cleanEmail, telefono: cleanPhone, movil: cleanPhone, pais: geo.normalizeCountry },
 };
 
 function cleanableFields(entity) { return Object.keys(CLEANERS[entity] || {}); }

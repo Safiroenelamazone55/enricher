@@ -35733,16 +35733,28 @@ ${foot}
   let _dgCleanPreview = null;
   let _dgOnlyIssues = false;
   let _dgSelMode = false;
-  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono', 'pais'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil', 'pais'] };
+  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono', 'pais'], contacts: ['nombre', 'apellido', 'cargo', 'email', 'email_personal', 'telefono', 'movil', 'pais'] };
   const DG_ENRICH_FIELDS = { companies: ['dominio', 'website', 'pais'], contacts: ['seniority', 'departamento', 'pais', 'idioma'] };
   // ── Validación (categoría C): SOLO detecta y marca visualmente — nunca corrige
   // sola. Cada validador recibe el valor ya recortado y devuelve '' (ok) o un
   // mensaje corto explicando el problema (se muestra como tooltip en la celda).
+  // Nombres de personas con errores típicos de LinkedIn/Apollo: «Sasha (Alexandra)», TODO MAYÚSCULAS, «Dr. Juan», «Ana, MBA», emojis. Solo marca; se corrige con Limpiar.
+  const _dgNameIssue = v => {
+    if (!v) return '';
+    if (/[()]/.test(v)) return 'Tiene paréntesis: se queda solo el nombre con que se presenta · Limpiar';
+    if (/\p{Extended_Pictographic}/u.test(v)) return 'Tiene emojis · Limpiar';
+    if (/^(dr|dra|mr|mrs|ms|sr|sra|srta|ing|lic|prof)\.?\s/i.test(v) || /(,\s*|\s)(mba|ph\.?d|msc|cpa|pmp|cfa|esq)\.?$/i.test(v)) return 'Tiene título o credencial (Dr., MBA…) · Limpiar';
+    const L = v.replace(/[^A-Za-zÀ-ÿ]/g, '');
+    if (L.length > 1 && v === v.toUpperCase()) return 'Todo en mayúsculas · Limpiar';
+    if (L.length > 1 && v === v.toLowerCase()) return 'Todo en minúsculas · Limpiar';
+    return '';
+  };
   const DG_VALIDATORS = {
     companies: {
       dominio: v => v && !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(v) ? 'Dominio con formato inválido' : '',
     },
     contacts: {
+      nombre: _dgNameIssue, apellido: _dgNameIssue,
       email: v => !v ? 'Sin email' : (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Email con formato inválido' : ''),
       telefono: v => { if (!v) return ''; const d = v.replace(/\D/g, ''); return (d.length < 6 || d.length > 15) ? 'Teléfono con formato dudoso' : ''; },
     },
