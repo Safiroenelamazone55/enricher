@@ -20788,6 +20788,7 @@ const LeadManagerModule = (() => {
   let _taskView = 'list';     // 'list' | 'calendar' | 'priority' en Tareas comerciales
   let _tiData = null;         // cache de GET /api/lm/tasks/inbox (Bloque 8: Centro de tareas por prioridad)
   let _taskFCli = '', _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (cliente / campaña / secuencia)
+  let _taskFCanal = '', _taskFAcc = '';                  // canal (email/linkedin/…) y, dentro del canal, el tipo de paso (InMail, mensaje, invitación…)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
   let _lmBootRestored = false; // solo restaura la última sección UNA vez por carga de página, no en cada clic a Outreach
@@ -25392,11 +25393,28 @@ ${foot}
     if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === seqId); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
     return true;
   }
-  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id)) : []; }
-  function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))); }
-  function _taskFilterPass(t) { return _tkSeqPass(t.sq.id); }
+  // Canal / tipo de paso: las tareas de secuencia traen su canal y acción; los emails por aprobar y los contactos por corregir son de pasos de EMAIL,
+  // y las aceptaciones de LinkedIn son de LinkedIn. Así todas las secciones de la pantalla responden al mismo filtro.
+  function _tkCanalPass(canal, accion) {
+    if (_taskFAcc && _taskFAcc.startsWith('__')) return false;       // se eligió una sección especial (por corregir…): las tareas normales no van
+    if (!_taskFCanal) return true;
+    if ((canal || 'email') !== _taskFCanal) return false;
+    return !_taskFAcc || (accion || '') === _taskFAcc;
+  }
+  // Secciones que también son tareas: cada una pertenece a un canal (corregir/aprobar = email, aceptar = LinkedIn) y se elige como «paso».
+  const _SPECIAL = { __fix: ['Por corregir', 'email'], __approve: ['Por aprobar', 'email'], __accept: ['Por aceptar', 'linkedin'] };
+  function _tkSpecialPass(key) {
+    const sp = _SPECIAL[key];
+    if (_taskFCanal && _taskFCanal !== sp[1]) return false;
+    return !_taskFAcc || _taskFAcc === key;
+  }
+  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')) : []; }
+  function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id)) && _tkSpecialPass('__fix')); }
+  function _taskFilterPass(t) { return _tkSeqPass(t.sq.id) && _tkCanalPass(t.st && t.st.canal, t.st && t.st.accion); }
   function taskSetFilter(kind, val) {
-    if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _renderBody(); return; }
+    if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _taskFCanal = ''; _taskFAcc = ''; _renderBody(); return; }
+    if (kind === 'canal') { _taskFCanal = val; if (_taskFAcc && _taskFAcc.startsWith('__') && _SPECIAL[_taskFAcc][1] !== val && val) _taskFAcc = ''; else if (!_taskFAcc || !_taskFAcc.startsWith('__')) _taskFAcc = ''; _renderBody(); return; }
+    if (kind === 'acc') { _taskFAcc = val; _renderBody(); return; }
     if (kind === 'cli') {
       _taskFCli = val;
       // la campaña y la secuencia elegidas se limpian si no pertenecen al cliente nuevo
@@ -25413,7 +25431,7 @@ ${foot}
     if (_tiData === null) setTimeout(() => { if (_tiData === null) _tiReload(); }, 0);   // para que el recuadro Prioridad ya traiga su número
 
     const allRaw = _allSeqTasks();
-    const hasFilter = !!(_taskFCli || _taskFCamp || _taskFSeq);
+    const hasFilter = !!(_taskFCli || _taskFCamp || _taskFSeq || _taskFCanal || _taskFAcc);
     const all = hasFilter ? allRaw.filter(_taskFilterPass) : allRaw;
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
@@ -25457,6 +25475,32 @@ ${foot}
       <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)} · ${_cnt[id] || 0}</option>`).join('')}</select>
       ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
     </div>` : '';
+    // ── Canal / tipo de paso (LinkedIn, Email, WhatsApp… y dentro: InMail, mensaje, invitación…). Los números respetan cliente/campaña/secuencia. ──
+    const canalRow = (() => {
+      const cnt = {}, acc = {};
+      const bumpC = (canal, accion) => { cnt[canal] = (cnt[canal] || 0) + 1; if (accion) { (acc[canal] = acc[canal] || {})[accion] = ((acc[canal] || {})[accion] || 0) + 1; } };
+      allRaw.filter(t => _tkSeqPass(t.sq.id) && t.due <= today).forEach(t => bumpC(t.st.canal || 'email', t.st.accion || ''));
+      const nApr = (Array.isArray(_apList) ? _apList : []).filter(a => _tkSeqPass(a.sequence_id)).length;
+      const nFix = _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
+      const nAcc = (typeof _pendingAccept === 'function' ? _pendingAccept() : []).filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
+      const special = { __fix: nFix, __approve: nApr, __accept: nAcc };
+      cnt.email = (cnt.email || 0) + nApr + nFix; if (nAcc) cnt.linkedin = (cnt.linkedin || 0) + nAcc;
+      const present = _CANALES.filter(k => cnt[k]);
+      if (present.length < 2 && !_taskFCanal && !_taskFAcc) return '';
+      const chip = (on, lbl, js, cls) => `<button class="lm-filter-btn${on ? ' on' : ''}${cls ? ' ' + cls : ''}" onclick="${js}">${lbl}</button>`;
+      const total = present.reduce((n, k) => n + cnt[k], 0);
+      let h = `<div class="lm-task-filters lm-task-canales"><span class="lm-task-canales__l">Canal</span>` + chip(!_taskFCanal, `Todos · ${total}`, "LeadManagerModule.taskSetFilter('canal','')")
+        + present.map(k => chip(_taskFCanal === k, `${(_TOUCH[k] || [k])[0]} · ${cnt[k]}`, `LeadManagerModule.taskSetFilter('canal','${k}')`)).join('');
+      // pasos del canal elegido (InMail, mensaje, invitación…) + las secciones que también son tareas de ese canal (por corregir, por aprobar, por aceptar)
+      const acts = _taskFCanal && acc[_taskFCanal] ? Object.entries(acc[_taskFCanal]).sort((a, b) => b[1] - a[1]) : [];
+      const sp = Object.keys(special).filter(k => special[k] && (!_taskFCanal || _SPECIAL[k][1] === _taskFCanal));
+      if (acts.length > 1 || (acts.length === 1 && _taskFAcc) || sp.length) {
+        h += `<span class="lm-task-canales__sep"></span><span class="lm-task-canales__l">Paso</span>` + chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')")
+          + acts.map(([a, n]) => chip(_taskFAcc === a, `${esc(_accionLabel(_taskFCanal, a) || a)} · ${n}`, `LeadManagerModule.taskSetFilter('acc','${a}')`)).join('')
+          + sp.map(k => chip(_taskFAcc === k, `${_SPECIAL[k][0]} · ${special[k]}`, `LeadManagerModule.taskSetFilter('acc','${k}')`, 'lm-filter-btn--sp')).join('');
+      }
+      return h + '</div>';
+    })();
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const _inactiveNames = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
@@ -25467,7 +25511,7 @@ ${foot}
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length) || _fixList().length;
-    const paCta = _acceptCtaHtml();
+    const paCta = (_taskFCanal && _taskFCanal !== 'linkedin') || (_taskFAcc && _taskFAcc !== '__accept') ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Centro de prioridad: respuestas, aprobaciones, fallos y más' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
@@ -25505,7 +25549,7 @@ ${foot}
       </div>
       ${_taskView === 'priority' ? '<div class="lm-prio-link"><a href="#" onclick="event.preventDefault();LeadManagerModule.taskSetView(\'list\')">‹ Volver a la lista</a></div>' + _vTaskInboxPriority() : ''}
       ${_taskView === 'calendar' ? _vTaskCalendar() : ''}
-      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRow}${listHtml}` : ''}`;
+      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRow}${canalRow}${listHtml}` : ''}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }

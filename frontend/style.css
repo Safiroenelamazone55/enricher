@@ -18452,3 +18452,7 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .seq-devprev__frame--mobile { border-radius: 26px; border-width: 10px; }
 .seq-devprev__frame--tablet { border-radius: 16px; }
 .seq-devprev__frame iframe { display: block; border: 0; background: #fff; }
+.lm-task-canales { margin-top: 6px; align-items: center; flex-wrap: wrap; gap: 6px; }
+.lm-task-canales__l { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.lm-task-canales__sep { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
+.lm-filter-btn--sp { border-style: dashed; }
