@@ -20788,6 +20788,8 @@ const LeadManagerModule = (() => {
   let _taskView = 'list';     // 'list' | 'calendar' | 'priority' en Tareas comerciales
   let _tiData = null;         // cache de GET /api/lm/tasks/inbox (Bloque 8: Centro de tareas por prioridad)
   let _taskFCli = '', _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (cliente / campaña / secuencia)
+  let _taskCanalOpen = false;                            // panel «Canal y paso»: oculto por defecto
+  function taskToggleCanal() { _taskCanalOpen = !_taskCanalOpen; _renderBody(); }
   let _taskFCanal = '', _taskFAcc = '';                  // canal (email/linkedin/…) y, dentro del canal, el tipo de paso (InMail, mensaje, invitación…)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
@@ -25505,6 +25507,7 @@ ${foot}
       ${cliMap.size > 1 || _taskFCli ? `<select onchange="LeadManagerModule.taskSetFilter('cli',this.value)"><option value="">Todos los clientes</option>${optSort(cliMap, _cliCnt).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCli) ? ' selected' : ''}>${esc(nm)} · ${_cliCnt[id] || 0}</option>`).join('')}</select>` : ''}
       ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${campOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)} · ${_campCnt[id] || 0}</option>`).join('')}</select>` : ''}
       <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)} · ${_cnt[id] || 0}</option>`).join('')}</select>
+      <!--CBTN-->
       ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
     </div>` : '';
     // ── Canal / tipo de paso (LinkedIn, Email, WhatsApp… y dentro: InMail, mensaje, invitación…). Los números respetan cliente/campaña/secuencia. ──
@@ -25518,10 +25521,10 @@ ${foot}
       const special = { __fix: nFix, __approve: nApr, __accept: nAcc };
       cnt.email = (cnt.email || 0) + nApr + nFix; if (nAcc) cnt.linkedin = (cnt.linkedin || 0) + nAcc;
       const present = _CANALES.filter(k => cnt[k]);
-      if (present.length < 2 && !_taskFCanal && !_taskFAcc) return '';
+      if (present.length < 2 && !_taskFCanal && !_taskFAcc) return { btn: '', panel: '' };
       const chip = (on, lbl, js, cls) => `<button class="lm-filter-btn${on ? ' on' : ''}${cls ? ' ' + cls : ''}" onclick="${js}">${lbl}</button>`;
       const total = present.reduce((n, k) => n + cnt[k], 0);
-      let h = `<div class="lm-task-filters lm-task-canales"><span class="lm-task-canales__l">Canal</span>` + chip(!_taskFCanal, `Todos · ${total}`, "LeadManagerModule.taskSetFilter('canal','')")
+      const canalChips = chip(!_taskFCanal, `Todos · ${total}`, "LeadManagerModule.taskSetFilter('canal','')")
         + present.map(k => chip(_taskFCanal === k, `${(_TOUCH[k] || [k])[0]} · ${cnt[k]}`, `LeadManagerModule.taskSetFilter('canal','${k}')`)).join('');
       // pasos del canal elegido (InMail, mensaje, invitación…) + las secciones que también son tareas de ese canal (por corregir, por aprobar, por aceptar)
       const none = {};   // tareas de un canal sin tipo de paso definido
@@ -25538,13 +25541,25 @@ ${foot}
         present.forEach(k => ordered(k).forEach(([a, n]) => paso.push([k + '|' + a, `${cName(k)} · ${esc(accLbl(k, a))} · ${n}`, `LeadManagerModule.taskSetFilter('combo','${k}|${a}')`])));
       }
       const sp = Object.keys(special).filter(k => special[k] && (!_taskFCanal || _SPECIAL[k][1] === _taskFCanal));
+      let pasoChips = '';
       if (paso.length || sp.length) {
-        h += `<span class="lm-task-canales__sep"></span><span class="lm-task-canales__l">Paso</span>` + (_taskFCanal || _taskFAcc ? chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')") : '')
+        pasoChips = (_taskFCanal || _taskFAcc ? chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')") : '')
           + paso.map(([key, lbl, js]) => chip(_taskFCanal ? _taskFAcc === key : false, lbl, js)).join('')
           + sp.map(k => chip(_taskFAcc === k, `${_SPECIAL[k][0]} · ${special[k]}`, `LeadManagerModule.taskSetFilter('acc','${k}')`, 'lm-filter-btn--sp')).join('');
       }
-      return h + '</div>';
+      // resumen de lo elegido (se ve aunque el panel esté oculto)
+      const spLbl = _taskFAcc && _taskFAcc.startsWith('__') ? _SPECIAL[_taskFAcc][0] : '';
+      const sum = [_taskFCanal ? cName(_taskFCanal) : '', spLbl || (_taskFAcc ? accLbl(_taskFCanal, _taskFAcc) : '')].filter(Boolean).join(' · ');
+      const on = !!(_taskFCanal || _taskFAcc);
+      const chev = `<svg class="lm-fbtn__chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+      const ico = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>`;
+      const btn = `<button type="button" class="lm-fbtn${on ? ' on' : ''}${_taskCanalOpen ? ' open' : ''}" onclick="LeadManagerModule.taskToggleCanal()" aria-expanded="${_taskCanalOpen}" title="Filtrar por canal (LinkedIn, Email, WhatsApp…) y tipo de paso (InMail, mensaje, llamada…)">${ico}<span>Canal y paso</span>${sum ? `<span class="lm-fbtn__sum">${esc(sum)}</span>` : ''}${chev}</button>`;
+      const panel = _taskCanalOpen ? `<div class="lm-cp"><div class="lm-cp__row"><span class="lm-cp__l">Canal</span><div class="lm-cp__chips">${canalChips}</div></div>`
+        + (pasoChips ? `<div class="lm-cp__row"><span class="lm-cp__l">Paso</span><div class="lm-cp__chips">${pasoChips}</div></div>` : '') + `</div>` : '';
+      return { btn, panel };
     })();
+    const _cb = canalRow.btn || '';
+    const filterRowF = filterRow ? filterRow.replace('<!--CBTN-->', _cb) : (_cb ? `<div class="lm-task-filters">${_cb}</div>` : '');
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const _inactiveNames = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
@@ -25593,7 +25608,7 @@ ${foot}
       </div>
       ${_taskView === 'priority' ? '<div class="lm-prio-link"><a href="#" onclick="event.preventDefault();LeadManagerModule.taskSetView(\'list\')">‹ Volver a la lista</a></div>' + _vTaskInboxPriority() : ''}
       ${_taskView === 'calendar' ? _vTaskCalendar() : ''}
-      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRow}${canalRow}${listHtml}` : ''}`;
+      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRowF}${canalRow.panel}${listHtml}` : ''}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
@@ -36332,7 +36347,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
