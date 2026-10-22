@@ -682,6 +682,7 @@ async function _connectInner(pool, id) {
         // Ticks de entrega/leído — solo sube (1 pendiente → 4 leído), nunca baja,
         // por si las actualizaciones llegan desordenadas.
         if (u.update?.status != null && u.key?.id) {
+          _anotarAck(id, u.key.id, u.update.status);
           await pool.query(
             `UPDATE wa_messages SET ack=$1 WHERE connection_id=$2 AND msg_id=$3 AND ack < $1`,
             [u.update.status, id, u.key.id]);
@@ -698,6 +699,7 @@ async function _connectInner(pool, id) {
         const r = u.receipt || {};
         const st = (r.readTimestamp || r.playedTimestamp) ? 4 : (r.receiptTimestamp ? 3 : null);
         if (st && u.key?.id && u.key.fromMe) {
+          _anotarAck(id, u.key.id, st);
           await pool.query(`UPDATE wa_messages SET ack=$1 WHERE connection_id=$2 AND msg_id=$3 AND ack < $1`, [st, id, u.key.id]);
         }
       } catch (e) { console.warn('[wa] message-receipt.update:', e.message); }
@@ -716,11 +718,42 @@ async function iniciar(pool, id) {
 
 // Antes de escribir a un número normal (1:1) se comprueba que tenga WhatsApp: si no, el mensaje quedaba "enviándose" para siempre sin que nadie supiera por qué.
 async function _verificarNumero(sock, jidFull) {
-  if (!String(jidFull).endsWith('@s.whatsapp.net')) return;
+  if (!String(jidFull).endsWith('@s.whatsapp.net')) return true;
   try {
     const r = await Promise.race([sock.onWhatsApp(jidFull), new Promise(res => setTimeout(() => res(null), 6000))]);
     if (Array.isArray(r) && r[0] && r[0].exists === false) throw Object.assign(new Error('Ese número no tiene WhatsApp. Revisa el número del contacto.'), { noWa: true, code: 'sin_whatsapp' });
-  } catch (e) { if (e && e.noWa) throw e; /* si la consulta falla o tarda, no se bloquea el envío */ }
+    return r !== null;   // null = la línea no contestó en 6 s
+  } catch (e) { if (e && e.noWa) throw e; /* si la consulta falla, no se bloquea el envío */ }
+  return true;
+}
+
+// Tras CADA envío de texto a un contacto: si en ~12 s el servidor de WhatsApp no confirmó ni que lo recibió (ack<2), la sesión con ese contacto o la
+// línea están mal y el mensaje no va a llegar solo. Se repara y se reenvía YA (con el mismo id: nunca duplica), en vez de esperar los 2 min del vigilante
+// y que Jenny tenga que pulsar «Reintentar». Máx. una vez cada 15 min por contacto (compartido con la auto-reparación).
+function _vigilarEntrega(pool, connId, jidFull, msgId) {
+  if (!msgId || !String(jidFull).endsWith('@s.whatsapp.net')) return;
+  setTimeout(async () => {
+    try {
+      if (_ackDe(connId, msgId) >= 2) return;
+      const { rows: [m] } = await pool.query('SELECT ack, estado FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [connId, msgId]);
+      if (!m || m.estado !== 'enviado' || m.ack >= 2) return;
+      const key = connId + ':' + jidFull;
+      if (Date.now() - (_healed.get(key) || 0) < 15 * 60 * 1000) return;
+      _healed.set(key, Date.now());
+      console.warn('[wa] sin confirmación a los 12 s → reparando y reenviando ' + jidFull + ' (conexión ' + connId + ')');
+      await _repararChat(pool, connId, jidFull);
+    } catch (e) { console.warn('[wa] vigilar entrega:', e.message); }
+  }, 12000);
+}
+// La sonda de «¿tiene WhatsApp?» también prueba que la línea RESPONDE. Un socket «abierto» pero mudo (conexión caída sin avisar) deja pasar los envíos
+// sin error y sin llegar: si no contesta, se reconecta y se envía recién cuando la línea está viva.
+async function _asegurarLinea(pool, id, sock, jidFull) {
+  const vivo = await _verificarNumero(sock, jidFull);
+  if (vivo !== false) return sock;
+  console.warn('[wa] la línea ' + id + ' no respondió a la sonda: reconectando antes de enviar');
+  _cerrarSock(sock); _socks.delete(id);
+  _programarReconexion(pool, id, 0);
+  return await esperarListo(pool, id, 20000);
 }
 
 async function enviar(pool, id, jid, texto, respondeA) {
@@ -737,12 +770,13 @@ async function enviar(pool, id, jid, texto, respondeA) {
     if (orig) quoted = { key: { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
   }
 
-  await _verificarNumero(sock, jidFull);
-  const res = await sock.sendMessage(jidFull, { text: texto }, quoted ? { quoted } : undefined);
+  const sockVivo = await _asegurarLinea(pool, id, sock, jidFull);
+  const res = await sockVivo.sendMessage(jidFull, { text: texto }, quoted ? { quoted } : undefined);
   await pool.query(`
-    INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto)
-    VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-    [id, jidFull, res.key.id, texto, quoted ? respondeA : '', quoted ? quoted.message.conversation : '']);
+    INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, ack)
+    VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,$7) ON CONFLICT (connection_id, msg_id) DO UPDATE SET ack = GREATEST(wa_messages.ack, EXCLUDED.ack)`,
+    [id, jidFull, res.key.id, texto, quoted ? respondeA : '', quoted ? quoted.message.conversation : '', Math.max(1, _ackDe(id, res.key.id))]);
+  _vigilarEntrega(pool, id, jidFull, res.key.id);
   return { jid: jidFull, msg_id: res.key.id };
 }
 
@@ -768,11 +802,13 @@ async function enviarSeguro(pool, id, jid, texto, { messageId, respondeA } = {})
     const { rows: [orig] } = await pool.query(`SELECT msg_id, from_me, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`, [id, jidFull, respondeA]);
     if (orig) quoted = { key: { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
   }
-  try { await _verificarNumero(sock, jidFull); } catch (e) { throw _clasificarErrorEnvio(e); }
+  let sockVivo = sock;
+  try { sockVivo = await _asegurarLinea(pool, id, sock, jidFull); } catch (e) { throw _clasificarErrorEnvio(e); }
   const opts = {}; if (quoted) opts.quoted = quoted; if (messageId) opts.messageId = messageId;
   let res;
-  try { res = await sock.sendMessage(jidFull, { text: texto }, Object.keys(opts).length ? opts : undefined); }
+  try { res = await sockVivo.sendMessage(jidFull, { text: texto }, Object.keys(opts).length ? opts : undefined); }
   catch (e) { throw _clasificarErrorEnvio(e); }
+  _vigilarEntrega(pool, id, jidFull, res.key.id);
   return { jid: jidFull, msg_id: res.key.id };
 }
 function nuevoIdMensaje(id) {
@@ -965,6 +1001,15 @@ async function _watchdogTick(pool) {
   }
 }
 let _tickerWatchdog = null;
+// Último estado de entrega visto por mensaje (1 pendiente · 2 el servidor lo recibió · 3 entregado · 4 leído). Se anota antes de tocar la base de datos:
+// si la confirmación llega antes de que exista la fila (o la base tarda), no se pierde y el mensaje no queda con 0 ticks aunque sí salió.
+const _ackMem = new Map();
+function _anotarAck(connId, msgId, st) {
+  if (!msgId || st == null) return;
+  const k = connId + ':' + msgId; if ((_ackMem.get(k) || 0) < st) _ackMem.set(k, st);
+  if (_ackMem.size > 4000) for (const key of [..._ackMem.keys()].slice(0, 1500)) _ackMem.delete(key);
+}
+const _ackDe = (connId, msgId) => _ackMem.get(connId + ':' + msgId) || 0;
 // ── Auto-reparación: si un mensaje lleva más de 5 min sin confirmación de entrega (ack 0), la sesión de cifrado con ESE contacto se dañó
 // (el otro teléfono muestra "Esperando el mensaje…"). Se borra solo la sesión de ese contacto para que se renegocie limpia en el siguiente envío.
 // Máx. una vez cada 6 h por contacto; nunca toca grupos ni a otros contactos.
