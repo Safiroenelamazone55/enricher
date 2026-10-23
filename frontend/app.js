@@ -5459,7 +5459,7 @@ const CanteraModule = (() => {
     dominio: ['domain', 'company domain'],
     website: ['website', 'company website', 'web', 'url', 'sitio web'],
     industria: ['industry', 'industria', 'sector', 'vertical', 'company industry'],
-    tamano: ['size', 'company size', 'employees', 'number of employees', 'headcount'],
+    tamano: ['size', 'company size', 'employees', 'number of employees', 'headcount', 'employee range', 'employees range', 'employee count', 'rango de empleados'],
     pais: ['country', 'company country', 'pais'],
     ciudad: ['city', 'company city', 'ciudad'],
     ubicacion: ['location', 'company location', 'ubicacion', 'ubicacion de la empresa'],
@@ -5485,6 +5485,8 @@ const CanteraModule = (() => {
   function _cIsPersonFile(headers) { return (headers || []).some(x => _C_PERSON_KEYS.includes(_cBest(_cNorm(x), CANT_CT_SYN))); }
   function _cGuess(headerRaw, personFile) {
     const h = _cNorm(headerRaw); if (!h) return '';
+    // Columnas que NO deben mapearse a nada (se conservan como extra): enlaces de Sales Navigator y conteos de LinkedIn, que si no se confunden con website/LinkedIn/tamaño.
+    if (/sales navigator|navigator url|employees on linkedin|linkedin employees|followers|seguidores/.test(h)) return '';
     const m = h.match(_C_CO_PFX);
     if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; }
     const c = _cBest(h, CANT_CT_SYN); if (c) return c;
@@ -5528,7 +5530,7 @@ const CanteraModule = (() => {
   }
   let _cImp = null;
   function openImportModal() {
-    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [], mode: 'actualizar' };
+    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [], mode: 'actualizar', tipo: 'ambos' };
     document.getElementById('cant-imp-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-imp-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeImportModal(); };
@@ -5570,6 +5572,9 @@ const CanteraModule = (() => {
     _cImpInner(`${_cImpHd('Importar prospectos')}
       <div class="lm-imp-body">
         ${_cImpSteps(1)}
+        <div class="cant-imp-tipo"><span class="cant-imp-mode__lbl">¿Qué trae el archivo?</span>
+          ${[['ambos', 'Empresas + contactos', 'Todo en uno: crea las empresas y sus contactos'], ['empresas', 'Solo empresas', 'Para validarlas en Cantera'], ['contactos', 'Solo contactos', 'Se asocian a las empresas que ya están en este borrador']].map(([v, t, d]) => `<label class="cant-imp-tipo__o${_cImp.tipo === v ? ' on' : ''}"><input type="radio" name="cant-imp-tipo" value="${v}" ${_cImp.tipo === v ? 'checked' : ''} onchange="CanteraModule.impSetTipo('${v}')"><b>${t}</b><small>${d}</small></label>`).join('')}
+        </div>
         <label class="lm-drop" id="cant-drop">
           <input type="file" accept=".csv,.xlsx,.xls,.tsv" style="display:none" onchange="CanteraModule.impFile(this.files[0])">
           <div class="lm-drop__t">Arrastra tu Excel / CSV aquí o haz clic para elegir</div>
@@ -5601,6 +5606,10 @@ const CanteraModule = (() => {
       if (!headers.length) throw new Error('No se encontraron columnas en el archivo.');
       _cImp.origHeader = headers.slice(); _cImp.samplesOrig = samples.slice();
       _cImp.hasHeader = true; _cImp.headers = headers; _cImp.samples = samples;
+      // Sugerir el tipo según las columnas: solo empresas / solo contactos / ambos (si la usuaria ya eligió uno a mano, se respeta).
+      const _pf = _cIsPersonFile(headers), _g = headers.map(h => _cGuess(h, _pf));
+      const _hasP = _g.some(k => _C_PERSON_KEYS.includes(k) || k === 'linkedin'), _hasC = _g.some(k => k.startsWith('co_'));
+      if (!_cImp.tipoManual) _cImp.tipo = !_hasP ? 'empresas' : (!_hasC ? 'contactos' : 'ambos');
       _cImpStepMap();
     } catch (e) {
       _cImpInner(`${_cImpHd('Importar prospectos')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-err">${esc(e.message)}</div></div>
@@ -5615,6 +5624,10 @@ const CanteraModule = (() => {
     _cImpStepMap();
   }
   function impSetMode(m) { if (_cImp) _cImp.mode = m; }
+  function impSetTipo(t) {
+    if (!_cImp) return; _cImp.tipo = t; _cImp.tipoManual = true;
+    document.querySelectorAll('#cant-imp-modal .cant-imp-tipo__o').forEach(l => l.classList.toggle('on', l.querySelector('input').value === t));
+  }
   function _cImpOpts() {
     const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
     CANT_FIELDS.forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
@@ -5646,8 +5659,9 @@ const CanteraModule = (() => {
         ${_cImpSteps(2)}
         <div class="lm-map-bar">
           <label class="lm-chk"><input type="checkbox" ${_cImp.hasHeader ? 'checked' : ''} onchange="CanteraModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
+          <span class="cant-hint" style="margin-left:auto">Tipo: <b>${{ ambos: 'Empresas + contactos', empresas: 'Solo empresas', contactos: 'Solo contactos' }[_cImp.tipo || 'ambos']}</b></span>
         </div>
-        ${_companies.length ? `<div class="cant-imp-mode">
+        ${_companies.length && _cImp.tipo === 'ambos' ? `<div class="cant-imp-mode">
           <span class="cant-imp-mode__lbl">Este borrador ya tiene ${_companies.length} empresa(s) — ¿qué hago con el archivo nuevo?</span>
           <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="actualizar" ${_cImp.mode === 'actualizar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('actualizar')"> Actualizar existentes y agregar nuevas (nunca borra nada)</label>
           <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="reemplazar" ${_cImp.mode === 'reemplazar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('reemplazar')"> Borrar todo y volver a cargar desde cero</label>
@@ -5713,6 +5727,7 @@ const CanteraModule = (() => {
       fd.append('mapping', JSON.stringify(mapping));
       fd.append('hasHeader', _cImp.hasHeader ? '1' : '0');
       fd.append('mode', _cImp.mode || 'actualizar');
+      fd.append('tipo', _cImp.tipo || 'ambos');
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
@@ -5741,9 +5756,12 @@ const CanteraModule = (() => {
                 <div class="lm-stat"><b>${sm.rows || 0}</b><span>filas leídas</span></div>
                 <div class="lm-stat"><b>${sm.companiesCreated || 0}</b><span>empresas nuevas</span></div>
                 <div class="lm-stat"><b>${sm.contactsCreated || 0}</b><span>contactos nuevos</span></div>
+                ${sm.tipo === 'contactos' ? `<div class="lm-stat"><b>${sm.companiesMatched || 0}</b><span>asociaciones a empresas del borrador</span></div>` : ''}
+                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>filas sin empresa en el borrador (no se importaron)</span></div>` : ''}
                 ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
                 ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
               </div></div>
+              ${(sm.sinEmpresaEjemplos || []).length ? `<div class="lm-imp-err">Sin empresa coincidente (ej.):<br>${sm.sinEmpresaEjemplos.map(e => esc(e)).join('<br>')}<br><small>Importa primero esas empresas (modo «Solo empresas» o «Empresas + contactos»).</small></div>` : ''}
               ${(sm.errors || []).length ? `<div class="lm-imp-err">${sm.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
             </div>
             <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.closeImportModal()">Listo</button></div></div>`);
@@ -6345,11 +6363,11 @@ const CanteraModule = (() => {
               </div>`).join('');
           return `<div class="cant-imp-file-list">${rows}</div>
             <div class="cant-imp-done-box__btns" style="margin-top:10px">
-              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
+              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar…</button>
               <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">${trashIco} Eliminar todo y volver a cargar</button>
             </div>`;
         })() : `<div class="cant-import-row">
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar…</button>
           <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM. Puedes importar varios archivos al mismo borrador: se van sumando, sin duplicar lo que ya coincide por dominio/LinkedIn.</span>
         </div>`}
       </div>` : ''}
@@ -7850,7 +7868,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, impSetTipo, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,

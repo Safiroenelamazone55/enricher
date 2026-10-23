@@ -18482,3 +18482,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cp-taskbar__mt--liopen.is-done:hover .cp-taskbar__open { background: #15803D; color: #fff; }
 .wa-msg__spin { animation: wa-spin .9s linear infinite; vertical-align: -1px; }
 @keyframes wa-spin { to { transform: rotate(360deg); } }
+.cant-imp-tipo { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0 0 12px; }
+.cant-imp-tipo .cant-imp-mode__lbl { grid-column:1/-1; font-size:12px; color:var(--text-muted,#667); }
+.cant-imp-tipo__o { display:flex; flex-direction:column; gap:2px; padding:9px 11px; border:1px solid #D9DEDB; border-radius:8px; cursor:pointer; background:#fff; }
+.cant-imp-tipo__o input { display:none; }
+.cant-imp-tipo__o b { font-size:13px; }
+.cant-imp-tipo__o small { font-size:11px; color:#667; line-height:1.3; }
+.cant-imp-tipo__o:hover { border-color:#9BB5A8; }
+.cant-imp-tipo__o.on { border-color:#00804C; background:#F0F9F4; box-shadow:0 0 0 1px #00804C inset; }

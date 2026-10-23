@@ -8085,7 +8085,10 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   // LinkedIn de empresa, nombre para empresas; LinkedIn o email para contactos) — y
   // solo completa campos vacíos o agrega lo genuinamente nuevo, nunca pisa un dato
   // que ya estaba lleno.
-  const importMode = req.body?.mode === 'reemplazar' ? 'reemplazar' : 'actualizar';
+  // Qué trae el archivo: 'ambos' (empresas+contactos, default), 'empresas' (solo empresas, no crea contactos) o 'contactos' (solo contactos:
+  // se asocian a empresas que YA están en este borrador; si no hay empresa que coincida, la fila NO crea una nueva y se reporta aparte).
+  const importTipo = ['empresas', 'contactos'].includes(req.body?.tipo) ? req.body.tipo : 'ambos';
+  const importMode = (req.body?.mode === 'reemplazar' && importTipo === 'ambos') ? 'reemplazar' : 'actualizar';
   let companiesDeleted = 0;
   if (importMode === 'reemplazar') {
     const del = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
@@ -8119,7 +8122,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'email in summary': 'email',
       'linkedin': 'linkedin', 'linkedin url': 'linkedin', 'perfil linkedin': 'linkedin', 'profile url': 'linkedin',
       'lead linkedin url': 'linkedin',
-      'empresa': 'co_nombre', 'compania': 'co_nombre', 'company': 'co_nombre', 'company name': 'co_nombre', 'organization': 'co_nombre',
+      'account name': 'co_nombre', 'employee range': 'co_tamano', 'company city': 'co_ciudad', 'empresa': 'co_nombre', 'compania': 'co_nombre', 'company': 'co_nombre', 'company name': 'co_nombre', 'organization': 'co_nombre',
       'dominio': 'co_dominio', 'domain': 'co_dominio', 'company domain': 'co_dominio',
       'website': 'co_website', 'sitio web': 'co_website', 'company website': 'co_website',
       'industria': 'co_industria', 'industry': 'co_industria', 'company industry': 'co_industria',
@@ -8171,7 +8174,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   _canteraImportJobs.set(batchId, job);
   res.json({ started: true, total: dataRows.length });
 
-  const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
+  const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, tipo: importTipo, sinEmpresa: 0, sinEmpresaEjemplos: [], errors: [] };
   const coCache = new Map();
   const coDom = new Map();   // id de empresa → dominio (para no unir por nombre dos empresas con dominios distintos)
   // Clave de nombre «flexible»: sin sufijo legal (S.L., S.A., LLC, Inc…), sin tildes ni signos y sin mayúsculas. Así «BOADAS 1880,S.A.» y «Boadas 1880»,
@@ -8306,6 +8309,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       return id;
     }
 
+    if (importTipo === 'contactos') return null;   // solo contactos: nunca se crea una empresa nueva
     const pais = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     // Empresa nueva en ESTE borrador -- si ya fue clasificada antes en otro
     // borrador con el MISMO ICP+Tiers (ver inheritCache arriba), hereda esa
@@ -8348,6 +8352,12 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       // se saltaba ANTES de tocar la empresa, perdiendo la chance de completar
       // campos vacíos de la empresa con esta fila.
       const companyId = await _co(f);
+      if (importTipo === 'empresas') { job.done = summary.rows; continue; }
+      if (importTipo === 'contactos' && !companyId) {
+        summary.sinEmpresa++;
+        if (summary.sinEmpresaEjemplos.length < 15) summary.sinEmpresaEjemplos.push(`${_lmS(f.nombre) || _lmS(f.nombre_completo) || '(sin nombre)'} → ${_lmS(f.co_nombre) || _lmS(f.co_dominio) || 'sin empresa en el archivo'}`);
+        job.done = summary.rows; continue;
+      }
       const contactKey = _lmCleanUrlish(f.linkedin).toLowerCase() || _lmCleanUrlish(f.email).toLowerCase();
       let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
       if (!nombre && !apellido && _lmS(f.nombre_completo)) {
