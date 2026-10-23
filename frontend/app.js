@@ -7610,6 +7610,7 @@ const CanteraModule = (() => {
       apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
       apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
     ]);
+    window._scopeData = { campanas, secuencias };
     document.getElementById('cant-scope-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-scope-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeScope(); };
@@ -7619,11 +7620,11 @@ const CanteraModule = (() => {
       <div class="fin-pi-box__hd"><h3>Cliente / Campaña / Secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeScope()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">Los tres son opcionales aquí — es solo una anotación, no envía nada a Outreach ni activa nada todavía. Si eliges "+ Crear nueva…" se crea como borrador.</p>
-        <label class="cant-flabel">Cliente<select id="cant-sc-client" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'client')">
+        <label class="cant-flabel">Cliente<select id="cant-sc-client" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'client').then(() => CanteraModule.scopeCascade('client'))">
           <option value="__new__">+ Crear cliente nuevo…</option>
           ${opt(clientes, _current.outbound_client_id, '— sin asignar —')}
         </select></label>
-        <label class="cant-flabel">Campaña<select id="cant-sc-camp" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'campaign')">
+        <label class="cant-flabel">Campaña<select id="cant-sc-camp" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'campaign').then(() => CanteraModule.scopeCascade('camp'))">
           <option value="__new__">+ Crear campaña nueva (borrador)…</option>
           ${opt(campanas, _current.campaign_id, '— sin asignar —')}
         </select></label>
@@ -7637,12 +7638,39 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" onclick="CanteraModule.saveScope()">Guardar</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    scopeCascade('init');
+  }
+  // Cascada: la campaña solo muestra las del cliente elegido; la secuencia, las de esa campaña (o, sin campaña, las del cliente).
+  function scopeCascade(level) {
+    const d = window._scopeData; if (!d) return;
+    const cl = document.getElementById('cant-sc-client'), ca = document.getElementById('cant-sc-camp'), sq = document.getElementById('cant-sc-seq');
+    if (!cl || !ca || !sq) return;
+    const clV = cl.value === '__new__' ? '' : cl.value;
+    const fill = (sel, kind, list, keep, none) => {
+      const extra = sel.querySelector('option[value="__new__"]').outerHTML;
+      sel.innerHTML = extra + '<option value="">' + none + '</option>' + list.map(x => '<option value="' + x.id + '"' + (String(keep) === String(x.id) ? ' selected' : '') + '>' + esc(x.nombre) + '</option>').join('');
+      if (!list.some(x => String(x.id) === String(keep))) sel.value = '';
+    };
+    if (level !== 'camp' && level !== 'seq') {
+      const keep = level === 'init' ? _current.campaign_id : ca.value;
+      fill(ca, 'campaign', d.campanas.filter(c => !clV || String(c.outbound_client_id) === String(clV)), keep, '— sin asignar —');
+    }
+    if (level !== 'seq') {
+      const caV = ca.value === '__new__' ? '' : ca.value;
+      const keep = level === 'init' ? _current.sequence_id : sq.value;
+      let list = d.secuencias;
+      if (caV) list = list.filter(x => String(x.campaign_id) === String(caV));
+      else if (clV) list = list.filter(x => String(x.outbound_client_id) === String(clV));
+      fill(sq, 'sequence', list, keep, '— sin asignar —');
+    }
   }
   function closeScope() { document.getElementById('cant-scope-modal')?.remove(); }
   const _SCOPE_EP = { client: 'outbound-clients', campaign: 'campaigns', sequence: 'sequences' };
   const _SCOPE_LBL = { client: 'cliente', campaign: 'campaña', sequence: 'secuencia' };
   async function scopeMaybeCreate(sel, kind) {
     if (sel.value !== '__new__') return;
+    const _cl = document.getElementById('cant-sc-client'), _ca = document.getElementById('cant-sc-camp');
+    const _rel = { outbound_client_id: kind !== 'client' && _cl && _cl.value && _cl.value !== '__new__' ? _cl.value : undefined, campaign_id: kind === 'sequence' && _ca && _ca.value && _ca.value !== '__new__' ? _ca.value : undefined };
     const nombre = prompt(`Nombre de la nueva ${_SCOPE_LBL[kind]} (se crea como borrador — no se envía nada a Outreach)`);
     if (!nombre || !nombre.trim()) { sel.value = ''; return; }
     try {
@@ -7650,10 +7678,13 @@ const CanteraModule = (() => {
       // origen_cantera=true — Outreach la muestra "en gris"/bloqueada hasta
       // que de verdad se le enrolen contactos vía "Mover al CRM"/"Enviar a
       // secuencia" (ver POST /sequences y el UPDATE al enrolar).
-      const body = kind === 'sequence' ? { nombre: nombre.trim(), origen_cantera: true } : { nombre: nombre.trim() };
+      const body = Object.assign(kind === 'sequence' ? { nombre: nombre.trim(), origen_cantera: true } : { nombre: nombre.trim() }, _rel);
       const res = await apiFetch(`${API}/${_SCOPE_EP[kind]}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
+      const sd = window._scopeData;
+      if (sd && kind === 'campaign') sd.campanas.push({ id: d.id, nombre: d.nombre, outbound_client_id: _rel.outbound_client_id || d.outbound_client_id });
+      if (sd && kind === 'sequence') sd.secuencias.push({ id: d.id, nombre: d.nombre, campaign_id: _rel.campaign_id || d.campaign_id, outbound_client_id: _rel.outbound_client_id || d.outbound_client_id });
       const o = document.createElement('option'); o.value = d.id; o.textContent = d.nombre;
       sel.insertBefore(o, sel.options[1] || null);
       sel.value = String(d.id);
@@ -7868,7 +7899,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, impSetTipo, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
