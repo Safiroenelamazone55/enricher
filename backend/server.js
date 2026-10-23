@@ -8173,6 +8173,14 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
 
   const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
   const coCache = new Map();
+  const coDom = new Map();   // id de empresa → dominio (para no unir por nombre dos empresas con dominios distintos)
+  // Clave de nombre «flexible»: sin sufijo legal (S.L., S.A., LLC, Inc…), sin tildes ni signos y sin mayúsculas. Así «BOADAS 1880,S.A.» y «Boadas 1880»,
+  // o «Agotzaina S.L» y «Agotzaina», se reconocen como la MISMA empresa al importar solo contactos y no se duplican (cada duplicado se validaba dos veces).
+  const _nombreFlex = n => {
+    const base = require('./services/dataCleanService').cleanValue('companies', 'nombre', String(n || ''));
+    const k = String(base || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return k.length >= 3 ? k : '';
+  };
   const contactCachePreloaded = new Map();
   if (importMode === 'actualizar') {
     // Precarga la identidad de lo que YA existe en este borrador, para que la misma
@@ -8187,6 +8195,8 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       if (e.dominio) coCache.set('d:' + e.dominio, e.id);
       if (e.linkedin) coCache.set('l:' + e.linkedin.toLowerCase(), e.id);
       if (e.nombre) coCache.set('n:' + e.nombre.toLowerCase(), e.id);
+      const nf = _nombreFlex(e.nombre); if (nf && !coCache.has('nn:' + nf)) coCache.set('nn:' + nf, e.id);
+      if (e.dominio) coDom.set(e.id, e.dominio);
     }
     const { rows: existingCts } = await pool.query(`SELECT id, linkedin, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
     for (const e of existingCts) {
@@ -8259,10 +8269,14 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     if (dominio) keys.push('d:' + dominio);
     if (linkedin) keys.push('l:' + linkedin);
     if (nombreKey) keys.push('n:' + nombreKey);
+    const flex = _nombreFlex(nombre);
+    if (flex) keys.push('nn:' + flex);
 
     for (const k of keys) {
       if (!coCache.has(k)) continue;
       const id = coCache.get(k);
+      // por nombre flexible solo se une si no hay dominios distintos de por medio (misma marca, otro sitio = otra empresa)
+      if (k.startsWith('nn:') && dominio && coDom.get(id) && coDom.get(id) !== dominio) continue;
       // Esta fila puede traer un dato que la empresa ya registrada no tenía todavía
       // (ej. la primera vez se vio con "N/A", o venía de una importación anterior
       // incompleta) — se completa cualquier campo que esté vacío, nunca se pisa lo
@@ -8286,7 +8300,8 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
             ubicacion = CASE WHEN ubicacion='' THEN $8 ELSE ubicacion END
           WHERE id=$9`, [dominio, website, linkedin, industria, tamano, ciudad, pais2, ubicacion, id]);
       }
-      keys.forEach(k2 => coCache.set(k2, id));
+      keys.forEach(k2 => { if (!coCache.has(k2)) coCache.set(k2, id); });
+      if (dominio && !coDom.get(id)) coDom.set(id, dominio);
       summary.companiesMatched++;
       return id;
     }
@@ -8304,6 +8319,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion), importId,
         inh ? inh.tier_clave : '', inh ? inh.paso1_estado : 'pendiente', inh ? (inh.paso1_motivo || '') : '', inh ? inh.paso2_estado : 'pendiente', inh ? inh.confianza : '', JSON.stringify(inh ? (inh.evidencia || []) : []), inh ? (inh.motivo_descarte || '') : '']);
     keys.forEach(k => coCache.set(k, ins.rows[0].id));
+    if (dominio) coDom.set(ins.rows[0].id, dominio);
     summary.companiesCreated++;
     if (inh) summary.companiesInherited++;
     return ins.rows[0].id;
