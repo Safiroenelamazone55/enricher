@@ -2482,6 +2482,15 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS publico_reciente  TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS sigue_empresa     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS ubicacion         TEXT NOT NULL DEFAULT '';`);
+    // LinkedIn Sales Navigator (empresa y contacto) junto al LinkedIn normal, región/estado y empleados en LinkedIn: se conservan al importar y al pasar al CRM.
+    for (const q of [
+      "ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS linkedin_sales_nav TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS empleados_linkedin TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS linkedin_sales_nav TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS empleados_linkedin TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS linkedin_sales_nav TEXT NOT NULL DEFAULT ''",
+    ]) await pool.query(q);
 
     // Auditoría por muestra de la investigación profunda (IA) — pedido explícito
     // 2026-09-06: "necesito saber si el motor está calificando bien de verdad".

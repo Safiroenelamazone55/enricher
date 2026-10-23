@@ -4245,6 +4245,7 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
       INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
       VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
     `, [req.workspaceOwnerId, ...vals, b.company_id || null, b.outbound_client_id || null]);
+    if (_lmS(b.linkedin_sales_nav)) { rows[0].linkedin_sales_nav = _lmCleanUrlish(b.linkedin_sales_nav); await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [rows[0].linkedin_sales_nav, rows[0].id]); }
     // Auto-enriquecimiento: verificar (o buscar) el email en background, sin bloquear la respuesta.
     if (b.auto_verify !== false) {
       try {
@@ -4266,6 +4267,7 @@ app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
       WHERE id=$${LM_CT_COLS.length + 3} AND user_id=$${LM_CT_COLS.length + 4} RETURNING *
     `, [...vals, b.company_id || null, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    if (b.linkedin_sales_nav !== undefined) { rows[0].linkedin_sales_nav = _lmCleanUrlish(b.linkedin_sales_nav); await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [rows[0].linkedin_sales_nav, rows[0].id]); }
     if (prev && (LM_CT_COLS.some(k => String(prev[k] == null ? '' : prev[k]) !== String(rows[0][k] == null ? '' : rows[0][k])) || String(prev.company_id || '') !== String(rows[0].company_id || ''))) await _refreshDrafts(req.workspaceOwnerId, [rows[0].id], null);
     // Si el email CAMBIÓ (p. ej. corrigiendo uno que rebotó), el estado anterior deja de valer:
     // se resetea a "sin verificar" y se re-verifica en background.
@@ -7822,7 +7824,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
         const sets = []; const vals = [found.id, uid];
         const upd = {
           nombre, website: _lmS(f.website), industria: _lmS(f.industria), tamano: _lmS(f.tamano), ingresos: _lmS(f.ingresos),
-          telefono: _lmS(f.telefono), linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
+          telefono: _lmS(f.telefono), linkedin: _lmS(f.linkedin), linkedin_sales_nav: _lmCleanUrlish(f.linkedin_sales_nav), empleados_linkedin: _lmS(f.empleados_linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
           fundada: _lmS(f.fundada), direccion: _lmS(f.direccion), codigo_postal: _lmS(f.codigo_postal), descripcion: _lmS(f.descripcion),
           tecnologias: _lmS(f.tecnologias), funding: _lmS(f.funding), target_tier: _lmS(f.target_tier), segmento: _lmS(f.segmento), analisis: _lmS(f.analisis),
         };
@@ -7841,6 +7843,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     `, [uid, nombre || dominio, dominio, _lmCleanUrlish(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
         _lmS(f.telefono), _lmCleanUrlish(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
         _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas), req.file.originalname || '']);
+    if (_lmS(f.linkedin_sales_nav) || _lmS(f.empleados_linkedin)) await pool.query(`UPDATE lm_companies SET linkedin_sales_nav=$1, empleados_linkedin=$2 WHERE id=$3`, [_lmCleanUrlish(f.linkedin_sales_nav), _lmS(f.empleados_linkedin), ins.rows[0].id]);
     keys.forEach(k => coCache.set(k, ins.rows[0].id)); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -7882,7 +7885,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             nombre, apellido,
             email_personal: _lmS(f.email_personal), telefono: _lmS(f.telefono), movil: _lmS(f.movil),
             cargo: _lmS(f.cargo), seniority: _lmS(f.seniority), departamento: _lmS(f.departamento),
-            linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
+            linkedin: _lmS(f.linkedin), linkedin_sales_nav: _lmCleanUrlish(f.linkedin_sales_nav), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
             estado: _lmS(f.estado), fuente: _lmS(f.fuente),
             contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), analisis: _lmS(f.analisis), notas: _lmS(f.notas),
             idioma: require('./services/geoService').normalizeLanguage(f.idioma),   // el idioma del archivo manda sobre el deducido por país
@@ -7897,7 +7900,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           if (_lmS(f.co_nombre) || _lmS(f.co_dominio) || _lmS(f.co_website)) {
             const cid2 = await _co({
               nombre: f.co_nombre, dominio: f.co_dominio, website: f.co_website, industria: f.co_industria,
-              tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
+              tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin, linkedin_sales_nav: f.co_linkedin_sales_nav, empleados_linkedin: f.co_empleados_linkedin,
               ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
               codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
               tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento, analisis: f.co_analisis,
@@ -7916,7 +7919,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
         }
         const companyId = await _co({
           nombre: f.co_nombre, dominio: f.co_dominio, website: f.co_website, industria: f.co_industria,
-          tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
+          tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin, linkedin_sales_nav: f.co_linkedin_sales_nav, empleados_linkedin: f.co_empleados_linkedin,
           ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
           codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
           tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
@@ -7926,6 +7929,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
             _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', require('./services/geoService').normalizeLanguage(f.idioma)]);
+        if (_lmS(f.linkedin_sales_nav)) await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=(SELECT MAX(id) FROM lm_contacts WHERE user_id=$2)`, [_lmCleanUrlish(f.linkedin_sales_nav), uid]);
         summary.contactsCreated++;
       }
     } catch (e) {
@@ -8129,6 +8133,8 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'tamano': 'co_tamano', 'tamaño': 'co_tamano', 'company size': 'co_tamano', 'employees': 'co_tamano', '# employees': 'co_tamano',
       'pais': 'co_pais', 'país': 'co_pais', 'country': 'co_pais', 'company country': 'co_pais',
       'ciudad': 'co_ciudad', 'city': 'co_ciudad',
+      'company sales navigator url': 'co_linkedin_sales_nav', 'company sales nav url': 'co_linkedin_sales_nav', 'company state': 'co_region', 'employees on linkedin': 'co_empleados_linkedin',
+      'lead sales navigator url': 'linkedin_sales_nav', 'person sales navigator url': 'linkedin_sales_nav', 'profile sales navigator url': 'linkedin_sales_nav',
       'linkedin empresa': 'co_linkedin', 'company linkedin url': 'co_linkedin', 'company linkedin': 'co_linkedin',
       // Identidad: si el encabezado YA es el nombre interno del campo (ej. quien arma
       // el archivo a mano usa "co_nombre" tal cual) — norm() convierte "_" en espacio,
@@ -8253,6 +8259,12 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     const parts = String(s || '').split(',').map(x => x.trim()).filter(Boolean);
     return parts.length ? parts[parts.length - 1] : '';
   }
+  // Campos que se guardan aparte para no alargar los INSERT/UPDATE de abajo: LinkedIn Sales Navigator de la empresa, región y empleados en LinkedIn (solo rellena vacíos).
+  async function _coExtra(id, f) {
+    const sn = _lmCleanUrlish(f.co_linkedin_sales_nav), rg = _lmS(f.co_region), em = _lmS(f.co_empleados_linkedin);
+    if (!sn && !rg && !em) return;
+    await pool.query(`UPDATE cantera_companies SET linkedin_sales_nav = CASE WHEN linkedin_sales_nav='' THEN $1 ELSE linkedin_sales_nav END, region = CASE WHEN region='' THEN $2 ELSE region END, empleados_linkedin = CASE WHEN empleados_linkedin='' THEN $3 ELSE empleados_linkedin END WHERE id=$4`, [sn, rg, em, id]);
+  }
   async function _co(f) {
     // Identidad de empresa CRUZADA (pedido explícito de Jenny 2026-09-06: "que sea
     // cruzada, dominio web, linkedin empresa, nombre") — no una cascada de prioridad,
@@ -8303,6 +8315,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
             ubicacion = CASE WHEN ubicacion='' THEN $8 ELSE ubicacion END
           WHERE id=$9`, [dominio, website, linkedin, industria, tamano, ciudad, pais2, ubicacion, id]);
       }
+      await _coExtra(id, f);
       keys.forEach(k2 => { if (!coCache.has(k2)) coCache.set(k2, id); });
       if (dominio && !coDom.get(id)) coDom.set(id, dominio);
       summary.companiesMatched++;
@@ -8322,6 +8335,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id
     `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion), importId,
         inh ? inh.tier_clave : '', inh ? inh.paso1_estado : 'pendiente', inh ? (inh.paso1_motivo || '') : '', inh ? inh.paso2_estado : 'pendiente', inh ? inh.confianza : '', JSON.stringify(inh ? (inh.evidencia || []) : []), inh ? (inh.motivo_descarte || '') : '']);
+    await _coExtra(ins.rows[0].id, f);
     keys.forEach(k => coCache.set(k, ins.rows[0].id));
     if (dominio) coDom.set(ins.rows[0].id, dominio);
     summary.companiesCreated++;
@@ -8376,8 +8390,9 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
             cargo = CASE WHEN cargo='' THEN $3 ELSE cargo END,
             email = CASE WHEN email='' THEN $4 ELSE email END,
             linkedin = CASE WHEN linkedin='' THEN $5 ELSE linkedin END,
-            ubicacion = CASE WHEN ubicacion='' THEN $6 ELSE ubicacion END
-          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId]);
+            ubicacion = CASE WHEN ubicacion='' THEN $6 ELSE ubicacion END,
+            linkedin_sales_nav = CASE WHEN linkedin_sales_nav='' THEN $8 ELSE linkedin_sales_nav END
+          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId, _lmCleanUrlish(f.linkedin_sales_nav)]);
         summary.contactsUpdated++;
         continue;
       }
@@ -8388,6 +8403,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId]);
+      if (_lmCleanUrlish(f.linkedin_sales_nav)) await pool.query(`UPDATE cantera_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [_lmCleanUrlish(f.linkedin_sales_nav), ctIns.rows[0].id]);
       if (contactKey) contactCache.set(contactKey, ctIns.rows[0].id);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
@@ -9578,7 +9594,7 @@ function _canteraCoData(co, batch) {
   const loc = _lmSplitLocation(co.ubicacion || '');
   const head = `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}` + (co.prioridad ? ` · prioridad ${co.prioridad}` : '') + (co.puntaje != null ? ` · puntaje ${co.puntaje}` : '');
   return {
-    ciudad: co.ciudad || loc.ciudad || '', region: loc.region || '', pais: co.pais || loc.pais || '',
+    ciudad: co.ciudad || loc.ciudad || '', region: co.region || loc.region || '', linkedin_sales_nav: co.linkedin_sales_nav || '', empleados_linkedin: co.empleados_linkedin || '', pais: co.pais || loc.pais || '',
     tamano: co.tamano || '', descripcion: razon,
     analisis: [nm.trim(), ev].filter(Boolean).join('\n\n'),
     notas: head + (nota ? '\n' + nota : ''),
@@ -9587,7 +9603,7 @@ function _canteraCoData(co, batch) {
 }
 // Rellena SOLO lo que está vacío en la empresa del CRM (nunca pisa lo que ya se editó a mano).
 async function _fillCoFromCantera(cl, uid, coId, d) {
-  const cols = ['ciudad', 'region', 'pais', 'tamano', 'descripcion', 'analisis', 'notas', 'website', 'industria', 'linkedin', 'target_tier'];
+  const cols = ['ciudad', 'region', 'pais', 'tamano', 'descripcion', 'analisis', 'notas', 'website', 'industria', 'linkedin', 'target_tier', 'linkedin_sales_nav', 'empleados_linkedin'];
   const sets = cols.map((c, i) => `${c} = CASE WHEN COALESCE(${c},'') = '' THEN $${i + 3} ELSE ${c} END`).join(', ');
   await cl.query(`UPDATE lm_companies SET ${sets}, updated_at = NOW() WHERE id=$1 AND user_id=$2`, [coId, uid, ...cols.map(c => d[c] || '')]);
 }
@@ -9657,7 +9673,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
             dd.analisis, dd.descripcion, outboundClientId, dd.notas]);
         coId = ins.rows[0].id;
       }
-      if (existing) await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
+      await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
@@ -9699,6 +9715,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
           contactId = ins.rows[0].id;
         }
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
+        if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);
@@ -9779,7 +9796,7 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
             dd.analisis, dd.descripcion, outboundClientId, dd.notas]);
         coId = ins.rows[0].id;
       }
-      if (existing) await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
+      await _fillCoFromCantera(cl, uid, coId, _canteraCoData(co, batch));
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
@@ -9817,6 +9834,7 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
           contactId = ins.rows[0].id;
         }
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
+        if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);

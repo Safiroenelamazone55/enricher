@@ -5425,7 +5425,7 @@ const CanteraModule = (() => {
   const CANT_FIELDS = [
     { g: 'Contacto', opts: [
       ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
-      ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'],
+      ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'],
       ['ubicacion', 'Ubicación del contacto'], ['conexion_grado', 'Grado de conexión'],
       ['premium', 'Cuenta Premium'], ['antiguedad_cargo', 'Antigüedad en el cargo'],
       ['conexiones_mutuas', 'Conexiones mutuas'], ['cambio_reciente', 'Cambió de trabajo recientemente'],
@@ -5435,7 +5435,8 @@ const CanteraModule = (() => {
       ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
       ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'],
       ['co_pais', 'Empresa · País'], ['co_ciudad', 'Empresa · Ciudad'], ['co_ubicacion', 'Empresa · Ubicación (texto completo)'],
-      ['co_linkedin', 'Empresa · LinkedIn'],
+      ['co_linkedin', 'Empresa · LinkedIn'], ['co_linkedin_sales_nav', 'Empresa · LinkedIn (Sales Navigator)'],
+      ['co_region', 'Empresa · Estado / Región'], ['co_empleados_linkedin', 'Empresa · Empleados en LinkedIn'],
     ] },
   ];
   const CANT_CT_SYN = {
@@ -5485,8 +5486,11 @@ const CanteraModule = (() => {
   function _cIsPersonFile(headers) { return (headers || []).some(x => _C_PERSON_KEYS.includes(_cBest(_cNorm(x), CANT_CT_SYN))); }
   function _cGuess(headerRaw, personFile) {
     const h = _cNorm(headerRaw); if (!h) return '';
-    // Columnas que NO deben mapearse a nada (se conservan como extra): enlaces de Sales Navigator y conteos de LinkedIn, que si no se confunden con website/LinkedIn/tamaño.
-    if (/sales navigator|navigator url|employees on linkedin|linkedin employees|followers|seguidores/.test(h)) return '';
+    // Sales Navigator, empleados en LinkedIn y estado/región tienen campo propio (si no, se confundirían con website/LinkedIn/tamaño).
+    if (/sales navigator|sales nav\b/.test(h)) return (/^(company|empresa|account|org|organization)\b/.test(h) || !personFile) ? 'co_linkedin_sales_nav' : 'linkedin_sales_nav';
+    if (/employees on linkedin|linkedin employees|empleados en linkedin/.test(h)) return 'co_empleados_linkedin';
+    if (/^(company|empresa|account)\s+(state|region|provincia|estado)$/.test(h)) return 'co_region';
+    if (/followers|seguidores/.test(h)) return '';
     const m = h.match(_C_CO_PFX);
     if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; if (!_cBest(h, CANT_CT_SYN)) return ''; }   // «Company State», «Company Phone»…: sin campo propio → extra
     const c = _cBest(h, CANT_CT_SYN); if (c) return c;
@@ -35079,6 +35083,7 @@ ${foot}
         ${_lmFld('ct-departamento', 'Departamento', c?.departamento)}
         ${_lmFld('ct-buyer_role', 'Rol de compra', c?.buyer_role)}
         ${_lmFld('ct-linkedin', 'LinkedIn', c?.linkedin, '', true)}
+        ${_lmFld('ct-linkedin_sales_nav', 'LinkedIn (Sales Navigator)', c?.linkedin_sales_nav, '', true)}
         ${_lmFld('ct-ciudad', 'Ciudad', c?.ciudad)}
         ${_lmFld('ct-region', 'Región', c?.region)}
         ${_lmFld('ct-pais', 'País', c?.pais)}
@@ -35123,7 +35128,7 @@ ${foot}
       nombre: g('ct-nombre'), apellido: g('ct-apellido'), email: g('ct-email'), email_personal: g('ct-email_personal'), cargo: g('ct-cargo'),
       telefono: g('ct-telefono'), movil: g('ct-movil'), seniority: g('ct-seniority'), departamento: g('ct-departamento'),
       buyer_role: g('ct-buyer_role'), contact_priority: g('ct-contact_priority'),
-      linkedin: g('ct-linkedin'), ciudad: g('ct-ciudad'), region: g('ct-region'), pais: g('ct-pais'),
+      linkedin: g('ct-linkedin'), linkedin_sales_nav: g('ct-linkedin_sales_nav'), ciudad: g('ct-ciudad'), region: g('ct-region'), pais: g('ct-pais'),
       estado: $('ct-estado')?.value || 'nuevo', fuente: g('ct-fuente') || 'manual', analisis: g('ct-analisis'), notas: g('ct-notas'),
       company_id: companyId, empresa_nombre: co ? (co.nombre || co.dominio || '') : '',
       outbound_client_id: $('ct-obc')?.value ? Number($('ct-obc').value) : null,
