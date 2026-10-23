@@ -5488,7 +5488,7 @@ const CanteraModule = (() => {
     // Columnas que NO deben mapearse a nada (se conservan como extra): enlaces de Sales Navigator y conteos de LinkedIn, que si no se confunden con website/LinkedIn/tamaño.
     if (/sales navigator|navigator url|employees on linkedin|linkedin employees|followers|seguidores/.test(h)) return '';
     const m = h.match(_C_CO_PFX);
-    if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; }
+    if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; if (!_cBest(h, CANT_CT_SYN)) return ''; }   // «Company State», «Company Phone»…: sin campo propio → extra
     const c = _cBest(h, CANT_CT_SYN); if (c) return c;
     const a = _cBest(h, CANT_CO_SYN);
     if (a) {
