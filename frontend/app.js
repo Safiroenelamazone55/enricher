@@ -5539,7 +5539,7 @@ const CanteraModule = (() => {
     _cImpStepFile();
   }
   function closeImportModal() { document.getElementById('cant-imp-modal')?.remove(); _cImp = null; }
-  // Acción directa desde el paso "Importar prospectos" (pedido explícito 2026-09-06,
+  // Acción directa desde el paso "Importar" (pedido explícito 2026-09-06,
   // visible ahí mismo, no escondida dentro del modal) — borra TODAS las empresas y
   // contactos de este borrador y abre el importador limpio para cargar de nuevo.
   async function deleteAndReimport() {
@@ -5569,7 +5569,7 @@ const CanteraModule = (() => {
   function _cImpHd(title) { return `<div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeImportModal()">✕</button></div>`; }
   function _cImpSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
   function _cImpStepFile() {
-    _cImpInner(`${_cImpHd('Importar prospectos')}
+    _cImpInner(`${_cImpHd('Importar')}
       <div class="lm-imp-body">
         ${_cImpSteps(1)}
         <div class="cant-imp-tipo"><span class="cant-imp-mode__lbl">¿Qué trae el archivo?</span>
@@ -5592,7 +5592,7 @@ const CanteraModule = (() => {
   async function impFile(file) {
     if (!file || !_cImp) return;
     _cImp.file = file;
-    _cImpInner(`${_cImpHd('Importar prospectos')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-load">Leyendo <b>${esc(file.name)}</b>…</div></div>`);
+    _cImpInner(`${_cImpHd('Importar')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-load">Leyendo <b>${esc(file.name)}</b>…</div></div>`);
     try {
       let headers = [], samples = [];
       if (/\.(csv|tsv|txt)$/i.test(file.name)) {
@@ -5612,7 +5612,7 @@ const CanteraModule = (() => {
       if (!_cImp.tipoManual) _cImp.tipo = !_hasP ? 'empresas' : (!_hasC ? 'contactos' : 'ambos');
       _cImpStepMap();
     } catch (e) {
-      _cImpInner(`${_cImpHd('Importar prospectos')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-err">${esc(e.message)}</div></div>
+      _cImpInner(`${_cImpHd('Importar')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-err">${esc(e.message)}</div></div>
         <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Reintentar</button></div></div>`);
     }
   }
@@ -5654,7 +5654,7 @@ const CanteraModule = (() => {
         </div>
       </div>`;
     }).join('');
-    _cImpInner(`${_cImpHd('Importar prospectos — asigna las columnas')}
+    _cImpInner(`${_cImpHd('Importar — asigna las columnas')}
       <div class="lm-imp-body">
         ${_cImpSteps(2)}
         <div class="lm-map-bar">
@@ -5673,7 +5673,7 @@ const CanteraModule = (() => {
         <span class="fin-cfg-hint" id="cant-imp-msg">${_cImp.headers.length} columnas · las no asignadas se conservan como extra</span>
         <div class="fin-pi-ft-btns">
           <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeImportModal()">Cancelar</button>
-          <button class="btn btn--primary btn--sm" id="cant-imp-go" onclick="CanteraModule.impRun()">Importar prospectos</button>
+          <button class="btn btn--primary btn--sm" id="cant-imp-go" onclick="CanteraModule.impRun()">Importar</button>
         </div>
       </div>`);
   }
@@ -5774,7 +5774,7 @@ const CanteraModule = (() => {
         await _loadCompanies(); _paint();
       }, 2000);
     } catch (e) {
-      if (go) { go.disabled = false; go.textContent = 'Importar prospectos'; }
+      if (go) { go.disabled = false; go.textContent = 'Importar'; }
       const msg = document.getElementById('cant-imp-msg'); if (msg) { msg.textContent = e.message; msg.style.color = '#B3261E'; }
     }
   }
@@ -6180,7 +6180,7 @@ const CanteraModule = (() => {
         <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
         <button class="cant-step${_step === 6 ? ' on' : ''}" onclick="CanteraModule.setStep(6)">Datos a investigar <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
-        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar prospectos</button>
+        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
         <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
         ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
@@ -6363,11 +6363,11 @@ const CanteraModule = (() => {
               </div>`).join('');
           return `<div class="cant-imp-file-list">${rows}</div>
             <div class="cant-imp-done-box__btns" style="margin-top:10px">
-              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar…</button>
+              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar</button>
               <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">${trashIco} Eliminar todo y volver a cargar</button>
             </div>`;
         })() : `<div class="cant-import-row">
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar…</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar</button>
           <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM. Puedes importar varios archivos al mismo borrador: se van sumando, sin duplicar lo que ya coincide por dominio/LinkedIn.</span>
         </div>`}
       </div>` : ''}
