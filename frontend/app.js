@@ -36685,7 +36685,7 @@ const WorkspaceModule = (() => {
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
     if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
     if (sec === 'uso') _loadUsage();
-    if (sec === 'agentes' && window.AgentesModule) AgentesModule.load();
+    if (sec === 'agentes' && typeof AgentesModule !== 'undefined') AgentesModule.load();
     // "Usuarios" pasó de ser una pestaña propia del header a vivir acá dentro —
     // en vez de duplicar la tabla, se muda el propio #pane-mgmt-team (mismo truco que
     // el chat de Slack en media pantalla: mover el nodo, no clonar el módulo).
@@ -43336,7 +43336,7 @@ const ChatModule = (() => {
     _socket.on('new_message', msg => _appendMessage(msg));
     _socket.on('meeting_reminder', m => _showMeetingReminder(m));
     // Aviso de un agente de vigilancia (Configuración → Agentes): llega al instante aunque no estés mirando la campana.
-    _socket.on('system_alert', a => { try { showBanner((a.name ? a.name + ': ' : '') + a.message, a.severity === 'ok' ? 'success' : 'error'); if (window.RNotifPanel) RNotifPanel.load(); } catch (_) {} });
+    _socket.on('system_alert', a => { try { showBanner((a.name ? a.name + ': ' : '') + a.message, a.severity === 'ok' ? 'success' : 'error'); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load(); } catch (_) {} });
   }
 
   // Aviso de recordatorio de reunión — llega por socket (siempre conectado

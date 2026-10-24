@@ -72,12 +72,12 @@ const AgentesModule = (() => {
   async function runOne(key) {
     _busy.add(key); _render();
     try { await apiFetch(API_B() + '/watchdog/' + key + '/run', { method: 'POST' }); } catch (_) {}
-    _busy.delete(key); await _refresh(); if (window.RNotifPanel) RNotifPanel.load();
+    _busy.delete(key); await _refresh(); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load();
   }
   async function runAll() {
     _busy.add('*'); _render();
     try { await apiFetch(API_B() + '/watchdog/run-all', { method: 'POST' }); } catch (_) {}
-    _busy.delete('*'); await _refresh(); if (window.RNotifPanel) RNotifPanel.load();
+    _busy.delete('*'); await _refresh(); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load();
   }
   async function toggle(key, on) {
     try { await apiFetch(API_B() + '/watchdog/' + key, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!on }) }); } catch (_) {}
@@ -85,7 +85,7 @@ const AgentesModule = (() => {
   }
   async function dismiss(id) {
     try { await apiFetch(API_B() + '/watchdog/events/' + id + '/dismiss', { method: 'POST' }); } catch (_) {}
-    await _refresh(); if (window.RNotifPanel) RNotifPanel.load();
+    await _refresh(); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load();
   }
   return { load, runOne, runAll, toggle, dismiss };
 })();
