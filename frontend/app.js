@@ -26086,7 +26086,9 @@ ${foot}
     const html = String(m.cuerpo_html || '');
     const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (showImg ? ' https: http:' : '');
     return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><base target="_blank"><style>html,body{margin:0;padding:0;background:transparent}'
-      + 'body{font:14px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1D4ED8}'
+      + 'body{font:13px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1D4ED8}'
+      // Cada correo trae su propio tamaño/tipografía (Outlook 11pt, Gmail 12.8px, plantillas con <font size>…): se unifica a UN tamaño para que todos los mensajes se lean igual.
+      + 'body *{font-size:inherit!important;font-family:inherit!important;line-height:inherit!important}sup,sub{font-size:75%!important}'
       + 'blockquote{margin:8px 0 8px 2px;padding-left:12px;border-left:3px solid #CBD5E1;color:#475569}pre{white-space:pre-wrap}</style></head><body>' + html + '</body></html>';
   }
   function _ibMailFrame(m) {
