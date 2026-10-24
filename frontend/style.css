@@ -18542,3 +18542,7 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .wcl-more__stage { font-size: 12px; font-weight: 600; }
 .wcl-more__line { font-size: 11px; color: #7C8982; }
 .wcl-empty { padding: 28px 12px; text-align: center; color: #8A958F; font-size: 12.5px; }
+
+/* Inbox: etiquetas (Interesado, No califica, OOO…) cuadradas, pequeñas y siempre en la misma línea que el nombre */
+.ibx-row__nm { flex-wrap: nowrap; }
+.ibx-row .cp-dispo-badge, .ibx-row .ibx-b { border-radius: 2px; font-size: 9.5px; line-height: 1.35; padding: 1px 5px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; flex: none; vertical-align: baseline; }
