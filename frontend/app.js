@@ -25998,7 +25998,7 @@ ${foot}
     const nm = [t.nombre, t.apellido].filter(Boolean).join(' ') || t.email;
     const when = _ibFmtAgo(t.last_in_at && (!t.last_out_at || new Date(t.last_in_at) > new Date(t.last_out_at)) ? t.last_in_at : t.last_out_at);
     // El fragmento llega en crudo del correo: se decodifican las entidades HTML (&nbsp; &amp;…) para no mostrarlas literales.
-    const _dec = x => String(x || '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(d+);/g, (_, n) => String.fromCharCode(+n)).replace(/s+/g, ' ').trim();
+    const _dec = x => String(x || '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/\s+/g, ' ').trim();
     const snippet = _dec(t.last_snippet) || t.last_asunto
       || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : (t.tiene_programado ? 'Correo programado, todavía no sale' : ''));
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
