@@ -3899,6 +3899,13 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
       }
     }
     if (!apply) return res.json({ preview: true, changes });
+    // Correcciones de la vista previa: lo desmarcado (skip) no se aplica y lo editado a mano manda sobre el valor calculado.
+    const ovr = new Map((Array.isArray(b.overrides) ? b.overrides : []).map(o => [o.id + '|' + o.campo, o]));
+    for (let i = changes.length - 1; i >= 0; i--) {
+      const o = ovr.get(changes[i].id + '|' + changes[i].campo); if (!o) continue;
+      if (o.skip) { changes.splice(i, 1); continue; }
+      if (typeof o.valor === 'string') changes[i].despues = o.valor.trim();
+    }
     let syncedNames = 0;
     for (const ch of changes) {
       await pool.query(`UPDATE ${table} SET ${ch.campo}=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
