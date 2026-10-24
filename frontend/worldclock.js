@@ -114,63 +114,84 @@ const WorldClockModule = (() => {
     else etapa = !work(t.wd) ? 'Día de descanso' : t.min >= WORK_END ? 'Jornada terminada' : 'Aún no empieza';
     return { city, country, tz, t, open, wait, prog, kind, etapa, left: open ? WORK_END - t.min : null };
   }
-  let _q = '', _openKey = '', _exp = new Set(), _timer = null, _panel = null;
+  let _q = '', _f = 'all', _exp = new Set(), _timer = null, _panel = null;
   const _key = s => s.tz + '|' + s.city;
   function _rowHtml(s) {
     const k = _key(s), ex = _exp.has(k);
-    const sub = s.open ? 'cierra en ' + _dur(s.left) : (s.wait != null ? 'abre en ' + _dur(s.wait) : '');
     const pct = Math.round(s.prog * 100);
+    const sub = s.open ? 'cierra en ' + _dur(s.left) : (s.wait != null ? 'abre en ' + _dur(s.wait) : '');
     return `<div class="wcl-row wcl-row--${s.kind}${ex ? ' is-open' : ''}">
       <button type="button" class="wcl-row__main" onclick="WorldClockModule.toggleRow(this.dataset.k)" data-k="${_esc(k)}" aria-expanded="${ex}">
-        <span class="wcl-dot"></span>
+        <span class="wcl-tick"></span>
         <span class="wcl-row__who"><b>${_esc(s.city)}</b><small>${_esc(s.country)}</small></span>
-        <span class="wcl-row__time"><b>${_clock(s.t.min)}</b><small>${_esc(sub)}</small></span>
-        <svg class="wcl-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <span class="wcl-row__sub">${_esc(sub)}</span>
+        <span class="wcl-row__time">${_clock(s.t.min)}</span>
+        <svg class="wcl-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       ${ex ? `<div class="wcl-row__more">
-        <div class="wcl-bar" title="${pct}% de la jornada"><span class="wcl-bar__lbl wcl-bar__lbl--t">${_hhmm(WORK_START)}</span><span class="wcl-bar__track"><span class="wcl-bar__fill" style="height:${pct}%"></span><span class="wcl-bar__now" style="top:${pct}%"></span></span><span class="wcl-bar__lbl wcl-bar__lbl--b">${_hhmm(WORK_END)}</span></div>
+        <div class="wcl-bar" title="${pct}% de la jornada"><span class="wcl-bar__track"><span class="wcl-bar__fill" style="height:${pct}%"></span><span class="wcl-bar__now" style="top:${pct}%"></span></span></div>
         <div class="wcl-more__txt">
-          <div class="wcl-more__stage">${_esc(s.etapa)}</div>
-          <div class="wcl-more__line">${s.open ? 'Jornada al ' + pct + '%' : s.wait != null ? 'Abre en ' + _dur(s.wait) : ''}</div>
-          <div class="wcl-more__line">Horario laboral ${_hhmm(WORK_START)}–${_hhmm(WORK_END)} · ${_esc(s.tz.replace(/_/g, ' '))}</div>
+          <div class="wcl-more__stage">${_esc(s.etapa)}${s.open ? ' · ' + pct + '%' : ''}</div>
+          <div class="wcl-more__line">Jornada ${_hhmm(WORK_START)}–${_hhmm(WORK_END)} · ${_esc(s.tz.replace(/_/g, ' '))}</div>
         </div>
       </div>` : ''}
     </div>`;
   }
-  function _group(title, cls, list) {
+  const _TIT = { open: 'Disponibles ahora', soon: 'Abren pronto', off: 'Fuera de horario' };
+  function _group(kind, list) {
     if (!list.length) return '';
-    return `<div class="wcl-group wcl-group--${cls}"><div class="wcl-group__hd"><span>${title}</span><i>${list.length}</i></div>${list.map(_rowHtml).join('')}</div>`;
+    return `<section class="wcl-group wcl-group--${kind}"><h4 class="wcl-group__hd">${_TIT[kind]}<i>${list.length}</i></h4>${list.map(_rowHtml).join('')}</section>`;
   }
-  function _body() {
+  function _data() {
     const now = new Date(), q = _norm(_q).trim();
-    let list = PLACES.filter(p => !q || _norm(p[0] + ' ' + p[1] + ' ' + p[3] + ' ' + p[2]).includes(q)).map(p => _state(p, now));
-    const open = list.filter(s => s.kind === 'open').sort((a, b) => b.left - a.left);
-    const soon = list.filter(s => s.kind === 'soon').sort((a, b) => a.wait - b.wait);
-    const off = list.filter(s => s.kind === 'off').sort((a, b) => (a.wait == null ? 1e9 : a.wait) - (b.wait == null ? 1e9 : b.wait));
-    if (!list.length) return `<div class="wcl-empty">Sin coincidencias para «${_esc(_q)}».</div>`;
-    return _group('Disponibles ahora', 'open', open) + _group('Abren pronto', 'soon', soon) + _group('Fuera de horario', 'off', off);
+    const list = PLACES.filter(p => !q || _norm(p[0] + ' ' + p[1] + ' ' + p[3] + ' ' + p[2]).includes(q)).map(p => _state(p, now));
+    return {
+      open: list.filter(s => s.kind === 'open').sort((a, b) => b.left - a.left),
+      soon: list.filter(s => s.kind === 'soon').sort((a, b) => a.wait - b.wait),
+      off: list.filter(s => s.kind === 'off').sort((a, b) => (a.wait == null ? 1e9 : a.wait) - (b.wait == null ? 1e9 : b.wait)),
+    };
+  }
+  function _seg(d) {
+    const it = (k, t, n) => `<button type="button" class="wcl-seg__b wcl-seg__b--${k}${_f === k ? ' on' : ''}" onclick="WorldClockModule.filter('${k}')">${k === 'all' ? '' : '<i></i>'}${t}<em>${n}</em></button>`;
+    return it('all', 'Todos', d.open.length + d.soon.length + d.off.length) + it('open', 'Disponibles', d.open.length) + it('soon', 'Pronto', d.soon.length) + it('off', 'Cerrados', d.off.length);
+  }
+  function _body(d) {
+    d = d || _data();
+    const total = d.open.length + d.soon.length + d.off.length;
+    if (!total) return `<div class="wcl-empty">Sin coincidencias para «${_esc(_q)}».</div>`;
+    let note = '';
+    if (!d.open.length && _f !== 'soon' && _f !== 'off') {
+      const nx = d.soon.concat(d.off).filter(s => s.wait != null).sort((a, b) => a.wait - b.wait)[0];
+      note = `<div class="wcl-note">Ahora no hay nadie en horario laboral${nx ? '. Siguiente: <b>' + _esc(nx.city) + '</b> en ' + _dur(nx.wait) : ''}.</div>`;
+    }
+    const show = k => _f === 'all' || _f === k;
+    const out = (show('open') ? _group('open', d.open) : '') + (show('soon') ? _group('soon', d.soon) : '') + (show('off') ? _group('off', d.off) : '');
+    return note + (out || `<div class="wcl-empty">Nada en esta categoría${_q ? ' para «' + _esc(_q) + '»' : ''}.</div>`);
   }
   function _head() {
     const now = new Date(), loc = _parts(Intl.DateTimeFormat().resolvedOptions().timeZone, now);
     const tzName = (Intl.DateTimeFormat().resolvedOptions().timeZone || '').split('/').pop().replace(/_/g, ' ');
-    return `<b>${_clock(loc.min)}</b><span>Tu hora · ${_esc(tzName)}</span>`;
+    return `<b>${_clock(loc.min)}</b><span>${_esc(tzName)}</span>`;
   }
   function _paint() {
     if (!_panel) return;
     const h = _panel.querySelector('.wcl-now'); if (h) h.innerHTML = _head();
-    const b = _panel.querySelector('.wcl-list'); if (b) { const st = b.scrollTop; b.innerHTML = _body(); b.scrollTop = st; }
+    const d = _data();
+    const sg = _panel.querySelector('.wcl-seg'); if (sg) sg.innerHTML = _seg(d);
+    const b = _panel.querySelector('.wcl-list'); if (b) { const st = b.scrollTop; b.innerHTML = _body(d); b.scrollTop = st; }
   }
   function open() {
     if (_panel) return;
     const bar = document.getElementById('global-topbar');
     const top = bar ? Math.round(bar.getBoundingClientRect().bottom) : 56;
     _panel = document.createElement('div'); _panel.className = 'wcl-panel'; _panel.style.top = top + 'px';
-    _panel.innerHTML = `<div class="wcl-hd"><div class="wcl-hd__t"><div><h3>Horario de prospección</h3><div class="wcl-now">${_head()}</div></div>
-        <button type="button" class="wcl-x" onclick="WorldClockModule.close()" aria-label="Cerrar">✕</button></div>
-        <label class="wcl-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-          <input type="text" id="wcl-q" placeholder="Buscar país o ciudad…" autocomplete="off" spellcheck="false" value="${_esc(_q)}" oninput="WorldClockModule.search(this.value)"></label>
-        <div class="wcl-legend"><span class="wcl-lg wcl-lg--open">Disponibles</span><span class="wcl-lg wcl-lg--soon">Pronto</span><span class="wcl-lg wcl-lg--off">Fuera de horario</span></div></div>
-      <div class="wcl-list">${_body()}</div>`;
+    const d = _data();
+    _panel.innerHTML = `<div class="wcl-hd"><div class="wcl-hd__t"><h3>Horario de prospección</h3><div class="wcl-now">${_head()}</div>
+        <button type="button" class="wcl-x" onclick="WorldClockModule.close()" aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></div>
+        <label class="wcl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <input type="text" id="wcl-q" placeholder="Buscar país o ciudad" autocomplete="off" spellcheck="false" value="${_esc(_q)}" oninput="WorldClockModule.search(this.value)"></label>
+        <div class="wcl-seg">${_seg(d)}</div></div>
+      <div class="wcl-list">${_body(d)}</div>`;
     document.body.appendChild(_panel);
     requestAnimationFrame(() => { _panel && _panel.classList.add('on'); const i = document.getElementById('wcl-q'); if (i) i.focus(); });
     clearInterval(_timer); _timer = setInterval(_paint, 30000);
@@ -193,6 +214,7 @@ const WorldClockModule = (() => {
   }
   function toggle() { if (_panel) close(); else { open(); document.getElementById('wcl-btn')?.classList.add('is-active'); } }
   function search(v) { _q = v || ''; _paint(); }
+  function filter(f) { _f = (_f === f && f !== 'all') ? 'all' : f; _paint(); }
   function toggleRow(k) { if (_exp.has(k)) _exp.delete(k); else _exp.add(k); _paint(); }
-  return { toggle, open, close, search, toggleRow };
+  return { toggle, open, close, search, toggleRow, filter };
 })();
