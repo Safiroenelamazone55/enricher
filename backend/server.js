@@ -11382,13 +11382,17 @@ app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
         [wid]
       ),
     ]);
+    // Avisos abiertos de los agentes de vigilancia (Configuración → Agentes): suman a la campana de alertas.
+    let agentes = [];
+    try { agentes = (await pool.query(`SELECT e.id, e.key, e.severity, e.message, e.created_at FROM watchdog_events e WHERE e.user_id=$1 AND e.resolved_at IS NULL AND NOT e.dismissed ORDER BY e.created_at DESC`, [wid])).rows; } catch (_) {}
     res.json({
+      agentes,
       clientes_sin_proyecto: clientsNoProj.rows,
       proyectos_sin_tareas:  projNoTasks.rows,
       tareas_sin_deadline:   tasksNoDeadline.rows,
       tareas_sin_responsable: tasksNoResp.rows,
       total: clientsNoProj.rows.length + projNoTasks.rows.length +
-             tasksNoDeadline.rows.length + tasksNoResp.rows.length,
+             tasksNoDeadline.rows.length + tasksNoResp.rows.length + agentes.length,
     });
   } catch (err) {
     console.error('[mgmt/integrity] error:', err.message);
@@ -12422,6 +12426,7 @@ const waSvc = require('./services/waService');
 const waQueue = require('./services/waQueue');
 waQueue.mount(app, { pool, requireAuth, cargarConexion: (req, res, id) => _cargarConexionAutorizada(req, res, id) });
 require('./services/proposalRoutes').mount(app, { pool, requireAuth });
+require('./services/watchdog').mount(app, { pool, requireAuth });
 require('./services/emailHints').mount(app, { pool, requireAuth });
 require('./services/toolsRoutes').mount(app, { requireAuth });   // Herramientas: descargas de extensiones/apps (solo con sesión)
 
@@ -14533,6 +14538,7 @@ async function start() {
     require('./services/backupContactWatcher').startBackupContactWatcher(pool);
     require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);
+    require('./services/watchdog').startWatchdog(pool, { emit: (uid, ev, payload) => io.to(`ws:${uid}`).emit(ev, payload) });
     require('./services/dailyReport').startDailyReport(pool);
   } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }
 

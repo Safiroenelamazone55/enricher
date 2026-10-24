@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026102309"/>
+  <link rel="stylesheet" href="style.css?v=2026102310"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -787,6 +787,12 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           </span>
           <span class="snav-item__label">Uso</span>
+        </button>
+        <button class="snav-item" data-sec="agentes" data-tooltip="Agentes" onclick="WorkspaceModule.setSection('agentes')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </span>
+          <span class="snav-item__label">Agentes</span>
         </button>
       </div>
 
@@ -2273,6 +2279,12 @@
       <!-- Uso: pedido explicito con referencia a Clay Settings -- "Usage: ver
            lo que voy usando para asi saber cuando comprar mas plan". Cuenta
            real desde /api/workspace/usage, no inventada. -->
+      <section class="cfg__sec" data-sec="agentes" hidden>
+        <h3 style="font-size:.95rem;font-weight:700;margin:0 0 4px">Agentes de vigilancia</h3>
+        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Revisan solos que el sistema funcione (correo, WhatsApp, conexiones, servidor) y te avisan en la campana de alertas cuando algo falla.</p>
+        <div id="agt-root"></div>
+      </section>
+
       <section class="cfg__sec" data-sec="uso" hidden>
         <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Resumen de actividad del workspace este mes, para saber cuándo hace falta más capacidad.</p>
         <div id="usage-grid" class="usage-grid">
@@ -3418,8 +3430,9 @@
   })();
 </script>
 
-<script src="app.js?v=2026102309"></script>
+<script src="app.js?v=2026102310"></script>
 <script src="worldclock.js?v=2"></script>
+<script src="agentes.js?v=1"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>

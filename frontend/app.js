@@ -36685,6 +36685,7 @@ const WorkspaceModule = (() => {
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
     if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
     if (sec === 'uso') _loadUsage();
+    if (sec === 'agentes' && window.AgentesModule) AgentesModule.load();
     // "Usuarios" pasó de ser una pestaña propia del header a vivir acá dentro —
     // en vez de duplicar la tabla, se muda el propio #pane-mgmt-team (mismo truco que
     // el chat de Slack en media pantalla: mover el nodo, no clonar el módulo).
@@ -43334,6 +43335,8 @@ const ChatModule = (() => {
     _socket.on('disconnect', () => { _connected = false; });
     _socket.on('new_message', msg => _appendMessage(msg));
     _socket.on('meeting_reminder', m => _showMeetingReminder(m));
+    // Aviso de un agente de vigilancia (Configuración → Agentes): llega al instante aunque no estés mirando la campana.
+    _socket.on('system_alert', a => { try { showBanner((a.name ? a.name + ': ' : '') + a.message, a.severity === 'ok' ? 'success' : 'error'); if (window.RNotifPanel) RNotifPanel.load(); } catch (_) {} });
   }
 
   // Aviso de recordatorio de reunión — llega por socket (siempre conectado
@@ -44397,6 +44400,7 @@ const RNotifPanel = (() => {
     try {
       const res  = await apiFetch(`${API}/mgmt/integrity`);
       const data = await res.json();
+      data.agentes = (data.agentes || []).map(a => Object.assign({}, a, { titulo: (window._agentNames && window._agentNames[a.key]) || a.key }));
       // "Cliente sin proyecto" ya NO se notifica aquí (decisión de Jenny: contactos/prospectos
       // sin proyecto son normales; esa info vive en la sección Clientes).
       if (data.clientes_sin_proyecto) { data.total = Math.max(0, (data.total || 0) - data.clientes_sin_proyecto.length); delete data.clientes_sin_proyecto; }
@@ -44429,7 +44433,7 @@ const RNotifPanel = (() => {
         _dismissed = new Set((dr.ok ? await dr.json() : []).map(d => `${d.kind}:${d.ref_id}`));
       } catch (_) { _dismissed = new Set(); }
       if (_dismissed.size) {
-        for (const key of ['tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
+        for (const key of ['agentes', 'tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
           if (!Array.isArray(data[key])) continue;
           const before = data[key].length;
           data[key] = data[key].filter(x => !_dismissed.has(`${key}:${x.id}`));
@@ -44533,6 +44537,7 @@ const RNotifPanel = (() => {
       calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
       folder:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
       building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/></svg>',
+      pulse:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
       check:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
     };
     const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
@@ -44540,6 +44545,8 @@ const RNotifPanel = (() => {
     // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
     const _fv = ds => ds ? new Date(String(ds).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
     const cats = [
+      { key: 'agentes', tone: 'red', badge: 'Sistema', ico: 'pulse', nameKey: 'titulo', task: false,
+        sub: a => esc(a.message || ''), action: () => `WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('agentes'),80)`, link: 'Ver agentes' },
       { key: 'tareas_completas', tone: 'green', badge: 'Lista para cerrar', ico: 'check', nameKey: 'titulo', task: true,
         sub: t => `${t._n || '?'} de ${t._n || '?'} subtareas completadas${[t.client_nombre, t.project_nombre].filter(Boolean).length ? ' · ' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''}`,
         actions: t => [
