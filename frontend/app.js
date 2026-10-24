@@ -25867,6 +25867,7 @@ ${foot}
     const nt = tmp.querySelector('.ibx-top'), nl = tmp.querySelector('.ibx-list');
     if (nt) top.innerHTML = nt.innerHTML;
     if (nl) { const sc = list.scrollTop; list.innerHTML = nl.innerHTML; list.scrollTop = sc; }
+    requestAnimationFrame(_ibFit);   // la barra superior pudo cambiar de alto
   }
   async function _ibReload(silent) {
     _ibLastAt = Date.now();
@@ -26934,7 +26935,19 @@ ${foot}
     // y como el grid recorta con overflow:hidden, el botón Enviar quedaba tapado).
     const available = window.innerHeight - g.getBoundingClientRect().top - 16;
     g.style.height = Math.max(260, available) + 'px';
-    if (!_ibFitBound) { _ibFitBound = true; window.addEventListener('resize', () => _ibFit()); }
+    if (!_ibFitBound) {
+      _ibFitBound = true;
+      // La altura se medía una sola vez (y al redimensionar): tras un refresco, la página aún se estaba acomodando (barra de carga, tipografías,
+      // pestañas, scrollbar) y quedaba una medida vieja → la bandeja se veía corta hasta recargar. Ahora se re-mide cada vez que el layout cambia.
+      const again = () => requestAnimationFrame(_ibFit);
+      window.addEventListener('resize', again);
+      window.addEventListener('load', again);
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', again);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(again).catch(() => {});
+      if (window.ResizeObserver) { try { new ResizeObserver(again).observe(document.body); } catch (_) {} }
+    }
+    // Re-medidas escalonadas tras pintar: cubren los cambios de layout que ocurren justo después de cargar.
+    [120, 450, 1200].forEach(ms => setTimeout(() => { const g2 = document.querySelector('.ibx-grid'); if (g2) g2.style.height = Math.max(260, window.innerHeight - g2.getBoundingClientRect().top - 16) + 'px'; }, ms));
   }
 
   function _ibListHtml() {
