@@ -25835,7 +25835,7 @@ ${foot}
   // ── Inbox unificado (Mailboxes F3): hilos reales entrantes/salientes ──
   let _ibThreads = null;   // null = cargando
   let _ibPoll    = null;   // refresco periódico del contador sin-leer
-  let _ibTab     = 'sin';  // todos | sin | resp | auto | env | reb
+  let _ibTab     = 'todos';  // todos | sin | resp | auto | env | reb (por defecto «Todos»: toda conversación con respuesta)
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
   let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
   // Filtros extra (apertura/leído/secuencia) — mismo patrón compacto (ícono + popover)
@@ -25997,7 +25997,9 @@ ${foot}
     const cat = _ibCat(t);
     const nm = [t.nombre, t.apellido].filter(Boolean).join(' ') || t.email;
     const when = _ibFmtAgo(t.last_in_at && (!t.last_out_at || new Date(t.last_in_at) > new Date(t.last_out_at)) ? t.last_in_at : t.last_out_at);
-    const snippet = t.last_snippet || t.last_asunto
+    // El fragmento llega en crudo del correo: se decodifican las entidades HTML (&nbsp; &amp;…) para no mostrarlas literales.
+    const _dec = x => String(x || '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(d+);/g, (_, n) => String.fromCharCode(+n)).replace(/s+/g, ' ').trim();
+    const snippet = _dec(t.last_snippet) || t.last_asunto
       || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : (t.tiene_programado ? 'Correo programado, todavía no sale' : ''));
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
                 : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo" title="Respuesta automática de ausencia: sus próximos pasos se aplazan hasta que vuelva">OOO${t.ooo_hasta ? ' · vuelve ' + new Date(String(t.ooo_hasta).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : ''}</span>` : '';
