@@ -18577,3 +18577,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .dg-cl-in:focus { outline: 0; border-color: #00804C; box-shadow: 0 0 0 2px rgba(0,128,76,.12); }
 .dg-cl-in:disabled { background: transparent; border-color: transparent; color: #98A39D; font-weight: 400; }
 @media (max-width: 760px) { .dg-cl-head { display: none; } .dg-cl-row { grid-template-columns: 22px 1fr; row-gap: 4px; } .dg-cl-arrow { display: none; } .dg-cl-a, .dg-cl-in { grid-column: 2; } }
+/* .fin-pi-box limita a 620px: la vista previa de limpieza necesita todo el ancho para ver y editar sin recortes */
+.fin-pi-box.dg-clean-box { width: min(1280px, 96vw); max-width: none; }
+.dg-cl-body { overflow-x: hidden; }

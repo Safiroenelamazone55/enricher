@@ -116,14 +116,24 @@ function cleanEmployeeCount(raw) {
   return s;
 }
 
-// "https://www.acme.com/" -> "acme.com". Se aplica a dominio Y a website (website
-// se guarda igual de "limpio" — si hace falta la URL completa está el dominio para
-// reconstruirla, y así ambos campos quedan comparables/deduplicables).
+// "https://www.acme.com/" -> "acme.com". Solo para el campo DOMINIO (el sitio web tiene su propio limpiador: cleanWebsite).
 function cleanDomain(raw) {
   let s = String(raw == null ? '' : raw).trim();
   if (!s) return s;
-  s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').trim();
-  return s.toLowerCase();
+  s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').trim().toLowerCase();
+  return s.includes('.') ? s : String(raw).trim();   // «n/a», «-»… no son dominios: se dejan como están
+}
+// Sitio web = URL completa y segura: "movr.es", "http://www.movr.es/" -> "https://www.movr.es". Va aparte del DOMINIO (que sí es solo "movr.es"):
+// el website es el enlace que se abre; el dominio es la clave para cruzar/deduplicar y armar emails. Antes ambos se limpiaban igual y el website perdía su https://.
+function cleanWebsite(raw) {
+  let s = String(raw == null ? '' : raw).trim();
+  if (!s) return s;
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[?#].*$/, '');
+  const slash = s.indexOf('/');
+  const host = (slash === -1 ? s : s.slice(0, slash)).trim().toLowerCase();
+  const path = slash === -1 ? '' : s.slice(slash).replace(/\/+$/, '');
+  if (!host || /\s/.test(host) || !host.includes('.')) return String(raw).trim();
+  return 'https://' + host + path;
 }
 function cleanEmail(raw) { return String(raw == null ? '' : raw).trim().toLowerCase(); }
 // Deja solo dígitos (y el + inicial si lo tenía) — "+51 987-654 321" -> "+51987654321".
@@ -136,7 +146,7 @@ function cleanPhone(raw) {
 
 // field → limpiador, por entidad.
 const CLEANERS = {
-  companies: { nombre: cleanCompanyName, tamano: cleanEmployeeCount, dominio: cleanDomain, website: cleanDomain, telefono: cleanPhone, pais: geo.normalizeCountry },
+  companies: { nombre: cleanCompanyName, tamano: cleanEmployeeCount, dominio: cleanDomain, website: cleanWebsite, telefono: cleanPhone, pais: geo.normalizeCountry },
   contacts:  { nombre: cleanFirstName, apellido: cleanLastName, cargo: cleanTitle, email: cleanEmail, email_personal: cleanEmail, telefono: cleanPhone, movil: cleanPhone, pais: geo.normalizeCountry },
 };
 
