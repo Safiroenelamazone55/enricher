@@ -7042,7 +7042,6 @@ const CanteraModule = (() => {
     if (idx === -1) return '';
     const total = list.length, pend = list.filter(c => !_validadaCo(c)).length, hechas = total - pend;
     return `<div class="cant-manual-progress" id="cant-manual-progress" data-co="${companyId}" title="Empresa Nº ${idx + 1} de la lista · ${hechas} validadas entre todos · ${pend} por validar (con los filtros actuales)">
-      <span class="cant-manual-progress__pos">Nº ${idx + 1}</span>
       <div class="cant-manual-progress__bar"><div class="cant-manual-progress__fill" style="width:${total ? Math.round(hechas / total * 100) : 0}%"></div></div>
       <span class="cant-manual-progress__txt">${pend} por validar de ${total}</span>
     </div>`;
