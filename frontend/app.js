@@ -5838,13 +5838,18 @@ const CanteraModule = (() => {
     _paso1Filtro = saved.paso1Filtro || ''; _dominioQ = saved.dominioQ || '';
     return true;
   }
+  // Pulsar «Borradores» en el menú lateral debe llevar a la LISTA de borradores aunque hubiera uno abierto (antes lo reabría: se restauraba la vista guardada).
+  // Al recargar la página o entrar al módulo desde Inicio sigue recordando el borrador en el que estabas.
+  let _navALista = false;
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.snav-item[data-tab="cantera"]')) _navALista = true; }, true);
   function render(containerId) {
     _containerId = containerId || _containerId;
     const el = document.getElementById(_containerId); if (!el) return;
+    const desdeMenu = _navALista; _navALista = false;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
     load().then(async () => {
-      const restored = await _restoreViewState().catch(() => false);
-      if (!restored) _view = 'list';
+      const restored = desdeMenu ? false : await _restoreViewState().catch(() => false);
+      if (!restored) { _view = 'list'; _current = null; }
       _paint();
     });
   }
