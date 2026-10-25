@@ -206,20 +206,8 @@
   .pjcard__main { width: 100% !important; min-width: 0; }
 }
 
-/* Inicio (módulos): 2 por fila en móvil, y se puede desplazar hasta arriba y abajo */
+/* Inicio (módulos): una columna en móvil, y se puede desplazar hasta arriba y abajo */
 @media (max-width: 900px) {
   #appShell.home-mode:not(.standalone-users) .app-main { overflow-y: auto !important; padding: 14px 0 28px !important; -webkit-overflow-scrolling: touch; }
   #appShell.home-mode #pane-home, #appShell.home-mode .content-wrap { height: auto !important; min-height: 0 !important; overflow: visible !important; }
-}
-@media (max-width: 640px) {
-  .home-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; padding: 0 !important; }
-  .home-card { width: auto !important; max-width: none !important; min-width: 0 !important; margin: 0 !important; padding: 12px !important; }
-  .home-card__top { flex-direction: column-reverse !important; align-items: flex-start !important; gap: 8px !important; }
-  .home-card__icon { width: 34px !important; height: 34px !important; flex: none; }
-  .home-card__icon svg { width: 18px !important; height: 18px !important; }
-  .home-card__body { width: 100%; min-width: 0; }
-  .home-card__title { font-size: 14px !important; }
-  .home-card__desc { font-size: 11px !important; line-height: 1.35 !important; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: auto !important; }
-  .home-card__foot { gap: 4px; }
-  .home-card__kebab { width: 26px !important; height: 26px !important; }
 }
