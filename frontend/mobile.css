@@ -196,3 +196,13 @@
 @media (max-width: 900px) {
   .wa-sidebar__hdr { flex-wrap: wrap; row-gap: 6px; }
 }
+
+/* Calendario y tarjetas de proyecto: se apilan en lugar de comprimirse en dos columnas */
+@media (max-width: 720px) {
+  .cal2 { flex-direction: column !important; height: auto !important; }
+  .cal2 .cal2__main { order: 1; width: 100% !important; flex: none !important; min-height: 70vh; overflow-x: auto; }
+  .cal2 .cal2sb { order: 2; width: 100% !important; max-width: none !important; height: auto !important; max-height: none !important; border-right: 0 !important; border-top: 1px solid var(--border, #E6E9E7); }
+  .pjcard { flex-direction: column !important; }
+  .pjcard__side { width: 100% !important; max-width: none !important; flex-direction: row !important; align-items: center; gap: 12px; padding: 10px 14px !important; }
+  .pjcard__main { width: 100% !important; min-width: 0; }
+}
