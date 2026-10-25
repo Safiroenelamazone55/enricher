@@ -47,7 +47,7 @@
     syncHome();
     // Elegir una sección (o volver a «Módulos») cierra el cajón y cualquier conversación abierta.
     document.addEventListener('click', e => {
-      if (e.target.closest('#sidebar .snav-item, #sidebar .snav-back')) { hide(); if (mq.matches) setTimeout(closeNav, 30); }
+      if (e.target.closest('#sidebar .snav-item, #sidebar .snav-back, .lm2-nav__item, .lm2-nav .snav-back')) { hide(); if (mq.matches) setTimeout(closeNav, 30); }
     }, true);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeNav(); } });
     const onChange = () => { if (!mq.matches) closeNav(); if (!mqDetail.matches) hide(); };
