@@ -7022,7 +7022,7 @@ const CanteraModule = (() => {
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
         <div class="fin-pi-ft-btns">
-          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cerrar</button>
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.prevManualValidation(${co.id})">← Atrás</button>
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.nextManualValidation(${co.id})">Siguiente →</button>
         </div>
       </div></div>`;
@@ -7110,6 +7110,13 @@ const CanteraModule = (() => {
   // tabla) si hay algún filtro activo, o el orden normal si no lo hay. Los
   // campos ya se autoguardan solos (onchange/onblur de cada campo), así que
   // aquí no hace falta guardar de nuevo — solo saltar de una vez al siguiente.
+  // Atrás: la empresa anterior de la misma lista (mismos filtros que «Siguiente»).
+  function prevManualValidation(companyId) {
+    const list = _filteredCompaniesList(), idx = list.findIndex(c => c.id === companyId);
+    if (idx === -1) { showBanner('Esta empresa ya no está en el filtro activo', 'info'); return; }
+    if (idx === 0) { showBanner('Es la primera de la lista', 'info'); return; }
+    openManualValidation(list[idx - 1].id);
+  }
   function nextManualValidation(companyId) {
     const list = _filteredCompaniesList();
     const idx = list.findIndex(c => c.id === companyId);
@@ -7927,7 +7934,7 @@ const CanteraModule = (() => {
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
-    openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, nextManualValidation, quitarValidacionManual, openAudit };
+    openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, prevManualValidation, nextManualValidation, quitarValidacionManual, openAudit };
 })();
 
 // =================================================================
