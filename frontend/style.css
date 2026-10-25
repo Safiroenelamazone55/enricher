@@ -18618,3 +18618,7 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .agt-empty { padding: 22px 12px; text-align: center; color: #8A958F; font-size: 12.5px; }
 .agt-foot { margin-top: 14px; font-size: 11.5px; color: #98A39D; }
 @media (max-width: 760px) { .agt-card { grid-template-columns: 10px 1fr; } .agt-side { grid-column: 2; align-items: flex-start; } .agt-ev__row { grid-template-columns: 1fr; } }
+/* Validación manual: Nº de la empresa abierta + barra de lo validado entre todos */
+.cant-manual-progress { max-width: 330px; }
+.cant-manual-progress__pos { font-size: .78rem; font-weight: 700; color: var(--text, #14211B); background: var(--surface-secondary, #F1F4F2); padding: 1px 8px; border-radius: 3px; white-space: nowrap; flex: none; }
+.cant-manual-progress__fill { background: #00804C; transition: width .4s ease; }

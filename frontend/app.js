@@ -6966,12 +6966,13 @@ const CanteraModule = (() => {
     // con los filtros actuales". Mismo universo que usa "Siguiente →"
     // (_filteredCompaniesList, respeta Tier/País/Industria/etc. activos), no
     // el total de 1397 del borrador.
-    const _progList = _filteredCompaniesList();
-    const _progIdx = _progList.findIndex(c => c.id === companyId);
-    const progressHtml = _progIdx !== -1 ? `<div class="cant-manual-progress" title="${_progIdx + 1} de ${_progList.length} con los filtros actuales">
-      <div class="cant-manual-progress__bar"><div class="cant-manual-progress__fill" style="width:${Math.round((_progIdx + 1) / _progList.length * 100)}%"></div></div>
-      <span class="cant-manual-progress__txt">${_progIdx + 1} de ${_progList.length}</span>
-    </div>` : '';
+    // Con dos personas validando el mismo borrador, «266 de 352» solo decía en qué posición de la lista estás, no cuánto falta de verdad.
+    // Ahora: el Nº de la empresa que tienes abierta + una barra con lo ya validado entre todos y cuántas quedan por validar (se actualiza sola).
+    const progressHtml = _manualProgressHtml(companyId);
+    clearInterval(_manualPoll); _manualPoll = setInterval(async () => {
+      if (!document.getElementById('cant-manual-modal')) { clearInterval(_manualPoll); return; }
+      try { await _loadCompanies(); _manualProgressUpdate(); } catch (_) {}
+    }, 8000);
     const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeManualValidation(); };
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="width:820px;max-width:94vw">
@@ -7033,7 +7034,23 @@ const CanteraModule = (() => {
       if (ta) ta.value = d.instruccion || '(sin instrucción)';
     } catch { const ta = document.getElementById('cant-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
   }
-  function closeManualValidation() { document.getElementById('cant-manual-modal')?.remove(); }
+  let _manualPoll = null;
+  const _validadaCo = c => !!c.tier_clave || (!!c.paso2_estado && c.paso2_estado !== 'pendiente');
+  function _manualProgressHtml(companyId) {
+    const list = _filteredCompaniesList(), idx = list.findIndex(c => c.id === companyId);
+    if (idx === -1) return '';
+    const total = list.length, pend = list.filter(c => !_validadaCo(c)).length, hechas = total - pend;
+    return `<div class="cant-manual-progress" id="cant-manual-progress" data-co="${companyId}" title="Empresa Nº ${idx + 1} de la lista · ${hechas} validadas entre todos · ${pend} por validar (con los filtros actuales)">
+      <span class="cant-manual-progress__pos">Nº ${idx + 1}</span>
+      <div class="cant-manual-progress__bar"><div class="cant-manual-progress__fill" style="width:${total ? Math.round(hechas / total * 100) : 0}%"></div></div>
+      <span class="cant-manual-progress__txt">${pend} por validar de ${total}</span>
+    </div>`;
+  }
+  function _manualProgressUpdate() {
+    const el = document.getElementById('cant-manual-progress'); if (!el) return;
+    const html = _manualProgressHtml(parseInt(el.dataset.co, 10)); if (html) el.outerHTML = html;
+  }
+  function closeManualValidation() { clearInterval(_manualPoll); document.getElementById('cant-manual-modal')?.remove(); }
   async function copyManualInstruccion(btn) {
     const ta = document.getElementById('cant-manual-instruccion'); if (!ta) return;
     try { await navigator.clipboard.writeText(ta.value); }
@@ -7082,7 +7099,7 @@ const CanteraModule = (() => {
       // tabla se quedaba mostrando el estado viejo (Tier/Confianza/"Pendiente")
       // hasta recargar la página entera a mano, aunque el guardado SÍ funcionaba.
       // Reportado en vivo 2026-09-15: "sigue diciendo pendiente" tras editar.
-      await _loadCompanies(); _paint();
+      await _loadCompanies(); _paint(); _manualProgressUpdate();
       const co = _companies.find(c => c.id === companyId);
       const btn = document.querySelector('#cant-manual-modal .fin-pi-box__ft span');
       if (btn && co) btn.innerHTML = `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>`;
