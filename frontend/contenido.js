@@ -445,7 +445,7 @@ const ContenidoModule = (() => {
         const cs = so.conexiones.filter(c => c.red === r.red);
         return `<article class="ct-cl"><header><b>${_e(r.nombre)}</b><span class="ct-badge ${r.configurada ? 'is-ok' : ''}">${r.configurada ? 'App configurada' : 'Sin configurar'}</span></header>
           <h5>1. Claves de la app (${_e(r.claves)})</h5>
-          <div class="ct-add"><input id="ct-sa-${r.red}" class="ct-in" placeholder="ID de la app" value="${_e(r.app_id)}"></div><div class="ct-add"><input id="ct-ss-${r.red}" type="password" class="ct-in" placeholder="${r.configurada ? 'Secreto guardado (escribe para cambiarlo)' : 'Secreto de la app'}" autocomplete="new-password"><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.guardarApp('${r.red}')">Guardar</button></div>
+          <div class="ct-add"><input id="ct-sa-${r.red}" class="ct-in" placeholder="ID de la app" value="${_e(r.app_id)}"></div><div class="ct-add"><input id="ct-ss-${r.red}" type="password" class="ct-in" placeholder="${r.configurada ? 'Secreto guardado (escribe para cambiarlo)' : 'Secreto de la app'}" autocomplete="new-password"><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.guardarApp('${r.red}')">Guardar</button>${r.configurada ? `<button type="button" class="btn btn--ghost btn--sm ct-del" onclick="ContenidoModule.quitarApp('${r.red}')">Quitar</button>` : ''}</div>
           <div class="ct-hint">Dirección de retorno que debes pegar en la app:</div><div class="ct-add"><input class="ct-in" readonly value="${_e(r.redirect)}" onfocus="this.select()"><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.copiarTxt('${_e(r.redirect)}')">Copiar</button></div>
           <details class="ct-det"><summary>Dónde conseguir las claves</summary><p>${_e(AYUDA[r.red] || '')}</p></details>
           <h5>2. Cuentas conectadas</h5><div class="ct-tags">${cs.map(c => `<span class="ct-tag"><i class="ct-pdot" style="background:${c.estado === 'ok' ? '#16A34A' : '#DC2626'}"></i>${_e(c.cuenta)} · ${_e(c.client_id ? _cliName(c.client_id) : 'sin cliente')}${c.estado !== 'ok' ? ' · ' + _e(c.estado) : ''}<button type="button" onclick="ContenidoModule.quitarConexion(${c.id})" aria-label="Desconectar">×</button></span>`).join('') || '<em>Ninguna todavía</em>'}</div>
@@ -456,6 +456,7 @@ const ContenidoModule = (() => {
     const id = (document.getElementById('ct-sa-' + red) || {}).value || '', secret = (document.getElementById('ct-ss-' + red) || {}).value || '';
     try { await _post('/content/social/apps/' + red, { app_id: id, secret }, 'PUT'); _D.social = await _j('/content/social'); _pintar(); _toast('Claves guardadas'); } catch (e) { _toast(e.message, 'error'); }
   }
+  async function quitarApp(red) { if (!confirm('¿Quitar las claves de esta app? Las cuentas ya conectadas dejarán de renovarse.')) return; try { await _j('/content/social/apps/' + red, { method: 'DELETE' }); _D.social = await _j('/content/social'); _pintar(); } catch (e) { _toast(e.message, 'error'); } }
   async function conectar(red) {
     const cid = (document.getElementById('ct-sc-' + red) || {}).value || '';
     if (!cid) { _toast('Elige el cliente al que pertenece la cuenta', 'error'); return; }
@@ -644,5 +645,5 @@ const ContenidoModule = (() => {
   function duplicar() { if (!_p) return; const c = JSON.parse(JSON.stringify(_p)); c.id = 0; c.titulo = c.titulo + ' (copia)'; c.estado = 'desarrollo'; c.fecha_plan = ''; c.link_publicado = ''; c.aprob_estado = ''; c.checklist.forEach(i => { i.ok = false; }); _p = c; _comments = []; _modal(); }
 
   return { render, filtrar, mes, modo, dia, irDia, capturar, mover, dragStart, soltar, soltarDia, addCuenta, borrarCuenta, addPilar, borrarPilar, nueva, nuevaPara, nuevaCamp, abrir, cerrar, guardar, pedirAprob, borrar, duplicar, red, copia, copiarATodas, hashBase, chk, chkDel, chkAdd, chkSugerida, enlDel, enlAdd, comentar, recargar, pv, pvRed, _s,
-    estrCliente, guardarEstrategia, campania, guardarCamp, borrarCamp, bibFiltro, subir, subirAqui, verMedia, borrarMedia, copiarTxt, desadjuntar, elegirMedia, pickMedia, pickOk, apCliente, apSel, apCrear, apRevocar, copiarPub, copiarPrimer, marcarPub, guardarApp, conectar, quitarConexion, publicarYa, autoPub, confirmarPub, anFiltro, anotar, guardarRes, infFiltro, generarInforme };
+    estrCliente, guardarEstrategia, campania, guardarCamp, borrarCamp, bibFiltro, subir, subirAqui, verMedia, borrarMedia, copiarTxt, desadjuntar, elegirMedia, pickMedia, pickOk, apCliente, apSel, apCrear, apRevocar, copiarPub, copiarPrimer, marcarPub, guardarApp, quitarApp, conectar, quitarConexion, publicarYa, autoPub, confirmarPub, anFiltro, anotar, guardarRes, infFiltro, generarInforme };
 })();

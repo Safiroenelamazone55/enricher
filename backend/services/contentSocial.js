@@ -171,6 +171,7 @@ function mount(app, { pool, requireAuth }) {
     await pool.query(`INSERT INTO social_apps (user_id,red,app_id,secret_enc) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id,red) DO UPDATE SET app_id=$3, secret_enc=CASE WHEN $4 <> '' THEN $4 ELSE social_apps.secret_enc END, updated_at=NOW()`, [uid(req), red, id, secret ? encPass(secret) : '']);
     res.json({ ok: true });
   }));
+  app.delete('/api/content/social/apps/:red', A, wrap(async (req, res) => { if (!REDES.includes(req.params.red)) return res.status(400).json({ error: 'Red no válida' }); await pool.query('DELETE FROM social_apps WHERE user_id=$1 AND red=$2', [uid(req), req.params.red]); res.json({ ok: true }); }));
   // Devuelve la dirección de autorización de la red; el navegador abre esa ventana y la red vuelve al callback.
   app.get('/api/content/social/connect/:red', A, wrap(async (req, res) => {
     const red = req.params.red; if (!REDES.includes(red)) return res.status(400).json({ error: 'Red no válida' });
