@@ -6978,6 +6978,7 @@ const CanteraModule = (() => {
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="width:820px;max-width:94vw">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3>${progressHtml}<button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
+        ${_validadaCo(co) ? '<div class="cant-manual-done">Esta empresa ya está validada. Si cambias algo, se reemplaza lo anterior.</div>' : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <label class="cant-flabel">Datos de la empresa
             <div class="cant-copy-row">
@@ -7126,13 +7127,12 @@ const CanteraModule = (() => {
     // califica. Reportado en vivo 2026-09-30: "error de no hay más resultados,
     // pero claramente vemos más de 1000 resultados". Si no se encuentra a sí
     // misma, se toma la primera de la lista (la próxima pendiente real).
-    if (idx === -1) {
-      if (!list.length) { showBanner('No hay más resultados en este filtro', 'info'); return; }
-      openManualValidation(list[0].id);
-      return;
-    }
-    if (idx === list.length - 1) { showBanner('No hay más resultados en este filtro', 'info'); return; }
-    openManualValidation(list[idx + 1].id);
+    // Siguiente salta las empresas que ya tienen validación (las tuyas, las de la otra cuenta o las de la IA): así nunca se reabre ni se pisa lo ya hecho.
+    // Si después de la actual no queda ninguna sin validar, busca desde el principio de la lista.
+    const desde = idx === -1 ? 0 : idx + 1;
+    const nx = list.slice(desde).find(c => !_validadaCo(c)) || list.find(c => !_validadaCo(c) && c.id !== companyId);
+    if (!nx) { showBanner('No quedan empresas por validar en este filtro', 'info'); return; }
+    openManualValidation(nx.id);
   }
   async function quitarValidacionManual(companyId) {
     try {
