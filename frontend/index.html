@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=2026102501"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
-  <link rel="stylesheet" href="contenido.css?v=3"/>
+  <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -702,6 +702,10 @@
           <span class="snav-item__label">Informes</span>
         </button>
         <div class="snav-cat">Ajustes</div>
+        <button class="snav-item" data-tab="contenido-conexiones" data-tooltip="Conexiones">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <span class="snav-item__label">Conexiones</span>
+        </button>
         <button class="snav-item" data-tab="contenido-clientes" data-tooltip="Clientes y pilares">
           <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span>
           <span class="snav-item__label">Clientes y pilares</span>
@@ -2149,6 +2153,7 @@
     <div class="pane" id="pane-contenido-publicar"><div id="contenido-publicar-body"></div></div>
     <div class="pane" id="pane-contenido-analitica"><div id="contenido-analitica-body"></div></div>
     <div class="pane" id="pane-contenido-informes"><div id="contenido-informes-body"></div></div>
+    <div class="pane" id="pane-contenido-conexiones"><div id="contenido-conexiones-body"></div></div>
     <div class="pane" id="pane-contenido-clientes"><div id="contenido-clientes-body"></div></div>
 
     <div class="pane" id="pane-plantillas">
@@ -3514,7 +3519,7 @@
 <script src="app.js?v=2026102502"></script>
 <script src="worldclock.js?v=2"></script>
 <script src="agentes.js?v=2"></script>
-<script src="contenido.js?v=5"></script>
+<script src="contenido.js?v=6"></script>
 <script src="mobile.js?v=5"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>

@@ -1,0 +1,2 @@
+Partes de Nova (backend/services/contentSocial.js) usan o adaptan codigo de SimplePost (https://github.com/simple-post/core),
+MIT License, Copyright (c) 2026 Vladimir Haltakov. El texto completo de la licencia esta en simple-post-LICENSE.txt.

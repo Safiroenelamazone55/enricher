@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
+    "@simple-post/sdk": "^1.5.0",
     "@aws-sdk/client-ses": "^3.0.0",
     "@whiskeysockets/baileys": "^6.7.9",
     "connect-pg-simple": "^9.0.1",

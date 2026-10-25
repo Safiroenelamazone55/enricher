@@ -30,6 +30,7 @@ const ContenidoModule = (() => {
     'contenido-publicar': ['Publicar', 'Cola de salida: texto y archivos listos para publicar, y marcar lo que ya salió.'],
     'contenido-analitica': ['Analítica', 'Qué funciona: resultados por red, formato, pilar y pieza.'],
     'contenido-informes': ['Informes', 'El resumen mensual para entregar al cliente, listo para imprimir o guardar en PDF.'],
+    'contenido-conexiones': ['Conexiones', 'Conecta LinkedIn, Instagram, Facebook y TikTok para publicar desde aquí, sin salir de Nova.'],
     'contenido-clientes': ['Clientes y pilares', 'Las cuentas de cada cliente y sus líneas de contenido.'],
   };
   let _D = null, _host = null, _sec = 'contenido-hoy', _f = { client: '', resp: '', q: '' }, _cal = { y: 0, m: 0, sel: '', modo: 'mes', ref: '' }, _p = null, _drag = null, _comments = [];
@@ -66,7 +67,8 @@ const ContenidoModule = (() => {
     try { await Promise.race([navigator.clipboard.writeText(txt), new Promise((_, rej) => setTimeout(() => rej(new Error('t')), 1500))]); _toast(ok || 'Copiado'); } catch (_) { fallback(); }
   }
 
-  async function _load() { _D = await _j('/content/bootstrap'); }
+  async function _load() { _D = await _j('/content/bootstrap'); try { _D.social = await _j('/content/social'); } catch (_) { _D.social = { redes: [], conexiones: [] }; } }
+  const _conectadas = cid => { const r = new Set(); ((_D.social || {}).conexiones || []).forEach(c => { if (c.estado === 'ok' && (c.client_id === cid || !c.client_id)) r.add(c.red); }); return r; };
   function _visibles(sinIdeas) {
     const q = _f.q.trim().toLowerCase();
     return (_D.pieces || []).filter(p => (!_f.client || String(p.client_id) === _f.client) && (!_f.resp || p.responsable === _f.resp)
@@ -329,12 +331,29 @@ const ContenidoModule = (() => {
         <div class="ct-pub__b">${bloques}
         ${p.primer_comentario ? `<div class="ct-out"><div class="ct-out__h"><b>Primer comentario</b><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.copiarPrimer(${p.id})">Copiar</button></div><pre>${_e(p.primer_comentario)}</pre></div>` : ''}
         ${medias.length ? `<div class="ct-out"><div class="ct-out__h"><b>Archivos (${medias.length})</b></div><div class="ct-thumbs">${medias.map(m => `<a href="${_e(m.url)}" download="${_e(m.nombre)}" target="_blank" rel="noopener" title="Descargar ${_e(m.nombre)}">${_mediaThumb(m)}</a>`).join('')}</div></div>` : ''}
-        <div class="ct-actions"><button type="button" class="btn btn--primary btn--sm" onclick="ContenidoModule.marcarPub(${p.id})">Marcar como publicada</button><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.abrir(${p.id})">Editar pieza</button></div></div></div>`;
+        <div class="ct-actions">${_btnPublicar(p)}<button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.marcarPub(${p.id})">Marcar como publicada a mano</button><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.abrir(${p.id})">Editar pieza</button></div></div></div>`;
     };
     return `${_filtros()}<p class="ct-hint">Aquí aparece lo que está <b>programado</b> o ya <b>aprobado por el cliente</b>. Copia el texto, descarga los archivos, publícalo en la red y márcalo como publicado con su enlace.</p>
       ${Object.entries(g).filter(([, a]) => a.length).map(([t, a]) => `<h4 class="ct-h4${t === 'Atrasadas' ? ' is-late' : ''}">${t} (${a.length})</h4>${a.map(fila).join('')}`).join('') || '<div class="ct-empty">No hay nada listo para publicar. Cuando una pieza pase a «Programado» o el cliente la apruebe, aparecerá aquí.</div>'}
       ${recientes.length ? `<h4 class="ct-h4">Publicadas recientemente</h4><div class="ct-wrapcards">${recientes.map(_card).join('')}</div>` : ''}`;
   }
+  const _SOC = ['linkedin', 'instagram', 'facebook', 'tiktok'];
+  function _estadoPub(p) {
+    const pb = p.publicaciones || {}, items = Object.entries(pb).map(([r, x]) => x.ok ? `<span class="ct-badge is-ok">${_e(_lbl(REDES, r))}: ${x.borrador ? 'enviado como borrador' : 'publicado'}${x.url ? ` · <a class="ct-link" href="${_e(x.url)}" target="_blank" rel="noopener">ver</a>` : ''}</span>` : `<span class="ct-badge is-bad" title="${_e(x.error)}">${_e(_lbl(REDES, r))}: error · ${_e((x.error || '').slice(0, 90))}</span>`);
+    return items.length ? `<div class="ct-apr__s" style="margin:4px 0">${items.join('')}</div>` : '';
+  }
+  function _btnPublicar(p) {
+    const con = _conectadas(p.client_id), redes = (p.redes || []).filter(r => _SOC.includes(r)), listas = redes.filter(r => con.has(r) && !((p.publicaciones || {})[r] || {}).ok);
+    const auto = `<label class="ct-chk" style="display:inline-flex;margin-right:10px"><input type="checkbox" ${p.auto_publicar ? 'checked' : ''} onchange="ContenidoModule.autoPub(${p.id},this.checked)"><span>Publicar solo a la hora</span></label>`;
+    return (listas.length ? `<button type="button" class="btn btn--primary btn--sm" onclick="ContenidoModule.publicarYa(${p.id},this)">Publicar ahora en ${listas.map(r => _e(_lbl(REDES, r))).join(', ')}</button>${auto}` : (redes.length ? '<span class="ct-hint" style="margin-right:8px">Conecta las cuentas en «Conexiones» para publicar desde aquí.</span>' : '')) + _estadoPub(p);
+  }
+  async function publicarYa(id, btn) {
+    if (!confirm('¿Publicar ahora en las redes conectadas? Esto sale de verdad a la cuenta del cliente.')) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
+    try { const r = await _post('/content/pieces/' + id + '/publish', {}); const p = _D.pieces.find(x => x.id === id); if (p) Object.assign(p, r); _pintar(); const mal = Object.values(r.publicaciones || {}).filter(x => !x.ok).length; _toast(mal ? 'Algunas redes fallaron: revisa el detalle' : 'Publicado', mal ? 'error' : 'success'); }
+    catch (e) { _toast(e.message, 'error'); _pintar(); }
+  }
+  async function autoPub(id, on) { try { const r = await _post('/content/pieces/' + id + '/auto', { auto: on }, 'PUT'); const p = _D.pieces.find(x => x.id === id); if (p) p.auto_publicar = r.auto_publicar; _toast(on ? 'Se publicará sola a la hora indicada' : 'Publicación automática desactivada'); } catch (e) { _toast(e.message, 'error'); _pintar(); } }
   function copiarPrimer(id) { const p = _D.pieces.find(x => x.id === id); if (p) _copiar(p.primer_comentario || '', 'Comentario copiado'); }
   function copiarPub(id, red) { const p = _D.pieces.find(x => x.id === id); if (!p) return; const st = (_D.strategies || {})[p.client_id] || {}; _copiar(((p.copy || {})[red] || '') + (p.hashtags ? '\n\n' + p.hashtags : '') + (st.firma ? '\n\n' + st.firma : ''), 'Texto copiado'); }
   function marcarPub(id) {
@@ -417,6 +436,36 @@ const ContenidoModule = (() => {
     w.document.close();
   }
 
+  // ══ CONEXIONES ══
+  const AYUDA = { linkedin: 'developers.linkedin.com → tu app → Auth → copia Client ID y Client Secret. En «Products» activa «Share on LinkedIn» y «Sign In with LinkedIn using OpenID Connect».', facebook: 'developers.facebook.com → tu app → Configuración → Básica → ID de la app y Clave secreta. Añade el producto «Inicio de sesión con Facebook» y pega abajo la dirección de retorno.', instagram: 'developers.facebook.com → tu app → Instagram → «Inicio de sesión de Instagram»: copia el ID y el secreto de la app de Instagram y pega la dirección de retorno.', tiktok: 'developers.tiktok.com → tu app → copia Client Key y Client Secret. Añade el producto «Content Posting API» y la dirección de retorno.' };
+  function _vConexiones() {
+    const so = _D.social || { redes: [], conexiones: [] };
+    return `<p class="ct-hint">Cada red necesita una <b>app de desarrollador</b> que crees tú en su sitio (guía en cada tarjeta). Aquí pegas sus claves, que se guardan cifradas, y después conectas la cuenta de cada cliente. TikTok envía el video como borrador a la cuenta para que lo termines de publicar en la app.</p>
+      <div class="ct-clients">${so.redes.map(r => {
+        const cs = so.conexiones.filter(c => c.red === r.red);
+        return `<article class="ct-cl"><header><b>${_e(r.nombre)}</b><span class="ct-badge ${r.configurada ? 'is-ok' : ''}">${r.configurada ? 'App configurada' : 'Sin configurar'}</span></header>
+          <h5>1. Claves de la app (${_e(r.claves)})</h5>
+          <div class="ct-add"><input id="ct-sa-${r.red}" class="ct-in" placeholder="ID de la app" value="${_e(r.app_id)}"></div><div class="ct-add"><input id="ct-ss-${r.red}" type="password" class="ct-in" placeholder="${r.configurada ? 'Secreto guardado (escribe para cambiarlo)' : 'Secreto de la app'}" autocomplete="new-password"><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.guardarApp('${r.red}')">Guardar</button></div>
+          <div class="ct-hint">Dirección de retorno que debes pegar en la app:</div><div class="ct-add"><input class="ct-in" readonly value="${_e(r.redirect)}" onfocus="this.select()"><button type="button" class="btn btn--ghost btn--sm" onclick="ContenidoModule.copiarTxt('${_e(r.redirect)}')">Copiar</button></div>
+          <details class="ct-det"><summary>Dónde conseguir las claves</summary><p>${_e(AYUDA[r.red] || '')}</p></details>
+          <h5>2. Cuentas conectadas</h5><div class="ct-tags">${cs.map(c => `<span class="ct-tag"><i class="ct-pdot" style="background:${c.estado === 'ok' ? '#16A34A' : '#DC2626'}"></i>${_e(c.cuenta)} · ${_e(c.client_id ? _cliName(c.client_id) : 'sin cliente')}${c.estado !== 'ok' ? ' · ' + _e(c.estado) : ''}<button type="button" onclick="ContenidoModule.quitarConexion(${c.id})" aria-label="Desconectar">×</button></span>`).join('') || '<em>Ninguna todavía</em>'}</div>
+          <div class="ct-add"><select id="ct-sc-${r.red}" class="ct-sel"><option value="">Cliente de la cuenta…</option>${_clienteOpts('')}</select><button type="button" class="btn btn--primary btn--sm" ${r.configurada ? '' : 'disabled title="Guarda primero las claves"'} onclick="ContenidoModule.conectar('${r.red}')">Conectar cuenta</button></div></article>`;
+      }).join('')}</div>`;
+  }
+  async function guardarApp(red) {
+    const id = (document.getElementById('ct-sa-' + red) || {}).value || '', secret = (document.getElementById('ct-ss-' + red) || {}).value || '';
+    try { await _post('/content/social/apps/' + red, { app_id: id, secret }, 'PUT'); _D.social = await _j('/content/social'); _pintar(); _toast('Claves guardadas'); } catch (e) { _toast(e.message, 'error'); }
+  }
+  async function conectar(red) {
+    const cid = (document.getElementById('ct-sc-' + red) || {}).value || '';
+    if (!cid) { _toast('Elige el cliente al que pertenece la cuenta', 'error'); return; }
+    try { const r = await _j('/content/social/connect/' + red + '?client_id=' + cid); location.href = r.url; } catch (e) { _toast(e.message, 'error'); }
+  }
+  async function quitarConexion(id) { if (!confirm('¿Desconectar esta cuenta? Las piezas ya publicadas no se tocan.')) return; try { await _j('/content/social/connections/' + id, { method: 'DELETE' }); _D.social = await _j('/content/social'); _pintar(); } catch (e) { _toast(e.message, 'error'); } }
+  function _volverConexion() {
+    try { const q = new URLSearchParams(location.search); if (!q.get('conexion')) return; const ok = q.get('conexion') === 'ok'; _toast((ok ? 'Conectado: ' : 'No se pudo conectar: ') + (q.get('msg') || ''), ok ? 'success' : 'error'); q.delete('conexion'); q.delete('red'); q.delete('msg'); history.replaceState({}, '', location.pathname + '?' + q.toString()); } catch (_) {}
+  }
+
   // ══ CLIENTES Y PILARES ══
   function _vClientes() {
     const cl = _D.clients || [];
@@ -436,12 +485,13 @@ const ContenidoModule = (() => {
   async function render(sec) {
     _sec = sec || _sec; const id = _sec === 'contenido' ? 'contenido-body' : _sec + '-body'; _host = document.getElementById(id); if (!_host) return;
     if (!_D) { _host.innerHTML = '<div class="ct-empty">Cargando…</div>'; try { await _load(); } catch (e) { _host.innerHTML = '<div class="ct-empty">No se pudo cargar: ' + _e(e.message) + '</div>'; return; } }
+    if (_sec === 'contenido-conexiones') { try { _D.social = await _j('/content/social'); } catch (_) {} _volverConexion(); }
     _pintar();
   }
   function _pintar() {
     if (!_host || !_D) return;
     const [t, s] = SECC[_sec] || SECC.contenido;
-    const vistas = { 'contenido-hoy': _vHoy, 'contenido-estrategia': _vEstrategia, 'contenido-ideas': _vIdeas, contenido: _vTablero, 'contenido-cal': _vCal, 'contenido-campanas': _vCampanas, 'contenido-biblioteca': _vBiblioteca, 'contenido-aprobaciones': _vAprobaciones, 'contenido-publicar': _vPublicar, 'contenido-analitica': _vAnalitica, 'contenido-informes': _vInformes, 'contenido-clientes': _vClientes };
+    const vistas = { 'contenido-hoy': _vHoy, 'contenido-estrategia': _vEstrategia, 'contenido-ideas': _vIdeas, contenido: _vTablero, 'contenido-cal': _vCal, 'contenido-campanas': _vCampanas, 'contenido-biblioteca': _vBiblioteca, 'contenido-aprobaciones': _vAprobaciones, 'contenido-publicar': _vPublicar, 'contenido-analitica': _vAnalitica, 'contenido-informes': _vInformes, 'contenido-conexiones': _vConexiones, 'contenido-clientes': _vClientes };
     const sx = _host.querySelector('.ct-board') ? _host.querySelector('.ct-board').scrollLeft : 0, sy = _host.closest('.app-main') ? _host.closest('.app-main').scrollTop : 0;
     _host.innerHTML = `<div class="ct"><div class="ct-hd"><h2>${_e(t)}</h2><p>${_e(s)}</p></div>${(vistas[_sec] || _vTablero)()}</div>`;
     const b = _host.querySelector('.ct-board'); if (b) b.scrollLeft = sx; const am = _host.closest('.app-main'); if (am) am.scrollTop = sy;
@@ -594,5 +644,5 @@ const ContenidoModule = (() => {
   function duplicar() { if (!_p) return; const c = JSON.parse(JSON.stringify(_p)); c.id = 0; c.titulo = c.titulo + ' (copia)'; c.estado = 'desarrollo'; c.fecha_plan = ''; c.link_publicado = ''; c.aprob_estado = ''; c.checklist.forEach(i => { i.ok = false; }); _p = c; _comments = []; _modal(); }
 
   return { render, filtrar, mes, modo, dia, irDia, capturar, mover, dragStart, soltar, soltarDia, addCuenta, borrarCuenta, addPilar, borrarPilar, nueva, nuevaPara, nuevaCamp, abrir, cerrar, guardar, pedirAprob, borrar, duplicar, red, copia, copiarATodas, hashBase, chk, chkDel, chkAdd, chkSugerida, enlDel, enlAdd, comentar, recargar, pv, pvRed, _s,
-    estrCliente, guardarEstrategia, campania, guardarCamp, borrarCamp, bibFiltro, subir, subirAqui, verMedia, borrarMedia, copiarTxt, desadjuntar, elegirMedia, pickMedia, pickOk, apCliente, apSel, apCrear, apRevocar, copiarPub, copiarPrimer, marcarPub, confirmarPub, anFiltro, anotar, guardarRes, infFiltro, generarInforme };
+    estrCliente, guardarEstrategia, campania, guardarCamp, borrarCamp, bibFiltro, subir, subirAqui, verMedia, borrarMedia, copiarTxt, desadjuntar, elegirMedia, pickMedia, pickOk, apCliente, apSel, apCrear, apRevocar, copiarPub, copiarPrimer, marcarPub, guardarApp, conectar, quitarConexion, publicarYa, autoPub, confirmarPub, anFiltro, anotar, guardarRes, infFiltro, generarInforme };
 })();

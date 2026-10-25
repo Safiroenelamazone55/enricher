@@ -12428,6 +12428,7 @@ waQueue.mount(app, { pool, requireAuth, cargarConexion: (req, res, id) => _carga
 require('./services/proposalRoutes').mount(app, { pool, requireAuth });
 require('./services/watchdog').mount(app, { pool, requireAuth });
 require('./services/contentRoutes').mount(app, { pool, requireAuth, express });
+require('./services/contentSocial').mount(app, { pool, requireAuth });
 require('./services/emailHints').mount(app, { pool, requireAuth });
 require('./services/toolsRoutes').mount(app, { requireAuth });   // Herramientas: descargas de extensiones/apps (solo con sesión)
 
@@ -14539,6 +14540,7 @@ async function start() {
     require('./services/backupContactWatcher').startBackupContactWatcher(pool);
     require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);
+    require('./services/contentSocial').startScheduler(pool);
     require('./services/watchdog').startWatchdog(pool, { emit: (uid, ev, payload) => io.to(`ws:${uid}`).emit(ev, payload) });
     require('./services/dailyReport').startDailyReport(pool);
   } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }
