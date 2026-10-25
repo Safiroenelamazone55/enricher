@@ -18,8 +18,11 @@
     const el = labelSel && document.querySelector(labelSel);
     bar.querySelector('.m-backbar__t').textContent = (el && el.textContent.trim()) || '';
   }
+  // Solo cuenta si la persona acaba de tocar algo: las aperturas automáticas (el chat que se abre solo al cargar, un refresco) no deben saltarse la lista.
+  let lastTap = 0;
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { lastTap = Date.now(); }, true));
   function show(key, sel) {
-    if (!mqDetail.matches) return;
+    if (!mqDetail.matches || Date.now() - lastTap > 3000) return;
     [...body.classList].filter(c => c.startsWith('m-detail--')).forEach(c => body.classList.remove(c));
     body.classList.add('m-detail', 'm-detail--' + key);
     labelSel = sel || '';
