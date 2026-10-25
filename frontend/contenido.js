@@ -60,7 +60,11 @@ const ContenidoModule = (() => {
   }
   const _post = (url, body, method) => _j(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   function _toast(m, t) { if (typeof showBanner === 'function') showBanner(m, t || 'success'); }
-  async function _copiar(txt, ok) { try { await navigator.clipboard.writeText(txt); _toast(ok || 'Copiado'); } catch (_) { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); _toast(ok || 'Copiado'); } catch (e) { _toast('No se pudo copiar', 'error'); } t.remove(); } }
+  // Copiar al portapapeles sin quedarse esperando: si el navegador no responde en 1,5 s se usa el método clásico.
+  async function _copiar(txt, ok) {
+    const fallback = () => { const t = document.createElement('textarea'); t.value = txt; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); let good = false; try { good = document.execCommand('copy'); } catch (_) {} t.remove(); _toast(good ? (ok || 'Copiado') : 'No se pudo copiar', good ? 'success' : 'error'); };
+    try { await Promise.race([navigator.clipboard.writeText(txt), new Promise((_, rej) => setTimeout(() => rej(new Error('t')), 1500))]); _toast(ok || 'Copiado'); } catch (_) { fallback(); }
+  }
 
   async function _load() { _D = await _j('/content/bootstrap'); }
   function _visibles(sinIdeas) {

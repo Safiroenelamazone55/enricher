@@ -1,8 +1,0 @@
-const fs=require('fs');let s=fs.readFileSync('frontend/contenido.js','utf8');
-const one=(a,b)=>{if(s.split(a).length!==2)throw new Error('no unico: '+a.slice(0,70));s=s.replace(a,()=>b);};
-one("<button type=\"button\" class=\"btn btn--ghost btn--sm\" onclick=\"ContenidoModule.copiarTxt(${_e(JSON.stringify(p.primer_comentario)).replace(/'/g, '&#39;')})\">Copiar</button>","<button type=\"button\" class=\"btn btn--ghost btn--sm\" onclick=\"ContenidoModule.copiarPrimer(${p.id})\">Copiar</button>");
-one("  function copiarPub(id, red) {","  function copiarPrimer(id) { const p = _D.pieces.find(x => x.id === id); if (p) _copiar(p.primer_comentario || '', 'Comentario copiado'); }\n  function copiarPub(id, red) {");
-one("      const bloques = (p.redes || []).map(r => { const base = (p.copy || {})[r] || ''; const txt = [base, p.hashtags, ''].filter((x, i) => x || i === 1).join(base && p.hashtags ? '\n\n' : '').trim(); const full =","      const bloques = (p.redes || []).map(r => { const base = (p.copy || {})[r] || ''; const full =");
-one("  async function pedirAprob() {\n    if (!_p || !_p.id) return; await guardar(); const id = _p.id || (_D.pieces[0] && _D.pieces[0].id);\n    _ap.client = ''; await apCrear([id], _p ? '' : ''); \n  }","  async function pedirAprob() {\n    if (!_p || !_p.id) return; const id = _p.id, t = _p.titulo; await guardar(); if (_p) return;   // si no se pudo guardar, la ventana sigue abierta\n    _ap.client = ''; await apCrear([id], t); _pintar();\n  }");
-one("copiarPub, marcarPub,","copiarPub, copiarPrimer, marcarPub,");
-fs.writeFileSync('frontend/contenido.js',s);
