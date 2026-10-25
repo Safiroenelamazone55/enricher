@@ -6982,13 +6982,13 @@ const CanteraModule = (() => {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <label class="cant-flabel">Datos de la empresa
             <div class="cant-copy-row">
-              <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
+              <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select();this.draggable=true" onblur="this.draggable=false" ondragend="this.draggable=false" ondragstart="event.dataTransfer.setData('text/plain',this.value);event.dataTransfer.effectAllowed='copyMove'" title="Haz clic para seleccionar todo; luego arrástralo a donde quieras pegarlo">${esc(_manualCopyText(co))}</textarea>
               <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData(this)">${_copyIconSvg()}</button>
             </div>
           </label>
           <label class="cant-flabel">Instrucción completa
             <div class="cant-copy-row">
-              <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
+              <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select();this.draggable=true" onblur="this.draggable=false" ondragend="this.draggable=false" ondragstart="event.dataTransfer.setData('text/plain',this.value);event.dataTransfer.effectAllowed='copyMove'" title="Haz clic para seleccionar todo; luego arrástralo a donde quieras pegarlo">Cargando…</textarea>
               <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion(this)">${_copyIconSvg()}</button>
             </div>
           </label>

@@ -18624,3 +18624,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cant-manual-progress__fill { background: #00804C; transition: width .4s ease; }
 
 .cant-manual-done { background: #FFF3DC; color: #8A5A00; border: 1px solid #F2D9A0; padding: 7px 10px; font-size: .78rem; font-weight: 600; border-radius: 4px; }
+
+.cant-copy-row textarea[draggable="true"] { cursor: grab; }
