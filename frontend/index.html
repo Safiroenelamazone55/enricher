@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026102312"/>
+  <link rel="stylesheet" href="style.css?v=2026102501"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
+  <link rel="stylesheet" href="contenido.css?v=1"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -344,6 +345,9 @@
       <button class="snav-mod" data-module="herramientas" onclick="selectModule('herramientas')" data-tip="Herramientas" aria-label="Herramientas">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
       </button>
+      <button class="snav-mod" data-module="contenido" onclick="selectModule('contenido')" data-tip="Contenido" aria-label="Contenido">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15l2.5 2.5L16 13"/></svg>
+      </button>
       <button class="snav-mod" data-module="plantillas" onclick="selectModule('plantillas')" data-tip="Plantillas" aria-label="Plantillas">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
       </button>
@@ -645,6 +649,27 @@
           <span class="snav-item__label">Configuración</span>
         </button>
 
+      </div>
+
+      <div class="snav-group" data-module="contenido" id="snav-body-contenido">
+        <div class="snav-cat">Producción</div>
+        <button class="snav-item" data-tab="contenido" data-tooltip="Tablero">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="11" rx="1"/></svg></span>
+          <span class="snav-item__label">Tablero</span>
+        </button>
+        <button class="snav-item" data-tab="contenido-ideas" data-tooltip="Banco de ideas">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg></span>
+          <span class="snav-item__label">Banco de ideas</span>
+        </button>
+        <div class="snav-cat">Planificación</div>
+        <button class="snav-item" data-tab="contenido-cal" data-tooltip="Calendario">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+          <span class="snav-item__label">Calendario</span>
+        </button>
+        <button class="snav-item" data-tab="contenido-clientes" data-tooltip="Clientes y pilares">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span>
+          <span class="snav-item__label">Clientes y pilares</span>
+        </button>
       </div>
 
       <div class="snav-group" data-module="plantillas" id="snav-body-plantillas">
@@ -2077,6 +2102,11 @@
     <div class="pane" id="pane-herramientas">
       <div id="herramientas-body"></div>
     </div><!-- /pane-herramientas -->
+    <div class="pane" id="pane-contenido"><div id="contenido-body"></div></div>
+    <div class="pane" id="pane-contenido-ideas"><div id="contenido-ideas-body"></div></div>
+    <div class="pane" id="pane-contenido-cal"><div id="contenido-cal-body"></div></div>
+    <div class="pane" id="pane-contenido-clientes"><div id="contenido-clientes-body"></div></div>
+
     <div class="pane" id="pane-plantillas">
       <div id="plantillas-body"></div>
     </div><!-- /pane-plantillas -->
@@ -2452,6 +2482,10 @@
     <button class="snav-mod ws-mod" data-module="herramientas" onclick="selectModule('herramientas');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
       <span class="ws-mod__lbl">Herramientas</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="contenido" onclick="selectModule('contenido');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15l2.5 2.5L16 13"/></svg></span>
+      <span class="ws-mod__lbl">Contenido</span><span class="ws-mod__chk"></span>
     </button>
     <button class="snav-mod ws-mod" data-module="plantillas" onclick="selectModule('plantillas');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
@@ -3433,9 +3467,10 @@
   })();
 </script>
 
-<script src="app.js?v=2026102312"></script>
+<script src="app.js?v=2026102501"></script>
 <script src="worldclock.js?v=2"></script>
 <script src="agentes.js?v=2"></script>
+<script src="contenido.js?v=1"></script>
 <script src="mobile.js?v=5"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
