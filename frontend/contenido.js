@@ -73,7 +73,8 @@ const ContenidoModule = (() => {
       && (!q || (p.titulo + ' ' + p.brief + ' ' + _cliName(p.client_id)).toLowerCase().includes(q)) && (!sinIdeas || p.estado !== 'idea'));
   }
   const _atrasada = p => p.fecha_plan && _d10(p.fecha_plan) < _hoy() && p.estado !== 'publicado';
-  const _clienteOpts = sel => (_D.clients || []).map(c => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${_e(c.empresa || c.nombre)}</option>`).join('');
+  const _cliLbl = c => (c.empresa || c.nombre) + (c.estado === 'inactivo' ? ' (inactivo)' : '');
+  const _clienteOpts = sel => (_D.clients || []).map(c => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${_e(_cliLbl(c))}</option>`).join('');
 
   // ── Tarjeta de pieza ──
   function _redesHtml(p) { return (p.redes || []).map(r => `<span class="ct-net" title="${_e(_lbl(REDES, r))}">${_e(_redShort(r))}</span>`).join(''); }
@@ -498,7 +499,7 @@ const ContenidoModule = (() => {
     document.body.appendChild(m); recargar(); setTimeout(() => document.getElementById('ct-f-t')?.focus(), 30);
   }
   function _formHtml() {
-    const p = _p, cli = (_D.clients || []).map(c => `<option value="${c.id}"${p.client_id === c.id ? ' selected' : ''}>${_e(c.empresa || c.nombre)}</option>`).join('');
+    const p = _p, cli = (_D.clients || []).map(c => `<option value="${c.id}"${p.client_id === c.id ? ' selected' : ''}>${_e(_cliLbl(c))}</option>`).join('');
     const pil = (_D.pillars || []).filter(x => !p.client_id || x.client_id === p.client_id).map(x => `<option value="${x.id}"${p.pilar_id === x.id ? ' selected' : ''}>${_e(x.nombre)}</option>`).join('');
     const cps = (_D.campaigns || []).filter(x => !p.client_id || x.client_id === p.client_id).map(x => `<option value="${x.id}"${p.campaign_id === x.id ? ' selected' : ''}>${_e(x.nombre)}</option>`).join('');
     const etapas = ETAPAS.map(([k, l]) => `<option value="${k}"${p.estado === k ? ' selected' : ''}>${l}</option>`).join('');

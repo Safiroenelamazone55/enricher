@@ -103,7 +103,7 @@ function mount(app, { pool, requireAuth, express }) {
   app.get('/api/content/bootstrap', A, wrap(async (req, res) => {
     const u = uid(req);
     const [cl, ac, pi, pc, tm, md, st, cp, ap] = await Promise.all([
-      pool.query(`SELECT id, nombre, empresa FROM clients WHERE user_id=$1 AND COALESCE(tipo,'cliente') <> 'contacto' AND COALESCE(estado,'activo') <> 'inactivo' ORDER BY LOWER(COALESCE(NULLIF(empresa,''), nombre))`, [u]),
+      pool.query(`SELECT id, nombre, empresa, estado FROM clients WHERE user_id=$1 AND COALESCE(tipo,'cliente') <> 'contacto' ORDER BY (COALESCE(estado,'activo') = 'inactivo'), LOWER(COALESCE(NULLIF(empresa,''), nombre))`, [u]),   // también los inactivos: la propia marca de la agencia suele estarlo
       pool.query('SELECT * FROM content_accounts WHERE user_id=$1 ORDER BY id', [u]),
       pool.query('SELECT * FROM content_pillars WHERE user_id=$1 ORDER BY id', [u]),
       pool.query(`SELECT p.*, (SELECT COUNT(*)::int FROM content_comments c WHERE c.piece_id=p.id) AS n_comentarios
