@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026102311"/>
+  <link rel="stylesheet" href="style.css?v=2026102312"/>
+  <link rel="stylesheet" href="mobile.css?v=2"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -228,6 +229,7 @@
 
   <!-- ── BARRA SUPERIOR GLOBAL: visible en Home y dentro de cada módulo ── -->
   <div class="global-topbar" id="global-topbar">
+    <button type="button" class="gtb-burger" id="gtb-burger" aria-label="Menú" onclick="toggleNavDrawer()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
     <!-- Dentro de un modulo, el logo se reemplaza por el icono+nombre del
          modulo activo (referencia adjunta: Odoo -- "CRM" con su icono en vez
          del logo de la empresa) -- pedido explicito. En Home se ve el logo
@@ -358,6 +360,7 @@
   </div>
 
   <!-- ── SECONDARY PANEL: subsecciones del módulo activo ── -->
+  <div id="nav-backdrop" onclick="closeNavDrawer()"></div>
   <aside class="sidebar" id="sidebar">
 
     <!-- Panel header: solo botón "← Módulos" para volver al home. El nombre
@@ -3430,9 +3433,10 @@
   })();
 </script>
 
-<script src="app.js?v=2026102311"></script>
+<script src="app.js?v=2026102312"></script>
 <script src="worldclock.js?v=2"></script>
 <script src="agentes.js?v=2"></script>
+<script src="mobile.js?v=2"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>

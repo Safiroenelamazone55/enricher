@@ -27001,6 +27001,7 @@ ${foot}
     if (_ibThreads === null) { _ibReload().then(() => ibOpen(cid)); } else { ibOpen(cid); }
   }
   async function ibOpen(cid) {
+    if (window.MobileNav) MobileNav.show('ibx', '.ibx-conv__nm');
     _ibActive = cid; _ibThread = null; _ibMsgIdx = 0; _ibMode = 'reply';
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
     _ibThreadStamp = t ? (t.last_in_at + '|' + t.last_out_at) : '';
@@ -37714,6 +37715,7 @@ const SlackChat = (() => {
   async function abrir(canalId) {
     const c = _canales.find(x => x.id === canalId);
     if (!c) return;
+    if (window.MobileNav) MobileNav.show('chat');
     if (_canal && _canal.id !== canalId) cancelAttach();   // no arrastrar un adjunto sin enviar a otro canal
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
@@ -41904,6 +41906,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
   }
 
   async function abrirChat(jid, nombre) {
+    if (window.MobileNav) MobileNav.show('wa');
     _draftGuardar();
     _chatAct = jid;
     _replyTo = null; _pintaQuote();
@@ -42823,6 +42826,7 @@ const ObcWaModule = (() => {
   }
 
   async function abrirChat(jid, nombre) {
+    if (window.MobileNav) MobileNav.show('wa');
     _chatAct = jid;
     _replyTo = null; _pintaQuote();
     const row = _chats.find(c => String(c.chat_jid) === String(jid));
@@ -43745,6 +43749,7 @@ const ChatModule = (() => {
   }
 
   async function selectChannel(id) {
+    if (window.MobileNav) MobileNav.show('chat');
     _channel = id;
     _unread[id] = 0;
     _saveUnread();
