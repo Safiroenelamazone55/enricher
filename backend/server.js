@@ -12427,7 +12427,7 @@ const waQueue = require('./services/waQueue');
 waQueue.mount(app, { pool, requireAuth, cargarConexion: (req, res, id) => _cargarConexionAutorizada(req, res, id) });
 require('./services/proposalRoutes').mount(app, { pool, requireAuth });
 require('./services/watchdog').mount(app, { pool, requireAuth });
-require('./services/contentRoutes').mount(app, { pool, requireAuth });
+require('./services/contentRoutes').mount(app, { pool, requireAuth, express });
 require('./services/emailHints').mount(app, { pool, requireAuth });
 require('./services/toolsRoutes').mount(app, { requireAuth });   // Herramientas: descargas de extensiones/apps (solo con sesión)
 

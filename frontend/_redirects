@@ -10,3 +10,6 @@
 /pt/portal  /portal  200
 /es/portal/*  /portal  200
 /es/portal  /portal  200
+
+# Aprobación de contenido por el cliente (enlace público)
+/aprobar/*  /aprobar  200

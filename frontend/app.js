@@ -900,7 +900,7 @@ const HOME_MODULES = [
   // Herramientas: extensiones y apps de escritorio que se conectan con Nova (descarga + vista previa).
   { id: 'herramientas',   tab: 'herramientas',   name: 'Herramientas',   desc: 'Extensiones y apps: scraper de LinkedIn y tracking de tiempo', color: 'teal',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
-  { id: 'contenido',      tab: 'contenido',      name: 'Contenido',      desc: 'Ideas, planificación y producción de contenido para redes, por cliente', color: 'orange',
+  { id: 'contenido',      tab: 'contenido-hoy',      name: 'Contenido',      desc: 'Ideas, planificación y producción de contenido para redes, por cliente', color: 'orange',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15l2.5 2.5L16 13"/></svg>' },
   { id: 'plantillas',     tab: 'plantillas',     name: 'Plantillas',     desc: 'Propuestas comerciales por oferta, en varios idiomas y con tu logo', color: 'teal',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>' },

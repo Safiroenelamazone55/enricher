@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Aprobación de contenido</title>
+<link rel="icon" href="/logo-nova.svg">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #14211B; --mut: #6B7770; --line: #E3E8E5; --bg: #F5F7F6; --pri: #00804C; --bad: #B42318; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-text-size-adjust: 100%; }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 16px 18px; position: sticky; top: 0; z-index: 5; }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+  header p { margin: 2px 0 0; font-size: 13px; color: var(--mut); }
+  main { max-width: 760px; margin: 0 auto; padding: 18px 14px 80px; }
+  .who { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; font-size: 13px; color: var(--mut); }
+  .who input { flex: 1; max-width: 240px; height: 36px; border: 1px solid #D5DBD8; border-radius: 8px; padding: 0 10px; font: inherit; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+  .card__h { padding: 14px 16px 6px; }
+  .card__h b { font-size: 16px; display: block; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--mut); }
+  .tag { background: #EEF2F0; border-radius: 4px; padding: 1px 7px; font-weight: 600; color: #3E4E46; }
+  .tabs { display: flex; gap: 6px; padding: 0 16px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid #D5DBD8; background: #fff; border-radius: 99px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .media { display: grid; gap: 4px; margin: 12px 0 0; background: #000; }
+  .media.m1 { grid-template-columns: 1fr; } .media.m2, .media.m3, .media.m4 { grid-template-columns: 1fr 1fr; }
+  .media img, .media video { width: 100%; max-height: 420px; object-fit: cover; display: block; background: #111; }
+  .media a.doc { display: grid; place-items: center; min-height: 120px; color: #fff; text-decoration: none; background: #333; }
+  .txt { padding: 14px 16px; white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.55; }
+  .txt .h { color: #2563EB; margin-top: 8px; }
+  .sub { padding: 0 16px 12px; font-size: 13px; color: var(--mut); }
+  .acts { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .btn { height: 42px; padding: 0 18px; border-radius: 10px; border: 1px solid #D5DBD8; background: #fff; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; flex: 1; min-width: 140px; }
+  .btn.ok { background: var(--pri); border-color: var(--pri); color: #fff; }
+  .btn.no { color: var(--bad); }
+  .btn:disabled { opacity: .55; }
+  .chg { display: none; width: 100%; }
+  .chg textarea { width: 100%; min-height: 90px; border: 1px solid #D5DBD8; border-radius: 10px; padding: 10px; font: inherit; font-size: 14px; margin-bottom: 8px; }
+  .st { padding: 10px 16px; font-size: 13px; font-weight: 600; }
+  .st.ok { background: #E8F5EE; color: #0B6B3E; } .st.bad { background: #FDECEA; color: var(--bad); }
+  .cm { padding: 0 16px 12px; font-size: 13px; } .cm div { background: #F5F7F6; border-radius: 8px; padding: 7px 10px; margin-top: 6px; } .cm small { color: var(--mut); }
+  .err { text-align: center; padding: 60px 20px; color: var(--mut); }
+  .done { text-align: center; padding: 18px; color: var(--mut); font-size: 13px; }
+</style>
+</head>
+<body>
+<header><h1 id="t">Cargando…</h1><p id="s"></p></header>
+<main id="m"></main>
+<script src="aprobar.js?v=1"></script>
+</body>
+</html>
