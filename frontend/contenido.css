@@ -106,3 +106,8 @@
   .ct-calh b { min-width: 0; flex: 1; }
   .ct-clients, .ct-ideas { grid-template-columns: 1fr; }
 }
+
+/* Fecha y hora siempre dentro del ancho de la ventana */
+.ct-dt > div { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 6px; }
+.ct-dt .ct-in, .ct-form .ct-in { min-width: 0; }
+.ct-form { overflow-x: hidden; }
