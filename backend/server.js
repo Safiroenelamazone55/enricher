@@ -13990,10 +13990,12 @@ app.post('/api/timer/manual', requireAuth, async (req, res) => {
     }
     if (!validTaskId && !taskTitulo) return res.status(400).json({ error: 'Elige una tarea' });
     const meta = Object.assign({}, b.metadata && typeof b.metadata === 'object' ? b.metadata : {}, { manual_entry: true });
+    const act = ['active_work', 'meeting'].includes(b.activity_type) ? b.activity_type : 'active_work';
+    const notas = String(b.notes || '').trim().slice(0, 1000);
     const { rows } = await pool.query(
-      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,ended_at,duration_s,active_s,idle_s,source,activity_type,metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$7,0,'manual_timer','active_work',$8) RETURNING id`,
-      [uid, validTaskId, taskTitulo, projectNombre, ini.toISOString(), fin.toISOString(), dur, JSON.stringify(meta)]);
+      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,ended_at,duration_s,active_s,idle_s,source,activity_type,metadata,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$7,0,'manual_timer',$9,$8,$10) RETURNING id`,
+      [uid, validTaskId, taskTitulo, projectNombre, ini.toISOString(), fin.toISOString(), dur, JSON.stringify(meta), act, notas]);
     if (validTaskId) { try { await pool.query("UPDATE tasks SET estado='en_progreso', updated_at=NOW() WHERE (id=$1 OR id=(SELECT parent_task_id FROM tasks WHERE id=$1)) AND estado='pendiente'", [validTaskId]); } catch (_) {} }
     res.status(201).json({ ok: true, id: rows[0].id, duration_s: dur });
   } catch (e) { res.status(500).json({ error: e.message }); }

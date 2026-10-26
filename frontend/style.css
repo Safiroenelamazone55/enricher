@@ -11068,6 +11068,34 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 
 /* ════════ Time Tracking — dashboard multi-fuente (premium) ════════ */
 .ttd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.ttd-head__btns { display: inline-flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.ttd-add { background: var(--brand,#007AFF); border-color: var(--brand,#007AFF); color: #fff; }
+.ttd-add:hover { background: #0062CC; border-color: #0062CC; color: #fff; }
+/* Time Tracking: ventana «Agregar tiempo» */
+.ttm-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(20,24,22,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ttm-box { width: min(520px, 100%); max-height: 92vh; overflow: auto; background: #fff; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+.ttm-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 6px; }
+.ttm-hd h3 { margin: 0; font-size: 1.05rem; } .ttm-hd p { margin: 3px 0 0; font-size: .78rem; color: #6C6862; }
+.ttm-x { border: 0; background: none; font-size: 16px; cursor: pointer; color: #6C6862; line-height: 1; padding: 2px 4px; }
+.ttm-body { padding: 10px 20px 4px; display: flex; flex-direction: column; gap: 12px; }
+.ttm-f { display: flex; flex-direction: column; gap: 4px; font-size: .76rem; font-weight: 600; color: #4B5B53; }
+.ttm-f input, .ttm-f select, .ttm-f textarea { font: inherit; font-weight: 400; font-size: .86rem; padding: 8px 10px; border: 1px solid #D9D6CF; border-radius: 6px; background: #fff; color: #14211B; width: 100%; box-sizing: border-box; }
+.ttm-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; }
+.ttm-pick { position: relative; }
+.ttm-menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; background: #fff; border: 1px solid #D9D6CF; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14); max-height: 260px; overflow: auto; }
+.ttm-opt { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #F1EFEB; display: flex; flex-direction: column; gap: 2px; font-weight: 400; }
+.ttm-opt b { font-weight: 600; font-size: .84rem; color: #14211B; } .ttm-opt span { font-size: .72rem; color: #8A958F; }
+.ttm-opt:hover { background: #F5F8FF; } .ttm-opt--none { cursor: default; color: #8A958F; } .ttm-opt--free b { color: #0062CC; }
+.ttm-chosen { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #A7C8F5; background: #F2F8FF; border-radius: 8px; font-weight: 400; }
+.ttm-chosen b { font-weight: 600; font-size: .86rem; color: #14211B; } .ttm-chosen > span { color: #6C6862; font-size: .74rem; flex: 1; text-align: right; }
+.ttm-chosen > div { min-width: 0; }
+.ttm-chosen[hidden], .ttm-menu[hidden] { display: none; }   /* display:flex de arriba anulaba el atributo hidden y dejaba una franja vacía */
+.ttm-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .72rem; color: #8A958F; }
+.ttm-chips button { border: 1px solid #D9D6CF; background: #fff; border-radius: 99px; padding: 3px 10px; cursor: pointer; font: inherit; font-size: .72rem; color: #4B5B53; }
+.ttm-chips button:hover { border-color: #007AFF; color: #007AFF; }
+.ttm-dur { min-height: 18px; font-size: .8rem; font-weight: 600; color: #0062CC; }
+.ttm-ft { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 18px; }
+@media (max-width: 520px) { .ttm-row { grid-template-columns: 1fr 1fr; } .ttm-row > label:first-child { grid-column: 1 / -1; } }
 .ttd-head__t { margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
 .ttd-head__s { margin: 4px 0 0; font-size: .82rem; color: var(--muted); }
 .ttd-print { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 0; border: 1px solid var(--border); background: var(--card,#fff); color: #6C6862; font-family: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; flex-shrink: 0; transition: background .12s, border-color .12s, color .12s; }

@@ -45766,6 +45766,123 @@ const TimerModule = (() => {
   }
 
   // Paso previo a imprimir: pregunta el idioma (Español / Inglés / Alemán) y luego arma el PDF.
+  // ── Agregar tiempo a mano (sin cronómetro) — botón «Agregar tiempo» de Time Tracking ──
+  // Se elige la tarea (o se escribe «otra actividad»), la fecha y la hora de inicio y fin (hora de Lima, como el resto del registro manual).
+  let _tmTasks = [], _tmSel = null, _tmRes = [];
+  const _tmEl = id => document.getElementById(id);
+  const _tmNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function _tmLima() {
+    const d = new Date();
+    return { fecha: d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' }), hora: d.toLocaleTimeString('en-GB', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false }) };
+  }
+  const _tmHM = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const _tmMin = hm => { const a = String(hm || '').split(':'); return a.length === 2 ? (+a[0]) * 60 + (+a[1]) : NaN; };
+  function _tmEsc(e) { if (e.key === 'Escape') closeManual(); }
+  function _tmDur() {
+    const el = _tmEl('ttm-dur'); if (!el) return;
+    const a = _tmMin(_tmEl('ttm-ini').value), b = _tmMin(_tmEl('ttm-fin').value), f = _tmEl('ttm-fecha').value, L = _tmLima();
+    el.style.color = '';
+    if (isNaN(a) || isNaN(b)) { el.textContent = ''; return; }
+    const m = b - a;
+    if (m <= 0) { el.textContent = 'La hora de fin debe ser posterior al inicio'; el.style.color = '#B42318'; return; }
+    if (m > 16 * 60) { el.textContent = 'Un registro no puede pasar de 16 horas'; el.style.color = '#B42318'; return; }
+    if (f === L.fecha && b > _tmMin(L.hora) + 1) { el.textContent = 'No se puede registrar tiempo en el futuro'; el.style.color = '#B42318'; return; }
+    el.textContent = 'Duración: ' + (Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : '') + (m % 60 ? (m % 60) + ' min' : '');
+  }
+  async function _tmLoadTasks() {
+    try {
+      const [tr, or] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/opportunity-tasks`)]);
+      const tasks = tr.ok ? await tr.json() : [], opp = or.ok ? await or.json() : [];
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const abierta = t => (t.estado || 'pendiente') !== 'completado' && (t.estado || '') !== 'cancelado';
+      const periodoPasado = t => !t.parent_task_id && t.fecha_inicio && t.deadline && new Date(String(t.deadline).split('T')[0] + 'T00:00:00') < hoy;
+      const archIds = new Set(tasks.filter(t => t.archivada).map(t => t.id));
+      const viva = t => !t.archivada && !(t.parent_task_id && archIds.has(t.parent_task_id));
+      // Si una tarea tiene subtareas abiertas se ofrecen las subtareas, no la tarea contenedora (igual que en el selector del Dashboard).
+      const conSubs = new Set(tasks.filter(t => viva(t) && abierta(t) && t.parent_task_id).map(t => t.parent_task_id));
+      const titPadre = new Map(tasks.map(t => [t.id, t.titulo]));
+      _tmTasks = [
+        ...tasks.filter(t => viva(t) && abierta(t) && !periodoPasado(t) && !conSubs.has(t.id)).map(t => ({ kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '' })),
+        ...opp.filter(t => t.estado !== 'completada' && t.estado !== 'completado').map(t => ({ kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '' })),
+      ];
+    } catch (_) { _tmTasks = []; }
+  }
+  async function openManual() {
+    _tmSel = null; _tmRes = [];
+    _tmEl('ttm-backdrop')?.remove();
+    const L = _tmLima(), fin = _tmMin(L.hora), ini = Math.max(0, fin - 60);
+    const back = document.createElement('div'); back.id = 'ttm-backdrop'; back.className = 'ttm-backdrop';
+    back.onclick = e => { if (e.target === back) closeManual(); };
+    back.innerHTML = `<div class="ttm-box" role="dialog" aria-label="Agregar tiempo">
+      <div class="ttm-hd"><div><h3>Agregar tiempo</h3><p>Registra tiempo que trabajaste sin usar el cronómetro (hora de Lima).</p></div><button class="ttm-x" type="button" onclick="TimerModule.closeManual()" aria-label="Cerrar">✕</button></div>
+      <div class="ttm-body">
+        <div class="ttm-f"><span>Tarea</span>
+          <div class="ttm-pick"><input id="ttm-q" autocomplete="off" placeholder="Busca una tarea, proyecto o cliente… o escribe otra actividad" oninput="TimerModule.manualSearch(this.value)" onfocus="TimerModule.manualSearch(this.value)" onblur="setTimeout(()=>{const m=document.getElementById('ttm-menu');if(m)m.hidden=true},180)"><div id="ttm-menu" class="ttm-menu" hidden></div></div>
+          <div id="ttm-chosen" class="ttm-chosen" hidden></div></div>
+        <div class="ttm-row">
+          <label class="ttm-f"><span>Fecha</span><input type="date" id="ttm-fecha" value="${L.fecha}" max="${L.fecha}"></label>
+          <label class="ttm-f"><span>Inicio</span><input type="time" id="ttm-ini" value="${_tmHM(ini)}"></label>
+          <label class="ttm-f"><span>Fin</span><input type="time" id="ttm-fin" value="${_tmHM(fin)}"></label>
+        </div>
+        <div class="ttm-chips"><span>Duración rápida desde el inicio:</span>${[15, 30, 60, 90, 120, 240].map(m => `<button type="button" onclick="TimerModule.manualDur(${m})">${m < 60 ? m + ' min' : (m / 60) + ' h'}</button>`).join('')}</div>
+        <div id="ttm-dur" class="ttm-dur"></div>
+        <label class="ttm-f"><span>Tipo</span><select id="ttm-tipo"><option value="active_work">Trabajo</option><option value="meeting">Reunión</option></select></label>
+        <label class="ttm-f"><span>Nota (opcional)</span><textarea id="ttm-nota" rows="2" maxlength="500" placeholder="Qué hiciste…"></textarea></label>
+      </div>
+      <div class="ttm-ft"><button class="btn btn--ghost btn--sm" type="button" onclick="TimerModule.closeManual()">Cancelar</button><button class="btn btn--primary btn--sm" type="button" id="ttm-save" onclick="TimerModule.saveManual()">Guardar tiempo</button></div></div>`;
+    document.body.appendChild(back);
+    ['ttm-ini', 'ttm-fin', 'ttm-fecha'].forEach(id => _tmEl(id).addEventListener('input', _tmDur));
+    document.addEventListener('keydown', _tmEsc);
+    _tmDur();
+    _tmEl('ttm-q')?.focus();
+    await _tmLoadTasks();
+    if (_tmEl('ttm-q') && document.activeElement === _tmEl('ttm-q')) manualSearch(_tmEl('ttm-q').value);
+  }
+  function closeManual() { _tmEl('ttm-backdrop')?.remove(); document.removeEventListener('keydown', _tmEsc); _tmSel = null; }
+  function manualSearch(q) {
+    const menu = _tmEl('ttm-menu'); if (!menu) return;
+    q = String(q || '');
+    const nq = _tmNorm(q).trim();
+    _tmRes = _tmTasks.filter(t => !nq || _tmNorm([t.titulo, t.ctx, t.cliente, t.padre].join(' ')).includes(nq)).slice(0, 12);
+    const items = _tmRes.map((t, i) => `<div class="ttm-opt" onmousedown="TimerModule.manualPick(${i})"><b>${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre ? ' · subtarea de ' + esc(t.padre) : ''}</span></div>`).join('');
+    const libre = q.trim() ? `<div class="ttm-opt ttm-opt--free" onmousedown="TimerModule.manualFree()"><b>＋ Otra actividad: «${esc(q.trim())}»</b><span>Sin tarea asociada</span></div>` : '';
+    menu.innerHTML = (items + libre) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
+    menu.hidden = false;
+  }
+  function _tmShowChosen() {
+    const box = _tmEl('ttm-chosen'), inp = _tmEl('ttm-q'), menu = _tmEl('ttm-menu'); if (!box || !inp) return;
+    if (menu) menu.hidden = true;
+    if (!_tmSel) { box.hidden = true; box.innerHTML = ''; inp.parentElement.style.display = ''; inp.value = ''; return; }
+    inp.parentElement.style.display = 'none';
+    box.hidden = false;
+    box.innerHTML = `<div><b>${esc(_tmSel.titulo)}</b></div><span>${_tmSel.kind === 'libre' ? 'Otra actividad (sin tarea)' : (_tmSel.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto') + ' · ' + esc(_tmSel.ctx)}</span><button type="button" class="ttm-x" onclick="TimerModule.manualClear()" aria-label="Quitar">✕</button>`;
+  }
+  function manualPick(i) { const t = _tmRes[i]; if (!t) return; _tmSel = t; _tmShowChosen(); }
+  function manualFree() { const q = (_tmEl('ttm-q')?.value || '').trim(); if (!q) return; _tmSel = { kind: 'libre', id: null, titulo: q, ctx: '' }; _tmShowChosen(); }
+  function manualClear() { _tmSel = null; _tmShowChosen(); _tmEl('ttm-q')?.focus(); }
+  function manualDur(min) {
+    const a = _tmMin(_tmEl('ttm-ini').value);
+    if (isNaN(a)) { showBanner('Primero indica la hora de inicio', 'info'); return; }
+    _tmEl('ttm-fin').value = _tmHM(Math.min(23 * 60 + 59, a + min)); _tmDur();
+  }
+  async function saveManual() {
+    if (!_tmSel) { showBanner('Elige la tarea o escribe la actividad', 'info'); _tmEl('ttm-q')?.focus(); return; }
+    const fecha = _tmEl('ttm-fecha').value, ini = _tmEl('ttm-ini').value, fin = _tmEl('ttm-fin').value;
+    if (!fecha || !ini || !fin) { showBanner('Indica la fecha, el inicio y el fin', 'info'); return; }
+    const btn = _tmEl('ttm-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    const sel = _tmSel;
+    try {
+      const r = await apiFetch(API + '/timer/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        task_id: sel.kind === 'proyecto' ? sel.id : null, task_titulo: sel.titulo, project_nombre: sel.ctx, fecha, inicio: ini, fin,
+        notes: _tmEl('ttm-nota').value, activity_type: _tmEl('ttm-tipo').value, metadata: sel.kind === 'oportunidad' ? { oppTaskId: sel.id } : {},
+      }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'No se pudo guardar');
+      closeManual();
+      showBanner('✓ Tiempo registrado: ' + (_fmtDur(j.duration_s) || '0m') + ' en «' + sel.titulo + '»', 'success');
+      loadReport();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Guardar tiempo'; } }
+  }
   function printReport() {
     const existing = document.getElementById('tt-print-lang');
     if (existing) existing.remove();
@@ -46369,7 +46486,8 @@ const TimerModule = (() => {
     pane.innerHTML = `
       <div class="ttd-head">
         <div><h2 class="ttd-head__t">Time Tracking</h2><p class="ttd-head__s">${(_ttMember && _ttMember !== 'me') ? `Viendo el tiempo de <b>${_ttMember === 'all' ? 'todo el equipo' : esc(_ttMember)}</b> · por día, semana, mes o rango.` : 'Todas tus entradas de tiempo · por día, semana, mes o rango personalizado.'}</p></div>
-        <button class="ttd-print" onclick="TimerModule.printReport()" title="Imprimir / exportar a PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
+        <span class="ttd-head__btns"><button class="ttd-print ttd-add" onclick="TimerModule.openManual()" title="Registrar tiempo que trabajaste sin usar el cronómetro"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Agregar tiempo</button>
+        <button class="ttd-print" onclick="TimerModule.printReport()" title="Imprimir / exportar a PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button></span>
       </div>
       ${periodBar}
       ${filterBar}
@@ -46540,7 +46658,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
