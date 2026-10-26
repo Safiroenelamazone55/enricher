@@ -45801,13 +45801,16 @@ const TimerModule = (() => {
       // Si una tarea tiene subtareas abiertas se ofrecen las subtareas, no la tarea contenedora (igual que en el selector del Dashboard).
       const conSubs = new Set(tasks.filter(t => viva(t) && abierta(t) && t.parent_task_id).map(t => t.parent_task_id));
       const titPadre = new Map(tasks.map(t => [t.id, t.titulo]));
+      // «semana» / «mes» para las tareas de un periodo (y sus subtareas): así «Semana 19–25 oct» encuentra «ADQ B2B · 19–25 oct» aunque el título no diga «semana».
+      const porId = new Map(tasks.map(t => [t.id, t]));
+      const periodo = x => { if (!x || !x.fecha_inicio || !x.deadline) return ''; const d = (new Date(String(x.deadline).split('T')[0]) - new Date(String(x.fecha_inicio).split('T')[0])) / 864e5; return d <= 9 ? 'semana' : d >= 25 ? 'mes' : ''; };
       // Todas las tareas, también las completadas, archivadas o de semanas pasadas: sirven para cargar tiempo atrasado. Sin escribir nada solo se
       // ofrecen las vigentes (lista corta); las pasadas aparecen al buscar, con su etiqueta, y siempre después de las vigentes.
       _tmTasks = [
         ...tasks.map(t => {
           const arch = !!t.archivada || !!(t.parent_task_id && archIds.has(t.parent_task_id)), est = t.estado || 'pendiente';
           const etiqueta = arch ? 'Archivada' : est === 'completado' ? 'Completada' : est === 'cancelado' ? 'Cancelada' : periodoPasado(t) ? 'Periodo pasado' : '';
-          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id) };
+          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id), kw: periodo(t) || periodo(porId.get(t.parent_task_id)) };
         }),
         ...opp.map(t => { const c = t.estado === 'completada' || t.estado === 'completado'; return { kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '', etiqueta: c ? 'Completada' : '', oculta: c }; }),
       ];
@@ -45849,7 +45852,9 @@ const TimerModule = (() => {
     const menu = _tmEl('ttm-menu'); if (!menu) return;
     q = String(q || '');
     const nq = _tmNorm(q).trim();
-    const hit = _tmTasks.filter(t => nq ? _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta].join(' ')).includes(nq) : !t.oculta);
+    // Búsqueda por palabras sueltas (todas deben aparecer, en cualquier orden): «semana 19-25 oct», «adq oct», «archivada»…
+    const toks = nq.split(/\s+/).filter(Boolean);
+    const hit = _tmTasks.filter(t => { if (!toks.length) return !t.oculta; const h = _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta, t.kw].join(' ')); return toks.every(w => h.includes(w)); });
     _tmRes = hit.sort((a, b) => (a.oculta ? 1 : 0) - (b.oculta ? 1 : 0)).slice(0, 15);   // vigentes primero
     const items = _tmRes.map((t, i) => `<div class="ttm-opt" onmousedown="TimerModule.manualPick(${i})"><b>${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}</span></div>`).join('')
       + (!nq ? '<div class="ttm-opt ttm-opt--none">Escribe para buscar también tareas pasadas, completadas o archivadas.</div>' : '');
