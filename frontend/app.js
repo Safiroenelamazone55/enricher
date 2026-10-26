@@ -1102,6 +1102,16 @@ const _NOVA_TOAST_ICO = {
   error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>',
   info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="7.5" x2="12.01" y2="7.5"/></svg>',
 };
+// Resumen de las reglas por cliente al mover de Cantera al CRM (empresas excluidas / contactos que no se repiten).
+function _gateAdd(acc, d) { acc.companiesExcluded += (d && d.companiesExcluded) || 0; acc.contactsAlreadyContacted += (d && d.contactsAlreadyContacted) || 0; acc.enrollBlocked += (d && d.enrollBlocked) || 0; return acc; }
+function _gateNote(d) {
+  if (!d) return '';
+  const p = [];
+  if (d.companiesExcluded) p.push(`${d.companiesExcluded} empresa(s) omitida(s) por estar en la lista de exclusión de este cliente`);
+  const yc = (d.contactsAlreadyContacted || 0) + (d.enrollBlocked || 0);
+  if (yc) p.push(`${yc} contacto(s) no se repitieron: ya fueron contactados por este cliente o están en otra de sus secuencias`);
+  return p.length ? ' — ' + p.join(' · ') : '';
+}
 function showBanner(msg, type) {
   msg = String(msg == null ? '' : msg).replace(/^[\s✓✔✅⚠️❌ℹ️•·]+/u, '');
   const el = document.createElement('div');
@@ -7858,7 +7868,7 @@ const CanteraModule = (() => {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       closePromote();
-      showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM${d.enrolled ? ` — ${d.enrolled} enrolado(s) en la secuencia` : ''}`, 'success');
+      showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM${d.enrolled ? ` — ${d.enrolled} enrolado(s) en la secuencia` : ''}${_gateNote(d)}`, 'success');
       _coSel = new Set();
       backToList(); await load(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Mover al CRM'; } }
@@ -7920,7 +7930,7 @@ const CanteraModule = (() => {
       if (!res.ok) throw new Error(d.error || 'Error');
       closeSendSeq();
       _coSel = new Set();
-      showBanner(`✓ ${d.companiesPromoted} empresa(s), ${d.contactsPromoted} contacto(s) movidos · ${d.enrolled} enrolado(s) en la secuencia`, 'success');
+      showBanner(`✓ ${d.companiesPromoted} empresa(s), ${d.contactsPromoted} contacto(s) movidos · ${d.enrolled} enrolado(s) en la secuencia${_gateNote(d)}`, 'success');
       await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
@@ -8496,16 +8506,16 @@ const CanteraMesaModule = (() => {
     const campId = document.getElementById('mesa-pr-camp')?.value || null;
     const includeResp = !!document.getElementById('mesa-pr-resp')?.checked;
     const groups = _groupByBatch([..._coSel]);
-    let companiesPromoted = 0, contactsPromoted = 0;
+    let companiesPromoted = 0, contactsPromoted = 0; const _gt = { companiesExcluded: 0, contactsAlreadyContacted: 0, enrollBlocked: 0 };
     try {
       for (const [batchId, ids] of Object.entries(groups)) {
         const res = await apiFetch(`${API}/cantera/batches/${batchId}/promote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp, company_ids: ids }) });
         const d = await res.json();
         if (!res.ok) continue;
-        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0;
+        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0; _gateAdd(_gt, d);
       }
       document.getElementById('mesa-promote-modal')?.remove();
-      showBanner(`✓ ${companiesPromoted} empresa(s) y ${contactsPromoted} contacto(s) movidos al CRM`, 'success');
+      showBanner(`✓ ${companiesPromoted} empresa(s) y ${contactsPromoted} contacto(s) movidos al CRM${_gateNote(_gt)}`, 'success');
       _coSel = new Set();
       await _refresh();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -8545,16 +8555,16 @@ const CanteraMesaModule = (() => {
     const campId = document.getElementById('mesa-sq-camp')?.value || null;
     const prioridades = [...document.querySelectorAll('.mesa-seq-prio:checked')].map(el => parseInt(el.value));
     const groups = _groupByBatch([..._coSel]);
-    let companiesPromoted = 0, contactsPromoted = 0, enrolled = 0;
+    let companiesPromoted = 0, contactsPromoted = 0, enrolled = 0; const _gt = { companiesExcluded: 0, contactsAlreadyContacted: 0, enrollBlocked: 0 };
     try {
       for (const [batchId, ids] of Object.entries(groups)) {
         const res = await apiFetch(`${API}/cantera/batches/${batchId}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: ids, outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades }) });
         const d = await res.json();
         if (!res.ok) continue;
-        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0; enrolled += d.enrolled || 0;
+        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0; enrolled += d.enrolled || 0; _gateAdd(_gt, d);
       }
       document.getElementById('mesa-seq-modal')?.remove();
-      showBanner(`✓ ${companiesPromoted} empresa(s), ${contactsPromoted} contacto(s) movidos · ${enrolled} enrolado(s) en la secuencia`, 'success');
+      showBanner(`✓ ${companiesPromoted} empresa(s), ${contactsPromoted} contacto(s) movidos · ${enrolled} enrolado(s) en la secuencia${_gateNote(_gt)}`, 'success');
       _coSel = new Set();
       await _refresh();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
