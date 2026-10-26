@@ -2646,6 +2646,9 @@ async function initDb() {
     // Contactos que llegaron en un archivo de «Solo contactos» y no encontraron su empresa: quedan en el borrador SIN empresa (company_id NULL)
     // con el nombre de empresa que traía el archivo, para vincularlos a mano o eliminarlos desde la pestaña Información.
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS empresa_archivo TEXT NOT NULL DEFAULT '';`);
+    // Prioridad por CARGO (services/canteraCargoService.js): número por cargo existente en el borrador + quién puso la prioridad de cada contacto.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS cargo_ranks JSONB NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS prioridad_origen TEXT NOT NULL DEFAULT '';`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {

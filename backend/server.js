@@ -8229,6 +8229,30 @@ app.post('/api/cantera/batches/:id/orphan-contacts/delete', requireAuth, async (
     res.json({ ok: true, eliminados: r.rowCount || 0 });
   } catch (e) { console.error('[cantera] orphan delete', e.message); res.status(500).json({ error: 'No se pudo eliminar' }); }
 });
+// Prioridad por cargo: lista de cargos que ya existen en el borrador (con el número que tiene cada uno) y aplicar los números elegidos.
+app.get('/api/cantera/batches/:id/cargos', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, svc = require('./services/canteraCargoService');
+    const { rows: [b] } = await pool.query('SELECT cargo_ranks FROM cantera_batches WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+    if (!b) return res.status(404).json({ error: 'Borrador no encontrado' });
+    const ranks = (b.cargo_ranks && typeof b.cargo_ranks === 'object') ? b.cargo_ranks : {};
+    const cargos = (await svc.listarCargos(pool, req.params.id, uid)).map(c => ({ ...c, rank: ranks[c.key] > 0 ? Number(ranks[c.key]) : null }));
+    res.json({ cargos });
+  } catch (e) { console.error('[cantera] cargos GET', e.message); res.status(500).json({ error: 'No se pudieron cargar los cargos' }); }
+});
+app.put('/api/cantera/batches/:id/cargos', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, svc = require('./services/canteraCargoService');
+    const raw = (req.body && req.body.ranks && typeof req.body.ranks === 'object') ? req.body.ranks : {};
+    const ranks = {};
+    for (const [k, v] of Object.entries(raw).slice(0, 5000)) { const n = parseInt(v, 10); if (n >= 1 && n <= 99 && String(k).trim()) ranks[String(k).trim()] = n; }
+    const up = await pool.query('UPDATE cantera_batches SET cargo_ranks=$1::jsonb WHERE id=$2 AND user_id=$3', [JSON.stringify(ranks), req.params.id, uid]);
+    if (!up.rowCount) return res.status(404).json({ error: 'Borrador no encontrado' });
+    const r = await svc.asignarPorCargo(pool, req.params.id, uid);
+    try { await require('./services/canteraBuyerService').asignarBuyers(pool, req.params.id, uid, null); } catch (_) {}   // «Buyer según la empresa» rellena los números libres
+    res.json({ ok: true, ...r });
+  } catch (e) { console.error('[cantera] cargos PUT', e.message); res.status(500).json({ error: 'No se pudieron aplicar las prioridades' }); }
+});
 app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
@@ -8650,6 +8674,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     `, [batchId]);
   } catch (e) { console.error('[cantera] auto-prioridad import', e.message); }
   try { await require('./services/canteraGeoService').derivarUbicacion(pool, batchId); } catch (e) { console.error('[cantera] ubicación import', e.message); }
+  try { await require('./services/canteraCargoService').asignarPorCargo(pool, batchId, uid); } catch (e) { console.error('[cantera] cargos import', e.message); }
   try { await require('./services/canteraBuyerService').asignarBuyers(pool, batchId, uid, null); } catch (e) { console.error('[cantera] buyers import', e.message); }
   job.running = false; job.summary = summary;
 });
@@ -9637,7 +9662,7 @@ app.patch('/api/cantera/batches/:id/contacts/:contactId/prioridad', requireAuth,
   if (!Number.isInteger(prioridad) || prioridad < 0) return res.status(400).json({ error: 'Prioridad inválida' });
   try {
     const { rows } = await pool.query(
-      `UPDATE cantera_contacts SET prioridad=$1 WHERE id=$2 AND batch_id=$3 AND user_id=$4 RETURNING *`,
+      `UPDATE cantera_contacts SET prioridad=$1, prioridad_auto=false, prioridad_origen='' WHERE id=$2 AND batch_id=$3 AND user_id=$4 RETURNING *`,
       [prioridad, req.params.contactId, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
     res.json(rows[0]);

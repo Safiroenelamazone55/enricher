@@ -6616,8 +6616,71 @@ const CanteraModule = (() => {
       _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // ── Prioridad por cargo (Información) ──
+  // Lista los cargos que YA existen en los contactos del borrador; la usuaria les pone un número (1, 2, 3…) y cada empresa toma como 1.º
+  // al contacto cuyo cargo tenga el número más bajo. Lo puesto a mano nunca se pisa (ver services/canteraCargoService.js).
+  let _cargos = null, _cargoRanks = {}, _cargoQ = '', _cargoSum = null;
+  const _cgN = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  let _cargoBatch = null;
+  async function _cargosLoad() {
+    if (!_current) return;
+    if (_cargoBatch !== _current.id) { _cargoBatch = _current.id; _cargoSum = null; _cargoQ = ''; }   // otro borrador: sin resumen ni búsqueda del anterior
+    try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos`); _cargos = r.ok ? ((await r.json()).cargos || []) : []; } catch (_) { _cargos = []; }
+    _cargoRanks = {}; _cargos.forEach(c => { if (c.rank) _cargoRanks[c.key] = c.rank; });
+    const box = document.getElementById('cant-cargos'); if (box) box.outerHTML = _cargosHtml();
+  }
+  function _cargosListHtml() {
+    const L = _cargos || [], q = _cgN(_cargoQ).trim();
+    const idx = L.map((c, i) => i);
+    const ranked = idx.filter(i => _cargoRanks[L[i].key] > 0).sort((a, b) => _cargoRanks[L[a].key] - _cargoRanks[L[b].key] || L[b].contactos - L[a].contactos);
+    const rest = idx.filter(i => !(_cargoRanks[L[i].key] > 0) && (!q || _cgN(L[i].label).includes(q)));
+    const shown = q ? rest.slice(0, 60) : rest.slice(0, L.length <= 90 ? 90 : 25);   // pocos cargos: se ven todos; muchos: los más frecuentes + buscador
+    const hidden = rest.length - shown.length;
+    const row = i => { const c = L[i], r = _cargoRanks[c.key] || '';
+      return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #F1EFEB">
+        <input type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)" style="width:58px;padding:6px 8px;border:1px solid ${r ? '#A7D7BE' : '#D9D6CF'};background:${r ? '#EEF8F2' : '#fff'};border-radius:8px;font:inherit;text-align:center">
+        <div style="flex:1;min-width:0"><b>${esc(c.label)}</b></div>
+        <span class="cant-hint" style="margin:0;white-space:nowrap">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span></div>`; };
+    return `${ranked.map(row).join('')}${shown.map(row).join('')}` +
+      (hidden > 0 ? `<div class="cant-hint" style="margin:8px 0 0">Hay ${hidden} cargo(s) más${q ? '' : ' (menos frecuentes)'}: usa el buscador para encontrarlos.</div>` : '') +
+      (!ranked.length && !shown.length ? '<div class="cant-hint" style="margin:8px 0 0">Ningún cargo coincide con la búsqueda.</div>' : '');
+  }
+  function _cargosHtml() {
+    if (!_cargos || !_cargos.length) return '<div id="cant-cargos"></div>';
+    const n = Object.keys(_cargoRanks).length, s = _cargoSum;
+    return `<div class="cant-info-block" id="cant-cargos">
+      <h3 class="cant-info-block__h">Prioridad por cargo</h3>
+      <div class="cant-hint" style="margin:0 0 8px">Estos son los cargos que ya tienen los contactos de este borrador (${_cargos.length}). Ponles un número: 1 = el primero al que contactar, luego 2, 3… Cada empresa toma como 1.º al contacto cuyo cargo tenga el número más bajo. Los cargos sin número no se priorizan, y lo que hayas puesto a mano no se toca.</div>
+      <input placeholder="Buscar un cargo…" value="${esc(_cargoQ)}" oninput="CanteraModule.cargoSearch(this.value)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff;margin-bottom:6px">
+      <div id="cant-cg-list">${_cargosListHtml()}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+        ${n ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.cargoClear()">Quitar todos los números</button>` : ''}
+        <button class="btn btn--primary btn--sm" type="button" onclick="CanteraModule.cargoApply()">Aplicar prioridades${n ? ` (${n} cargo${n > 1 ? 's' : ''})` : ''}</button>
+      </div>
+      ${s ? `<div class="cant-hint" style="margin:10px 0 0;color:#065F46">✓ ${s.asignados} contacto(s) con prioridad · ${s.empresasConPrimero} de ${s.empresasConContactos} empresa(s) ya tienen un 1.º contacto${s.empresasSinPrimero ? ` · ${s.empresasSinPrimero} sin ninguno (ninguno de sus cargos tiene número)` : ''}</div>` : ''}
+    </div>`;
+  }
+  function cargoSearch(q) { _cargoQ = q || ''; const l = document.getElementById('cant-cg-list'); if (l) l.innerHTML = _cargosListHtml(); }
+  function cargoRank(i, v) {
+    const c = (_cargos || [])[i]; if (!c) return;
+    const n = parseInt(v, 10);
+    if (n >= 1 && n <= 99) _cargoRanks[c.key] = n; else delete _cargoRanks[c.key];
+    const l = document.getElementById('cant-cg-list'); if (l) l.innerHTML = _cargosListHtml();
+  }
+  async function cargoApply() {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ranks: _cargoRanks }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudieron aplicar');
+      _cargoSum = d;
+      showBanner(`✓ Prioridades aplicadas · ${d.empresasConPrimero} de ${d.empresasConContactos} empresa(s) con 1.º contacto`, 'success');
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function cargoClear() { if (!confirm('¿Quitar todos los números de cargo? Las prioridades calculadas por cargo se borran; las que pusiste a mano se conservan.')) return; _cargoRanks = {}; cargoApply(); }
   function _infoHtml(calificadas) {
-    setTimeout(_orphansLoad, 0);
+    setTimeout(_orphansLoad, 0); setTimeout(_cargosLoad, 0);
     const imp = _current.import_stats || {};
     const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
     // Desglose paso 1 — se calcula del lado del cliente (ya está cargado en
@@ -6627,6 +6690,7 @@ const CanteraModule = (() => {
     const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     return `<div class="cant-section">
       ${_orphansHtml()}
+      ${_cargosHtml()}
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Estado actual del borrador</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">
@@ -8136,7 +8200,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cargoSearch, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
