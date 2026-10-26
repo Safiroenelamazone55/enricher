@@ -5438,10 +5438,16 @@ const CanteraModule = (() => {
     { g: 'Contacto', opts: [
       ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
       ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'],
-      ['ubicacion', 'Ubicación del contacto'], ['conexion_grado', 'Grado de conexión'],
+      ['ubicacion', 'Ubicación del contacto'], ['ct_ciudad', 'Contacto · Ciudad'], ['ct_region', 'Contacto · Estado / Región'], ['ct_pais', 'Contacto · País'],
+      ['conexion_grado', 'Grado de conexión'],
       ['premium', 'Cuenta Premium'], ['antiguedad_cargo', 'Antigüedad en el cargo'],
       ['conexiones_mutuas', 'Conexiones mutuas'], ['cambio_reciente', 'Cambió de trabajo recientemente'],
       ['publico_reciente', 'Publicó en LinkedIn recientemente'], ['sigue_empresa', 'Sigue tu empresa'],
+    ] },
+    { g: 'Idiomas del contacto', opts: [
+      ['idioma', 'Idioma (uno o varios en una columna)'],
+      ['idioma_1', 'Idioma 1'], ['nivel_1', 'Nivel del idioma 1'], ['idioma_2', 'Idioma 2'], ['nivel_2', 'Nivel del idioma 2'],
+      ['idioma_3', 'Idioma 3'], ['nivel_3', 'Nivel del idioma 3'], ['idioma_4', 'Idioma 4'], ['nivel_4', 'Nivel del idioma 4'],
     ] },
     { g: 'Empresa (se crea y enlaza)', opts: [
       ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
@@ -5499,6 +5505,14 @@ const CanteraModule = (() => {
   function _cGuess(headerRaw, personFile) {
     const h = _cNorm(headerRaw); if (!h) return '';
     // Sales Navigator, empleados en LinkedIn y estado/región tienen campo propio (si no, se confundirían con website/LinkedIn/tamaño).
+    // «Title Company» / «Title Match» no son el cargo y «Languages Count» no es un idioma: se conservan como extra.
+    if (/^title (company|match)$/.test(h) || /^languages? count$/.test(h)) return '';
+    // Idiomas del contacto (Language 1-4 / Level 1-4 del export de Sales Navigator, o una columna «Idioma» suelta).
+    { const mi = h.match(/^(language|idioma)\s*([1-4])$/); if (mi) return 'idioma_' + mi[2]; }
+    { const mn = h.match(/^(level|nivel)\s*([1-4])$/); if (mn) return 'nivel_' + mn[2]; }
+    if (/^(languages|idiomas|language|idioma)$/.test(h)) return 'idioma';
+    // Ubicación PROPIA del contacto (Lead City / State / Country): antes «Lead Country» caía en el país de la EMPRESA.
+    { const ml = h.match(/^(lead|contact|person|contacto|persona)\s+(city|ciudad|state|region|provincia|estado|country|pais)$/); if (ml) return /city|ciudad/.test(ml[2]) ? 'ct_ciudad' : /country|pais/.test(ml[2]) ? 'ct_pais' : 'ct_region'; }
     if (/sales navigator|sales nav\b/.test(h)) return (/^(company|empresa|account|org|organization)\b/.test(h) || !personFile) ? 'co_linkedin_sales_nav' : 'linkedin_sales_nav';
     if (/employees on linkedin|linkedin employees|empleados en linkedin/.test(h)) return 'co_empleados_linkedin';
     if (/^(company|empresa|account)\s+(state|region|provincia|estado)$/.test(h)) return 'co_region';

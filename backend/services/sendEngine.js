@@ -32,6 +32,12 @@ function stepVariants(st) {
   if (v.length) return v;
   return [{ nombre: 'A', cuerpo: st.plantilla || '', targets: [] }];
 }
+// Idiomas que habla el contacto (principal primero). lm_contacts.idiomas = [{idioma, nivel}] (jsonb); tolera texto JSON.
+function langList(ctx) {
+  let a = ctx && ctx.idiomas;
+  if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) { a = []; } }
+  return (Array.isArray(a) ? a : []).map(x => (x && typeof x === 'object') ? x.idioma : x).filter(Boolean);
+}
 function pickVariant(st, ctx) {
   const vars = stepVariants(st);
   if (vars.length <= 1) return vars[0];
@@ -40,7 +46,11 @@ function pickVariant(st, ctx) {
     const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const val = nz(ctx[st.variant_field]);
     // Varios mensajes del MISMO idioma = test A/B dentro de ese idioma (se reparten al azar de forma estable por contacto)
-    const hits = vars.filter(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
+    let hits = vars.filter(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
+    // Segmento por idioma: si no hay mensaje en su idioma principal, se prueba con los demás idiomas que habla (en orden).
+    if (!hits.length && st.variant_field === 'idioma') {
+      for (const l of langList(ctx)) { hits = vars.filter(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === nz(l))); if (hits.length) break; }
+    }
     if (hits.length > 1) return hits[Math.abs((ctx.contact_id || 0) + (st.id || 0)) % hits.length];
     return hits[0] || vars[0];
   }
@@ -63,7 +73,9 @@ function idiomaGap(step, enr) {
   const lang = String(enr.idioma || '').trim(); if (!lang) return '';
   const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const vars = stepVariants(step);
-  return vars.some(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === nz(lang))) ? '' : lang;
+  const cubre = l => vars.some(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === nz(l)));
+  // Basta con que el paso tenga mensaje en CUALQUIER idioma que el contacto habla.
+  return (cubre(lang) || langList(enr).some(cubre)) ? '' : lang;
 }
 
 // ── Campos personalizados como variables: cada campo con nombre (Configuración → Campos personalizados) se usa como {{nombre_del_campo}} ──
@@ -410,7 +422,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   const { rows: [enr] } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma,
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma, k.idiomas,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
            s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id
       FROM lm_contact_sequences cs
@@ -983,7 +995,7 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status, k.idioma,
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status, k.idioma, k.idiomas,
            k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante
       FROM lm_contact_sequences cs
       JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'

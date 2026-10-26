@@ -2635,6 +2635,14 @@ async function initDb() {
     // separado, no solo "borrar todo y volver a cargar".
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS import_id TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS import_id TEXT NOT NULL DEFAULT '';`);
+    // Ubicación e idiomas PROPIOS del contacto (export de Sales Navigator: Lead City/State/Country, Language 1-4 + Level 1-4).
+    // idioma = el principal (nativo/bilingüe primero); idiomas = lista ordenada [{idioma, nivel}] para elegir el mensaje de la secuencia.
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS ciudad  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS region  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS pais    TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS idioma  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS idiomas JSONB NOT NULL DEFAULT '[]';`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS idiomas JSONB NOT NULL DEFAULT '[]';`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {

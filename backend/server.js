@@ -7082,7 +7082,7 @@ async function _pendingNoEmailRows(pool, userId, seqId) {
   if (!steps.length) return [];
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.contact_id, cs.paso, cs.next_action_at,
-           k.nombre, k.apellido, k.cargo, k.linkedin, co.linkedin_sales_nav AS company_linkedin_sales_nav, k.ciudad, k.pais, k.idioma AS idioma,
+           k.nombre, k.apellido, k.cargo, k.linkedin, co.linkedin_sales_nav AS company_linkedin_sales_nav, k.ciudad, k.pais, k.idioma AS idioma, k.idiomas,
            k.disposition, k.li_aceptado_at, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -8114,6 +8114,29 @@ app.delete('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 // y terminaba bien del lado del servidor (reportado 2026-09-06: Jenny vio el
 // error pero sus 1242 empresas sí quedaron cargadas correctamente).
 const _canteraImportJobs = new Map(); // batchId -> { running, done, total, summary, error }
+// Idiomas del contacto desde el export de Sales Navigator (Language 1-4 + Level 1-4) o una columna «Idioma» suelta.
+// principal = primer idioma con nivel nativo/bilingüe (si no hay, el primero de la lista); lista = principal primero y luego el resto en el
+// orden del archivo. Los nombres se normalizan al de Nova (English → Inglés) para que coincidan con los mensajes por idioma de la secuencia.
+function _canteraLangs(f) {
+  const geo = require('./services/geoService');
+  const lista = [];
+  for (let i = 1; i <= 4; i++) {
+    const raw = _lmS(f['idioma_' + i]); if (!raw) continue;
+    const nombre = geo.normalizeLanguage(raw) || raw;
+    if (lista.some(l => l.idioma === nombre)) continue;
+    lista.push({ idioma: nombre, nivel: _lmS(f['nivel_' + i]) });
+  }
+  if (!lista.length && _lmS(f.idioma)) {
+    for (const raw of _lmS(f.idioma).split(/[;,/|]+/).map(x => x.trim()).filter(Boolean)) {
+      const nombre = geo.normalizeLanguage(raw) || raw;
+      if (!lista.some(l => l.idioma === nombre)) lista.push({ idioma: nombre, nivel: '' });
+    }
+  }
+  const nat = lista.find(l => /nativ|bilingual|bilingue/i.test(String(l.nivel || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+  const principal = (nat || lista[0] || {}).idioma || '';
+  const orden = principal ? [lista.find(l => l.idioma === principal), ...lista.filter(l => l.idioma !== principal)] : lista;
+  return { principal, lista: orden };
+}
 app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
@@ -8203,6 +8226,11 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'recently changed jobs': 'cambio_reciente',
       'posted on linkedin recently': 'publico_reciente',
       'follows your company': 'sigue_empresa',
+      // Ubicación e idiomas del CONTACTO (no de la empresa).
+      'lead city': 'ct_ciudad', 'lead state': 'ct_region', 'lead country': 'ct_pais',
+      'language 1': 'idioma_1', 'language 2': 'idioma_2', 'language 3': 'idioma_3', 'language 4': 'idioma_4',
+      'level 1': 'nivel_1', 'level 2': 'nivel_2', 'level 3': 'nivel_3', 'level 4': 'nivel_4',
+      'idioma': 'idioma', 'idiomas': 'idioma',
     };
     // Archivo de PERSONAS (trae nombre/apellido/cargo/email): una columna "Ciudad"/"City" sin prefijo de empresa es la ubicación de la persona.
     // Mapearla a la empresa hacía que la empresa heredara la ciudad del LinkedIn del contacto (Murcia, Valencia, Aruba…) aunque su oficina
@@ -8428,6 +8456,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
         const parts = _lmS(f.nombre_completo).split(/\s+/);
         nombre = parts.shift() || ''; apellido = parts.join(' ');
       }
+      const _lg = _canteraLangs(f);
       if (contactKey && contactCache.has(contactKey)) {
         // Contacto ya existente (mismo LinkedIn/email) -- se completan solo los
         // campos que estén vacíos, igual que ya hace la empresa, en vez de
@@ -8441,18 +8470,25 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
             email = CASE WHEN email='' THEN $4 ELSE email END,
             linkedin = CASE WHEN linkedin='' THEN $5 ELSE linkedin END,
             ubicacion = CASE WHEN ubicacion='' THEN $6 ELSE ubicacion END,
-            linkedin_sales_nav = CASE WHEN linkedin_sales_nav='' THEN $8 ELSE linkedin_sales_nav END
-          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId, _lmCleanUrlish(f.linkedin_sales_nav)]);
+            linkedin_sales_nav = CASE WHEN linkedin_sales_nav='' THEN $8 ELSE linkedin_sales_nav END,
+            ciudad = CASE WHEN ciudad='' THEN $9 ELSE ciudad END,
+            region = CASE WHEN region='' THEN $10 ELSE region END,
+            pais = CASE WHEN pais='' THEN $11 ELSE pais END,
+            idioma = CASE WHEN idioma='' THEN $12 ELSE idioma END,
+            idiomas = CASE WHEN idiomas = '[]'::jsonb THEN $13::jsonb ELSE idiomas END
+          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId, _lmCleanUrlish(f.linkedin_sales_nav), _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista)]);
         summary.contactsUpdated++;
         continue;
       }
       const ctIns = await pool.query(`
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
-          ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa,import_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id
+          ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa,import_id,
+          ciudad,region,pais,idioma,idiomas)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb) RETURNING id
       `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
-          _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId]);
+          _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId,
+          _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista)]);
       if (_lmCleanUrlish(f.linkedin_sales_nav)) await pool.query(`UPDATE cantera_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [_lmCleanUrlish(f.linkedin_sales_nav), ctIns.rows[0].id]);
       if (contactKey) contactCache.set(contactKey, ctIns.rows[0].id);
       summary.contactsCreated++;
@@ -9765,10 +9801,11 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
             INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,ciudad,region,pais,seniority,departamento)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id
           `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
-              (k.puesto_estado === 'decide' || (k.puesto_estado === 'pendiente' && k.prioridad === 1)) ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, _loc.ciudad, _loc.region, _loc.pais, k.seniority || '', k.departamento || '']);
+              (k.puesto_estado === 'decide' || (k.puesto_estado === 'pendiente' && k.prioridad === 1)) ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, k.seniority || '', k.departamento || '']);
           contactId = ins.rows[0].id;
         }
-        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
+        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, contactId]);
+        if (k.idioma || (Array.isArray(k.idiomas) && k.idiomas.length)) await cl.query(`UPDATE lm_contacts SET idioma = CASE WHEN COALESCE(idioma,'')='' THEN $1 ELSE idioma END, idiomas = CASE WHEN idiomas IS NULL OR idiomas = '[]'::jsonb THEN $2::jsonb ELSE idiomas END WHERE id=$3`, [k.idioma || '', JSON.stringify(k.idiomas || []), contactId]);
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (dup) {
@@ -9894,10 +9931,11 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
             INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,ciudad,region,pais,seniority,departamento)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id
           `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
-              k.prioridad === 1 ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, _loc.ciudad, _loc.region, _loc.pais, k.seniority || '', k.departamento || '']);
+              k.prioridad === 1 ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId, k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, k.seniority || '', k.departamento || '']);
           contactId = ins.rows[0].id;
         }
-        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
+        if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, contactId]);
+        if (k.idioma || (Array.isArray(k.idiomas) && k.idiomas.length)) await cl.query(`UPDATE lm_contacts SET idioma = CASE WHEN COALESCE(idioma,'')='' THEN $1 ELSE idioma END, idiomas = CASE WHEN idiomas IS NULL OR idiomas = '[]'::jsonb THEN $2::jsonb ELSE idiomas END WHERE id=$3`, [k.idioma || '', JSON.stringify(k.idiomas || []), contactId]);
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (dup) {
@@ -10354,7 +10392,7 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
         const { rows: drafts } = await pool.query(`
           SELECT m.id, m.contact_id,
                  k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.idioma,
+                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.idioma, k.idiomas,
                  co.nombre AS company_nombre
             FROM lm_messages m
             JOIN lm_contacts k ON k.id=m.contact_id
