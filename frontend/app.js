@@ -46097,7 +46097,17 @@ const TimerModule = (() => {
           ${legendHtml}` : `<div class="ttp-empty">${esc(t.empty)}</div>`}
         <div class="ttp-footer"><span>${companyName ? `<strong>${esc(companyName)}</strong> · ` : ''}${esc(t.title)}</span><span>${esc(t.generated)} ${esc(fechaGen)}</span></div>
       </div>`;
-    setTimeout(() => window.print(), 80);
+    // Nombre del PDF: el navegador propone el título de la página al guardar, así que se pone «Cliente - Proyecto - Semana … - Miembro» mientras se imprime
+    // (solo lo que aplica: sin filtro de cliente o proyecto, esas partes se omiten) y luego se restaura el título.
+    const _fn = x => String(x || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const _dias = Math.round((range.end - range.start) / 86400000);
+    const _esSemana = _ttPeriod === 'week' || (_ttPeriod === 'custom' && _dias >= 6 && _dias <= 7 && range.start.getDay() === 1);
+    const _partes = [_ttClient !== 'all' ? _ttClient : '', _ttProject !== 'all' ? _ttProject : '', (_esSemana ? _wkWord(lang) + ' ' : '') + periodLabel, memberLabel].map(_fn).filter(Boolean);
+    const _titPrev = document.title;
+    const _restaurar = () => { document.title = _titPrev; window.removeEventListener('afterprint', _restaurar); };
+    window.addEventListener('afterprint', _restaurar);
+    document.title = (_partes.join(' - ') || t.title).slice(0, 150);
+    setTimeout(() => { window.print(); setTimeout(_restaurar, 120000); }, 80);
   }
   function navPeriod(dir) {
     if (_ttPeriod === 'custom') return;
