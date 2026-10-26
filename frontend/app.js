@@ -5379,6 +5379,8 @@ const CanteraModule = (() => {
   // explícito 2026-09-07: "aquí solo puedo filtrar por dos opciones").
   let _minContactos = 0;
   let _sinPrioridad = false;
+  // Nº de contactos por empresa: varias opciones a la vez (1, 2, 3, 4, 5 o más, sin contactos), cada una con Incluir / Excluir.
+  let _nContFiltro = new Set(), _nContExcl = new Set();
   let _auditoriaFiltro = '';
   // Más filtros avanzados — pedido explícito 2026-09-07: "hay muchos otros
   // campos que podrían considerarse un criterio para filtrar, no lo veo".
@@ -5918,6 +5920,7 @@ const CanteraModule = (() => {
       sessionStorage.setItem(CANT_STATE_KEY, JSON.stringify({
         batchId: _current.id, step: _step,
         tierFiltro: [..._tierFiltro], tierExclFiltro: [..._tierExclFiltro], prioFiltro: [..._prioFiltro],
+        nContFiltro: [..._nContFiltro], nContExcl: [..._nContExcl],
         minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
         paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
         industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
@@ -5937,6 +5940,7 @@ const CanteraModule = (() => {
     _step = saved.step || 1;
     _tierFiltro = new Set(saved.tierFiltro || []); _tierExclFiltro = new Set(saved.tierExclFiltro || []); _prioFiltro = new Set(saved.prioFiltro || []);
     _minContactos = saved.minContactos || 0; _sinPrioridad = !!saved.sinPrioridad; _auditoriaFiltro = saved.auditoriaFiltro || '';
+    _nContFiltro = new Set(saved.nContFiltro || []); _nContExcl = new Set(saved.nContExcl || []);
     _paisFiltro = new Set(saved.paisFiltro || []); _paisExclFiltro = new Set(saved.paisExclFiltro || []);
     _industriaFiltro = new Set(saved.industriaFiltro || []); _industriaExclFiltro = new Set(saved.industriaExclFiltro || []);
     _tamanoFiltro = new Set(saved.tamanoFiltro || []); _tamanoExclFiltro = new Set(saved.tamanoExclFiltro || []);
@@ -6050,6 +6054,7 @@ const CanteraModule = (() => {
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
     _cantPageIdx = 0; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
+    _nContFiltro = new Set(); _nContExcl = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
     _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set(); _enCrmFiltro = new Set();
     _paso1Filtro = ''; _dominioQ = '';
@@ -6207,6 +6212,8 @@ const CanteraModule = (() => {
       .filter(c => skip === 'tier' || _tierKeysFor(c).every(k => !_tierExclFiltro.has(k)))
       .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
       .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
+      .filter(c => skip === 'ncont' || !_nContFiltro.size || _nContFiltro.has(_nContKey(c)))
+      .filter(c => skip === 'ncont' || !_nContExcl.has(_nContKey(c)))
       .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
       .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
       .filter(c => skip === 'pais' || !_paisFiltro.size || _paisFiltro.has(c.pais))
@@ -6492,11 +6499,11 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         ${_deBanner()}
         ${(() => {
-          const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
+          const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _nContFiltro.size || _nContExcl.size || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_nContLabel()}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
           <div class="cant-results-actions">
             <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
             ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
@@ -6813,6 +6820,23 @@ const CanteraModule = (() => {
         _filteredCompaniesList('tier').filter(c => _tierKeysFor(c).includes(TIER_DESCARTADO)).length)
       || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers definidos todavía</div>';
   }
+  // ── Filtro «Nº de contactos» ──
+  const _NCONT = [['0', 'Sin contactos'], ['1', '1 contacto'], ['2', '2 contactos'], ['3', '3 contactos'], ['4', '4 contactos'], ['5+', '5 o más contactos']];
+  function _nContKey(c) { const n = c.contactos != null ? Number(c.contactos) : (_contactsByCompany[c.id] || []).length; return n >= 5 ? '5+' : String(n); }
+  function _nContLabel() {
+    const nm = k => (_NCONT.find(x => x[0] === k) || [k, k])[1].replace(' contactos', '').replace(' contacto', '').replace(' o más', '+');
+    return (_nContFiltro.size ? ` · Nº de contactos: ${[..._nContFiltro].map(nm).join(', ')}` : '') + (_nContExcl.size ? ` · sin los de ${[..._nContExcl].map(nm).join(', ')} contactos` : '');
+  }
+  function _nContPanelRows() {
+    const base = _filteredCompaniesList('ncont');
+    const atajos = `<div class="cant-inrow" onclick="event.stopPropagation()" style="gap:6px;flex-wrap:wrap;padding:6px 10px"><span class="cant-inrow__n" style="margin:0">Rápido:</span>
+      ${[2, 3, 4].map(n => `<button type="button" class="cant-inrow__op" onclick="CanteraModule.setNContMin(${n})">${n} o más</button>`).join('')}<button type="button" class="cant-inrow__op" onclick="CanteraModule.setNContMin(0)">Todas</button></div>`;
+    return _NCONT.map(([k, l]) => _incExcRow(l, _nContFiltro.has(k), _nContExcl.has(k), `CanteraModule.toggleNContFiltro('${k}')`, `CanteraModule.toggleNContExcl('${k}')`, base.filter(c => _nContKey(c) === k).length)).join('') + atajos;
+  }
+  function toggleNContFiltro(k) { if (_nContFiltro.has(k)) _nContFiltro.delete(k); else { _nContFiltro.add(k); _nContExcl.delete(k); } _cantPageIdx = 0; _paint(); _refreshSubpanel('ncont'); }
+  function toggleNContExcl(k) { if (_nContExcl.has(k)) _nContExcl.delete(k); else { _nContExcl.add(k); _nContFiltro.delete(k); } _cantPageIdx = 0; _paint(); _refreshSubpanel('ncont'); }
+  // «2 o más», «3 o más»…: marca de una vez todas las opciones desde ese número (0 = quitar el filtro).
+  function setNContMin(n) { _nContExcl = new Set(); _nContFiltro = new Set(n ? ['1', '2', '3', '4', '5+'].filter(k => (k === '5+' ? 5 : +k) >= n) : []); _cantPageIdx = 0; _paint(); _refreshSubpanel('ncont'); }
   function _paisPanelRows() {
     const base = _filteredCompaniesList('pais');
     return _distinctVals('pais').map(v =>
@@ -6838,7 +6862,7 @@ const CanteraModule = (() => {
     // primera que encuentre. Pedido explícito 2026-10-01: "ya edité y guardé
     // el nombre... debería actualizarse incluso sin hacer refresh".
     const els = document.querySelectorAll('.cp-subpanel-' + field); if (!els.length) return;
-    const fns = { tier: _tierPanelRows, pais: _paisPanelRows, industria: _industriaPanelRows, tamano: _tamanoPanelRows, guardados: _guardadosPanelRows };
+    const fns = { tier: _tierPanelRows, ncont: _nContPanelRows, pais: _paisPanelRows, industria: _industriaPanelRows, tamano: _tamanoPanelRows, guardados: _guardadosPanelRows };
     if (fns[field]) els.forEach(el => { el.innerHTML = fns[field](); });
   }
   function _guardadosPanelRows() {
@@ -6905,9 +6929,8 @@ const CanteraModule = (() => {
     ).join('');
     // Filtros avanzados extra — mismo patrón que Mesa de trabajo (pedido
     // explícito 2026-09-07: "aquí solo puedo filtrar por dos opciones").
-    const numContactosPanel = [
-      { n: 2, label: '2 o más contactos' }, { n: 3, label: '3 o más contactos' }, { n: 4, label: '4 o más contactos' },
-    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="cant-num-contactos" ${_minContactos === n ? 'checked' : ''} onclick="CanteraModule.setMinContactos(${n})"> ${label}</label>`).join('')
+    // Nº de contactos: varias opciones a la vez (rangos), cada una con Incluir / Excluir, con el conteo según el resto de filtros.
+    const numContactosPanel = `<div class="cp-subpanel-ncont">${_nContPanelRows()}</div>`
       + `<label class="cant-colchk"><input type="checkbox" ${_sinPrioridad ? 'checked' : ''} onchange="CanteraModule.toggleSinPrioridad()"> Sin ningún contacto priorizado todavía</label>`;
     const auditoriaPanel = [
       ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
@@ -6947,7 +6970,7 @@ const CanteraModule = (() => {
     // que Base Global) — pedido explícito 2026-10-01, con captura: "debería
     // abrir a la derecha los filtros guardados que tengo... yo podría elegir
     // cuál" (esperaba un hover-flyout con varios, no un solo click directo).
-    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size || _enCrmFiltro.size);
+    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _nContFiltro.size || _nContExcl.size || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size || _enCrmFiltro.size);
     const filtrosGuardadosList = _loadFiltrosGuardados();
     const guardadosPanel = `<div class="cp-subpanel-guardados">${_guardadosPanelRows()}</div>`;
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
@@ -7480,6 +7503,7 @@ const CanteraModule = (() => {
   // NO toca la selección (_coSel): son dos cosas distintas.
   function resetFiltros() {
     _paso1Filtro = ''; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
+    _nContFiltro = new Set(); _nContExcl = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
     _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set();
     _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set(); _enCrmFiltro = new Set();
@@ -7520,6 +7544,8 @@ const CanteraModule = (() => {
       (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : '',
       (f.prioFiltro || []).length ? `Prioridad: ${f.prioFiltro.join(', ')}` : '',
       f.minContactos ? `${f.minContactos}+ contactos` : '',
+      (f.nContFiltro || []).length ? `Nº de contactos: ${f.nContFiltro.join(', ')}` : '',
+      (f.nContExcl || []).length ? `Sin los de ${f.nContExcl.join(', ')} contactos` : '',
       f.sinPrioridad ? 'sin priorizar' : '',
       f.auditoriaFiltro ? `auditoría: ${f.auditoriaFiltro}` : '',
       (f.paisFiltro || []).length ? `País: ${f.paisFiltro.join(', ')}` : '',
@@ -7542,7 +7568,7 @@ const CanteraModule = (() => {
         minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
         paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
         industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
-        tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro], tierExclFiltro: [..._tierExclFiltro],
+        tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro], tierExclFiltro: [..._tierExclFiltro], nContFiltro: [..._nContFiltro], nContExcl: [..._nContExcl],
         domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro],
       });
       _saveFiltrosGuardados(list);
@@ -7555,6 +7581,7 @@ const CanteraModule = (() => {
     const f = list[idx]; if (!f) return;
     _paso1Filtro = f.paso1Filtro || ''; _tierFiltro = new Set(f.tierFiltro || []); _tierExclFiltro = new Set(f.tierExclFiltro || []); _prioFiltro = new Set(f.prioFiltro || []);
     _minContactos = f.minContactos || 0; _sinPrioridad = !!f.sinPrioridad; _auditoriaFiltro = f.auditoriaFiltro || '';
+    _nContFiltro = new Set(f.nContFiltro || []); _nContExcl = new Set(f.nContExcl || []);
     _paisFiltro = new Set(f.paisFiltro || []); _paisExclFiltro = new Set(f.paisExclFiltro || []);
     _industriaFiltro = new Set(f.industriaFiltro || []); _industriaExclFiltro = new Set(f.industriaExclFiltro || []);
     _tamanoFiltro = new Set(f.tamanoFiltro || []); _tamanoExclFiltro = new Set(f.tamanoExclFiltro || []);
@@ -8198,7 +8225,7 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
