@@ -5746,10 +5746,90 @@ const CanteraModule = (() => {
   // el navegador espera una respuesta, y sin esto se veía "Failed to fetch" aunque
   // el import seguía y terminaba bien del lado del servidor (reportado 2026-09-06).
   let _impPollTimer = null;
-  async function impRun() {
+  // ── Vincular a mano las empresas del archivo que no cruzaron (tras importar «Solo contactos») ──
+  // Cada una tiene un cuadro: escribes media palabra, salen las empresas de ESTE borrador que coinciden, eliges y se vincula.
+  function _impSinEmpresaHtml(sm) {
+    const L = sm.sinEmpresaEmpresas || [];
+    if (!L.length) return '';
+    const rows = L.map((x, i) => {
+      const who = (x.personas || []).join(', ') + ((x.n || 0) > (x.personas || []).length ? '…' : '');
+      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="margin-top:6px" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
+      return `<div class="cant-al-row" data-i="${i}" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start;padding:9px 0;border-top:1px solid #E5E2DC">
+        <div><b>${esc(x.archivo || '(sin nombre de empresa)')}</b><div class="cant-hint" style="margin:2px 0 0">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</div>${x.archivo ? sug : ''}</div>
+        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
+      </div>`;
+    }).join('');
+    return `<div class="lm-imp-err" style="background:#FAF8F4;border-color:#E5E2DC;color:inherit">
+      <div style="font-weight:600;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
+      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas.</div>
+      ${rows}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn--sm" type="button" onclick="CanteraModule.impCrearFaltantes()">Crear las demás como empresas nuevas</button>
+        <button class="btn btn--primary btn--sm" type="button" id="cant-al-save" disabled onclick="CanteraModule.impAliasSave()">Guardar vínculos</button>
+      </div></div>`;
+  }
+  function _impAproxHtml(sm) {
+    const A = sm.aproximadas || [];
+    if (!A.length) return '';
+    return `<details style="margin-top:10px"><summary class="cant-hint" style="cursor:pointer;margin:0">${sm.aproximadasN || A.length} fila(s) se asociaron por validación cruzada — revisa</summary>
+      <div class="cant-hint" style="margin:6px 0 0;line-height:1.7">${A.map(a => `${esc(a.archivo)} → <b>${esc(a.borrador)}</b> <span style="opacity:.7">(${esc(a.como)})</span>`).join('<br>')}</div></details>`;
+  }
+  let _impAlTimer = null;
+  function impAliasSearch(i, q) {
+    clearTimeout(_impAlTimer);
+    q = String(q || '').trim();
+    const old = document.getElementById('cant-al-menu-' + i); if (old) old.remove();
+    if (!q) return;
+    _impAlTimer = setTimeout(async () => {
+      try {
+        const rows = await (await apiFetch(`${API}/cantera/batches/${_current.id}/companies-search?q=${encodeURIComponent(q)}`)).json();
+        if (!_cImp) return;
+        (_cImp.alRes = _cImp.alRes || {})[i] = Array.isArray(rows) ? rows : [];
+        const box = document.getElementById('cant-al-box-' + i); if (!box) return;
+        document.getElementById('cant-al-menu-' + i)?.remove();
+        const m = document.createElement('div'); m.id = 'cant-al-menu-' + i;
+        m.style.cssText = 'position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:50;background:#fff;border:1px solid #D9D6CF;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:230px;overflow:auto';
+        m.innerHTML = _cImp.alRes[i].length
+          ? _cImp.alRes[i].map((r, j) => `<div onmousedown="CanteraModule.impAliasPick(${i},${j})" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #F1EFEB" onmouseover="this.style.background='#F5F3EE'" onmouseout="this.style.background=''"><b>${esc(r.nombre)}</b><div class="cant-hint" style="margin:0">${esc([r.dominio, r.ciudad, r.pais].filter(Boolean).join(' · '))}</div></div>`).join('')
+          : '<div class="cant-hint" style="padding:8px 10px;margin:0">Sin coincidencias en este borrador</div>';
+        box.appendChild(m);
+      } catch (_) { /* sin red: no pasa nada, vuelve a escribir */ }
+    }, 180);
+  }
+  function _impAliasPaint(i) {
+    const a = (_cImp.alias || {})[i], inp = document.getElementById('cant-al-in-' + i), slot = document.getElementById('cant-al-pick-' + i);
+    if (!slot || !inp) return;
+    if (a) { inp.style.display = 'none'; slot.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #A7D7BE;background:#EEF8F2;border-radius:8px"><span style="flex:1;min-width:0">→ <b>${esc(a.nombre)}</b></span><button class="btn btn--sm" type="button" onclick="CanteraModule.impAliasClear(${i})">✕</button></div>`; }
+    else { inp.style.display = ''; inp.value = ''; slot.innerHTML = ''; }
+    const n = Object.keys(_cImp.alias || {}).length, sv = document.getElementById('cant-al-save');
+    if (sv) { sv.disabled = !n; sv.textContent = n ? `Guardar vínculos (${n})` : 'Guardar vínculos'; }
+  }
+  function impAliasPick(i, j) {
+    const r = ((_cImp && _cImp.alRes && _cImp.alRes[i]) || [])[j]; if (!r) return;
+    (_cImp.alias = _cImp.alias || {})[i] = { id: r.id, nombre: r.nombre };
+    document.getElementById('cant-al-menu-' + i)?.remove(); _impAliasPaint(i);
+  }
+  function impAliasSug(i) {
+    const x = ((_cImp && _cImp.sinLista) || [])[i]; if (!x || !x.sugerida) return;
+    (_cImp.alias = _cImp.alias || {})[i] = { id: x.sugerida.id, nombre: x.sugerida.borrador }; _impAliasPaint(i);
+  }
+  function impAliasClear(i) { if (_cImp && _cImp.alias) delete _cImp.alias[i]; _impAliasPaint(i); }
+  function _impAliasMap() {
+    const out = {}; const L = (_cImp && _cImp.sinLista) || [];
+    Object.entries((_cImp && _cImp.alias) || {}).forEach(([i, a]) => { const x = L[i]; if (x && x.archivo) out[String(x.archivo).toLowerCase().trim()] = a.id; });
+    return out;
+  }
+  // Re-importa el mismo archivo SOLO asociando contactos a las empresas elegidas (lo ya importado no se duplica: se completa).
+  function impAliasSave() { if (!_cImp) return; _cImp.tipo = 'contactos'; _cImp.tipoManual = true; impRun({ tipo: 'contactos', aliases: _impAliasMap() }); }
+  // Crea como empresas nuevas (con sus contactos) las que siguen sin coincidir; las vinculadas a mano se respetan.
+  function impCrearFaltantes() { if (!_cImp) return; impRun({ tipo: 'faltantes', aliases: _impAliasMap() }); }
+  async function impRun(ov) {
     if (!_cImp || !_cImp.file) return;
-    const mapping = {};
-    document.querySelectorAll('#cant-imp-modal .lm-cbx-input').forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; });
+    ov = (ov && typeof ov === 'object' && !(ov instanceof Event)) ? ov : {};
+    let mapping = {};
+    const _inps = document.querySelectorAll('#cant-imp-modal .lm-cbx-input');
+    if (_inps.length) { _inps.forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; }); _cImp.lastMapping = mapping; }
+    else mapping = _cImp.lastMapping || {};
     const go = document.getElementById('cant-imp-go'); if (go) { go.disabled = true; go.textContent = 'Importando…'; }
     try {
       const fd = new FormData();
@@ -5757,7 +5837,8 @@ const CanteraModule = (() => {
       fd.append('mapping', JSON.stringify(mapping));
       fd.append('hasHeader', _cImp.hasHeader ? '1' : '0');
       fd.append('mode', _cImp.mode || 'actualizar');
-      fd.append('tipo', _cImp.tipo || 'ambos');
+      fd.append('tipo', ov.tipo || _cImp.tipo || 'ambos');
+      fd.append('aliases', JSON.stringify(ov.aliases || {}));
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
@@ -5778,6 +5859,7 @@ const CanteraModule = (() => {
         }
         clearInterval(_impPollTimer);
         const sm = st.summary || {};
+        if (_cImp) { _cImp.sinLista = sm.sinEmpresaEmpresas || []; _cImp.alias = {}; _cImp.alRes = {}; }
         if (document.getElementById('cant-imp-modal')) {
           _cImpInner(`${_cImpHd('Importación completa')}
             <div class="lm-imp-body">${_cImpSteps(3)}
@@ -5791,7 +5873,7 @@ const CanteraModule = (() => {
                 ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
                 ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
               </div></div>
-              ${(sm.sinEmpresaEjemplos || []).length ? `<div class="lm-imp-err">Sin empresa coincidente (ej.):<br>${sm.sinEmpresaEjemplos.map(e => esc(e)).join('<br>')}<br><small>Importa primero esas empresas (modo «Solo empresas» o «Empresas + contactos»).</small></div>` : ''}
+              ${(sm.sinEmpresaEmpresas || []).length ? _impSinEmpresaHtml(sm) : ((sm.sinEmpresaEjemplos || []).length ? `<div class="lm-imp-err">Sin empresa coincidente (ej.):<br>${sm.sinEmpresaEjemplos.map(e => esc(e)).join('<br>')}<br><small>Importa primero esas empresas (modo «Solo empresas» o «Empresas + contactos»).</small></div>` : '')}${_impAproxHtml(sm)}
               ${(sm.errors || []).length ? `<div class="lm-imp-err">${sm.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
             </div>
             <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.closeImportModal()">Listo</button></div></div>`);
@@ -7957,7 +8039,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,

@@ -8117,6 +8117,34 @@ app.delete('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 // y terminaba bien del lado del servidor (reportado 2026-09-06: Jenny vio el
 // error pero sus 1242 empresas sí quedaron cargadas correctamente).
 const _canteraImportJobs = new Map(); // batchId -> { running, done, total, summary, error }
+// ── Cruce de empresas por NOMBRE (solo al importar contactos / crear faltantes) ──
+// Cuando el archivo no trae web ni LinkedIn de empresa, el nombre exacto no basta: «Monge spa» vs «Monge & C. - S.p.A.», «Inversiones HEMOSA» vs «Hemosa».
+// Se comparan las palabras distintivas (sin formas legales, «grupo», ciudades…).
+//  · EXACTO: mismas palabras distintivas → se asocia sola.
+//  · POSIBLE: un nombre trae palabras de más («Grupo Jorge» vs «Grupo Jorge Batista») → NO se une sola; la usuaria lo confirma.
+// En ambos casos exige UNA sola candidata y que ninguna señal dura la contradiga (dominio o LinkedIn de empresa distintos = otra empresa).
+const _FZ_GENERIC = new Set(['grupo', 'group', 'gruppo', 'holding', 'holdings', 'inversiones', 'sociedad', 'limitada', 'anonima', 'sl', 'sa', 'slu', 'sau', 'spa', 'srl', 'srls', 'sas', 'snc', 'scp', 'cb', 'ltd', 'llc', 'inc', 'gmbh', 'bv', 'ag', 'co', 'corp', 'the', 'and', 'de', 'del', 'la', 'el', 'las', 'los', 'y', 'e', 'di', 'da', 'dei', 'espana', 'spain', 'italia', 'italy', 'madrid', 'barcelona', 'chile', 'portugal']);
+const _FZ_FREEMAIL = new Set(['gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.es', 'outlook.com', 'outlook.es', 'yahoo.com', 'yahoo.es', 'icloud.com', 'live.com', 'msn.com', 'proton.me', 'protonmail.com']);
+function _fzTokens(name) {
+  return [...new Set(String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length >= 2 && !_FZ_GENERIC.has(t)))];
+}
+function _fzSlug(u) { const m = String(u || '').toLowerCase().match(/linkedin\.com\/company\/([^/?#\s]+)/); return m ? m[1] : ''; }
+function _fzFind(list, nombre, dominio, linkedin) {
+  const ft = _fzTokens(nombre); if (!ft.length) return null;
+  const fs = new Set(ft), sl = _fzSlug(linkedin), found = [];
+  for (const c of list) {
+    if (!c.toks.length) continue;
+    const small = ft.length <= c.toks.length ? ft : c.toks, big = ft.length <= c.toks.length ? new Set(c.toks) : fs;
+    if (!small.every(t => big.has(t))) continue;
+    if (small.join('').length < 5 || !small.some(t => t.length >= 4)) continue;   // una palabra corta («par») no identifica a nadie
+    if (dominio && c.dom && _lmNormDomain(c.dom) !== dominio) continue;
+    if (sl && c.li && c.li !== sl) continue;
+    found.push({ c, exacto: ft.length === c.toks.length });
+  }
+  const ex = found.filter(x => x.exacto);
+  if (ex.length === 1) return ex[0];
+  return (!ex.length && found.length === 1) ? found[0] : null;
+}
 // Idiomas del contacto desde el export de Sales Navigator (Language 1-4 + Level 1-4) o una columna «Idioma» suelta.
 // principal = primer idioma con nivel nativo/bilingüe (si no hay, el primero de la lista); lista = principal primero y luego el resto en el
 // orden del archivo. Los nombres se normalizan al de Nova (English → Inglés) para que coincidan con los mensajes por idioma de la secuencia.
@@ -8140,6 +8168,23 @@ function _canteraLangs(f) {
   const orden = principal ? [lista.find(l => l.idioma === principal), ...lista.filter(l => l.idioma !== principal)] : lista;
   return { principal, lista: orden };
 }
+// Buscador de empresas de UN borrador (cuadro «escribe media palabra» al vincular a mano las filas sin empresa tras importar contactos).
+// Ignora tildes y mayúsculas; busca en nombre y dominio; primero las que empiezan igual.
+app.get('/api/cantera/batches/:id/companies-search', requireAuth, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    if (!q) return res.json([]);
+    const like = '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%', pre = q.replace(/[\\%_]/g, m => '\\' + m) + '%';
+    const T = "translate(lower(%s),'áàäâéèëêíìïîóòöôúùüûñç','aaaaeeeeiiiioooouuuunc')";
+    const col = c => T.replace('%s', c);
+    const { rows } = await pool.query(
+      `SELECT id, nombre, dominio, pais, ciudad FROM cantera_companies
+        WHERE batch_id=$1 AND user_id=$2 AND (${col('nombre')} LIKE ${col('$3')} OR lower(dominio) LIKE lower($3))
+        ORDER BY (${col('nombre')} LIKE ${col('$4')}) DESC, length(nombre), nombre LIMIT 12`,
+      [req.params.id, req.workspaceOwnerId, like, pre]);
+    res.json(rows);
+  } catch (e) { console.error('[cantera] companies-search', e.message); res.status(500).json({ error: 'No se pudo buscar' }); }
+});
 app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
@@ -8167,7 +8212,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   // que ya estaba lleno.
   // Qué trae el archivo: 'ambos' (empresas+contactos, default), 'empresas' (solo empresas, no crea contactos) o 'contactos' (solo contactos:
   // se asocian a empresas que YA están en este borrador; si no hay empresa que coincida, la fila NO crea una nueva y se reporta aparte).
-  const importTipo = ['empresas', 'contactos'].includes(req.body?.tipo) ? req.body.tipo : 'ambos';
+  const importTipo = ['empresas', 'contactos', 'faltantes'].includes(req.body?.tipo) ? req.body.tipo : 'ambos';   // faltantes = como «ambos» pero solo las filas cuya empresa NO está ya en el borrador
   const importMode = (req.body?.mode === 'reemplazar' && importTipo === 'ambos') ? 'reemplazar' : 'actualizar';
   let companiesDeleted = 0;
   if (importMode === 'reemplazar') {
@@ -8263,6 +8308,9 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
 
   const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, tipo: importTipo, sinEmpresa: 0, sinEmpresaEjemplos: [], errors: [] };
   const coCache = new Map();
+  const fuzzyList = [];   // empresas ya en el borrador (nombre → palabras) para el cruce por nombre
+  const aliasMap = new Map();   // nombre de empresa del archivo (minúsculas) → id de empresa del borrador, confirmado por la usuaria
+  try { for (const [k, v] of Object.entries(JSON.parse(req.body?.aliases || '{}'))) { const n = parseInt(v); if (n) aliasMap.set(String(k).toLowerCase().trim(), n); } } catch (_) {}
   const coDom = new Map();   // id de empresa → dominio (para no unir por nombre dos empresas con dominios distintos)
   // Clave de nombre «flexible»: sin sufijo legal (S.L., S.A., LLC, Inc…), sin tildes ni signos y sin mayúsculas. Así «BOADAS 1880,S.A.» y «Boadas 1880»,
   // o «Agotzaina S.L» y «Agotzaina», se reconocen como la MISMA empresa al importar solo contactos y no se duplican (cada duplicado se validaba dos veces).
@@ -8287,6 +8335,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       if (e.nombre) coCache.set('n:' + e.nombre.toLowerCase(), e.id);
       const nf = _nombreFlex(e.nombre); if (nf && !coCache.has('nn:' + nf)) coCache.set('nn:' + nf, e.id);
       if (e.dominio) coDom.set(e.id, e.dominio);
+      fuzzyList.push({ id: e.id, nombre: e.nombre || '', toks: _fzTokens(e.nombre), dom: e.dominio || '', li: _fzSlug(e.linkedin) });
     }
     const { rows: existingCts } = await pool.query(`SELECT id, linkedin, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
     for (const e of existingCts) {
@@ -8403,6 +8452,28 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       return id;
     }
 
+    if (importTipo === 'contactos' || importTipo === 'faltantes') {
+      // Validación cruzada de respaldo, en orden: 0) lo que la usuaria ya confirmó a mano; 1) el dominio del EMAIL del contacto = la web de una
+      // empresa del borrador; 2) nombre equivalente. Un nombre solo «parecido» NO se une sola: queda como posible para confirmar.
+      let hit = null, como = '';
+      const al = aliasMap.get(nombreKey);
+      if (al) { hit = fuzzyList.find(c => c.id === al) || null; if (hit) como = 'confirmada por ti'; }
+      const ed = _lmNormDomain(String(f.email || '').split('@')[1] || '');
+      if (!hit && ed && !_FZ_FREEMAIL.has(ed)) { hit = fuzzyList.find(c => c.dom && _lmNormDomain(c.dom) === ed) || null; if (hit) como = 'dominio del email'; }
+      if (!hit) {
+        const r = _fzFind(fuzzyList, nombre, dominio, linkedin);
+        if (r && r.exacto) { hit = r.c; como = 'nombre equivalente'; }
+        else if (r) { const pz = (summary.posibles = summary.posibles || []); if (pz.length < 40 && !pz.some(x => x.archivo === nombre)) pz.push({ archivo: nombre, id: r.c.id, borrador: r.c.nombre }); }
+      }
+      if (hit) {
+        keys.forEach(k2 => { if (!coCache.has(k2)) coCache.set(k2, hit.id); });   // las demás filas de esa empresa cruzan directo
+        summary.companiesMatched++;
+        summary.aproximadasN = (summary.aproximadasN || 0) + 1;
+        const ap = (summary.aproximadas = summary.aproximadas || []);
+        if (!ap.some(a => a.archivo === nombre) && ap.length < 25) ap.push({ archivo: nombre, borrador: hit.nombre, como });
+        return hit.id;
+      }
+    }
     if (importTipo === 'contactos') return null;   // solo contactos: nunca se crea una empresa nueva
     const pais = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     // Empresa nueva en ESTE borrador -- si ya fue clasificada antes en otro
@@ -8446,10 +8517,16 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       // actualizan los datos que tenga de más". Antes, un contacto duplicado
       // se saltaba ANTES de tocar la empresa, perdiendo la chance de completar
       // campos vacíos de la empresa con esta fila.
+      const _matchedBefore = summary.companiesMatched;
       const companyId = await _co(f);
+      if (importTipo === 'faltantes' && summary.companiesMatched > _matchedBefore) { job.done = summary.rows; continue; }
       if (importTipo === 'empresas') { job.done = summary.rows; continue; }
       if (importTipo === 'contactos' && !companyId) {
         summary.sinEmpresa++;
+        { const _sk = _lmS(f.co_nombre).trim(), _lst = (summary.sinEmpresaEmpresas = summary.sinEmpresaEmpresas || []);
+          let _it = _lst.find(x => x.archivo === _sk);
+          if (!_it && _lst.length < 300) { _it = { archivo: _sk, n: 0, personas: [], sugerida: (summary.posibles || []).find(x => x.archivo === _sk) || null }; _lst.push(_it); }
+          if (_it) { _it.n++; const _pn = _lmS(f.nombre) || _lmS(f.nombre_completo) || [_lmS(f.nombre), _lmS(f.apellido)].filter(Boolean).join(' '); if (_pn && _it.personas.length < 4) _it.personas.push(_pn); } }
         if (summary.sinEmpresaEjemplos.length < 15) summary.sinEmpresaEjemplos.push(`${_lmS(f.nombre) || _lmS(f.nombre_completo) || '(sin nombre)'} → ${_lmS(f.co_nombre) || _lmS(f.co_dominio) || 'sin empresa en el archivo'}`);
         job.done = summary.rows; continue;
       }
