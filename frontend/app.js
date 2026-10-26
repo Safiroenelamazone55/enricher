@@ -45852,20 +45852,21 @@ const TimerModule = (() => {
   // Resultados: sin escribir, las tareas vigentes. Al buscar, cada tarea sale agrupada bajo su CONTENEDOR (la semana / el periodo / la tarea madre),
   // que también se puede elegir; así, buscando por cliente salen sus semanas (de la más reciente a la más antigua) y no 15 tareas sueltas.
   const _TM_KIDS = 5, _TM_MAX = 40;
-  function manualSearch(q) {
-    const menu = _tmEl('ttm-menu'); if (!menu) return;
+  function _tmMenu(menu, q, pick, libre, soloProyecto) {
+    if (!menu) return;
     q = String(q || '');
     const nq = _tmNorm(q).trim();
     const toks = nq.split(/\s+/).filter(Boolean);
-    const row = (t, i, cls, extra) => `<div class="ttm-opt${cls ? ' ' + cls : ''}" onmousedown="TimerModule.manualPick(${i})"><b>${cls === 'ttm-opt--kid' ? '↳ ' : ''}${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre && cls !== 'ttm-opt--kid' ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}${extra || ''}</span></div>`;
+    const base = soloProyecto ? _tmTasks.filter(t => t.kind === 'proyecto') : _tmTasks;
+    const row = (t, i, cls, extra) => `<div class="ttm-opt${cls ? ' ' + cls : ''}" onmousedown="TimerModule.${pick}(${i})"><b>${cls === 'ttm-opt--kid' ? '↳ ' : ''}${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre && cls !== 'ttm-opt--kid' ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}${extra || ''}</span></div>`;
     let html = '';
     _tmRes = [];
     if (!toks.length) {
-      _tmRes = _tmTasks.filter(t => !t.oculta).sort((a, z) => z.orden - a.orden).slice(0, 15);
+      _tmRes = base.filter(t => !t.oculta).sort((a, z) => z.orden - a.orden).slice(0, 15);
       html = _tmRes.map((t, i) => row(t, i)).join('') + '<div class="ttm-opt ttm-opt--none">Escribe para buscar también por cliente, proyecto, semana, o tareas pasadas, completadas o archivadas.</div>';
     } else {
-      const hit = _tmTasks.filter(t => { const h = _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta, t.kw].join(' ')); return toks.every(w => h.includes(w)); });
-      const porId = new Map(_tmTasks.filter(t => t.kind === 'proyecto').map(t => [t.id, t]));
+      const hit = base.filter(t => { const h = _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta, t.kw].join(' ')); return toks.every(w => h.includes(w)); });
+      const porId = new Map(base.filter(t => t.kind === 'proyecto').map(t => [t.id, t]));
       const grupos = new Map();   // id del contenedor → { root, kids }
       for (const t of hit) {
         const padre = t.parentId && porId.get(t.parentId);
@@ -45884,10 +45885,11 @@ const TimerModule = (() => {
       }
       if (omitidos) html += `<div class="ttm-opt ttm-opt--none">Hay ${omitidos} contenedor(es) más: añade el mes, la semana o el proyecto para acotar.</div>`;
     }
-    const libre = q.trim() ? `<div class="ttm-opt ttm-opt--free" onmousedown="TimerModule.manualFree()"><b>＋ Otra actividad: «${esc(q.trim())}»</b><span>Sin tarea asociada</span></div>` : '';
-    menu.innerHTML = (html + libre) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
+    const libreHtml = (libre && q.trim()) ? `<div class="ttm-opt ttm-opt--free" onmousedown="TimerModule.manualFree()"><b>＋ Otra actividad: «${esc(q.trim())}»</b><span>Sin tarea asociada</span></div>` : '';
+    menu.innerHTML = (html + libreHtml) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
     menu.hidden = false;
   }
+  function manualSearch(q) { _tmMenu(_tmEl('ttm-menu'), q, 'manualPick', true, false); }
   function _tmShowChosen() {
     const box = _tmEl('ttm-chosen'), inp = _tmEl('ttm-q'), menu = _tmEl('ttm-menu'); if (!box || !inp) return;
     if (menu) menu.hidden = true;
@@ -46623,7 +46625,10 @@ const TimerModule = (() => {
     const dur = _ttdDur(e, new Date()), s = new Date(e.started_at);
     const dtVal = `${s.getFullYear()}-${_pad2(s.getMonth() + 1)}-${_pad2(s.getDate())}T${_pad2(s.getHours())}:${_pad2(s.getMinutes())}`;
     const h = Math.floor(dur / 3600), m = Math.round((dur % 3600) / 60);
-    const taskOpts = `<option value="">— Sin tarea —</option>` + (_ttTasks || []).map(t => `<option value="${t.id}"${e.task_id === t.id ? ' selected' : ''}>${esc(_ttTaskLabel(t))}</option>`).join('');
+    // La tarea (o subtarea) se elige con el mismo buscador de «Agregar tiempo»: por nombre, proyecto, cliente o semana, agrupado por contenedor.
+    await _tmLoadTasks();
+    _teOrig = e;
+    _teSel = e.task_id ? ((_tmTasks.find(t => t.kind === 'proyecto' && t.id === e.task_id)) || (() => { const t = (_ttTasks || []).find(x => x.id === e.task_id); return t ? { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || '', padre: '', etiqueta: '' } : null; })()) : null;
     const actOpts = _TT_ACT.map(([v, l]) => `<option value="${v}"${(e.activity_type || 'active_work') === v ? ' selected' : ''}>${l}</option>`).join('');
     document.getElementById('tt-edit-modal')?.remove();
     const bd = document.createElement('div');
@@ -46632,7 +46637,9 @@ const TimerModule = (() => {
     bd.innerHTML = `<div class="fin-pi-box tt-edit-box">
       <div class="tt-edit-hd"><h3>Editar sesión</h3><button class="fin-pi-x" onclick="TimerModule.closeEntryEdit()">✕</button></div>
       <div class="tt-edit-body">
-        <label class="tt-edit-f tt-edit-f--full"><span>Tarea / Proyecto</span><select class="form-input" id="tt-e-task">${taskOpts}</select></label>
+        <div class="tt-edit-f tt-edit-f--full"><span>Tarea / Subtarea</span>
+          <div id="tt-e-chosen" class="ttm-chosen"></div>
+          <div class="ttm-pick" style="margin-top:6px"><input class="form-input" id="tt-e-q" autocomplete="off" placeholder="Cambiar: busca la tarea o subtarea (nombre, proyecto, cliente, semana…)" oninput="TimerModule.editSearch(this.value)" onfocus="TimerModule.editSearch(this.value)" onblur="setTimeout(()=>{const m=document.getElementById('tt-e-menu');if(m)m.hidden=true},180)"><div id="tt-e-menu" class="ttm-menu" hidden></div></div></div>
         <label class="tt-edit-f"><span>Inicio</span><input class="form-input" type="datetime-local" id="tt-e-start" value="${dtVal}"></label>
         <label class="tt-edit-f"><span>Duración</span><span class="tt-edit-dur"><input class="form-input" type="number" min="0" id="tt-e-h" value="${h}"><b>h</b><input class="form-input" type="number" min="0" max="59" id="tt-e-m" value="${m}"><b>min</b></span></label>
         <label class="tt-edit-f"><span>Tipo</span><select class="form-input" id="tt-e-act">${actOpts}</select></label>
@@ -46641,12 +46648,30 @@ const TimerModule = (() => {
       <div class="tt-edit-ft"><span class="tt-edit-hint">${e.approved ? '⚠ Sesión aprobada — al guardar sigue aprobada.' : 'La duración se recalcula desde inicio + tiempo indicado.'}</span><div class="tt-edit-btns"><button class="btn btn--ghost btn--sm" onclick="TimerModule.closeEntryEdit()">Cancelar</button><button class="btn btn--primary btn--sm" id="tt-e-save" onclick="TimerModule.saveEntryEdit(${id})">Guardar</button></div></div>
     </div>`;
     document.body.appendChild(bd);
+    _teShowChosen();
   }
-  function closeEntryEdit() { document.getElementById('tt-edit-modal')?.remove(); }
+  let _teSel = null, _teOrig = null;
+  function _teShowChosen() {
+    const box = _tmEl('tt-e-chosen'); if (!box) return;
+    const t = _teSel, o = _teOrig;
+    box.innerHTML = t
+      ? `<div><b>${esc(t.titulo)}</b></div><span>${t.padre ? 'subtarea de ' + esc(t.padre) + ' · ' : ''}${esc(t.ctx || '')}${t.etiqueta ? ' · ' + esc(t.etiqueta) : ''}</span><button type="button" class="ttm-x" title="Quitar la tarea" onclick="TimerModule.editClear()">✕</button>`
+      : `<div><b>${o && o.task_titulo ? esc(o.task_titulo) : 'Sin tarea'}</b></div><span>${o && o.task_titulo ? 'sin tarea asociada' : 'elige una con el buscador'}</span>`;
+  }
+  function editSearch(q) { _tmMenu(_tmEl('tt-e-menu'), q, 'editPick', false, true); }
+  function editPick(i) {
+    const t = _tmRes[i]; if (!t) return;
+    _teSel = t; _teShowChosen();
+    const q = _tmEl('tt-e-q'); if (q) q.value = '';
+    const m = _tmEl('tt-e-menu'); if (m) m.hidden = true;
+  }
+  function editClear() { _teSel = null; _teShowChosen(); }
+  function closeEntryEdit() { document.getElementById('tt-edit-modal')?.remove(); _teSel = null; _teOrig = null; }
   async function saveEntryEdit(id) {
     const g = x => document.getElementById(x);
-    const taskSel = g('tt-e-task'), taskId = taskSel.value || null;
-    const taskTit = taskId ? (taskSel.options[taskSel.selectedIndex]?.text || '').split(' · ')[0] : '';
+    const taskId = _teSel ? _teSel.id : null;
+    // Sin tarea elegida se conserva el nombre de la actividad libre (si la sesión no tenía tarea asociada) en vez de borrarlo.
+    const taskTit = _teSel ? _teSel.titulo : ((_teOrig && !_teOrig.task_id) ? (_teOrig.task_titulo || '') : '');
     const startV = g('tt-e-start').value;
     const h = parseInt(g('tt-e-h').value || '0', 10) || 0, m = parseInt(g('tt-e-m').value || '0', 10) || 0;
     const started = startV ? new Date(startV) : null;
@@ -46717,7 +46742,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
