@@ -45811,7 +45811,7 @@ const TimerModule = (() => {
         ...tasks.map(t => {
           const arch = !!t.archivada || !!(t.parent_task_id && archIds.has(t.parent_task_id)), est = t.estado || 'pendiente';
           const etiqueta = arch ? 'Archivada' : est === 'completado' ? 'Completada' : est === 'cancelado' ? 'Cancelada' : periodoPasado(t) ? 'Periodo pasado' : '';
-          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id), kw: periodo(t) || periodo(porId.get(t.parent_task_id)), parentId: t.parent_task_id || null, orden: new Date(String(t.deadline || t.fecha_inicio || t.created_at || '').split('T')[0]).getTime() || 0 };
+          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id), kw: periodo(t) || periodo(porId.get(t.parent_task_id)), parentId: t.parent_task_id || null, projectId: t.project_id || null, orden: new Date(String(t.deadline || t.fecha_inicio || t.created_at || '').split('T')[0]).getTime() || 0 };
         }),
         ...opp.map(t => { const c = t.estado === 'completada' || t.estado === 'completado'; return { kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '', etiqueta: c ? 'Completada' : '', oculta: c, parentId: null, orden: new Date(String(t.fecha_limite || '').split('T')[0]).getTime() || 0 }; }),
       ];
@@ -45828,7 +45828,7 @@ const TimerModule = (() => {
       <div class="ttm-body">
         <div class="ttm-f"><span>Tarea</span>
           <div class="ttm-pick"><input id="ttm-q" autocomplete="off" placeholder="Busca una tarea, proyecto o cliente… o escribe otra actividad" oninput="TimerModule.manualSearch(this.value)" onfocus="TimerModule.manualSearch(this.value)" onblur="setTimeout(()=>{const m=document.getElementById('ttm-menu');if(m)m.hidden=true},180)"><div id="ttm-menu" class="ttm-menu" hidden></div></div>
-          <div id="ttm-chosen" class="ttm-chosen" hidden></div></div>
+          <div id="ttm-chosen" class="ttm-chosen" hidden></div><div id="ttm-sub"></div></div>
         <div class="ttm-row">
           <label class="ttm-f"><span>Fecha</span><input type="date" id="ttm-fecha" value="${L.fecha}" max="${L.fecha}"></label>
           <label class="ttm-f"><span>Inicio</span><input type="time" id="ttm-ini" value="${_tmHM(ini)}"></label>
@@ -45890,13 +45890,52 @@ const TimerModule = (() => {
     menu.hidden = false;
   }
   function manualSearch(q) { _tmMenu(_tmEl('ttm-menu'), q, 'manualPick', true, false); }
-  function _tmShowChosen() {
+  function _tmShowChosen() { _tmShowChosen0(); _tmSubOpen.ttm = false; _tmPaintSub('ttm'); }
+  function _tmShowChosen0() {
     const box = _tmEl('ttm-chosen'), inp = _tmEl('ttm-q'), menu = _tmEl('ttm-menu'); if (!box || !inp) return;
     if (menu) menu.hidden = true;
     if (!_tmSel) { box.hidden = true; box.innerHTML = ''; inp.parentElement.style.display = ''; inp.value = ''; return; }
     inp.parentElement.style.display = 'none';
     box.hidden = false;
     box.innerHTML = `<div><b>${esc(_tmSel.titulo)}</b></div><span>${_tmSel.kind === 'libre' ? 'Otra actividad (sin tarea)' : (_tmSel.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto') + ' · ' + esc(_tmSel.ctx) + (_tmSel.etiqueta ? ' · ' + esc(_tmSel.etiqueta) : '')}</span><button type="button" class="ttm-x" onclick="TimerModule.manualClear()" aria-label="Quitar">✕</button>`;
+  }
+  // ── Crear una subtarea dentro de la tarea elegida (Agregar tiempo y Editar sesión) ──
+  // La subtarea cuelga de la tarea CONTENEDORA (si lo elegido ya es una subtarea, se crea otra hermana en el mismo contenedor), en su mismo proyecto.
+  const _tmSubOpen = { ttm: false, 'tt-e': false };
+  function _tmParentOf(sel) {
+    if (!sel || sel.kind !== 'proyecto' || !sel.id) return null;
+    if (sel.parentId) return _tmTasks.find(t => t.kind === 'proyecto' && t.id === sel.parentId) || { id: sel.parentId, titulo: sel.padre || '', ctx: sel.ctx, cliente: sel.cliente, projectId: sel.projectId, etiqueta: sel.etiqueta };
+    return sel;
+  }
+  function _tmPaintSub(prefix) {
+    const box = _tmEl(prefix + '-sub'); if (!box) return;
+    const par = _tmParentOf(prefix === 'ttm' ? _tmSel : _teSel);
+    if (!par) { box.innerHTML = ''; return; }
+    if (!_tmSubOpen[prefix]) { box.innerHTML = `<button type="button" class="ttm-sublink" onclick="TimerModule.subToggle('${prefix}')">＋ Crear subtarea en «${esc(par.titulo)}»</button>`; return; }
+    box.innerHTML = `<div class="ttm-subform"><div class="ttm-subform__t">Nueva subtarea en «${esc(par.titulo)}» <span>· ${esc(par.ctx || '')}</span></div>
+      <div class="ttm-subform__r"><input id="${prefix}-sub-in" class="ttm-subform__i" maxlength="160" autocomplete="off" placeholder="¿Qué subtarea trabajaste?" onkeydown="if(event.key==='Enter'){event.preventDefault();TimerModule.subCreate('${prefix}')}">
+      <button type="button" class="btn btn--primary btn--sm" id="${prefix}-sub-go" onclick="TimerModule.subCreate('${prefix}')">Crear y usar</button>
+      <button type="button" class="btn btn--ghost btn--sm" onclick="TimerModule.subToggle('${prefix}')">Cancelar</button></div></div>`;
+    setTimeout(() => _tmEl(prefix + '-sub-in')?.focus(), 0);
+  }
+  function subToggle(prefix) { _tmSubOpen[prefix] = !_tmSubOpen[prefix]; _tmPaintSub(prefix); }
+  async function subCreate(prefix) {
+    const inp = _tmEl(prefix + '-sub-in'), titulo = (inp && inp.value || '').trim();
+    const par = _tmParentOf(prefix === 'ttm' ? _tmSel : _teSel);
+    if (!par) return;
+    if (!titulo) { showBanner('Escribe el nombre de la subtarea', 'info'); inp && inp.focus(); return; }
+    if (!par.projectId) { showBanner('No se pudo saber el proyecto de esta tarea', 'error'); return; }
+    const btn = _tmEl(prefix + '-sub-go'); if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      const me = window._authUser?.memberNombre || window._authUser?.name || '';
+      const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: +par.projectId, responsable: me, estado: 'pendiente', parent_task_id: par.id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo crear la subtarea');
+      const nuevo = { kind: 'proyecto', id: d.id, titulo: d.titulo || titulo, ctx: par.ctx, cliente: par.cliente || '', padre: par.titulo, etiqueta: par.etiqueta || '', oculta: false, kw: par.kw || '', parentId: par.id, projectId: par.projectId, orden: Date.now() };
+      _tmTasks.push(nuevo); if (!par.etiqueta) par.oculta = true;   // el contenedor ya tiene subtareas: en la lista corta se ofrecen las subtareas
+      if (prefix === 'ttm') { _tmSel = nuevo; _tmShowChosen(); } else { _teSel = nuevo; _teShowChosen(); }
+      showBanner('✓ Subtarea creada: «' + nuevo.titulo + '»', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Crear y usar'; } }
   }
   function manualPick(i) { const t = _tmRes[i]; if (!t) return; _tmSel = t; _tmShowChosen(); }
   function manualFree() { const q = (_tmEl('ttm-q')?.value || '').trim(); if (!q) return; _tmSel = { kind: 'libre', id: null, titulo: q, ctx: '' }; _tmShowChosen(); }
@@ -46628,7 +46667,7 @@ const TimerModule = (() => {
     // La tarea (o subtarea) se elige con el mismo buscador de «Agregar tiempo»: por nombre, proyecto, cliente o semana, agrupado por contenedor.
     await _tmLoadTasks();
     _teOrig = e;
-    _teSel = e.task_id ? ((_tmTasks.find(t => t.kind === 'proyecto' && t.id === e.task_id)) || (() => { const t = (_ttTasks || []).find(x => x.id === e.task_id); return t ? { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || '', padre: '', etiqueta: '' } : null; })()) : null;
+    _teSel = e.task_id ? ((_tmTasks.find(t => t.kind === 'proyecto' && t.id === e.task_id)) || (() => { const t = (_ttTasks || []).find(x => x.id === e.task_id); return t ? { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || '', padre: '', etiqueta: '', parentId: t.parent_task_id || null, projectId: t.project_id || null } : null; })()) : null;
     const actOpts = _TT_ACT.map(([v, l]) => `<option value="${v}"${(e.activity_type || 'active_work') === v ? ' selected' : ''}>${l}</option>`).join('');
     document.getElementById('tt-edit-modal')?.remove();
     const bd = document.createElement('div');
@@ -46638,7 +46677,7 @@ const TimerModule = (() => {
       <div class="tt-edit-hd"><h3>Editar sesión</h3><button class="fin-pi-x" onclick="TimerModule.closeEntryEdit()">✕</button></div>
       <div class="tt-edit-body">
         <div class="tt-edit-f tt-edit-f--full"><span>Tarea / Subtarea</span>
-          <div id="tt-e-chosen" class="ttm-chosen"></div>
+          <div id="tt-e-chosen" class="ttm-chosen"></div><div id="tt-e-sub"></div>
           <div class="ttm-pick" style="margin-top:6px"><input class="form-input" id="tt-e-q" autocomplete="off" placeholder="Cambiar: busca la tarea o subtarea (nombre, proyecto, cliente, semana…)" oninput="TimerModule.editSearch(this.value)" onfocus="TimerModule.editSearch(this.value)" onblur="setTimeout(()=>{const m=document.getElementById('tt-e-menu');if(m)m.hidden=true},180)"><div id="tt-e-menu" class="ttm-menu" hidden></div></div></div>
         <label class="tt-edit-f"><span>Inicio</span><input class="form-input" type="datetime-local" id="tt-e-start" value="${dtVal}"></label>
         <label class="tt-edit-f"><span>Duración</span><span class="tt-edit-dur"><input class="form-input" type="number" min="0" id="tt-e-h" value="${h}"><b>h</b><input class="form-input" type="number" min="0" max="59" id="tt-e-m" value="${m}"><b>min</b></span></label>
@@ -46651,7 +46690,8 @@ const TimerModule = (() => {
     _teShowChosen();
   }
   let _teSel = null, _teOrig = null;
-  function _teShowChosen() {
+  function _teShowChosen() { _teShowChosen0(); _tmSubOpen['tt-e'] = false; _tmPaintSub('tt-e'); }
+  function _teShowChosen0() {
     const box = _tmEl('tt-e-chosen'); if (!box) return;
     const t = _teSel, o = _teOrig;
     box.innerHTML = t
@@ -46742,7 +46782,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, subToggle, subCreate, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
