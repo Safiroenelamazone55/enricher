@@ -18618,6 +18618,22 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .agt-empty { padding: 22px 12px; text-align: center; color: #8A958F; font-size: 12.5px; }
 .agt-foot { margin-top: 14px; font-size: 11.5px; color: #98A39D; }
 @media (max-width: 760px) { .agt-card { grid-template-columns: 10px 1fr; } .agt-side { grid-column: 2; align-items: flex-start; } .agt-ev__row { grid-template-columns: 1fr; } }
+/* Agentes: aviso desplegable con el error exacto + Registro de errores */
+.agt-ev__item { border-bottom: 1px solid #F0F2F1; } .agt-ev__item:last-child { border-bottom: 0; }
+.agt-ev__item .agt-ev__row, .agt-er__row { border-bottom: 0; cursor: pointer; }
+.agt-ev__item .agt-ev__row:hover, .agt-er__row:hover { background: #F7F9F8; }
+.agt-er__row { display: grid; grid-template-columns: 72px 190px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 8px 12px; font-size: 12.5px; }
+.agt-ev__chev { font-style: normal; display: inline-block; color: #98A39D; font-size: 10px; margin-right: 2px; transition: transform .15s; }
+.is-open > .agt-ev__row .agt-ev__chev, .is-open > .agt-er__row .agt-ev__chev { transform: rotate(90deg); }
+.agt-ev__x { padding: 6px 14px 16px 14px; background: #FAFBFA; border-top: 1px dashed #E6E9E7; }
+.agt-x__h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; margin-top: 8px; } .agt-x__h .agt-btn { margin-left: auto; }
+.agt-x__d { font-size: 11px; color: #98A39D; }
+.agt-pre { margin: 6px 0 0; padding: 8px 10px; background: #fff; border: 1px solid #E6E9E7; border-radius: 6px; font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; color: #2A332E; user-select: text; }
+.agt-err { margin-top: 8px; } .agt-err__h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; } .agt-err__o { color: #6B7770; font-size: 11.5px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.agt-area--row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .agt-area--row .agt-btn { margin-left: auto; }
+.agt-sel { height: 26px; border: 1px solid #D9DEDB; border-radius: 4px; background: #fff; font: inherit; font-size: 12px; }
+.agt-note { flex: 1; min-width: 160px; height: 26px; padding: 0 8px; border: 1px solid #D9DEDB; border-radius: 4px; font: inherit; font-size: 12px; background: #fff; }
+@media (max-width: 760px) { .agt-er__row { grid-template-columns: 1fr; } }
 /* Validación manual: Nº de la empresa abierta + barra de lo validado entre todos */
 .cant-manual-progress { max-width: 330px; }
 .cant-manual-progress__pos { font-size: .78rem; font-weight: 700; color: var(--text, #14211B); background: var(--surface-secondary, #F1F4F2); padding: 1px 8px; border-radius: 3px; white-space: nowrap; flex: none; }

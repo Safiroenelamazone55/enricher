@@ -37,7 +37,7 @@ function limpiarCargo(raw, empresa, opts) {
   // Geografía y sector al final: «… Delegación Alicante», «… Portugal», «… Sector Alimentación».
   s = s.replace(/\s+(delegaci[oó]n|delegacion|sector|filial|sucursal)\s+.*$/i, '');
   for (const g of _GEO) s = s.replace(new RegExp('\\s+' + g + '$', 'i'), '');
-  s = s.replace(/^[\s\-–—|,;:]+|[\s\-–—|,;:]+$/g, '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^[\s\-–—|,;:/]+|[\s\-–—|,;:/]+$/g, '').replace(/\s+/g, ' ').trim();
   return s;
 }
 
