@@ -45770,7 +45770,7 @@ const TimerModule = (() => {
   // Se elige la tarea (o se escribe «otra actividad»), la fecha y la hora de inicio y fin (hora de Lima, como el resto del registro manual).
   let _tmTasks = [], _tmSel = null, _tmRes = [];
   const _tmEl = id => document.getElementById(id);
-  const _tmNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const _tmNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[–—]/g, '-').toLowerCase();   // «19–25» y «19-25» son lo mismo al buscar
   function _tmLima() {
     const d = new Date();
     return { fecha: d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' }), hora: d.toLocaleTimeString('en-GB', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false }) };
@@ -45801,9 +45801,15 @@ const TimerModule = (() => {
       // Si una tarea tiene subtareas abiertas se ofrecen las subtareas, no la tarea contenedora (igual que en el selector del Dashboard).
       const conSubs = new Set(tasks.filter(t => viva(t) && abierta(t) && t.parent_task_id).map(t => t.parent_task_id));
       const titPadre = new Map(tasks.map(t => [t.id, t.titulo]));
+      // Todas las tareas, también las completadas, archivadas o de semanas pasadas: sirven para cargar tiempo atrasado. Sin escribir nada solo se
+      // ofrecen las vigentes (lista corta); las pasadas aparecen al buscar, con su etiqueta, y siempre después de las vigentes.
       _tmTasks = [
-        ...tasks.filter(t => viva(t) && abierta(t) && !periodoPasado(t) && !conSubs.has(t.id)).map(t => ({ kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '' })),
-        ...opp.filter(t => t.estado !== 'completada' && t.estado !== 'completado').map(t => ({ kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '' })),
+        ...tasks.map(t => {
+          const arch = !!t.archivada || !!(t.parent_task_id && archIds.has(t.parent_task_id)), est = t.estado || 'pendiente';
+          const etiqueta = arch ? 'Archivada' : est === 'completado' ? 'Completada' : est === 'cancelado' ? 'Cancelada' : periodoPasado(t) ? 'Periodo pasado' : '';
+          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id) };
+        }),
+        ...opp.map(t => { const c = t.estado === 'completada' || t.estado === 'completado'; return { kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '', etiqueta: c ? 'Completada' : '', oculta: c }; }),
       ];
     } catch (_) { _tmTasks = []; }
   }
@@ -45843,8 +45849,10 @@ const TimerModule = (() => {
     const menu = _tmEl('ttm-menu'); if (!menu) return;
     q = String(q || '');
     const nq = _tmNorm(q).trim();
-    _tmRes = _tmTasks.filter(t => !nq || _tmNorm([t.titulo, t.ctx, t.cliente, t.padre].join(' ')).includes(nq)).slice(0, 12);
-    const items = _tmRes.map((t, i) => `<div class="ttm-opt" onmousedown="TimerModule.manualPick(${i})"><b>${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre ? ' · subtarea de ' + esc(t.padre) : ''}</span></div>`).join('');
+    const hit = _tmTasks.filter(t => nq ? _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta].join(' ')).includes(nq) : !t.oculta);
+    _tmRes = hit.sort((a, b) => (a.oculta ? 1 : 0) - (b.oculta ? 1 : 0)).slice(0, 15);   // vigentes primero
+    const items = _tmRes.map((t, i) => `<div class="ttm-opt" onmousedown="TimerModule.manualPick(${i})"><b>${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}</span></div>`).join('')
+      + (!nq ? '<div class="ttm-opt ttm-opt--none">Escribe para buscar también tareas pasadas, completadas o archivadas.</div>' : '');
     const libre = q.trim() ? `<div class="ttm-opt ttm-opt--free" onmousedown="TimerModule.manualFree()"><b>＋ Otra actividad: «${esc(q.trim())}»</b><span>Sin tarea asociada</span></div>` : '';
     menu.innerHTML = (items + libre) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
     menu.hidden = false;
@@ -45855,7 +45863,7 @@ const TimerModule = (() => {
     if (!_tmSel) { box.hidden = true; box.innerHTML = ''; inp.parentElement.style.display = ''; inp.value = ''; return; }
     inp.parentElement.style.display = 'none';
     box.hidden = false;
-    box.innerHTML = `<div><b>${esc(_tmSel.titulo)}</b></div><span>${_tmSel.kind === 'libre' ? 'Otra actividad (sin tarea)' : (_tmSel.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto') + ' · ' + esc(_tmSel.ctx)}</span><button type="button" class="ttm-x" onclick="TimerModule.manualClear()" aria-label="Quitar">✕</button>`;
+    box.innerHTML = `<div><b>${esc(_tmSel.titulo)}</b></div><span>${_tmSel.kind === 'libre' ? 'Otra actividad (sin tarea)' : (_tmSel.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto') + ' · ' + esc(_tmSel.ctx) + (_tmSel.etiqueta ? ' · ' + esc(_tmSel.etiqueta) : '')}</span><button type="button" class="ttm-x" onclick="TimerModule.manualClear()" aria-label="Quitar">✕</button>`;
   }
   function manualPick(i) { const t = _tmRes[i]; if (!t) return; _tmSel = t; _tmShowChosen(); }
   function manualFree() { const q = (_tmEl('ttm-q')?.value || '').trim(); if (!q) return; _tmSel = { kind: 'libre', id: null, titulo: q, ctx: '' }; _tmShowChosen(); }
