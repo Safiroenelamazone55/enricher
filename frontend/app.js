@@ -33080,7 +33080,9 @@ ${foot}
         ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'],
         ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
         ['buyer_role', 'Rol de compra (Buyer Role)'],
-        ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'], ['idioma', 'Idioma del contacto'],
+        ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'], ['idioma', 'Idioma del contacto (uno o varios)'],
+        ['idioma_1', 'Idioma 1'], ['nivel_1', 'Nivel del idioma 1'], ['idioma_2', 'Idioma 2'], ['nivel_2', 'Nivel del idioma 2'],
+        ['idioma_3', 'Idioma 3'], ['nivel_3', 'Nivel del idioma 3'], ['idioma_4', 'Idioma 4'], ['nivel_4', 'Nivel del idioma 4'],
         ['estado', 'Etapa / Estado'], ['contact_priority', 'Prioridad (Contact Priority)'], ['fuente', 'Fuente'], ['analisis', 'Análisis (por qué calificó)'], ['notas', 'Notas'],
       ] },
       { g: 'Empresa (se crea y enlaza)', opts: [
@@ -33178,8 +33180,15 @@ ${foot}
     // 'ID' EXACTO = id de nuestro export (actualizar existente). "Record ID"/"Contact ID" de
     // otras herramientas NO se mapean solos (evita actualizar contactos equivocados).
     if (h === 'id') return 'id';
+    // «Title Company» / «Title Match» no son el cargo y «Languages Count» no es un idioma: se conservan como extra.
+    if (/^title (company|match)$/.test(h) || /^languages? count$/.test(h) || /^tenure\b/.test(h)) return '';
+    // Idiomas del contacto: cada «Language N» / «Level N» va a su campo (antes todos se pegaban en uno solo).
+    { const mi = h.match(/^(language|idioma)\s*([1-4])$/); if (mi) return 'idioma_' + mi[2]; }
+    { const mn = h.match(/^(level|nivel)\s*([1-4])$/); if (mn) return 'nivel_' + mn[2]; }
+    // «Sales Navigator Url» a secas es la del CONTACTO; con prefijo company/empresa es la de la empresa.
+    if (/sales navigator|sales nav\b/.test(h)) return /^(company|empresa|account|org|organization|organisation)\b/.test(h) ? 'co_linkedin_sales_nav' : 'linkedin_sales_nav';
     const m = h.match(_CO_PFX);                       // "company X" → atributo de empresa
-    if (m) { const a = _lmBest(m[2], LM_CO_SYN); if (a) return _coKey(a); }
+    if (m) { const a = _lmBest(m[2], LM_CO_SYN); if (a) return _coKey(a); if (!_lmBest(h, LM_CT_SYN)) return ''; }   // «Company Location»…: sin campo propio → extra (no «nombre»)
     const c = _lmBest(h, LM_CT_SYN);                  // campo de contacto directo
     if (c) return c;
     const a = _lmBest(h, LM_CO_SYN);                  // atributo de empresa sin prefijo (industry, revenue…)
@@ -33524,7 +33533,7 @@ ${foot}
       case 'email':    return c.email ? `<a class="cell-clip" style="max-width:100%" href="mailto:${esc(c.email)}" title="${esc(c.email)}" onclick="event.stopPropagation()">${esc(c.email)}</a>` : '<span class="lm-dim">—</span>';
       case 'verificacion': return c.email ? _emailBadge(c) : '<span class="lm-dim">—</span>';
       case 'telefono': return clip(c.telefono || c.movil);
-      case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link">Perfil ↗</a>` : '<span class="lm-dim">—</span>';
+      case 'linkedin': return (c.linkedin || c.linkedin_sales_nav) ? `${c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link">Perfil ↗</a>` : ''}${c.linkedin_sales_nav ? `${c.linkedin ? ' · ' : ''}<a href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link" title="Abrir en Sales Navigator">Sales Nav ↗</a>` : ''}` : '<span class="lm-dim">—</span>';
       case 'ciudad':   return clip(c.ciudad);
       case 'region':   return clip(c.region);
       case 'pais':     return clip(c.pais);
@@ -34037,7 +34046,7 @@ ${foot}
             ${FB('telefono', 'Teléfono', c.telefono, _infoCopyBtn(c.telefono, 'Copiar teléfono'))}
             ${FB('movil', 'Móvil', c.movil, _infoCopyBtn(c.movil, 'Copiar móvil'))}${F('cargo', 'Cargo', c.cargo)}
             ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
-            ${FB('linkedin', 'LinkedIn', c.linkedin, `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>`)}${F('ciudad', 'Ciudad', c.ciudad)}
+            ${FB('linkedin', 'LinkedIn', c.linkedin, `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>`)}${FB('linkedin_sales_nav', 'LinkedIn Sales Navigator', c.linkedin_sales_nav, `<a class="cp-go" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" onclick="event.stopPropagation()">${_SN_ICO}</a>`)}${F('ciudad', 'Ciudad', c.ciudad)}
             ${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
           </div></div>
           <div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp-fields">
@@ -34076,6 +34085,7 @@ ${foot}
           <div class="cp-card"><div class="cp-card__t">Disponibilidad de canales</div><div class="cp-fields">
             ${_cpChannelRow('LinkedIn', c.linkedin ? (c.no_linkedin ? ['URL no válida', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5']) : ['Sin URL', '#6C6862', '#F1EFEB'],
               [c.linkedin ? `<a class="cp-dispo-b cp-dispo-b--xs" href="${esc(c.linkedin)}" target="_blank" rel="noopener">Abrir</a>` : '',
+               c.linkedin_sales_nav ? `<a class="cp-dispo-b cp-dispo-b--xs" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">Sales Nav</a>` : '',
                c.linkedin ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(c.linkedin.replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
                `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpFocusField('linkedin')">Corregir</button>`,
                `<button class="cp-dispo-b cp-dispo-b--xs${c.no_linkedin ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoLinkedIn(${id})">${c.no_linkedin ? 'Marcar válida' : 'Marcar no válida'}</button>`].filter(Boolean))}
@@ -34096,7 +34106,9 @@ ${foot}
           </div></div>
 </div>`;
   }
+  const _SN_ICO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>';
   const _STRIP_ICO = {
+    sn: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
     mail: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>',
     phone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
     in: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>',
@@ -34116,6 +34128,7 @@ ${foot}
     if (tel) items.push(['phone', 'Teléfono', `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`, esc(String(tel))]);
     if (_waDigits(c)) items.push(['phone', 'WhatsApp', `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"`, esc(String(c.movil || c.telefono || ''))]);
     if (c.linkedin) items.push(['in', 'LinkedIn', `href="${esc(c.linkedin)}" target="_blank" rel="noopener"`]);
+    if (c.linkedin_sales_nav) items.push(['sn', 'Sales Navigator', `href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener"`, esc(c.linkedin_sales_nav)]);
     if (c.fuente) items.push(['src', c.fuente, '']);
     if (!items.length) return '';
     return `<div class="cp-strip">${items.map(([ic, val, attr, tip]) => attr ? `<a class="cp-strip__i" title="${tip || esc(c[ic === 'mail' ? 'email' : ic === 'in' ? 'linkedin' : 'x'] || '')}" ${attr}${attr.includes('onclick=') ? '' : ' onclick="event.stopPropagation()"'}>${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
@@ -35385,6 +35398,7 @@ ${foot}
           <button class="cp-act" onclick="LeadManagerModule.openCompany(${id})">✎ Editar</button>
           <button class="cp-act" onclick="LeadManagerModule.openContact(null,${id})">＋ Prospecto</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(_urlFix(c.linkedin))}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
+          ${c.linkedin_sales_nav ? `<a class="cp-act cp-act--in" href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">Sales Navigator ›</a>` : ''}
           ${c.website ? `<a class="cp-act" href="${esc(_urlFix(c.website))}" target="_blank" rel="noopener">Sitio web ›</a>` : ''}
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.deleteCompany(${id},1)">Eliminar</button>
         </div>

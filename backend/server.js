@@ -7918,6 +7918,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           nombre = parts.shift() || ''; apellido = parts.join(' ');
         }
         const email = _lmS(f.email).toLowerCase();
+        const _lg = _canteraLangs(f);   // idioma principal + lista de idiomas del contacto
         // ── UPSERT: si ya existe (por ID del export, o por email) se ACTUALIZA — no se duplica.
         // Solo se pisan los campos que VIENEN con valor: una celda vacía nunca borra datos.
         let existing = null;
@@ -7938,9 +7939,10 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             linkedin: _lmS(f.linkedin), linkedin_sales_nav: _lmCleanUrlish(f.linkedin_sales_nav), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
             estado: _lmS(f.estado), fuente: _lmS(f.fuente),
             contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), analisis: _lmS(f.analisis), notas: _lmS(f.notas),
-            idioma: require('./services/geoService').normalizeLanguage(f.idioma),   // el idioma del archivo manda sobre el deducido por país
+            idioma: _lg.principal,   // el idioma del archivo manda sobre el deducido por país
           };
           for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
+          if (_lg.lista.length) sets.push(`idiomas=$${vals.push(JSON.stringify(_lg.lista))}::jsonb`);
           // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
           if (email && email !== String(existing.email || '').trim().toLowerCase()) {
             sets.push(`email=$${vals.push(email)}`);
@@ -7978,7 +7980,8 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch,idioma)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
-            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', require('./services/geoService').normalizeLanguage(f.idioma)]);
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', _lg.principal]);
+        if (_lg.lista.length) await pool.query(`UPDATE lm_contacts SET idiomas=$1::jsonb WHERE id=(SELECT MAX(id) FROM lm_contacts WHERE user_id=$2)`, [JSON.stringify(_lg.lista), uid]);
         if (_lmS(f.linkedin_sales_nav)) await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=(SELECT MAX(id) FROM lm_contacts WHERE user_id=$2)`, [_lmCleanUrlish(f.linkedin_sales_nav), uid]);
         summary.contactsCreated++;
       }
@@ -9766,6 +9769,8 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
       if (existing) _gate.reusadas++;
+      { const _cx = Object.assign({}, (co.raw && typeof co.raw === 'object') ? co.raw : {}); if (co.ubicacion && !_cx['Company Location']) _cx['Company Location'] = co.ubicacion;
+        if (Object.keys(_cx).length) await cl.query(`UPDATE lm_companies SET raw = $1::jsonb || COALESCE(raw,'{}'::jsonb), updated_at=NOW() WHERE id=$2 AND user_id=$3`, [JSON.stringify(_cx), coId, uid]); }
       await _cl.linkCompany(cl, uid, coId, outboundClientId, 'cantera');
 
       const estados = includeRespaldo ? ['decide', 'respaldo'] : ['decide'];
@@ -9806,6 +9811,14 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         }
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, contactId]);
         if (k.idioma || (Array.isArray(k.idiomas) && k.idiomas.length)) await cl.query(`UPDATE lm_contacts SET idioma = CASE WHEN COALESCE(idioma,'')='' THEN $1 ELSE idioma END, idiomas = CASE WHEN idiomas IS NULL OR idiomas = '[]'::jsonb THEN $2::jsonb ELSE idiomas END WHERE id=$3`, [k.idioma || '', JSON.stringify(k.idiomas || []), contactId]);
+        { // Todo lo que trajo el archivo viaja con el contacto (lo que ya tenía el CRM manda; solo se completa lo que faltaba).
+          const _x = Object.assign({}, (k.raw && typeof k.raw === 'object') ? k.raw : {});
+          const _sig = { 'Lead Location': k.ubicacion, 'Connection Degree': k.conexion_grado, 'Premium Account': k.premium, 'Tenure in Role': k.antiguedad_cargo,
+            'Mutual Connections': k.conexiones_mutuas, 'Recently Changed Jobs': k.cambio_reciente, 'Posted on LinkedIn Recently': k.publico_reciente, 'Follows Your Company': k.sigue_empresa };
+          for (const [kk, vv] of Object.entries(_sig)) if (vv && !_x[kk]) _x[kk] = vv;
+          if (Object.keys(_x).length) await cl.query(`UPDATE lm_contacts SET raw = $1::jsonb || COALESCE(raw,'{}'::jsonb) WHERE id=$2`, [JSON.stringify(_x), contactId]);
+          if (dup) await cl.query(`UPDATE lm_contacts SET cargo = CASE WHEN COALESCE(cargo,'')='' THEN $1 ELSE cargo END, linkedin = CASE WHEN COALESCE(linkedin,'')='' THEN $2 ELSE linkedin END, seniority = CASE WHEN COALESCE(seniority,'')='' THEN $3 ELSE seniority END, departamento = CASE WHEN COALESCE(departamento,'')='' THEN $4 ELSE departamento END WHERE id=$5`, [k.cargo || '', k.linkedin || '', k.seniority || '', k.departamento || '', contactId]);
+        }
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (dup) {
@@ -9900,6 +9913,8 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
       if (existing) _gate.reusadas++;
+      { const _cx = Object.assign({}, (co.raw && typeof co.raw === 'object') ? co.raw : {}); if (co.ubicacion && !_cx['Company Location']) _cx['Company Location'] = co.ubicacion;
+        if (Object.keys(_cx).length) await cl.query(`UPDATE lm_companies SET raw = $1::jsonb || COALESCE(raw,'{}'::jsonb), updated_at=NOW() WHERE id=$2 AND user_id=$3`, [JSON.stringify(_cx), coId, uid]); }
       await _cl.linkCompany(cl, uid, coId, outboundClientId, 'cantera');
 
       // Contactos: por prioridad explícita (lo que se filtró/seleccionó), no por
@@ -9936,6 +9951,14 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
         }
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [k.ciudad || _loc.ciudad, k.region || _loc.region, k.pais || _loc.pais, contactId]);
         if (k.idioma || (Array.isArray(k.idiomas) && k.idiomas.length)) await cl.query(`UPDATE lm_contacts SET idioma = CASE WHEN COALESCE(idioma,'')='' THEN $1 ELSE idioma END, idiomas = CASE WHEN idiomas IS NULL OR idiomas = '[]'::jsonb THEN $2::jsonb ELSE idiomas END WHERE id=$3`, [k.idioma || '', JSON.stringify(k.idiomas || []), contactId]);
+        { // Todo lo que trajo el archivo viaja con el contacto (lo que ya tenía el CRM manda; solo se completa lo que faltaba).
+          const _x = Object.assign({}, (k.raw && typeof k.raw === 'object') ? k.raw : {});
+          const _sig = { 'Lead Location': k.ubicacion, 'Connection Degree': k.conexion_grado, 'Premium Account': k.premium, 'Tenure in Role': k.antiguedad_cargo,
+            'Mutual Connections': k.conexiones_mutuas, 'Recently Changed Jobs': k.cambio_reciente, 'Posted on LinkedIn Recently': k.publico_reciente, 'Follows Your Company': k.sigue_empresa };
+          for (const [kk, vv] of Object.entries(_sig)) if (vv && !_x[kk]) _x[kk] = vv;
+          if (Object.keys(_x).length) await cl.query(`UPDATE lm_contacts SET raw = $1::jsonb || COALESCE(raw,'{}'::jsonb) WHERE id=$2`, [JSON.stringify(_x), contactId]);
+          if (dup) await cl.query(`UPDATE lm_contacts SET cargo = CASE WHEN COALESCE(cargo,'')='' THEN $1 ELSE cargo END, linkedin = CASE WHEN COALESCE(linkedin,'')='' THEN $2 ELSE linkedin END, seniority = CASE WHEN COALESCE(seniority,'')='' THEN $3 ELSE seniority END, departamento = CASE WHEN COALESCE(departamento,'')='' THEN $4 ELSE departamento END WHERE id=$5`, [k.cargo || '', k.linkedin || '', k.seniority || '', k.departamento || '', contactId]);
+        }
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (dup) {
