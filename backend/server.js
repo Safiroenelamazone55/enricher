@@ -4381,6 +4381,25 @@ async function _seqHasCompanyQueue(uid, sid) {
 }
 // ── Lista de exclusión de empresas (no contactar) ──
 const _excl = require('./services/exclusions');
+const _cl = require('./services/clientLinks');
+// Cantera → CRM, reglas por cliente (2026-10-26): empresa excluida para el cliente = se omite entera; contacto ya
+// contactado por el cliente = no se vuelve a mover/enrolar. Ver services/clientLinks.js.
+function _cantGateCompany(gate, co) {
+  for (const ex of gate.exs) {
+    const how = _excl.matchCompany(ex, { nombre: co.nombre, dominio: co.dominio, website: co.website, linkedin: co.linkedin, ciudad: co.ciudad });
+    if (how) return { ex, how };
+  }
+  return null;
+}
+function _gateOut(g) {
+  const ei = g.enrollInfo || {};
+  return {
+    companiesExcluded: g.excluidas.length, excluidas: g.excluidas.slice(0, 30),
+    companiesReused: g.reusadas, contactsReused: g.contactosReusados,
+    contactsAlreadyContacted: g.yaContactados.length, yaContactados: g.yaContactados.slice(0, 50),
+    enrollBlocked: ei.ya_contactados || 0, enrollBlockedDetalle: ei.ya_contactados_detalle || [],
+  };
+}
 app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
@@ -4518,6 +4537,21 @@ async function _lmAddMembership(req, res, kind) {
         res.json = o => _rj0(o && typeof o === 'object' && !Array.isArray(o) ? { ...o, excluidos: fx.excluded.length, excluidos_detalle: fx.excluded.slice(0, 12) } : o);
       }
     }
+    // Regla "mismo contacto, mismo cliente" (2026-10-26): quien ya fue contactado por ESTE cliente, o está en marcha en otra secuencia
+    // suya, no se enrola en otra. Para otro cliente sí se permite. Se puede forzar con forzar_contactados:true.
+    if (b.forzar_contactados !== true && toAdd.length) {
+      const _cid = (await pool.query(`SELECT outbound_client_id FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0]?.outbound_client_id;
+      if (_cid) {
+        const _bl = await _cl.blockedByClient(pool, uid, toAdd, _cid, { excludeSequenceId: targetId });
+        if (_bl.size) {
+          const _nm = new Map((await pool.query(`SELECT id, TRIM(nombre||' '||COALESCE(apellido,'')) AS nombre, empresa_nombre FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, [..._bl.keys()]])).rows.map(r => [r.id, r]));
+          const _det = [..._bl].map(([id, v]) => ({ id, nombre: _nm.get(id)?.nombre || '', empresa: _nm.get(id)?.empresa_nombre || '', motivo: v.motivo, fecha: v.fecha, secuencia: v.secuencia }));
+          toAdd = toAdd.filter(id => !_bl.has(id));
+          const _rjb = res.json.bind(res);
+          res.json = o => _rjb(o && typeof o === 'object' && !Array.isArray(o) ? { ...o, ya_contactados: _det.length, ya_contactados_detalle: _det.slice(0, 30) } : o);
+        }
+      }
+    }
     // Los contactos con conversación abierta (Respondió / Interesado / Más adelante / Reunión / Derivó) NO se enrolan en una secuencia fría:
     // ya tienen su propio seguimiento (tareas de seguimiento, Leads, Deals). Se informan como omitidos; se pueden forzar con incluir_respondieron:true.
     let _omit = [];
@@ -4610,6 +4644,15 @@ async function _lmAddMembership(req, res, kind) {
       FROM unnest($3::int[], $4::text[]) AS t(cid, sd)
       ON CONFLICT (contact_id, ${col}) DO NOTHING
     `, [uid, targetId, toAdd, dates]);
+    { // Registro cliente ↔ contacto/empresa (sin duplicar filas).
+      const _sc = (await pool.query(`SELECT outbound_client_id FROM sequences WHERE id=$1`, [targetId])).rows[0];
+      if (_sc && _sc.outbound_client_id) {
+        try {
+          await pool.query(`INSERT INTO lm_contact_clients (user_id,contact_id,outbound_client_id,source) SELECT $1,cid,$2,'secuencia' FROM unnest($3::int[]) cid ON CONFLICT DO NOTHING`, [uid, _sc.outbound_client_id, toAdd]);
+          await pool.query(`INSERT INTO lm_company_clients (user_id,company_id,outbound_client_id,source) SELECT DISTINCT $1,k.company_id,$2,'secuencia' FROM lm_contacts k WHERE k.id = ANY($3::int[]) AND k.company_id IS NOT NULL ON CONFLICT DO NOTHING`, [uid, _sc.outbound_client_id, toAdd]);
+        } catch (_) {}
+      }
+    }
     const spreadDays = new Set(dates).size;
     res.json({ added: r.rowCount + queueIds.size, requested: ids.length, spread_days: spreadDays, per_day: drip, misma_empresa: mismaEmpresa, en_espera_rotacion: queueIds.size });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
@@ -9663,7 +9706,9 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
     if (!companies.length) throw new Error('No hay empresas calificadas todavía (paso 2) para mover');
 
     let companiesPromoted = 0, contactsPromoted = 0;
+    const _gate = { exs: await _excl.loadApplicable(pool, uid, { clientId: outboundClientId, campaignId: campaignId, sequenceId: sequenceId }), excluidas: [], yaContactados: [], reusadas: 0, contactosReusados: 0, enrollInfo: null };
     for (const co of companies) {
+      { const _x = _cantGateCompany(_gate, co); if (_x) { _gate.excluidas.push({ empresa: co.nombre, motivo: _x.ex.motivo || _x.ex.categoria || '', lista: _x.ex.lista || '', scope: _x.ex.scope }); continue; } }
       const dominio = _lmNormDomain(co.dominio || co.website || '');
       let coId;
       const existing = dominio
@@ -9684,6 +9729,8 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
+      if (existing) _gate.reusadas++;
+      await _cl.linkCompany(cl, uid, coId, outboundClientId, 'cantera');
 
       const estados = includeRespaldo ? ['decide', 'respaldo'] : ['decide'];
       const { rows: contactos } = await cl.query(
@@ -9724,6 +9771,12 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
+        if (dup) {
+          const _b1 = (await _cl.blockedByClient(cl, uid, [contactId], outboundClientId)).get(contactId);
+          if (_b1) { _gate.yaContactados.push({ id: contactId, nombre: [k.nombre, k.apellido].filter(Boolean).join(' '), empresa: co.nombre, motivo: _b1.motivo, fecha: _b1.fecha, secuencia: _b1.secuencia }); continue; }
+          _gate.contactosReusados++;
+        }
+        await _cl.linkContact(cl, uid, contactId, outboundClientId, 'cantera');
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);
         contactsPromoted++;
@@ -9744,11 +9797,11 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
     if (sequenceId && lmContactIds.length) {
       try {
         const r = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId);
-        enrolled = r.added || 0;
+        enrolled = r.added || 0; _gate.enrollInfo = r;
         await pool.query(`UPDATE sequences SET origen_cantera=FALSE WHERE id=$1 AND user_id=$2`, [sequenceId, uid]);
-      } catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message }); }
+      } catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message, ..._gateOut(_gate) }); }
     }
-    res.json({ companiesPromoted, contactsPromoted, enrolled });
+    res.json({ companiesPromoted, contactsPromoted, enrolled, ..._gateOut(_gate) });
   } catch (err) {
     await cl.query('ROLLBACK').catch(() => {});
     console.error('[cantera] promote', err.message);
@@ -9786,7 +9839,9 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
     if (!companies.length) throw new Error('Ninguna de las empresas seleccionadas existe en este borrador');
 
     let companiesPromoted = 0, contactsPromoted = 0;
+    const _gate = { exs: await _excl.loadApplicable(pool, uid, { clientId: outboundClientId, campaignId: campaignId, sequenceId: sequenceId }), excluidas: [], yaContactados: [], reusadas: 0, contactosReusados: 0, enrollInfo: null };
     for (const co of companies) {
+      { const _x = _cantGateCompany(_gate, co); if (_x) { _gate.excluidas.push({ empresa: co.nombre, motivo: _x.ex.motivo || _x.ex.categoria || '', lista: _x.ex.lista || '', scope: _x.ex.scope }); continue; } }
       const dominio = _lmNormDomain(co.dominio || co.website || '');
       let coId;
       const existing = dominio
@@ -9807,6 +9862,8 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
       await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
       await _promoteDatosExtra(cl, uid, coId, co.datos_extra);
       companiesPromoted++;
+      if (existing) _gate.reusadas++;
+      await _cl.linkCompany(cl, uid, coId, outboundClientId, 'cantera');
 
       // Contactos: por prioridad explícita (lo que se filtró/seleccionó), no por
       // decide/respaldo del motor — la prioridad manual pisa esa clasificación
@@ -9843,6 +9900,12 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
         if (dup) await cl.query(`UPDATE lm_contacts SET ciudad=CASE WHEN COALESCE(ciudad,'')='' THEN $1 ELSE ciudad END, region=CASE WHEN COALESCE(region,'')='' THEN $2 ELSE region END, pais=CASE WHEN COALESCE(pais,'')='' THEN $3 ELSE pais END WHERE id=$4`, [_loc.ciudad, _loc.region, _loc.pais, contactId]);
         if (k.linkedin_sales_nav) await cl.query(`UPDATE lm_contacts SET linkedin_sales_nav = CASE WHEN COALESCE(linkedin_sales_nav,'')='' THEN $1 ELSE linkedin_sales_nav END WHERE id=$2`, [k.linkedin_sales_nav, contactId]);
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
+        if (dup) {
+          const _b1 = (await _cl.blockedByClient(cl, uid, [contactId], outboundClientId)).get(contactId);
+          if (_b1) { _gate.yaContactados.push({ id: contactId, nombre: [k.nombre, k.apellido].filter(Boolean).join(' '), empresa: co.nombre, motivo: _b1.motivo, fecha: _b1.fecha, secuencia: _b1.secuencia }); continue; }
+          _gate.contactosReusados++;
+        }
+        await _cl.linkContact(cl, uid, contactId, outboundClientId, 'cantera');
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
         lmContactIds.push(contactId);
         contactsPromoted++;
@@ -9853,12 +9916,12 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
     let enroll = { added: 0 };
     if (lmContactIds.length) {
       try {
-        enroll = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId);
+        enroll = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId); _gate.enrollInfo = enroll;
         await pool.query(`UPDATE sequences SET origen_cantera=FALSE WHERE id=$1 AND user_id=$2`, [sequenceId, uid]);
       }
-      catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message }); }
+      catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message, ..._gateOut(_gate) }); }
     }
-    res.json({ companiesPromoted, contactsPromoted, enrolled: enroll.added || 0 });
+    res.json({ companiesPromoted, contactsPromoted, enrolled: enroll.added || 0, ..._gateOut(_gate) });
   } catch (err) {
     await cl.query('ROLLBACK').catch(() => {});
     console.error('[cantera] send-to-sequence', err.message);

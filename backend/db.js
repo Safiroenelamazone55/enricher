@@ -2002,6 +2002,47 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_user_idx ON lm_company_sequences (user_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_seq_idx  ON lm_company_sequences (sequence_id, estado);`);
+    // ── Registro cliente ↔ empresa / contacto (sin duplicar filas) ──
+    // Una empresa vive UNA vez en lm_companies pero puede pertenecer a varios clientes; igual con los contactos.
+    // Ver services/clientLinks.js (regla "ya contactado por este cliente").
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_company_clients (
+        id                 SERIAL      PRIMARY KEY,
+        user_id            INTEGER,
+        company_id         INTEGER     NOT NULL REFERENCES lm_companies(id) ON DELETE CASCADE,
+        outbound_client_id INTEGER     NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        source             TEXT        NOT NULL DEFAULT '',
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (company_id, outbound_client_id)
+      );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocl_client_idx ON lm_company_clients (outbound_client_id);`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_contact_clients (
+        id                 SERIAL      PRIMARY KEY,
+        user_id            INTEGER,
+        contact_id         INTEGER     NOT NULL REFERENCES lm_contacts(id) ON DELETE CASCADE,
+        outbound_client_id INTEGER     NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        source             TEXT        NOT NULL DEFAULT '',
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (contact_id, outbound_client_id)
+      );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_kcl_client_idx ON lm_contact_clients (outbound_client_id);`);
+    // Relleno con lo que ya existe (idempotente: ON CONFLICT DO NOTHING). Solo agrega vínculos, nunca borra.
+    try {
+      await pool.query(`INSERT INTO lm_contact_clients (user_id, contact_id, outbound_client_id, source)
+        SELECT user_id, id, outbound_client_id, 'actual' FROM lm_contacts WHERE outbound_client_id IS NOT NULL ON CONFLICT DO NOTHING`);
+      await pool.query(`INSERT INTO lm_contact_clients (user_id, contact_id, outbound_client_id, source)
+        SELECT DISTINCT cs.user_id, cs.contact_id, s.outbound_client_id, 'secuencia' FROM lm_contact_sequences cs
+          JOIN sequences s ON s.id = cs.sequence_id WHERE s.outbound_client_id IS NOT NULL ON CONFLICT DO NOTHING`);
+      await pool.query(`INSERT INTO lm_contact_clients (user_id, contact_id, outbound_client_id, source)
+        SELECT DISTINCT cc.user_id, cc.contact_id, c.outbound_client_id, 'campaña' FROM lm_contact_campaigns cc
+          JOIN campaigns c ON c.id = cc.campaign_id WHERE c.outbound_client_id IS NOT NULL ON CONFLICT DO NOTHING`);
+      await pool.query(`INSERT INTO lm_company_clients (user_id, company_id, outbound_client_id, source)
+        SELECT user_id, id, outbound_client_id, 'actual' FROM lm_companies WHERE outbound_client_id IS NOT NULL ON CONFLICT DO NOTHING`);
+      await pool.query(`INSERT INTO lm_company_clients (user_id, company_id, outbound_client_id, source)
+        SELECT DISTINCT k.user_id, k.company_id, kc.outbound_client_id, 'contactos' FROM lm_contact_clients kc
+          JOIN lm_contacts k ON k.id = kc.contact_id WHERE k.company_id IS NOT NULL ON CONFLICT DO NOTHING`);
+    } catch (e) { console.warn('[db] relleno cliente↔empresa/contacto:', e.message); }
 
     // URL de LinkedIn Sales Navigator de la empresa — distinta del LinkedIn público (linkedin),
     // que es la que ella usa de verdad para prospectar. El botón "LinkedIn ↗" de Cola de
