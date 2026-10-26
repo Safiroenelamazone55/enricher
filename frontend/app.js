@@ -45713,7 +45713,7 @@ const TimerModule = (() => {
   const PRINT_I18N = {
     es: {
       locale: 'es', logoAlt: 'Logo de la empresa',
-      title: 'Reporte de Time Tracking', subtitle: 'Resumen de horas y facturación',
+      title: 'Reporte de Time Tracking', subtitle: 'Resumen de horas y facturación', subtitleTime: 'Resumen de horas trabajadas',
       period: 'Período', member: 'Miembro', client: 'Cliente', project: 'Proyecto', generated: 'Generado', allProjects: 'Todos los proyectos',
       memberMe: 'Yo', memberAll: 'Todo el equipo', today: 'Hoy', yesterday: 'Ayer',
       summary: 'Resumen', detail: 'Detalle por proyecto y tarea',
@@ -45726,7 +45726,7 @@ const TimerModule = (() => {
     },
     en: {
       locale: 'en-GB', logoAlt: 'Company logo',
-      title: 'Time Tracking Report', subtitle: 'Hours and billing summary',
+      title: 'Time Tracking Report', subtitle: 'Hours and billing summary', subtitleTime: 'Summary of hours worked',
       period: 'Period', member: 'Member', client: 'Client', project: 'Project', generated: 'Generated', allProjects: 'All projects',
       memberMe: 'Me', memberAll: 'Whole team', today: 'Today', yesterday: 'Yesterday',
       summary: 'Summary', detail: 'Detail by project and task',
@@ -45739,7 +45739,7 @@ const TimerModule = (() => {
     },
     de: {
       locale: 'de-DE', logoAlt: 'Firmenlogo',
-      title: 'Zeiterfassungsbericht', subtitle: 'Stunden- und Abrechnungsübersicht',
+      title: 'Zeiterfassungsbericht', subtitle: 'Stunden- und Abrechnungsübersicht', subtitleTime: 'Übersicht der Arbeitsstunden',
       period: 'Zeitraum', member: 'Mitglied', client: 'Kunde', project: 'Projekt', generated: 'Erstellt', allProjects: 'Alle Projekte',
       memberMe: 'Ich', memberAll: 'Gesamtes Team', today: 'Heute', yesterday: 'Gestern',
       summary: 'Zusammenfassung', detail: 'Details nach Projekt und Aufgabe',
@@ -45927,6 +45927,10 @@ const TimerModule = (() => {
     if (existing) existing.remove();
     let last = 'es';
     try { last = localStorage.getItem('kw_printLang') || 'es'; } catch (_) {}
+    // Contenido del reporte: «tarifa» = horas + tarifa por hora + monto; «tiempo» = solo tiempo de trabajo (sin montos). Sin proyectos con tarifa solo hay «tiempo».
+    const hasTarifa = !!(_ttSummary && _ttSummary.hasBilling);
+    let mode = 'tarifa'; try { mode = localStorage.getItem('kw_printMode') || 'tarifa'; } catch (_) {}
+    if (!hasTarifa) mode = 'tiempo';
     const opt = (lang, flag, name, native) =>
       `<button class="ttpl-opt${lang === last ? ' ttpl-opt--last' : ''}" data-lang="${lang}" type="button">
         <span class="ttpl-flag">${flag}</span>
@@ -45942,6 +45946,13 @@ const TimerModule = (() => {
           <div class="ttpl-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
           <div><div class="ttpl-title">Idioma del reporte</div><div class="ttpl-sub">¿En qué idioma quieres el PDF / la impresión?</div></div>
         </div>
+        <div class="ttpl-mode">
+          <div class="ttpl-mode__l">Contenido del reporte</div>
+          <div class="ttpl-seg">
+            <button type="button" class="ttpl-seg__b${mode === 'tarifa' ? ' is-on' : ''}" data-mode="tarifa" ${hasTarifa ? '' : 'disabled title="No hay proyectos con tarifa por hora en este período"'}><b>Tiempo y tarifa por hora</b><span>Horas, tarifa y monto por proyecto</span></button>
+            <button type="button" class="ttpl-seg__b${mode === 'tiempo' ? ' is-on' : ''}" data-mode="tiempo"><b>Solo tiempo de trabajo</b><span>Horas por proyecto y tarea, sin montos</span></button>
+          </div>
+        </div>
         <div class="ttpl-opts">
           ${opt('es', 'ES', 'Español', 'Español')}
           ${opt('en', 'EN', 'Inglés', 'English')}
@@ -45954,11 +45965,16 @@ const TimerModule = (() => {
     function close() { ov.remove(); document.removeEventListener('keydown', onKey); }
     ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
     ov.querySelector('.ttpl-cancel').addEventListener('click', close);
+    ov.querySelectorAll('.ttpl-seg__b').forEach(b => b.addEventListener('click', () => {
+      if (b.disabled) return;
+      mode = b.getAttribute('data-mode') || 'tarifa';
+      ov.querySelectorAll('.ttpl-seg__b').forEach(x => x.classList.toggle('is-on', x === b));
+    }));
     ov.querySelectorAll('.ttpl-opt').forEach(b => b.addEventListener('click', () => {
       const lang = b.getAttribute('data-lang') || 'es';
-      try { localStorage.setItem('kw_printLang', lang); } catch (_) {}
+      try { localStorage.setItem('kw_printLang', lang); if (hasTarifa) localStorage.setItem('kw_printMode', mode); } catch (_) {}
       close();
-      _doPrintReport(lang);
+      _doPrintReport(lang, mode);
     }));
     document.addEventListener('keydown', onKey);
     const focusTarget = ov.querySelector(`.ttpl-opt[data-lang="${last}"]`) || ov.querySelector('.ttpl-opt');
@@ -45979,8 +45995,9 @@ const TimerModule = (() => {
       return ma === mb ? `${dd.format(a)}–${dd.format(b)} ${ma}` : `${dd.format(a)} ${ma} – ${dd.format(b)} ${mb}`;
     } catch (_) { return wk; }
   }
-  function _doPrintReport(lang) {
+  function _doPrintReport(lang, mode) {
     const t = PRINT_I18N[lang] || PRINT_I18N.es;
+    const soloT = mode === 'tiempo' || !(_ttSummary && _ttSummary.hasBilling);   // solo tiempo de trabajo: sin tarifas ni montos
     const locale = t.locale;
     let pr = document.getElementById('tt-print');
     if (!pr) { pr = document.createElement('div'); pr.id = 'tt-print'; document.body.appendChild(pr); }
@@ -46002,19 +46019,21 @@ const TimerModule = (() => {
     const s = _ttSummary;
     let kpisHtml = '', tableHtml = '', chartHtml = '', legendHtml = '';
     if (s) {
-      const kpis = s.hasBilling
-        ? [[t.totalHours, s.totalStr, ''], [t.billableHours, s.billStr, ''], [t.balance, s.saldoStr, ' ttp-kpi--accent'], [t.avgRate, s.avgTarifaStr, '']]
-        : [[t.totalHours, s.totalStr, ''], [t.projects, String(s.projCount), ''], [t.tasks, String(s.totalTasks), ''], [t.balance, '—', '']];
+      const kpis = soloT
+        ? [[t.totalHours, s.totalStr, ''], [t.projects, String(s.projCount), ''], [t.tasks, String(s.totalTasks), '']]
+        : [[t.totalHours, s.totalStr, ''], [t.billableHours, s.billStr, ''], [t.balance, s.saldoStr, ' ttp-kpi--accent'], [t.avgRate, s.avgTarifaStr, '']];
       kpisHtml = kpis.map(([l, v, acc]) => `<div class="ttp-kpi${acc}"><div class="ttp-kpi__l">${esc(l)}</div><div class="ttp-kpi__v">${esc(v)}</div></div>`).join('');
+      const monto = v => soloT ? '' : `<td class="r">${esc(v)}</td>`;
       const rows = s.projects.map(pg => {
         const tRows = pg.tasks.map(tk => tk.kind === 'week'
-          ? `<tr class="ttp-trow ttp-trow--week"><td class="c1">${esc(_wkWord(lang))} ${esc(_wkLabel(tk.wk, locale))}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`
-          : `<tr class="ttp-trow ttp-trow--sub"><td class="c1">${esc(tk.titulo)}${tk.parent ? `<span class="ttp-par"> · ${esc(tk.parent)}</span>` : ''}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`).join('');
-        return `<tbody class="ttp-grp"><tr class="ttp-prow"><td>${esc(pg.nombre)}${pg.rateStr ? `<span class="ttp-rate">${esc(pg.rateStr)}</span>` : ''}</td><td class="r">${esc(pg.secStr)}</td><td class="r">${esc(pg.montoStr)}</td></tr>${tRows}</tbody>`;
+          ? `<tr class="ttp-trow ttp-trow--week"><td class="c1">${esc(_wkWord(lang))} ${esc(_wkLabel(tk.wk, locale))}</td><td class="r">${esc(tk.secStr)}</td>${monto(tk.montoStr)}</tr>`
+          : `<tr class="ttp-trow ttp-trow--sub"><td class="c1">${esc(tk.titulo)}${tk.parent ? `<span class="ttp-par"> · ${esc(tk.parent)}</span>` : ''}</td><td class="r">${esc(tk.secStr)}</td>${monto(tk.montoStr)}</tr>`).join('');
+        return `<tbody class="ttp-grp"><tr class="ttp-prow"><td>${esc(pg.nombre)}${(!soloT && pg.rateStr) ? `<span class="ttp-rate">${esc(pg.rateStr)}</span>` : ''}</td><td class="r">${esc(pg.secStr)}</td>${monto(pg.montoStr)}</tr>${tRows}</tbody>`;
       }).join('');
-      tableHtml = `<table class="ttp-table"><thead><tr><th>${esc(t.thProjectTask)}</th><th class="r">${esc(t.thHours)}</th><th class="r">${esc(t.thAmount)}</th></tr></thead>${rows}<tfoot><tr class="ttp-total"><td>${esc(t.total)}</td><td class="r">${esc(s.totalStr)}</td><td class="r">${esc(s.saldoStr)}</td></tr></tfoot></table>`;
-      if (_billChart) { try { const src = _billChart.toBase64Image(); const ttl = (_billChartData && _billChartData.mode === 'money') ? t.chartBilling : t.chartHours; chartHtml = `<div class="ttp-sect">${esc(ttl)}</div><div class="ttp-chartbox"><img src="${src}"></div>`; } catch (_) {} }
-      legendHtml = `<div class="ttp-legend"><span><i class="ttp-dot ttp-dot--bill"></i>${esc(t.legendBill)}</span><span><i class="ttp-dot ttp-dot--flat"></i>${esc(t.legendFlat)}</span></div>`;
+      tableHtml = `<table class="ttp-table"><thead><tr><th>${esc(t.thProjectTask)}</th><th class="r">${esc(t.thHours)}</th>${soloT ? '' : `<th class="r">${esc(t.thAmount)}</th>`}</tr></thead>${rows}<tfoot><tr class="ttp-total"><td>${esc(t.total)}</td><td class="r">${esc(s.totalStr)}</td>${soloT ? '' : `<td class="r">${esc(s.saldoStr)}</td>`}</tr></tfoot></table>`;
+      // El gráfico en dinero no va en el reporte de solo tiempo; el de horas sí.
+      if (_billChart && (!soloT || (_billChartData && _billChartData.mode !== 'money'))) { try { const src = _billChart.toBase64Image(); const ttl = (_billChartData && _billChartData.mode === 'money') ? t.chartBilling : t.chartHours; chartHtml = `<div class="ttp-sect">${esc(ttl)}</div><div class="ttp-chartbox"><img src="${src}"></div>`; } catch (_) {} }
+      legendHtml = soloT ? '' : `<div class="ttp-legend"><span><i class="ttp-dot ttp-dot--bill"></i>${esc(t.legendBill)}</span><span><i class="ttp-dot ttp-dot--flat"></i>${esc(t.legendFlat)}</span></div>`;
     }
 
     const clogo = window._authUser?.companyLogo || '';
@@ -46023,7 +46042,7 @@ const TimerModule = (() => {
       <div class="ttp-accent"></div>
       <div class="ttp-body">
         <div class="ttp-header">
-          <div class="ttp-head-l"><div class="ttp-h1">${esc(t.title)}</div><div class="ttp-subtitle">${esc(t.subtitle)}${_ttProject !== 'all' ? ' — ' + esc(_ttProject) : ''}</div></div>
+          <div class="ttp-head-l"><div class="ttp-h1">${esc(t.title)}</div><div class="ttp-subtitle">${esc(soloT ? (t.subtitleTime || t.subtitle) : t.subtitle)}${_ttProject !== 'all' ? ' — ' + esc(_ttProject) : ''}</div></div>
           ${clogo ? `<img class="ttp-clogo" src="${esc(clogo)}" alt="${esc(t.logoAlt)}">` : ''}
         </div>
         <div class="ttp-rule"></div>
