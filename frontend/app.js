@@ -39412,10 +39412,10 @@ const HerramientasModule = (() => {
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
     { id: 'nova-activity-web', nombre: 'Elevn Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
       desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
-      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
     { id: 'nova-activity-desktop', nombre: 'Elevn Activity · Escritorio', tipo: 'App de Windows', ico: 'win', prev: 'tray', token: true,
       desc: 'Mide el tiempo por aplicación (Figma, VS Code, Word…) y funciona con varios perfiles de Chrome. Corre en la bandeja y solo captura con el timer encendido.',
-      pasos: ['Descarga y ejecuta el instalador. Si Windows muestra «Windows protegió tu PC», pulsa <b>Más información → Ejecutar de todas formas</b> (el instalador aún no tiene firma digital).', 'En Nova, ve a <b>Time Tracking → Fuentes de actividad → Conectar</b> y copia tu token.', 'Pégalo cuando el asistente lo pida. Queda un icono en la bandeja y arranca solo con Windows.', 'Enciende un timer en Nova: desde ese momento registra las apps que usas.'] },
+      pasos: ['Descarga y ejecuta el instalador. Si Windows muestra «Windows protegió tu PC», pulsa <b>Más información → Ejecutar de todas formas</b> (el instalador aún no tiene firma digital).', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Pégalo cuando el asistente lo pida. Queda un icono en la bandeja y arranca solo con Windows.', 'Enciende un timer en Nova: desde ese momento registra las apps que usas.'] },
   ];
   const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
   function _card(t) {
@@ -39460,7 +39460,8 @@ const HerramientasModule = (() => {
     const a = document.createElement('a'); a.href = `${API}/tools/${id}/download`; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
     showBanner('Descargando… revisa tu carpeta de Descargas', 'success');
   }
-  function abrirTT() { if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab('mgmt-timetracking'); }
+  // Antes llevaba a Time Tracking → Fuentes de actividad; esa tarjeta se quitó: el token se genera aquí mismo, en Configuración → Herramientas.
+  function abrirTT() { if (typeof TimerModule !== 'undefined' && TimerModule.connectExtension) TimerModule.connectExtension(); }
   return { render, descargar, pasos, abrirTT };
 })();
 window.HerramientasModule = HerramientasModule;
@@ -46403,6 +46404,7 @@ const TimerModule = (() => {
           <div class="ttd-empty__ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
           <p class="ttd-empty__t">Conecta Nova Extension o Desktop Agent</p>
           <p class="ttd-empty__s">Aquí verás las apps y websites en los que realmente trabajaste, fuera de Nova.</p>
+          <button class="hrm-lnk" type="button" onclick="window._novaSwitchTab && window._novaSwitchTab('herramientas')">Configuración → Herramientas ›</button>
         </div>`;
     const _appsTotal = _appsList.reduce((a, x) => a + (x.dur || 0), 0);
     const appsCard = `<div class="ttd-card tt2-card">
@@ -46531,7 +46533,7 @@ const TimerModule = (() => {
       ${filterBar}
       ${timeline}
       <div class="tt2-row3">${workingHours}${breakdownCard}${appsCard}</div>
-      <div class="tt2-row3">${projectsCard}${reviewCard}${sources}</div>
+      <div class="tt2-row3 tt2-row3--one">${projectsCard}</div>
       ${billingCard}
       ${sessionsCard}
       ${teamHtml}
