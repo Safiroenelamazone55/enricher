@@ -6639,7 +6639,7 @@ const CanteraModule = (() => {
     const row = i => { const c = L[i], r = _cargoRanks[c.key] || '';
       return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #F1EFEB">
         <input type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)" style="width:58px;padding:6px 8px;border:1px solid ${r ? '#A7D7BE' : '#D9D6CF'};background:${r ? '#EEF8F2' : '#fff'};border-radius:8px;font:inherit;text-align:center">
-        <div style="flex:1;min-width:0"><b>${esc(c.label)}</b></div>
+        <div style="flex:1;min-width:0"><b>${esc(c.label)}</b>${(c.variantes || []).some(v => _cgN(v.texto).replace(/[^a-z0-9]/g, '') !== _cgN(c.label).replace(/[^a-z0-9]/g, '')) ? `<div class="cant-hint" style="margin:1px 0 0;white-space:normal">incluye: ${esc(c.variantes.slice(0, 4).map(v => v.texto).join(' · '))}${(c.variantesTotal || 0) > 4 ? ` · +${c.variantesTotal - 4} más` : ''}</div>` : ''}</div>
         <span class="cant-hint" style="margin:0;white-space:nowrap">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span></div>`; };
     return `${ranked.map(row).join('')}${shown.map(row).join('')}` +
       (hidden > 0 ? `<div class="cant-hint" style="margin:8px 0 0">Hay ${hidden} cargo(s) más${q ? '' : ' (menos frecuentes)'}: usa el buscador para encontrarlos.</div>` : '') +
@@ -6884,7 +6884,8 @@ const CanteraModule = (() => {
     // de la última vez que se corrió "todos los campos" directamente.
     const cleanPanel = Object.keys(CANT_CLEAN_LABELS).map(f =>
       item(_lastClean[f] !== undefined ? `${CANT_CLEAN_LABELS[f]} limpiado (${_lastClean[f]})` : `Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)
-    ).join('') + item(_lastClean.ran ? `Limpiado todo (${_lastClean.total})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`);
+    ).join('') + item(_lastClean.ran ? `Limpiado todo (${_lastClean.total})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`)
+      + item(_lastClean.cargo !== undefined ? `Cargos de los contactos limpiados (${_lastClean.cargo})` : 'Limpiar cargos de los contactos', `CanteraModule.runCleanCargos()`);
     const enrichPanel = Object.keys(CANT_ENRICH_LABELS).map(f =>
       item(_lastEnrich[f] !== undefined ? `${CANT_ENRICH_LABELS[f]} enriquecido (${_lastEnrich[f]})` : `Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)
     ).join('') + item(_lastEnrich.ran ? `Enriquecido todo (${_lastEnrich.total})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
@@ -7043,10 +7044,13 @@ const CanteraModule = (() => {
     setTimeout(() => { document.addEventListener('click', onDoc); window.addEventListener('scroll', onScroll, true); }, 0);
   }
   let _cantOpState = null; // { kind:'clean'|'enrich', field, changes }
-  async function _cantPreview(kind, field, endpoint, labels, titlePrefix) {
+  async function _cantPreview(kind, field, endpoint, labels, titlePrefix, opts) {
+    // opts.entity='contacts' + opts.extra={company_ids}: limpia los CONTACTOS de las empresas marcadas (p. ej. su cargo). Por defecto, las empresas.
+    const _ent = (opts && opts.entity) || 'companies', _ex = (opts && opts.extra) || {};
+    const _bodyBase = { entity: _ent, ids: _ent === 'companies' ? [..._coSel] : [], ..._ex };
     const fields = field ? [field] : Object.keys(labels);
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields, apply: false }) });
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ..._bodyBase, fields, apply: false }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       const changes = d.changes || [];
@@ -7063,14 +7067,16 @@ const CanteraModule = (() => {
         // Aunque no haya nada que cambiar, la corrida en sí debe quedar guardada
         // en el borrador — si no, se pierde al recargar y "Limpiar Nombre" vuelve
         // a verse como si nunca se hubiera corrido (reportado 2026-09-06).
-        apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields, apply: true }) }).catch(() => {});
+        apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ..._bodyBase, fields, apply: true }) }).catch(() => {});
         return;
       }
-      _cantOpState = { kind, field, endpoint, fields, changes };
+      _cantOpState = { kind, field, endpoint, fields, changes, base: _bodyBase };
       _cantOpModal(titlePrefix + (field ? ' ' + labels[field] : ' todos los campos'));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function runClean(field) { if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; } _cantPreview('clean', field, 'bulk-clean', CANT_CLEAN_LABELS, 'Limpiar'); }
+  // Limpia el CARGO de los contactos de las empresas marcadas (quita el nombre de la empresa, paréntesis, «| X», geografía). Misma vista previa.
+  function runCleanCargos() { if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; } _cantPreview('clean', 'cargo', 'bulk-clean', { cargo: 'cargos de los contactos' }, 'Limpiar', { entity: 'contacts', extra: { company_ids: [..._coSel] } }); }
   function runEnrich(field) { if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; } _cantPreview('enrich', field, 'bulk-enrich', CANT_ENRICH_LABELS, 'Enriquecer'); }
   function _cantOpModal(titulo) {
     document.getElementById('cant-op-modal')?.remove();
@@ -7079,7 +7085,7 @@ const CanteraModule = (() => {
     m.onclick = e => { if (e.target === m) closeCantOp(); };
     const rowName = id => (_companies.find(c => c.id === id) || {}).nombre || `#${id}`;
     const body = changes.length
-      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-n">${esc(rowName(c.id))}</span><span class="dg-clean-f">${esc(c.campo)}</span><span class="dg-clean-a">${esc(c.antes) || 'vacío'}</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues) || '—'}</span></div>`).join('')}</div>`
+      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-n">${esc(c.etiqueta || rowName(c.id))}</span><span class="dg-clean-f">${esc(c.campo)}</span><span class="dg-clean-a">${esc(c.antes) || 'vacío'}</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues) || '—'}</span></div>`).join('')}</div>`
       : `<div class="cp-empty2" style="padding:22px">Nada que cambiar en lo seleccionado.</div>`;
     m.innerHTML = `<div class="fin-pi-box lm-flt-box">
       <div class="fin-pi-box__hd"><h3>${esc(titulo)} · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="CanteraModule.closeCantOp()">✕</button></div>
@@ -7106,7 +7112,7 @@ const CanteraModule = (() => {
   async function applyCantOp() {
     const st = _cantOpState; if (!st || !st.changes.length) return;
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${st.endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields: st.fields, apply: true }) });
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${st.endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(st.base || { entity: 'companies', ids: [..._coSel] }), fields: st.fields, apply: true }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       if (!d.started) throw new Error('No se pudo iniciar');
@@ -8202,7 +8208,7 @@ const CanteraModule = (() => {
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cargoSearch, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
-    toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
+    toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
     openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, prevManualValidation, nextManualValidation, quitarValidacionManual, openAudit };

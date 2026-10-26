@@ -3889,12 +3889,13 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
   const table = entity === 'companies' ? 'lm_companies' : 'lm_contacts';
   try {
     const { rows } = await pool.query(
-      `SELECT id, ${fields.join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+      `SELECT id, ${fields.join(',')}${entity === 'contacts' ? ', empresa_nombre' : ''} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
     const changes = [];
     for (const row of rows) {
       for (const field of fields) {
         const before = row[field] == null ? '' : String(row[field]);
-        const after = cleanValue(entity, field, before);
+        let after = cleanValue(entity, field, before);
+        if (entity === 'contacts' && field === 'cargo') after = require('./services/cargoNormalService').limpiarCargo(after, row.empresa_nombre, { seguro: true });
         if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after });
       }
     }
@@ -9713,17 +9714,29 @@ app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) =>
   const allowed = CANT_CLEAN_FIELDS[entity] || [];
   const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
   const apply = !!b.apply;
+  const _porEmpresa = entity === 'contacts' && Array.isArray(b.company_ids) && b.company_ids.length;   // contactos de las empresas marcadas
   if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
-  if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
+  if (!ids.length && !_porEmpresa) return res.status(400).json({ error: 'Sin filas seleccionadas' });
   if (!fields.length) return res.status(400).json({ error: 'Sin campos para limpiar' });
   const table = entity === 'companies' ? 'cantera_companies' : 'cantera_contacts';
   try {
-    const { rows } = await pool.query(`SELECT id, ${fields.join(',')} FROM ${table} WHERE user_id=$1 AND batch_id=$2 AND id = ANY($3::int[])`, [uid, req.params.id, ids]);
+    let rows;
+    if (entity === 'contacts') {
+      // Contactos: se trae también el nombre de su empresa (para quitarlo del cargo) y quién es (para la vista previa).
+      rows = (await pool.query(
+        `SELECT k.id, ${fields.map(f => 'k.' + f).join(',')}, c.nombre AS _emp, TRIM(COALESCE(k.nombre,'') || ' ' || COALESCE(k.apellido,'')) AS _persona
+           FROM cantera_contacts k LEFT JOIN cantera_companies c ON c.id = k.company_id
+          WHERE k.user_id=$1 AND k.batch_id=$2 AND ` + (_porEmpresa ? 'k.company_id = ANY($3::int[])' : 'k.id = ANY($3::int[])'),
+        [uid, req.params.id, (_porEmpresa ? b.company_ids : ids).map(Number).filter(Boolean)])).rows;
+    } else {
+      rows = (await pool.query(`SELECT id, ${fields.join(',')} FROM ${table} WHERE user_id=$1 AND batch_id=$2 AND id = ANY($3::int[])`, [uid, req.params.id, ids])).rows;
+    }
     const changes = [];
     for (const row of rows) for (const field of fields) {
       const before = row[field] == null ? '' : String(row[field]);
-      const after = cleanValue(entity, field, before);
-      if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after });
+      let after = cleanValue(entity, field, before);
+      if (entity === 'contacts' && field === 'cargo') after = require('./services/cargoNormalService').limpiarCargo(after, row._emp, { seguro: true });
+      if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after, ...(entity === 'contacts' ? { etiqueta: [row._emp, row._persona].filter(Boolean).join(' · ') } : {}) });
     }
     if (!apply) return res.json({ preview: true, changes });
     const batchId = req.params.id;

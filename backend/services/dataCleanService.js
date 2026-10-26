@@ -20,6 +20,10 @@ const CO_LONG = [
   dot('sderl') + '(?:\\s*de\\s*' + dot('cv') + ')?',        // S. de R.L. [de C.V.]
   dot('slu'), dot('sll'), dot('slne'), dot('sau'), dot('sas'), dot('sac'), dot('scp'), dot('sca'),
   dot('srl'), dot('spa'), dot('sl'), dot('sa'), dot('sc'),
+  // Italia: S.r.l.s., S.n.c., S.c.a r.l., S.c.r.l., Soc. Coop., Società Benefit, «& C.» (Monge & C. S.p.A. → Monge)
+  dot('srls'), dot('snc'), dot('scarl'), dot('scrl'), 'soc\\.?\\s*coop\\.?', 'soci[eé]t[aà]\\s+benefit', '&\\s*c\\.?', '&\\s*cie\\.?',
+  // Perú / LatAm / Portugal / Francia / Bélgica / España: S.A.A., E.I.R.L., EIRELI, Lda., SASU, EURL, SPRL, BVBA, S.L.P.
+  dot('saa'), dot('eirl'), dot('eireli'), dot('lda'), dot('sasu'), dot('eurl'), dot('sprl'), dot('bvba'), dot('slp'),
   dot('bv'), dot('nv'), dot('sarl'), dot('llc'), dot('llp'), dot('pty') + '(?:\\s*' + dot('ltd') + ')?',
   's\\.?\\s*coop',                                           // cooperativa
   'c\\.\\s*b\\.',                                            // comunidad de bienes (solo escrita con puntos: "CB" suelto puede ser parte del nombre)
@@ -46,12 +50,13 @@ function cleanCompanyName(raw) {
   let s = String(raw == null ? '' : raw).replace(/[ ​  ]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return s;
   s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();                   // comillas envolventes
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/[\s,;:\-–—|]+$/, '');                                     // «Monge & C. -»: el guion suelto no debe tapar el sufijo anterior
     const t = s.replace(CO_SUFFIX_RE, '').replace(CO_UPPER_RE, '');
     if (t === s || !t.trim()) break;                                         // nunca dejar el nombre vacío
     s = t;
   }
-  s = s.replace(/^[\s,;:.\-–—|]+|[\s,;:.\-–—|]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+  s = s.replace(/^[\s,;:.\-–—|]+|[\s,;:.\-–—|&]+$/g, '').replace(/\s{2,}/g, ' ').trim();   // «Tom & Co» → «Tom» (no «Tom &»)
   s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();                   // comillas que quedaron al descubierto al quitar el sufijo
   // TODO MAYÚSCULAS o todo minúsculas con 2+ palabras → Capitalizado (una sola palabra en mayúsculas suele ser marca: IMMOFY, RE/MAX)
   const letters = s.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇç]/g, '');
@@ -73,7 +78,10 @@ function cleanTitle(raw) {
   const isAllUpper = s === s.toUpperCase() && s !== s.toLowerCase();
   const isAllLower = s === s.toLowerCase() && s !== s.toUpperCase();
   if (isAllUpper || isAllLower) {
-    s = s.toLowerCase().replace(/(^|\s)([a-záéíóúñ])/g, (_, sp, c) => sp + c.toUpperCase());
+    // «JEFE DE LOGISTICA» → «Jefe de Logistica» (los conectores van en minúscula, salvo al inicio)
+    // Las siglas de cargo se respetan: «CEO» no pasa a «Ceo».
+    const SIGLAS = new Set(['ceo', 'coo', 'cfo', 'cto', 'cmo', 'cio', 'cro', 'chro', 'cpo', 'vp', 'svp', 'evp', 'hr', 'rrhh', 'it', 'pmo', 'md', 'gm', 'sdr', 'bdr', 'seo', 'sem', 'crm', 'erp']);
+    s = s.toLowerCase().replace(/(^|\s)([a-záéíóúñ]+)/g, (m, sp, w, off) => SIGLAS.has(w) ? sp + w.toUpperCase() : (off > 0 && LOWER_WORDS.has(w)) ? sp + w : sp + w.charAt(0).toUpperCase() + w.slice(1));
   }
   return s;
 }
