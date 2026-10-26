@@ -11090,6 +11090,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .ttm-chosen b { font-weight: 600; font-size: .86rem; color: #14211B; } .ttm-chosen > span { color: #6C6862; font-size: .74rem; flex: 1; text-align: right; }
 .ttm-chosen > div { min-width: 0; }
 .ttm-tag { font-style: normal; background: #F1EFEB; color: #6C6862; border-radius: 99px; padding: 0 7px; font-size: .68rem; font-weight: 600; }
+.ttm-opt--root { background: #FAFBFA; }
+.ttm-opt--kid { padding-left: 26px; } .ttm-opt--kid b { font-weight: 500; font-size: .8rem; }
+.ttm-tag--c { background: #E8F1FF; color: #0062CC; }
 .ttm-chosen[hidden], .ttm-menu[hidden] { display: none; }   /* display:flex de arriba anulaba el atributo hidden y dejaba una franja vacía */
 .ttm-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .72rem; color: #8A958F; }
 .ttm-chips button { border: 1px solid #D9D6CF; background: #fff; border-radius: 99px; padding: 3px 10px; cursor: pointer; font: inherit; font-size: .72rem; color: #4B5B53; }

@@ -45810,9 +45810,9 @@ const TimerModule = (() => {
         ...tasks.map(t => {
           const arch = !!t.archivada || !!(t.parent_task_id && archIds.has(t.parent_task_id)), est = t.estado || 'pendiente';
           const etiqueta = arch ? 'Archivada' : est === 'completado' ? 'Completada' : est === 'cancelado' ? 'Cancelada' : periodoPasado(t) ? 'Periodo pasado' : '';
-          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id), kw: periodo(t) || periodo(porId.get(t.parent_task_id)) };
+          return { kind: 'proyecto', id: t.id, titulo: t.titulo, ctx: t.project_nombre || 'Sin proyecto', cliente: t.client_nombre || '', padre: t.parent_task_id ? (titPadre.get(t.parent_task_id) || '') : '', etiqueta, oculta: !!etiqueta || conSubs.has(t.id), kw: periodo(t) || periodo(porId.get(t.parent_task_id)), parentId: t.parent_task_id || null, orden: new Date(String(t.deadline || t.fecha_inicio || t.created_at || '').split('T')[0]).getTime() || 0 };
         }),
-        ...opp.map(t => { const c = t.estado === 'completada' || t.estado === 'completado'; return { kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '', etiqueta: c ? 'Completada' : '', oculta: c }; }),
+        ...opp.map(t => { const c = t.estado === 'completada' || t.estado === 'completado'; return { kind: 'oportunidad', id: t.id, titulo: t.titulo, ctx: t.opp_titulo || 'Oportunidad', cliente: t.opp_cliente || '', padre: '', etiqueta: c ? 'Completada' : '', oculta: c, parentId: null, orden: new Date(String(t.fecha_limite || '').split('T')[0]).getTime() || 0 }; }),
       ];
     } catch (_) { _tmTasks = []; }
   }
@@ -45848,18 +45848,43 @@ const TimerModule = (() => {
     if (_tmEl('ttm-q') && document.activeElement === _tmEl('ttm-q')) manualSearch(_tmEl('ttm-q').value);
   }
   function closeManual() { _tmEl('ttm-backdrop')?.remove(); document.removeEventListener('keydown', _tmEsc); _tmSel = null; }
+  // Resultados: sin escribir, las tareas vigentes. Al buscar, cada tarea sale agrupada bajo su CONTENEDOR (la semana / el periodo / la tarea madre),
+  // que también se puede elegir; así, buscando por cliente salen sus semanas (de la más reciente a la más antigua) y no 15 tareas sueltas.
+  const _TM_KIDS = 5, _TM_MAX = 40;
   function manualSearch(q) {
     const menu = _tmEl('ttm-menu'); if (!menu) return;
     q = String(q || '');
     const nq = _tmNorm(q).trim();
-    // Búsqueda por palabras sueltas (todas deben aparecer, en cualquier orden): «semana 19-25 oct», «adq oct», «archivada»…
     const toks = nq.split(/\s+/).filter(Boolean);
-    const hit = _tmTasks.filter(t => { if (!toks.length) return !t.oculta; const h = _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta, t.kw].join(' ')); return toks.every(w => h.includes(w)); });
-    _tmRes = hit.sort((a, b) => (a.oculta ? 1 : 0) - (b.oculta ? 1 : 0)).slice(0, 15);   // vigentes primero
-    const items = _tmRes.map((t, i) => `<div class="ttm-opt" onmousedown="TimerModule.manualPick(${i})"><b>${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}</span></div>`).join('')
-      + (!nq ? '<div class="ttm-opt ttm-opt--none">Escribe para buscar también tareas pasadas, completadas o archivadas.</div>' : '');
+    const row = (t, i, cls, extra) => `<div class="ttm-opt${cls ? ' ' + cls : ''}" onmousedown="TimerModule.manualPick(${i})"><b>${cls === 'ttm-opt--kid' ? '↳ ' : ''}${esc(t.titulo)}</b><span>${t.kind === 'oportunidad' ? 'Oportunidad' : 'Proyecto'} · ${esc(t.ctx)}${t.cliente ? ' · ' + esc(t.cliente) : ''}${t.padre && cls !== 'ttm-opt--kid' ? ' · subtarea de ' + esc(t.padre) : ''}${t.etiqueta ? ' · <em class="ttm-tag">' + esc(t.etiqueta) + '</em>' : ''}${extra || ''}</span></div>`;
+    let html = '';
+    _tmRes = [];
+    if (!toks.length) {
+      _tmRes = _tmTasks.filter(t => !t.oculta).sort((a, z) => z.orden - a.orden).slice(0, 15);
+      html = _tmRes.map((t, i) => row(t, i)).join('') + '<div class="ttm-opt ttm-opt--none">Escribe para buscar también por cliente, proyecto, semana, o tareas pasadas, completadas o archivadas.</div>';
+    } else {
+      const hit = _tmTasks.filter(t => { const h = _tmNorm([t.titulo, t.ctx, t.cliente, t.padre, t.etiqueta, t.kw].join(' ')); return toks.every(w => h.includes(w)); });
+      const porId = new Map(_tmTasks.filter(t => t.kind === 'proyecto').map(t => [t.id, t]));
+      const grupos = new Map();   // id del contenedor → { root, kids }
+      for (const t of hit) {
+        const padre = t.parentId && porId.get(t.parentId);
+        if (!padre) { const g = grupos.get(t.id) || { root: t, kids: [] }; g.root = t; grupos.set(t.id, g); }
+        else { const g = grupos.get(padre.id) || { root: padre, kids: [] }; g.kids.push(t); grupos.set(padre.id, g); }
+      }
+      // Vigentes primero; dentro, lo más reciente primero.
+      const lista = [...grupos.values()].sort((a, z) => (a.root.etiqueta ? 1 : 0) - (z.root.etiqueta ? 1 : 0) || z.root.orden - a.root.orden);
+      let filas = 0, omitidos = 0;
+      for (const g of lista) {
+        if (filas >= _TM_MAX) { omitidos++; continue; }
+        const nk = g.kids.length, extraC = nk ? ` · <em class="ttm-tag ttm-tag--c">contenedor · ${nk} subtarea${nk > 1 ? 's' : ''}</em>` : '';
+        _tmRes.push(g.root); html += row(g.root, _tmRes.length - 1, 'ttm-opt--root', extraC); filas++;
+        for (const k of g.kids.slice(0, _TM_KIDS)) { _tmRes.push(k); html += row(k, _tmRes.length - 1, 'ttm-opt--kid'); filas++; }
+        if (nk > _TM_KIDS) html += `<div class="ttm-opt ttm-opt--none ttm-opt--kid">+ ${nk - _TM_KIDS} subtarea(s) más: escribe su nombre para verlas</div>`;
+      }
+      if (omitidos) html += `<div class="ttm-opt ttm-opt--none">Hay ${omitidos} contenedor(es) más: añade el mes, la semana o el proyecto para acotar.</div>`;
+    }
     const libre = q.trim() ? `<div class="ttm-opt ttm-opt--free" onmousedown="TimerModule.manualFree()"><b>＋ Otra actividad: «${esc(q.trim())}»</b><span>Sin tarea asociada</span></div>` : '';
-    menu.innerHTML = (items + libre) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
+    menu.innerHTML = (html + libre) || '<div class="ttm-opt ttm-opt--none">Escribe para buscar una tarea…</div>';
     menu.hidden = false;
   }
   function _tmShowChosen() {
