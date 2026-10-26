@@ -8031,7 +8031,7 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('validacion_manual','descartado_manual'))::int AS validado_manual_total,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total,
              (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total,
-             (SELECT COUNT(*) FROM (SELECT company_id FROM cantera_contacts WHERE batch_id=b.id GROUP BY company_id HAVING COUNT(*) > 1) t)::int AS empresas_multi_contacto,
+             (SELECT COUNT(*) FROM (SELECT company_id FROM cantera_contacts WHERE batch_id=b.id AND company_id IS NOT NULL GROUP BY company_id HAVING COUNT(*) > 1) t)::int AS empresas_multi_contacto,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND NOT EXISTS (SELECT 1 FROM cantera_contacts k2 WHERE k2.company_id=c.id))::int AS empresas_sin_contacto,
              (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id AND COALESCE(k.email,'')<>'')::int AS contactos_con_email,
              (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id AND COALESCE(k.linkedin,'')<>'')::int AS contactos_con_linkedin,
@@ -8184,6 +8184,50 @@ app.get('/api/cantera/batches/:id/companies-search', requireAuth, async (req, re
       [req.params.id, req.workspaceOwnerId, like, pre]);
     res.json(rows);
   } catch (e) { console.error('[cantera] companies-search', e.message); res.status(500).json({ error: 'No se pudo buscar' }); }
+});
+// Contactos que quedaron SIN empresa en un borrador (importación de «Solo contactos» sin empresa coincidente): listar, vincular a una empresa o eliminar.
+app.get('/api/cantera/batches/:id/orphan-contacts', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nombre, apellido, cargo, email, linkedin, linkedin_sales_nav, ubicacion, ciudad, region, pais, idioma, empresa_archivo, created_at
+         FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 AND company_id IS NULL ORDER BY empresa_archivo, id`, [req.params.id, req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (e) { console.error('[cantera] orphan-contacts', e.message); res.status(500).json({ error: 'No se pudieron cargar los contactos sin empresa' }); }
+});
+// Vincula contactos sin empresa a una empresa del borrador (company_id) o crea la empresa con el nombre del archivo (crear:true) y los vincula.
+app.post('/api/cantera/batches/:id/orphan-contacts/assign', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, bid = req.params.id, b = req.body || {};
+  const ids = Array.isArray(b.contact_ids) ? b.contact_ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'Elige al menos un contacto' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const { rows: [batch] } = await cl.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [bid, uid]);
+    if (!batch) throw new Error('Borrador no encontrado (o ya fue movido al CRM)');
+    let companyId = parseInt(b.company_id) || null;
+    if (companyId) {
+      const ok = (await cl.query(`SELECT 1 FROM cantera_companies WHERE id=$1 AND batch_id=$2 AND user_id=$3`, [companyId, bid, uid])).rowCount;
+      if (!ok) throw new Error('Esa empresa no está en este borrador');
+    } else if (b.crear) {
+      const { rows: [k] } = await cl.query(`SELECT empresa_archivo FROM cantera_contacts WHERE id = ANY($1::int[]) AND batch_id=$2 AND user_id=$3 AND company_id IS NULL AND empresa_archivo<>'' LIMIT 1`, [ids, bid, uid]);
+      const nombre = _lmS(k && k.empresa_archivo);
+      if (!nombre) throw new Error('Este contacto no trae nombre de empresa: elige una empresa existente');
+      const ins = await cl.query(`INSERT INTO cantera_companies (batch_id, user_id, nombre) VALUES ($1,$2,$3) RETURNING id`, [bid, uid, nombre]);
+      companyId = ins.rows[0].id;
+    } else throw new Error('Elige una empresa');
+    const up = await cl.query(`UPDATE cantera_contacts SET company_id=$1 WHERE id = ANY($2::int[]) AND batch_id=$3 AND user_id=$4 AND company_id IS NULL`, [companyId, ids, bid, uid]);
+    await cl.query('COMMIT');
+    res.json({ ok: true, vinculados: up.rowCount || 0, company_id: companyId });
+  } catch (e) { await cl.query('ROLLBACK').catch(() => {}); res.status(400).json({ error: e.message || 'No se pudo vincular' }); }
+  finally { cl.release(); }
+});
+app.post('/api/cantera/batches/:id/orphan-contacts/delete', requireAuth, async (req, res) => {
+  try {
+    const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'Elige al menos un contacto' });
+    const r = await pool.query(`DELETE FROM cantera_contacts WHERE id = ANY($1::int[]) AND batch_id=$2 AND user_id=$3 AND company_id IS NULL`, [ids, req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true, eliminados: r.rowCount || 0 });
+  } catch (e) { console.error('[cantera] orphan delete', e.message); res.status(500).json({ error: 'No se pudo eliminar' }); }
 });
 app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
   const uid = req.workspaceOwnerId;
@@ -8528,7 +8572,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
           if (!_it && _lst.length < 300) { _it = { archivo: _sk, n: 0, personas: [], sugerida: (summary.posibles || []).find(x => x.archivo === _sk) || null }; _lst.push(_it); }
           if (_it) { _it.n++; const _pn = _lmS(f.nombre) || _lmS(f.nombre_completo) || [_lmS(f.nombre), _lmS(f.apellido)].filter(Boolean).join(' '); if (_pn && _it.personas.length < 4) _it.personas.push(_pn); } }
         if (summary.sinEmpresaEjemplos.length < 15) summary.sinEmpresaEjemplos.push(`${_lmS(f.nombre) || _lmS(f.nombre_completo) || '(sin nombre)'} → ${_lmS(f.co_nombre) || _lmS(f.co_dominio) || 'sin empresa en el archivo'}`);
-        job.done = summary.rows; continue;
+        summary.huerfanos = (summary.huerfanos || 0) + 1;   // se guarda sin empresa (company_id NULL) para vincularlo a mano después
       }
       const contactKey = _lmCleanUrlish(f.linkedin).toLowerCase() || _lmCleanUrlish(f.email).toLowerCase();
       let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
@@ -8555,20 +8599,22 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
             region = CASE WHEN region='' THEN $10 ELSE region END,
             pais = CASE WHEN pais='' THEN $11 ELSE pais END,
             idioma = CASE WHEN idioma='' THEN $12 ELSE idioma END,
-            idiomas = CASE WHEN idiomas = '[]'::jsonb THEN $13::jsonb ELSE idiomas END
-          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId, _lmCleanUrlish(f.linkedin_sales_nav), _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista)]);
+            idiomas = CASE WHEN idiomas = '[]'::jsonb THEN $13::jsonb ELSE idiomas END,
+            company_id = CASE WHEN company_id IS NULL AND $14::int IS NOT NULL THEN $14::int ELSE company_id END,
+            empresa_archivo = CASE WHEN empresa_archivo='' THEN $15 ELSE empresa_archivo END
+          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId, _lmCleanUrlish(f.linkedin_sales_nav), _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista), companyId || null, _lmS(f.co_nombre)]);
         summary.contactsUpdated++;
         continue;
       }
       const ctIns = await pool.query(`
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
           ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa,import_id,
-          ciudad,region,pais,idioma,idiomas)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb) RETURNING id
+          ciudad,region,pais,idioma,idiomas,empresa_archivo)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24) RETURNING id
       `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId,
-          _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista)]);
+          _lmS(f.ct_ciudad), _lmS(f.ct_region), _lmS(f.ct_pais), _lg.principal, JSON.stringify(_lg.lista), _lmS(f.co_nombre)]);
       if (_lmCleanUrlish(f.linkedin_sales_nav)) await pool.query(`UPDATE cantera_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [_lmCleanUrlish(f.linkedin_sales_nav), ctIns.rows[0].id]);
       if (contactKey) contactCache.set(contactKey, ctIns.rows[0].id);
       summary.contactsCreated++;
@@ -8622,6 +8668,7 @@ app.delete('/api/cantera/batches/:id/companies', requireAuth, async (req, res) =
     const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [req.params.id, uid]);
     if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     const del = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [req.params.id, uid]);
+    await pool.query(`DELETE FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 AND company_id IS NULL`, [req.params.id, uid]);
     await pool.query(`UPDATE cantera_batches SET archivo_nombre='', import_files='[]'::jsonb WHERE id=$1`, [req.params.id]);
     res.json({ ok: true, companiesDeleted: del.rowCount || 0 });
   } catch (err) { console.error('[cantera] DELETE companies', err.message); res.status(500).json({ error: 'Error al eliminar' }); }
@@ -9354,7 +9401,7 @@ app.get('/api/cantera/batches/:id/companies', requireAuth, async (req, res) => {
 });
 app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT * FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 ORDER BY id ASC`, [req.params.id, req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT * FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 AND company_id IS NOT NULL ORDER BY id ASC`, [req.params.id, req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });

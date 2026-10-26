@@ -5761,7 +5761,7 @@ const CanteraModule = (() => {
     }).join('');
     return `<div class="lm-imp-err" style="background:#FAF8F4;border-color:#E5E2DC;color:inherit">
       <div style="font-weight:600;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
-      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas.</div>
+      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas. Lo que no resuelvas ahora queda guardado en la pestaña Información, con su LinkedIn, para verificarlo después.</div>
       ${rows}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn--sm" type="button" onclick="CanteraModule.impCrearFaltantes()">Crear las demás como empresas nuevas</button>
@@ -5869,7 +5869,7 @@ const CanteraModule = (() => {
                 <div class="lm-stat"><b>${sm.companiesCreated || 0}</b><span>empresas nuevas</span></div>
                 <div class="lm-stat"><b>${sm.contactsCreated || 0}</b><span>contactos nuevos</span></div>
                 ${sm.tipo === 'contactos' ? `<div class="lm-stat"><b>${sm.companiesMatched || 0}</b><span>asociaciones a empresas del borrador</span></div>` : ''}
-                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>filas sin empresa en el borrador (no se importaron)</span></div>` : ''}
+                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>contactos sin empresa en el borrador (quedaron guardados en Información)</span></div>` : ''}
                 ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
                 ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
               </div></div>
@@ -6521,7 +6521,103 @@ const CanteraModule = (() => {
   // cuántos duplicados eliminaron". Todo derivado de datos persistidos en el
   // servidor (import_stats/limpieza_stats/enriquecimiento_stats/validado_at),
   // no de contadores en memoria que se pierden al recargar.
+  // ── Contactos que quedaron SIN empresa (importación de «Solo contactos» sin empresa coincidente) ──
+  // Se agrupan por el nombre de empresa que traía el archivo: una búsqueda vincula a todo el grupo; cada contacto trae su LinkedIn
+  // (y Sales Navigator) para verificarlo, y se puede eliminar. «Crear empresa» la crea con el nombre del archivo.
+  let _orphans = null, _orphGroups = [], _orphRes = {}, _orphTimer = null;
+  async function _orphansLoad() {
+    if (!_current) return;
+    try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts`); _orphans = r.ok ? await r.json() : []; } catch (_) { _orphans = []; }
+    const box = document.getElementById('cant-orphans'); if (box) box.outerHTML = _orphansHtml();
+  }
+  function _orphansHtml() {
+    const L = _orphans || [];
+    if (!L.length) return '<div id="cant-orphans"></div>';
+    const fix = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    const IN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+    const SN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>';
+    const by = new Map();
+    L.forEach(c => { const nm = String(c.empresa_archivo || '').trim(), k = nm.toLowerCase() || ('#' + c.id); if (!by.has(k)) by.set(k, { nombre: nm, items: [] }); by.get(k).items.push(c); });
+    _orphGroups = [...by.values()];
+    const cards = _orphGroups.map((g, gi) => {
+      const members = g.items.map(c => {
+        const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
+        const sub = [c.cargo, [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion, c.idioma].filter(Boolean).join(' · ');
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed #ECE9E2">
+          <div style="flex:1;min-width:0"><b>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)')}</b>
+            ${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn para verificarlo" style="color:#0A66C2;display:inline-flex;vertical-align:middle;margin-left:6px">${IN}</a>` : ''}
+            ${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" style="color:#0A66C2;display:inline-flex;vertical-align:middle;margin-left:6px">${SN}</a>` : ''}
+            ${!li && !sn ? '<span class="cant-hint" style="margin-left:6px">sin LinkedIn</span>' : ''}
+            ${sub ? `<div class="cant-hint" style="margin:1px 0 0">${esc(sub)}</div>` : ''}</div>
+          <button class="btn btn--sm" type="button" title="Eliminar este contacto" onclick="CanteraModule.orphDel(${c.id})">Eliminar</button></div>`;
+      }).join('');
+      return `<div style="padding:12px 0;border-top:1px solid #E5E2DC">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start">
+          <div><div class="cant-hint" style="margin:0">Empresa en el archivo</div><b>${esc(g.nombre || '(sin nombre de empresa)')}</b>
+            <div class="cant-hint" style="margin:2px 0 0">${g.items.length} contacto(s)</div></div>
+          <div style="position:relative" id="cant-or-box-${gi}">
+            <input id="cant-or-in-${gi}" autocomplete="off" placeholder="Vincular a una empresa de este borrador…" oninput="CanteraModule.orphSearch(${gi}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-or-menu-${gi}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff">
+            ${g.nombre ? `<button class="btn btn--sm" type="button" style="margin-top:6px" onclick="CanteraModule.orphCreate(${gi})">Crear empresa «${esc(g.nombre.length > 40 ? g.nombre.slice(0, 40) + '…' : g.nombre)}»</button>` : ''}
+          </div></div>
+        <div style="margin-top:6px">${members}</div></div>`;
+    }).join('');
+    return `<div class="cant-info-block" id="cant-orphans">
+      <h3 class="cant-info-block__h">Contactos sin empresa (${L.length})</h3>
+      <div class="cant-hint" style="margin:0 0 4px">Ninguna empresa de este borrador coincidió con ellos al importar. Verifica su LinkedIn y vincúlalos a una empresa, créales su empresa o elimínalos.</div>
+      ${cards}</div>`;
+  }
+  function orphSearch(gi, q) {
+    clearTimeout(_orphTimer);
+    q = String(q || '').trim();
+    document.getElementById('cant-or-menu-' + gi)?.remove();
+    if (!q) return;
+    _orphTimer = setTimeout(async () => {
+      try {
+        const rows = await (await apiFetch(`${API}/cantera/batches/${_current.id}/companies-search?q=${encodeURIComponent(q)}`)).json();
+        _orphRes[gi] = Array.isArray(rows) ? rows : [];
+        const box = document.getElementById('cant-or-box-' + gi); if (!box) return;
+        document.getElementById('cant-or-menu-' + gi)?.remove();
+        const m = document.createElement('div'); m.id = 'cant-or-menu-' + gi;
+        m.style.cssText = 'position:absolute;left:0;right:0;top:44px;z-index:50;background:#fff;border:1px solid #D9D6CF;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:230px;overflow:auto';
+        m.innerHTML = _orphRes[gi].length
+          ? _orphRes[gi].map((r, j) => `<div onmousedown="CanteraModule.orphPick(${gi},${j})" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #F1EFEB" onmouseover="this.style.background='#F5F3EE'" onmouseout="this.style.background=''"><b>${esc(r.nombre)}</b><div class="cant-hint" style="margin:0">${esc([r.dominio, r.ciudad, r.pais].filter(Boolean).join(' · '))}</div></div>`).join('')
+          : '<div class="cant-hint" style="padding:8px 10px;margin:0">Sin coincidencias en este borrador</div>';
+        box.appendChild(m);
+      } catch (_) { /* sin red: vuelve a escribir */ }
+    }, 180);
+  }
+  async function _orphAssign(gi, body, okMsg) {
+    const g = _orphGroups[gi]; if (!g) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: g.items.map(c => c.id), ...body }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo vincular');
+      showBanner(`✓ ${d.vinculados} contacto(s) ${okMsg}`, 'success');
+      _orphans = null;
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function orphPick(gi, j) {
+    const r = (_orphRes[gi] || [])[j]; if (!r) return;
+    document.getElementById('cant-or-menu-' + gi)?.remove();
+    _orphAssign(gi, { company_id: r.id }, `vinculado(s) a «${r.nombre}»`);
+  }
+  function orphCreate(gi) { _orphAssign(gi, { crear: true }, 'vinculado(s) a la empresa nueva'); }
+  async function orphDel(id) {
+    if (!confirm('¿Eliminar este contacto del borrador? No se puede deshacer.')) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo eliminar');
+      _orphans = (_orphans || []).filter(c => c.id !== id);
+      showBanner('✓ Contacto eliminado', 'success');
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function _infoHtml(calificadas) {
+    setTimeout(_orphansLoad, 0);
     const imp = _current.import_stats || {};
     const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
     // Desglose paso 1 — se calcula del lado del cliente (ya está cargado en
@@ -6530,6 +6626,7 @@ const CanteraModule = (() => {
     const descartadas1 = _companies.filter(c => c.paso1_estado === 'descartado').length;
     const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     return `<div class="cant-section">
+      ${_orphansHtml()}
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Estado actual del borrador</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">
@@ -8039,7 +8136,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
