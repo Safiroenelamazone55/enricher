@@ -22156,7 +22156,7 @@ const LeadManagerModule = (() => {
         try {
           const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (!f.ok) { console.warn('[gc] logo', v, f.status); continue; }
           const blob = await f.blob(); if (!blob.size) continue;
-          if (_gcli === id) { _gcLogo = { id, url: URL.createObjectURL(blob), bg: v === 'dark' ? (b.header_bg || '#0B1220') : '#fff' }; _refreshNav(); }
+          if (_gcli === id) { _gcLogo = { id, url: URL.createObjectURL(blob), bg: b.header_bg || '#0B1220', inv: v !== 'dark' }; _refreshNav(); }
           return;
         } catch (e) { console.warn('[gc] logo', v, e.message); }
       }
@@ -22164,7 +22164,7 @@ const LeadManagerModule = (() => {
   }
   function _gcTile() {
     const nm = gcName(), ini = esc((nm.split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase());
-    return (_gcLogo.id === _gcli && _gcLogo.url) ? `<i class="lm2-gc__t lm2-gc__t--img" style="background:${esc(_gcLogo.bg || '#0B1220')}"><img src="${_gcLogo.url}" alt="${esc(nm)}"></i>` : `<i class="lm2-gc__t">${ini}</i>`;
+    return (_gcLogo.id === _gcli && _gcLogo.url) ? `<i class="lm2-gc__t lm2-gc__t--img" style="background:${esc(_gcLogo.bg || '#0B1220')}"><img src="${_gcLogo.url}"${_gcLogo.inv ? ' style="filter:brightness(0) invert(1)"' : ''} alt="${esc(nm)}"></i>` : `<i class="lm2-gc__t">${ini}</i>`;
   }
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
