@@ -6680,7 +6680,7 @@ const CanteraModule = (() => {
     const row = i => { const c = L[i], r = _cargoRanks[c.key] || '', open = _cargoOpen.has(c.key);
       const inc = (c.variantes || []).some(v => _cgN(v.texto).replace(/[^a-z0-9]/g, '') !== _cgN(c.label).replace(/[^a-z0-9]/g, '')) ? c.variantes.slice(0, 4).map(v => v.texto).join(' · ') + ((c.variantesTotal || 0) > 4 ? ` · +${c.variantesTotal - 4} más` : '') : '';
       return `<div class="cgr${open ? ' is-open' : ''}"><div class="cgr__h">
-        <input class="cgr__rank${r ? ' on' : ''}" type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)">
+        <select class="cgr__rank${r ? ' on' : ''}" title="Orden de contacto: 1 = el primero al que escribir. Cada número se usa una sola vez." onchange="CanteraModule.cargoRank(${i}, this.value)"><option value="">—</option>${Array.from({ length: L.length }, (_, k) => k + 1).map(n => { const own = Object.keys(_cargoRanks).find(k2 => _cargoRanks[k2] === n); const usedBy = own && own !== c.key ? (L.find(x => x.key === own) || {}).label : ''; return `<option value="${n}"${r === n ? ' selected' : ''}${usedBy ? ' disabled' : ''}>${n}${usedBy ? ' · ' + esc(usedBy) : ''}</option>`; }).join('')}</select>
         <div class="cgr__t"><b>${esc(c.label)}</b>${inc ? `<span class="cgr__inc" title="${esc(inc)}">${esc(inc)}</span>` : ''}</div>
         <span class="cgr__n">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span>
         <button type="button" class="cgr__more" onclick="CanteraModule.cargoToggle('${esc(c.key).replace(/'/g, '&#39;')}')">${open ? 'Ocultar' : 'Ver contactos'} ${open ? '▴' : '▾'}</button></div>${open ? detail(c) : ''}</div>`; };
@@ -6707,7 +6707,8 @@ const CanteraModule = (() => {
   function cargoRank(i, v) {
     const c = (_cargos || [])[i]; if (!c) return;
     const n = parseInt(v, 10);
-    if (n >= 1 && n <= 99) _cargoRanks[c.key] = n; else delete _cargoRanks[c.key];
+    // Cada número se usa una sola vez: si ya lo tenía otro cargo, se libera ese.
+    if (n >= 1 && n <= 99) { Object.keys(_cargoRanks).forEach(k => { if (_cargoRanks[k] === n && k !== c.key) delete _cargoRanks[k]; }); _cargoRanks[c.key] = n; } else delete _cargoRanks[c.key];
     const l = document.getElementById('cant-cg-list'); if (l) l.innerHTML = _cargosListHtml();
   }
   async function cargoApply() {
