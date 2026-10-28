@@ -2133,15 +2133,15 @@ app.post('/api/mgmt/tasks', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO tasks
-         (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, fecha_inicio, notas, monto, cobrado, parent_task_id, plan_dias, plan_horas, plan_hora)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, fecha_inicio, notas, monto, cobrado, parent_task_id, plan_dias, plan_horas, plan_hora, created_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING *`,
       [req.workspaceOwnerId, project_id, titulo.trim(), descripcion || '',
        estado || 'pendiente', prioridad || 'media',
        respFirst, respArr, deadline || null, fecha_inicio || null, notas || '',
        monto != null ? +monto : null, cobrado ? true : false,
        parent_task_id || null,
-       plan_dias || '', plan_horas != null && plan_horas !== '' ? +plan_horas : null, plan_hora != null && plan_hora !== '' ? +plan_hora : null]
+       plan_dias || '', plan_horas != null && plan_horas !== '' ? +plan_horas : null, plan_hora != null && plan_hora !== '' ? +plan_hora : null, req.user.name || '']
     );
     res.status(201).json(rows[0]);
   } catch (err) {

@@ -11873,8 +11873,12 @@ const MyWorkModule = (() => {
   }
   // Mis tareas y subtareas (sin los contenedores) — incluye completadas; cada vista filtra lo que necesita.
   const _mineAll = () => _mineRaw().filter(_passes);
+  let _deleg = false;
+  function setDeleg(v) { _deleg = !!v; render(); }
   function _mineRaw() {
     const me = _meN(); if (!me) return [];
+    // «Delegadas por mí»: tareas que creaste y están asignadas a otras personas (sólo las creadas desde ahora guardan quién las creó).
+    if (_deleg) { const mine = t => (t.responsables || []).some(r => (r || '').toLowerCase() === me) || (t.responsable || '').toLowerCase() === me; return _tasks.filter(t => !t.archivada && (t.created_by_name || '').toLowerCase() === me && !mine(t)); }
     const parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
     return _tasks.filter(t => !t.archivada && ((t.responsables || []).some(r => (r || '').toLowerCase() === me) || (t.responsable || '').toLowerCase() === me) && (!!t.parent_task_id || !parentIds.has(t.id)));
   }
@@ -12015,6 +12019,7 @@ const MyWorkModule = (() => {
   const _wantsClosed = () => _filters.some(f => f.prop === 'estado' && f.op === 'is' && f.vals.some(v => v === 'completado' || v === 'cancelado'));
   function setQ(v) { _q = _nrm(v).trim(); render(); }
   function _paintFilters() {
+    const dg = $('mw-deleg'); if (dg) dg.classList.toggle('on', _deleg);
     const box = $('mywork-fchips'); if (!box) return;
     box.innerHTML = _filters.map((f, i) => {
       const P = _FPROPS[f.prop], m = new Map(P.vals());
@@ -12136,7 +12141,7 @@ const MyWorkModule = (() => {
     const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
   }
 
-  return { load, render, setView, setGroup, _byIdG: id => _tasks.find(x => x.id === id), openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
+  return { load, render, setView, setGroup, setDeleg, _byIdG: id => _tasks.find(x => x.id === id), openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================

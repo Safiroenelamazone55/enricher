@@ -384,6 +384,7 @@ async function initDb() {
     // Etiquetas, duración estimada y checklists de la tarea (inspirado en ClickUp). Sólo se tocan por PATCH /mgmt/tasks/:id/extras.
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS etiquetas        JSONB   NOT NULL DEFAULT '[]'::jsonb;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS duracion_est_min INTEGER;`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by_name TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS checklists       JSONB   NOT NULL DEFAULT '[]'::jsonb;`);
     // Lunes de la semana que representa la tarea (idempotencia de la creación automática).
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS semana_week DATE;`);
