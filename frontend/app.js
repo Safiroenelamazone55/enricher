@@ -8287,7 +8287,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cargoSearch, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
