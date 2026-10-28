@@ -6668,7 +6668,7 @@ const CanteraModule = (() => {
       <div class="cfi__ft"><span id="cfi-msg"></span><button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeFicha()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveFicha()">Guardar cambios</button></div>`;
   }
   async function saveFicha() {
-    if (!_fk) return; const body = {};
+    if (!_fk) return; const body = {}, cargoAntes = _fk.cargo || '';
     ['nombre', 'apellido', 'cargo', 'email', 'idioma', 'ciudad', 'pais', 'linkedin', 'linkedin_sales_nav'].forEach(k => { const el = document.getElementById('cfi-' + k); if (el) body[k] = el.value; });
     const msg = document.getElementById('cfi-msg');
     try {
@@ -6679,7 +6679,24 @@ const CanteraModule = (() => {
       // La tabla de contactos por cargo y los datos del borrador se ponen al día con lo editado
       Object.keys(_cargoCt).forEach(key => { (_cargoCt[key] || []).forEach(x => { if (x.id === _fk.id) Object.assign(x, body); }); }); _cargoRepaint();
       if (_current) { try { await load(); } catch (_) {} }
+      if ((body.cargo || '') !== cargoAntes) { await _cargosRefresh(); const mm2 = document.getElementById('cfi-msg'); if (mm2) mm2.textContent += ' · el cargo se reubicó en su grupo'; }
     } catch (e) { if (msg) msg.textContent = '✕ ' + e.message; showBanner('No se pudo guardar: ' + e.message, 'error'); }
+  }
+  // Si se corrige un cargo a mano, el contacto se vuelve a evaluar y cae en el grupo que le corresponde (o crea uno nuevo si no encaja en ninguno).
+  // Se conservan los números que ya habías elegido en pantalla para los grupos que siguen existiendo.
+  async function _cargosRefresh() {
+    if (!_current) return;
+    try {
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos`); if (!r.ok) return;
+      const prev = Object.assign({}, _cargoRanks); _cargos = (await r.json()).cargos || [];
+      const keys = new Set(_cargos.map(c => c.key)); _cargoRanks = {};
+      _cargos.forEach(c => { const n = prev[c.key] || c.rank; if (n > 0) _cargoRanks[c.key] = n; });
+      Object.keys(prev).forEach(k => { if (!keys.has(k)) delete _cargoRanks[k]; });
+      const abiertos = [..._cargoOpen].filter(k => keys.has(k)); _cargoOpen = new Set(abiertos); _cargoCt = {};
+      _cargoRepaint();
+      for (const k of abiertos) { try { const r2 = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos/contactos?key=${encodeURIComponent(k)}`); _cargoCt[k] = r2.ok ? ((await r2.json()).contactos || []) : []; } catch (_) { _cargoCt[k] = []; } }
+      _cargoRepaint();
+    } catch (_) {}
   }
   // Ver la lista completa de contactos de un cargo (se abre por cargo; se carga al abrir)
   let _cargoOpen = new Set(), _cargoCt = {}, _cargoSel = {};
