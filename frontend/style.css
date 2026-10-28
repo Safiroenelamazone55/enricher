@@ -10259,7 +10259,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #dash2-tasks .d3-task-row:not(.d3-task-row--sub), #mywork-list .d3-task-row:not(.d3-task-row--sub) { padding: 6px 18px; gap: 10px; border-top: 1px solid #F0EDE8; }
 #dash2-tasks .d3-section-label + .d3-task-row, #mywork-list .d3-section-label + .d3-task-row { border-top: 0; }
 #dash2-tasks .d3-task-row--overdue, #mywork-list .d3-task-row--overdue { box-shadow: none; }
-#dash2-tasks .d3-task-row:not(.d3-task-row--sub) .d3-task-name, #mywork-list .d3-task-row:not(.d3-task-row--sub) .d3-task-name { font-size: .83rem; font-weight: 700; color: #1F1D1B; letter-spacing: -.01em; line-height: 1.28; }
+#dash2-tasks .d3-task-row:not(.d3-task-row--sub) .d3-task-name, #mywork-list .d3-task-row:not(.d3-task-row--sub) .d3-task-name { font-size: .83rem; font-weight: 600; color: #33302C; letter-spacing: -.01em; line-height: 1.28; }
 #dash2-tasks .d3-task-row:not(.d3-task-row--sub) .d3-task-name--overdue, #mywork-list .d3-task-row:not(.d3-task-row--sub) .d3-task-name--overdue { font-weight: 700; }
 #dash2-tasks .d3-task-row:not(.d3-task-row--sub) .d3-task-meta, #mywork-list .d3-task-row:not(.d3-task-row--sub) .d3-task-meta { font-size: .69rem; color: #7A766F; margin-top: 1px; }
 #dash2-tasks .d3-task-meta__b, #mywork-list .d3-task-meta__b, .mw-kcard .d3-task-meta__b { color: #B0ABA3; }
