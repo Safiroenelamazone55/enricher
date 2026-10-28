@@ -18938,3 +18938,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 /* La flecha «atrás» sobra con la barra contraída: ya existe en el encabezado */
 .lm2-nav--collapsed .snav-back { display: none !important; }
 .lm2-gc__t--img { border-color: transparent; } .lm2-gc__t--img img { padding: 3px; }
+
+/* Cantera: usa todo el ancho de la pantalla (antes quedaba un contenedor angosto al centro) */
+.content-wrap:has(.pane.active[id^="pane-cantera"]) { max-width: none; padding-left: 40px; padding-right: 40px; }
