@@ -6668,13 +6668,13 @@ const CanteraModule = (() => {
     const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
     const detail = c => {
       const L2 = _cargoCt[c.key]; if (!L2) return '<div class="cgd"><div class="cant-hint" style="margin:6px 0">Cargando contactos…</div></div>';
-      const sel = _cargoSel[c.key] || new Set(), all = L2.length && L2.every(x => sel.has(x.id));
-      return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s)${sel.size ? ` · <b>${sel.size}</b> seleccionado(s)` : ''}</span><button type="button" class="cgd__b" onclick="CanteraModule.cargoCopy('${esc(c.key).replace(/'/g, '&#39;')}')">Copiar ${sel.size ? 'selección' : 'todo'}</button></div>
-        <div class="cgd__w"><table class="cgd__t"><thead><tr><th><input type="checkbox" ${all ? 'checked' : ''} onchange="CanteraModule.cargoSelAll('${esc(c.key).replace(/'/g, '&#39;')}',this.checked)"></th><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
-        ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web);
-          return `<tr><td><input type="checkbox" ${sel.has(x.id) ? 'checked' : ''} onchange="CanteraModule.cargoSel('${esc(c.key).replace(/'/g, '&#39;')}',${x.id},this.checked)"></td><td class="cgd__n">${esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—')}</td><td>${esc(x.empresa || '—')}</td><td>${esc(x.cargo || '—')}</td>
+      const lnk = (u, txt, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(t)}">${txt}</a>` : txt;
+      return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s) · toca un nombre, empresa, web o icono para abrirlo</span></div>
+        <div class="cgd__w"><table class="cgd__t"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
+        ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web), nm = esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—');
+          return `<tr><td class="cgd__n">${lnk(li || sn, nm, li ? 'Abrir LinkedIn' : 'Abrir Sales Navigator')}</td><td>${lnk(wu, esc(x.empresa || '—'), 'Abrir la web de la empresa')}</td><td>${esc(x.cargo || '—')}</td>
             <td>${web ? `<a href="${esc(wu)}" target="_blank" rel="noopener">${esc(web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : '<span class="cgd__d">—</span>'}</td>
-            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
+            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
         </tbody></table></div></div>`;
     };
     const row = i => { const c = L[i], r = _cargoRanks[c.key] || '', open = _cargoOpen.has(c.key);
