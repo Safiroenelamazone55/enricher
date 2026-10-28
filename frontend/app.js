@@ -22149,13 +22149,13 @@ const LeadManagerModule = (() => {
     const id = _gcli; _gcLogo = { id, url: '' };
     try {
       const r = await apiFetch(`${API}/lm/portal/branding?client=${id}`); const b = r.ok ? await r.json() : null;
-      const v = b && b.has && ['color', 'colo', 'light', 'dark'].find(k => b.has[k]) || (b && b.has && Object.keys(b.has).find(k => b.has[k]));
-      if (v) { const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (f.ok) { const url = URL.createObjectURL(await f.blob()); if (_gcli === id) { _gcLogo = { id, url }; _refreshNav(); } } }
+      const v = b && b.has && ['dark', 'color', 'colo', 'light'].find(k => b.has[k]) || (b && b.has && Object.keys(b.has).find(k => b.has[k]));
+      if (v) { const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (f.ok) { const url = URL.createObjectURL(await f.blob()); if (_gcli === id) { _gcLogo = { id, url, bg: b.header_bg || '#0B1220' }; _refreshNav(); } } }
     } catch (_) {}
   }
   function _gcTile() {
     const nm = gcName(), ini = esc((nm.split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase());
-    return (_gcLogo.id === _gcli && _gcLogo.url) ? `<i class="lm2-gc__t lm2-gc__t--img"><img src="${_gcLogo.url}" alt="${esc(nm)}"></i>` : `<i class="lm2-gc__t">${ini}</i>`;
+    return (_gcLogo.id === _gcli && _gcLogo.url) ? `<i class="lm2-gc__t lm2-gc__t--img" style="background:${esc(_gcLogo.bg || '#0B1220')}"><img src="${_gcLogo.url}" alt="${esc(nm)}"></i>` : `<i class="lm2-gc__t">${ini}</i>`;
   }
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
