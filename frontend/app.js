@@ -11134,6 +11134,7 @@ const DashboardModule = (() => {
       // ya se había marcado completada.
       const cached = _allTasksCache.find(x => x.id === taskId);
       if (cached) cached.estado = newStatus;
+      try { if (typeof MyWorkModule !== 'undefined' && MyWorkModule._sync) MyWorkModule._sync(taskId, { estado: newStatus }); } catch (_) {}
       const row = document.querySelector(`[data-task-id="${taskId}"]`);
       if (!row) return;
       if (newStatus === 'completado' || newStatus === 'cancelado') {
@@ -11728,9 +11729,7 @@ const MyWorkModule = (() => {
     render();
   }
 
-  function render() {
-    const wrap = $('mywork-list');
-    if (!wrap) return;
+  function _renderLista(wrap) {
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     const byId = new Map(_tasks.map(t => [t.id, t]));
     const mine = _me ? _tasks.filter(t =>
@@ -11793,7 +11792,7 @@ const MyWorkModule = (() => {
       <button class="mw-prio-btn" title="Prioridad: ${prio.label} — clic para cambiar" onclick="MyWorkModule.openPrioMenu(event,${t.id})">${_flagSvg(prio.color)}</button>
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
-        ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
+        ${meta ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
@@ -11821,7 +11820,183 @@ const MyWorkModule = (() => {
     });
   }
 
-  return { load, _openDate, openPrioMenu, setTaskPrioridad };
+  // ═══════════════════════════════════════════════════════════════
+  // Vistas de «Mi trabajo»: Lista · Tabla · Kanban · Calendario · Gantt (pedido explícito 2026-10-28).
+  // Todas muestran lo MISMO (tus tareas y subtareas; un padre con subtareas es un contenedor y no cuenta) y comparten estado, prioridad, fechas y cronómetro.
+  // ═══════════════════════════════════════════════════════════════
+  const _VIEWS = [
+    ['lista', 'Lista', '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>'],
+    ['tabla', 'Tabla', '<rect x="3" y="4" width="18" height="16" rx="1"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/>'],
+    ['kanban', 'Kanban', '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>'],
+    ['calendario', 'Calendario', '<rect x="3" y="5" width="18" height="16" rx="1"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>'],
+    ['gantt', 'Gantt', '<line x1="3" y1="6" x2="14" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="5" y1="18" x2="16" y2="18"/><line x1="3" y1="3" x2="3" y2="21"/>'],
+  ];
+  let _view = 'lista';
+  try { _view = localStorage.getItem('nova_mw_view') || 'lista'; } catch (_) {}
+  if (!_VIEWS.some(v => v[0] === _view)) _view = 'lista';
+  let _sortKey = 'vence', _sortDir = 1, _showDone = false, _calMonth = null, _calDay = null, _gZoom = 26;
+
+  const _meN = () => (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+  const _d10 = v => v ? String(v).split('T')[0] : null;
+  const _wn = t => { const end = _d10(t.deadline), start = _d10(t.fecha_inicio) || end; return { start, end: end || start }; };
+  const _open = t => t.estado !== 'completado' && t.estado !== 'cancelado';
+  const _nrm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const _fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  const _dayN = iso => { const a = iso.split('-').map(Number); return Math.round(Date.UTC(a[0], a[1] - 1, a[2]) / 86400000); };
+  const _isoN = n => { const d = new Date(n * 86400000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; };
+  // Contexto de la fila con jerarquía: lo principal algo más oscuro y lo último (cliente) más claro.
+  function _metaHtml(parts) {
+    const p = (parts || []).filter(Boolean);
+    if (!p.length) return '';
+    if (p.length === 1) return esc(p[0]);
+    return `${esc(p.slice(0, -1).join(' · '))}<span class="d3-task-meta__b"> · ${esc(p[p.length - 1])}</span>`;
+  }
+  // Mis tareas y subtareas (sin los contenedores) — incluye completadas; cada vista filtra lo que necesita.
+  function _mineAll() {
+    const me = _meN(); if (!me) return [];
+    const parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    return _tasks.filter(t => !t.archivada && ((t.responsables || []).some(r => (r || '').toLowerCase() === me) || (t.responsable || '').toLowerCase() === me) && (!!t.parent_task_id || !parentIds.has(t.id)));
+  }
+  const _byId = () => new Map(_tasks.map(t => [t.id, t]));
+  const _ctxArr = (t, byId) => { const p = t.parent_task_id ? byId.get(t.parent_task_id) : null; return [p && p.titulo, t.project_nombre, t.client_nombre]; };
+  const _vencida = t => { const w = _wn(t); return _open(t) && w.end && w.end < _localISO(); };
+  const _playBtn = t => `<button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>`;
+  const _statusBtn = t => `<button class="d3-status-btn d3-status-btn--${(_CFG[t.estado || 'pendiente'] || _CFG.pendiente).dot}" onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})" title="Cambiar estado">${_svg(t.estado || 'pendiente')}</button>`;
+  const _prioBtn = t => { const p = _PRIO_CFG[t.prioridad] || _PRIO_CFG.media; return `<button class="mw-prio-btn" title="Prioridad: ${p.label} — clic para cambiar" onclick="event.stopPropagation();MyWorkModule.openPrioMenu(event,${t.id})">${_flagSvg(p.color)}</button>`; };
+  const _dateBtn = (t, txt) => `<span class="d3-task-date${_vencida(t) ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${txt || 'Fecha'}</span>`;
+  function _dateTxt(t) { const w = _wn(t); if (!w.end) return ''; const s = _d10(t.fecha_inicio); return (s && s !== w.end && !t.parent_task_id) ? `${_fmt(s)} – ${_fmt(w.end)}` : _fmt(w.end); }
+
+  function _paintViews() {
+    const box = $('mywork-views'); if (!box) return;
+    box.innerHTML = _VIEWS.map(([k, l, ico]) => `<button type="button" class="mw-view${_view === k ? ' is-on' : ''}" onclick="MyWorkModule.setView('${k}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ico}</svg>${l}</button>`).join('');
+  }
+  function setView(v) { if (!_VIEWS.some(x => x[0] === v)) return; _view = v; try { localStorage.setItem('nova_mw_view', v); } catch (_) {} render(); }
+  function render() {
+    _paintViews();
+    const wrap = $('mywork-list'); if (!wrap) return;
+    const body = wrap.closest('.mw-body'); if (body) body.classList.toggle('mw-wide', _view !== 'lista');
+    wrap.classList.toggle('mw-card--plain', _view === 'kanban');
+    if (!_meN()) { wrap.innerHTML = `<div class="d3-empty">No se pudo identificar tu usuario.</div>`; return; }
+    ({ lista: _renderLista, tabla: _renderTabla, kanban: _renderKanban, calendario: _renderCalendario, gantt: _renderGantt }[_view] || _renderLista)(wrap);
+  }
+  // Un cambio de estado hecho desde el menú del Dashboard: se sincroniza aquí para que las vistas no «resuciten» tareas.
+  function _sync(id, patch) { const t = _tasks.find(x => x.id === id); if (t) Object.assign(t, patch); if (_view !== 'lista' && _view !== 'tabla') render(); }
+  async function _setStatus(id, estado) {
+    const t = _tasks.find(x => x.id === id); if (!t || t.estado === estado) return;
+    const prev = t.estado; t.estado = estado; render();
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!r.ok) throw new Error('Error ' + r.status);
+    } catch (e) { t.estado = prev; render(); showBanner('No se pudo cambiar el estado: ' + e.message, 'error'); }
+  }
+
+  // ── Tabla ──
+  function sortBy(k) { if (_sortKey === k) _sortDir = -_sortDir; else { _sortKey = k; _sortDir = 1; } render(); }
+  function toggleDone() { _showDone = !_showDone; render(); }
+  function _renderTabla(wrap) {
+    const byId = _byId(), PR = { alta: 0, media: 1, baja: 2 }, EST = ['bloqueado', 'en_progreso', 'pendiente', 'completado', 'cancelado'];
+    const items = _mineAll().filter(t => _showDone || _open(t));
+    const key = { titulo: t => _nrm(t.titulo), proyecto: t => _nrm(t.project_nombre), cliente: t => _nrm(t.client_nombre), prioridad: t => PR[t.prioridad] ?? 1, inicio: t => _wn(t).start || '9999', vence: t => _wn(t).end || '9999', estado: t => EST.indexOf(t.estado || 'pendiente') }[_sortKey];
+    items.sort((a, b) => { const x = key(a), y = key(b); return ((x < y ? -1 : x > y ? 1 : 0) * _sortDir) || _nrm(a.titulo).localeCompare(_nrm(b.titulo)); });
+    const th = (k, l, cls) => `<th class="${cls || ''}" onclick="MyWorkModule.sortBy('${k}')" title="Ordenar">${l}${_sortKey === k ? `<i class="mw-sort">${_sortDir > 0 ? '▲' : '▼'}</i>` : ''}</th>`;
+    const prio = t => { const p = _PRIO_CFG[t.prioridad] || _PRIO_CFG.media; return `<span class="mw-prio-cell" onclick="MyWorkModule.openPrioMenu(event,${t.id})" title="Cambiar prioridad">${_flagSvg(p.color)}<span>${p.label}</span></span>`; };
+    const rows = items.map(t => { const w = _wn(t), done = !_open(t);
+      return `<tr class="mw-tr${done ? ' is-done' : ''}" data-task-id="${t.id}">
+        <td class="mw-td-st">${_statusBtn(t)}</td>
+        <td class="mw-td-t"><span class="mw-t">${esc(t.titulo)}</span>${t.parent_task_id && byId.get(t.parent_task_id) ? `<span class="mw-sub">${esc(byId.get(t.parent_task_id).titulo)}</span>` : ''}</td>
+        <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
+        <td>${prio(t)}</td>
+        <td class="mw-td-d">${w.start ? _fmt(w.start) : '—'}</td>
+        <td class="mw-td-d">${_dateBtn(t, w.end ? _fmt(w.end) : '')}</td>
+        <td class="mw-td-a">${_playBtn(t)}</td></tr>`; }).join('');
+    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label></div>
+      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
+  }
+
+  // ── Kanban (arrastra una tarjeta a otra columna para cambiar su estado) ──
+  const _KCOLS = [['pendiente', 'Pendiente', '#B4AFA8'], ['en_progreso', 'En progreso', '#4F6BF0'], ['bloqueado', 'Bloqueado', '#EF4444'], ['completado', 'Completado', '#22C55E']];
+  function _dragStart(ev, id) { ev.dataTransfer.setData('text/plain', String(id)); ev.dataTransfer.effectAllowed = 'move'; ev.currentTarget.classList.add('is-drag'); }
+  function _dragEnd(ev) { ev.currentTarget.classList.remove('is-drag'); document.querySelectorAll('.mw-kcol.is-over').forEach(c => c.classList.remove('is-over')); }
+  function _dragOver(ev) { ev.preventDefault(); ev.currentTarget.classList.add('is-over'); }
+  function _dragLeave(ev) { ev.currentTarget.classList.remove('is-over'); }
+  function _drop(ev, estado) { ev.preventDefault(); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); document.querySelectorAll('.mw-kcol.is-over').forEach(c => c.classList.remove('is-over')); if (id) _setStatus(id, estado); }
+  function _renderKanban(wrap) {
+    const byId = _byId(), all = _mineAll().filter(t => ['pendiente', 'en_progreso', 'bloqueado', 'completado'].includes(t.estado || 'pendiente'));
+    const cols = _KCOLS.map(([est, label, color]) => {
+      let list = all.filter(t => (t.estado || 'pendiente') === est);
+      list.sort((a, b) => est === 'completado' ? String(b.updated_at || _d10(b.deadline) || '').localeCompare(String(a.updated_at || _d10(a.deadline) || '')) : (_wn(a).end || '9999').localeCompare(_wn(b).end || '9999'));
+      const total = list.length; if (est === 'completado') list = list.slice(0, 15);
+      const cards = list.map(t => `<div class="mw-kcard${_vencida(t) ? ' is-overdue' : ''}" draggable="true" data-task-id="${t.id}" ondragstart="MyWorkModule._dragStart(event,${t.id})" ondragend="MyWorkModule._dragEnd(event)">
+          <div class="mw-kcard__t">${esc(t.titulo)}</div>
+          <div class="d3-task-meta mw-kcard__m">${_metaHtml(_ctxArr(t, byId))}</div>
+          <div class="mw-kcard__f">${_dateBtn(t, _dateTxt(t))}<span class="mw-kcard__sp"></span>${_prioBtn(t)}${_playBtn(t)}</div></div>`).join('');
+      return `<div class="mw-kcol" ondragover="MyWorkModule._dragOver(event)" ondragleave="MyWorkModule._dragLeave(event)" ondrop="MyWorkModule._drop(event,'${est}')">
+        <div class="mw-kcol__h"><i style="background:${color}"></i>${label}<b>${total}</b></div>
+        <div class="mw-kcol__b">${cards || '<div class="mw-kempty">Arrastra tareas aquí</div>'}${est === 'completado' && total > 15 ? `<div class="mw-kempty">+ ${total - 15} completadas más</div>` : ''}</div></div>`;
+    }).join('');
+    wrap.innerHTML = `<div class="mw-kanban">${cols}</div>`;
+  }
+
+  // ── Calendario (mes) ──
+  function calNav(d) { const a = (_calMonth || _localISO().slice(0, 7)).split('-').map(Number); const n = new Date(a[0], a[1] - 1 + d, 1); _calMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; render(); }
+  function calToday() { _calMonth = _localISO().slice(0, 7); _calDay = _localISO(); render(); }
+  function calPick(iso) { _calDay = iso; render(); }
+  function _renderCalendario(wrap) {
+    const today = _localISO(); if (!_calMonth) _calMonth = today.slice(0, 7); if (!_calDay) _calDay = today;
+    const [y, m] = _calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), off = (first.getDay() + 6) % 7, byId = _byId();
+    const items = _mineAll().filter(t => _open(t)).map(t => ({ t, w: _wn(t) })).filter(x => x.w.start);
+    const on = iso => items.filter(x => x.w.start <= iso && iso <= (x.w.end || x.w.start)).map(x => x.t);
+    const monthName = first.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    let cells = '';
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(y, m - 1, 1 - off + i), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const ts = on(iso), chips = ts.slice(0, 3).map(t => `<span class="mw-chip${_vencida(t) ? ' is-over' : ''} mw-chip--${(t.estado || 'pendiente')}" title="${esc(t.titulo)}">${esc(t.titulo)}</span>`).join('');
+      cells += `<div class="mw-cal-cell${d.getMonth() !== m - 1 ? ' is-out' : ''}${iso === today ? ' is-today' : ''}${iso === _calDay ? ' is-sel' : ''}" onclick="MyWorkModule.calPick('${iso}')"><span class="mw-cal-n">${d.getDate()}</span>${chips}${ts.length > 3 ? `<span class="mw-chip-more">+${ts.length - 3} más</span>` : ''}</div>`;
+    }
+    const dia = on(_calDay), diaTxt = new Date(_calDay + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const agenda = dia.length ? dia.map(t => `<div class="d3-task-row${_vencida(t) ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">${_statusBtn(t)}${_prioBtn(t)}<div class="d3-task-body"><span class="d3-task-name">${esc(t.titulo)}</span><span class="d3-task-meta">${_metaHtml(_ctxArr(t, byId))}</span></div>${_dateBtn(t, _dateTxt(t))}${_playBtn(t)}</div>`).join('') : '<div class="d3-empty">Nada programado este día.</div>';
+    wrap.innerHTML = `<div class="mw-cal-hd"><button class="mw-nav" onclick="MyWorkModule.calNav(-1)" aria-label="Mes anterior">‹</button><span class="mw-cal-t">${monthName}</span><button class="mw-nav" onclick="MyWorkModule.calNav(1)" aria-label="Mes siguiente">›</button><button class="mw-today" onclick="MyWorkModule.calToday()">Hoy</button></div>
+      <div class="mw-cal-grid"><div class="mw-cal-dow">${['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(x => `<span>${x}</span>`).join('')}</div>${cells}</div>
+      <div class="mw-agenda"><div class="mw-agenda__t">${esc(diaTxt)} · ${dia.length}</div>${agenda}</div>`;
+  }
+
+  // ── Gantt ──
+  function ganttZoom(px) { _gZoom = px; render(); }
+  function _renderGantt(wrap) {
+    const today = _localISO(), tN = _dayN(today), items = _mineAll().filter(t => _open(t)).map(t => ({ t, w: _wn(t) }));
+    const dated = items.filter(x => x.w.start), sinFecha = items.length - dated.length;
+    if (!dated.length) { wrap.innerHTML = `<div class="d3-empty">No tienes tareas con fecha para mostrar en el Gantt.${sinFecha ? ` (${sinFecha} sin fecha)` : ''}</div>`; return; }
+    let lo = Math.min(tN - 7, ...dated.map(x => _dayN(x.w.start))), hi = Math.max(tN + 35, ...dated.map(x => _dayN(x.w.end || x.w.start)));
+    lo = Math.max(lo, tN - 120); hi = Math.min(hi, tN + 240);
+    const days = hi - lo + 1, W = _gZoom, width = days * W;
+    // cabeceras: meses y días
+    let meses = '', dias = '', cur = null, curStart = 0;
+    for (let i = 0; i < days; i++) {
+      const iso = _isoN(lo + i), mk = iso.slice(0, 7), dow = (new Date(iso + 'T00:00:00').getDay() + 6) % 7;
+      if (mk !== cur) { if (cur) meses += `<span style="left:${curStart * W}px;width:${(i - curStart) * W}px">${new Date(cur + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>`; cur = mk; curStart = i; }
+      dias += `<span class="${dow > 4 ? 'is-we' : ''}${iso === today ? ' is-today' : ''}" style="left:${i * W}px;width:${W}px">${W >= 20 ? iso.slice(8) : ''}</span>`;
+    }
+    meses += `<span style="left:${curStart * W}px;width:${(days - curStart) * W}px">${new Date(cur + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>`;
+    const byProj = new Map(); dated.forEach(x => { const k = x.t.project_nombre || 'Sin proyecto'; if (!byProj.has(k)) byProj.set(k, []); byProj.get(k).push(x); });
+    const todayLine = `<i class="mw-g-today" style="left:${(tN - lo) * W + W / 2}px"></i>`;
+    const fondo = `<i class="mw-g-bg" style="background-size:${W}px 100%"></i>`;
+    const rows = [...byProj.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([proj, arr]) => {
+      arr.sort((a, b) => a.w.start.localeCompare(b.w.start));
+      return `<div class="mw-g-row mw-g-row--p"><div class="mw-g-name"><span class="mw-g-pt" title="${esc(proj)}">${esc(proj)}</span> <b>${arr.length}</b></div><div class="mw-g-track" style="width:${width}px">${fondo}</div></div>`
+        + arr.map(({ t, w }) => { const s = _dayN(w.start) - lo, e = _dayN(w.end || w.start) - lo, left = s * W, bw = Math.max(W, (e - s + 1) * W), over = _vencida(t);
+          return `<div class="mw-g-row" data-task-id="${t.id}"><div class="mw-g-name">${_statusBtn(t)}<span class="mw-g-t" title="${esc(t.titulo)}">${esc(t.titulo)}</span></div>
+            <div class="mw-g-track" style="width:${width}px">${fondo}${todayLine}<div class="mw-g-bar mw-chip--${t.estado || 'pendiente'}${over ? ' is-over' : ''}" style="left:${left}px;width:${bw}px" title="${esc(t.titulo)} · ${_fmt(w.start)}${w.end && w.end !== w.start ? ' – ' + _fmt(w.end) : ''} — clic para cambiar las fechas" onclick="MyWorkModule._openDate(event,${t.id})"><span>${bw > 90 ? esc(t.titulo) : ''}</span></div></div></div>`; }).join('');
+    }).join('');
+    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${dated.length} tarea${dated.length === 1 ? '' : 's'} con fecha${sinFecha ? ` · ${sinFecha} sin fecha (no se muestran)` : ''}</span>
+        <span class="mw-zoom">Zoom ${[[36, 'Día'], [26, 'Normal'], [12, 'Semana']].map(([px, l]) => `<button type="button" class="${_gZoom === px ? 'is-on' : ''}" onclick="MyWorkModule.ganttZoom(${px})">${l}</button>`).join('')}</span></div>
+      <div class="mw-gantt" id="mw-gantt"><div class="mw-g-inner" style="min-width:${width + 240}px">
+        <div class="mw-g-row mw-g-row--h"><div class="mw-g-name">Tarea</div><div class="mw-g-track" style="width:${width}px"><div class="mw-g-months">${meses}</div><div class="mw-g-days">${dias}</div></div></div>${rows}</div></div>`;
+    // Al abrir: desde la tarea abierta más antigua (hasta 45 días atrás, para ver las vencidas) hasta hoy; si no hay atrasadas, desde unos días antes de hoy.
+    const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
+  }
+
+  return { load, render, setView, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================
