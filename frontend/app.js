@@ -22070,11 +22070,11 @@ const LeadManagerModule = (() => {
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
       // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada,
       // el contador del servidor.
-      const nc = _navCounts || {};
+      const nc = _gcli ? {} : (_navCounts || {});   // con filtro de cliente los totales del servidor (de todos los clientes) no valen
       const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
                 : n.k === 'leads'  ? (_contacts.length ? _contacts.filter(c => _ldMatchPill(c, 'respondio')).length : (nc.leads || 0))   // = "Por calificar": lo que espera tu decisión (no los ya trabajados ni los que ya están en Deals)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
-                : n.k === 'clients' ? _cuTotal()
+                : n.k === 'clients' ? (_gcli ? 0 : _cuTotal())
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}${n.k === 'clients' && _gcli ? ' has-gc' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')"${n.k === 'clients' ? ' onmouseenter="LeadManagerModule.gcOpen(this)" onmouseleave="LeadManagerModule.gcLeave()"' : ''}>
@@ -22135,6 +22135,12 @@ const LeadManagerModule = (() => {
     _data = (_data || []).filter(mine);
   }
   function _gcInbox() { if (_gcli && Array.isArray(_ibThreads)) { const k = new Set((_contacts || []).map(c => c.id)); _ibThreads = _ibThreads.filter(t => k.has(t.contact_id)); } }
+  function _gcTi() {
+    if (!_gcli || !_tiData || !Array.isArray(_tiData.items)) return;
+    const k = new Set((_contacts || []).map(c => c.id));
+    _tiData.items = _tiData.items.filter(it => it.outbound_client_id === _gcli || (!it.outbound_client_id && it.contact_id && k.has(it.contact_id)));
+    const counts = {}; _tiData.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; }); _tiData.counts = counts;
+  }
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
     _gcClose(true);
@@ -22142,7 +22148,7 @@ const LeadManagerModule = (() => {
     try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
     _refreshNav();
     const body = $('lm2-body'); if (body) body.style.opacity = '.5';
-    try { await load(); await _ibReload(true); } finally { if (body) body.style.opacity = ''; }
+    try { await load(); await Promise.all([_ibReload(true), _tiReload(), _waReload(), _exLoad()]); } finally { if (body) body.style.opacity = ''; }
     _refreshNav();
   }
   function gcOpen(btn) {
@@ -26753,6 +26759,7 @@ ${foot}
       const r = await apiFetch(`${API}/lm/tasks/inbox`);
       _tiData = (r && r.ok) ? await r.json() : { ok: false, items: [] };
     } catch { _tiData = { ok: false, items: [] }; }
+    _gcTi();
     if (_section === 'tasks' && (_taskView === 'priority' || _taskView === 'list')) _renderBody();
   }
   const _TI_CATS = [
@@ -28226,6 +28233,7 @@ ${foot}
   async function _waReload() {
     try { const r = await apiFetch(`${API}/lm/wa-list`); _waList = (r && r.ok) ? await r.json() : []; }
     catch { _waList = []; }
+    if (_gcli && Array.isArray(_waList)) _waList = _waList.filter(w => w.outbound_client_id === _gcli);
     if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
     _refreshNav();
   }
@@ -31139,6 +31147,8 @@ ${foot}
   const _exSel = new Set();
   async function _exLoad() {
     try { const r = await apiFetch(`${API}/lm/exclusions`); if (r.ok) _exList = await r.json(); else _exList = []; } catch (_) { _exList = []; }
+    // Con filtro de cliente: las exclusiones de ese cliente (empresa/campaña/secuencia) y las globales, que también le aplican.
+    if (_gcli && Array.isArray(_exList)) _exList = _exList.filter(e => e.outbound_client_id === _gcli || !e.outbound_client_id);
     if (_section === 'exclusions') _renderBody();
   }
   // Lee una tabla (array de filas) con o sin encabezado. Reconoce: Tipo, Categoría, Empresa, Website, Dominio web, Dominio email 1/2/3…,
@@ -36487,6 +36497,7 @@ ${foot}
   // ── Card "Hoy" (dashboard) ──
   async function _loadToday() {
     try { const r = await apiFetch(`${API}/lm/today`); _todayData = (r && r.ok) ? await r.json() : null; } catch { _todayData = null; }
+    if (_gcli && _todayData) { const k = new Set((_contacts || []).map(c => c.id)); ['replies', 'tasks'].forEach(f => { if (Array.isArray(_todayData[f])) _todayData[f] = _todayData[f].filter(x => k.has(x.contact_id)); }); }
     const el = document.getElementById('lm-hoy');
     if (el && _todayData) el.innerHTML = _hoyHtml();
   }
