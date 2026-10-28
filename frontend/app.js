@@ -11901,10 +11901,15 @@ const MyWorkModule = (() => {
     items.sort((a, b) => { const x = key(a), y = key(b); return ((x < y ? -1 : x > y ? 1 : 0) * _sortDir) || _nrm(a.titulo).localeCompare(_nrm(b.titulo)); });
     const th = (k, l, cls) => `<th class="${cls || ''}" onclick="MyWorkModule.sortBy('${k}')" title="Ordenar">${l}${_sortKey === k ? `<i class="mw-sort">${_sortDir > 0 ? '▲' : '▼'}</i>` : ''}</th>`;
     const prio = t => { const p = _PRIO_CFG[t.prioridad] || _PRIO_CFG.media; return `<span class="mw-prio-cell" onclick="MyWorkModule.openPrioMenu(event,${t.id})" title="Cambiar prioridad">${_flagSvg(p.color)}<span>${p.label}</span></span>`; };
-    const rows = items.map(t => { const w = _wn(t), done = !_open(t);
-      return `<tr class="mw-tr${done ? ' is-done' : ''}" data-task-id="${t.id}">
+    // Las subtareas se agrupan bajo su tarea principal (que aparece como cabecera) para que se lea la jerarquía.
+    const ordered = [], seenP = new Set(), kids = new Map();
+    items.forEach(t => { if (t.parent_task_id && byId.get(t.parent_task_id)) { if (!kids.has(t.parent_task_id)) kids.set(t.parent_task_id, []); kids.get(t.parent_task_id).push(t); } });
+    items.forEach(t => { const pid = t.parent_task_id; if (pid && byId.get(pid)) { if (!seenP.has(pid)) { seenP.add(pid); ordered.push({ head: byId.get(pid) }); kids.get(pid).forEach(k => ordered.push({ t: k, sub: true })); } } else ordered.push({ t }); });
+    const rows = ordered.map(o => { if (o.head) { const h = o.head, hw = _wn(h); return `<tr class="mw-tr mw-tr--head"><td></td><td class="mw-td-t"><span class="mw-t">${esc(h.titulo)}</span><span class="mw-sub">Tarea · ${(kids.get(h.id) || []).length} subtarea${(kids.get(h.id) || []).length === 1 ? '' : 's'}</span></td><td>${esc(h.project_nombre || '—')}</td><td class="mw-td-c">${esc(h.client_nombre || '—')}</td><td></td><td class="mw-td-d">${hw.start ? _fmt(hw.start) : ''}</td><td class="mw-td-d">${hw.end ? _fmt(hw.end) : ''}</td><td></td></tr>`; }
+      const t = o.t, w = _wn(t), done = !_open(t);
+      return `<tr class="mw-tr${done ? ' is-done' : ''}${o.sub ? ' mw-tr--sub' : ''}" data-task-id="${t.id}">
         <td class="mw-td-st">${_statusBtn(t)}</td>
-        <td class="mw-td-t"><span class="mw-t">${esc(t.titulo)}</span>${t.parent_task_id && byId.get(t.parent_task_id) ? `<span class="mw-sub">${esc(byId.get(t.parent_task_id).titulo)}</span>` : ''}</td>
+        <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span></td>
         <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
         <td>${prio(t)}</td>
         <td class="mw-td-d">${w.start ? _fmt(w.start) : '—'}</td>
