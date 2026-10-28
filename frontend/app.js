@@ -22148,7 +22148,7 @@ const LeadManagerModule = (() => {
     try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
     _refreshNav();
     const body = $('lm2-body'); if (body) body.style.opacity = '.5';
-    try { await load(); await Promise.all([_ibReload(true), _tiReload(), _waReload(), _exLoad()]); } finally { if (body) body.style.opacity = ''; }
+    try { await load(); await Promise.all([_ibReload(true), _tiReload(), _waReload(), _exLoad(), _apReload()]); } finally { if (body) body.style.opacity = ''; }
     _refreshNav();
   }
   function gcOpen(btn) {
@@ -24476,6 +24476,7 @@ ${foot}
   async function _apReload() {
     try { const r = await apiFetch(`${API}/lm/approvals`); _apList = (r && r.ok) ? await r.json() : []; }
     catch { _apList = []; }
+    if (_gcli && Array.isArray(_apList)) { const sq = new Set((_sequences || []).map(x => x.id)); _apList = _apList.filter(a => sq.has(a.sequence_id)); }   // filtro global de cliente
     if (_section === 'tasks') _renderBody();
   }
   // Próximo día REAL de envío: parte de la fecha programada (o ahora) y avanza hasta el
