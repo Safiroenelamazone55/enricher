@@ -22149,9 +22149,18 @@ const LeadManagerModule = (() => {
     const id = _gcli; _gcLogo = { id, url: '' };
     try {
       const r = await apiFetch(`${API}/lm/portal/branding?client=${id}`); const b = r.ok ? await r.json() : null;
-      const v = b && b.has && ['dark', 'color', 'colo', 'light'].find(k => b.has[k]) || (b && b.has && Object.keys(b.has).find(k => b.has[k]));
-      if (v) { const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (f.ok) { const url = URL.createObjectURL(await f.blob()); if (_gcli === id) { _gcLogo = { id, url, bg: b.header_bg || '#0B1220' }; _refreshNav(); } } }
-    } catch (_) {}
+      if (!b || !b.has) return;
+      // Siempre la versión «Para fondo oscuro»; si falta o no carga, la siguiente que exista.
+      for (const v of ['dark', 'color', 'light']) {
+        if (!b.has[v]) continue;
+        try {
+          const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (!f.ok) { console.warn('[gc] logo', v, f.status); continue; }
+          const blob = await f.blob(); if (!blob.size) continue;
+          if (_gcli === id) { _gcLogo = { id, url: URL.createObjectURL(blob), bg: v === 'dark' ? (b.header_bg || '#0B1220') : '#fff' }; _refreshNav(); }
+          return;
+        } catch (e) { console.warn('[gc] logo', v, e.message); }
+      }
+    } catch (e) { console.warn('[gc] logo', e.message); }
   }
   function _gcTile() {
     const nm = gcName(), ini = esc((nm.split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase());
