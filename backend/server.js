@@ -8359,6 +8359,36 @@ app.get('/api/cantera/batches/:id/cargos', requireAuth, async (req, res) => {
     res.json({ cargos });
   } catch (e) { console.error('[cantera] cargos GET', e.message); res.status(500).json({ error: 'No se pudieron cargar los cargos' }); }
 });
+// ── Ficha de un contacto de Cantera (aún sin pasar al CRM): ver y editar; si ya fue promovido, el cambio también llega al CRM ──
+const _CT_EDIT = ['nombre', 'apellido', 'cargo', 'email', 'linkedin', 'linkedin_sales_nav', 'ciudad', 'pais', 'idioma'];
+app.get('/api/cantera/contacts/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT k.*, c.nombre AS empresa, c.website, c.dominio, c.linkedin AS empresa_linkedin, c.pais AS empresa_pais, c.industria, c.tamano, b.nombre AS borrador, b.estado AS borrador_estado
+         FROM cantera_contacts k LEFT JOIN cantera_companies c ON c.id = k.company_id JOIN cantera_batches b ON b.id = k.batch_id
+        WHERE k.id=$1 AND k.user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const r = rows[0]; delete r.raw; res.json(r);
+  } catch (e) { console.error('[cantera] contact GET', e.message); res.status(500).json({ error: 'No se pudo cargar el contacto' }); }
+});
+app.patch('/api/cantera/contacts/:id', requireAuth, async (req, res) => {
+  const b = req.body || {}, vals = {};
+  for (const k of _CT_EDIT) if (k in b) vals[k] = String(b[k] == null ? '' : b[k]).replace(/\s+/g, ' ').trim().slice(0, k.includes('linkedin') ? 400 : 160);
+  if (!Object.keys(vals).length) return res.status(400).json({ error: 'Nada que actualizar' });
+  if (('nombre' in vals || 'apellido' in vals) && !(vals.nombre || vals.apellido)) return res.status(400).json({ error: 'El contacto necesita un nombre' });
+  try {
+    const keys = Object.keys(vals), set = keys.map((k, i) => `${k}=$${i + 1}`).join(', ');
+    const { rows } = await pool.query(`UPDATE cantera_contacts SET ${set} WHERE id=$${keys.length + 1} AND user_id=$${keys.length + 2} RETURNING id, promoted_contact_id`, [...keys.map(k => vals[k]), parseInt(req.params.id, 10), req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Contacto no encontrado' });
+    let crm = false;
+    if (rows[0].promoted_contact_id) {   // ya está en el CRM: se actualiza allá también (mismas columnas)
+      const set2 = keys.map((k, i) => `${k}=$${i + 1}`).join(', ');
+      const r2 = await pool.query(`UPDATE lm_contacts SET ${set2}, updated_at=NOW() WHERE id=$${keys.length + 1} AND user_id=$${keys.length + 2}`, [...keys.map(k => vals[k]), rows[0].promoted_contact_id, req.workspaceOwnerId]).catch(async () => pool.query(`UPDATE lm_contacts SET ${set2} WHERE id=$${keys.length + 1} AND user_id=$${keys.length + 2}`, [...keys.map(k => vals[k]), rows[0].promoted_contact_id, req.workspaceOwnerId]));
+      crm = (r2.rowCount || 0) > 0;
+    }
+    res.json({ ok: true, crm });
+  } catch (e) { console.error('[cantera] contact PATCH', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+});
 app.get('/api/cantera/batches/:id/cargos/contactos', requireAuth, async (req, res) => {
   try {
     const key = String(req.query.key || '').slice(0, 200); if (!key) return res.status(400).json({ error: 'Falta el cargo' });

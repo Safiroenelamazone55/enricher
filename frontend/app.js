@@ -6638,6 +6638,49 @@ const CanteraModule = (() => {
     _cargoRanks = {}; _cargos.forEach(c => { if (c.rank) _cargoRanks[c.key] = c.rank; });
     const box = document.getElementById('cant-cargos'); if (box) box.outerHTML = _cargosHtml();
   }
+  // ── Ficha de un contacto de Cantera (todavía no está en el CRM): misma idea que la ficha del CRM, con una franja que lo aclara ──
+  let _fk = null;
+  async function openFicha(id) {
+    closeFicha();
+    const m = document.createElement('div'); m.id = 'cant-ficha'; m.className = 'cfi'; m.onclick = ev => { if (ev.target === m) closeFicha(); };
+    m.innerHTML = '<div class="cfi__box"><div class="cfi__load">Cargando ficha…</div></div>'; document.body.appendChild(m);
+    try {
+      const r = await apiFetch(`${API}/cantera/contacts/${id}`); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      _fk = await r.json(); _fichaPaint();
+    } catch (e) { m.querySelector('.cfi__box').innerHTML = `<div class="cfi__load">No se pudo cargar: ${esc(e.message)}</div>`; }
+  }
+  function closeFicha() { const m = document.getElementById('cant-ficha'); if (m) m.remove(); _fk = null; }
+  function _fichaPaint() {
+    const m = document.getElementById('cant-ficha'); if (!m || !_fk) return; const k = _fk;
+    const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    const nm = [k.nombre, k.apellido].filter(Boolean).join(' ') || '(sin nombre)', ini = (((k.nombre || '?')[0]) + ((k.apellido || '')[0] || '')).toUpperCase();
+    const inCrm = !!k.promoted_contact_id, web = fx(k.website || k.dominio);
+    const fld = (key, label, ph, wide) => `<label class="cfi__f${wide ? ' cfi__f--w' : ''}"><span>${label}</span><input id="cfi-${key}" value="${esc(k[key] || '')}" placeholder="${ph || ''}" autocomplete="off"></label>`;
+    m.querySelector('.cfi__box').innerHTML = `
+      <div class="cfi__band cfi__band--${inCrm ? 'crm' : 'cant'}">${inCrm ? '✓ Este contacto ya está en el CRM · lo que cambies aquí se actualiza también allá' : '◔ Contacto en CANTERA · todavía no se ha enviado al CRM'}<span>Borrador: ${esc(k.borrador || '')}</span></div>
+      <div class="cfi__hd"><div class="cfi__av">${esc(ini.trim() || '?')}</div><div class="cfi__id"><div class="cfi__name">${esc(nm)}</div><div class="cfi__sub">${esc(k.cargo || 'Sin cargo')}${k.empresa ? ' · ' + (web ? `<a href="${esc(web)}" target="_blank" rel="noopener">${esc(k.empresa)}</a>` : esc(k.empresa)) : ''}</div></div>
+        <div class="cfi__lk">${fx(k.linkedin) ? `<a href="${esc(fx(k.linkedin))}" target="_blank" rel="noopener" title="Abrir LinkedIn">LinkedIn ↗</a>` : ''}${fx(k.linkedin_sales_nav) ? `<a href="${esc(fx(k.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir Sales Navigator">Sales Navigator ↗</a>` : ''}</div>
+        <button class="cfi__x" onclick="CanteraModule.closeFicha()" title="Cerrar">×</button></div>
+      <div class="cfi__bd"><h4>Datos del contacto <small>edítalos aquí: se guardan en Cantera${inCrm ? ' y en el CRM' : ' y viajarán al CRM cuando lo muevas'}</small></h4>
+        <div class="cfi__g">${fld('nombre', 'Nombre')}${fld('apellido', 'Apellido')}${fld('cargo', 'Cargo', '', true)}${fld('email', 'Email')}${fld('idioma', 'Idioma', 'es, en, it…')}${fld('ciudad', 'Ciudad')}${fld('pais', 'País')}${fld('linkedin', 'LinkedIn (URL)', '', true)}${fld('linkedin_sales_nav', 'Sales Navigator (URL)', '', true)}</div>
+        <h4>Empresa <small>se edita en Resultados</small></h4>
+        <div class="cfi__co"><b>${esc(k.empresa || '—')}</b>${[k.industria, k.empresa_pais, k.tamano].filter(Boolean).length ? `<span>${esc([k.industria, k.empresa_pais, k.tamano].filter(Boolean).join(' · '))}</span>` : ''}${web ? `<a href="${esc(web)}" target="_blank" rel="noopener">${esc(String(k.website || k.dominio).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗</a>` : ''}</div></div>
+      <div class="cfi__ft"><span id="cfi-msg"></span><button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeFicha()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveFicha()">Guardar cambios</button></div>`;
+  }
+  async function saveFicha() {
+    if (!_fk) return; const body = {};
+    ['nombre', 'apellido', 'cargo', 'email', 'idioma', 'ciudad', 'pais', 'linkedin', 'linkedin_sales_nav'].forEach(k => { const el = document.getElementById('cfi-' + k); if (el) body[k] = el.value; });
+    const msg = document.getElementById('cfi-msg');
+    try {
+      const r = await apiFetch(`${API}/cantera/contacts/${_fk.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error');
+      Object.assign(_fk, body); _fichaPaint();
+      const mm = document.getElementById('cfi-msg'); if (mm) mm.textContent = j.crm ? '✓ Guardado en Cantera y en el CRM' : '✓ Guardado';
+      // La tabla de contactos por cargo y los datos del borrador se ponen al día con lo editado
+      Object.keys(_cargoCt).forEach(key => { (_cargoCt[key] || []).forEach(x => { if (x.id === _fk.id) Object.assign(x, body); }); }); _cargoRepaint();
+      if (_current) { try { await load(); } catch (_) {} }
+    } catch (e) { if (msg) msg.textContent = '✕ ' + e.message; showBanner('No se pudo guardar: ' + e.message, 'error'); }
+  }
   // Ver la lista completa de contactos de un cargo (se abre por cargo; se carga al abrir)
   let _cargoOpen = new Set(), _cargoCt = {}, _cargoSel = {};
   function _cargoRepaint() { const el = document.getElementById('cant-cg-list'); if (el) el.innerHTML = _cargosListHtml(); }
@@ -6672,7 +6715,7 @@ const CanteraModule = (() => {
       return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s) · toca un nombre, empresa, web o icono para abrirlo</span></div>
         <div class="cgd__w"><table class="cgd__t"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
         ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web), nm = esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—');
-          return `<tr><td class="cgd__n">${lnk(li || sn, nm, li ? 'Abrir LinkedIn' : 'Abrir Sales Navigator')}</td><td>${lnk(wu, esc(x.empresa || '—'), 'Abrir la web de la empresa')}</td><td>${esc(x.cargo || '—')}</td>
+          return `<tr><td class="cgd__n"><button type="button" class="cgd__go" title="Abrir la ficha del contacto" onclick="CanteraModule.openFicha(${x.id})">→</button>${lnk(li || sn, nm, li ? 'Abrir LinkedIn' : 'Abrir Sales Navigator')}</td><td>${lnk(wu, esc(x.empresa || '—'), 'Abrir la web de la empresa')}</td><td>${esc(x.cargo || '—')}</td>
             <td>${web ? `<a href="${esc(wu)}" target="_blank" rel="noopener">${esc(web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : '<span class="cgd__d">—</span>'}</td>
             <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
         </tbody></table></div></div>`;
@@ -8301,7 +8344,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, openFicha, closeFicha, saveFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
