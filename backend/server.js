@@ -1722,6 +1722,35 @@ app.delete('/api/mgmt/clients/:id/contacts/:contactId', requireAuth, async (req,
 // =================================================================
 
 // ── GET /api/mgmt/projects ────────────────────────────────────────
+// ── Espacios: agrupan proyectos (las «listas») ───────────────────────
+app.get('/api/mgmt/spaces', requireAuth, async (req, res) => {
+  try { const { rows } = await pool.query(`SELECT id, nombre, color, orden FROM spaces WHERE user_id=$1 ORDER BY orden, id`, [req.workspaceOwnerId]); res.json(rows); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/mgmt/spaces', requireAuth, async (req, res) => {
+  const nombre = String(req.body?.nombre || '').trim().slice(0, 60); if (!nombre) return res.status(400).json({ error: 'Ponle un nombre al espacio' });
+  const color = /^#[0-9a-f]{6}$/i.test(req.body?.color || '') ? req.body.color : '#7C5CE0';
+  try { const { rows } = await pool.query(`INSERT INTO spaces (user_id, nombre, color, orden) VALUES ($1,$2,$3,(SELECT COALESCE(MAX(orden),0)+1 FROM spaces WHERE user_id=$1)) RETURNING id, nombre, color, orden`, [req.workspaceOwnerId, nombre, color]); res.status(201).json(rows[0]); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.patch('/api/mgmt/spaces/:id', requireAuth, async (req, res) => {
+  const nombre = String(req.body?.nombre || '').trim().slice(0, 60), color = /^#[0-9a-f]{6}$/i.test(req.body?.color || '') ? req.body.color : null;
+  try { const { rows } = await pool.query(`UPDATE spaces SET nombre = COALESCE(NULLIF($3,''), nombre), color = COALESCE($4, color) WHERE id=$1 AND user_id=$2 RETURNING id, nombre, color, orden`, [parseInt(req.params.id, 10), req.workspaceOwnerId, nombre, color]); if (!rows[0]) return res.status(404).json({ error: 'No encontrado' }); res.json(rows[0]); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/mgmt/spaces/:id', requireAuth, async (req, res) => {
+  try { const id = parseInt(req.params.id, 10); await pool.query(`UPDATE projects SET space_id=NULL WHERE space_id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]); await pool.query(`DELETE FROM spaces WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.patch('/api/mgmt/projects/:id/space', requireAuth, async (req, res) => {
+  const sid = req.body?.space_id ? parseInt(req.body.space_id, 10) : null;
+  try {
+    if (sid) { const ok = await pool.query(`SELECT 1 FROM spaces WHERE id=$1 AND user_id=$2`, [sid, req.workspaceOwnerId]); if (!ok.rows[0]) return res.status(404).json({ error: 'Espacio no encontrado' }); }
+    const { rows } = await pool.query(`UPDATE projects SET space_id=$3 WHERE id=$1 AND user_id=$2 RETURNING id, space_id`, [parseInt(req.params.id, 10), req.workspaceOwnerId, sid]);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' }); res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/mgmt/projects', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(

@@ -13201,7 +13201,7 @@ const TasksModule = (() => {
     else render();
   }
   // «Mi trabajo» comparte su lista de tareas con este módulo para reutilizar el menú/panel del Kanban; aquí se le avisa de los cambios.
-  function _notifyMW() { try { if (typeof MyWorkModule !== 'undefined' && MyWorkModule._fromTasks) MyWorkModule._fromTasks(_tasks); } catch (_) {} }
+  function _notifyMW() { try { if (typeof MyWorkModule !== 'undefined' && MyWorkModule._fromTasks) MyWorkModule._fromTasks(_tasks); } catch (_) {} try { if (typeof SpacesModule !== 'undefined' && SpacesModule._fromTasks) SpacesModule._fromTasks(_tasks); } catch (_) {} }
   function _adopt(arr) {
     if (Array.isArray(arr)) _tasks = arr;
     if (!_teamMembers.length) apiFetch(`${API}/mgmt/team`).then(r => r.ok ? r.json() : []).then(t => { if (t.length) _teamMembers = t; }).catch(() => {});
@@ -47697,6 +47697,7 @@ function initApp() {
     if (tabName === 'mgmt-projects')  ProjectsModule.load();
     if (tabName === 'mgmt-opportunities') OpportunitiesModule.load();
     if (tabName === 'mgmt-tasks')     TasksModule.load();
+    if (tabName === 'mgmt-spaces' && typeof SpacesModule !== 'undefined') SpacesModule.load();
     if (tabName === 'mgmt-calendar')  CalendarModule.load();
     if (tabName === 'mgmt-blocks')    BlocksModule.load();
     if (tabName === 'mgmt-team')      TeamModule.load();
