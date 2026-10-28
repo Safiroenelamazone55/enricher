@@ -7903,6 +7903,7 @@ const CanteraModule = (() => {
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">`
+      + item('Renombrar borrador…', `CanteraModule.renombrarBorrador()`)
       + item('Mover al CRM…', `CanteraModule.openPromote()`)
       + item('Guardar criterio como plantilla…', `CanteraModule.saveAsTemplate()`)
       + `<div class="cp-mark-menu__sep"></div>`
@@ -7912,6 +7913,16 @@ const CanteraModule = (() => {
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`; menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function renombrarBorrador() {
+    if (!_current) return;
+    const nombre = prompt('Nombre del borrador', _current.nombre || '');
+    if (nombre == null || !nombre.trim() || nombre.trim() === _current.nombre) return;
+    try {
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/nombre`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nombre.trim() }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      _current.nombre = nombre.trim(); await load(); _paint(); showBanner('✓ Borrador renombrado', 'success');
+    } catch (e) { showBanner('No se pudo renombrar: ' + e.message, 'error'); }
   }
   async function remove(id) {
     if (!confirm('¿Eliminar este borrador? No se puede deshacer.')) return;
@@ -8225,7 +8236,7 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  return { renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,

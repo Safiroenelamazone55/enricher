@@ -8184,6 +8184,16 @@ app.get('/api/cantera/batches/:id/instruccion', requireAuth, async (req, res) =>
     res.json({ instruccion });
   } catch (err) { console.error('[cantera] GET instruccion', err.message); res.status(500).json({ error: 'Error al generar la instrucción' }); }
 });
+// Renombrar un borrador sin tocar el resto de su criterio (el PUT de abajo reescribe todos los campos).
+app.patch('/api/cantera/batches/:id/nombre', requireAuth, async (req, res) => {
+  const nombre = _lmS(req.body && req.body.nombre);
+  if (!nombre) return res.status(400).json({ error: 'Escribe un nombre' });
+  try {
+    const { rows } = await pool.query(`UPDATE cantera_batches SET nombre=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 AND estado='borrador' RETURNING id, nombre`, [nombre, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: 'No se pudo renombrar' }); }
+});
 app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   const motorIa = ['kimi', 'gemini'].includes(b.motor_ia) ? b.motor_ia : 'claude';
