@@ -5871,7 +5871,7 @@ const CanteraModule = (() => {
                 <div class="lm-stat"><b>${sm.companiesCreated || 0}</b><span>empresas nuevas</span></div>
                 <div class="lm-stat"><b>${sm.contactsCreated || 0}</b><span>contactos nuevos</span></div>
                 ${sm.tipo === 'contactos' ? `<div class="lm-stat"><b>${sm.companiesMatched || 0}</b><span>asociaciones a empresas del borrador</span></div>` : ''}
-                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>contactos sin empresa en el borrador (quedaron guardados en Información)</span></div>` : ''}
+                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>contactos sin empresa en el borrador (quedaron guardados en Configuración)</span></div>` : ''}
                 ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
                 ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
               </div></div>
