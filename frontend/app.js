@@ -22064,7 +22064,7 @@ const LeadManagerModule = (() => {
     settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   };
   function _navHtml() {
-    let html = _gcli ? `<div class="lm2-gc" title="Filtro global de cliente"><span>Viendo sólo</span><b>${esc(gcName())}</b><button type="button" onclick="LeadManagerModule.gcSet(null)" title="Quitar filtro">×</button></div>` : '', lastG = null;
+    let html = _gcli ? (_gcLoadLogo(), `<div class="lm2-gc" title="Viendo sólo ${esc(gcName())} · clic para quitar el filtro" onclick="LeadManagerModule.gcSet(null)">${_gcTile()}<div class="lm2-gc__x"><span>Viendo sólo</span><b>${esc(gcName())}</b></div><button type="button" title="Quitar filtro">×</button></div>`) : '', lastG = null;
     _NAV.forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
@@ -22140,6 +22140,22 @@ const LeadManagerModule = (() => {
     const k = new Set((_contacts || []).map(c => c.id));
     _tiData.items = _tiData.items.filter(it => it.outbound_client_id === _gcli || (!it.outbound_client_id && it.contact_id && k.has(it.contact_id)));
     const counts = {}; _tiData.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; }); _tiData.counts = counts;
+  }
+  // Logo del cliente filtrado (el del portal, si lo tiene) para mostrarlo en la barra contraída; si no, sus iniciales.
+  let _gcLogo = { id: 0, url: '' };
+  async function _gcLoadLogo() {
+    if (!_gcli) { _gcLogo = { id: 0, url: '' }; return; }
+    if (_gcLogo.id === _gcli) return;
+    const id = _gcli; _gcLogo = { id, url: '' };
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding?client=${id}`); const b = r.ok ? await r.json() : null;
+      const v = b && b.has && ['color', 'colo', 'light', 'dark'].find(k => b.has[k]) || (b && b.has && Object.keys(b.has).find(k => b.has[k]));
+      if (v) { const f = await apiFetch(`${API}/lm/portal/branding/${id}/file/${v}?v=${b.v || 0}`); if (f.ok) { const url = URL.createObjectURL(await f.blob()); if (_gcli === id) { _gcLogo = { id, url }; _refreshNav(); } } }
+    } catch (_) {}
+  }
+  function _gcTile() {
+    const nm = gcName(), ini = esc((nm.split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase());
+    return (_gcLogo.id === _gcli && _gcLogo.url) ? `<i class="lm2-gc__t lm2-gc__t--img"><img src="${_gcLogo.url}" alt="${esc(nm)}"></i>` : `<i class="lm2-gc__t">${ini}</i>`;
   }
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
