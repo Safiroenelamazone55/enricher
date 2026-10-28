@@ -13582,6 +13582,8 @@ const TasksModule = (() => {
 
             <div class="tskd__block" id="tskd-ck">${_tdCkHtml(t)}</div>
 
+            <div class="tskd__block"><div class="tskd__lbl-row"><span class="tskd__lbl">Actividad</span></div><div class="act" id="tskd-act"><div class="act__e">Cargando…</div></div></div>
+
             <div class="tskd__block">
               <div class="tskd__lbl-row">
                 <span class="tskd__lbl">Subtareas</span>
@@ -13645,6 +13647,11 @@ const TasksModule = (() => {
                 <div class="tskd__lbl">Etiquetas</div>
                 <div id="tskd-tags">${_tdTagsHtml(t)}</div>
               </div>
+              <div class="tskd__tools">
+                <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'link')">Copiar vínculo</button>
+                <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'id')">Copiar ID</button>
+                <button type="button" class="tskd__tool" onclick="TasksModule.duplicateTask(${id})">Duplicar</button>
+              </div>
               <button class="btn btn--ghost btn--sm tskd__edit-btn" onclick="TasksModule.openDrawer(${id})">Editar detalles</button>
             </div>
 
@@ -13666,7 +13673,7 @@ const TasksModule = (() => {
     _tdFitHeight();
     if (!_tdResizeBound) { window.addEventListener('resize', _tdFitHeight); _tdResizeBound = true; }
     TimerModule.syncButtons();
-    _tdLoadComments(id);
+    _tdLoadComments(id); _tdLoadActivity(id);
     if (_tdCommentPoll) clearInterval(_tdCommentPoll);
     _tdCommentPoll = setInterval(() => { if (_tdCurrentId === id) _tdLoadComments(id, true); }, 8000);
   }
@@ -13770,6 +13777,20 @@ const TasksModule = (() => {
   function _tdCkItemAdd(id, ci, inp) { const v = inp.value.trim(); if (!v) return; const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items.push({ id: 'i' + Date.now().toString(36), texto: v, hecho: false }); inp.value = ''; _tdExtra(id, { checklists: c }).then(() => { const el = document.querySelectorAll('#tskd-ck .ck__add')[ci]; el && el.focus(); }); }
   function _tdCkToggle(id, ci, ii) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items[ii].hecho = !c[ci].items[ii].hecho; _tdExtra(id, { checklists: c }); }
   function _tdCkItemDel(id, ci, ii) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items.splice(ii, 1); _tdExtra(id, { checklists: c }); }
+
+  async function _tdLoadActivity(id) {
+    const box = $('tskd-act'); if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/activity`); const a = r.ok ? await r.json() : [];
+      const fmt = d => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      box.innerHTML = a.length ? a.map(x => `<div class="act__i"><b>${esc(x.user_name || 'Alguien')}</b> ${esc(x.texto)}<time>${fmt(x.created_at)}</time></div>`).join('') : '<div class="act__e">Aún no hay cambios registrados. Desde ahora se anotan aquí.</div>';
+    } catch (_) { box.innerHTML = '<div class="act__e">No se pudo cargar la actividad.</div>'; }
+  }
+  async function _tdCopy(id, what) {
+    const txt = what === 'id' ? '#' + id : location.origin + '/?task=' + id;
+    try { await navigator.clipboard.writeText(txt); showBanner(what === 'id' ? '✓ ID copiado: ' + txt : '✓ Vínculo copiado', 'success'); }
+    catch (_) { showBanner('No se pudo copiar: ' + txt, 'error'); }
+  }
 
   async function _tdLoadComments(id, silent) {
     const box = $('tskd-chat-msgs');
@@ -15801,7 +15822,7 @@ const TasksModule = (() => {
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
-    _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
+    _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
     openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,

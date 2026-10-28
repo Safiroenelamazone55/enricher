@@ -1999,6 +1999,43 @@ app.delete('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
 // =================================================================
 
 // ── GET /api/mgmt/tasks ───────────────────────────────────────────
+// ── Actividad de la tarea: registra quién cambió qué (estado, prioridad, fechas, etiquetas, estimado, checklists) ──
+let _actReady = false;
+async function _ensureActivity() {
+  if (_actReady) return;
+  await pool.query(`CREATE TABLE IF NOT EXISTS task_activity (
+    id SERIAL PRIMARY KEY, workspace_owner_id INTEGER NOT NULL, task_id INTEGER NOT NULL, user_id INTEGER, user_name TEXT NOT NULL DEFAULT '',
+    texto TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS task_activity_task_idx ON task_activity (task_id, created_at DESC)`);
+  _actReady = true;
+}
+const _ESTL = { pendiente: 'Pendiente', en_progreso: 'En progreso', bloqueado: 'Bloqueado', completado: 'Completado', cancelado: 'Cancelado' };
+const _fmtD = v => v ? new Date(String(v).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : 'sin fecha';
+app.use('/api/mgmt/tasks/:id/:field', (req, res, next) => {
+  if (req.method !== 'PATCH') return next();
+  const f = req.params.field, b = req.body || {}, tid = parseInt(req.params.id, 10);
+  res.on('finish', async () => {
+    if (res.statusCode !== 200 || !tid || !req.user) return;
+    let txt = '';
+    if (f === 'status' && b.estado) txt = `cambió el estado a «${_ESTL[b.estado] || b.estado}»`;
+    else if (f === 'prioridad' && b.prioridad) txt = `cambió la prioridad a ${b.prioridad}`;
+    else if (f === 'deadline') txt = `cambió la fecha límite a ${_fmtD(b.deadline)}`;
+    else if (f === 'fecha-inicio') txt = `cambió la fecha de inicio a ${_fmtD(b.fecha_inicio)}`;
+    else if (f === 'extras') txt = [('etiquetas' in b) && 'actualizó las etiquetas', ('duracion_est_min' in b) && 'cambió la duración estimada', ('checklists' in b) && 'actualizó un checklist'].filter(Boolean).join(' y ');
+    if (!txt) return;
+    try { await _ensureActivity(); await pool.query(`INSERT INTO task_activity (workspace_owner_id, task_id, user_id, user_name, texto) VALUES ($1,$2,$3,$4,$5)`, [req.workspaceOwnerId, tid, req.user.id, req.user.name || '', txt]); }
+    catch (e) { console.warn('[activity]', e.message); }
+  });
+  next();
+});
+app.get('/api/mgmt/tasks/:id/activity', requireAuth, async (req, res) => {
+  try {
+    await _ensureActivity();
+    const { rows } = await pool.query(`SELECT id, user_name, texto, created_at FROM task_activity WHERE task_id = $1 AND workspace_owner_id = $2 ORDER BY created_at DESC LIMIT 40`, [parseInt(req.params.id, 10), req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── PATCH /api/mgmt/tasks/:id/extras — etiquetas, duración estimada y checklists (sólo las claves enviadas) ──
 app.patch('/api/mgmt/tasks/:id/extras', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10), b = req.body || {}, sets = [], vals = [];
