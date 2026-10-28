@@ -6740,6 +6740,1400 @@ const CanteraModule = (() => {
     const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
     const descartadas1 = _companies.filter(c => c.paso1_estado === 'descartado').length;
     const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
+    if (_orphans === null) _orphansLoad().then(() => { if (_step === 5) _paint(); });
+    const nE = _companies.length, nC = _current.contactos_total || 0, sinC = _current.empresas_sin_contacto || 0, conC = Math.max(0, nE - sinC);
+    const pct = (n, d) => d > 0 ? Math.round(n / d * 100) : 0, num = n => Number(n || 0).toLocaleString('es-ES');
+    const valid = Math.min(nE, (_current.validado_ia_total || 0) + (_current.validado_manual_total || 0));
+    const bar = (p, tone) => `<span class="inf-bar"><i class="inf-bar__f inf-bar__f--${tone || 'b'}" style="width:${Math.min(100, p)}%"></i></span>`;
+    // 1) Embudo: de lo importado a lo listo para el CRM
+    const stages = [
+      ['Empresas importadas', nE, 100, 'ok', 'Hecho', 3],
+      ['Con al menos 1 contacto', conC, pct(conC, nE), conC >= nE ? 'ok' : 'warn', conC >= nE ? 'Hecho' : `${num(sinC)} sin contacto`, 3],
+      ['Aprobadas en el filtro básico', aprobadas, pct(aprobadas, nE), aprobadas ? 'ok' : 'off', pendientes1 === nE ? 'Sin correr · opcional' : (aprobadas ? 'Hecho' : 'Pendiente'), 1],
+      ['Validadas (paso 2: IA o a mano)', valid, pct(valid, nE), valid >= nE ? 'ok' : (valid ? 'warn' : 'off'), valid >= nE ? 'Hecho' : (valid ? 'En curso' : 'Pendiente'), 2],
+      ['Calificadas para mover al CRM', calificadas, pct(calificadas, nE), calificadas ? 'ok' : 'off', calificadas ? 'Listas para mover' : 'Ninguna aún', 4],
+    ];
+    const funnel = `<table class="inf-t inf-funnel"><thead><tr><th>Etapa</th><th class="inf-num">Empresas</th><th class="inf-num">% del total</th><th style="width:34%"></th><th>Estado</th></tr></thead><tbody>
+      ${stages.map(([l, n, p, tone, st, step]) => `<tr onclick="CanteraModule.setStep(${step})" title="Ir a esta etapa"><td class="inf-l">${esc(l)}</td><td class="inf-num"><b>${num(n)}</b></td><td class="inf-num">${p}%</td><td>${bar(p, tone === 'ok' ? 'g' : tone === 'warn' ? 'a' : 'x')}</td><td><span class="inf-chip inf-chip--${tone}">${esc(st)}</span></td></tr>`).join('')}</tbody></table>`;
+    // 2) Calidad de los contactos
+    const qrow = (l, n, d, hint) => `<tr><td class="inf-l">${esc(l)}</td><td class="inf-num"><b>${num(n)}</b> <span class="inf-dim">de ${num(d)}</span></td><td class="inf-num">${pct(n, d)}%</td><td style="width:38%">${bar(pct(n, d), pct(n, d) >= 80 ? 'g' : pct(n, d) >= 40 ? 'a' : 'x')}</td></tr>${hint ? `<tr class="inf-hintr"><td colspan="4">${hint}</td></tr>` : ''}`;
+    const quality = `<table class="inf-t"><tbody>
+      ${qrow('Empresas con contacto', conC, nE)}${qrow('Contactos con email', _current.contactos_con_email || 0, nC)}${qrow('Contactos con LinkedIn', _current.contactos_con_linkedin || 0, nC)}${qrow('Contactos con prioridad asignada', _current.contactos_con_prioridad || 0, nC)}</tbody></table>`;
+    // 3) Importación (tabla compacta)
+    const irows = [['Filas leídas del archivo', imp.rows], ['Empresas nuevas creadas', imp.companiesCreated], ['Empresas repetidas (no se duplicaron)', imp.companiesMatched], ['Empresas con Tier heredado de otro borrador', imp.companiesInherited], ['Empresas eliminadas al reimportar', imp.companiesDeleted], ['Contactos agregados', imp.contactsCreated], ['Contactos existentes completados', imp.contactsUpdated]].filter(r => r[1] || r[0].startsWith('Filas') || r[0].startsWith('Empresas nuevas') || r[0].startsWith('Contactos agregados'));
+    const imptbl = `<table class="inf-t inf-kv"><tbody>${irows.map(([l, v]) => `<tr><td class="inf-l">${esc(l)}</td><td class="inf-num"><b>${num(v)}</b></td></tr>`).join('')}</tbody></table>${!imp.imports ? '<p class="inf-empty">Todavía no se ha importado ningún archivo.</p>' : ''}`;
+    // 4) Por Tier y estado
+    const tiers = new Map();
+    _companies.forEach(c => { const k = c.tier_clave || '—'; const t = tiers.get(k) || { n: 0, ok: 0, no: 0, pe: 0 }; t.n++; if (c.paso2_estado === 'aprobado') t.ok++; else if (c.paso2_estado === 'descartado') t.no++; else t.pe++; tiers.set(k, t); });
+    const tierTbl = tiers.size > 1 || (tiers.size === 1 && !tiers.has('—')) ? `<table class="inf-t"><thead><tr><th>Tier</th><th class="inf-num">Empresas</th><th class="inf-num">Aprobadas</th><th class="inf-num">Descartadas</th><th class="inf-num">Pendientes</th></tr></thead><tbody>${[...tiers.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, t]) => `<tr><td class="inf-l"><b>${esc(k === '—' ? 'Sin tier' : k)}</b></td><td class="inf-num">${num(t.n)}</td><td class="inf-num inf-g">${num(t.ok)}</td><td class="inf-num inf-r">${num(t.no)}</td><td class="inf-num inf-dim">${num(t.pe)}</td></tr>`).join('')}</tbody></table>` : '<p class="inf-empty">Aún no hay empresas clasificadas por Tier.</p>';
+    // 5) Motivos de descarte y países
+    const mot = new Map(); _companies.forEach(c => { const m = String(c.paso1_estado === 'descartado' ? c.paso1_motivo : (c.paso2_estado === 'descartado' ? (c.motivo_descarte || c.paso1_motivo) : '') || '').trim(); if (m) mot.set(m, (mot.get(m) || 0) + 1); });
+    const motTbl = mot.size ? `<table class="inf-t inf-kv"><tbody>${[...mot.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([m, n]) => `<tr><td class="inf-l" title="${esc(m)}">${esc(m.length > 70 ? m.slice(0, 70) + '…' : m)}</td><td class="inf-num"><b>${num(n)}</b></td></tr>`).join('')}</tbody></table>` : '<p class="inf-empty">Todavía no hay empresas descartadas.</p>';
+    const pa = new Map(); _companies.forEach(c => { const k = String(c.pais || '').trim() || 'Sin país'; pa.set(k, (pa.get(k) || 0) + 1); });
+    const paTbl = `<table class="inf-t"><tbody>${[...pa.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => `<tr><td class="inf-l">${esc(k)}</td><td class="inf-num"><b>${num(n)}</b></td><td class="inf-num">${pct(n, nE)}%</td><td style="width:38%">${bar(pct(n, nE), 'b')}</td></tr>`).join('')}</tbody></table>`;
+    // 6) Qué falta (acciones sugeridas, cada una lleva a donde se resuelve)
+    const todo = [];
+    if (sinC > 0) todo.push(['warn', `${num(sinC)} empresa(s) sin ningún contacto`, 'Importa contactos o enriquécelas para poder escribirles.', 3, 'Importar']);
+    const sinMail = Math.max(0, nC - (_current.contactos_con_email || 0)); if (sinMail > 0) todo.push(['warn', `${num(sinMail)} contacto(s) sin email`, 'Sin email solo se podrá contactar por LinkedIn o WhatsApp.', 4, 'Ver resultados']);
+    const sinPri = Math.max(0, nC - (_current.contactos_con_prioridad || 0)); if (nC && sinPri > 0) todo.push(['info', `${num(sinPri)} contacto(s) sin prioridad`, 'Asigna el orden por cargo para saber a quién escribir primero.', 7, 'Configurar']);
+    if (_orphans && _orphans.length) todo.push(['warn', `${num(_orphans.length)} contacto(s) sin empresa clara`, 'Vincúlalos a una empresa o elimínalos.', 7, 'Resolver']);
+    if (pendientes1 === nE && nE) todo.push(['info', 'El filtro básico aún no se ha corrido', 'Es opcional: descarta rápido lo que claramente no encaja, sin IA y sin costo.', 1, 'Ir a filtros']);
+    if (calificadas > 0) todo.push(['ok', `${num(calificadas)} empresa(s) calificada(s) listas`, 'Ya puedes moverlas al CRM.', 4, 'Ver resultados']);
+    const todoHtml = todo.length ? todo.map(([tone, t, d, step, cta]) => `<div class="inf-todo inf-todo--${tone}"><div><b>${esc(t)}</b><span>${esc(d)}</span></div><button type="button" class="inf-todo__b" onclick="CanteraModule.setStep(${step})">${esc(cta)} ›</button></div>`).join('') : '<p class="inf-empty">Todo en orden: no hay pendientes.</p>';
+    const kpi = (n, l, sub, tone) => `<div class="inf-kpi${tone ? ' inf-kpi--' + tone : ''}"><b>${n}</b><span>${esc(l)}</span>${sub ? `<em>${sub}</em>` : ''}</div>`;
+    const cl = (_lastClean.total || 0), en = (_lastEnrich.total || 0);
+    return `<div class="cant-section inf">
+      <div class="inf-kpis">
+        ${kpi(num(nE), 'Empresas en el borrador', `${num(conC)} con contacto`)}
+        ${kpi(num(nC), 'Contactos', nE ? `${(nC / nE).toFixed(1)} por empresa` : '')}
+        ${kpi(num(calificadas), 'Calificadas para el CRM', `${pct(calificadas, nE)}% del total`, calificadas ? 'g' : '')}
+        ${kpi(`${pct(valid, nE)}%`, 'Validación avanzada', `${num(valid)} de ${num(nE)} empresas`, valid >= nE && nE ? 'g' : '')}
+      </div>
+      <div class="inf-card"><h3>Qué falta por hacer</h3>${todoHtml}</div>
+      <div class="inf-card"><h3>Avance del borrador <small>de lo importado a lo listo para el CRM · toca una fila para ir a esa etapa</small></h3>${funnel}</div>
+      <div class="inf-2">
+        <div class="inf-card"><h3>Calidad de los datos</h3>${quality}</div>
+        <div class="inf-card"><h3>Empresas por país <small>las 6 principales</small></h3>${paTbl}</div>
+      </div>
+      <div class="inf-2">
+        <div class="inf-card"><h3>Resultado por Tier</h3>${tierTbl}</div>
+        <div class="inf-card"><h3>Motivos de descarte <small>los más frecuentes</small></h3>${motTbl}</div>
+      </div>
+      <div class="inf-2">
+        <div class="inf-card"><h3>Importación</h3>${imptbl}</div>
+        <div class="inf-card"><h3>Limpieza y enriquecimiento</h3><table class="inf-t inf-kv"><tbody><tr><td class="inf-l">Campos limpiados</td><td class="inf-num"><b>${num(cl)}</b></td></tr><tr><td class="inf-l">Campos enriquecidos</td><td class="inf-num"><b>${num(en)}</b></td></tr></tbody></table>${!_lastClean.ran && !_lastEnrich.ran ? '<p class="inf-empty">Todavía no se ha corrido Limpiar ni Enriquecer.</p>' : ''}</div>
+      </div>
+    </div>`;
+  }
+  // Paginación de la tabla de Resultados (pedido explícito 2026-09-06: "ver la
+  // lista en bloques de 50, 100 o 200, opcional") — 1242 filas de golpe era
+  // demasiado. Mismo patrón que la paginación de Contactos/Empresas del CRM.
+  let _cantPageIdx = 0;
+  function _cantPageSize() { try { return parseInt(localStorage.getItem('cantera_page_size')) || 100; } catch (_) { return 100; } }
+  function cantSetPageSize(n) { try { localStorage.setItem('cantera_page_size', String(parseInt(n) || 100)); } catch (_) {} _cantPageIdx = 0; _paint(); }
+  function cantGoPage(d) { _cantPageIdx = Math.max(0, _cantPageIdx + d); _paint(); }
+  // Resultado de la última corrida de cada acción — pedido explícito 2026-09-06:
+  // en vez de una descripción fija con conteos generales, cada botón debe reflejar
+  // lo que ÉL hizo ("Empresas limpiadas (N)" en vez de "Limpiar empresas"), así se
+  // sabe de un vistazo qué se corrió y qué falta.
+  let _lastFiltros = null; // { aprobadas, descartadas, total }
+  // { [field]: count } por cada campo corrido suelto, + `total` acumulado de
+  // TODO lo limpiado/enriquecido en este borrador (suma de cada corrida, sea
+  // por campo o "todos los campos") — pedido explícito 2026-09-06: "si limpié
+  // website 20 y nombre 30, Limpiar todo debe decir Limpiado todo (50)", el
+  // total no es solo el resultado de la última corrida de "todos los campos".
+  let _lastClean = { total: 0 };
+  let _lastEnrich = { total: 0 };
+  let _lastIA = null;      // { done, ok, errores }
+
+  // ── Importador con previsualización + mapeo editable (mismo patrón que el
+  // importador real de Contactos/Empresas del CRM — pedido explícito de
+  // Jenny 2026-09-05: "tiene que haber una validación manual... poderlo
+  // editar, así como cuando se importan directamente en el CRM"). ─────────
+  const CANT_FIELDS = [
+    { g: 'Contacto', opts: [
+      ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
+      ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'],
+      ['ubicacion', 'Ubicación del contacto'], ['ct_ciudad', 'Contacto · Ciudad'], ['ct_region', 'Contacto · Estado / Región'], ['ct_pais', 'Contacto · País'],
+      ['conexion_grado', 'Grado de conexión'],
+      ['premium', 'Cuenta Premium'], ['antiguedad_cargo', 'Antigüedad en el cargo'],
+      ['conexiones_mutuas', 'Conexiones mutuas'], ['cambio_reciente', 'Cambió de trabajo recientemente'],
+      ['publico_reciente', 'Publicó en LinkedIn recientemente'], ['sigue_empresa', 'Sigue tu empresa'],
+    ] },
+    { g: 'Idiomas del contacto', opts: [
+      ['idioma', 'Idioma (uno o varios en una columna)'],
+      ['idioma_1', 'Idioma 1'], ['nivel_1', 'Nivel del idioma 1'], ['idioma_2', 'Idioma 2'], ['nivel_2', 'Nivel del idioma 2'],
+      ['idioma_3', 'Idioma 3'], ['nivel_3', 'Nivel del idioma 3'], ['idioma_4', 'Idioma 4'], ['nivel_4', 'Nivel del idioma 4'],
+    ] },
+    { g: 'Empresa (se crea y enlaza)', opts: [
+      ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
+      ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'],
+      ['co_pais', 'Empresa · País'], ['co_ciudad', 'Empresa · Ciudad'], ['co_ubicacion', 'Empresa · Ubicación (texto completo)'],
+      ['co_linkedin', 'Empresa · LinkedIn'], ['co_linkedin_sales_nav', 'Empresa · LinkedIn (Sales Navigator)'],
+      ['co_region', 'Empresa · Estado / Región'], ['co_empleados_linkedin', 'Empresa · Empleados en LinkedIn'],
+    ] },
+  ];
+  const CANT_CT_SYN = {
+    nombre: ['first name', 'firstname', 'first', 'nombre', 'nombres', 'given name'],
+    apellido: ['last name', 'lastname', 'last', 'apellido', 'apellidos', 'surname'],
+    nombre_completo: ['full name', 'name', 'nombre completo', 'contact name'],
+    cargo: ['title', 'job title', 'cargo', 'puesto', 'position', 'role', 'headline'],
+    email: ['email', 'e mail', 'correo', 'mail', 'email address', 'work email', 'email in summary'],
+    linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url', 'lead linkedin url'],
+    ubicacion: ['lead location', 'contact location', 'ubicacion', 'ubicacion del contacto'],
+    conexion_grado: ['connection degree', 'grado de conexion'],
+    premium: ['premium account', 'cuenta premium'],
+    antiguedad_cargo: ['tenure in role', 'antiguedad en el cargo', 'antiguedad'],
+    conexiones_mutuas: ['mutual connections', 'conexiones mutuas'],
+    cambio_reciente: ['recently changed jobs', 'cambio reciente de trabajo'],
+    publico_reciente: ['posted on linkedin recently', 'publico en linkedin recientemente'],
+    sigue_empresa: ['follows your company', 'sigue tu empresa'],
+  };
+  const CANT_CO_SYN = {
+    nombre: ['name', 'company', 'company name', 'account name', 'organization', 'razon social', 'empresa'],
+    dominio: ['domain', 'company domain'],
+    website: ['website', 'company website', 'web', 'url', 'sitio web'],
+    industria: ['industry', 'industria', 'sector', 'vertical', 'company industry'],
+    tamano: ['size', 'company size', 'employees', 'number of employees', 'headcount', 'employee range', 'employees range', 'employee count', 'rango de empleados'],
+    pais: ['country', 'company country', 'pais'],
+    ciudad: ['city', 'company city', 'ciudad'],
+    ubicacion: ['location', 'company location', 'ubicacion', 'ubicacion de la empresa'],
+    linkedin: ['linkedin', 'company linkedin', 'linkedin url', 'company linkedin url'],
+  };
+  function _cNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
+  function _cWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
+  function _cBest(h, synMap) {
+    let best = '', score = 0;
+    for (const [key, syns] of Object.entries(synMap)) for (const raw of syns) {
+      const s = _cNorm(raw); if (!s) continue;
+      let sc = 0;
+      if (h === s) sc = 1000 + s.length; else if (_cWord(h, s)) sc = 100 + s.length;
+      if (sc > score) { score = sc; best = key; }
+    }
+    return best;
+  }
+  const _C_CO_PFX = /^(company|empresa|account|org|organization)\s+(.+)$/;
+  // ¿El archivo trae columnas de PERSONA (nombre, apellido, cargo, email)? Entonces una columna "Ciudad"/"City"/"Location" SIN prefijo
+  // de empresa es la ubicación de la persona, no la de la empresa. Mapearla a la empresa fue la causa de ciudades erróneas (la
+  // empresa heredaba "Murcia"/"Valencia"/"Aruba" del LinkedIn del contacto aunque su oficina estuviera en Alicante).
+  const _C_PERSON_KEYS = ['nombre', 'apellido', 'nombre_completo', 'cargo', 'email'];
+  function _cIsPersonFile(headers) { return (headers || []).some(x => _C_PERSON_KEYS.includes(_cBest(_cNorm(x), CANT_CT_SYN))); }
+  function _cGuess(headerRaw, personFile) {
+    const h = _cNorm(headerRaw); if (!h) return '';
+    // Sales Navigator, empleados en LinkedIn y estado/región tienen campo propio (si no, se confundirían con website/LinkedIn/tamaño).
+    // «Title Company» / «Title Match» no son el cargo y «Languages Count» no es un idioma: se conservan como extra.
+    if (/^title (company|match)$/.test(h) || /^languages? count$/.test(h)) return '';
+    // Idiomas del contacto (Language 1-4 / Level 1-4 del export de Sales Navigator, o una columna «Idioma» suelta).
+    { const mi = h.match(/^(language|idioma)\s*([1-4])$/); if (mi) return 'idioma_' + mi[2]; }
+    { const mn = h.match(/^(level|nivel)\s*([1-4])$/); if (mn) return 'nivel_' + mn[2]; }
+    if (/^(languages|idiomas|language|idioma)$/.test(h)) return 'idioma';
+    // Ubicación PROPIA del contacto (Lead City / State / Country): antes «Lead Country» caía en el país de la EMPRESA.
+    { const ml = h.match(/^(lead|contact|person|contacto|persona)\s+(city|ciudad|state|region|provincia|estado|country|pais)$/); if (ml) return /city|ciudad/.test(ml[2]) ? 'ct_ciudad' : /country|pais/.test(ml[2]) ? 'ct_pais' : 'ct_region'; }
+    if (/sales navigator|sales nav\b/.test(h)) return (/^(company|empresa|account|org|organization)\b/.test(h) || !personFile) ? 'co_linkedin_sales_nav' : 'linkedin_sales_nav';
+    if (/employees on linkedin|linkedin employees|empleados en linkedin/.test(h)) return 'co_empleados_linkedin';
+    if (/^(company|empresa|account)\s+(state|region|provincia|estado)$/.test(h)) return 'co_region';
+    if (/followers|seguidores/.test(h)) return '';
+    const m = h.match(_C_CO_PFX);
+    if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; if (!_cBest(h, CANT_CT_SYN)) return ''; }   // «Company State», «Company Phone»…: sin campo propio → extra
+    const c = _cBest(h, CANT_CT_SYN); if (c) return c;
+    const a = _cBest(h, CANT_CO_SYN);
+    if (a) {
+      if (personFile && (a === 'ciudad' || a === 'ubicacion')) return 'ubicacion';   // ubicación del contacto, no de la empresa
+      return 'co_' + a;
+    }
+    return '';
+  }
+  function _cCsvParse(text, delim) {
+    const rows = []; let row = [], field = '', q = false, i = 0; const n = text.length;
+    while (i < n) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; } field += c; i++; continue; }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === delim) { row.push(field); field = ''; i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      field += c; i++;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  function _cReadCsv(file) {
+    return new Promise((resolve, reject) => {
+      const rd = new FileReader();
+      rd.onload = e => {
+        let text = String(e.target.result || '');
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const firstLine = text.split(/\r?\n/)[0] || '';
+        const d = firstLine.includes('\t') ? '\t' : (firstLine.split(';').length > firstLine.split(',').length ? ';' : ',');
+        const rows = _cCsvParse(text, d).filter(r => r.some(c => String(c).trim().length));
+        if (!rows.length) { resolve({ headers: [], sampleRows: [] }); return; }
+        const trim = r => r.map(x => String(x).trim());
+        resolve({ headers: trim(rows[0]), sampleRows: rows.slice(1, 6).map(trim) });
+      };
+      rd.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      rd.readAsText(file);
+    });
+  }
+  let _cImp = null;
+  function openImportModal() {
+    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [], mode: 'actualizar', tipo: 'ambos' };
+    document.getElementById('cant-imp-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-imp-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeImportModal(); };
+    m.innerHTML = `<div class="fin-pi-box lm-imp-box"><div id="cant-imp-inner"></div></div>`;
+    document.body.appendChild(m);
+    _cImpStepFile();
+  }
+  function closeImportModal() { document.getElementById('cant-imp-modal')?.remove(); _cImp = null; }
+  // Acción directa desde el paso "Importar" (pedido explícito 2026-09-06,
+  // visible ahí mismo, no escondida dentro del modal) — borra TODAS las empresas y
+  // contactos de este borrador y abre el importador limpio para cargar de nuevo.
+  async function deleteAndReimport() {
+    if (!confirm(`Esto borra las ${_companies.length} empresa(s) y sus contactos de este borrador (no se puede deshacer). ¿Continuar?`)) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies`, { method: 'DELETE' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _current.archivo_nombre = '';
+      await _loadCompanies();
+      showBanner(`✓ ${d.companiesDeleted} empresa(s) eliminadas`, 'success');
+      openImportModal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function deleteImportFile(importId, nombre) {
+    if (!confirm(`¿Eliminar solo lo que trajo "${nombre}"? Las empresas/contactos de los demás archivos de este borrador no se tocan. No se puede deshacer.`)) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import-files/${encodeURIComponent(importId)}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json();
+      await _loadCompanies(); _paint();
+      showBanner(`✓ ${d.companiesDeleted} empresa(s) eliminadas de "${nombre}"`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _cImpInner(html) { const el = document.getElementById('cant-imp-inner'); if (el) el.innerHTML = html; }
+  function _cImpHd(title) { return `<div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeImportModal()">✕</button></div>`; }
+  function _cImpSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
+  function _cImpStepFile() {
+    _cImpInner(`${_cImpHd('Importar')}
+      <div class="lm-imp-body">
+        ${_cImpSteps(1)}
+        <div class="cant-imp-tipo"><span class="cant-imp-mode__lbl">¿Qué trae el archivo?</span>
+          ${[['ambos', 'Empresas + contactos', 'Todo en uno: crea las empresas y sus contactos'], ['empresas', 'Solo empresas', 'Para validarlas en Cantera'], ['contactos', 'Solo contactos', 'Se asocian a las empresas que ya están en este borrador']].map(([v, t, d]) => `<label class="cant-imp-tipo__o${_cImp.tipo === v ? ' on' : ''}"><input type="radio" name="cant-imp-tipo" value="${v}" ${_cImp.tipo === v ? 'checked' : ''} onchange="CanteraModule.impSetTipo('${v}')"><b>${t}</b><small>${d}</small></label>`).join('')}
+        </div>
+        <label class="lm-drop" id="cant-drop">
+          <input type="file" accept=".csv,.xlsx,.xls,.tsv" style="display:none" onchange="CanteraModule.impFile(this.files[0])">
+          <div class="lm-drop__t">Arrastra tu Excel / CSV aquí o haz clic para elegir</div>
+          <div class="lm-drop__s">.xlsx · .xls · .csv — hasta 10 MB</div>
+        </label>
+        <div class="lm-imp-hint">Detectaremos las columnas automáticamente; podrás revisarlas y corregirlas antes de guardar.</div>
+      </div>`);
+    const drop = document.getElementById('cant-drop');
+    if (drop) {
+      ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+      ['dragleave', 'dragend'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+      drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); const f = e.dataTransfer?.files?.[0]; if (f) impFile(f); });
+    }
+  }
+  async function impFile(file) {
+    if (!file || !_cImp) return;
+    _cImp.file = file;
+    _cImpInner(`${_cImpHd('Importar')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-load">Leyendo <b>${esc(file.name)}</b>…</div></div>`);
+    try {
+      let headers = [], samples = [];
+      if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+        const r = await _cReadCsv(file); headers = r.headers; samples = r.sampleRows;
+      } else {
+        const fd = new FormData(); fd.append('file', file);
+        const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`);
+        const dd = await res.json(); headers = dd.headers || []; samples = dd.sampleRows || [];
+      }
+      if (!headers.length) throw new Error('No se encontraron columnas en el archivo.');
+      _cImp.origHeader = headers.slice(); _cImp.samplesOrig = samples.slice();
+      _cImp.hasHeader = true; _cImp.headers = headers; _cImp.samples = samples;
+      // Sugerir el tipo según las columnas: solo empresas / solo contactos / ambos (si la usuaria ya eligió uno a mano, se respeta).
+      const _pf = _cIsPersonFile(headers), _g = headers.map(h => _cGuess(h, _pf));
+      const _hasP = _g.some(k => _C_PERSON_KEYS.includes(k) || k === 'linkedin'), _hasC = _g.some(k => k.startsWith('co_'));
+      if (!_cImp.tipoManual) _cImp.tipo = !_hasP ? 'empresas' : (!_hasC ? 'contactos' : 'ambos');
+      _cImpStepMap();
+    } catch (e) {
+      _cImpInner(`${_cImpHd('Importar')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-err">${esc(e.message)}</div></div>
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Reintentar</button></div></div>`);
+    }
+  }
+  function impToggleHeader(chk) {
+    if (!_cImp) return;
+    _cImp.hasHeader = chk;
+    if (chk) { _cImp.headers = _cImp.origHeader.slice(); _cImp.samples = _cImp.samplesOrig.slice(); }
+    else { _cImp.headers = _cImp.origHeader.map((_, i) => `Columna ${i + 1}`); _cImp.samples = [_cImp.origHeader.slice(), ..._cImp.samplesOrig]; }
+    _cImpStepMap();
+  }
+  function impSetMode(m) { if (_cImp) _cImp.mode = m; }
+  function impSetTipo(t) {
+    if (!_cImp) return; _cImp.tipo = t; _cImp.tipoManual = true;
+    document.querySelectorAll('#cant-imp-modal .cant-imp-tipo__o').forEach(l => l.classList.toggle('on', l.querySelector('input').value === t));
+  }
+  function _cImpOpts() {
+    const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
+    CANT_FIELDS.forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
+    return out;
+  }
+  function _cImpStepMap() {
+    _cImp.opts = _cImpOpts();
+    const _personFile = _cIsPersonFile(_cImp.headers);
+    const _seenUbic = new Set();
+    const rowsHtml = _cImp.headers.map((h, idx) => {
+      const samples = _cImp.samples.map(r => r[idx] || '').filter(Boolean).slice(0, 2);
+      let gKey = _cGuess(h, _personFile);
+      if (gKey === 'ubicacion') { if (_seenUbic.has('u')) gKey = ''; else _seenUbic.add('u'); }   // un solo campo de ubicación del contacto
+      const gOpt = _cImp.opts.find(o => o.key === gKey) || _cImp.opts[0];
+      const chips = samples.length ? samples.map(v => `<span class="lm-map-chip">${esc(v.length > 22 ? v.slice(0, 20) + '…' : v)}</span>`).join('') : '<span class="lm-map-empty">sin datos</span>';
+      return `<div class="lm-map-row${gKey ? ' mapped' : ''}" data-idx="${idx}">
+        <div class="lm-map-src" title="${esc(h)}">${esc(h || ('Columna ' + (idx + 1)))}</div>
+        <div class="lm-map-ex">${chips}</div>
+        <div class="lm-map-arrow">→</div>
+        <div class="lm-cbx" data-idx="${idx}">
+          <input class="lm-cbx-input form-input" data-value="${esc(gKey)}" value="${esc(gOpt.label)}" placeholder="Buscar campo…" autocomplete="off" spellcheck="false"
+            onfocus="CanteraModule.cbxOpen(${idx})" oninput="CanteraModule.cbxFilter(${idx})" onblur="CanteraModule.cbxBlur(${idx})">
+          <div class="lm-cbx-menu" id="cant-cbx-menu-${idx}"></div>
+        </div>
+      </div>`;
+    }).join('');
+    _cImpInner(`${_cImpHd('Importar — asigna las columnas')}
+      <div class="lm-imp-body">
+        ${_cImpSteps(2)}
+        <div class="lm-map-bar">
+          <label class="lm-chk"><input type="checkbox" ${_cImp.hasHeader ? 'checked' : ''} onchange="CanteraModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
+          <span class="cant-hint" style="margin-left:auto">Tipo: <b>${{ ambos: 'Empresas + contactos', empresas: 'Solo empresas', contactos: 'Solo contactos' }[_cImp.tipo || 'ambos']}</b></span>
+        </div>
+        ${_companies.length && _cImp.tipo === 'ambos' ? `<div class="cant-imp-mode">
+          <span class="cant-imp-mode__lbl">Este borrador ya tiene ${_companies.length} empresa(s) — ¿qué hago con el archivo nuevo?</span>
+          <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="actualizar" ${_cImp.mode === 'actualizar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('actualizar')"> Actualizar existentes y agregar nuevas (nunca borra nada)</label>
+          <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="reemplazar" ${_cImp.mode === 'reemplazar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('reemplazar')"> Borrar todo y volver a cargar desde cero</label>
+        </div>` : ''}
+        <div class="lm-map-headrow"><span>Columna del archivo</span><span>Ejemplo</span><span></span><span>Asignar a (escribe para buscar)</span></div>
+        <div class="lm-map-list">${rowsHtml}</div>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="fin-cfg-hint" id="cant-imp-msg">${_cImp.headers.length} columnas · las no asignadas se conservan como extra</span>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeImportModal()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" id="cant-imp-go" onclick="CanteraModule.impRun()">Importar</button>
+        </div>
+      </div>`);
+  }
+  function _cCbxMenuHtml(idx, filter) {
+    const f = _cNorm(filter || '');
+    let lastGrp = null, h = '';
+    _cImp.opts.forEach(o => {
+      const special = (o.key === '' || o.key === '__ignore__');
+      if (f && !special && !_cNorm(o.label).includes(f)) return;
+      if (o.grp !== lastGrp && o.grp) { h += `<div class="lm-cbx-grp">${esc(o.grp)}</div>`; lastGrp = o.grp; }
+      h += `<div class="lm-cbx-opt" onmousedown="event.preventDefault();CanteraModule.cbxPick(${idx},'${o.key}')">${esc(o.label)}</div>`;
+    });
+    return h || `<div class="lm-cbx-none">Sin coincidencias</div>`;
+  }
+  function cbxOpen(idx) {
+    const wrap = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"]`); if (!wrap) return;
+    const inp = wrap.querySelector('.lm-cbx-input'); const menu = document.getElementById('cant-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cCbxMenuHtml(idx, '');
+    const r = inp.getBoundingClientRect();
+    menu.style.left = r.left + 'px'; menu.style.top = (r.bottom + 3) + 'px'; menu.style.width = r.width + 'px';
+    menu.classList.add('open');
+    setTimeout(() => inp.select(), 0);
+  }
+  function cbxFilter(idx) {
+    const inp = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"] .lm-cbx-input`); const menu = document.getElementById('cant-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cCbxMenuHtml(idx, inp.value);
+    menu.classList.add('open');
+  }
+  function cbxPick(idx, key) {
+    const o = _cImp.opts.find(x => x.key === key) || _cImp.opts[0];
+    const inp = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"] .lm-cbx-input`);
+    if (inp) { inp.value = o.label; inp.dataset.value = o.key; }
+    document.getElementById('cant-cbx-menu-' + idx)?.classList.remove('open');
+    const row = document.querySelector(`#cant-imp-modal .lm-map-row[data-idx="${idx}"]`);
+    if (row) row.classList.toggle('mapped', !!o.key && o.key !== '__ignore__');
+  }
+  function cbxBlur(idx) { setTimeout(() => document.getElementById('cant-cbx-menu-' + idx)?.classList.remove('open'), 160); }
+  // La importación corre en segundo plano en el servidor (mismo patrón que la
+  // investigación con IA) — un archivo grande (miles de filas) tarda más de lo que
+  // el navegador espera una respuesta, y sin esto se veía "Failed to fetch" aunque
+  // el import seguía y terminaba bien del lado del servidor (reportado 2026-09-06).
+  let _impPollTimer = null;
+  // ── Vincular a mano las empresas del archivo que no cruzaron (tras importar «Solo contactos») ──
+  // Cada una tiene un cuadro: escribes media palabra, salen las empresas de ESTE borrador que coinciden, eliges y se vincula.
+  function _impSinEmpresaHtml(sm) {
+    const L = sm.sinEmpresaEmpresas || [];
+    if (!L.length) return '';
+    const rows = L.map((x, i) => {
+      const who = (x.personas || []).join(', ') + ((x.n || 0) > (x.personas || []).length ? '…' : '');
+      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="margin-top:6px" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
+      return `<div class="cant-al-row" data-i="${i}" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start;padding:9px 0;border-top:1px solid #E5E2DC">
+        <div><b>${esc(x.archivo || '(sin nombre de empresa)')}</b><div class="cant-hint" style="margin:2px 0 0">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</div>${x.archivo ? sug : ''}</div>
+        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
+      </div>`;
+    }).join('');
+    return `<div class="lm-imp-err" style="background:#FAF8F4;border-color:#E5E2DC;color:inherit">
+      <div style="font-weight:600;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
+      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas. Lo que no resuelvas ahora queda guardado en la pestaña Información, con su LinkedIn, para verificarlo después.</div>
+      ${rows}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn--sm" type="button" onclick="CanteraModule.impCrearFaltantes()">Crear las demás como empresas nuevas</button>
+        <button class="btn btn--primary btn--sm" type="button" id="cant-al-save" disabled onclick="CanteraModule.impAliasSave()">Guardar vínculos</button>
+      </div></div>`;
+  }
+  function _impAproxHtml(sm) {
+    const A = sm.aproximadas || [];
+    if (!A.length) return '';
+    return `<details style="margin-top:10px"><summary class="cant-hint" style="cursor:pointer;margin:0">${sm.aproximadasN || A.length} fila(s) se asociaron por validación cruzada — revisa</summary>
+      <div class="cant-hint" style="margin:6px 0 0;line-height:1.7">${A.map(a => `${esc(a.archivo)} → <b>${esc(a.borrador)}</b> <span style="opacity:.7">(${esc(a.como)})</span>`).join('<br>')}</div></details>`;
+  }
+  let _impAlTimer = null;
+  function impAliasSearch(i, q) {
+    clearTimeout(_impAlTimer);
+    q = String(q || '').trim();
+    const old = document.getElementById('cant-al-menu-' + i); if (old) old.remove();
+    if (!q) return;
+    _impAlTimer = setTimeout(async () => {
+      try {
+        const rows = await (await apiFetch(`${API}/cantera/batches/${_current.id}/companies-search?q=${encodeURIComponent(q)}`)).json();
+        if (!_cImp) return;
+        (_cImp.alRes = _cImp.alRes || {})[i] = Array.isArray(rows) ? rows : [];
+        const box = document.getElementById('cant-al-box-' + i); if (!box) return;
+        document.getElementById('cant-al-menu-' + i)?.remove();
+        const m = document.createElement('div'); m.id = 'cant-al-menu-' + i;
+        m.style.cssText = 'position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:50;background:#fff;border:1px solid #D9D6CF;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:230px;overflow:auto';
+        m.innerHTML = _cImp.alRes[i].length
+          ? _cImp.alRes[i].map((r, j) => `<div onmousedown="CanteraModule.impAliasPick(${i},${j})" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #F1EFEB" onmouseover="this.style.background='#F5F3EE'" onmouseout="this.style.background=''"><b>${esc(r.nombre)}</b><div class="cant-hint" style="margin:0">${esc([r.dominio, r.ciudad, r.pais].filter(Boolean).join(' · '))}</div></div>`).join('')
+          : '<div class="cant-hint" style="padding:8px 10px;margin:0">Sin coincidencias en este borrador</div>';
+        box.appendChild(m);
+      } catch (_) { /* sin red: no pasa nada, vuelve a escribir */ }
+    }, 180);
+  }
+  function _impAliasPaint(i) {
+    const a = (_cImp.alias || {})[i], inp = document.getElementById('cant-al-in-' + i), slot = document.getElementById('cant-al-pick-' + i);
+    if (!slot || !inp) return;
+    if (a) { inp.style.display = 'none'; slot.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #A7D7BE;background:#EEF8F2;border-radius:8px"><span style="flex:1;min-width:0">→ <b>${esc(a.nombre)}</b></span><button class="btn btn--sm" type="button" onclick="CanteraModule.impAliasClear(${i})">✕</button></div>`; }
+    else { inp.style.display = ''; inp.value = ''; slot.innerHTML = ''; }
+    const n = Object.keys(_cImp.alias || {}).length, sv = document.getElementById('cant-al-save');
+    if (sv) { sv.disabled = !n; sv.textContent = n ? `Guardar vínculos (${n})` : 'Guardar vínculos'; }
+  }
+  function impAliasPick(i, j) {
+    const r = ((_cImp && _cImp.alRes && _cImp.alRes[i]) || [])[j]; if (!r) return;
+    (_cImp.alias = _cImp.alias || {})[i] = { id: r.id, nombre: r.nombre };
+    document.getElementById('cant-al-menu-' + i)?.remove(); _impAliasPaint(i);
+  }
+  function impAliasSug(i) {
+    const x = ((_cImp && _cImp.sinLista) || [])[i]; if (!x || !x.sugerida) return;
+    (_cImp.alias = _cImp.alias || {})[i] = { id: x.sugerida.id, nombre: x.sugerida.borrador }; _impAliasPaint(i);
+  }
+  function impAliasClear(i) { if (_cImp && _cImp.alias) delete _cImp.alias[i]; _impAliasPaint(i); }
+  function _impAliasMap() {
+    const out = {}; const L = (_cImp && _cImp.sinLista) || [];
+    Object.entries((_cImp && _cImp.alias) || {}).forEach(([i, a]) => { const x = L[i]; if (x && x.archivo) out[String(x.archivo).toLowerCase().trim()] = a.id; });
+    return out;
+  }
+  // Re-importa el mismo archivo SOLO asociando contactos a las empresas elegidas (lo ya importado no se duplica: se completa).
+  function impAliasSave() { if (!_cImp) return; _cImp.tipo = 'contactos'; _cImp.tipoManual = true; impRun({ tipo: 'contactos', aliases: _impAliasMap() }); }
+  // Crea como empresas nuevas (con sus contactos) las que siguen sin coincidir; las vinculadas a mano se respetan.
+  function impCrearFaltantes() { if (!_cImp) return; impRun({ tipo: 'faltantes', aliases: _impAliasMap() }); }
+  async function impRun(ov) {
+    if (!_cImp || !_cImp.file) return;
+    ov = (ov && typeof ov === 'object' && !(ov instanceof Event)) ? ov : {};
+    let mapping = {};
+    const _inps = document.querySelectorAll('#cant-imp-modal .lm-cbx-input');
+    if (_inps.length) { _inps.forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; }); _cImp.lastMapping = mapping; }
+    else mapping = _cImp.lastMapping || {};
+    const go = document.getElementById('cant-imp-go'); if (go) { go.disabled = true; go.textContent = 'Importando…'; }
+    try {
+      const fd = new FormData();
+      fd.append('file', _cImp.file);
+      fd.append('mapping', JSON.stringify(mapping));
+      fd.append('hasHeader', _cImp.hasHeader ? '1' : '0');
+      fd.append('mode', _cImp.mode || 'actualizar');
+      fd.append('tipo', ov.tipo || _cImp.tipo || 'ambos');
+      fd.append('aliases', JSON.stringify(ov.aliases || {}));
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
+      if (!d.started) throw new Error('No se pudo iniciar la importación');
+      _cImpInner(`${_cImpHd('Importando…')}
+        <div class="lm-imp-body">${_cImpSteps(3)}
+          <div class="lm-imp-load">Procesando 0 de ${d.total} fila(s)… puedes cerrar esta ventana, sigue en segundo plano.</div>
+        </div>`);
+      clearInterval(_impPollTimer);
+      _impPollTimer = setInterval(async () => {
+        let st;
+        try { st = await (await apiFetch(`${API}/cantera/batches/${_current.id}/import-status`)).json(); }
+        catch { return; }
+        if (st.running) {
+          const box = document.querySelector('#cant-imp-modal .lm-imp-load');
+          if (box) box.textContent = `Procesando ${st.done} de ${st.total} fila(s)… puedes cerrar esta ventana, sigue en segundo plano.`;
+          return;
+        }
+        clearInterval(_impPollTimer);
+        const sm = st.summary || {};
+        if (_cImp) { _cImp.sinLista = sm.sinEmpresaEmpresas || []; _cImp.alias = {}; _cImp.alRes = {}; }
+        if (document.getElementById('cant-imp-modal')) {
+          _cImpInner(`${_cImpHd('Importación completa')}
+            <div class="lm-imp-body">${_cImpSteps(3)}
+              ${sm.companiesDeleted ? `<p class="cant-hint" style="margin:0 0 10px">Se borraron ${sm.companiesDeleted} empresa(s) anteriores antes de cargar el archivo nuevo.</p>` : ''}
+              <div class="lm-imp-done"><div class="lm-imp-done__stats">
+                <div class="lm-stat"><b>${sm.rows || 0}</b><span>filas leídas</span></div>
+                <div class="lm-stat"><b>${sm.companiesCreated || 0}</b><span>empresas nuevas</span></div>
+                <div class="lm-stat"><b>${sm.contactsCreated || 0}</b><span>contactos nuevos</span></div>
+                ${sm.tipo === 'contactos' ? `<div class="lm-stat"><b>${sm.companiesMatched || 0}</b><span>asociaciones a empresas del borrador</span></div>` : ''}
+                ${sm.sinEmpresa ? `<div class="lm-stat"><b>${sm.sinEmpresa}</b><span>contactos sin empresa en el borrador (quedaron guardados en Configuración)</span></div>` : ''}
+                ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
+                ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
+              </div></div>
+              ${(sm.sinEmpresaEmpresas || []).length ? _impSinEmpresaHtml(sm) : ((sm.sinEmpresaEjemplos || []).length ? `<div class="lm-imp-err">Sin empresa coincidente (ej.):<br>${sm.sinEmpresaEjemplos.map(e => esc(e)).join('<br>')}<br><small>Importa primero esas empresas (modo «Solo empresas» o «Empresas + contactos»).</small></div>` : '')}${_impAproxHtml(sm)}
+              ${(sm.errors || []).length ? `<div class="lm-imp-err">${sm.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
+            </div>
+            <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.closeImportModal()">Listo</button></div></div>`);
+        } else {
+          showBanner(`✓ Importación completa · ${sm.companiesCreated || 0} empresa(s) nueva(s) · ${sm.contactsCreated || 0} contacto(s) nuevo(s)`, 'success');
+        }
+        // Refresca el borrador — archivo_nombre e import_stats (pestaña
+        // Información) se actualizan en el servidor durante la importación.
+        try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
+        await _loadCompanies(); _paint();
+      }, 2000);
+    } catch (e) {
+      if (go) { go.disabled = false; go.textContent = 'Importar'; }
+      const msg = document.getElementById('cant-imp-msg'); if (msg) { msg.textContent = e.message; msg.style.color = '#B3261E'; }
+    }
+  }
+
+  async function load() {
+    try { const r = await apiFetch(`${API}/cantera/batches`); _batches = r.ok ? await r.json() : []; }
+    catch { _batches = []; }
+    if (!_bdOpts) {
+      try {
+        const [clientes, campanas, secuencias] = await Promise.all([
+          apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+        ]);
+        _bdOpts = { clientes, campanas, secuencias };
+      } catch { _bdOpts = { clientes: [], campanas: [], secuencias: [] }; }
+    }
+  }
+  // Recordar en qué borrador/pestaña/filtros se estaba parada, para que un
+  // refresh (F5) vuelva ahí en vez de mandar de regreso a la lista de
+  // borradores — pedido explícito 2026-09-15: "quiero hacer refresh y que se
+  // quede allí con los filtros y exactamente donde estoy". sessionStorage (no
+  // localStorage): solo dura esta pestaña del navegador, no queda pegado para
+  // siempre entre sesiones distintas.
+  const CANT_STATE_KEY = 'cantera_last_view';
+  function _saveViewState() {
+    try {
+      if (_view !== 'detail' || !_current) { sessionStorage.removeItem(CANT_STATE_KEY); return; }
+      sessionStorage.setItem(CANT_STATE_KEY, JSON.stringify({
+        batchId: _current.id, step: _step,
+        tierFiltro: [..._tierFiltro], tierExclFiltro: [..._tierExclFiltro], prioFiltro: [..._prioFiltro],
+        nContFiltro: [..._nContFiltro], nContExcl: [..._nContExcl],
+        minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
+        paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
+        industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
+        tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro],
+        domFaltante: _domFaltante, paso2DescFiltro: [..._paso2DescFiltro],
+        paso1Filtro: _paso1Filtro, dominioQ: _dominioQ,
+      }));
+    } catch (_) {}
+  }
+  async function _restoreViewState() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(CANT_STATE_KEY) || 'null'); } catch (_) {}
+    if (!saved || !saved.batchId) return false;
+    if (!(_batches || []).some(b => b.id === saved.batchId)) { sessionStorage.removeItem(CANT_STATE_KEY); return false; }
+    await open(saved.batchId);
+    if (!_current) return false;
+    _step = saved.step || 1;
+    _tierFiltro = new Set(saved.tierFiltro || []); _tierExclFiltro = new Set(saved.tierExclFiltro || []); _prioFiltro = new Set(saved.prioFiltro || []);
+    _minContactos = saved.minContactos || 0; _sinPrioridad = !!saved.sinPrioridad; _auditoriaFiltro = saved.auditoriaFiltro || '';
+    _nContFiltro = new Set(saved.nContFiltro || []); _nContExcl = new Set(saved.nContExcl || []);
+    _paisFiltro = new Set(saved.paisFiltro || []); _paisExclFiltro = new Set(saved.paisExclFiltro || []);
+    _industriaFiltro = new Set(saved.industriaFiltro || []); _industriaExclFiltro = new Set(saved.industriaExclFiltro || []);
+    _tamanoFiltro = new Set(saved.tamanoFiltro || []); _tamanoExclFiltro = new Set(saved.tamanoExclFiltro || []);
+    _domFaltante = !!saved.domFaltante; _paso2DescFiltro = new Set(saved.paso2DescFiltro || []);
+    _paso1Filtro = saved.paso1Filtro || ''; _dominioQ = saved.dominioQ || '';
+    return true;
+  }
+  // Pulsar «Borradores» en el menú lateral debe llevar a la LISTA de borradores aunque hubiera uno abierto (antes lo reabría: se restauraba la vista guardada).
+  // Al recargar la página o entrar al módulo desde Inicio sigue recordando el borrador en el que estabas.
+  let _navALista = false;
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.snav-item[data-tab="cantera"]')) _navALista = true; }, true);
+  function render(containerId) {
+    _containerId = containerId || _containerId;
+    const el = document.getElementById(_containerId); if (!el) return;
+    const desdeMenu = _navALista; _navALista = false;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    load().then(async () => {
+      const restored = desdeMenu ? false : await _restoreViewState().catch(() => false);
+      if (!restored) { _view = 'list'; _current = null; }
+      _paint();
+    });
+  }
+  function _paint() {
+    _saveViewState();
+    const el = document.getElementById(_containerId); if (!el) return;
+    // El scroll horizontal de la tabla se perdía en cada repintado (ej. al
+    // guardar una validación manual) — pedido explícito 2026-09-06: "se movió
+    // a las primeras columnas" al trabajar con columnas como Tier/Auditoría
+    // que quedan a la derecha. Se guarda y se restaura en cada _paint().
+    const wrapBefore = el.querySelector('.lm-dt-wrap');
+    const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
+    const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
+    if (wrapBefore && wrapBefore._stickyHead) { wrapBefore._stickyHead.remove(); wrapBefore._stickyHead = null; }
+    el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
+    const wrapAfter = el.querySelector('.lm-dt-wrap');
+    if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
+    _cantScheduleStickySync();
+  }
+
+  // ── Lista de borradores — tabla de TODOS los borradores importados, con
+  // filtro por Cliente/Campaña/Secuencia y paginación, mismo patrón que la
+  // tabla de Resultados (pedido explícito 2026-09-06: "quiero ver la tabla de
+  // todos los borradores y filtrar por cliente, campaña y por algún otro").
+  function _bdFilterSelect(kind, list, current) {
+    const label = { cliente: 'Cliente', campana: 'Campaña', secuencia: 'Secuencia' }[kind];
+    return `<select class="form-input" style="width:auto" onchange="CanteraModule.bdSetFiltro('${kind}',this.value)" title="Filtrar por ${label.toLowerCase()}">
+      <option value="">${label}</option>
+      ${list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}
+    </select>`;
+  }
+  function _bdPagerHtml(total) {
+    const ps = _bdPageSize();
+    const pages = Math.max(1, Math.ceil(total / ps));
+    if (_bdPageIdx > pages - 1) _bdPageIdx = pages - 1;
+    if (_bdPageIdx < 0) _bdPageIdx = 0;
+    const from = total ? _bdPageIdx * ps + 1 : 0, to = Math.min(total, (_bdPageIdx + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraModule.bdGoPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+      <span>Mostrando <b>${from}–${to}</b> de <b>${total}</b></span>
+      <select onchange="CanteraModule.bdSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, _bdPageIdx <= 0, '‹')}
+      <span>${_bdPageIdx + 1} / ${pages}</span>
+      ${nav(1, _bdPageIdx >= pages - 1, '›')}
+    </div>`;
+  }
+  function _listHtml() {
+    const opts = _bdOpts || { clientes: [], campanas: [], secuencias: [] };
+    const filtered = _batches.filter(b =>
+      (!_bdFiltro.cliente || String(b.outbound_client_id) === _bdFiltro.cliente) &&
+      (!_bdFiltro.campana || String(b.campaign_id) === _bdFiltro.campana) &&
+      (!_bdFiltro.secuencia || String(b.sequence_id) === _bdFiltro.secuencia)
+    );
+    const ps = _bdPageSize();
+    const pageBatches = filtered.slice(_bdPageIdx * ps, _bdPageIdx * ps + ps);
+    const rows = pageBatches.map(b => `
+      <tr class="clients-table__row" onclick="CanteraModule.open(${b.id})">
+        <td>${esc(b.nombre)}</td>
+        <td class="dg-cell--ro">${esc(b.cliente_nombre || '—')}</td>
+        <td class="dg-cell--ro">${esc(b.campana_nombre || '—')}</td>
+        <td class="dg-cell--ro">${esc(b.secuencia_nombre || '—')}</td>
+        <td class="dg-cell--ro">${b.total_empresas}</td>
+        <td class="dg-cell--ro">${b.pasaron_filtro}</td>
+        <td class="dg-cell--ro">${b.calificadas}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(b.estado)}">${b.estado === 'borrador' ? 'Borrador' : 'Movido al CRM'}</span></td>
+      </tr>`).join('');
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Cantera</h2></div>
+        <button class="btn btn--primary btn--sm" onclick="CanteraModule.openCreate()">+ Nuevo borrador</button>
+      </div>
+      <p class="lm-sec-sub" style="margin-bottom:16px">Prospección sin validar todavía — nada de esto existe en el CRM hasta que lo muevas.</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${_bdFilterSelect('cliente', opts.clientes, _bdFiltro.cliente)}
+        ${_bdFilterSelect('campana', opts.campanas, _bdFiltro.campana)}
+        ${_bdFilterSelect('secuencia', opts.secuencias, _bdFiltro.secuencia)}
+      </div>
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
+        <thead><tr><th>Nombre</th><th>Cliente</th><th>Campaña</th><th>Secuencia</th><th>Empresas</th><th>Pasaron filtro</th><th>Calificadas</th><th>Estado</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" class="cp-empty2">${_batches.length ? 'Ningún borrador coincide con el filtro.' : 'Sin borradores todavía — crea el primero.'}</td></tr>`}</tbody>
+      </table></div>
+      ${_bdPagerHtml(filtered.length)}`;
+  }
+  function openCreate() {
+    const nombre = prompt('Nombre del borrador (ej. "Rutas de reparto LatAm")');
+    if (!nombre) return;
+    apiFetch(`${API}/cantera/batches`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) })
+      .then(r => r.json()).then(b => { open(b.id); }).catch(e => showBanner('Error: ' + e.message, 'error'));
+  }
+  let _filtroOpts = null;
+  async function open(id) {
+    const r = await apiFetch(`${API}/cantera/batches/${id}`); _current = r.ok ? await r.json() : null;
+    if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
+    _current.filtros = _current.filtros || {};
+    _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
+    _cantPageIdx = 0; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
+    _nContFiltro = new Set(); _nContExcl = new Set();
+    _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
+    _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set(); _enCrmFiltro = new Set();
+    _paso1Filtro = ''; _dominioQ = '';
+    // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
+    // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
+    // ser 0" al recargar la página o volver a entrar.
+    _lastFiltros = _current.filtro_total ? { total: _current.filtro_total } : null;
+    _lastClean = { ...(_current.limpieza_stats || {}) };
+    _lastEnrich = { ...(_current.enriquecimiento_stats || {}) };
+    _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
+    if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
+    await _loadCompanies();
+    // Retoma la barra de progreso si la investigación seguía corriendo en el
+    // servidor cuando se recargó la página o se reabrió el borrador.
+    try {
+      const st = await (await apiFetch(`${API}/cantera/batches/${id}/validacion-status`)).json();
+      if (st.running) { _jobRunning = true; _jobProgress = { done: st.done, total: st.total }; _startValidacionPolling([]); }
+      else _jobRunning = false;
+    } catch { _jobRunning = false; }
+    _view = 'detail'; _paint();
+  }
+  function backToList() { _view = 'list'; _current = null; _paint(); }
+  async function _loadCompanies() {
+    const r = await apiFetch(`${API}/cantera/batches/${_current.id}/companies`);
+    _companies = r.ok ? await r.json() : [];
+  }
+
+  // ── Columnas de la tabla de Resultados — configurables (pedido explícito
+  // 2026-09-06: "por defecto deben estar solo las útiles, pero debo poder hacer
+  // visible las demás"). Nombre siempre va fija (primera columna, congelada);
+  // esta lista es todo lo demás. La selección se guarda en localStorage.
+  const CANT_RESULT_COLS = [
+    { key: 'dominio', label: 'Dominio', def: true },
+    { key: 'pais', label: 'País', def: true },
+    { key: 'industria', label: 'Industria', def: false },
+    { key: 'tamano', label: 'Tamaño', def: false },
+    { key: 'ciudad', label: 'Ciudad', def: false },
+    { key: 'ubicacion', label: 'Ubicación', def: false },
+    { key: 'website', label: 'Website', def: false },
+    { key: 'linkedin', label: 'LinkedIn', def: false },
+    { key: 'paso1_estado', label: 'Validación básica', def: true },
+    { key: 'paso1_motivo', label: 'Motivo paso 1', def: true },
+    { key: 'tier_clave', label: 'Tier', def: true },
+    { key: 'confianza', label: 'Confianza', def: true },
+    { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
+    { key: 'puntaje', label: 'Puntaje', def: true },
+    { key: 'paso2_estado', label: 'Validación profunda', def: true },
+    { key: 'motivo_descarte', label: 'Nota', def: true },
+    { key: 'contactos', label: 'Contactos', def: true },
+    { key: 'auditoria', label: 'Auditoría', def: true },
+    { key: 'en_crm', label: 'En CRM', def: true },
+  ];
+  // Cada dato a investigar (competidores, una frase, etc.) es una columna propia: aparece sola, con su nombre, y se puede ocultar.
+  function _deNames() {
+    const n = []; const add = x => { x = String(x || '').trim(); if (x && !n.includes(x)) n.push(x); };
+    ((_current && _current.datos_extra) || []).forEach(d => add(d.nombre));
+    (_companies || []).forEach(c => Object.keys(c.datos_extra || {}).forEach(add));
+    return n;
+  }
+  function _allResultCols() { return CANT_RESULT_COLS.concat(_deNames().map(n => ({ key: 'de:' + n, label: n, def: true }))); }
+  function _hiddenDe() { try { return new Set(JSON.parse(localStorage.getItem('cantera_hidden_de') || '[]')); } catch (_) { return new Set(); } }
+  function _colOn(c) { return c.key.startsWith('de:') ? !_hiddenDe().has(c.key) : _loadVisibleCols().has(c.key); }
+  let _visibleCols = null;
+  function _loadVisibleCols() {
+    if (_visibleCols) return _visibleCols;
+    try {
+      const saved = JSON.parse(localStorage.getItem('cantera_result_cols') || 'null');
+      if (Array.isArray(saved)) {
+        // Columnas nuevas agregadas despues de que ya existia una preferencia
+        // guardada (ej. "En CRM") se prenden solas si son def:true, en vez de
+        // quedar invisibles para siempre -- sino cualquier columna nueva que
+        // se agregue a futuro nunca se ve para quien ya tenia un guardado.
+        const seen = new Set(JSON.parse(localStorage.getItem('cantera_result_cols_seen') || '[]'));
+        const s = new Set(saved);
+        CANT_RESULT_COLS.forEach(c => { if (c.def && !seen.has(c.key)) s.add(c.key); });
+        try { localStorage.setItem('cantera_result_cols_seen', JSON.stringify(CANT_RESULT_COLS.map(c => c.key))); } catch (_) {}
+        _visibleCols = s; return _visibleCols;
+      }
+    } catch (_) {}
+    _visibleCols = new Set(CANT_RESULT_COLS.filter(c => c.def).map(c => c.key));
+    return _visibleCols;
+  }
+  function _saveVisibleCols() { try { localStorage.setItem('cantera_result_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
+  function toggleResultCol(key) {
+    if (key.startsWith('de:')) { const h = _hiddenDe(); if (h.has(key)) h.delete(key); else h.add(key); try { localStorage.setItem('cantera_hidden_de', JSON.stringify([...h])); } catch (_) {} _paint(); return; }
+    const s = _loadVisibleCols();
+    if (s.has(key)) s.delete(key); else s.add(key);
+    _saveVisibleCols(); _paint();
+  }
+  function _deFaltantes() {
+    const defs = (_current && _current.datos_extra) || [];
+    return (_companies || []).map(c => [c, window._cantDe.calif(c) ? window._cantDe.falta(c, defs) : []]).filter(([, f]) => f.length);
+  }
+  function _deBanner() {
+    const mal = _deFaltantes(); if (!mal.length) return '';
+    const n = mal.length;
+    return `<div class="cant-de-warn" role="alert"><b>⚠ ${n} empresa${n === 1 ? '' : 's'} calificada${n === 1 ? '' : 's'} sin todos los datos a investigar:</b> ${mal.slice(0, 6).map(([c, f]) => `${esc(c.nombre)} <span class="cant-de-warn__f">(${esc(f.join(', '))})</span>`).join(' · ')}${n > 6 ? ' · …' : ''}<span class="cant-de-warn__sub">Si las pasas al CRM así, sus mensajes saldrán con huecos. Vuelve a investigarlas antes de moverlas.</span></div>`;
+  }
+  function _colCellHtml(c, key) {
+    if (key.startsWith('de:')) return window._cantDe.cell(c, (c.datos_extra || {})[key.slice(3)]);
+    switch (key) {
+      case 'dominio': return esc(c.dominio || '—');
+      case 'pais': return esc(c.pais || '—');
+      case 'industria': return esc(c.industria || '—');
+      case 'tamano': return esc(c.tamano || '—');
+      case 'ciudad': return esc(c.ciudad || '—');
+      case 'ubicacion': return esc(c.ubicacion || '—');
+      case 'website': return c.website ? `<a href="${/^https?:/i.test(c.website) ? esc(c.website) : 'https://' + esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : '—';
+      case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener">Ver perfil</a>` : '—';
+      case 'paso1_estado': return `<span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_estadoLabel(c.paso1_estado)}</span>`;
+      case 'paso1_motivo': return `<span class="cant-nota-cell" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
+      case 'tier_clave': return esc(c.tier_clave || '—');
+      case 'confianza': return esc(c.confianza || '—');
+      case 'prioridad': return esc(c.prioridad || '—');
+      case 'datos_extra': { const e = Object.entries(c.datos_extra || {}); if (!e.length) return '—'; const tx = e.map(([k, v]) => k + ': ' + v).join(' · '); return `<span class="cant-nota-cell" title="${esc(tx)}">${esc(tx)}</span>`; }
+      case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
+      case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
+      case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
+      case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
+        : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
+        : '<span class="cant-hint" style="margin:0">Sin auditar</span>';
+      case 'en_crm': return c.promoted_company_id
+        ? `<span class="cant-estado cant-estado--aprobado" title="Ya se movio al CRM -- no repetir investigacion">✓ En CRM</span>`
+        : '<span class="cant-hint" style="margin:0">—</span>';
+      default: return '—';
+    }
+  }
+  // Misma cadena de filtros usada para pintar la tabla y para decidir el
+  // orden de "Siguiente" en la validación manual — pedido explícito
+  // 2026-09-15: el botón Siguiente debe respetar el filtro activo, no el
+  // orden crudo de _companies, si es que hay uno aplicado.
+  // skip: nombre de filtro a ignorar -- se usa para contar "cuantos quedarian
+  // si eligiera esta opcion" respetando el resto de filtros ya aplicados,
+  // pero no el propio campo que se esta por elegir (mismo criterio que ya
+  // usa Base Global en el backend). Pedido explicito: "ya tengo un filtro
+  // aplicado y quiero aplicar otro... que vaya contabilizando lo que queda,
+  // con los filtros aplicados".
+  // "Descartado" vive DENTRO del filtro de Tier como una opción más -- pedido
+  // explícito: "falta el filtro de descartados directamente desde tier". Una
+  // empresa descartada (IA o manual) no tiene tier_clave, así que antes no
+  // aparecía bajo ningún Tier; ahora cuenta también como la clave especial
+  // TIER_DESCARTADO para Incluir/Excluir junto a A/B/C/D.
+  const TIER_DESCARTADO = '__descartado__';
+  function _tierKeysFor(c) {
+    const keys = [];
+    if (c.tier_clave) keys.push(c.tier_clave);
+    if (c.paso2_estado === 'descartado' || c.paso2_estado === 'descartado_manual') keys.push(TIER_DESCARTADO);
+    return keys;
+  }
+  function _filteredCompaniesList(skip) {
+    return _companies
+      .filter(c => !_paso1Filtro || (_paso1Filtro === 'vacio' ? !c.paso1_estado : c.paso1_estado === _paso1Filtro))
+      .filter(c => skip === 'tier' || !_tierFiltro.size || _tierKeysFor(c).some(k => _tierFiltro.has(k)))
+      .filter(c => skip === 'tier' || _tierKeysFor(c).every(k => !_tierExclFiltro.has(k)))
+      .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
+      .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
+      .filter(c => skip === 'ncont' || !_nContFiltro.size || _nContFiltro.has(_nContKey(c)))
+      .filter(c => skip === 'ncont' || !_nContExcl.has(_nContKey(c)))
+      .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
+      .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
+      .filter(c => skip === 'pais' || !_paisFiltro.size || _paisFiltro.has(c.pais))
+      .filter(c => skip === 'pais' || !_paisExclFiltro.has(c.pais))
+      .filter(c => skip === 'industria' || !_industriaFiltro.size || _industriaFiltro.has(c.industria))
+      .filter(c => skip === 'industria' || !_industriaExclFiltro.has(c.industria))
+      .filter(c => skip === 'tamano' || !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
+      .filter(c => skip === 'tamano' || !_tamanoExclFiltro.has(c.tamano))
+      .filter(c => !_domFaltante || !c.dominio)
+      .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
+      .filter(c => skip === 'paso2Desc' || !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado))
+      .filter(c => skip === 'enCrm' || !_enCrmFiltro.size || _enCrmFiltro.has(c.promoted_company_id ? 'si' : 'no'));
+  }
+  // ── Detalle: criterio + import + resultados ──────────────────────
+  function _detailHtml() {
+    const b = _current;
+    const filtros = b.filtros || {};
+    const tiers = b.tiers || [];
+    const puestos = b.puestos || {};
+    const expanded = _expanded || new Set();
+    const visCols = _allResultCols().filter(_colOn);
+    // Contacto/Puesto/Prioridad son columnas propias y fijas (pedido explícito
+    // 2026-09-06: "que se encuentren en la columna donde le corresponden... si
+    // muevo la tabla, todo sigue en su lugar") — celdas reales, no un bloque de
+    // texto suelto, así el scroll horizontal las alinea igual que cualquier
+    // otra columna, sin trucos.
+    // Contacto/Puesto/Prioridad van DESPUÉS de las columnas toggleables (incluida
+    // Contactos), no antes — pedido explícito 2026-09-05: son el detalle que se
+    // abre AL EXPANDIR, no datos de la empresa en sí.
+    const emptyColspan = 2 + visCols.length;
+    const filteredCompanies = _filteredCompaniesList();
+    const cantPs = _cantPageSize();
+    const cantPages = Math.max(1, Math.ceil(filteredCompanies.length / cantPs));
+    if (_cantPageIdx > cantPages - 1) _cantPageIdx = cantPages - 1;
+    if (_cantPageIdx < 0) _cantPageIdx = 0;
+    const pageCompanies = filteredCompanies.slice(_cantPageIdx * cantPs, _cantPageIdx * cantPs + cantPs);
+    const rows = pageCompanies.map(c => {
+      const main = `<tr class="${_coSel.has(c.id) ? 'sel' : ''}">
+        <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraModule.toggleCoSel(${c.id},this.checked)"></td>
+        <td class="dg-cell--frozen" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${esc(c.nombre)}</td>
+        ${visCols.map(col => `<td class="dg-cell--ro"${col.key === 'contactos' ? ` onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer"` : ''}>${_colCellHtml(c, col.key)}</td>`).join('')}
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
+      </tr>`;
+      if (!expanded.has(c.id)) return main;
+      const cts = [...(_contactsByCompany[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
+      const n = cts.length;
+      const fillCols = visCols.map(() => `<td class="dg-cell--ro"></td>`).join('');
+      const sub = cts.map(k => `<tr class="cant-subrow">
+        <td class="lm-ck-col"></td>
+        <td class="dg-cell--frozen"></td>
+        ${fillCols}
+        <td class="dg-cell--ro"><b>${esc([k.nombre, k.apellido].filter(Boolean).join(' ')) || '(sin nombre)'}</b></td>
+        <td class="dg-cell--ro">
+          <span class="cant-subrow__cargo">${esc(k.cargo || '(sin cargo)')}</span>
+          ${(k.seniority || k.departamento || _cantSignalOn(k.cambio_reciente) || _cantSignalOn(k.sigue_empresa) || k.puesto_motivo) ? `<div class="cant-subrow__line">
+            ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
+            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>cambio reciente</span>` : ''}
+            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px;margin-right:2px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>sigue tu empresa</span>` : ''}
+            ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
+          </div>` : ''}
+        </td>
+        <td class="dg-cell--ro">
+          <select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
+            <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
+            ${Array.from({ length: n }, (_, i) => i + 1).map(num => `<option value="${num}"${k.prioridad === num ? ' selected' : ''}>${num}</option>`).join('')}
+          </select>
+        </td>
+      </tr>`).join('');
+      return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
+    }).join('');
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
+
+    return `<div class="lm-sec-head lm-sec-head--compact">
+        <div><button class="lm-bulk-ghost" style="color:var(--muted,#B4AFA8);background:none;padding:0 0 4px" onclick="CanteraModule.backToList()">‹ Cantera</button><h2 class="lm-sec-title">${esc(b.nombre)}</h2></div>
+        <button class="dg-kebab" onclick="CanteraModule.moreMenu(event)" title="Más opciones">⋮</button>
+      </div>
+
+      <div class="scope-bar-cant">
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Cliente: ${b.outbound_client_id ? esc(b.cliente_nombre || 'asignado') : 'sin asignar (opcional)'}</button>
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Campaña: ${b.campaign_id ? esc(b.campana_nombre || 'asignada') : 'sin asignar (opcional)'}</button>
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Secuencia: ${b.sequence_id ? esc(b.secuencia_nombre || 'asignada') : 'sin asignar (opcional)'}</button>
+        <button class="cant-x" onclick="CanteraModule.openScope()" title="Asignar cliente / campaña / secuencia">✎</button>
+      </div>
+
+      <div class="cant-stepbar">
+        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
+        <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
+        <button class="cant-step${_step === 6 ? ' on' : ''}" onclick="CanteraModule.setStep(6)">Datos a investigar <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
+        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar</button>
+        <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
+        <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
+        <button class="cant-step${_step === 7 ? ' on' : ''}" onclick="CanteraModule.setStep(7)">Configuración</button>
+        ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
+      </div>
+
+      ${_step === 1 ? `<div class="cant-section">
+        <div class="cant-note" style="background:#EEF4FF;border:1px solid #C7D7FE;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:.84rem;line-height:1.5;color:#1D2939">
+          <b>Validación básica · opcional.</b> Es una revisión rápida y superficial, sin IA y sin costo: solo compara los datos que ya importaste. Puedes completarla, completar solo algunos filtros o saltarla; la <b>validación profunda</b> (investigación con IA, por clave API o pegando la instrucción en tu herramienta de IA) funciona igual sin haberla corrido.<br><br>
+          <b>Estos filtros deciden sobre la EMPRESA.</b> Primero se define la empresa objetivo, y solo las empresas que cumplen pasan al análisis. Si una no cumple, se descarta entera con su motivo.
+          <ul style="margin:6px 0 0 18px;padding:0">
+            <li><b>País, Industria y Tamaño:</b> se comparan con los datos de la propia empresa.</li>
+            <li><b>Seniority y Departamento:</b> se deducen del cargo de sus contactos. La empresa pasa si <i>al menos uno</i> cumple; un contacto que no encaja no se elimina por separado.</li>
+          </ul>
+        </div>
+        <p class="cant-hint">Selecciona de una lista real — nunca escribes el valor a mano, así "España" y "Spain" siempre se reconocen como el mismo país.</p>
+        <div class="filters-grid">
+          ${_taField('pais', 'País de la empresa')}
+          ${_taField('industria', 'Industria de la empresa')}
+          ${_taField('tamano', 'Tamaño de la empresa')}
+          ${_taField('seniority', 'Seniority (de sus contactos)')}
+          ${_taField('departamento', 'Departamento (de sus contactos)')}
+        </div>
+        <div class="cant-save-row"><button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar filtros</button></div>
+      </div>` : ''}
+
+      ${_step === 2 ? `<div class="cant-section">
+        <div class="cant-pia">
+          <div class="cant-pia__hd">
+            <div style="flex:1;min-width:0"><div class="cant-pia__t">Instrucción para tu IA (ChatGPT, Copilot, Gemini…)</div><div class="cant-pia__s">Pégala en tu otra ventana de trabajo con IA para que te entregue el ICP, los Tiers, los puestos y las reglas de buyer listos para copiar aquí.</div></div>
+            <button type="button" class="cant-pia__copy" id="cant-pia-copy" title="Copiar la instrucción completa" onclick="CanteraModule.copyPromptIA()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+          </div>
+          <div class="cant-pia__body">
+            <pre class="cant-pia__txt${_promptIAOpen ? '' : ' cant-pia__clip'}">${esc(CANTERA_PROMPT_IA)}</pre>
+            <button type="button" class="cant-pia__more" onclick="CanteraModule.togglePromptIA()">${_promptIAOpen ? 'Ver menos' : 'Ver más'}</button>
+          </div>
+        </div>
+        <p class="cant-hint">Esto es lo único que escribes — el criterio de investigación (protocolo, evidencia, formato) es fijo para cualquier motor que elijas abajo.</p>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">Motor de investigación profunda (IA)
+          <select id="cant-motor-ia" class="form-input" onchange="CanteraModule.setMotorIA(this.value)">
+            <option value="claude"${(b.motor_ia || 'claude') === 'claude' ? ' selected' : ''}>Claude (con búsqueda propia de Anthropic)</option>
+            <option value="gemini"${b.motor_ia === 'gemini' ? ' selected' : ''}>Gemini 3 Pro (con búsqueda propia de Google)</option>
+            <option value="kimi"${b.motor_ia === 'kimi' ? ' selected' : ''}>Kimi-K3 vía NVIDIA (con búsqueda propia vía Brave)</option>
+          </select>
+        </label>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="10" placeholder="¿A quién buscamos?" oninput="CanteraModule.setIcp(this.value)">${esc(b.icp || '')}</textarea></label>
+
+        <div class="cant-tiers">${tiers.map((t, i) => `
+          <div class="cant-tier-card">
+            <div class="cant-tier-row">
+              <input type="text" class="form-input cant-tier-clave" placeholder="${String.fromCharCode(65 + (i % 26))}" value="${esc(t.clave || '')}" oninput="CanteraModule.setTierField(${i},'clave',this.value)">
+              <input type="text" class="form-input" placeholder="Nombre del Tier" value="${esc(t.nombre || '')}" oninput="CanteraModule.setTierField(${i},'nombre',this.value)">
+              <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeTier(${i})">✕</button>
+            </div>
+            <textarea class="form-input" rows="7" placeholder="Criterio de entrada…" oninput="CanteraModule.setTierField(${i},'criterio',this.value)">${esc(t.criterio || '')}</textarea>
+            <textarea class="form-input" rows="5" placeholder="Esto NO califica si… (opcional)" oninput="CanteraModule.setTierField(${i},'descarte',this.value)">${esc(t.descarte || '')}</textarea>
+            ${t.clave ? `<label class="cant-tier-califica"><input type="checkbox" ${(b.tiers_calificantes || []).includes(t.clave) ? 'checked' : ''} onchange="CanteraModule.toggleTierCalifica('${_jsEsc(t.clave)}')"> Cuenta como "califica" en el portal del cliente para esta campaña</label>` : ''}
+          </div>`).join('')}
+        </div>
+        <span class="cant-hint" style="display:block;margin:-6px 0 10px">${(b.tiers_calificantes || []).length ? '' : 'Sin ningún Tier marcado: por defecto, en el portal "califica" cualquier empresa aprobada o validada manualmente, sea cual sea su Tier.'}</span>
+        <button class="add-tier" onclick="CanteraModule.addTier()">+ Agregar Tier</button>
+
+        <div style="margin-top:16px"><h4 style="margin:0 0 4px">Puestos por Tier <span class="cant-hint" style="font-weight:400">(opcional · lo clasifica la IA)</span></h4>
+          <p class="cant-hint" style="margin:0 0 8px">Marca qué cargos deciden, cuáles son respaldo y cuáles se descartan en cada Tier. Si ya usas <b>Buyer según la empresa</b> (abajo) para ordenar a quién contactar primero, aquí basta con los cargos a <b>descartar</b>; no repitas los mismos cargos en las dos cajas.</p></div>
+        <div class="cant-puestos" style="margin-top:16px">${tiers.filter(t => t.clave).map(t => `
+          <div class="roles-tier">
+            <div class="roles-tier-label"><span class="tier-badge t1a">${esc(t.clave)}</span></div>
+            <div class="roles-grid">${(puestos[t.clave] || []).map((p, i) => `
+              <div class="role-row${p.tipo === 'descarte' ? ' discard' : ''}">
+                <span class="role-drag">⠿</span>
+                <span class="role-title">
+                  <input type="text" class="cant-puesto-input" placeholder="Cargo/título" value="${esc(p.titulo || '')}" oninput="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'titulo',this.value)">
+                  <input type="text" class="cant-puesto-input cant-puesto-excl" placeholder="Excluir si… (opcional)" value="${esc(p.exclusion || '')}" oninput="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'exclusion',this.value)">
+                </span>
+                <select class="form-input" style="width:auto" onchange="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'tipo',this.value)">
+                  <option value="decide"${p.tipo === 'decide' || !p.tipo ? ' selected' : ''}>Decide</option>
+                  <option value="respaldo"${p.tipo === 'respaldo' ? ' selected' : ''}>Respaldo</option>
+                  <option value="descarte"${p.tipo === 'descarte' ? ' selected' : ''}>Descartar</option>
+                </select>
+                <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removePuesto('${esc(t.clave)}',${i})">✕</button>
+              </div>`).join('')}
+              <button class="add-role" onclick="CanteraModule.addPuesto('${esc(t.clave)}')">+ Agregar puesto</button>
+            </div>
+          </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
+        </div>
+        <div class="cant-score" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Scoring <span class="cant-hint" style="font-weight:400">(opcional · lo calcula la IA en la validación profunda)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Define las variables y cuántos puntos pesa cada una (idealmente suman 100). Al investigar cada empresa, la IA puntúa variable por variable, suma el total y lo guarda en la columna "Puntaje" para que ordenes por quién contactar primero. Si no defines variables, no se calcula nada.</p>
+          ${((_current.scoring || {}).variables || []).map((v, i) => `
+            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="flex:1"><span class="cant-hint">Variable</span><input class="form-input" value="${esc(v.nombre || '')}" placeholder="Ej. Internacionalidad e idiomas" oninput="CanteraModule.setScoreVar(${i},'nombre',this.value)"></label>
+              <label style="width:80px"><span class="cant-hint">Peso</span><input type="number" min="0" class="form-input" value="${esc(v.peso ?? '')}" oninput="CanteraModule.setScoreVar(${i},'peso',this.value)"></label>
+              <label style="flex:2"><span class="cant-hint">Qué se mide y cómo puntuar (opcional)</span><input class="form-input" value="${esc(v.criterio || '')}" placeholder="Ej. 15 si la web está en 3+ idiomas, 8 si en 2, 0 si en 1" oninput="CanteraModule.setScoreVar(${i},'criterio',this.value)"></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeScoreVar(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addScoreVar()">+ Agregar variable</button>
+          ${((_current.scoring || {}).variables || []).length ? `<span id="cant-score-total" class="cant-hint" style="margin-left:10px">${_scoreTotalHtml()}</span>` : ''}
+          ${((_current.scoring || {}).variables || []).length ? `
+          <div style="margin-top:12px">
+            <div class="cant-hint" style="margin-bottom:4px">Cortes de Tier por puntaje (opcional): si los defines, el Tier lo decide el puntaje y no la IA.</div>
+            ${((_current.scoring || {}).cortes || []).map((c, i) => `
+              <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+                <span class="cant-hint">Tier</span>
+                <select class="form-input" style="width:auto" onchange="CanteraModule.setScoreCut(${i},'tier',this.value)">
+                  <option value="">—</option>${(_current.tiers || []).filter(t => t.clave).map(t => `<option value="${esc(t.clave)}"${c.tier === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
+                </select>
+                <span class="cant-hint">desde</span>
+                <input type="number" min="0" max="100" class="form-input" style="width:80px" value="${esc(c.desde ?? '')}" oninput="CanteraModule.setScoreCut(${i},'desde',this.value)">
+                <span class="cant-hint">puntos</span>
+                <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeScoreCut(${i})">✕</button>
+              </div>`).join('')}
+            <button class="add-role" onclick="CanteraModule.addScoreCut()">+ Agregar corte</button>
+          </div>` : ''}
+        </div>
+        <div class="cant-buyers" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Buyer según la empresa <span class="cant-hint" style="font-weight:400">(automático, sin IA)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Elige por qué dato de la empresa cambia el buyer (tamaño, país, industria, ciudad). El cargo que escribas PRIMERO es el 1.º a contactar, el segundo el 2.º, etc. Gana la primera regla que calce. Se aplica al importar y al analizar. Lo que pongas a mano nunca se pisa.</p>
+          ${(_current.reglas_buyer || []).map((r, i) => `
+            <div class="cant-buyer-row" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="width:190px"><span class="cant-hint">Según</span><select class="form-input" onchange="CanteraModule.setBuyerField(${i},'campo',this.value,true)">
+                ${_buyerCampoOptions(r.campo || 'tamano')}</select></label>
+              ${['tamano', 'puntaje'].includes(r.campo || 'tamano') ? `
+              <label style="width:90px"><span class="cant-hint">Desde</span><input type="number" class="form-input" value="${esc(r.desde ?? '')}" oninput="CanteraModule.setBuyerField(${i},'desde',this.value)"></label>
+              <label style="width:90px"><span class="cant-hint">Hasta</span><input type="number" class="form-input" placeholder="sin tope" value="${esc(r.hasta ?? '')}" oninput="CanteraModule.setBuyerField(${i},'hasta',this.value)"></label>`
+              : `<label style="width:190px"><span class="cant-hint">Valores (uno por línea)</span><textarea class="form-input" rows="3" placeholder="Spain&#10;Mallorca" oninput="CanteraModule.setBuyerField(${i},'valores',this.value)">${esc(r.valores || '')}</textarea></label>`}
+              <label style="flex:1"><span class="cant-hint">Cargos en orden (uno por línea · el 1.º es el Buyer 1 · usa " / " para variantes del mismo cargo)</span><textarea class="form-input" rows="3" placeholder="Founder&#10;Owner&#10;Managing Director" oninput="CanteraModule.setBuyerField(${i},'cargos',this.value)">${esc(r.cargos || '')}</textarea></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeBuyerRule(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addBuyerRule()">+ Agregar regla</button>
+          ${(_current.reglas_buyer || []).length ? `<button class="btn btn--ghost btn--sm" style="margin-left:8px" onclick="CanteraModule.aplicarBuyers()">Guardar y aplicar a todo el borrador</button>` : ''}
+        </div>
+        <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar criterio</button></div>
+      </div>` : ''}
+
+      ${_step === 6 ? `<div class="cant-section">
+        <div class="cant-datos" style="margin-top:18px">
+          <h4 style="margin:0 0 4px">Datos a investigar por empresa <span class="cant-hint" style="font-weight:400">(opcional · para personalizar tus mensajes)</span></h4>
+          <p class="cant-hint" style="margin:0 0 10px">Cada dato se investiga en la misma validación profunda (no cuesta una pasada aparte) y al mover la empresa al CRM queda guardado como un campo personalizado, listo para usar en el texto de tus pasos como <code>{{nombre_del_dato}}</code>. Si la IA no encuentra evidencia, guarda "No verificado" y ese valor no pasa al CRM.</p>
+
+          ${(_current.datos_extra || []).map((d, i) => `
+            <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
+              <label style="width:200px;position:relative"><span class="cant-hint">Nombre del dato</span><input class="form-input" autocomplete="off" value="${esc(d.nombre || '')}" placeholder="Elige uno usado antes o escribe uno nuevo" onfocus="CanteraModule.showDeNames(${i})" onblur="CanteraModule.hideDeNames(${i})" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value);CanteraModule.showDeNames(${i})"><div id="cant-de-menu-${i}" style="display:none;position:absolute;left:0;right:0;top:56px;z-index:30;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-l);padding:4px;max-height:200px;overflow:auto"></div><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
+              <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="5" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
+              <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
+              <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
+            </div>`).join('')}
+          <button class="add-role" onclick="CanteraModule.addDatoExtra()">+ Agregar dato</button>
+        </div>
+        <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar</button></div>
+      </div>` : ''}
+
+      ${_step === 3 ? `<div class="cant-section">
+        ${_companies.length ? (() => {
+          // Cada archivo importado es su PROPIA fila, con su ícono y su propio botón
+          // de eliminar — antes era una sola caja con un nombre de archivo que se
+          // pisaba en cada import, y solo existía "borrar TODO". Pedido explícito
+          // 2026-09-15: "que pueda eliminar por separado... una nueva fila con
+          // [el] icono de importar archivo". Los archivos de antes de este cambio
+          // (sin id rastreable) se muestran igual pero sin botón de borrar puntual —
+          // no hay forma de separar retroactivamente qué trajo cada uno.
+          const fileIco = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+          const trashIco = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+          const files = Array.isArray(b.import_files) ? b.import_files : [];
+          // El primer archivo (importado ANTES de que existiera este historial)
+          // no tiene entrada en import_files — sin esto, en cuanto se importaba
+          // un segundo archivo rastreado, el primero desaparecía de la lista por
+          // completo (aunque sus empresas seguían ahí). Bug reportado 2026-09-15:
+          // "aunque hayan sido dos, el primero no tiene por qué desaparecer".
+          // Se calcula por diferencia: lo que no está explicado por los archivos
+          // rastreados es el remanente del/los import(s) sin id.
+          const trackedTotal = files.reduce((s, f) => s + (f.empresas || 0), 0);
+          const legacyCount = Math.max(0, _companies.length - trackedTotal);
+          const legacyRow = legacyCount > 0 ? `<div class="cant-imp-file-row">
+                <div class="cant-imp-file-row__ico">${fileIco}</div>
+                <div class="cant-imp-file-row__txt"><b>${b.archivo_nombre && !files.some(f => f.nombre === b.archivo_nombre) ? esc(b.archivo_nombre) : 'Importación anterior'}</b><span>${legacyCount} empresa(s) — sin historial individual, importado(s) antes de este cambio</span></div>
+              </div>` : '';
+          const rows = legacyRow + files.map(f => `<div class="cant-imp-file-row">
+                <div class="cant-imp-file-row__ico">${fileIco}</div>
+                <div class="cant-imp-file-row__txt"><b>${esc(f.nombre || 'archivo')}</b><span>${f.empresas || 0} empresa(s) · ${f.contactos || 0} contacto(s)</span></div>
+                <button class="lm-mini-x" title="Eliminar solo lo que trajo este archivo" onclick="CanteraModule.deleteImportFile('${esc(f.id)}','${_jsEsc(f.nombre || 'este archivo')}')">${trashIco}</button>
+              </div>`).join('');
+          return `<div class="cant-imp-file-list">${rows}</div>
+            <div class="cant-imp-done-box__btns" style="margin-top:10px">
+              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar</button>
+              <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">${trashIco} Eliminar todo y volver a cargar</button>
+            </div>`;
+        })() : `<div class="cant-import-row">
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar</button>
+          <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM. Puedes importar varios archivos al mismo borrador: se van sumando, sin duplicar lo que ya coincide por dominio/LinkedIn.</span>
+        </div>`}
+      </div>` : ''}
+
+      ${_step === 4 ? `<div class="cant-section">
+        ${_deBanner()}
+        ${(() => {
+          const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _nContFiltro.size || _nContExcl.size || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
+          if (!_coSel.size && !hasFiltros) return '';
+          const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
+          return `<div class="cant-results-bar">
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_nContLabel()}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <div class="cant-results-actions">
+            <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
+            ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
+          </div>
+        </div>`;
+        })()}
+        ${_jobRunning ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span class="cant-hint" style="margin:0;white-space:nowrap">Investigando ${_jobProgress.done} de ${_jobProgress.total}…</span>
+          <div class="cant-progress" style="flex:1;max-width:200px"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
+        </div>` : ''}
+        <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
+          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${filteredCompanies.length && filteredCompanies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
+        </table></div>
+        ${_cantPagerHtml(filteredCompanies.length)}
+      </div>` : ''}
+      ${_step === 5 ? _infoHtml(calificadas) : ''}
+      ${_step === 7 ? _configHtml() : ''}`;
+  }
+  // Paso 5 · Información — pedido explícito 2026-09-06: "quiero que agregues
+  // algo que tenga que ver con información... si agregaron tantos prospectos,
+  // tantas empresas, cuántos fueron duplicados, se limpiaron o enriquecieron,
+  // cuántos duplicados eliminaron". Todo derivado de datos persistidos en el
+  // servidor (import_stats/limpieza_stats/enriquecimiento_stats/validado_at),
+  // no de contadores en memoria que se pierden al recargar.
+  // ── Contactos que quedaron SIN empresa (importación de «Solo contactos» sin empresa coincidente) ──
+  // Se agrupan por el nombre de empresa que traía el archivo: una búsqueda vincula a todo el grupo; cada contacto trae su LinkedIn
+  // (y Sales Navigator) para verificarlo, y se puede eliminar. «Crear empresa» la crea con el nombre del archivo.
+  let _orphans = null, _orphGroups = [], _orphRes = {}, _orphTimer = null;
+  async function _orphansLoad() {
+    if (!_current) return;
+    try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts`); _orphans = r.ok ? await r.json() : []; } catch (_) { _orphans = []; }
+    const box = document.getElementById('cant-orphans'); if (box) box.outerHTML = _orphansHtml();
+  }
+  function _orphansHtml() {
+    const L = _orphans || [];
+    if (!L.length) return '<div id="cant-orphans"></div>';
+    const fix = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    const IN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+    const SN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>';
+    const by = new Map();
+    L.forEach(c => { const nm = String(c.empresa_archivo || '').trim(), k = nm.toLowerCase() || ('#' + c.id); if (!by.has(k)) by.set(k, { nombre: nm, items: [] }); by.get(k).items.push(c); });
+    _orphGroups = [...by.values()];
+    const cards = _orphGroups.map((g, gi) => {
+      const members = g.items.map(c => {
+        const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
+        const sub = [c.cargo, [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion, c.idioma].filter(Boolean).join(' · ');
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed #ECE9E2">
+          <div style="flex:1;min-width:0"><b>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)')}</b>
+            ${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn para verificarlo" style="color:#0A66C2;display:inline-flex;vertical-align:middle;margin-left:6px">${IN}</a>` : ''}
+            ${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" style="color:#0A66C2;display:inline-flex;vertical-align:middle;margin-left:6px">${SN}</a>` : ''}
+            ${!li && !sn ? '<span class="cant-hint" style="margin-left:6px">sin LinkedIn</span>' : ''}
+            ${sub ? `<div class="cant-hint" style="margin:1px 0 0">${esc(sub)}</div>` : ''}</div>
+          <button class="btn btn--sm" type="button" title="Eliminar este contacto" onclick="CanteraModule.orphDel(${c.id})">Eliminar</button></div>`;
+      }).join('');
+      return `<div style="padding:12px 0;border-top:1px solid #E5E2DC">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start">
+          <div><div class="cant-hint" style="margin:0">Empresa en el archivo</div><b>${esc(g.nombre || '(sin nombre de empresa)')}</b>
+            <div class="cant-hint" style="margin:2px 0 0">${g.items.length} contacto(s)</div></div>
+          <div style="position:relative" id="cant-or-box-${gi}">
+            <input id="cant-or-in-${gi}" autocomplete="off" placeholder="Vincular a una empresa de este borrador…" oninput="CanteraModule.orphSearch(${gi}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-or-menu-${gi}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff">
+            ${g.nombre ? `<button class="btn btn--sm" type="button" style="margin-top:6px" onclick="CanteraModule.orphCreate(${gi})">Crear empresa «${esc(g.nombre.length > 40 ? g.nombre.slice(0, 40) + '…' : g.nombre)}»</button>` : ''}
+          </div></div>
+        <div style="margin-top:6px">${members}</div></div>`;
+    }).join('');
+    return `<div class="cant-info-block" id="cant-orphans">
+      <h3 class="cant-info-block__h">Contactos sin empresa (${L.length})</h3>
+      <div class="cant-hint" style="margin:0 0 4px">Ninguna empresa de este borrador coincidió con ellos al importar. Verifica su LinkedIn y vincúlalos a una empresa, créales su empresa o elimínalos.</div>
+      ${cards}</div>`;
+  }
+  function orphSearch(gi, q) {
+    clearTimeout(_orphTimer);
+    q = String(q || '').trim();
+    document.getElementById('cant-or-menu-' + gi)?.remove();
+    if (!q) return;
+    _orphTimer = setTimeout(async () => {
+      try {
+        const rows = await (await apiFetch(`${API}/cantera/batches/${_current.id}/companies-search?q=${encodeURIComponent(q)}`)).json();
+        _orphRes[gi] = Array.isArray(rows) ? rows : [];
+        const box = document.getElementById('cant-or-box-' + gi); if (!box) return;
+        document.getElementById('cant-or-menu-' + gi)?.remove();
+        const m = document.createElement('div'); m.id = 'cant-or-menu-' + gi;
+        m.style.cssText = 'position:absolute;left:0;right:0;top:44px;z-index:50;background:#fff;border:1px solid #D9D6CF;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:230px;overflow:auto';
+        m.innerHTML = _orphRes[gi].length
+          ? _orphRes[gi].map((r, j) => `<div onmousedown="CanteraModule.orphPick(${gi},${j})" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #F1EFEB" onmouseover="this.style.background='#F5F3EE'" onmouseout="this.style.background=''"><b>${esc(r.nombre)}</b><div class="cant-hint" style="margin:0">${esc([r.dominio, r.ciudad, r.pais].filter(Boolean).join(' · '))}</div></div>`).join('')
+          : '<div class="cant-hint" style="padding:8px 10px;margin:0">Sin coincidencias en este borrador</div>';
+        box.appendChild(m);
+      } catch (_) { /* sin red: vuelve a escribir */ }
+    }, 180);
+  }
+  async function _orphAssign(gi, body, okMsg) {
+    const g = _orphGroups[gi]; if (!g) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: g.items.map(c => c.id), ...body }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo vincular');
+      showBanner(`✓ ${d.vinculados} contacto(s) ${okMsg}`, 'success');
+      _orphans = null;
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function orphPick(gi, j) {
+    const r = (_orphRes[gi] || [])[j]; if (!r) return;
+    document.getElementById('cant-or-menu-' + gi)?.remove();
+    _orphAssign(gi, { company_id: r.id }, `vinculado(s) a «${r.nombre}»`);
+  }
+  function orphCreate(gi) { _orphAssign(gi, { crear: true }, 'vinculado(s) a la empresa nueva'); }
+  async function orphDel(id) {
+    if (!confirm('¿Eliminar este contacto del borrador? No se puede deshacer.')) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/orphan-contacts/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo eliminar');
+      _orphans = (_orphans || []).filter(c => c.id !== id);
+      showBanner('✓ Contacto eliminado', 'success');
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Prioridad por cargo (Información) ──
+  // Lista los cargos que YA existen en los contactos del borrador; la usuaria les pone un número (1, 2, 3…) y cada empresa toma como 1.º
+  // al contacto cuyo cargo tenga el número más bajo. Lo puesto a mano nunca se pisa (ver services/canteraCargoService.js).
+  let _cargos = null, _cargoRanks = {}, _cargoQ = '', _cargoSum = null;
+  const _cgN = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  let _cargoBatch = null;
+  async function _cargosLoad() {
+    if (!_current) return;
+    if (_cargoBatch !== _current.id) { _cargoBatch = _current.id; _cargoSum = null; _cargoQ = ''; }   // otro borrador: sin resumen ni búsqueda del anterior
+    try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos`); _cargos = r.ok ? ((await r.json()).cargos || []) : []; } catch (_) { _cargos = []; }
+    _cargoRanks = {}; _cargos.forEach(c => { if (c.rank) _cargoRanks[c.key] = c.rank; });
+    const box = document.getElementById('cant-cargos'); if (box) box.outerHTML = _cargosHtml();
+  }
+  // Ver la lista completa de contactos de un cargo (se abre por cargo; se carga al abrir)
+  let _cargoOpen = new Set(), _cargoCt = {}, _cargoSel = {};
+  function _cargoRepaint() { const el = document.getElementById('cant-cg-list'); if (el) el.innerHTML = _cargosListHtml(); }
+  async function cargoToggle(key) {
+    if (_cargoOpen.has(key)) { _cargoOpen.delete(key); _cargoRepaint(); return; }
+    _cargoOpen.add(key); _cargoRepaint();
+    if (!_cargoCt[key] && _current) {
+      try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos/contactos?key=${encodeURIComponent(key)}`); _cargoCt[key] = r.ok ? ((await r.json()).contactos || []) : []; } catch (_) { _cargoCt[key] = []; }
+      _cargoRepaint();
+    }
+  }
+  function cargoSel(key, id, on) { const s = _cargoSel[key] || (_cargoSel[key] = new Set()); if (on) s.add(id); else s.delete(id); _cargoRepaint(); }
+  function cargoSelAll(key, on) { const s = _cargoSel[key] = new Set(); if (on) (_cargoCt[key] || []).forEach(x => s.add(x.id)); _cargoRepaint(); }
+  async function cargoCopy(key) {
+    const L2 = _cargoCt[key] || [], sel = _cargoSel[key] || new Set(), pick = sel.size ? L2.filter(x => sel.has(x.id)) : L2;
+    const txt = ['Contacto\tEmpresa\tCargo\tWeb\tLinkedIn\tSales Navigator'].concat(pick.map(x => [[x.nombre, x.apellido].filter(Boolean).join(' '), x.empresa, x.cargo, x.website || x.dominio, x.linkedin, x.linkedin_sales_nav].map(v => String(v || '').replace(/[\t\r\n]+/g, ' ')).join('\t'))).join('\n');
+    try { await navigator.clipboard.writeText(txt); showBanner(`✓ ${pick.length} contacto(s) copiados (pégalos en Excel)`, 'success'); } catch (_) { showBanner('No se pudo copiar', 'error'); }
+  }
+  function _cargosListHtml() {
+    const L = _cargos || [], q = _cgN(_cargoQ).trim();
+    const idx = L.map((c, i) => i);
+    const ranked = idx.filter(i => _cargoRanks[L[i].key] > 0).sort((a, b) => _cargoRanks[L[a].key] - _cargoRanks[L[b].key] || L[b].contactos - L[a].contactos);
+    const rest = idx.filter(i => !(_cargoRanks[L[i].key] > 0) && (!q || _cgN(L[i].label).includes(q)));
+    const shown = q ? rest.slice(0, 60) : rest.slice(0, L.length <= 90 ? 90 : 25);   // pocos cargos: se ven todos; muchos: los más frecuentes + buscador
+    const hidden = rest.length - shown.length;
+    const IN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+    const SN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16 8 14 14 8 16 10 10 16 8"/></svg>';
+    const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    const detail = c => {
+      const L2 = _cargoCt[c.key]; if (!L2) return '<div class="cgd"><div class="cant-hint" style="margin:6px 0">Cargando contactos…</div></div>';
+      const lnk = (u, txt, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(t)}">${txt}</a>` : txt;
+      return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s) · toca un nombre, empresa, web o icono para abrirlo</span></div>
+        <div class="cgd__w"><table class="cgd__t"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
+        ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web), nm = esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—');
+          return `<tr><td class="cgd__n">${lnk(li || sn, nm, li ? 'Abrir LinkedIn' : 'Abrir Sales Navigator')}</td><td>${lnk(wu, esc(x.empresa || '—'), 'Abrir la web de la empresa')}</td><td>${esc(x.cargo || '—')}</td>
+            <td>${web ? `<a href="${esc(wu)}" target="_blank" rel="noopener">${esc(web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : '<span class="cgd__d">—</span>'}</td>
+            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
+        </tbody></table></div></div>`;
+    };
+    const row = i => { const c = L[i], r = _cargoRanks[c.key] || '', open = _cargoOpen.has(c.key);
+      const inc = (c.variantes || []).some(v => _cgN(v.texto).replace(/[^a-z0-9]/g, '') !== _cgN(c.label).replace(/[^a-z0-9]/g, '')) ? c.variantes.slice(0, 4).map(v => v.texto).join(' · ') + ((c.variantesTotal || 0) > 4 ? ` · +${c.variantesTotal - 4} más` : '') : '';
+      return `<div class="cgr${open ? ' is-open' : ''}"><div class="cgr__h">
+        <input class="cgr__rank${r ? ' on' : ''}" type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)">
+        <div class="cgr__t"><b>${esc(c.label)}</b>${inc ? `<span class="cgr__inc" title="${esc(inc)}">${esc(inc)}</span>` : ''}</div>
+        <span class="cgr__n">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span>
+        <button type="button" class="cgr__more" onclick="CanteraModule.cargoToggle('${esc(c.key).replace(/'/g, '&#39;')}')">${open ? 'Ocultar' : 'Ver contactos'} ${open ? '▴' : '▾'}</button></div>${open ? detail(c) : ''}</div>`; };
+    return `${ranked.map(row).join('')}${shown.map(row).join('')}` +
+      (hidden > 0 ? `<div class="cant-hint" style="margin:8px 0 0">Hay ${hidden} cargo(s) más${q ? '' : ' (menos frecuentes)'}: usa el buscador para encontrarlos.</div>` : '') +
+      (!ranked.length && !shown.length ? '<div class="cant-hint" style="margin:8px 0 0">Ningún cargo coincide con la búsqueda.</div>' : '');
+  }
+  function _cargosHtml() {
+    if (!_cargos || !_cargos.length) return '<div id="cant-cargos"></div>';
+    const n = Object.keys(_cargoRanks).length, s = _cargoSum;
+    return `<div class="cant-info-block" id="cant-cargos">
+      <h3 class="cant-info-block__h">Prioridad por cargo</h3>
+      <div class="cant-hint" style="margin:0 0 8px">Estos son los cargos que ya tienen los contactos de este borrador (${_cargos.length}). Ponles un número: 1 = el primero al que contactar, luego 2, 3… Cada empresa toma como 1.º al contacto cuyo cargo tenga el número más bajo. Los cargos sin número no se priorizan, y lo que hayas puesto a mano no se toca.</div>
+      <input placeholder="Buscar un cargo…" value="${esc(_cargoQ)}" oninput="CanteraModule.cargoSearch(this.value)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff;margin-bottom:6px">
+      <div id="cant-cg-list">${_cargosListHtml()}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+        ${n ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.cargoClear()">Quitar todos los números</button>` : ''}
+        <button class="btn btn--primary btn--sm" type="button" onclick="CanteraModule.cargoApply()">Aplicar prioridades${n ? ` (${n} cargo${n > 1 ? 's' : ''})` : ''}</button>
+      </div>
+      ${s ? `<div class="cant-hint" style="margin:10px 0 0;color:#065F46">✓ ${s.asignados} contacto(s) con prioridad · ${s.empresasConPrimero} de ${s.empresasConContactos} empresa(s) ya tienen un 1.º contacto${s.empresasSinPrimero ? ` · ${s.empresasSinPrimero} sin ninguno (ninguno de sus cargos tiene número)` : ''}</div>` : ''}
+    </div>`;
+  }
+  function cargoSearch(q) { _cargoQ = q || ''; const l = document.getElementById('cant-cg-list'); if (l) l.innerHTML = _cargosListHtml(); }
+  function cargoRank(i, v) {
+    const c = (_cargos || [])[i]; if (!c) return;
+    const n = parseInt(v, 10);
+    if (n >= 1 && n <= 99) _cargoRanks[c.key] = n; else delete _cargoRanks[c.key];
+    const l = document.getElementById('cant-cg-list'); if (l) l.innerHTML = _cargosListHtml();
+  }
+  async function cargoApply() {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ranks: _cargoRanks }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudieron aplicar');
+      _cargoSum = d;
+      showBanner(`✓ Prioridades aplicadas · ${d.empresasConPrimero} de ${d.empresasConContactos} empresa(s) con 1.º contacto`, 'success');
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function cargoClear() { if (!confirm('¿Quitar todos los números de cargo? Las prioridades calculadas por cargo se borran; las que pusiste a mano se conservan.')) return; _cargoRanks = {}; cargoApply(); }
+  // Paso 7 · Configuración: lo que se ASIGNA (prioridad por cargo) y lo que hay que RESOLVER (contactos sin empresa clara), cada cosa en su propia sección.
+  function _configHtml() {
+    setTimeout(_orphansLoad, 0); setTimeout(_cargosLoad, 0);
+    return `<div class="cant-section">
+      <div class="cant-hint" style="margin:0 0 14px;max-width:none">Aquí configuras el borrador: asigna la prioridad por cargo y resuelve los contactos que quedaron sin empresa clara. El resumen de lo importado, limpiado y enriquecido está en <b>Información</b>.</div>
+      <div class="cant-cfg-h">Prioridad por cargo</div>${_cargosHtml()}
+      <div class="cant-cfg-h">Contactos sin empresa clara</div>${_orphansHtml()}
+      ${(_orphans && !_orphans.length) ? '<div class="cant-hint" style="margin:0">No hay contactos sin empresa clara en este borrador.</div>' : ''}
+    </div>`;
+  }
+  function _infoHtml(calificadas) {
+    const imp = _current.import_stats || {};
+    const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
+    // Desglose paso 1 — se calcula del lado del cliente (ya está cargado en
+    // _companies), sin pedirle otra columna al servidor.
+    const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
+    const descartadas1 = _companies.filter(c => c.paso1_estado === 'descartado').length;
+    const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     return `<div class="cant-section">
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Estado actual del borrador</h3>
