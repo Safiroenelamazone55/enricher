@@ -9572,6 +9572,17 @@ app.get('/api/cantera/batches/:id/validacion-status', requireAuth, async (req, r
 });
 
 // Resultados del borrador (empresas + contadores), filtrable desde el front.
+// Todos los datos del borrador (empresas y contactos, con las columnas originales del archivo) para exportar a Excel.
+app.get('/api/cantera/batches/:id/export-data', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, bid = req.params.id;
+    const { rows: [b] } = await pool.query('SELECT nombre FROM cantera_batches WHERE id=$1 AND user_id=$2', [bid, uid]);
+    if (!b) return res.status(404).json({ error: 'Borrador no encontrado' });
+    const companies = (await pool.query('SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 ORDER BY id', [bid, uid])).rows;
+    const contactos = (await pool.query('SELECT * FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 ORDER BY company_id, id', [bid, uid])).rows;
+    res.json({ borrador: b.nombre, companies, contactos });
+  } catch (err) { console.error('[cantera] export-data', err.message); res.status(500).json({ error: 'No se pudo preparar la exportación' }); }
+});
 app.get('/api/cantera/batches/:id/companies', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

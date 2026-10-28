@@ -7002,6 +7002,39 @@ const CanteraModule = (() => {
   // "Elegir columnas" abren su propia "ventanita" (submenu lateral, mismo
   // patrón hover-flyout que "Resolver respuesta" en el Inbox) en vez de
   // listar todo de golpe en el menú principal.
+  // ── Exportar a Excel: lo que ves en Resultados (con los filtros aplicados; si marcaste empresas, sólo esas), con TODOS sus datos ──
+  const _XL_EMP = { nombre: 'Empresa', dominio: 'Dominio', website: 'Website', industria: 'Industria', tamano: 'Tamaño', pais: 'País', ciudad: 'Ciudad', ubicacion: 'Ubicación', linkedin: 'LinkedIn', linkedin_sales_nav: 'Sales Navigator', empleados_linkedin: 'Empleados en LinkedIn', paso1_estado: 'Filtro básico', paso1_motivo: 'Motivo filtro básico', paso2_estado: 'Validación (paso 2)', tier_clave: 'Tier', confianza: 'Confianza', motivo_descarte: 'Motivo de descarte', contactos: 'Nº de contactos', id: 'ID Cantera' };
+  const _XL_CON = { nombre: 'Nombre', apellido: 'Apellido', cargo: 'Cargo', email: 'Email', linkedin: 'LinkedIn', linkedin_sales_nav: 'Sales Navigator', ubicacion: 'Ubicación', ciudad: 'Ciudad', pais: 'País', idioma: 'Idioma', idiomas: 'Idiomas', prioridad: 'Prioridad', puesto_estado: 'Estado del puesto', puesto_motivo: 'Motivo del puesto', empresa: 'Empresa', id: 'ID Cantera' };
+  const _XL_SKIP = new Set(['user_id', 'batch_id', 'company_id', 'raw', 'promoted_contact_id', 'prioridad_auto', 'prioridad_origen']);
+  function _xlVal(v) { if (v == null) return ''; if (typeof v === 'object') { if (Array.isArray(v)) return v.map(x => (x && typeof x === 'object') ? Object.values(x).filter(Boolean).join(': ') : x).join(' | '); return Object.entries(v).map(([k, x]) => `${k}: ${x}`).join(' | '); } return v; }
+  function _xlRows(list, labels, extra) {
+    const colsSet = new Set(); list.forEach(r => Object.keys(r).forEach(k => { if (!_XL_SKIP.has(k) && !(labels[k] === undefined && /_at$/.test(k))) colsSet.add(k); }));
+    const base = Object.keys(labels).filter(k => colsSet.has(k)), more = [...colsSet].filter(k => !(k in labels)), rawKeys = new Set();
+    list.forEach(r => { if (r.raw && typeof r.raw === 'object') Object.keys(r.raw).forEach(k => rawKeys.add(k)); });
+    return list.map(r => { const o = {}; (extra || []).forEach(([h, f]) => { o[h] = f(r); }); base.forEach(k => { o[labels[k]] = _xlVal(r[k]); }); more.forEach(k => { o[k.replace(/_/g, ' ')] = _xlVal(r[k]); }); rawKeys.forEach(k => { o['Archivo · ' + k] = _xlVal(r.raw && r.raw[k]); }); return o; });
+  }
+  async function exportExcel() {
+    if (!_current) return;
+    if (typeof XLSX === 'undefined') { showBanner('No se cargó la librería de Excel. Recarga la página.', 'error'); return; }
+    showBanner('Preparando el Excel…', 'info');
+    try {
+      const vis = _filteredCompaniesList(), pick = _coSel.size ? vis.filter(c => _coSel.has(c.id)) : vis, ids = new Set(pick.map(c => c.id));
+      if (!ids.size) { showBanner('No hay empresas en la vista actual para exportar', 'error'); return; }
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/export-data`); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const d = await r.json(), byId = new Map(d.companies.map(c => [c.id, c])), conts = d.contactos.filter(k => ids.has(k.company_id));
+      const nCon = new Map(); conts.forEach(k => nCon.set(k.company_id, (nCon.get(k.company_id) || 0) + 1));
+      const emp = d.companies.filter(c => ids.has(c.id)).map(c => Object.assign({}, c, { contactos: nCon.get(c.id) || 0, evidencia: Array.isArray(c.evidencia) ? c.evidencia.map(e => [e.fuente, e.resumen, e.url].filter(Boolean).join(' · ')).join(' | ') : c.evidencia }));
+      const con = conts.map(k => Object.assign({}, k, { empresa: (byId.get(k.company_id) || {}).nombre || '' }));
+      const wb = XLSX.utils.book_new();
+      const wsE = XLSX.utils.json_to_sheet(_xlRows(emp, _XL_EMP)), wsC = XLSX.utils.json_to_sheet(_xlRows(con, _XL_CON, [['Empresa', k => k.empresa]]).map(o => { const { Empresa, ...rest } = o; return Object.assign({ Empresa }, rest); }));
+      const fit = ws => { const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }); if (!rows.length) return; ws['!cols'] = rows[0].map((_, ci) => ({ wch: Math.min(48, Math.max(10, ...rows.slice(0, 200).map(r2 => String(r2[ci] == null ? '' : r2[ci]).length)) + 2) })); ws['!freeze'] = { xSplit: 0, ySplit: 1 }; };
+      fit(wsE); fit(wsC);
+      XLSX.utils.book_append_sheet(wb, wsE, 'Empresas'); XLSX.utils.book_append_sheet(wb, wsC, 'Contactos');
+      const nm = String(d.borrador || 'borrador').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60), fecha = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Cantera - ${nm} - ${fecha}.xlsx`);
+      showBanner(`✓ Excel descargado: ${emp.length} empresas y ${con.length} contactos`, 'success');
+    } catch (e) { showBanner('No se pudo exportar: ' + e.message, 'error'); }
+  }
   function resultsMenu(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
@@ -7104,6 +7137,7 @@ const CanteraModule = (() => {
         ${filtrosGuardadosList.length ? sub(`Aplicar filtro guardado${filtrosGuardadosList.length > 1 ? ' · ' + filtrosGuardadosList.length : ''}`, guardadosPanel) : ''}
       </div>
       <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item('Exportar a Excel', 'CanteraModule.exportExcel()')}</div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
         ${calificadas ? item(`Mover al CRM (${calificadas})`, 'CanteraModule.openPromote()') : ''}
@@ -8361,7 +8395,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, openFicha, closeFicha, saveFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
