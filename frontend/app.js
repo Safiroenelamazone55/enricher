@@ -11916,6 +11916,11 @@ const MyWorkModule = (() => {
   }
 
   // ── Kanban (mismo estilo y menú que Tareas; arrastra una tarjeta para cambiar su estado) ──
+  function _dragStart(ev, id) { ev.dataTransfer.setData('text/plain', String(id)); ev.dataTransfer.effectAllowed = 'move'; ev.currentTarget.classList.add('is-drag'); }
+  function _dragEnd(ev) { ev.currentTarget.classList.remove('is-drag'); document.querySelectorAll('.kanban-col.is-over').forEach(c => c.classList.remove('is-over')); }
+  function _dragOver(ev) { ev.preventDefault(); ev.currentTarget.classList.add('is-over'); }
+  function _dragLeave(ev) { ev.currentTarget.classList.remove('is-over'); }
+  function _drop(ev, estado) { ev.preventDefault(); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); document.querySelectorAll('.kanban-col.is-over').forEach(c => c.classList.remove('is-over')); if (id) _setStatus(id, estado); }
   function _kcard(t, byId) {
     const p = t.parent_task_id ? byId.get(t.parent_task_id) : null;
     const prio = t.prioridad || 'media', prioLabel = { urgente: 'Urgente', alta: 'Alta', media: 'Media', baja: 'Baja' }[prio] || prio;
