@@ -21952,6 +21952,7 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_contacts)) _contacts = [];
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
       if (!Array.isArray(_mailboxes)) _mailboxes = [];
+      _gcApply(_clients);
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
     // La tarea/secuencia/cliente exactos donde se estaba solo se pueden reconstruir
     // ACÁ — recién ahora _contacts/_sequences/_steps ya están cargados. Solo una
@@ -21988,6 +21989,7 @@ const LeadManagerModule = (() => {
     const get = async (p) => { try { const r = await apiFetch(API + p); if (r && r.ok) { const j = await r.json(); return Array.isArray(j) ? j : null; } } catch (_) {} return null; };
     const [cl, cm, sq, st, co, ct, ac] = await Promise.all([get('/outbound-clients'), get('/campaigns'), get('/sequences'), get('/sequence-steps'), get('/lm/companies'), get('/lm/contacts'), get('/activities')]);
     if (cl) _clients = cl; if (cm) _campaigns = cm; if (sq) _sequences = sq; if (st) _steps = st; if (co) _companies = co; if (ct) _contacts = ct; if (ac) _activities = ac;
+    if (_gcli) { if (cl) _gcApply(cl); else if (cm || sq || st || co || ct || ac) { const keep = _clients; _gcApply(null); _clients = keep; } }
     // Listas propias de la secuencia abierta (traen nombres de empresa/contacto copiados del servidor)
     if (_section === 'sequence' && _activeSeq) {
       if (Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq);
@@ -22057,7 +22059,7 @@ const LeadManagerModule = (() => {
     settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   };
   function _navHtml() {
-    let html = '', lastG = null;
+    let html = _gcli ? `<div class="lm2-gc" title="Filtro global de cliente"><span>Viendo sólo</span><b>${esc(gcName())}</b><button type="button" onclick="LeadManagerModule.gcSet(null)" title="Quitar filtro">×</button></div>` : '', lastG = null;
     _NAV.forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
@@ -22070,7 +22072,7 @@ const LeadManagerModule = (() => {
                 : n.k === 'clients' ? _cuTotal()
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
-      html += `<button class="lm2-nav__item${active ? ' active' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')">
+      html += `<button class="lm2-nav__item${active ? ' active' : ''}${n.k === 'clients' && _gcli ? ' has-gc' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')"${n.k === 'clients' ? ' onmouseenter="LeadManagerModule.gcOpen(this)" onmouseleave="LeadManagerModule.gcLeave()"' : ''}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
     });
@@ -22106,6 +22108,55 @@ const LeadManagerModule = (() => {
       <main class="lm2-main"><div class="lm2-body" id="lm2-body"></div></main>
     </div>`;
   }
+  // ── Filtro global de cliente: al elegir un cliente en el panel que sale al pasar el mouse por «Clientes outbound»,
+  //    TODO Outreach (campañas, secuencias, empresas, contactos, leads, deals, actividades, inbox, tareas…) muestra sólo su información. ──
+  let _gcli = null, _gcAll = [], _gcTimer = null, _gcBox = null;
+  try { const v = parseInt(localStorage.getItem('nova_lm_gclient'), 10); if (v) _gcli = v; } catch (_) {}
+  // Se llama justo después de cargar los datos: guarda la lista completa de clientes y recorta lo demás al cliente elegido.
+  function _gcApply(fullClients) {
+    if (Array.isArray(fullClients)) _gcAll = fullClients.slice(); else if (Array.isArray(_clients) && !_gcli) _gcAll = _clients.slice();
+    if (_gcli && _gcAll.length && !_gcAll.some(c => c.id === _gcli)) { _gcli = null; try { localStorage.removeItem('nova_lm_gclient'); } catch (_) {} }
+    if (!_gcli) { return; }
+    const id = _gcli, mine = x => x && x.outbound_client_id === id;
+    _clients = (_gcAll || []).filter(c => c.id === id);
+    _campaigns = (_campaigns || []).filter(mine);
+    _sequences = (_sequences || []).filter(mine);
+    const sids = new Set(_sequences.map(x => x.id));
+    _steps = (_steps || []).filter(x => sids.has(x.sequence_id));
+    _contacts = (_contacts || []).filter(mine);
+    const cids = new Set(_contacts.map(c => c.company_id).filter(Boolean)), kids = new Set(_contacts.map(c => c.id));
+    _companies = (_companies || []).filter(c => mine(c) || cids.has(c.id));
+    _activities = (_activities || []).filter(a => mine(a) || kids.has(a.contact_id) || kids.has(a.lead_id));
+    _data = (_data || []).filter(mine);
+  }
+  function _gcInbox() { if (_gcli && Array.isArray(_ibThreads)) { const k = new Set((_contacts || []).map(c => c.id)); _ibThreads = _ibThreads.filter(t => k.has(t.contact_id)); } }
+  function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
+  async function gcSet(id) {
+    _gcClose(true);
+    _gcli = id || null;
+    try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
+    _refreshNav();
+    const body = $('lm2-body'); if (body) body.style.opacity = '.5';
+    try { await load(); await _ibReload(true); } finally { if (body) body.style.opacity = ''; }
+    _refreshNav();
+  }
+  function gcOpen(btn) {
+    clearTimeout(_gcTimer);
+    if (!_gcBox) {
+      _gcBox = document.createElement('div'); _gcBox.className = 'gc-fly';
+      _gcBox.onmouseenter = () => clearTimeout(_gcTimer); _gcBox.onmouseleave = () => _gcClose();
+      document.body.appendChild(_gcBox);
+    }
+    const all = _gcAll.length ? _gcAll : _clients, nC = c => (_gcli ? 0 : (_campaigns || []).filter(x => x.outbound_client_id === c.id).length);
+    _gcBox.innerHTML = `<div class="gc-fly__h">Ver Outreach de…</div>
+      <button type="button" class="gc-fly__i${!_gcli ? ' on' : ''}" onclick="LeadManagerModule.gcSet(null)"><span class="gc-fly__dot gc-fly__dot--all"></span><span class="gc-fly__n">Todos los clientes</span>${!_gcli ? '<em>✓</em>' : ''}</button>
+      <div class="gc-fly__sep"></div>
+      <div class="gc-fly__l">${all.map(c => `<button type="button" class="gc-fly__i${_gcli === c.id ? ' on' : ''}" onclick="LeadManagerModule.gcSet(${c.id})"><span class="gc-fly__dot">${esc((c.abrev || c.nombre || '?').slice(0, 2).toUpperCase())}</span><span class="gc-fly__n">${esc(c.nombre)}</span>${_gcli === c.id ? '<em>✓</em>' : ''}</button>`).join('') || '<div class="gc-fly__e">Sin clientes</div>'}</div>
+      <p class="gc-fly__p">Al elegir un cliente, todo Outreach muestra sólo su información.</p>`;
+    const r = btn.getBoundingClientRect(); _gcBox.style.left = (r.right + 6) + 'px'; _gcBox.style.top = Math.max(8, Math.min(r.top - 6, innerHeight - 360)) + 'px'; _gcBox.style.display = '';
+  }
+  function _gcClose(now) { clearTimeout(_gcTimer); const hide = () => { if (_gcBox) _gcBox.style.display = 'none'; }; if (now) hide(); else _gcTimer = setTimeout(hide, 220); }
+  function gcLeave() { _gcClose(); }
   function go(section) {
     _section = section; _activeClient = null; _seqTaskCanal = ''; _refreshNav(); _renderBody();
     // Recuerda la última sección (sin parámetros — no vistas de un contacto/secuencia/cliente
@@ -22340,12 +22391,27 @@ const LeadManagerModule = (() => {
   let _clQ = '', _clEst = '';
   function clSetQ(v) { _clQ = v; _clPaint(); }
   function clSetEst(v) { _clEst = v; _clPaint(); }
+  // «El mundo del cliente»: con el filtro global activo, Clientes outbound muestra una sola tarjeta grande con todo lo del cliente.
+  function _gcHero(c) {
+    const ini = (c.abrev || c.nombre || '?').slice(0, 2).toUpperCase(), est = (_OBC_OPTS.find(x => x[0] === (c.estado || 'preparacion')) || ['', 'Preparación'])[1];
+    const ct = _contacts || [], resp = ct.filter(x => ['respondio', 'interesado', 'reunion'].includes(x.disposition)).length, reun = ct.filter(x => x.disposition === 'reunion').length;
+    const activas = (_sequences || []).filter(x => x.estado === 'active' || x.estado === 'activa').length;
+    const k = (n, l, go) => `<button type="button" class="gch__k" onclick="LeadManagerModule.go('${go}')"><b>${n}</b><span>${l}</span></button>`;
+    const web = c.website ? `<a class="gch__web" href="${esc(/^https?:/i.test(c.website) ? c.website : 'https://' + c.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(c.website).replace(/^https?:\/\//, ''))}</a>` : '';
+    return `<div class="gch">
+      <div class="gch__top"><div class="gch__av">${esc(ini)}</div>
+        <div class="gch__id"><div class="gch__name">${esc(c.nombre)}</div><div class="gch__sub"><span class="gch__est">${esc(est)}</span>${c.responsable ? `<span>Responsable: <b>${esc(c.responsable)}</b></span>` : ''}${web}</div></div>
+        <div class="gch__acts"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClient(${c.id})">Abrir cliente</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.gcSet(null)">Ver todos los clientes</button></div></div>
+      <div class="gch__kpis">${k((_campaigns || []).length, 'Campañas', 'campaigns')}${k((_sequences || []).length, 'Secuencias' + (activas ? ` · ${activas} activas` : ''), 'sequences')}${k((_companies || []).length, 'Empresas', 'companies')}${k(ct.length, 'Contactos', 'contacts')}${k(resp, 'Respondieron', 'leads')}${k(reun, 'Reuniones', 'deals')}</div>
+      <p class="gch__hint">Estás viendo el mundo de este cliente: todo Outreach (campañas, secuencias, empresas, contactos, leads, deals, inbox y tareas) muestra sólo su información. Quita el filtro con «Ver todos los clientes».</p></div>`;
+  }
   function _clBody() {
     let list = _clients.slice();
     if (_clEst) list = list.filter(c => (c.estado || 'preparacion') === _clEst);
     if (_clQ) { const q = _clQ.toLowerCase(); list = list.filter(c => ((c.nombre || '') + ' ' + (c.responsable || '') + ' ' + (c.website || '')).toLowerCase().includes(q)); }
     if (!list.length) return '<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ningún cliente cumple estos filtros.</div></div>';
     const nC = c => _campaigns.filter(x => x.outbound_client_id === c.id).length, nS = c => _sequences.filter(x => x.outbound_client_id === c.id).length;
+    if (_gcli && list.length === 1) return _gcHero(list[0]);
     const L = _lmLayout.cl;
     if (L === 'lista') {
       return '<div class="ldh-table-wrap"><table class="ldh-table"><thead><tr><th>Cliente</th><th>Estado</th><th>Responsable</th><th class="ldh-num">Campañas</th><th class="ldh-num">Secuencias</th><th class="ldh-num">Leads</th></tr></thead><tbody>' +
@@ -23964,7 +24030,7 @@ ${foot}
     setTimeout(() => $(`coq-nombre-${companySeqId}`)?.focus(), 60);
   }
   async function _reloadContacts() {
-    try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = d; } } catch (e) {}
+    try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = _gcli ? d.filter(x => x.outbound_client_id === _gcli) : d; } } catch (e) {}
     _refreshNav();
   }
   // ── Disposición outbound (independiente del paso; pausa en todas sus secuencias) ──
@@ -26862,6 +26928,7 @@ ${foot}
     _ibLastAt = Date.now();
     try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
     catch { _ibThreads = []; }
+    _gcInbox();
     const sig = _ibSigOf(_ibThreads), changed = sig !== _ibSig; _ibSig = sig;
     if (_section === 'inbox' && (changed || silent !== true)) { if (silent === true) _ibPaintSoft(); else _ibPaint(); }
     _refreshNav(); // contador "sin leer" junto a Inbox en la barra lateral
@@ -37466,7 +37533,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
