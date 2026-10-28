@@ -12858,6 +12858,65 @@ const AnalyticsModule = (() => {
 // TASKS MODULE
 // =================================================================
 
+// ═══════════════════════════════════════════════════════════════
+// Etiquetas @Miembro en comentarios, notas y descripción de tareas (el servidor notifica por campana y correo).
+// ═══════════════════════════════════════════════════════════════
+const MentionPicker = (() => {
+  let _names = null, _box = null, _el = null, _items = [], _sel = 0;
+  const _n = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  async function ready() {
+    if (_names) return _names;
+    try { const r = await apiFetch(`${API}/mgmt/team`); const a = r.ok ? await r.json() : []; _names = a.filter(m => m.estado !== 'inactivo' && m.nombre).map(m => m.nombre); } catch (_) { _names = []; }
+    return _names;
+  }
+  // Texto ya escapado → con las @etiquetas resaltadas
+  function highlight(escaped) {
+    if (!_names || !_names.length || escaped.indexOf('@') < 0) return escaped;
+    let out = escaped;
+    [..._names].sort((a, b) => b.length - a.length).forEach(nm => {
+      const e = esc(nm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      out = out.replace(new RegExp('(^|[^\\p{L}\\p{N}>])(@' + e + ')(?![\\p{L}\\p{N}])', 'giu'), '$1<span class="mention">$2</span>');
+    });
+    return out;
+  }
+  function close() { if (_box) { _box.remove(); _box = null; } _el = null; }
+  function _check(el) {
+    const pos = el.selectionStart, before = el.value.slice(0, pos);
+    const m = /(^|\s)@([^\s@]{0,30}(?: [^\s@]{0,20})?)$/.exec(before);
+    if (!m || !_names || !_names.length) { close(); return; }
+    const q = _n(m[2]);
+    _items = _names.filter(nm => _n(nm).includes(q)).slice(0, 6);
+    if (!_items.length) { close(); return; }
+    _sel = 0; _el = el; el._mpStart = pos - m[2].length - 1;
+    if (!_box) { _box = document.createElement('div'); _box.className = 'mp-pop'; document.body.appendChild(_box); }
+    _box.innerHTML = '<div class="mp-pop__h">Etiquetar a</div>' + _items.map((nm, i) => `<button type="button" class="mp-pop__i${i === 0 ? ' on' : ''}" data-i="${i}">${esc(nm)}</button>`).join('');
+    _box.onmousedown = ev => { const b = ev.target.closest('.mp-pop__i'); if (b) { ev.preventDefault(); _pick(+b.dataset.i); } };
+    const r = el.getBoundingClientRect(), h = _box.offsetHeight;
+    _box.style.left = Math.min(r.left + 8, innerWidth - 240) + 'px';
+    _box.style.top = (r.top - h - 6 > 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+  }
+  function _pick(i) {
+    const el = _el, nm = _items[i]; if (!el || !nm) return;
+    const start = el._mpStart, pos = el.selectionStart;
+    el.value = el.value.slice(0, start) + '@' + nm + ' ' + el.value.slice(pos);
+    const c = start + nm.length + 2; el.setSelectionRange(c, c); el.focus(); close();
+  }
+  function _key(e) {
+    if (!_box) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); _sel = (_sel + (e.key === 'ArrowDown' ? 1 : _items.length - 1)) % _items.length; _box.querySelectorAll('.mp-pop__i').forEach((b, i) => b.classList.toggle('on', i === _sel)); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); _pick(_sel); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+  }
+  function attach(el) {
+    if (!el || el._mp) return; el._mp = 1; ready();
+    el.addEventListener('input', () => _check(el));
+    el.addEventListener('keydown', _key, true);
+    el.addEventListener('blur', () => setTimeout(close, 150));
+  }
+  document.addEventListener('focusin', e => { if (e.target && e.target.matches && e.target.matches('#tskd-chat-input, .tskd__textarea')) attach(e.target); });
+  return { ready, highlight, attach, close };
+})();
+
 const TasksModule = (() => {
   let _tasks        = [];
   let _editId       = null;
@@ -13597,8 +13656,9 @@ const TasksModule = (() => {
     t[field] = value;
     try {
       await _putTask(t);
-      if (field === 'estado' || field === 'titulo') {
-        // Refleja el cambio si hay una vista Kanban/lista detras al volver.
+      if ((field === 'notas' || field === 'descripcion') && String(value).includes('@')) {
+        apiFetch(`${API}/mentions/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: field === 'notas' ? 'task_note' : 'task_desc', task_id: id, text: value }) })
+          .then(r => r.ok ? r.json() : null).then(d => { if (d && d.n) showBanner(`✓ Se avisó a ${d.n} persona${d.n === 1 ? '' : 's'} etiquetada${d.n === 1 ? '' : 's'}`, 'success'); }).catch(() => {});
       }
     } catch (e) {
       t[field] = prev;
@@ -13610,6 +13670,7 @@ const TasksModule = (() => {
     const box = $('tskd-chat-msgs');
     if (!box) return;
     try {
+      await MentionPicker.ready();
       const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('task:' + id)}`);
       const msgs = await r.json();
       if (!Array.isArray(msgs)) return;
@@ -13625,7 +13686,7 @@ const TasksModule = (() => {
           <div class="tskd-cm__av">${ini}</div>
           <div class="tskd-cm__body">
             <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span></div>
-            <div class="tskd-cm__txt">${esc(m.content)}</div>
+            <div class="tskd-cm__txt">${MentionPicker.highlight(esc(m.content))}</div>
           </div>
         </div>`;
       }).join('');
@@ -45069,18 +45130,31 @@ const RNotifPanel = (() => {
         _dismissed = new Set((dr.ok ? await dr.json() : []).map(d => `${d.kind}:${d.ref_id}`));
       } catch (_) { _dismissed = new Set(); }
       if (_dismissed.size) {
-        for (const key of ['agentes', 'tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
+        for (const key of ['menciones', 'agentes', 'tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
           if (!Array.isArray(data[key])) continue;
           const before = data[key].length;
           data[key] = data[key].filter(x => !_dismissed.has(`${key}:${x.id}`));
           data.total = Math.max(0, (data.total || 0) - (before - data[key].length));
         }
       }
+      try {
+        const mr = await apiFetch(`${API}/mentions`);
+        const mens = mr.ok ? await mr.json() : [];
+        if (mens.length) { data.menciones = mens; data.total = (data.total || 0) + mens.length; }
+      } catch (_) {}
       _render(data);
       _updateBadge(data.total || 0);
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:44px 0">Error al cargar.</div>`;
     }
+  }
+
+  // Abre la tarea donde te etiquetaron y marca la mención como leída.
+  function openMention(id, taskId) {
+    apiFetch(`${API}/mentions/${id}/read`, { method: 'POST' }).catch(() => {});
+    document.querySelector(`[data-notif-id="menciones:${id}"]`)?.remove();
+    if (taskId) { document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(taskId), 250); }
+    else document.querySelector('[data-tab=mgmt-projects]')?.click();
   }
 
   // Marca una tarea como completada desde la notificación (endpoint seguro /status).
@@ -45181,6 +45255,9 @@ const RNotifPanel = (() => {
     // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
     const _fv = ds => ds ? new Date(String(ds).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
     const cats = [
+      { key: 'menciones', tone: 'violet', badge: 'Te etiquetaron', ico: 'member', nameKey: 'task_titulo', task: false,
+        sub: m => `<b>${esc(m.by_name || 'Alguien')}</b>: ${esc(String(m.excerpt || '').slice(0, 140))}`,
+        actions: m => [{ lbl: 'Abrir', on: `RNotifPanel.openMention(${m.id},${m.task_id || 0})`, pri: true }] },
       { key: 'agentes', tone: 'red', badge: 'Sistema', ico: 'pulse', nameKey: 'titulo', task: false,
         sub: a => esc(a.message || ''), action: () => `WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('agentes'),80)`, link: 'Ver agentes' },
       { key: 'tareas_completas', tone: 'green', badge: 'Lista para cerrar', ico: 'check', nameKey: 'titulo', task: true,
@@ -45540,7 +45617,7 @@ const RNotifPanel = (() => {
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
     completeTask, goToProject, completeProject, pickProjFecha, addSubToProject,
-    dismiss,
+    dismiss, openMention,
   };
 })();
 

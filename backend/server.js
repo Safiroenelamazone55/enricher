@@ -11883,6 +11883,30 @@ app.post('/api/workspace/accept-invite', requireAuth, async (req, res) => {
 // CHAT — REST (history) + Socket.io (real-time)
 // =================================================================
 
+// ── Etiquetas @Miembro: notas/descripción de tarea, bandeja de la campana ──
+const _mentionSvc = require('./services/mentionService');
+app.post('/api/mentions/scan', requireAuth, async (req, res) => {
+  const kind = ['task_note', 'task_desc'].includes(req.body?.kind) ? req.body.kind : null;
+  const taskId = parseInt(req.body?.task_id, 10), text = String(req.body?.text || '');
+  if (!kind || !taskId || !text.includes('@')) return res.json({ ok: true, n: 0 });
+  try { res.json({ ok: true, n: await _mentionSvc.process(pool, { wid: req.workspaceOwnerId, user: req.user, kind, taskId, text }) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.get('/api/mentions', requireAuth, async (req, res) => {
+  try {
+    await _mentionSvc.ensureTable(pool);
+    const { rows } = await pool.query(
+      `SELECT m.id, m.by_name, m.kind, m.task_id, m.project_id, m.excerpt, m.created_at, t.titulo AS task_titulo, p.nombre AS project_nombre
+         FROM mentions m LEFT JOIN tasks t ON t.id = m.task_id LEFT JOIN projects p ON p.id = m.project_id
+        WHERE m.mentioned_user_id = $1 AND m.read = FALSE ORDER BY m.created_at DESC LIMIT 50`, [req.user.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/mentions/:id/read', requireAuth, async (req, res) => {
+  try { await pool.query(`UPDATE mentions SET read = TRUE WHERE id = $1 AND mentioned_user_id = $2`, [parseInt(req.params.id, 10), req.user.id]); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── GET /api/chat/messages/:channel ──────────────────────────────
 app.get('/api/chat/messages/:channel', requireAuth, async (req, res) => {
   try {
@@ -11912,6 +11936,11 @@ app.post('/api/chat/messages/:channel', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4) RETURNING *`,
       [req.workspaceOwnerId, req.params.channel, req.user.id, content]
     );
+    // @Miembro en comentarios de tarea/proyecto → campana + correo (no frena el envío si falla)
+    try {
+      const mm = /^(task|project):(\d+)$/.exec(req.params.channel);
+      if (mm && content.includes('@')) await _mentionSvc.process(pool, { wid: req.workspaceOwnerId, user: req.user, kind: mm[1] === 'task' ? 'task_comment' : 'project_comment', taskId: mm[1] === 'task' ? +mm[2] : null, projectId: mm[1] === 'project' ? +mm[2] : null, text: content });
+    } catch (e) { console.warn('[mention] comentario:', e.message); }
     res.status(201).json({ ...rows[0], sender_name: req.user.name, sender_avatar: req.user.avatar || null });
   } catch (err) {
     res.status(500).json({ error: err.message });
