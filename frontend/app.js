@@ -11829,6 +11829,7 @@ const MyWorkModule = (() => {
     ['tabla', 'Tabla', '<rect x="3" y="4" width="18" height="16" rx="1"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/>'],
     ['kanban', 'Kanban', '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>'],
     ['calendario', 'Calendario', '<rect x="3" y="5" width="18" height="16" rx="1"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>'],
+    ['carga', 'Carga', '<rect x="4" y="12" width="4" height="8"/><rect x="10" y="6" width="4" height="14"/><rect x="16" y="9" width="4" height="11"/>'],
     ['gantt', 'Gantt', '<line x1="3" y1="6" x2="14" y2="6"/><line x1="8" y1="12" x2="19" y2="12"/><line x1="5" y1="18" x2="16" y2="18"/><line x1="3" y1="3" x2="3" y2="21"/>'],
   ];
   let _view = 'lista';
@@ -11878,7 +11879,7 @@ const MyWorkModule = (() => {
     const body = wrap.closest('.mw-body'); if (body) body.classList.toggle('mw-wide', _view !== 'lista');
     wrap.classList.toggle('mw-card--plain', _view === 'kanban');
     if (!_meN()) { wrap.innerHTML = `<div class="d3-empty">No se pudo identificar tu usuario.</div>`; return; }
-    ({ lista: _renderLista, tabla: _renderTabla, kanban: _renderKanban, calendario: _renderCalendario, gantt: _renderGantt }[_view] || _renderLista)(wrap);
+    ({ lista: _renderLista, tabla: _renderTabla, kanban: _renderKanban, calendario: _renderCalendario, carga: _renderCarga, gantt: _renderGantt }[_view] || _renderLista)(wrap);
   }
   // Un cambio de estado hecho desde el menú del Dashboard: se sincroniza aquí para que las vistas no «resuciten» tareas.
   function _sync(id, patch) { const t = _tasks.find(x => x.id === id); if (t) Object.assign(t, patch); if (_view !== 'lista' && _view !== 'tabla') render(); }
@@ -11925,7 +11926,7 @@ const MyWorkModule = (() => {
   function _dragEnd(ev) { ev.currentTarget.classList.remove('is-drag'); document.querySelectorAll('.kanban-col.is-over').forEach(c => c.classList.remove('is-over')); }
   function _dragOver(ev) { ev.preventDefault(); ev.currentTarget.classList.add('is-over'); }
   function _dragLeave(ev) { ev.currentTarget.classList.remove('is-over'); }
-  function _drop(ev, estado) { ev.preventDefault(); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); document.querySelectorAll('.kanban-col.is-over').forEach(c => c.classList.remove('is-over')); if (id) _setStatus(id, estado); }
+  function _drop(ev, ci) { ev.preventDefault(); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); document.querySelectorAll('.kanban-col.is-over').forEach(c => c.classList.remove('is-over')); const col = _gcols[ci]; if (!id || !col) return; if (_group === 'estado') _setStatus(id, col[0]); else if (_group === 'prioridad') setTaskPrioridad(id, col[0]); else showBanner('Agrupa por Estado o Prioridad para mover tarjetas arrastrando', 'info'); }
   function _kcard(t, byId) {
     const p = t.parent_task_id ? byId.get(t.parent_task_id) : null;
     const prio = t.prioridad || 'media', prioLabel = { urgente: 'Urgente', alta: 'Alta', media: 'Media', baja: 'Baja' }[prio] || prio;
@@ -11940,24 +11941,32 @@ const MyWorkModule = (() => {
           <button class="tt-task-play-btn tt-play--kc" data-timer-task="${t.id}" draggable="false" title="Iniciar seguimiento" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           <button class="kc-menu-btn" title="Opciones" onclick="MyWorkModule.openCardMenu(event,${t.id})"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button></div></div>
       ${(ctx || t.client_nombre) ? `<div class="kc-meta">${ctx ? `<span class="kc-project" title="${esc(ctx)}">${esc(ctx)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
-      <div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
+      ${_taskBadgesHtml(t)}<div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
   }
+  let _group = 'estado', _gcols = [];
+  const _GROUPS = { estado: ['Estado', t => t.estado || 'pendiente'], prioridad: ['Prioridad', t => t.prioridad || 'media'], proyecto: ['Proyecto', t => t.project_nombre || 'Sin proyecto'], cliente: ['Cliente', t => t.client_nombre || 'Sin cliente'] };
+  function setGroup(g) { if (_GROUPS[g]) { _group = g; render(); } }
   function _renderKanban(wrap) {
-    const byId = _byId(), all = _mineAll().filter(t => ['pendiente', 'en_progreso', 'bloqueado', 'completado'].includes(t.estado || 'pendiente'));
-    const cols = [['bloqueado', 'Bloqueado'], ['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado']].map(([est, label]) => {
-      let list = all.filter(t => (t.estado || 'pendiente') === est);
-      list.sort((a, b) => est === 'completado' ? String(b.updated_at || _d10(b.deadline) || '').localeCompare(String(a.updated_at || _d10(a.deadline) || '')) : (_wn(a).end || '9999').localeCompare(_wn(b).end || '9999'));
-      const total = list.length; if (est === 'completado') list = list.slice(0, 15);
-      return `<div class="kanban-col" data-kanban-status="${est}" ondragover="MyWorkModule._dragOver(event)" ondragleave="MyWorkModule._dragLeave(event)" ondrop="MyWorkModule._drop(event,'${est}')">
-        <div class="kanban-col__head" data-status="${est}"><div class="kanban-col__title"><span class="kanban-col__dot"></span>${label}<span class="kanban-count">${total}</span></div></div>
-        <div class="kanban-cards">${list.map(t => _kcard(t, byId)).join('') || '<div class="kanban-empty">Sin tareas</div>'}${est === 'completado' && total > 15 ? `<div class="kanban-empty">+ ${total - 15} completadas más</div>` : ''}</div></div>`;
+    const byId = _byId(), all = _mineAll().filter(t => _group !== 'estado' || ['pendiente', 'en_progreso', 'bloqueado', 'completado'].includes(t.estado || 'pendiente'));
+    const key = _GROUPS[_group][1];
+    if (_group === 'estado') _gcols = [['bloqueado', 'Bloqueado'], ['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado']];
+    else if (_group === 'prioridad') _gcols = [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja']];
+    else _gcols = [...new Set(all.map(key))].sort((a, b) => a.localeCompare(b, 'es')).map(v => [v, v]);
+    const cols = _gcols.map(([val, label], ci) => {
+      let list = all.filter(t => key(t) === val);
+      list.sort((a, b) => val === 'completado' ? String(b.updated_at || _d10(b.deadline) || '').localeCompare(String(a.updated_at || _d10(a.deadline) || '')) : (_wn(a).end || '9999').localeCompare(_wn(b).end || '9999'));
+      const total = list.length; if (val === 'completado') list = list.slice(0, 15);
+      return `<div class="kanban-col" data-kanban-status="${_group === 'estado' ? val : ''}" ondragover="MyWorkModule._dragOver(event)" ondragleave="MyWorkModule._dragLeave(event)" ondrop="MyWorkModule._drop(event,${ci})">
+        <div class="kanban-col__head" ${_group === 'estado' ? `data-status="${val}"` : ''}><div class="kanban-col__title">${_group === 'estado' ? '<span class="kanban-col__dot"></span>' : ''}<span class="mw-kcol-t" title="${esc(label)}">${esc(label)}</span><span class="kanban-count">${total}</span></div></div>
+        <div class="kanban-cards">${list.map(t => _kcard(t, byId)).join('') || '<div class="kanban-empty">Sin tareas</div>'}${val === 'completado' && total > 15 ? `<div class="kanban-empty">+ ${total - 15} completadas más</div>` : ''}</div></div>`;
     }).join('');
-    wrap.innerHTML = `<div class="kanban-board mw-kb">${cols}</div>`;
+    const sel = Object.entries(_GROUPS).map(([k, g]) => `<option value="${k}"${k === _group ? ' selected' : ''}>${g[0]}</option>`).join('');
+    wrap.innerHTML = `<div class="mw-gb"><label>Agrupar por <select onchange="MyWorkModule.setGroup(this.value)">${sel}</select></label>${_group === 'estado' || _group === 'prioridad' ? '<span>Arrastra una tarjeta para cambiar su ' + _GROUPS[_group][0].toLowerCase() + '</span>' : ''}</div><div class="kanban-board mw-kb">${cols}</div>`;
   }
   // El menú, el panel y los selectores son los de Tareas: se le entrega la misma lista de tareas (compartida) y avisa de vuelta cuando algo cambia.
   function _adoptTT() { try { TasksModule._adopt(_tasks); } catch (e) { console.error('[mywork] adopt:', e); } }
   function openCardMenu(ev, id) { ev.preventDefault(); ev.stopPropagation(); _adoptTT(); TasksModule.openKanbanMenu(ev, id); }
-  function openCard(id) { _adoptTT(); TasksModule.openDrawer(id); }
+  function openCard(id) { _adoptTT(); document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
   function _fromTasks(arr) { if (arr && arr !== _tasks) _tasks = arr; render(); }
 
   // ── Filtros estilo Notion (propiedad · es / no es · valores) + búsqueda ──
@@ -12032,6 +12041,23 @@ const MyWorkModule = (() => {
   function toggleVal(i, k, on) { const f = _filters[i]; if (!f) return; const v = _FPROPS[f.prop].vals()[k][0]; f.vals = on ? [...new Set([...f.vals, v])] : f.vals.filter(x => x !== v); render(); }
   function setOp(i, op) { const f = _filters[i]; if (!f) return; f.op = op; const r = _pop && _pop.getBoundingClientRect(); render(); if (r) { const a = document.createElement('span'); a.style.cssText = `position:fixed;left:${r.left}px;top:${r.top - 6}px;width:1px;height:1px`; document.body.appendChild(a); _showVals(i, a); a.remove(); } }
 
+  // ── Carga de trabajo: horas estimadas por día de entrega frente a una jornada de 8 h ──
+  function _renderCarga(wrap) {
+    const today = _localISO(), tN = _dayN(today), CAP = 480, items = _mineAll().filter(t => _open(t));
+    const days = []; for (let i = 0; i < 14; i++) days.push(_isoN(tN + i));
+    const dueOf = t => _wn(t).end || '';
+    const atras = items.filter(t => dueOf(t) && dueOf(t) < today), sinFecha = items.filter(t => !dueOf(t));
+    const mins = a => a.reduce((s, t) => s + (t.duracion_est_min || 0), 0), unest = a => a.filter(t => !t.duracion_est_min).length;
+    const colHtml = (title, sub, arr, cls) => { const m = mins(arr), pct = Math.min(100, Math.round(m / CAP * 100));
+      return `<div class="mw-ld ${cls || ''}${m > CAP ? ' is-over' : ''}"><div class="mw-ld__h"><b>${title}</b><span>${sub}</span></div>
+        <div class="mw-ld__bar"><i style="height:${pct}%"></i></div><div class="mw-ld__m">${m ? _fmtEst(m) : '—'}${m > CAP ? ' ⚠' : ''}</div>
+        <div class="mw-ld__l">${arr.slice(0, 6).map(t => `<span title="${esc(t.titulo)}" onclick="MyWorkModule.openCard(${t.id})">${esc(t.titulo)}${t.duracion_est_min ? ` <em>${_fmtEst(t.duracion_est_min)}</em>` : ''}</span>`).join('')}${arr.length > 6 ? `<small>+${arr.length - 6} más</small>` : ''}</div>
+        ${unest(arr) ? `<div class="mw-ld__u">${unest(arr)} sin estimar</div>` : ''}</div>`; };
+    const dayCols = days.map(d => { const dt = new Date(d + 'T00:00:00'); return colHtml(dt.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' }), d === today ? 'Hoy' : dt.toLocaleDateString('es-ES', { month: 'short' }), items.filter(t => dueOf(t) === d), d === today ? 'is-today' : ([0, 6].includes(dt.getDay()) ? 'is-we' : '')); }).join('');
+    wrap.innerHTML = `<div class="mw-ld-note">Suma la <b>duración estimada</b> de tus tareas por día de entrega. Barra llena = una jornada de 8 h. Define el estimado en el detalle de la tarea.</div>
+      <div class="mw-ld-grid">${colHtml('Atrasadas', 'antes de hoy', atras, 'is-late')}${dayCols}${colHtml('Sin fecha', 'sin programar', sinFecha, 'is-none')}</div>`;
+  }
+
   // ── Calendario (mes) ──
   function calNav(d) { const a = (_calMonth || _localISO().slice(0, 7)).split('-').map(Number); const n = new Date(a[0], a[1] - 1 + d, 1); _calMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; render(); }
   function calToday() { _calMonth = _localISO().slice(0, 7); _calDay = _localISO(); render(); }
@@ -12090,7 +12116,7 @@ const MyWorkModule = (() => {
     const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
   }
 
-  return { load, render, setView, openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
+  return { load, render, setView, setGroup, openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================
@@ -12858,6 +12884,17 @@ const AnalyticsModule = (() => {
 // TASKS MODULE
 // =================================================================
 
+// Insignias de tarjeta: etiquetas, avance del checklist y duración estimada (compartido por los Kanban).
+const _fmtEst = m => !m ? '' : (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm');
+const _tagHue = tx => { let h = 0; for (const c of String(tx)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const _tagChip = tx => `<span class="tg-chip" style="--h:${_tagHue(tx)}">${esc(tx)}</span>`;
+function _taskBadgesHtml(t) {
+  const tags = Array.isArray(t.etiquetas) ? t.etiquetas : [], cls = Array.isArray(t.checklists) ? t.checklists : [];
+  let tot = 0, done = 0; cls.forEach(c => (c.items || []).forEach(i => { tot++; if (i.hecho) done++; }));
+  if (!tags.length && !tot && !t.duracion_est_min) return '';
+  return `<div class="kc-badges">${tags.slice(0, 3).map(_tagChip).join('')}${tags.length > 3 ? `<span class="tg-more">+${tags.length - 3}</span>` : ''}${tot ? `<span class="kc-bdg${done === tot ? ' is-done' : ''}" title="Checklist">☑ ${done}/${tot}</span>` : ''}${t.duracion_est_min ? `<span class="kc-bdg" title="Duración estimada">⏱ ${_fmtEst(t.duracion_est_min)}</span>` : ''}</div>`;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Etiquetas @Miembro en comentarios, notas y descripción de tareas (el servidor notifica por campana y correo).
 // ═══════════════════════════════════════════════════════════════
@@ -13543,6 +13580,8 @@ const TasksModule = (() => {
                         onblur="TasksModule._tdSaveField(${id},'notas',this.value)">${esc(t.notas || '')}</textarea>
             </div>
 
+            <div class="tskd__block" id="tskd-ck">${_tdCkHtml(t)}</div>
+
             <div class="tskd__block">
               <div class="tskd__lbl-row">
                 <span class="tskd__lbl">Subtareas</span>
@@ -13596,6 +13635,15 @@ const TasksModule = (() => {
                   <span class="task-elapsed" data-timer-display="${id}" hidden></span>
                   ${_timerBtn(id)}
                 </div>
+              </div>
+              <div class="tskd__field">
+                <div class="tskd__lbl">Duración estimada</div>
+                <input class="tskd__est" id="tskd-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="ej. 2h 30m"
+                       onblur="TasksModule._tdEst(${id},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+              </div>
+              <div class="tskd__field">
+                <div class="tskd__lbl">Etiquetas</div>
+                <div id="tskd-tags">${_tdTagsHtml(t)}</div>
               </div>
               <button class="btn btn--ghost btn--sm tskd__edit-btn" onclick="TasksModule.openDrawer(${id})">Editar detalles</button>
             </div>
@@ -13665,6 +13713,63 @@ const TasksModule = (() => {
       showBanner('No se pudo guardar. Reintenta.', 'error');
     }
   }
+
+  // ── Etiquetas · duración estimada · checklists de la tarea ──
+  function _tdParseEst(v) {
+    v = String(v || '').trim().toLowerCase().replace(',', '.'); if (!v) return null;
+    let m = /^(\d+(?:\.\d+)?)\s*h(?:\s*(\d+)\s*m?)?$/.exec(v); if (m) return Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0));
+    m = /^(\d+)\s*m(?:in)?$/.exec(v); if (m) return +m[1];
+    m = /^\d+(?:\.\d+)?$/.exec(v); if (m) return Math.round(parseFloat(v) * 60);
+    return NaN;
+  }
+  function _tdTagsHtml(t) {
+    const id = t.id, tags = Array.isArray(t.etiquetas) ? t.etiquetas : [];
+    return `<div class="tg-row">${tags.map((x, i) => `<span class="tg-chip" style="--h:${_tagHue(x)}">${esc(x)}<button type="button" title="Quitar" onclick="TasksModule._tdTagDel(${id},${i})">×</button></span>`).join('')}<input class="tg-in" placeholder="${tags.length ? '+' : '+ etiqueta'}" maxlength="30" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();TasksModule._tdTagAdd(${id},this)}" onblur="TasksModule._tdTagAdd(${id},this)"></div>`;
+  }
+  function _tdCkHtml(t) {
+    const id = t.id, cls = Array.isArray(t.checklists) ? t.checklists : [];
+    const lists = cls.map((c, ci) => {
+      const its = c.items || [], done = its.filter(i => i.hecho).length, pct = its.length ? Math.round(done / its.length * 100) : 0;
+      return `<div class="ck">
+        <div class="ck__hd"><input class="ck__title" value="${esc(c.titulo)}" onblur="TasksModule._tdCkTitle(${id},${ci},this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"><span class="ck__n">${done}/${its.length}</span><button type="button" class="ck__x" title="Eliminar lista" onclick="TasksModule._tdCkDel(${id},${ci})">×</button></div>
+        ${its.length ? `<div class="tskd__subs-bar"><div class="tskd__subs-fill" style="width:${pct}%"></div></div>` : ''}
+        ${its.map((i, ii) => `<div class="ck__it${i.hecho ? ' is-done' : ''}"><input type="checkbox" ${i.hecho ? 'checked' : ''} onchange="TasksModule._tdCkToggle(${id},${ci},${ii})"><span>${esc(i.texto)}</span><button type="button" class="ck__x" title="Quitar" onclick="TasksModule._tdCkItemDel(${id},${ci},${ii})">×</button></div>`).join('')}
+        <input class="ck__add" placeholder="+ Agregar elemento…" onkeydown="if(event.key==='Enter'){event.preventDefault();TasksModule._tdCkItemAdd(${id},${ci},this)}">
+      </div>`;
+    }).join('');
+    return `<div class="tskd__lbl-row"><span class="tskd__lbl">Checklist</span></div>${lists}<button type="button" class="tskd__add-sub" onclick="TasksModule._tdCkNew(${id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Crear lista de control</button>`;
+  }
+  function _tdRepaint(id) {
+    const t = _tasks.find(x => x.id === id); if (!t) return;
+    const a = $('tskd-ck'), b = $('tskd-tags'); if (a) a.innerHTML = _tdCkHtml(t); if (b) b.innerHTML = _tdTagsHtml(t);
+    try { _notifyMW(); } catch (_) {}
+  }
+  async function _tdExtra(id, patch) {
+    const t = _tasks.find(x => x.id === id); if (!t) return false;
+    const prev = {}; Object.keys(patch).forEach(k => { prev[k] = t[k]; }); Object.assign(t, patch);
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/extras`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error ' + r.status);
+      return true;
+    } catch (e) { Object.assign(t, prev); showBanner('No se pudo guardar: ' + e.message, 'error'); return false; }
+    finally { _tdRepaint(id); }
+  }
+  const _ckClone = t => JSON.parse(JSON.stringify(t.checklists || []));
+  const _taskOf = id => _tasks.find(x => x.id === id);
+  function _tdTagAdd(id, inp) { const v = inp.value.replace(/,/g, '').trim(); inp.value = ''; const t = _taskOf(id); if (!v || !t) return; const tags = [...(t.etiquetas || [])]; if (tags.some(x => x.toLowerCase() === v.toLowerCase())) return; tags.push(v); _tdExtra(id, { etiquetas: tags }); }
+  function _tdTagDel(id, i) { const t = _taskOf(id); if (!t) return; const tags = [...(t.etiquetas || [])]; tags.splice(i, 1); _tdExtra(id, { etiquetas: tags }); }
+  function _tdEst(id, inp) {
+    const m = _tdParseEst(inp.value), t = _taskOf(id); if (!t) return;
+    if (Number.isNaN(m)) { showBanner('Escribe la duración así: 90m, 2h o 1h 30m', 'error'); inp.value = _fmtEst(t.duracion_est_min); return; }
+    if ((t.duracion_est_min || null) === m) { inp.value = _fmtEst(m); return; }
+    _tdExtra(id, { duracion_est_min: m }).then(() => { inp.value = _fmtEst(m); });
+  }
+  function _tdCkNew(id) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c.push({ id: 'c' + Date.now().toString(36), titulo: 'Checklist', items: [] }); _tdExtra(id, { checklists: c }).then(() => { const el = document.querySelectorAll('#tskd-ck .ck__add'); el[el.length - 1]?.focus(); }); }
+  function _tdCkDel(id, ci) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c.splice(ci, 1); _tdExtra(id, { checklists: c }); }
+  function _tdCkTitle(id, ci, v) { const t = _taskOf(id); if (!t || !t.checklists[ci] || t.checklists[ci].titulo === v.trim()) return; const c = _ckClone(t); c[ci].titulo = v.trim() || 'Checklist'; _tdExtra(id, { checklists: c }); }
+  function _tdCkItemAdd(id, ci, inp) { const v = inp.value.trim(); if (!v) return; const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items.push({ id: 'i' + Date.now().toString(36), texto: v, hecho: false }); inp.value = ''; _tdExtra(id, { checklists: c }).then(() => { const el = document.querySelectorAll('#tskd-ck .ck__add')[ci]; el && el.focus(); }); }
+  function _tdCkToggle(id, ci, ii) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items[ii].hecho = !c[ci].items[ii].hecho; _tdExtra(id, { checklists: c }); }
+  function _tdCkItemDel(id, ci, ii) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items.splice(ii, 1); _tdExtra(id, { checklists: c }); }
 
   async function _tdLoadComments(id, silent) {
     const box = $('tskd-chat-msgs');
@@ -14201,6 +14306,7 @@ const TasksModule = (() => {
         </div>
       </div>
       ${(t.project_nombre || t.client_nombre) ? `<div class="kc-meta">${t.project_nombre ? `<span class="kc-project" title="${esc(t.project_nombre)}">${esc(t.project_nombre)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
+      ${_taskBadgesHtml(t)}
       <div class="kc-foot">
         <span class="kc-prio kc-prio--${prio}">${prioLabel}</span>
         ${dlFmt ? `<span class="kc-dl${isOverdue ? ' kc-dl--ov' : ''}">
@@ -15695,6 +15801,7 @@ const TasksModule = (() => {
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
+    _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
     openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,

@@ -1999,6 +1999,38 @@ app.delete('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
 // =================================================================
 
 // ── GET /api/mgmt/tasks ───────────────────────────────────────────
+// ── PATCH /api/mgmt/tasks/:id/extras — etiquetas, duración estimada y checklists (sólo las claves enviadas) ──
+app.patch('/api/mgmt/tasks/:id/extras', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10), b = req.body || {}, sets = [], vals = [];
+  if (!id) return res.status(400).json({ error: 'Tarea inválida' });
+  const txt = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  if ('etiquetas' in b) {
+    const seen = new Set(), tags = [];
+    for (const t of (Array.isArray(b.etiquetas) ? b.etiquetas : [])) { const x = txt(t, 30); if (x && !seen.has(x.toLowerCase()) && tags.length < 12) { seen.add(x.toLowerCase()); tags.push(x); } }
+    vals.push(JSON.stringify(tags)); sets.push(`etiquetas = $${vals.length}::jsonb`);
+  }
+  if ('duracion_est_min' in b) {
+    const n = b.duracion_est_min === null || b.duracion_est_min === '' ? null : Math.round(Number(b.duracion_est_min));
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 600000)) return res.status(400).json({ error: 'Duración inválida' });
+    vals.push(n); sets.push(`duracion_est_min = $${vals.length}`);
+  }
+  if ('checklists' in b) {
+    const cls = (Array.isArray(b.checklists) ? b.checklists : []).slice(0, 20).map((c, i) => ({
+      id: txt(c && c.id, 24) || ('c' + Date.now().toString(36) + i),
+      titulo: txt(c && c.titulo, 120) || 'Checklist',
+      items: (Array.isArray(c && c.items) ? c.items : []).slice(0, 100).map((it, j) => ({ id: txt(it && it.id, 24) || ('i' + Date.now().toString(36) + j), texto: txt(it && it.texto, 300), hecho: !!(it && it.hecho) })).filter(it => it.texto),
+    }));
+    vals.push(JSON.stringify(cls)); sets.push(`checklists = $${vals.length}::jsonb`);
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+  try {
+    vals.push(id, req.workspaceOwnerId);
+    const { rows } = await pool.query(`UPDATE tasks SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id, etiquetas, duracion_est_min, checklists`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
