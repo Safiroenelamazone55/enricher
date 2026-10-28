@@ -11735,7 +11735,7 @@ const MyWorkModule = (() => {
     const mine = _me ? _tasks.filter(t =>
       (t.responsables || []).some(r => (r || '').toLowerCase() === _me) ||
       (t.responsable  || '').toLowerCase() === _me
-    ) : [];
+    ).filter(_passes) : [];
     const active = mine.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada);
     // Un padre con subtareas es un contenedor: el trabajo real está en sus
     // subtareas, no cuenta como tarea propia (mismo criterio que Dashboard).
@@ -11852,7 +11852,8 @@ const MyWorkModule = (() => {
     return `${esc(p.slice(0, -1).join(' · '))}<span class="d3-task-meta__b"> · ${esc(p[p.length - 1])}</span>`;
   }
   // Mis tareas y subtareas (sin los contenedores) — incluye completadas; cada vista filtra lo que necesita.
-  function _mineAll() {
+  const _mineAll = () => _mineRaw().filter(_passes);
+  function _mineRaw() {
     const me = _meN(); if (!me) return [];
     const parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
     return _tasks.filter(t => !t.archivada && ((t.responsables || []).some(r => (r || '').toLowerCase() === me) || (t.responsable || '').toLowerCase() === me) && (!!t.parent_task_id || !parentIds.has(t.id)));
@@ -11872,7 +11873,7 @@ const MyWorkModule = (() => {
   }
   function setView(v) { if (!_VIEWS.some(x => x[0] === v)) return; _view = v; try { localStorage.setItem('nova_mw_view', v); } catch (_) {} render(); }
   function render() {
-    _paintViews();
+    _paintViews(); _paintFilters();
     const wrap = $('mywork-list'); if (!wrap) return;
     const body = wrap.closest('.mw-body'); if (body) body.classList.toggle('mw-wide', _view !== 'lista');
     wrap.classList.toggle('mw-card--plain', _view === 'kanban');
@@ -11895,7 +11896,7 @@ const MyWorkModule = (() => {
   function toggleDone() { _showDone = !_showDone; render(); }
   function _renderTabla(wrap) {
     const byId = _byId(), PR = { alta: 0, media: 1, baja: 2 }, EST = ['bloqueado', 'en_progreso', 'pendiente', 'completado', 'cancelado'];
-    const items = _mineAll().filter(t => _showDone || _open(t));
+    const items = _mineAll().filter(t => _showDone || _open(t) || _wantsClosed());
     const key = { titulo: t => _nrm(t.titulo), proyecto: t => _nrm(t.project_nombre), cliente: t => _nrm(t.client_nombre), prioridad: t => PR[t.prioridad] ?? 1, inicio: t => _wn(t).start || '9999', vence: t => _wn(t).end || '9999', estado: t => EST.indexOf(t.estado || 'pendiente') }[_sortKey];
     items.sort((a, b) => { const x = key(a), y = key(b); return ((x < y ? -1 : x > y ? 1 : 0) * _sortDir) || _nrm(a.titulo).localeCompare(_nrm(b.titulo)); });
     const th = (k, l, cls) => `<th class="${cls || ''}" onclick="MyWorkModule.sortBy('${k}')" title="Ordenar">${l}${_sortKey === k ? `<i class="mw-sort">${_sortDir > 0 ? '▲' : '▼'}</i>` : ''}</th>`;
@@ -11914,29 +11915,112 @@ const MyWorkModule = (() => {
         : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
   }
 
-  // ── Kanban (arrastra una tarjeta a otra columna para cambiar su estado) ──
-  const _KCOLS = [['pendiente', 'Pendiente', '#B4AFA8'], ['en_progreso', 'En progreso', '#4F6BF0'], ['bloqueado', 'Bloqueado', '#EF4444'], ['completado', 'Completado', '#22C55E']];
-  function _dragStart(ev, id) { ev.dataTransfer.setData('text/plain', String(id)); ev.dataTransfer.effectAllowed = 'move'; ev.currentTarget.classList.add('is-drag'); }
-  function _dragEnd(ev) { ev.currentTarget.classList.remove('is-drag'); document.querySelectorAll('.mw-kcol.is-over').forEach(c => c.classList.remove('is-over')); }
-  function _dragOver(ev) { ev.preventDefault(); ev.currentTarget.classList.add('is-over'); }
-  function _dragLeave(ev) { ev.currentTarget.classList.remove('is-over'); }
-  function _drop(ev, estado) { ev.preventDefault(); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); document.querySelectorAll('.mw-kcol.is-over').forEach(c => c.classList.remove('is-over')); if (id) _setStatus(id, estado); }
+  // ── Kanban (mismo estilo y menú que Tareas; arrastra una tarjeta para cambiar su estado) ──
+  function _kcard(t, byId) {
+    const p = t.parent_task_id ? byId.get(t.parent_task_id) : null;
+    const prio = t.prioridad || 'media', prioLabel = { urgente: 'Urgente', alta: 'Alta', media: 'Media', baja: 'Baja' }[prio] || prio;
+    const w = _wn(t), dl = w.end, ov = _vencida(t);
+    const dlFmt = dl ? (() => { const d = new Date(dl + 'T00:00:00'); return `${d.getDate()} ${['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][d.getMonth()]}`; })() : null;
+    const ctx = [p && p.titulo, t.project_nombre].filter(Boolean).join(' · ');
+    const resp = t.responsables && t.responsables.length ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const who = resp.slice(0, 2).map(r => `<span class="kc-who" title="${esc(r)}">${esc(r.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase())}</span>`).join('');
+    return `<div class="kanban-card" data-task-id="${t.id}" draggable="true" onclick="MyWorkModule.openCard(${t.id})" oncontextmenu="MyWorkModule.openCardMenu(event,${t.id})" ondragstart="MyWorkModule._dragStart(event,${t.id})" ondragend="MyWorkModule._dragEnd(event)">
+      <div class="kc-hdr"><span class="kc-title">${esc(t.titulo)}</span>
+        <div class="kc-hdr-actions"><span class="kc-elapsed task-elapsed" data-timer-display="${t.id}" hidden></span>
+          <button class="tt-task-play-btn tt-play--kc" data-timer-task="${t.id}" draggable="false" title="Iniciar seguimiento" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+          <button class="kc-menu-btn" title="Opciones" onclick="MyWorkModule.openCardMenu(event,${t.id})"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button></div></div>
+      ${(ctx || t.client_nombre) ? `<div class="kc-meta">${ctx ? `<span class="kc-project" title="${esc(ctx)}">${esc(ctx)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
+      <div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
+  }
   function _renderKanban(wrap) {
     const byId = _byId(), all = _mineAll().filter(t => ['pendiente', 'en_progreso', 'bloqueado', 'completado'].includes(t.estado || 'pendiente'));
-    const cols = _KCOLS.map(([est, label, color]) => {
+    const cols = [['bloqueado', 'Bloqueado'], ['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado']].map(([est, label]) => {
       let list = all.filter(t => (t.estado || 'pendiente') === est);
       list.sort((a, b) => est === 'completado' ? String(b.updated_at || _d10(b.deadline) || '').localeCompare(String(a.updated_at || _d10(a.deadline) || '')) : (_wn(a).end || '9999').localeCompare(_wn(b).end || '9999'));
       const total = list.length; if (est === 'completado') list = list.slice(0, 15);
-      const cards = list.map(t => `<div class="mw-kcard${_vencida(t) ? ' is-overdue' : ''}" draggable="true" data-task-id="${t.id}" ondragstart="MyWorkModule._dragStart(event,${t.id})" ondragend="MyWorkModule._dragEnd(event)">
-          <div class="mw-kcard__t">${esc(t.titulo)}</div>
-          <div class="d3-task-meta mw-kcard__m">${_metaHtml(_ctxArr(t, byId))}</div>
-          <div class="mw-kcard__f">${_dateBtn(t, _dateTxt(t))}<span class="mw-kcard__sp"></span>${_prioBtn(t)}${_playBtn(t)}</div></div>`).join('');
-      return `<div class="mw-kcol" ondragover="MyWorkModule._dragOver(event)" ondragleave="MyWorkModule._dragLeave(event)" ondrop="MyWorkModule._drop(event,'${est}')">
-        <div class="mw-kcol__h"><i style="background:${color}"></i>${label}<b>${total}</b></div>
-        <div class="mw-kcol__b">${cards || '<div class="mw-kempty">Arrastra tareas aquí</div>'}${est === 'completado' && total > 15 ? `<div class="mw-kempty">+ ${total - 15} completadas más</div>` : ''}</div></div>`;
+      return `<div class="kanban-col" data-kanban-status="${est}" ondragover="MyWorkModule._dragOver(event)" ondragleave="MyWorkModule._dragLeave(event)" ondrop="MyWorkModule._drop(event,'${est}')">
+        <div class="kanban-col__head" data-status="${est}"><div class="kanban-col__title"><span class="kanban-col__dot"></span>${label}<span class="kanban-count">${total}</span></div></div>
+        <div class="kanban-cards">${list.map(t => _kcard(t, byId)).join('') || '<div class="kanban-empty">Sin tareas</div>'}${est === 'completado' && total > 15 ? `<div class="kanban-empty">+ ${total - 15} completadas más</div>` : ''}</div></div>`;
     }).join('');
-    wrap.innerHTML = `<div class="mw-kanban">${cols}</div>`;
+    wrap.innerHTML = `<div class="kanban-board mw-kb">${cols}</div>`;
   }
+  // El menú, el panel y los selectores son los de Tareas: se le entrega la misma lista de tareas (compartida) y avisa de vuelta cuando algo cambia.
+  function _adoptTT() { try { TasksModule._adopt(_tasks); } catch (e) { console.error('[mywork] adopt:', e); } }
+  function openCardMenu(ev, id) { ev.preventDefault(); ev.stopPropagation(); _adoptTT(); TasksModule.openKanbanMenu(ev, id); }
+  function openCard(id) { _adoptTT(); TasksModule.openDrawer(id); }
+  function _fromTasks(arr) { if (arr && arr !== _tasks) _tasks = arr; render(); }
+
+  // ── Filtros estilo Notion (propiedad · es / no es · valores) + búsqueda ──
+  let _filters = [], _q = '';
+  const _uniq = f => [...new Set(_mineRaw().map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')).map(v => [v, v]);
+  const _weekRange = () => { const n = new Date(), d = (n.getDay() + 6) % 7, f = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; return [f(new Date(n.getFullYear(), n.getMonth(), n.getDate() - d)), f(new Date(n.getFullYear(), n.getMonth(), n.getDate() - d + 6))]; };
+  const _FPROPS = {
+    estado: { label: 'Estado', vals: () => [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['bloqueado', 'Bloqueado'], ['completado', 'Completado'], ['cancelado', 'Cancelado']], get: t => [t.estado || 'pendiente'] },
+    prioridad: { label: 'Prioridad', vals: () => [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja']], get: t => [t.prioridad || 'media'] },
+    proyecto: { label: 'Proyecto', vals: () => _uniq(t => t.project_nombre), get: t => [t.project_nombre || ''] },
+    cliente: { label: 'Cliente', vals: () => _uniq(t => t.client_nombre), get: t => [t.client_nombre || ''] },
+    fecha: { label: 'Fecha', vals: () => [['vencidas', 'Vencidas'], ['hoy', 'Hoy'], ['semana', 'Esta semana'], ['sin_fecha', 'Sin fecha']], get: t => {
+      const w = _wn(t), today = _localISO(), [a, b] = _weekRange(), k = [];
+      if (!w.end) return ['sin_fecha'];
+      if (_vencida(t)) k.push('vencidas');
+      if (w.start <= today && today <= w.end) k.push('hoy');
+      if (w.start <= b && w.end >= a) k.push('semana');
+      return k;
+    } },
+  };
+  const _FICON = { estado: '◔', prioridad: '⚑', proyecto: '▣', cliente: '◉', fecha: '▤' };
+  function _passes(t) {
+    if (_q) { const h = _nrm([t.titulo, t.project_nombre, t.client_nombre].join(' ')); if (!_q.split(/\s+/).every(w => h.includes(w))) return false; }
+    return _filters.every(f => { if (!f.vals.length) return true; const hit = _FPROPS[f.prop].get(t).some(v => f.vals.includes(v)); return f.op === 'not' ? !hit : hit; });
+  }
+  const _wantsClosed = () => _filters.some(f => f.prop === 'estado' && f.op === 'is' && f.vals.some(v => v === 'completado' || v === 'cancelado'));
+  function setQ(v) { _q = _nrm(v).trim(); render(); }
+  function _paintFilters() {
+    const box = $('mywork-fchips'); if (!box) return;
+    box.innerHTML = _filters.map((f, i) => {
+      const P = _FPROPS[f.prop], m = new Map(P.vals());
+      const txt = f.vals.length ? f.vals.map(v => m.get(v) || v).join(', ') : 'elegir…';
+      return `<span class="mw-fchip"><button class="mw-fchip__b" onclick="MyWorkModule.openFilter(event,${i})"><span class="mw-fchip__p">${P.label}</span><span class="mw-fchip__o">${f.op === 'not' ? 'no es' : 'es'}</span><span class="mw-fchip__v">${esc(txt)}</span></button><button class="mw-fchip__x" title="Quitar filtro" onclick="MyWorkModule.removeFilter(${i})">×</button></span>`;
+    }).join('') + (_filters.length || _q ? `<button class="mw-fclear" onclick="MyWorkModule.clearFilters()">Limpiar</button>` : '');
+    const c = $('mywork-fcount'); if (c) c.textContent = (_filters.length || _q) ? `${_mineAll().length} de ${_mineRaw().length}` : '';
+  }
+  function removeFilter(i) { _filters.splice(i, 1); _closePop(); render(); }
+  function clearFilters() { _filters = []; _q = ''; const i = $('mw-q'); if (i) i.value = ''; _closePop(); render(); }
+  let _pop = null, _popOff = null;
+  function _closePop() { if (_pop) { _pop.remove(); _pop = null; } if (_popOff) { document.removeEventListener('mousedown', _popOff, true); _popOff = null; } }
+  function _openPop(anchor, html) {
+    _closePop();
+    const p = document.createElement('div'); p.className = 'mw-pop'; p.innerHTML = html; document.body.appendChild(p); _pop = p;
+    const r = anchor.getBoundingClientRect(); let left = r.left, top = r.bottom + 6;
+    if (left + p.offsetWidth > innerWidth - 8) left = Math.max(8, innerWidth - p.offsetWidth - 8);
+    if (top + p.offsetHeight > innerHeight - 8) top = Math.max(8, r.top - p.offsetHeight - 6);
+    p.style.left = left + 'px'; p.style.top = top + 'px';
+    _popOff = ev => { if (!p.contains(ev.target)) _closePop(); };
+    setTimeout(() => document.addEventListener('mousedown', _popOff, true), 0);
+    return p;
+  }
+  function openFilterAdd(ev) {
+    ev.stopPropagation();
+    _openPop(ev.currentTarget, `<div class="mw-pop__h">Filtrar por</div>${Object.entries(_FPROPS).map(([k, P]) => `<button class="mw-pop__i" onclick="MyWorkModule.openQuick(event,'${k}')"><span class="mw-pop__ic">${_FICON[k]}</span>${P.label}</button>`).join('')}`);
+  }
+  function openFilter(ev, i) { ev.stopPropagation(); _showVals(i, ev.currentTarget); }
+  function openQuick(ev, prop) {
+    ev.stopPropagation(); let i = _filters.findIndex(f => f.prop === prop);
+    if (i < 0) { _filters.push({ prop, op: 'is', vals: [] }); i = _filters.length - 1; }
+    const anchor = (_pop ? document.querySelector('.mw-fadd') : null) || ev.currentTarget; _showVals(i, anchor);
+  }
+  function _showVals(i, anchor) {
+    const f = _filters[i]; if (!f) return; const P = _FPROPS[f.prop];
+    const counts = {}; _mineRaw().forEach(t => P.get(t).forEach(v => { counts[v] = (counts[v] || 0) + 1; }));
+    const opts = P.vals();
+    const body = opts.map(([v, l], k) => `<label class="mw-pop__o" data-k="${k}" data-l="${esc(_nrm(l))}"><input type="checkbox" ${f.vals.includes(v) ? 'checked' : ''} onchange="MyWorkModule.toggleVal(${i},${k},this.checked)"><span>${esc(l)}</span><b>${counts[v] || 0}</b></label>`).join('') || '<div class="mw-pop__e">Sin valores</div>';
+    _openPop(anchor, `<div class="mw-pop__h">${P.label}<span class="mw-seg"><button class="${f.op === 'is' ? 'on' : ''}" onclick="MyWorkModule.setOp(${i},'is')">es</button><button class="${f.op === 'not' ? 'on' : ''}" onclick="MyWorkModule.setOp(${i},'not')">no es</button></span></div>
+      ${opts.length > 7 ? `<input class="mw-pop__q" placeholder="Buscar…" oninput="MyWorkModule._popSearch(this.value)">` : ''}<div class="mw-pop__l">${body}</div>
+      <button class="mw-pop__i mw-pop__i--del" onclick="MyWorkModule.removeFilter(${i})">Quitar filtro</button>`);
+  }
+  function _popSearch(v) { const q = _nrm(v); _pop && _pop.querySelectorAll('.mw-pop__o').forEach(el => { el.style.display = el.dataset.l.includes(q) ? '' : 'none'; }); }
+  function toggleVal(i, k, on) { const f = _filters[i]; if (!f) return; const v = _FPROPS[f.prop].vals()[k][0]; f.vals = on ? [...new Set([...f.vals, v])] : f.vals.filter(x => x !== v); render(); }
+  function setOp(i, op) { const f = _filters[i]; if (!f) return; f.op = op; const r = _pop && _pop.getBoundingClientRect(); render(); if (r) { const a = document.createElement('span'); a.style.cssText = `position:fixed;left:${r.left}px;top:${r.top - 6}px;width:1px;height:1px`; document.body.appendChild(a); _showVals(i, a); a.remove(); } }
 
   // ── Calendario (mes) ──
   function calNav(d) { const a = (_calMonth || _localISO().slice(0, 7)).split('-').map(Number); const n = new Date(a[0], a[1] - 1 + d, 1); _calMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; render(); }
@@ -11996,7 +12080,7 @@ const MyWorkModule = (() => {
     const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
   }
 
-  return { load, render, setView, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
+  return { load, render, setView, openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================
@@ -12853,6 +12937,7 @@ const TasksModule = (() => {
   }
 
   function _applyView() {
+    _notifyMW();
     _hideAllViews();
     const toolbar   = $('tasks-list-toolbar');
     const estadoBtn = $('tasks-estado-btn');
@@ -12963,6 +13048,13 @@ const TasksModule = (() => {
     if (_currentView === 'kanban') _renderKanban();
     else render();
   }
+  // «Mi trabajo» comparte su lista de tareas con este módulo para reutilizar el menú/panel del Kanban; aquí se le avisa de los cambios.
+  function _notifyMW() { try { if (typeof MyWorkModule !== 'undefined' && MyWorkModule._fromTasks) MyWorkModule._fromTasks(_tasks); } catch (_) {} }
+  function _adopt(arr) {
+    if (Array.isArray(arr)) _tasks = arr;
+    if (!_teamMembers.length) apiFetch(`${API}/mgmt/team`).then(r => r.ok ? r.json() : []).then(t => { if (t.length) _teamMembers = t; }).catch(() => {});
+  }
+  function _getTasks() { return _tasks; }
 
   // Subtareas activas de una tarea (el tiempo se mide en ellas, no en la tarea madre)
   function getSubtasks(id) { return _tasks.filter(t => t.parent_task_id === id && !t.archivada && t.estado !== 'cancelado'); }
@@ -13827,6 +13919,7 @@ const TasksModule = (() => {
   }
 
   function render() {
+    _notifyMW();
     const tbody     = $('tasks-tbody');
     const empty     = $('tasks-empty');
     const tableWrap = $('tasks-table-wrap');
@@ -14066,6 +14159,7 @@ const TasksModule = (() => {
     }
     _initKanbanDnD();
     TimerModule.syncButtons();
+    _notifyMW();
   }
 
   // ── D&D ────────────────────────────────────────────────────────────
@@ -15527,7 +15621,7 @@ const TasksModule = (() => {
   return {
     moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep, pickProject, clearPickedProject,
     copiarSemanaAnterior,
-    load, filter, setFilterMember, setFilterFecha, render,
+    load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
     openFilterMenu, toggleFilterOpt, clearFilter,

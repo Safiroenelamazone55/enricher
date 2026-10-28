@@ -18789,3 +18789,25 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cant-manual-done { background: #FFF3DC; color: #8A5A00; border: 1px solid #F2D9A0; padding: 7px 10px; font-size: .78rem; font-weight: 600; border-radius: 4px; }
 
 .cant-copy-row textarea[draggable="true"] { cursor: grab; }
+
+/* «Mi trabajo»: Kanban con las tarjetas de Tareas + filtros estilo Notion */
+.mw-kb { padding: 14px 0 28px; } .kanban-card.is-drag { opacity: .4; } .kanban-col.is-over { box-shadow: inset 0 0 0 2px #A7C8F5; }
+.mw-fbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 0 2px; }
+.mw-fsearch { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid #E4E0D9; border-radius: 6px; background: #fff; color: #8F8B83; min-width: 230px; }
+.mw-fsearch:focus-within { border-color: #A7C8F5; } .mw-fsearch input { border: 0; outline: 0; background: none; font: inherit; font-size: .78rem; color: #33302C; width: 100%; }
+.mw-fq, .mw-fadd, .mw-fclear { height: 30px; padding: 0 10px; border: 1px solid #E4E0D9; border-radius: 6px; background: #fff; font: inherit; font-size: .76rem; font-weight: 600; color: #4A4742; cursor: pointer; }
+.mw-fq i { font-style: normal; font-size: .65rem; color: #A19D95; margin-left: 2px; } .mw-fq:hover, .mw-fadd:hover { border-color: #C9C4BB; background: #FAF9F7; }
+.mw-fadd { border-style: dashed; color: #6C6862; } .mw-fclear { border: 0; background: none; color: #8F8B83; font-weight: 500; } .mw-fclear:hover { color: #C0574D; }
+.mw-fchips { display: contents; } .mw-fcount { font-size: .72rem; color: #A19D95; margin-left: 4px; }
+.mw-fchip { display: inline-flex; align-items: center; height: 30px; border: 1px solid #CFE0F8; background: #F2F8FF; border-radius: 6px; overflow: hidden; }
+.mw-fchip__b { display: inline-flex; align-items: center; gap: 5px; height: 100%; padding: 0 4px 0 9px; border: 0; background: none; font: inherit; font-size: .76rem; cursor: pointer; max-width: 340px; }
+.mw-fchip__p { font-weight: 700; color: #2F5BB7; } .mw-fchip__o { color: #7A9BD1; font-size: .7rem; } .mw-fchip__v { color: #33302C; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mw-fchip__x { border: 0; background: none; height: 100%; padding: 0 8px; color: #7A9BD1; font-size: .95rem; cursor: pointer; } .mw-fchip__x:hover { color: #C0574D; background: #E4EFFC; }
+.mw-pop { position: fixed; z-index: 9500; min-width: 230px; max-width: 320px; background: #fff; border: 1px solid #E4E0D9; border-radius: 8px; box-shadow: 0 8px 28px rgba(28,25,23,.14); padding: 6px; font-size: .78rem; }
+.mw-pop__h { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #8F8B83; }
+.mw-seg { display: inline-flex; border: 1px solid #E4E0D9; border-radius: 5px; overflow: hidden; text-transform: none; letter-spacing: 0; } .mw-seg button { border: 0; background: #fff; font: inherit; font-size: .72rem; padding: 2px 9px; cursor: pointer; color: #6C6862; } .mw-seg button.on { background: #EAF2FE; color: #2F5BB7; font-weight: 700; }
+.mw-pop__i { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; font: inherit; font-size: .8rem; color: #33302C; padding: 7px 8px; border-radius: 5px; cursor: pointer; text-align: left; } .mw-pop__i:hover { background: #F4F2EE; }
+.mw-pop__ic { width: 16px; text-align: center; color: #8F8B83; } .mw-pop__i--del { color: #C0574D; border-top: 1px solid #F0EDE8; border-radius: 0 0 5px 5px; margin-top: 4px; }
+.mw-pop__q { width: calc(100% - 8px); margin: 0 4px 4px; height: 28px; border: 1px solid #E4E0D9; border-radius: 5px; padding: 0 8px; font: inherit; font-size: .78rem; outline: 0; } .mw-pop__q:focus { border-color: #A7C8F5; }
+.mw-pop__l { max-height: 260px; overflow-y: auto; } .mw-pop__o { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; color: #33302C; } .mw-pop__o:hover { background: #F4F2EE; }
+.mw-pop__o span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mw-pop__o b { font-weight: 500; font-size: .7rem; color: #A19D95; } .mw-pop__e { padding: 10px; color: #A19D95; text-align: center; }

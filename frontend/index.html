@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026102613"/>
+  <link rel="stylesheet" href="style.css?v=2026102614"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -958,6 +958,14 @@
             <p class="pane-sub">Todo lo que tienes asignado, en cualquier proyecto o cliente</p>
           </div>
           <div class="mw-views" id="mywork-views"></div>
+        </div>
+        <div class="mw-fbar">
+          <label class="mw-fsearch"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input id="mw-q" type="search" placeholder="Buscar tarea, proyecto o cliente…" oninput="MyWorkModule.setQ(this.value)" autocomplete="off"></label>
+          <button type="button" class="mw-fq" onclick="MyWorkModule.openQuick(event,'proyecto')">Proyecto <i>▾</i></button>
+          <button type="button" class="mw-fq" onclick="MyWorkModule.openQuick(event,'cliente')">Cliente <i>▾</i></button>
+          <div class="mw-fchips" id="mywork-fchips"></div>
+          <button type="button" class="mw-fadd" onclick="MyWorkModule.openFilterAdd(event)">+ Filtro</button>
+          <span class="mw-fcount" id="mywork-fcount"></span>
         </div>
       </div>
       <div class="mw-body">
@@ -3517,7 +3525,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026102624"></script>
+<script src="app.js?v=2026102625"></script>
 <script src="worldclock.js?v=2"></script>
 <script src="agentes.js?v=3"></script>
 <script src="contenido.js?v=7"></script>
