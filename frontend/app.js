@@ -10951,9 +10951,28 @@ const DashboardModule = (() => {
       ${body}`;
   }
 
+  // Tarjetas extra del Dashboard (inspiradas en el Inicio de ClickUp): Prioridades y Recientes.
+  function _renderSideCards(allTasks) {
+    const pr = $('dash2-prio'), rc = $('dash2-recent'); if (!pr && !rc) return;
+    const me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase(), today = _localISO();
+    const mine = (allTasks || []).filter(t => me && t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada && ((t.responsables || []).some(r => (r || '').toLowerCase() === me) || (t.responsable || '').toLowerCase() === me));
+    const dl = t => t.deadline ? String(t.deadline).split('T')[0] : '';
+    const row = t => { const d = dl(t), ctx = [t.project_nombre, t.client_nombre].filter(Boolean).join(' · ');
+      return `<div class="d3-mini" onclick="openTaskAnywhere(${t.id})"><span class="d3-mini__t">${esc(t.titulo)}${ctx ? `<small>${esc(ctx)}</small>` : ''}</span>${d ? `<em class="${d < today ? 'is-late' : ''}">${new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</em>` : ''}</div>`; };
+    if (pr) {
+      const hi = mine.filter(t => t.prioridad === 'alta').sort((a, b) => (dl(a) || '9999').localeCompare(dl(b) || '9999')).slice(0, 6);
+      pr.style.display = ''; pr.innerHTML = `<div class="d3-card-head"><span class="d3-card-title">Prioridades</span><span class="d3-card-count">${hi.length || ''}</span></div><div class="d3-mini-l">${hi.length ? hi.map(row).join('') : '<div class="d3-mini-e">Sin tareas de prioridad alta. ¡Todo bajo control!</div>'}</div>`;
+    }
+    if (rc) {
+      let ids = []; try { ids = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]'); } catch (_) {}
+      const by = new Map((allTasks || []).map(t => [t.id, t])), rec = ids.map(i => by.get(i)).filter(Boolean).slice(0, 6);
+      rc.style.display = ''; rc.innerHTML = `<div class="d3-card-head"><span class="d3-card-title">Recientes</span></div><div class="d3-mini-l">${rec.length ? rec.map(row).join('') : '<div class="d3-mini-e">Aquí verás las últimas tareas que abras.</div>'}</div>`;
+    }
+  }
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
     const el = $('dash2-tasks');
     if (!el) return;
+    try { _renderSideCards(allTasks); } catch (e) { console.warn('[dash] side cards', e); }
 
     // Always compute from allTasks filtered by current user — never trust API count alone
     _allTasksCache = allTasks || [];
@@ -12884,6 +12903,10 @@ const AnalyticsModule = (() => {
 // TASKS MODULE
 // =================================================================
 
+// Abrir el detalle de una tarea desde cualquier sección, y recordar las últimas abiertas (tarjeta «Recientes» del Dashboard).
+function openTaskAnywhere(id) { document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
+function _pushRecentTask(id) { try { const a = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]').filter(x => x !== id); a.unshift(id); localStorage.setItem('nova_recent_tasks', JSON.stringify(a.slice(0, 12))); } catch (_) {} }
+
 // Insignias de tarjeta: etiquetas, avance del checklist y duración estimada (compartido por los Kanban).
 const _fmtEst = m => !m ? '' : (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm');
 const _tagHue = tx => { let h = 0; for (const c of String(tx)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -13594,6 +13617,7 @@ const TasksModule = (() => {
   let _tdCurrentId   = null;
 
   async function openTaskPage(id) {
+    _pushRecentTask(id);
     if (!_tasks.length) await load();
     await _renderTaskDetail(id);
   }
