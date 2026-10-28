@@ -8359,6 +8359,14 @@ app.get('/api/cantera/batches/:id/cargos', requireAuth, async (req, res) => {
     res.json({ cargos });
   } catch (e) { console.error('[cantera] cargos GET', e.message); res.status(500).json({ error: 'No se pudieron cargar los cargos' }); }
 });
+app.get('/api/cantera/batches/:id/cargos/contactos', requireAuth, async (req, res) => {
+  try {
+    const key = String(req.query.key || '').slice(0, 200); if (!key) return res.status(400).json({ error: 'Falta el cargo' });
+    const { rows: [b] } = await pool.query('SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!b) return res.status(404).json({ error: 'Borrador no encontrado' });
+    res.json({ contactos: await require('./services/canteraCargoService').contactosDeRol(pool, req.params.id, req.workspaceOwnerId, key) });
+  } catch (e) { console.error('[cantera] cargos/contactos', e.message); res.status(500).json({ error: 'No se pudieron cargar los contactos' }); }
+});
 app.put('/api/cantera/batches/:id/cargos', requireAuth, async (req, res) => {
   try {
     const uid = req.workspaceOwnerId, svc = require('./services/canteraCargoService');

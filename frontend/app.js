@@ -6638,6 +6638,24 @@ const CanteraModule = (() => {
     _cargoRanks = {}; _cargos.forEach(c => { if (c.rank) _cargoRanks[c.key] = c.rank; });
     const box = document.getElementById('cant-cargos'); if (box) box.outerHTML = _cargosHtml();
   }
+  // Ver la lista completa de contactos de un cargo (se abre por cargo; se carga al abrir)
+  let _cargoOpen = new Set(), _cargoCt = {}, _cargoSel = {};
+  function _cargoRepaint() { const el = document.getElementById('cant-cg-list'); if (el) el.innerHTML = _cargosListHtml(); }
+  async function cargoToggle(key) {
+    if (_cargoOpen.has(key)) { _cargoOpen.delete(key); _cargoRepaint(); return; }
+    _cargoOpen.add(key); _cargoRepaint();
+    if (!_cargoCt[key] && _current) {
+      try { const r = await apiFetch(`${API}/cantera/batches/${_current.id}/cargos/contactos?key=${encodeURIComponent(key)}`); _cargoCt[key] = r.ok ? ((await r.json()).contactos || []) : []; } catch (_) { _cargoCt[key] = []; }
+      _cargoRepaint();
+    }
+  }
+  function cargoSel(key, id, on) { const s = _cargoSel[key] || (_cargoSel[key] = new Set()); if (on) s.add(id); else s.delete(id); _cargoRepaint(); }
+  function cargoSelAll(key, on) { const s = _cargoSel[key] = new Set(); if (on) (_cargoCt[key] || []).forEach(x => s.add(x.id)); _cargoRepaint(); }
+  async function cargoCopy(key) {
+    const L2 = _cargoCt[key] || [], sel = _cargoSel[key] || new Set(), pick = sel.size ? L2.filter(x => sel.has(x.id)) : L2;
+    const txt = ['Contacto\tEmpresa\tCargo\tWeb\tLinkedIn\tSales Navigator'].concat(pick.map(x => [[x.nombre, x.apellido].filter(Boolean).join(' '), x.empresa, x.cargo, x.website || x.dominio, x.linkedin, x.linkedin_sales_nav].map(v => String(v || '').replace(/[\t\r\n]+/g, ' ')).join('\t'))).join('\n');
+    try { await navigator.clipboard.writeText(txt); showBanner(`✓ ${pick.length} contacto(s) copiados (pégalos en Excel)`, 'success'); } catch (_) { showBanner('No se pudo copiar', 'error'); }
+  }
   function _cargosListHtml() {
     const L = _cargos || [], q = _cgN(_cargoQ).trim();
     const idx = L.map((c, i) => i);
@@ -6645,11 +6663,27 @@ const CanteraModule = (() => {
     const rest = idx.filter(i => !(_cargoRanks[L[i].key] > 0) && (!q || _cgN(L[i].label).includes(q)));
     const shown = q ? rest.slice(0, 60) : rest.slice(0, L.length <= 90 ? 90 : 25);   // pocos cargos: se ven todos; muchos: los más frecuentes + buscador
     const hidden = rest.length - shown.length;
-    const row = i => { const c = L[i], r = _cargoRanks[c.key] || '';
-      return `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #F1EFEB">
-        <input type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)" style="width:58px;padding:6px 8px;border:1px solid ${r ? '#A7D7BE' : '#D9D6CF'};background:${r ? '#EEF8F2' : '#fff'};border-radius:8px;font:inherit;text-align:center">
-        <div style="flex:1;min-width:0"><b>${esc(c.label)}</b>${(c.variantes || []).some(v => _cgN(v.texto).replace(/[^a-z0-9]/g, '') !== _cgN(c.label).replace(/[^a-z0-9]/g, '')) ? `<div class="cant-hint" style="margin:1px 0 0;white-space:normal">incluye: ${esc(c.variantes.slice(0, 4).map(v => v.texto).join(' · '))}${(c.variantesTotal || 0) > 4 ? ` · +${c.variantesTotal - 4} más` : ''}</div>` : ''}</div>
-        <span class="cant-hint" style="margin:0;white-space:nowrap">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span></div>`; };
+    const IN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+    const SN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16 8 14 14 8 16 10 10 16 8"/></svg>';
+    const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    const detail = c => {
+      const L2 = _cargoCt[c.key]; if (!L2) return '<div class="cgd"><div class="cant-hint" style="margin:6px 0">Cargando contactos…</div></div>';
+      const sel = _cargoSel[c.key] || new Set(), all = L2.length && L2.every(x => sel.has(x.id));
+      return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s)${sel.size ? ` · <b>${sel.size}</b> seleccionado(s)` : ''}</span><button type="button" class="cgd__b" onclick="CanteraModule.cargoCopy('${esc(c.key).replace(/'/g, '&#39;')}')">Copiar ${sel.size ? 'selección' : 'todo'}</button></div>
+        <div class="cgd__w"><table class="cgd__t"><thead><tr><th><input type="checkbox" ${all ? 'checked' : ''} onchange="CanteraModule.cargoSelAll('${esc(c.key).replace(/'/g, '&#39;')}',this.checked)"></th><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
+        ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web);
+          return `<tr><td><input type="checkbox" ${sel.has(x.id) ? 'checked' : ''} onchange="CanteraModule.cargoSel('${esc(c.key).replace(/'/g, '&#39;')}',${x.id},this.checked)"></td><td class="cgd__n">${esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—')}</td><td>${esc(x.empresa || '—')}</td><td>${esc(x.cargo || '—')}</td>
+            <td>${web ? `<a href="${esc(wu)}" target="_blank" rel="noopener">${esc(web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : '<span class="cgd__d">—</span>'}</td>
+            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
+        </tbody></table></div></div>`;
+    };
+    const row = i => { const c = L[i], r = _cargoRanks[c.key] || '', open = _cargoOpen.has(c.key);
+      const inc = (c.variantes || []).some(v => _cgN(v.texto).replace(/[^a-z0-9]/g, '') !== _cgN(c.label).replace(/[^a-z0-9]/g, '')) ? c.variantes.slice(0, 4).map(v => v.texto).join(' · ') + ((c.variantesTotal || 0) > 4 ? ` · +${c.variantesTotal - 4} más` : '') : '';
+      return `<div class="cgr${open ? ' is-open' : ''}"><div class="cgr__h">
+        <input class="cgr__rank${r ? ' on' : ''}" type="number" min="1" max="99" value="${r}" placeholder="—" onchange="CanteraModule.cargoRank(${i}, this.value)">
+        <div class="cgr__t"><b>${esc(c.label)}</b>${inc ? `<span class="cgr__inc" title="${esc(inc)}">${esc(inc)}</span>` : ''}</div>
+        <span class="cgr__n">${c.contactos} contacto(s) · ${c.empresas} empresa(s)</span>
+        <button type="button" class="cgr__more" onclick="CanteraModule.cargoToggle('${esc(c.key).replace(/'/g, '&#39;')}')">${open ? 'Ocultar' : 'Ver contactos'} ${open ? '▴' : '▾'}</button></div>${open ? detail(c) : ''}</div>`; };
     return `${ranked.map(row).join('')}${shown.map(row).join('')}` +
       (hidden > 0 ? `<div class="cant-hint" style="margin:8px 0 0">Hay ${hidden} cargo(s) más${q ? '' : ' (menos frecuentes)'}: usa el buscador para encontrarlos.</div>` : '') +
       (!ranked.length && !shown.length ? '<div class="cant-hint" style="margin:8px 0 0">Ningún cargo coincide con la búsqueda.</div>' : '');

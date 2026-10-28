@@ -33,6 +33,16 @@ async function listarCargos(pool, batchId, uid) {
   })).sort((a, b) => b.contactos - a.contactos || a.label.localeCompare(b.label));
 }
 
+// Contactos de UN rol (para revisar la lista completa desde Prioridad por cargo): empresa, cargo, web y LinkedIn / Sales Navigator.
+async function contactosDeRol(pool, batchId, uid, key) {
+  const { rows } = await pool.query(
+    `SELECT k.id, k.nombre, k.apellido, k.cargo, k.email, k.linkedin, k.linkedin_sales_nav, k.prioridad,
+            c.nombre AS empresa, c.website, c.dominio, c.pais AS empresa_pais
+       FROM cantera_contacts k JOIN cantera_companies c ON c.id = k.company_id
+      WHERE k.batch_id=$1 AND k.user_id=$2 AND COALESCE(k.cargo,'')<>'' ORDER BY c.nombre, k.apellido, k.nombre`, [batchId, uid]);
+  return rows.filter(r => _n(rolCanonico(r.cargo, r.empresa).rol) === key);
+}
+
 async function asignarPorCargo(pool, batchId, uid) {
   const { rows: [b] } = await pool.query('SELECT cargo_ranks FROM cantera_batches WHERE id=$1 AND user_id=$2', [batchId, uid]);
   const ranks = (b && b.cargo_ranks && typeof b.cargo_ranks === 'object') ? b.cargo_ranks : {};
@@ -67,4 +77,4 @@ async function asignarPorCargo(pool, batchId, uid) {
   return { asignados: setIds.length, quitados: resetIds.length, empresasConContactos: s.empresas, empresasConPrimero: s.con_primero, empresasSinPrimero: s.empresas - s.con_primero };
 }
 
-module.exports = { listarCargos, asignarPorCargo, claveRol };
+module.exports = { listarCargos, contactosDeRol, asignarPorCargo, claveRol };
