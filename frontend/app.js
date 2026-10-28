@@ -11925,18 +11925,19 @@ const MyWorkModule = (() => {
     const ordered = [], seenP = new Set(), kids = new Map();
     items.forEach(t => { if (t.parent_task_id && byId.get(t.parent_task_id)) { if (!kids.has(t.parent_task_id)) kids.set(t.parent_task_id, []); kids.get(t.parent_task_id).push(t); } });
     items.forEach(t => { const pid = t.parent_task_id; if (pid && byId.get(pid)) { if (!seenP.has(pid)) { seenP.add(pid); ordered.push({ head: byId.get(pid) }); kids.get(pid).forEach(k => ordered.push({ t: k, sub: true })); } } else ordered.push({ t }); });
-    const rows = ordered.map(o => { if (o.head) { const h = o.head, hw = _wn(h); return `<tr class="mw-tr mw-tr--head"><td></td><td class="mw-td-t"><span class="mw-t">${esc(h.titulo)}</span><span class="mw-sub">Tarea · ${(kids.get(h.id) || []).length} subtarea${(kids.get(h.id) || []).length === 1 ? '' : 's'}</span></td><td>${esc(h.project_nombre || '—')}</td><td class="mw-td-c">${esc(h.client_nombre || '—')}</td><td></td><td class="mw-td-d">${hw.start ? _fmt(hw.start) : ''}</td><td class="mw-td-d">${hw.end ? _fmt(hw.end) : ''}</td><td></td></tr>`; }
+    const rows = ordered.map(o => { if (o.head) { const h = o.head, hw = _wn(h); return `<tr class="mw-tr mw-tr--head"><td></td><td class="mw-td-t"><span class="mw-t">${esc(h.titulo)}</span><span class="mw-sub">Tarea · ${(kids.get(h.id) || []).length} subtarea${(kids.get(h.id) || []).length === 1 ? '' : 's'}</span></td><td>${esc(h.project_nombre || '—')}</td><td class="mw-td-c">${esc(h.client_nombre || '—')}</td><td></td><td></td><td class="mw-td-d">${hw.start ? _fmt(hw.start) : ''}</td><td class="mw-td-d">${hw.end ? _fmt(hw.end) : ''}</td><td></td></tr>`; }
       const t = o.t, w = _wn(t), done = !_open(t);
       return `<tr class="mw-tr${done ? ' is-done' : ''}${o.sub ? ' mw-tr--sub' : ''}" data-task-id="${t.id}">
         <td class="mw-td-st">${_statusBtn(t)}</td>
         <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span></td>
         <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
         <td>${prio(t)}</td>
+        <td class="mw-td-e"><input class="mw-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="—" onclick="event.stopPropagation()" onblur="saveEstimateG(${t.id},this,m=>{const x=MyWorkModule._byIdG(${t.id});if(x)x.duracion_est_min=m})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"></td>
         <td class="mw-td-d">${w.start ? _fmt(w.start) : '—'}</td>
         <td class="mw-td-d">${_dateBtn(t, w.end ? _fmt(w.end) : '')}</td>
         <td class="mw-td-a">${_playBtn(t)}</td></tr>`; }).join('');
     wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label></div>
-      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
   }
 
@@ -12135,7 +12136,7 @@ const MyWorkModule = (() => {
     const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
   }
 
-  return { load, render, setView, setGroup, openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
+  return { load, render, setView, setGroup, _byIdG: id => _tasks.find(x => x.id === id), openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================
@@ -12907,6 +12908,23 @@ const AnalyticsModule = (() => {
 function openTaskAnywhere(id) { document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
 function _pushRecentTask(id) { try { const a = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]').filter(x => x !== id); a.unshift(id); localStorage.setItem('nova_recent_tasks', JSON.stringify(a.slice(0, 12))); } catch (_) {} }
 
+function _parseEstG(v) {
+  v = String(v || '').trim().toLowerCase().replace(',', '.'); if (!v) return null;
+  let m = /^(\d+(?:\.\d+)?)\s*h(?:\s*(\d+)\s*m?)?$/.exec(v); if (m) return Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0));
+  m = /^(\d+)\s*m(?:in)?$/.exec(v); if (m) return +m[1];
+  m = /^\d+(?:\.\d+)?$/.exec(v); if (m) return Math.round(parseFloat(v) * 60);
+  return NaN;
+}
+// Guarda la duración estimada de una tarea desde cualquier vista (misma ruta que el detalle).
+async function saveEstimateG(id, inp, onDone) {
+  const m = _parseEstG(inp.value);
+  if (Number.isNaN(m)) { showBanner('Escribe la duración así: 90m, 2h o 1h 30m', 'error'); return; }
+  try {
+    const r = await apiFetch(`${API}/mgmt/tasks/${id}/extras`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ duracion_est_min: m }) });
+    if (!r.ok) throw new Error('Error ' + r.status);
+    inp.value = _fmtEst(m); if (onDone) onDone(m);
+  } catch (e) { showBanner('No se pudo guardar el estimado: ' + e.message, 'error'); }
+}
 // Insignias de tarjeta: etiquetas, avance del checklist y duración estimada (compartido por los Kanban).
 const _fmtEst = m => !m ? '' : (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm');
 const _tagHue = tx => { let h = 0; for (const c of String(tx)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -21684,7 +21702,61 @@ const TeamModule = (() => {
     } catch(err) { alert('Error eliminando miembro: ' + err.message); }
   }
 
-  return { load, filter, setFilter, render, openDrawer, closeDrawer, save, confirmDelete, openAccess, doAccess, closeAcc: _closeAcc, copyAccLink };
+  // ── Carga del equipo: horas estimadas por persona y día de entrega (semana) ──
+  let _tab = 'miembros', _wlWeek = null, _wlTasks = [], _wlSel = null;
+  const _mondayOf = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+  const _iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function setTab(t) {
+    _tab = t;
+    document.querySelectorAll('#team-tabs .tm-tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    const wl = t === 'carga';
+    ['.clients-toolbar', '#team-table-wrap'].forEach(sel => { const el = document.querySelector('#pane-mgmt-team ' + sel); if (el) el.style.display = wl ? 'none' : ''; });
+    const box = $('team-workload'); if (box) box.style.display = wl ? '' : 'none';
+    if (wl) { if (!_wlWeek) _wlWeek = _mondayOf(new Date()); _wlLoad(); } else load();
+  }
+  async function _wlLoad() {
+    const box = $('team-workload'); if (!box) return; box.innerHTML = '<div class="wl-e">Cargando…</div>';
+    try {
+      const [tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`)]);
+      _wlTasks = tr.ok ? await tr.json() : []; _all = mr.ok ? await mr.json() : _all;
+    } catch (_) {}
+    _wlPaint();
+  }
+  function wlNav(d) { _wlWeek = d === 0 ? _mondayOf(new Date()) : new Date(_wlWeek.getFullYear(), _wlWeek.getMonth(), _wlWeek.getDate() + d * 7); _wlSel = null; _wlPaint(); }
+  function wlPick(name, day) { _wlSel = (_wlSel && _wlSel.n === name && _wlSel.d === day) ? null : { n: name, d: day }; _wlPaint(); }
+  function _wlPaint() {
+    const box = $('team-workload'); if (!box) return;
+    const days = []; for (let i = 0; i < 7; i++) days.push(new Date(_wlWeek.getFullYear(), _wlWeek.getMonth(), _wlWeek.getDate() + i));
+    const iso = days.map(_iso), today = _iso(new Date()), CAP = 480;
+    const open = _wlTasks.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada && !_wlTasks.some(c => c.parent_task_id === t.id));
+    const dueOf = t => String(t.deadline || '').split('T')[0] || String(t.fecha_inicio || '').split('T')[0];
+    const people = _all.filter(m => m.estado !== 'inactivo').map(m => m.nombre);
+    const who = t => ((t.responsables || []).length ? t.responsables : (t.responsable ? [t.responsable] : [])).map(r => people.find(p => p.toLowerCase() === String(r).toLowerCase()) || r);
+    const rows = [...people, 'Sin asignar'];
+    const cell = (name, d) => open.filter(t => dueOf(t) === d && (name === 'Sin asignar' ? who(t).length === 0 : who(t).includes(name)));
+    const range = `${days[0].toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} – ${days[6].toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    const head = days.map((d, i) => `<div class="wl-h${iso[i] === today ? ' is-today' : ''}">${d.toLocaleDateString('es-ES', { weekday: 'short' })}<b>${d.getDate()}</b></div>`).join('');
+    const body = rows.map(name => {
+      let wk = 0, wkTasks = 0, sinEst = 0;
+      const cells = iso.map((d, i) => { const ts = cell(name, d), m = ts.reduce((s, t) => s + (t.duracion_est_min || 0), 0), we = i >= 5, cap = we ? 0 : CAP;
+        wk += m; wkTasks += ts.length; sinEst += ts.filter(t => !t.duracion_est_min).length;
+        const ratio = cap ? m / cap : (m ? 2 : 0), cls = !ts.length ? '' : ratio > 1 ? 'is-over' : ratio >= .7 ? 'is-high' : 'is-ok';
+        return `<button type="button" class="wl-c ${cls}${we ? ' is-we' : ''}${_wlSel && _wlSel.n === name && _wlSel.d === d ? ' is-sel' : ''}" onclick="TeamModule.wlPick(${JSON.stringify(name).replace(/"/g, '&quot;')},'${d}')">${ts.length ? `<b>${m ? _fmtEst(m) : '—'}</b><small>${ts.length} tarea${ts.length === 1 ? '' : 's'}</small>` : ''}</button>`; }).join('');
+      const pct = Math.round(wk / (CAP * 5) * 100);
+      return `<div class="wl-r"><div class="wl-n"><span class="wl-av">${esc(_initials(name))}</span><span>${esc(name)}</span></div>${cells}<div class="wl-t ${pct > 100 ? 'is-over' : ''}"><b>${wk ? _fmtEst(wk) : '—'}</b><small>${wkTasks ? pct + '% de 40 h' : ''}${sinEst ? ` · ${sinEst} sin estimar` : ''}</small></div></div>`;
+    }).join('');
+    let detail = '';
+    if (_wlSel) {
+      const ts = cell(_wlSel.n, _wlSel.d);
+      detail = `<div class="wl-d"><h4>${esc(_wlSel.n)} · ${new Date(_wlSel.d + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</h4>${ts.map(t => `<div class="wl-d__r"><span class="wl-d__t" onclick="openTaskAnywhere(${t.id})">${esc(t.titulo)}<small>${esc([t.project_nombre, t.client_nombre].filter(Boolean).join(' · '))}</small></span><input class="wl-d__e" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="estimar" onblur="TeamModule.wlEst(${t.id},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"></div>`).join('')}<p class="wl-d__h">Escribe la duración (90m, 2h, 1h 30m) y sal del campo para guardarla.</p></div>`;
+    }
+    box.innerHTML = `<div class="wl-bar"><button class="mw-nav" onclick="TeamModule.wlNav(-1)">‹</button><span class="wl-range">${range}</span><button class="mw-nav" onclick="TeamModule.wlNav(1)">›</button><button class="mw-today" onclick="TeamModule.wlNav(0)">Esta semana</button></div>
+      <p class="wl-note">Suma la <b>duración estimada</b> de las tareas según su fecha de entrega. Jornada de 8 h de lunes a viernes. Verde = holgado · ámbar = casi lleno · rojo = sobrecargado. Toca un día para estimar tareas ahí mismo; también puedes hacerlo en el detalle de la tarea.</p>
+      <div class="wl-grid"><div class="wl-r wl-r--h"><div class="wl-n"></div>${head}<div class="wl-t">Semana</div></div>${body}</div>${detail}`;
+  }
+  function wlEst(id, inp) { saveEstimateG(id, inp, m => { const t = _wlTasks.find(x => x.id === id); if (t) t.duracion_est_min = m; _wlPaint(); }); }
+
+  return { load, filter, setFilter, render, setTab, wlNav, wlPick, wlEst, openDrawer, closeDrawer, save, confirmDelete, openAccess, doAccess, closeAcc: _closeAcc, copyAccLink };
 })();
 
 // =================================================================
