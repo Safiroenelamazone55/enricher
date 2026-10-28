@@ -10961,12 +10961,12 @@ const DashboardModule = (() => {
       return `<div class="d3-mini" onclick="openTaskAnywhere(${t.id})"><span class="d3-mini__t">${esc(t.titulo)}${ctx ? `<small>${esc(ctx)}</small>` : ''}</span>${d ? `<em class="${d < today ? 'is-late' : ''}">${new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</em>` : ''}</div>`; };
     if (pr) {
       const hi = mine.filter(t => t.prioridad === 'alta').sort((a, b) => (dl(a) || '9999').localeCompare(dl(b) || '9999')).slice(0, 6);
-      pr.style.display = ''; pr.innerHTML = `<div class="d3-card-head"><span class="d3-card-title">Prioridades</span><span class="d3-card-count">${hi.length || ''}</span></div><div class="d3-mini-l">${hi.length ? hi.map(row).join('') : '<div class="d3-mini-e">Sin tareas de prioridad alta. ¡Todo bajo control!</div>'}</div>`;
+      pr.style.display = ''; pr.innerHTML = `<div class="d3-card-header"><span class="d3-card-title">Prioridades</span><span class="d3-card-count">${hi.length || ''}</span></div><div class="d3-mini-l">${hi.length ? hi.map(row).join('') : '<div class="d3-mini-e">Sin tareas de prioridad alta. ¡Todo bajo control!</div>'}</div>`;
     }
     if (rc) {
       let ids = []; try { ids = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]'); } catch (_) {}
       const by = new Map((allTasks || []).map(t => [t.id, t])), rec = ids.map(i => by.get(i)).filter(Boolean).slice(0, 6);
-      rc.style.display = ''; rc.innerHTML = `<div class="d3-card-head"><span class="d3-card-title">Recientes</span></div><div class="d3-mini-l">${rec.length ? rec.map(row).join('') : '<div class="d3-mini-e">Aquí verás las últimas tareas que abras.</div>'}</div>`;
+      rc.style.display = ''; rc.innerHTML = `<div class="d3-card-header"><span class="d3-card-title">Recientes</span></div><div class="d3-mini-l">${rec.length ? rec.map(row).join('') : '<div class="d3-mini-e">Aquí verás las últimas tareas que abras.</div>'}</div>`;
     }
   }
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
