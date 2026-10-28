@@ -6307,6 +6307,7 @@ const CanteraModule = (() => {
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
         <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
+        <button class="cant-step${_step === 7 ? ' on' : ''}" onclick="CanteraModule.setStep(7)">Configuración</button>
         ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
       </div>
 
@@ -6520,7 +6521,8 @@ const CanteraModule = (() => {
         </table></div>
         ${_cantPagerHtml(filteredCompanies.length)}
       </div>` : ''}
-      ${_step === 5 ? _infoHtml(calificadas) : ''}`;
+      ${_step === 5 ? _infoHtml(calificadas) : ''}
+      ${_step === 7 ? _configHtml() : ''}`;
   }
   // Paso 5 · Información — pedido explícito 2026-09-06: "quiero que agregues
   // algo que tenga que ver con información... si agregaron tantos prospectos,
@@ -6686,8 +6688,17 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function cargoClear() { if (!confirm('¿Quitar todos los números de cargo? Las prioridades calculadas por cargo se borran; las que pusiste a mano se conservan.')) return; _cargoRanks = {}; cargoApply(); }
-  function _infoHtml(calificadas) {
+  // Paso 7 · Configuración: lo que se ASIGNA (prioridad por cargo) y lo que hay que RESOLVER (contactos sin empresa clara), cada cosa en su propia sección.
+  function _configHtml() {
     setTimeout(_orphansLoad, 0); setTimeout(_cargosLoad, 0);
+    return `<div class="cant-section">
+      <div class="cant-hint" style="margin:0 0 14px;max-width:none">Aquí configuras el borrador: asigna la prioridad por cargo y resuelve los contactos que quedaron sin empresa clara. El resumen de lo importado, limpiado y enriquecido está en <b>Información</b>.</div>
+      <div class="cant-cfg-h">Prioridad por cargo</div>${_cargosHtml()}
+      <div class="cant-cfg-h">Contactos sin empresa clara</div>${_orphansHtml()}
+      ${(_orphans && !_orphans.length) ? '<div class="cant-hint" style="margin:0">No hay contactos sin empresa clara en este borrador.</div>' : ''}
+    </div>`;
+  }
+  function _infoHtml(calificadas) {
     const imp = _current.import_stats || {};
     const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
     // Desglose paso 1 — se calcula del lado del cliente (ya está cargado en
@@ -6696,8 +6707,6 @@ const CanteraModule = (() => {
     const descartadas1 = _companies.filter(c => c.paso1_estado === 'descartado').length;
     const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     return `<div class="cant-section">
-      ${_orphansHtml()}
-      ${_cargosHtml()}
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Estado actual del borrador</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">

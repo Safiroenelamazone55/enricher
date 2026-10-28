@@ -18941,3 +18941,4 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 
 /* Cantera: usa todo el ancho de la pantalla (antes quedaba un contenedor angosto al centro) */
 .content-wrap:has(.pane.active[id^="pane-cantera"]) { max-width: none; padding-left: 40px; padding-right: 40px; }
+.cant-cfg-h { margin: 22px 0 8px; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8F8B83; padding-bottom: 6px; border-bottom: 1px solid #ECE9E4; }
