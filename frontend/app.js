@@ -7030,8 +7030,11 @@ const CanteraModule = (() => {
       const fit = ws => { const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }); if (!rows.length) return; ws['!cols'] = rows[0].map((_, ci) => ({ wch: Math.min(48, Math.max(10, ...rows.slice(0, 200).map(r2 => String(r2[ci] == null ? '' : r2[ci]).length)) + 2) })); ws['!freeze'] = { xSplit: 0, ySplit: 1 }; };
       fit(wsE); fit(wsC);
       XLSX.utils.book_append_sheet(wb, wsE, 'Empresas'); XLSX.utils.book_append_sheet(wb, wsC, 'Contactos');
-      const nm = String(d.borrador || 'borrador').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60), fecha = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `Cantera - ${nm} - ${fecha}.xlsx`);
+      const safe = t => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const nm = safe(d.borrador || 'borrador').slice(0, 50), fecha = new Date().toISOString().slice(0, 10);
+      const filtros = _filtroResumenTexto({ paso1Filtro: _paso1Filtro, tierFiltro: [..._tierFiltro], prioFiltro: [..._prioFiltro], minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro, paisFiltro: [..._paisFiltro], industriaFiltro: [..._industriaFiltro], tamanoFiltro: [..._tamanoFiltro], nContFiltro: [..._nContFiltro], nContExcl: [..._nContExcl], domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro] });
+      const fTxt = _coSel.size ? 'seleccion manual' : (filtros === '(sin condiciones)' ? 'sin filtros' : safe(filtros.replace(/ · /g, ', ')).slice(0, 90));
+      XLSX.writeFile(wb, `Cantera - ${nm} - ${emp.length} resultados - ${fTxt} - ${fecha}.xlsx`);
       showBanner(`✓ Excel descargado: ${emp.length} empresas y ${con.length} contactos`, 'success');
     } catch (e) { showBanner('No se pudo exportar: ' + e.message, 'error'); }
   }
