@@ -18935,3 +18935,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 
 .lm2-gc { cursor: pointer; } .lm2-gc__x { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; } .lm2-gc__t { width: 28px; height: 28px; background: #2F6BFF; color: #fff; font-style: normal; font-weight: 800; font-size: .7rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; } .lm2-gc__t--img { background: #fff; border: 1px solid #DCE7FB; } .lm2-gc__t img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .lm2-nav--collapsed .lm2-gc { justify-content: center; padding: 6px 0; margin: 6px 6px 4px; border-left: 0; background: none; } .lm2-nav--collapsed .lm2-gc__x, .lm2-nav--collapsed .lm2-gc button { display: none; } .lm2-nav--collapsed .lm2-gc__t { width: 36px; height: 36px; box-shadow: 0 0 0 2px #CFE0FB; }
+/* La flecha «atrás» sobra con la barra contraída: ya existe en el encabezado */
+.lm2-nav--collapsed .snav-back { display: none !important; }
