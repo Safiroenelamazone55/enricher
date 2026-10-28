@@ -10112,7 +10112,7 @@ const DashboardModule = (() => {
               title="Cambiar estado">${_statusSvg(estado)}</button>
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
-        ${ctx ? `<span class="d3-task-meta">${esc(ctx)}</span>` : ''}
+        ${ctx ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.client_nombre || t.project_nombre])}</span>` : ''}
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
@@ -11050,6 +11050,13 @@ const DashboardModule = (() => {
     cancelado:   { dot: 'cancelled',   label: 'Cancelado',   icon: `<circle cx="8" cy="8" r="6.5" fill="#8E8A84"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
   };
 
+  // Contexto de la fila con jerarquía: lo principal (proyecto) algo más oscuro y lo último (cliente / responsable) más claro.
+  function _metaHtml(parts) {
+    const p = (parts || []).filter(Boolean);
+    if (!p.length) return '';
+    if (p.length === 1) return esc(p[0]);
+    return `${esc(p.slice(0, -1).join(' · '))}<span class="d3-task-meta__b"> · ${esc(p[p.length - 1])}</span>`;
+  }
   function _statusSvg(estado) {
     const cfg = _STATUS_CFG[estado] || _STATUS_CFG.pendiente;
     return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">${cfg.icon}</svg>`;
@@ -11070,7 +11077,7 @@ const DashboardModule = (() => {
               title="Cambiar estado">${_statusSvg(estado)}</button>
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
-        ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
+        ${meta ? `<span class="d3-task-meta">${_metaHtml([t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
