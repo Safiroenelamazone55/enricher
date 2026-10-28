@@ -12950,7 +12950,7 @@ const MentionPicker = (() => {
     el.addEventListener('keydown', _key, true);
     el.addEventListener('blur', () => setTimeout(close, 150));
   }
-  document.addEventListener('focusin', e => { if (e.target && e.target.matches && e.target.matches('#tskd-chat-input, .tskd__textarea')) attach(e.target); });
+  document.addEventListener('focusin', e => { if (e.target && e.target.matches && e.target.matches('#tskd-chat-input, #pj-chat-input, .tskd__textarea')) attach(e.target); });
   return { ready, highlight, attach, close };
 })();
 
@@ -13349,6 +13349,7 @@ const TasksModule = (() => {
   // y muestra una cabecera con info del proyecto arriba de la barra de vistas.
 
   function _projectHeaderHide() {
+    $('tpj-panel')?.remove(); _pjTabNow = 'tareas';
     const el = $('tasks-project-header');
     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
     if (_projMembers) { _projMembers = null; setTimeout(_populateMemberFilter, 0); }
@@ -13398,6 +13399,89 @@ const TasksModule = (() => {
     const url = new URL(window.location.href);
     url.searchParams.delete('tab'); url.searchParams.set('project', pid);
     history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+
+  // ── Pestañas del proyecto (Resumen · Notas · Archivos · Tiempo · Actividad) ──
+  let _pjP = null, _pjTabNow = 'tareas';
+  const _pjMain = () => _tasks.filter(t => _pjP && t.project_id === _pjP.id && !t.parent_task_id && !t.archivada);
+  const _pjAll = () => _tasks.filter(t => _pjP && t.project_id === _pjP.id && !t.archivada);
+  const _isOpen = t => t.estado !== 'completado' && t.estado !== 'cancelado';
+  const _dShort = d => d ? new Date(String(d).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '—';
+  function pjTab(tab) {
+    if (!_pjP) return; _pjTabNow = tab;
+    document.querySelectorAll('#tpj-tabs .tpjh__tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    const panel = $('tpj-panel'); if (!panel) return;
+    if (tab === 'tareas') { panel.style.display = 'none'; panel.innerHTML = ''; _applyView(); return; }
+    _hideAllViews(); const tb = $('tasks-list-toolbar'); if (tb) tb.style.display = 'none';
+    panel.style.display = ''; panel.innerHTML = '<div class="tpjp__load">Cargando…</div>';
+    ({ resumen: _pjResumen, notas: _pjNotas, archivos: _pjArchivos, tiempo: _pjTiempo, actividad: _pjActividad }[tab] || _pjResumen)(panel);
+  }
+  function _pjResumen(panel) {
+    const all = _pjAll(), main = _pjMain(), today = new Date().toISOString().slice(0, 10);
+    const dl = t => t.deadline ? String(t.deadline).split('T')[0] : '';
+    const open = all.filter(_isOpen), vencidas = open.filter(t => dl(t) && dl(t) < today);
+    const wk = new Date(); wk.setDate(wk.getDate() + 7); const wkS = wk.toISOString().slice(0, 10);
+    const semana = open.filter(t => dl(t) && dl(t) >= today && dl(t) <= wkS), bloq = all.filter(t => t.estado === 'bloqueado'), sinResp = main.filter(t => _isOpen(t) && !((t.responsables || []).length || t.responsable));
+    const cnt = e => all.filter(t => t.estado === e).length, tot = all.length || 1;
+    const seg = [['completado', '#22C55E'], ['en_progreso', '#4F6BF0'], ['pendiente', '#CFCAC3'], ['bloqueado', '#EF4444']].map(([e, c]) => cnt(e) ? `<i style="width:${cnt(e) / tot * 100}%;background:${c}" title="${_ESTL_UI[e]}: ${cnt(e)}"></i>` : '').join('');
+    const prox = open.filter(t => dl(t)).sort((a, b) => dl(a).localeCompare(dl(b))).slice(0, 8);
+    const mem = {}; open.forEach(t => { const rs = (t.responsables || []).length ? t.responsables : (t.responsable ? [t.responsable] : ['Sin asignar']); rs.forEach(r => { (mem[r] = mem[r] || { n: 0, m: 0 }).n++; mem[r].m += t.duracion_est_min || 0; }); });
+    const kpi = (n, l, cls) => `<div class="tpjp__k ${cls || ''}"><b>${n}</b><span>${l}</span></div>`;
+    panel.innerHTML = `<div class="tpjp__grid">
+      <div class="tpjp__card tpjp__card--wide"><div class="tpjp__kpis">${kpi(vencidas.length, 'Vencidas', vencidas.length ? 'is-bad' : '')}${kpi(semana.length, 'Vencen en 7 días')}${kpi(bloq.length, 'Bloqueadas', bloq.length ? 'is-bad' : '')}${kpi(sinResp.length, 'Sin responsable', sinResp.length ? 'is-warn' : '')}</div>
+        <div class="tpjp__bar">${seg}</div><div class="tpjp__leg">${['completado', 'en_progreso', 'pendiente', 'bloqueado'].map(e => `<span>${_ESTL_UI[e]} <b>${cnt(e)}</b></span>`).join('')}</div></div>
+      <div class="tpjp__card"><h4>Próximos vencimientos</h4>${prox.length ? prox.map(t => `<div class="tpjp__row" onclick="TasksModule.openTaskPage(${t.id})"><span>${esc(t.titulo)}</span><em class="${dl(t) < today ? 'is-bad' : ''}">${_dShort(t.deadline)}</em></div>`).join('') : '<div class="tpjp__e">Nada con fecha pendiente.</div>'}</div>
+      <div class="tpjp__card"><h4>Carga por persona</h4>${Object.keys(mem).length ? Object.entries(mem).sort((a, b) => b[1].n - a[1].n).map(([r, v]) => `<div class="tpjp__row"><span>${esc(r)}</span><em>${v.n} abiertas${v.m ? ' · ' + _fmtEst(v.m) : ''}</em></div>`).join('') : '<div class="tpjp__e">Sin tareas abiertas.</div>'}</div>
+      ${(_pjP.descripcion || '').trim() ? `<div class="tpjp__card tpjp__card--wide"><h4>Descripción</h4><p class="tpjp__p">${esc(_pjP.descripcion)}</p></div>` : ''}</div>`;
+  }
+  const _ESTL_UI = { pendiente: 'Pendiente', en_progreso: 'En progreso', bloqueado: 'Bloqueado', completado: 'Completado', cancelado: 'Cancelado' };
+  async function _pjNotas(panel) {
+    panel.innerHTML = `<div class="tpjp__card tpjp__card--wide"><h4>Notas del proyecto <small>conversación interna · etiqueta con @</small></h4>
+      <div class="tpjp__chat" id="pj-chat"><div class="tpjp__e">Cargando…</div></div>
+      <div class="tpjp__comp"><textarea id="pj-chat-input" rows="2" placeholder="Escribe una nota o decisión… usa @ para etiquetar a alguien" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();TasksModule.pjSendNote()}"></textarea><button class="btn btn--primary btn--sm" onclick="TasksModule.pjSendNote()">Enviar</button></div></div>`;
+    await _pjLoadNotes();
+  }
+  async function _pjLoadNotes() {
+    const box = $('pj-chat'); if (!box || !_pjP) return;
+    try {
+      await MentionPicker.ready();
+      const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('project:' + _pjP.id)}`); const m = r.ok ? await r.json() : [];
+      box.innerHTML = m.length ? m.map(x => `<div class="tskd-cm"><div class="tskd-cm__av">${esc((x.sender_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div><div class="tskd-cm__body"><div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(x.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${new Date(x.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div><div class="tskd-cm__txt">${MentionPicker.highlight(esc(x.content))}</div></div></div>`).join('') : '<div class="tpjp__e">Aún no hay notas. Anota aquí decisiones, acuerdos y contexto del proyecto.</div>';
+      box.scrollTop = box.scrollHeight;
+    } catch (_) { box.innerHTML = '<div class="tpjp__e">No se pudieron cargar las notas.</div>'; }
+  }
+  async function pjSendNote() {
+    const inp = $('pj-chat-input'); const v = (inp?.value || '').trim(); if (!v || !_pjP) return; inp.value = '';
+    try { const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('project:' + _pjP.id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: v }) }); if (!r.ok) throw new Error('Error'); await _pjLoadNotes(); }
+    catch (e) { inp.value = v; showBanner('No se pudo enviar la nota', 'error'); }
+  }
+  function _pjArchivos(panel) {
+    const links = (_pjP.links || []).filter(l => (l.label || '').trim() || (l.url || '').trim());
+    panel.innerHTML = `<div class="tpjp__card tpjp__card--wide"><h4>Archivos y enlaces</h4>
+      ${links.length ? links.map((l, i) => `<div class="tpjp__row"><a href="${esc(/^https?:/i.test(l.url) ? l.url : 'https://' + l.url)}" target="_blank" rel="noopener">${esc(l.label || l.url)}</a><em><button type="button" class="ck__x" title="Quitar" onclick="TasksModule.pjLinkDel(${i})">×</button></em></div>`).join('') : '<div class="tpjp__e">Aún no hay enlaces. Agrega entregables, carpetas de Drive, Figma, documentos del cliente…</div>'}
+      <div class="tpjp__comp"><input id="pj-l-label" class="form-input" placeholder="Nombre (ej. Carpeta de Drive)"><input id="pj-l-url" class="form-input" placeholder="https://…"><button class="btn btn--primary btn--sm" onclick="TasksModule.pjLinkAdd()">Agregar</button></div></div>`;
+  }
+  async function _pjSaveLinks(links) {
+    try { const r = await apiFetch(`${API}/mgmt/projects/${_pjP.id}/links`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ links }) }); if (!r.ok) throw new Error('Error'); _pjP.links = links; }
+    catch (e) { showBanner('No se pudo guardar el enlace', 'error'); }
+    _pjArchivos($('tpj-panel'));
+  }
+  function pjLinkAdd() { const label = ($('pj-l-label').value || '').trim(), url = ($('pj-l-url').value || '').trim(); if (!url) { showBanner('Pega la dirección del enlace', 'error'); return; } _pjSaveLinks([...(_pjP.links || []), { label: label || url, url }]); }
+  function pjLinkDel(i) { const l = [...(_pjP.links || [])]; l.splice(i, 1); _pjSaveLinks(l); }
+  function _pjTiempo(panel) {
+    const main = _pjMain().slice().sort((a, b) => (+b.horas_track || 0) - (+a.horas_track || 0));
+    const est = _pjAll().reduce((s, t) => s + (t.duracion_est_min || 0), 0), trk = main.reduce((s, t) => s + (+t.horas_track || 0), 0);
+    const metaH = _pjP.horas_estimadas ? +_pjP.horas_estimadas : null;
+    panel.innerHTML = `<div class="tpjp__card tpjp__card--wide"><div class="tpjp__kpis">
+      <div class="tpjp__k"><b>${Math.round(trk * 100) / 100}h</b><span>Trabajadas</span></div><div class="tpjp__k"><b>${est ? _fmtEst(est) : '—'}</b><span>Estimadas (tareas)</span></div>${metaH ? `<div class="tpjp__k ${trk > metaH ? 'is-bad' : ''}"><b>${metaH}h</b><span>Meta del proyecto</span></div>` : ''}</div>
+      <table class="tpjp__tbl"><thead><tr><th>Tarea</th><th>Estimado</th><th>Trabajado</th></tr></thead><tbody>${main.map(t => { const e = t.duracion_est_min || 0, h = +t.horas_track || 0; return `<tr onclick="TasksModule.openTaskPage(${t.id})"><td>${esc(t.titulo)}</td><td>${e ? _fmtEst(e) : '—'}</td><td class="${e && h * 60 > e ? 'is-bad' : ''}">${h ? h + 'h' : '—'}</td></tr>`; }).join('') || '<tr><td colspan="3" class="tpjp__e">Sin tareas.</td></tr>'}</tbody></table></div>`;
+  }
+  async function _pjActividad(panel) {
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${_pjP.id}/activity`); const a = r.ok ? await r.json() : [];
+      const f = d => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      panel.innerHTML = `<div class="tpjp__card tpjp__card--wide"><h4>Actividad del proyecto</h4>${a.length ? a.map(x => `<div class="act__i" style="cursor:pointer" onclick="TasksModule.openTaskPage(${x.task_id})"><b>${esc(x.user_name || 'Alguien')}</b> ${esc(x.texto)} en <b>${esc(x.task_titulo)}</b><time>${f(x.created_at)}</time></div>`).join('') : '<div class="tpjp__e">Aún no hay cambios registrados. Desde ahora se anotan aquí.</div>'}</div>`;
+    } catch (_) { panel.innerHTML = '<div class="tpjp__e">No se pudo cargar la actividad.</div>'; }
   }
 
   async function _renderProjectHeader(pid) {
@@ -13478,6 +13562,10 @@ const TasksModule = (() => {
         <div class="tpjh__stat"><span class="tpjh__stat-lbl">Tareas</span><span class="tpjh__stat-val">${done}/${total} completadas</span></div>
       </div>`;
     el.classList.remove('hidden');
+    _pjP = p; _pjTabNow = 'tareas';
+    el.insertAdjacentHTML('beforeend', `<div class="tpjh__tabs" id="tpj-tabs">${[['tareas', 'Tareas'], ['resumen', 'Resumen'], ['notas', 'Notas'], ['archivos', 'Archivos'], ['tiempo', 'Tiempo'], ['actividad', 'Actividad']].map(([k, l]) => `<button type="button" class="tpjh__tab${k === 'tareas' ? ' on' : ''}" data-tab="${k}" onclick="TasksModule.pjTab('${k}')">${l}</button>`).join('')}</div>`);
+    let _pan = $('tpj-panel'); if (_pan) _pan.remove();
+    el.insertAdjacentHTML('afterend', '<div class="tpjp" id="tpj-panel" style="display:none"></div>');
 
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
@@ -15822,7 +15910,7 @@ const TasksModule = (() => {
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
-    _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
+    pjTab, pjSendNote, pjLinkAdd, pjLinkDel, _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
     openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,

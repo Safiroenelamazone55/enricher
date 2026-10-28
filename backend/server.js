@@ -2028,6 +2028,16 @@ app.use('/api/mgmt/tasks/:id/:field', (req, res, next) => {
   });
   next();
 });
+app.get('/api/mgmt/projects/:id/activity', requireAuth, async (req, res) => {
+  try {
+    await _ensureActivity();
+    const { rows } = await pool.query(
+      `SELECT a.id, a.user_name, a.texto, a.created_at, a.task_id, t.titulo AS task_titulo
+         FROM task_activity a JOIN tasks t ON t.id = a.task_id
+        WHERE t.project_id = $1 AND a.workspace_owner_id = $2 ORDER BY a.created_at DESC LIMIT 80`, [parseInt(req.params.id, 10), req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 app.get('/api/mgmt/tasks/:id/activity', requireAuth, async (req, res) => {
   try {
     await _ensureActivity();
