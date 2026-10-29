@@ -24817,6 +24817,11 @@ ${foot}
       // Enlaces en columnas fijas (siempre en el mismo sitio): LinkedIn · Sales Navigator · Web · WhatsApp/Tel · Google. Si falta uno, queda un guion.
       const q = encodeURIComponent('"' + nm + '" ' + empresa);
       const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+      // Búsquedas para casos difíciles. dom = dominio de la empresa (ficha o sitio web).
+      const dom = String((co && (co.dominio || co.website)) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0];
+      const cargoTxt = String(c.cargo || '').trim();
+      const qAI = encodeURIComponent('What is the corporate email address of ' + nm + (cargoTxt ? ', ' + cargoTxt : '') + (empresa ? ' at ' + empresa : '') + (dom ? ' (' + dom + ')' : '') + '? Include alternative or personal emails, the email format used at ' + (dom || 'the company') + ', and their LinkedIn profile.');
+      const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? '"' + empresa + '" ' : '') + (dom ? '("@' + dom + '" OR "' + dom + '") ' : '') + '(email OR correo OR contact OR contacto) -site:linkedin.com -site:facebook.com -site:instagram.com');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
       const slot = (title, inner, attrs, on) => on ? '<a class="lm-fx-i" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
       const wa = _waDigits(c);
@@ -24825,7 +24830,8 @@ ${foot}
         slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
-        slot('Buscar su email en Google', NI('search', 14), 'href="https://www.google.com/search?q=' + q + '%20email" target="_blank" rel="noopener"', true),
+        slot('Búsqueda inteligente del email (Google con IA): pregunta completa con nombre, cargo, empresa y dominio', NI('sparkles', 14), 'href="https://www.google.com/search?q=' + qAI + '" target="_blank" rel="noopener"', true),
+        slot('Búsqueda por operadores: nombre + empresa + dominio + «email»/«@dominio», sin redes', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
       ].join('');
       const tag = bad === 'rebote'
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
@@ -24840,7 +24846,7 @@ ${foot}
         '<button type="button" class="lm-fx-pb" id="fix-pb-' + c.id + '" title="Deducir el email probable a partir de los correos de esa empresa que ya hay en el sistema" onclick="LeadManagerModule.fixHints(' + c.id + ')">Email probable</button></div>' +
         '<div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
-    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · Google</span><span>Email profesional</span><span>Email personal</span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
