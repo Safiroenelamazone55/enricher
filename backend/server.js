@@ -7444,8 +7444,8 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.to_email, m.estado,
-             m.error, m.sent_at, m.replied_at, m.created_at,
-             k.nombre, k.apellido, s.nombre AS seq_nombre,
+             m.error, m.sent_at, m.replied_at, m.created_at, m.scheduled_at,
+             k.nombre, k.apellido, s.nombre AS seq_nombre, s.timezone AS seq_timezone,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')  AS opens,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click') AS clicks
         FROM lm_messages m
@@ -7456,6 +7456,9 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
          AND ($3::int IS NULL OR m.sequence_id=$3)
        ORDER BY m.created_at DESC LIMIT $4
     `, [uid, cid, sid, lim]);
+    if (rows.some(r => r.estado === 'approved')) {
+      try { const est = await require('./services/sendEngine').estimateSendTimes(pool, uid); rows.forEach(r => { if (est[r.id]) r.est_send_at = est[r.id]; }); } catch (e) { console.warn('[lm-msgs] est', e.message); }
+    }
     res.json(rows);
   } catch (err) { console.error('[lm-msgs] GET', err.message); res.status(500).json({ error: 'Error al cargar mensajes' }); }
 });

@@ -36937,8 +36937,14 @@ ${foot}
   }
   function _msgRow(m) {
     const ST = { sent: ['Enviado', '#F1EFEB', '#1E5FA8'], replied: ['Respondió', '#F1EFEB', '#15803D'], failed: ['Falló', '#F1EFEB', '#C4342B'], queued: ['En cola', '#F1EFEB', '#6C6862'], bounced: ['Rebotó', '#F1EFEB', '#C4342B'] };
+    ST.approved = ST.queued; ST.awaiting = ['Por aprobar', '#FEF3C7', '#92400E'];
     const s = ST[m.estado] || ST.queued;
-    const when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const fmt = d => new Date(d).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    let when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    if (!m.sent_at && m.estado === 'approved' && m.est_send_at) {
+      let pr = ''; try { if (m.seq_timezone) pr = ' · allá ' + new Date(m.est_send_at).toLocaleTimeString('es-ES', { timeZone: m.seq_timezone, hour: '2-digit', minute: '2-digit' }); } catch (_) {}
+      when = `<span title="Estimado: respeta la ventana horaria del prospecto, los días permitidos y el intervalo entre envíos">Sale ~${fmt(m.est_send_at)}${pr}</span>`;
+    }
     return `<tr class="clients-table__row" onclick="LeadManagerModule.ibAbrirDesdeEnviados(${m.contact_id})" style="cursor:pointer">
       <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
       <td class="client-meta">${esc(m.asunto)}${m.seq_nombre ? `<div class="client-empresa">${esc(m.seq_nombre)}</div>` : ''}</td>

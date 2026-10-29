@@ -222,11 +222,11 @@ function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }
 
 // Hora y día actuales en el timezone del workspace.
 const _WDX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
-function _localNow(tz) {
+function _localNow(tz, at) {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: tz || 'America/Lima', hour: 'numeric', hour12: false, weekday: 'short',
-    }).formatToParts(new Date());
+    }).formatToParts(at || new Date());
     const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '12');
     const wd   = parts.find(p => p.type === 'weekday')?.value || 'Mon';
     return { hour: hour === 24 ? 0 : hour, weekend: wd === 'Sat' || wd === 'Sun', wdIdx: _WDX[wd] ?? 0 };
@@ -828,6 +828,33 @@ async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
   return true;
 }
 
+// Hora estimada de salida de los emails APROBADOS que aún esperan: misma regla que
+// _flushApproved (ventana en la hora del prospecto/secuencia, días permitidos, fin de
+// semana, intervalo entre envíos de la secuencia). Es una estimación, no una promesa.
+async function estimateSendTimes(pool, uid) {
+  const { rows } = await pool.query(`
+    SELECT m.id, m.sequence_id, m.scheduled_at, s.send_days, s.timezone AS seq_tz, COALESCE(s.send_interval_min,5) AS iv,
+           cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone AS cfg_tz,
+           (SELECT MAX(mi.sent_at) FROM lm_messages mi WHERE mi.sequence_id=m.sequence_id) AS last_sent
+      FROM lm_messages m JOIN sequences s ON s.id = m.sequence_id
+      LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
+     WHERE m.user_id=$1 AND m.estado='approved' ORDER BY m.sequence_id, m.created_at ASC`, [uid]);
+  const out = {}, cursor = {};
+  for (const r of rows) {
+    const tz = r.seq_tz || r.cfg_tz || 'America/Lima', ws = r.window_start ?? 9, we = r.window_end ?? 18, mask = _sanSendDays(r.send_days);
+    const ivMs = Math.max(r.iv, 1) * 60000;
+    let t = Math.max(Date.now(), cursor[r.sequence_id] || 0, r.last_sent ? new Date(r.last_sent).getTime() + ivMs : 0, r.scheduled_at ? new Date(r.scheduled_at).getTime() : 0);
+    for (let i = 0; i < 700; i++) {
+      const { hour, weekend, wdIdx } = _localNow(tz, new Date(t));
+      if (hour >= ws && hour < we && !(weekend && !r.send_weekends) && mask[wdIdx] === '1') break;
+      t += 30 * 60000;
+    }
+    out[r.id] = new Date(t).toISOString();
+    cursor[r.sequence_id] = t + ivMs;
+  }
+  return out;
+}
+
 // ── Envíos pre-aprobados: despacha los 'approved' respetando el intervalo por secuencia ──
 // ¿El buzón de este cliente ya llegó hoy a su tope? (límite propio del buzón; si no tiene, el calentamiento). Cuenta TODAS sus secuencias.
 async function _mailboxFull(pool, clientId, tz) {
@@ -1246,4 +1273,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { estimateSendTimes, responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
