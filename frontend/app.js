@@ -24820,15 +24820,16 @@ ${foot}
       // Búsquedas para casos difíciles. dom = dominio de la empresa (ficha o sitio web).
       const dom = String((co && (co.dominio || co.website)) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0];
       const cargoTxt = String(c.cargo || '').trim();
-      const lugar = [c.ciudad, c.pais].filter(Boolean).join(', ');
-      const pais = String(c.pais || (co && co.pais) || '').trim(), who = empresa || 'that company';
+      const _ok = v => { v = String(v || '').trim(); return v && !/^(n\/?a|na|-|—|null|undefined)$/i.test(v) ? v : ''; };
+      const lugar = [_ok(c.ciudad), _ok(c.pais)].filter(Boolean).join(', ');
+      const pais = _ok(c.pais) || _ok(co && co.pais), who = empresa || 'that company';
       const qAI = encodeURIComponent('Goal: recommend the most likely business email for ' + nm + (cargoTxt ? ' (' + cargoTxt + ')' : '') + ' at ' + who + (dom ? ' (website domain: ' + dom + ')' : '') + (lugar ? ', based in ' + lugar : '') + '. '
         + 'Method: 1) First look for ' + nm + '\'s email directly. 2) If it is not public, search for OTHER PEOPLE who work at ' + who + (pais ? ' in ' + pais : '') + ' (same country or office first) and have a publicly listed business email (company website, directories, press, LinkedIn, RocketReach, Apollo, etc.). '
         + '3) For each example, check the EMAIL DOMAIN actually used (it may differ from the website domain, e.g. a country domain, group domain or legacy domain) and its STRUCTURE (first.last@, flast@, first@, firstl@, last.first@…). '
         + '4) Compare the examples, pick the dominant domain + structure, and build the recommended email for ' + nm + ' with it (handle accents, double surnames and hyphens the way the examples do). '
         + 'VERIFY FIRST that the company is the right one: it must match the country' + (pais ? ' (' + pais + ')' : '') + (lugar ? ' and the area (' + lugar + ')' : '') + (dom ? ' and the website ' + dom : '') + '. Companies with a similar name in other countries are NOT valid: ignore them and say so. If you cannot confirm it is the same company, say it clearly and do not propose an email. '
         + 'Spanish and Latin names often have two surnames (e.g. Gil Figueras): list the plausible variants (first surname only, both surnames, initial + surname) and mark which one the examples use. '
-        + 'Answer in Spanish using exactly this format: 0) Empresa verificada: sí/no y por qué (país, dirección, web);  1) Email recomendado; 2) Certeza estimada en % y por qué; 3) Dominio y estructura detectados; 4) Ejemplos de otros empleados que lo respaldan (nombre, cargo y correo); 5) Otros correos encontrados (generales o personales). If there are fewer than 2 examples, say the certainty is low.');
+        + 'Answer in Spanish. The VERY FIRST LINE of the answer must be only this, on one single line, with no extra words, so it can be copied: 📧 EMAIL — NN% (for example: 📧 vgarside@dominio.com — 85%). If you cannot recommend one, write: 📧 sin recomendación — 0%. After that first line, use exactly this format: 0) Empresa verificada: sí/no y por qué (país, dirección, web);  1) Email recomendado; 2) Certeza estimada en % y por qué; 3) Dominio y estructura detectados; 4) Ejemplos de otros empleados que lo respaldan (nombre, cargo y correo); 5) Otros correos encontrados (generales o personales). If there are fewer than 2 examples, say the certainty is low.');
       // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
       const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
