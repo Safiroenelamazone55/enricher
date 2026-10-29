@@ -19000,3 +19000,9 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 /* Editor de paso: fuerza capa propia al desplazar (evita zonas en blanco al hacer scroll en ventanas largas) */
 #lm-step-modal .fin-pi-form { transform: translateZ(0); will-change: scroll-position; }
 .lm-back--btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #E4E0D9; background: #fff; color: #33302C; font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 12px; cursor: pointer; margin-bottom: 12px; } .lm-back--btn:hover { border-color: #A7C8F5; color: #2F5BB7; background: #F7FAFF; }
+
+/* Tareas de LinkedIn: iconos LinkedIn + Sales Navigator juntos (sin mostrar la URL) */
+.cp-li-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-li-ico { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px solid #D5E3F7; background: #F2F8FF; color: #0A66C2; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; } .cp-li-ico:hover { background: #E2EEFC; border-color: #A7C8F5; }
+.cp-li-ico--off { color: #B4AFA8; background: #FAF9F7; border-color: #ECE9E4; cursor: not-allowed; font-weight: 600; }
+.cp-li-done { display: inline-flex; align-items: center; gap: 4px; font-size: .76rem; font-weight: 700; color: #15803D; }

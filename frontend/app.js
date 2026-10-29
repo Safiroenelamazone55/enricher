@@ -25926,9 +25926,9 @@ ${foot}
     if (global) { _section = 'tasks'; _renderBody(); return; }   // se vuelve a la lista de Tareas comerciales, con los filtros como los dejaste
     _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
   }
-  function seqOpenLinkedIn(cid) {
+  function seqOpenLinkedIn(cid, kind) {
     const c = _contacts.find(x => x.id === cid);
-    const url = c && c.linkedin; if (!url) return;
+    const url = c && (kind === 'sn' ? c.linkedin_sales_nav : c.linkedin); if (!url) return;
     try {
       const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
       const pw = Math.max(560, Math.floor(w / 2));
@@ -26308,11 +26308,16 @@ ${foot}
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
         ${fromMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--from" title="Envía desde este buzón del cliente"><span class="cp-taskbar__subj-l">De</span><span class="cp-taskbar__mt-v">${esc(fromMail)}</span>${_copyBtn(fromMail, 'Buzón copiado')}</span>` : ''}
       </div>` : ''}
-      ${st.canal === 'linkedin' ? `<div class="cp-taskbar__mailto">
-        ${c.linkedin
-          ? `<button class="cp-taskbar__mt cp-taskbar__mt--liopen${_cpFlag('open') ? ' is-done' : ''}" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado para enviar la conexión o la nota"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v cp-taskbar__mt-v--li">${esc(c.linkedin)}</span><span class="cp-taskbar__open">${_cpFlag("open") ? NI("check", 12) + "Abierto" : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Abrir`}</span></button>`
-          : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
-      </div>` : ''}
+      ${st.canal === 'linkedin' ? (() => {
+        // Dos iconos juntos, siempre en el mismo sitio: LinkedIn y Sales Navigator. Cada uno abre su perfil en la ventana del costado.
+        const li = c.linkedin, sn = c.linkedin_sales_nav, done = _cpFlag('open');
+        const IN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+        const SN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16 8 14 14 8 16 10 10 16 8"/></svg>';
+        const btn = (url, kind, ico, lbl, miss) => url
+          ? `<button type="button" class="cp-li-ico" onclick="LeadManagerModule.seqOpenLinkedIn(${cid},'${kind}')" title="Abrir ${lbl} al costado">${ico}<span>${lbl}</span></button>`
+          : `<span class="cp-li-ico cp-li-ico--off" title="${miss}">${ico}<span>${lbl}</span></span>`;
+        return `<div class="cp-taskbar__mailto cp-li-row">${btn(li, 'li', IN, 'LinkedIn', 'Este contacto no tiene URL de LinkedIn en su ficha')}${btn(sn, 'sn', SN, 'Sales Navigator', 'Este contacto no tiene URL de Sales Navigator en su ficha')}${done ? `<span class="cp-li-done">${NI('check', 12)} Abierto</span>` : ''}</div>`;
+      })() : ''}
       ${(st.canal === 'email' || _isInmailStep(st)) && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">${st.canal === 'email' ? 'Asunto' : 'Título'}</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs${_cpFlag('subj') ? ' is-done' : ''}" data-act="subj" onclick="LeadManagerModule.seqDoCopySubject()" title="Copiar el asunto">${_cpFlag('subj') ? NI('check', 13) : NI('copy')}</button></div>` : ''}
       ${_isContentStep(st.canal, st.accion) ? (() => {
         const dias = parseInt(st.post_dias) || 0;
