@@ -34225,7 +34225,7 @@ ${foot}
   let _contactView = null;
   let _cpTab = 'informacion';
   let _companyView = null;
-  let _coFrom = 'companies';
+  let _coFrom = 'companies', _coFromSeq = null;   // desde dónde se abrió la ficha de empresa (y, si fue desde una secuencia, cuál y en qué pestaña)
   let _addIds = [];
   let _bulkAddKind = 'sequence'; // 'sequence'|'campaign' — con qué se creó el picker que abrió "Crear nueva…"
   function _bulkAddAfterCreate(saved) { bulkAddDo(_bulkAddKind, saved.id); }
@@ -35768,6 +35768,14 @@ ${foot}
     } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
   }
   // Vuelve al lugar de donde se abrió la ficha (tarea de secuencia, la propia secuencia o la sección de origen)
+  function _coBack() {
+    if (_coFromSeq) {
+      const f = _coFromSeq; _coFromSeq = null; _companyView = null;
+      _activeSeq = f.seqId; _section = 'sequence'; _seqTab = f.tab || 'empresas';
+      _seqContacts = null; _refreshNav(); _renderBody(); _seqLoadContacts(f.seqId); return;
+    }
+    go(_coFrom || 'companies');
+  }
   function _cpBack() {
     if (_cpTaskCtx) { seqDoExit(); return; }
     if (_cpFromSeq) {
@@ -36586,7 +36594,7 @@ ${foot}
   // lista de Contactos y filtrar a mano.
   // ═══════════════════════════════════════════════════════════════
   function openCompanyPage(id) {
-    if (_section !== 'company-view') _coFrom = _CP_FROM_LABEL[_section] ? _section : 'companies';
+    if (_section !== 'company-view') { _coFrom = _CP_FROM_LABEL[_section] ? _section : 'companies'; _coFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
     _companyView = id; _section = 'company-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0;
   }
   function _coInfoRow(label, val, href) {
@@ -36630,7 +36638,7 @@ ${foot}
       </tr>`;
     }).join('');
     return `<div class="cp" id="lm-co-page">
-      <button class="lm-back" onclick="LeadManagerModule.go('${_coFrom}')">‹ ${_CP_FROM_LABEL[_coFrom] || 'Empresas'}</button>
+      <button class="lm-back lm-back--btn" onclick="LeadManagerModule._coBack()">← Atrás · ${_coFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_coFrom] || 'Empresas')}</button>
       <div class="cp-head">
         <div class="cp-ava cp-ava--co"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
         <div class="cp-id">
@@ -37776,7 +37784,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

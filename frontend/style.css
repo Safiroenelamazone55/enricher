@@ -18999,3 +18999,4 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .cant-imp-file-row .lm-mini-x { padding: 2px 4px; }
 /* Editor de paso: fuerza capa propia al desplazar (evita zonas en blanco al hacer scroll en ventanas largas) */
 #lm-step-modal .fin-pi-form { transform: translateZ(0); will-change: scroll-position; }
+.lm-back--btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #E4E0D9; background: #fff; color: #33302C; font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 12px; cursor: pointer; margin-bottom: 12px; } .lm-back--btn:hover { border-color: #A7C8F5; color: #2F5BB7; background: #F7FAFF; }
