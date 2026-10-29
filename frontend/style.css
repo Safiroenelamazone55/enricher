@@ -19087,3 +19087,8 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .lm-q-pos { min-width: 24px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; color: #5C5851; background: #F1EFEB; border: 1px solid #E4E0D9; font-variant-numeric: tabular-nums; }
 .lm-q-w b { font-size: .82rem; font-weight: 600; color: #1F1D1B; white-space: nowrap; } .lm-q-tz { font-weight: 500; font-size: .7rem; color: #8F8B83; margin-left: 2px; }
 .lm-q-sub { font-size: .7rem; color: #8F8B83; margin-top: 1px; }
+.lm-q-sum__r + .lm-q-sum__r { margin-top: 6px; }
+.lm-q-lbl { width: 92px; flex-shrink: 0; font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #A19D95; }
+button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.lm-q-chip:hover { border-color: #C9C4BB; } button.lm-q-chip.is-on { background: #EAF2FE; border-color: #7FA8F0; color: #1F4FA8; }
+.lm-q-none { font-size: .76rem; color: #A19D95; }
+.lm-q-ch { display: inline-block; font-size: .6rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; margin-right: 4px; background: #F1EFEB; color: #5C5851; } .lm-q-ch--whatsapp { background: #E6F3EA; color: #2C6B43; }

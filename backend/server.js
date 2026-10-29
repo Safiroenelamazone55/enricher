@@ -7463,6 +7463,22 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-msgs] GET', err.message); res.status(500).json({ error: 'Error al cargar mensajes' }); }
 });
 
+// Envíos de WhatsApp de una secuencia (cola con ritmo + enviados), para la pestaña Envíos junto a los emails.
+app.get('/api/lm/sequences/:id/wa-sends', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.contact_id, m.estado, m.scheduled_at, m.ts, m.ultimo_error, m.via_cola, LEFT(m.texto, 160) AS texto,
+             k.nombre, k.apellido, COALESCE(NULLIF(k.movil,''), k.telefono, '') AS telefono, s.timezone AS seq_timezone
+        FROM wa_messages m
+        JOIN wa_connections c ON c.id = m.connection_id AND c.user_id = $1
+        JOIN sequences s ON s.id = m.sequence_id AND s.user_id = $1
+        LEFT JOIN lm_contacts k ON k.id = m.contact_id
+       WHERE m.sequence_id = $2 AND m.from_me AND m.estado IN ('programado','enviando','error_programado','enviado')
+       ORDER BY m.ts DESC LIMIT 300`, [req.workspaceOwnerId, parseInt(req.params.id, 10)]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-wa-sends] GET', err.message); res.status(500).json({ error: 'Error al cargar envíos de WhatsApp' }); }
+});
+
 // "Acciones del lead": línea de tiempo real de cada email enviado a este contacto —
 // cuándo se mandó, cada apertura (con hora) y cada clic (con hora y qué link) — no
 // solo el conteo agregado que ya devuelve /api/lm/messages. Los eventos ya se

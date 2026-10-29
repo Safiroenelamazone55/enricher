@@ -23882,16 +23882,39 @@ ${foot}
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
-      if (!_seqMsgs.length) return `<div class="cp-empty2" style="padding:22px">Aún no hay emails enviados por el motor en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
-      const _q = _seqMsgs.filter(m => m.estado === 'approved' && m.est_send_at).sort((a, b) => new Date(a.est_send_at) - new Date(b.est_send_at));
-      _q.forEach((m, i) => { m._pos = i + 1; });
-      const _rest = _seqMsgs.filter(m => !_q.includes(m));
+      if (!_seqMsgs.length && !(_seqWa || []).length) return `<div class="cp-empty2" style="padding:22px">Aún no hay envíos en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
       const _sq = (_sequences || []).find(x => x.id === id) || {};
       const _tzs = _sq.timezone || '';
-      const _byDay = {}; _q.forEach(m => { const d = new Date(m.est_send_at).toLocaleDateString('es-PE', _tzs ? { timeZone: _tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, ''); _byDay[d] = (_byDay[d] || 0) + 1; });
       const _cityS = String(_tzs).split('/').pop().replace(/_/g, ' ');
-      const _sum = _q.length ? `<div class="lm-q-sum"><div class="lm-q-sum__r"><b class="lm-q-sum__t">${_q.length} en cola</b>${Object.entries(_byDay).map(([d, n]) => `<span class="lm-q-chip">${esc(d)} <b>${n}</b></span>`).join('')}</div><div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''}</div></div>` : '';
-      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${[..._q, ..._rest].map(m => _msgRow(m)).join('')}</tbody></table></div>`;
+      const _waItems = (_seqWa || []).map(w => {
+        const q = w.estado === 'programado' || w.estado === 'enviando';
+        return { _ch: 'whatsapp', id: 'wa' + w.id, contact_id: w.contact_id, nombre: w.nombre, apellido: w.apellido, to_email: w.telefono ? '+' + String(w.telefono).replace(/^\+/, '') : '', asunto: w.texto,
+          estado: q ? 'approved' : (w.estado === 'enviado' ? 'sent' : 'failed'), sent_at: w.estado === 'enviado' ? w.ts : null, created_at: w.ts, est_send_at: q ? w.scheduled_at : null,
+          seq_timezone: w.seq_timezone, error: w.estado === 'error_programado' ? w.ultimo_error : '', opens: 0, clicks: 0, seq_nombre: '' };
+      });
+      const _all = [..._seqMsgs.map(m => { m._ch = 'email'; return m; }), ..._waItems];
+      const _byEst = (a, b) => new Date(a.est_send_at) - new Date(b.est_send_at);
+      _all.forEach(m => { m._pos = 0; });
+      ['email', 'whatsapp'].forEach(ch => _all.filter(m => m._ch === ch && m.estado === 'approved' && m.est_send_at).sort(_byEst).forEach((m, i) => { m._pos = i + 1; }));
+      const _dk = m => new Date(m.est_send_at).toLocaleDateString('en-CA', _tzs ? { timeZone: _tzs } : {});
+      const _dl = m => new Date(m.est_send_at).toLocaleDateString('es-PE', _tzs ? { timeZone: _tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
+      const _stK = m => m.estado === 'approved' ? 'queued' : m.estado === 'awaiting' ? 'awaiting' : m.estado === 'sent' ? 'sent' : m.estado === 'replied' ? 'replied' : 'failed';
+      const _queued = _all.filter(m => m.estado === 'approved' && m.est_send_at);
+      const _days = []; _queued.slice().sort(_byEst).forEach(m => { const k = _dk(m); if (!_days.find(d => d.k === k)) _days.push({ k, l: _dl(m), n: 0 }); _days.find(d => d.k === k).n++; });
+      const _chip = (k, v, lbl, n) => n ? `<button type="button" class="lm-q-chip${_envF[k] === v ? ' is-on' : ''}" onclick="LeadManagerModule.envFilter('${k}','${v}')">${lbl} <b>${n}</b></button>` : '';
+      const _cnt = f => _all.filter(f).length;
+      const _stOpts = [['queued', 'En cola'], ['awaiting', 'Por aprobar'], ['sent', 'Enviados'], ['replied', 'Respondieron'], ['failed', 'Fallaron']];
+      const _items = _all.filter(m => (!_envF.canal || m._ch === _envF.canal) && (!_envF.estado || _stK(m) === _envF.estado) && (!_envF.dia || (m.est_send_at && _dk(m) === _envF.dia)));
+      const _iq = _items.filter(m => m.estado === 'approved' && m.est_send_at).sort(_byEst);
+      const _ir = _items.filter(m => !_iq.includes(m)).sort((a, b) => new Date(b.sent_at || b.created_at || 0) - new Date(a.sent_at || a.created_at || 0));
+      const _sum = `<div class="lm-q-sum">
+        <div class="lm-q-sum__r"><b class="lm-q-sum__t">${_queued.length} en cola</b></div>
+        <div class="lm-q-sum__r"><span class="lm-q-lbl">Canal</span>${_chip('canal', 'email', 'Email', _cnt(m => m._ch === 'email'))}${_chip('canal', 'whatsapp', 'WhatsApp', _cnt(m => m._ch === 'whatsapp'))}</div>
+        <div class="lm-q-sum__r"><span class="lm-q-lbl">Día de envío</span>${_days.map(d => _chip('dia', d.k, esc(d.l), d.n)).join('') || '<span class="lm-q-none">Sin envíos programados</span>'}</div>
+        <div class="lm-q-sum__r"><span class="lm-q-lbl">Estado</span>${_stOpts.map(([v, l]) => _chip('estado', v, l, _cnt(m => _stK(m) === v))).join('')}</div>
+        <div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''} LinkedIn es manual: se gestiona desde Tareas.</div></div>`;
+      const _rows = [..._iq, ..._ir].map(m => _msgRow(m)).join('') || `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--muted)">Sin envíos con estos filtros</td></tr>`;
+      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_rows}</tbody></table></div>`;
     }
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null || _seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
@@ -36786,6 +36809,9 @@ ${foot}
   let _todayData = null;    // datos de la card Hoy (lazy)
   let _lmMsgs = null;       // mensajes enviados (inbox real, lazy)
   let _seqMsgs = null;      // mensajes de la secuencia activa (tab Envíos, lazy)
+  let _seqWa = [];          // envíos de WhatsApp de la secuencia activa (tab Envíos)
+  let _envF = { canal: '', dia: '', estado: '' };   // filtros de la pestaña Envíos
+  function envFilter(k, v) { _envF[k] = (_envF[k] === v ? '' : v); const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); }
 
   // Badge de verificación de email (pipeline propio — el diferenciador)
   const _VB = {
@@ -36959,7 +36985,7 @@ ${foot}
     }
     return `<tr class="clients-table__row" onclick="LeadManagerModule.ibAbrirDesdeEnviados(${m.contact_id})" style="cursor:pointer">
       <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
-      <td class="client-meta">${esc(m.asunto)}${m.seq_nombre ? `<div class="client-empresa">${esc(m.seq_nombre)}</div>` : ''}</td>
+      <td class="client-meta">${m._ch ? `<span class="lm-q-ch lm-q-ch--${m._ch}">${m._ch === "whatsapp" ? "WhatsApp" : "Email"}</span> ` : ""}${esc(m.asunto)}${m.seq_nombre ? `<div class="client-empresa">${esc(m.seq_nombre)}</div>` : ''}</td>
       <td class="client-meta">${when}</td>
       <td class="client-meta lm-msg-tr">${m.opens > 0 ? `<span title="aperturas">${NI('eye', 13)} ${m.opens}</span>` : ''}${m.clicks > 0 ? `<span title="clics">${NI('click', 13)} ${m.clicks}</span>` : ''}</td>
       <td><span class="client-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>${m.error ? `<div class="client-empresa" title="${esc(m.error)}">${esc(String(m.error).slice(0, 40))}</div>` : ''}</td>
@@ -37047,6 +37073,7 @@ ${foot}
   // ── Tab Envíos en detalle de secuencia ──
   async function _seqLoadMsgs(id) {
     try { const r = await apiFetch(`${API}/lm/messages?sequence_id=${id}&limit=200`); _seqMsgs = (r && r.ok) ? await r.json() : []; } catch { _seqMsgs = []; }
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/wa-sends`); _seqWa = (r && r.ok) ? await r.json() : []; } catch { _seqWa = []; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'envios') {
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
     }
@@ -37939,7 +37966,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
