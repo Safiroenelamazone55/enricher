@@ -3839,8 +3839,6 @@ app.post('/api/lm/companies', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!_lmS(b.nombre) && !_lmS(b.dominio)) return res.status(400).json({ error: 'Nombre o dominio requerido' });
   try {
-    const _oldCo = (await pool.query('SELECT * FROM lm_companies WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {};
-    const _oldNm = _oldCo.nombre;
     const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
     const { rows } = await pool.query(`
       INSERT INTO lm_companies (user_id,${LM_CO_COLS.join(',')},outbound_client_id)
@@ -3873,6 +3871,8 @@ async function _companyContactIds(uid, companyId) { return (await pool.query(`SE
 app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
+    const _oldCo = (await pool.query('SELECT * FROM lm_companies WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {};
+    const _oldNm = _oldCo.nombre;
     const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
     const set = LM_CO_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
     const { rows } = await pool.query(`
@@ -3883,6 +3883,12 @@ app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
     // El nombre de empresa vive duplicado en lm_contacts.empresa_nombre (snapshot de import) —
     // sin esto, editar el nombre acá dejaba desincronizados a sus contactos.
     if (_lmS(b.nombre)) { await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]); }
+    // El nombre también se actualiza en el resto de sitios donde la empresa aparece copiada (Cantera, exclusiones automáticas, cola de empresas).
+    if (_lmS(b.nombre) && _oldNm !== _lmS(b.nombre)) {
+      const nn = _lmS(b.nombre);
+      await pool.query(`UPDATE cantera_companies SET nombre=$1 WHERE user_id=$2 AND promoted_company_id=$3`, [nn, req.workspaceOwnerId, req.params.id]).catch(() => {});
+      await pool.query(`UPDATE lm_exclusions SET nombre=$1, nombre_norm=$4 WHERE user_id=$2 AND auto_origen='deal' AND auto_company_id=$3`, [nn, req.workspaceOwnerId, req.params.id, _excl.normName(nn)]).catch(() => {});
+    }
     if (_oldCo.id && LM_CO_COLS.some(k => String(_oldCo[k] == null ? '' : _oldCo[k]) !== String(rows[0][k] == null ? '' : rows[0][k]))) await _refreshDrafts(req.workspaceOwnerId, await _companyContactIds(req.workspaceOwnerId, req.params.id), { old: _oldNm, new: rows[0].nombre });
     res.json(rows[0]);
   } catch (err) { console.error('[lm-co] PUT', err.message); res.status(500).json({ error: 'Error al actualizar empresa' }); }
