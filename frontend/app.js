@@ -8290,7 +8290,7 @@ const CanteraModule = (() => {
           <option value="">Sin secuencia</option>
           ${secuencias.map(s => `<option value="${s.id}"${String(_current.sequence_id) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}
         </select></label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir contactos de respaldo</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closePromote()">Cancelar</button>
@@ -8947,7 +8947,7 @@ const CanteraMesaModule = (() => {
         <p class="cant-hint" style="margin:0">Las empresas calificadas de tu selección, con sus contactos "Decide"/"Respaldo", se crean como reales. Esto no se puede deshacer.</p>
         <label class="cant-flabel">Cliente<select id="mesa-pr-client" class="form-input" onchange="_cantCascade.change('mesa-pr','client')"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
         <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-pr-camp" class="form-input" onchange="_cantCascade.change('mesa-pr','camp')"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="mesa-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="mesa-pr-resp" checked> Incluir contactos de respaldo</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-promote-modal').remove()">Cancelar</button>
