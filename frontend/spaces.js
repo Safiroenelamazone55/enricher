@@ -52,7 +52,7 @@ const SpacesModule = (() => {
   // ── esqueleto ──
   function render() {
     const root = $q('spaces-root'); if (!root) return;
-    root.innerHTML = `<div class="sp"><aside class="sp-tree" id="sp-tree"></aside><section class="sp-main" id="sp-main"></section></div>`;
+    root.innerHTML = `<div class="spw"><aside class="sp-tree" id="sp-tree"></aside><section class="sp-main" id="sp-main"></section></div>`;
     _paintTree(); _paintMain();
   }
   function _paintTree() {
