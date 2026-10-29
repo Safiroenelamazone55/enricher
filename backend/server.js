@@ -6759,12 +6759,10 @@ app.patch('/api/lm/sequences/:id/contacts-idioma', requireAuth, async (req, res)
     const geo = require('./services/geoService');
     const a = geo.normalizeLanguage(b.a); if (!a) return res.status(400).json({ error: 'Elige el idioma a asignar' });
     const desde = b.desde === '_none' ? '' : geo.normalizeLanguage(b.desde);
-    const { rows } = await pool.query(`SELECT DISTINCT k.id, k.idioma, k.pais, k.ciudad, k.region FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id WHERE cs.user_id=$1 AND cs.sequence_id=$2`, [uid, parseInt(req.params.id)]);
+    const { rows } = await pool.query(`SELECT DISTINCT k.id, k.idioma, k.idiomas, k.pais, k.ciudad, k.region FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id WHERE cs.user_id=$1 AND cs.sequence_id=$2`, [uid, parseInt(req.params.id)]);
     const ids = [];
     for (const r of rows) {
-      let ef = r.idioma ? geo.normalizeLanguage(r.idioma) : '';
-      if (!ef) { const l = geo.languageFor(r.pais || geo.countryFromPlace(r.ciudad, r.region) || '', r.ciudad); ef = l.lang ? (geo.LANG_NAMES[l.lang] || l.lang) : ''; }
-      if (ef === desde) ids.push(r.id);
+      if (geo.effectiveLanguage(r).lang === desde) ids.push(r.id);   // misma regla que el grupo que se ve en pantalla
     }
     if (!ids.length) return res.json({ ok: true, actualizados: 0 });
     await pool.query(`UPDATE lm_contacts SET idioma=$1, updated_at=NOW() WHERE user_id=$2 AND id = ANY($3::int[])`, [a, uid, ids]);

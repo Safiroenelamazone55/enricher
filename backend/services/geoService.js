@@ -262,4 +262,12 @@ function bestLanguage(lista) {
   return top ? normalizeLanguage(top) : '';
 }
 
-module.exports = { _nivelRank, bestLanguage, normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES, normalizeLanguage };
+// Idioma EFECTIVO de un contacto (misma regla en todo el sistema): el guardado a mano → el que prioriza por nivel (nativo > avanzado…) → el deducido de su país/ciudad.
+function effectiveLanguage(r) {
+  if (r.idioma) return { lang: normalizeLanguage(r.idioma) || r.idioma, origen: 'guardado' };
+  const best = bestLanguage(r.idiomas); if (best) return { lang: best, origen: 'por nivel' };
+  const l = languageFor(r.pais || countryFromPlace(r.ciudad, r.region) || '', r.ciudad);
+  return l.lang ? { lang: LANG_NAMES[l.lang] || l.lang, origen: 'deducido' } : { lang: '', origen: '' };
+}
+
+module.exports = { effectiveLanguage, _nivelRank, bestLanguage, normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES, normalizeLanguage };
