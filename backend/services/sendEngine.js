@@ -878,7 +878,9 @@ async function estimateSendTimes(pool, uid) {
     }
     const dk = dayKey(new Date(t)); days[dk] = (days[dk] || 0) + 1; cdays[dk] = (cdays[dk] || 0) + 1;
     out[r.id] = new Date(t).toISOString();
-    cursor[r.sequence_id] = t + ivMs;
+    // El envío real espera entre 0.6x y 1.5x el intervalo (anti-patrón de bot); la estimación usa un factor fijo por mensaje en ese rango.
+    const jit = 0.6 + ((r.id * 2654435761) % 1000) / 1000 * 0.9;
+    cursor[r.sequence_id] = t + Math.round(ivMs * jit);
   }
   return out;
 }
