@@ -24790,6 +24790,42 @@ ${foot}
       showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — se usará solo si no hay profesional disponible' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  function fixRowMenu(ev, cid) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const x = _fixList().find(r => r.c.id === cid); if (!x) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const html = `<div class="cp-mark-menu__list">
+      <button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.fixSkip(${cid})">${x.bad === 'rebote' ? 'Email inválido' : 'No tiene email'} — saltar paso</button>
+      <button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.fixDisq(${cid})">Lead no válido — descalifica</button></div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '230px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const r = ((ev && (ev.currentTarget || ev.target)) || document.body).getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 230, window.innerWidth - 240))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+  }
+  async function _fixAfter() {
+    try { await _reloadContacts(); } catch (_) {}
+    try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
+    _renderBody();
+  }
+  async function fixSkip(cid) {
+    const x = _fixList().find(r => r.c.id === cid); if (!x) return;
+    const inSeq = _section === 'sequence' && _activeSeq && x.seqs.some(s => s.id === _activeSeq);
+    const ids = inSeq ? [_activeSeq] : x.seqs.map(s => s.id);
+    if (!confirm('¿Saltar el email de este contacto?\n\nNo se envía nada: sigue en la secuencia y pasa al siguiente paso (LinkedIn, llamada, etc.). Si más adelante hay otro email, volverá a aparecer en esta lista.')) return;
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + cid + '/skip-email-steps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sequence_ids: ids }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      await _fixAfter();
+      showBanner('✓ Paso saltado — el contacto avanza al siguiente', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fixDisq(cid) {
+    if (!confirm('¿Marcar este lead como "No califica"?\n\nSe detienen todas sus secuencias y sale de las listas de trabajo.')) return;
+    try { await _lmSetDispositionCore(cid, 'no_califica', null, ''); await _fixAfter(); showBanner('✓ Lead descalificado', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
   // paso de EMAIL en una secuencia ACTIVA. En una secuencia solo de LinkedIn no tener email no es un problema, por eso no cuentan.
   function _fixList() {
@@ -24863,10 +24899,11 @@ ${foot}
         '<input class="lm-fx-in" id="fix-em-' + c.id + '" type="email" placeholder="Email profesional" title="Email de trabajo (el que se usa para enviar)" onkeydown="if(event.key===\'Enter\'){' + sv + '}">' +
         '<input class="lm-fx-in" id="fix-emp-' + c.id + '" type="email" placeholder="Email personal" value="' + esc(c.email_personal || '') + '" title="Email personal (gmail, outlook…). Si no hay profesional, los envíos van a este." onkeydown="if(event.key===\'Enter\'){' + sv + '}">' +
         '<button class="btn btn--primary btn--sm lm-fx-sv" onclick="' + sv + '">Guardar</button>' +
-        '<button type="button" class="lm-fx-pb" id="fix-pb-' + c.id + '" title="Deducir el email probable a partir de los correos de esa empresa que ya hay en el sistema" onclick="LeadManagerModule.fixHints(' + c.id + ')">Email probable</button></div>' +
+        '<button type="button" class="lm-fx-pb" id="fix-pb-' + c.id + '" title="Deducir el email probable a partir de los correos de esa empresa que ya hay en el sistema" onclick="LeadManagerModule.fixHints(' + c.id + ')">Email probable</button>' +
+        '<button type="button" class="lm-fx-mn" title="Más opciones" onclick="LeadManagerModule.fixRowMenu(event,' + c.id + ')">⋮</button></div>' +
         '<div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
-    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
@@ -37884,7 +37921,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

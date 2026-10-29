@@ -19073,3 +19073,7 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .lm-fx.is-active { background: #F3F8FF !important; box-shadow: inset 3px 0 0 #7FA8F0; }
 .lm-fx.is-active .lm-fx-n b { color: #1F4FA8; }
 .lm-fx.is-active .lm-fx-in { border-color: #C9DCF7; }
+
+.lm-fx { grid-template-columns: 28px minmax(150px, 1.1fr) 92px 232px minmax(110px, 1fr) minmax(110px, 1fr) 70px 104px 26px !important; }
+.lm-fx-mn { width: 26px; height: 26px; border: 1px solid #E4E0D9; background: #fff; color: #5C5851; font: inherit; font-size: 1rem; font-weight: 800; line-height: 1; cursor: pointer; padding: 0; } .lm-fx-mn:hover { background: #F3F1EC; border-color: #C9C4BB; }
+@media (max-width: 1100px) { .lm-fx { grid-template-columns: 28px 1fr 92px !important; } }
