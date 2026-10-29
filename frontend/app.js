@@ -37278,16 +37278,17 @@ ${foot}
   function _dgToolbar() {
     const isCo = _dgEntity === 'companies';
     const cliOpts = `<option value="">Cliente: todos</option>` + _clients.map(c => `<option value="${c.id}"${String(_dgCliente) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
-    const seqOpts = `<option value="">Secuencia: todas</option>` + _sequences.map(s => `<option value="${s.id}"${String(_dgSeq) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
-    const campOpts = `<option value="">Campaña: todas</option>` + _campaigns.map(c => `<option value="${c.id}"${String(_dgCamp) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const _cliOk = x => !_dgCliente || String(x.outbound_client_id) === String(_dgCliente);
+    const seqOpts = `<option value="">Secuencia: todas</option>` + _sequences.filter(_cliOk).map(s => `<option value="${s.id}"${String(_dgSeq) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
+    const campOpts = `<option value="">Campaña: todas</option>` + _campaigns.filter(_cliOk).map(c => `<option value="${c.id}"${String(_dgCamp) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
     return `<div class="lm-toolbar dg-toolbar">
       <div class="dg-toggle">
         <button class="dg-toggle__b${isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('companies')">Empresas</button>
         <button class="dg-toggle__b${!isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('contacts')">Contactos</button>
       </div>
       <select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCliente(this.value)">${cliOpts}</select>
-      <select class="form-input dg-flt-sel"${isCo ? ' disabled title="Disponible al ver Contactos"' : ''} onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
-      ${!isCo ? `<select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>` : ''}
+      <select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
+      <select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>
       <input class="form-input dg-flt-q" id="dg-q" placeholder="Buscar empresa o contacto…" value="${esc(_dgQ)}" oninput="LeadManagerModule.dgSetQ(this.value)">
       <button class="dg-kebab" onclick="LeadManagerModule.dgMoreMenu(event)" title="Más opciones">⋮</button>
     </div>`;
@@ -37322,8 +37323,13 @@ ${foot}
     const isCo = _dgEntity === 'companies';
     const src = isCo ? _companies : _contacts;
     const q = _dgQ.toLowerCase().trim();
+    // En Empresas: una empresa pertenece a una secuencia/campaña si alguno de sus contactos está en ella.
+    const coSeq = (isCo && _dgSeq) ? new Set((_contacts || []).filter(k => (k.sequences || []).some(s => String(s.id) === String(_dgSeq))).map(k => k.company_id)) : null;
+    const coCamp = (isCo && _dgCamp) ? new Set((_contacts || []).filter(k => (k.campaigns || []).some(c => String(c.id) === String(_dgCamp))).map(k => k.company_id)) : null;
     return (src || []).filter(r => {
       if (_dgCliente && String(r.outbound_client_id) !== String(_dgCliente)) return false;
+      if (coSeq && !coSeq.has(r.id)) return false;
+      if (coCamp && !coCamp.has(r.id)) return false;
       if (!isCo && _dgSeq && !(r.sequences || []).some(s => String(s.id) === String(_dgSeq))) return false;
       if (!isCo && _dgCamp && !(r.campaigns || []).some(c => String(c.id) === String(_dgCamp))) return false;
       if (q) {
@@ -37397,8 +37403,14 @@ ${foot}
     return rows;
   }
   function _dgRepaint() { const el = document.getElementById(_dgContainerId); if (!el) return; el.innerHTML = _dgShellHtml(); _dgRenderRows(); }
-  function dgSetEntity(e) { _dgEntity = e; _dgSel.clear(); _dgSeq = ''; _dgCamp = ''; _dgRepaint(); }
-  function dgSetCliente(v) { _dgCliente = v; _dgRenderRows(); }
+  function dgSetEntity(e) { _dgEntity = e; _dgSel.clear(); _dgRepaint(); }
+  function dgSetCliente(v) {
+    _dgCliente = v;
+    const ok = x => !v || String(x.outbound_client_id) === String(v);
+    if (_dgSeq && !(_sequences || []).some(x => String(x.id) === String(_dgSeq) && ok(x))) _dgSeq = '';
+    if (_dgCamp && !(_campaigns || []).some(x => String(x.id) === String(_dgCamp) && ok(x))) _dgCamp = '';
+    _dgRepaint();
+  }
   function dgSetSeq(v) { _dgSeq = v; _dgRenderRows(); }
   function dgSetCamp(v) { _dgCamp = v; _dgRenderRows(); }
   function dgSetQ(v) { _dgQ = v; _dgRenderRows(); }
