@@ -24820,7 +24820,10 @@ ${foot}
       // Búsquedas para casos difíciles. dom = dominio de la empresa (ficha o sitio web).
       const dom = String((co && (co.dominio || co.website)) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0];
       const cargoTxt = String(c.cargo || '').trim();
-      const qAI = encodeURIComponent('What is the corporate email address of ' + nm + (cargoTxt ? ', ' + cargoTxt : '') + (empresa ? ' at ' + empresa : '') + (dom ? ' (' + dom + ')' : '') + '? Include alternative or personal emails, the email format used at ' + (dom || 'the company') + ', and their LinkedIn profile.');
+      const lugar = [c.ciudad, c.pais].filter(Boolean).join(', ');
+      const qAI = encodeURIComponent('Find the corporate email address of ' + nm + (cargoTxt ? ', ' + cargoTxt : '') + (empresa ? ' at ' + empresa : '') + (dom ? ' (' + dom + ')' : '') + (lugar ? ', based in ' + lugar : '') + '. '
+        + 'If their email is not public, find other employees of ' + (empresa || 'that company') + (lugar ? ' (preferably in ' + lugar + ')' : '') + ' whose business email IS publicly listed, compare how those addresses are built (e.g. first.last@, flast@, first@), say which format is most common and how many examples support it, and then propose the most likely email for ' + nm + ' in that format. '
+        + 'Also include any alternative or personal email and their LinkedIn profile.');
       // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
       const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
@@ -24831,7 +24834,7 @@ ${foot}
         slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
-        slot('Búsqueda inteligente del email (Google con IA): pregunta completa con nombre, cargo, empresa y dominio', NI('sparkles', 14), 'href="https://www.google.com/search?q=' + qAI + '" target="_blank" rel="noopener"', true),
+        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?q=' + qAI + '" target="_blank" rel="noopener"', true),
         slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
       ].join('');
       const tag = bad === 'rebote'
