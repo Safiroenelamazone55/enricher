@@ -43,8 +43,14 @@ function limpiarCargo(raw, empresa, opts) {
 
 // Nivel (de mayor a menor) y área, reconocidos en varios idiomas.
 const NIVELES = [
-  ['CEO', /\b(ceo|chief executive officer|consejer[oa] delegad[oa]|amministratore delegato|managing director|director[a]? general|direttore generale|general manager|gerente general)\b/],
+  ['CEO', /\b(ceo|chief executive officer|consejer[oa] delegad[oa]|amministratore delegato|amministratore unico|amm unico|administrador[a]? unic[oa]|administrador[a]? delegad[oa]|managing director|director[a]? general|direttore generale|general manager|gerente general)\b/],
   ['COO', /\b(coo|chief operating officer)\b/],
+  ['CFO', /\b(cfo|chief financial officer|director[a]? financier[oa]|direttore finanziario)\b/],
+  ['CIO', /\b(cio|chief information officer)\b/],
+  ['CTO', /\b(cto|chief technology officer)\b/],
+  ['CMO', /\b(cmo|chief marketing officer)\b/],
+  ['Presidente', /\b(president[ea]?|presidenta|chairman|chairwoman)\b/],
+  ['Propietario', /\b(propietari[oa]|owner|titular|titolare|fundador[a]?|founder|co ?founder|cofundador[a]?|socio|socia|partner|dueno|duena|autonomo[a]?)\b/],
   ['Director', /\b(director[a]?|direttore|direttrice|direzione|head of|diretor[a]?)\b/],
   ['Coordinador', /\b(coordinador[a]?|coordinatore|coordinatrice|coordenador[a]?|coordinator)\b/],
   ['Responsable', /\b(jefe|jefa|responsable|responsabile|resp|gerente|manager|managers|manazer|encargad[oa]|supervisor[a]?|capo|chef de)\b/],
@@ -54,10 +60,22 @@ const AREAS = [
   ['Logística', /\b(logisti[a-z]*|logistics?|supply chain|cadena de suministro|trasporti|transporte|transporti|transport|almacen|almacenes|magazzino|warehouse|distribuzione|distribucion|distributiv[a-z]*)\b/],
   ['Operaciones', /\b(operaciones|operacion|operations|operation|operazioni|operazione|operaci|operacoes)\b/],
   ['Flota', /\b(flota|fleet|flotta)\b/],
-  ['Compras', /\b(compras|purchasing|procurement|acquisti|approvvigionamenti)\b/],
-  ['Producción', /\b(produccion|production|produzione)\b/],
+  ['Compras', /\b(compras|purchasing|procurement|acquisti|approvvigionamenti|buyer)\b/],
+  ['Producción', /\b(produccion|production|produzione|fabrica|planta|plant|manufacturing)\b/],
   ['Calidad', /\b(calidad|quality|qualita)\b/],
+  ['Comercial', /\b(comercial|commercial|commerciale|ventas|sales|vendite|business development|desarrollo de negocio|desarrollo comercial|comercio)\b/],
+  ['Marketing', /\b(marketing|mercadeo|comunicacion|communication|comunicazione)\b/],
+  ['Finanzas', /\b(finanzas|financiero|financiera|finance|financial|finanze|finanziario|contabilidad|accounting|administracion y finanzas)\b/],
+  ['Recursos Humanos', /\b(rrhh|hr|recursos humanos|human resources|risorse umane|people|talento|talent)\b/],
+  ['Tecnología', /\b(tecnologia|technology|sistemas|it|informatica|informatico|tic|digital|ti)\b/],
+  ['Mantenimiento', /\b(mantenimiento|maintenance|manutenzione)\b/],
+  ['Seguridad', /\b(seguridad|safety|security|sicurezza|prevencion|hse|prl)\b/],
+  ['Atención al cliente', /\b(atencion al cliente|customer service|customer success|servicio al cliente|clientes|servizio clienti)\b/],
 ];
+// Áreas que se leen como adjetivo: «Director Comercial» (no «Director de Comercial»).
+const _ADJ = new Set(['Comercial']);
+// Niveles que por sí solos ya son el rol (no necesitan un área).
+const _SOLO = new Set(['CEO', 'COO', 'CFO', 'CIO', 'CTO', 'CMO', 'Presidente', 'Propietario']);
 
 // {rol, nivel, area}. rol = forma canónica para agrupar; si no se reconoce nada, el cargo limpio.
 function rolCanonico(raw, empresa) {
@@ -69,8 +87,8 @@ function rolCanonico(raw, empresa) {
   let area = '', pos = Infinity;
   for (const [nm, re] of AREAS) { const m = re.exec(' ' + t + ' '); if (m && m.index < pos) { pos = m.index; area = nm; } }
   let rol;
-  if (nivel === 'CEO' || nivel === 'COO') rol = nivel;
-  else if (nivel && area) rol = `${nivel} de ${area}`;
+  if (_SOLO.has(nivel)) rol = nivel;
+  else if (nivel && area) rol = _ADJ.has(area) ? `${nivel} ${area}` : `${nivel} de ${area}`;
   else if (area) rol = area;                                           // «Logística», «Operaciones»: el área sola
   else rol = limpio.replace(/\s+/g, ' ');                               // sin reconocer: se deja el cargo limpio
   return { rol, nivel, area, limpio };
