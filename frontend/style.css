@@ -19078,4 +19078,12 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .lm-fx-mn { width: 26px; height: 26px; border: 1px solid #E4E0D9; background: #fff; color: #5C5851; font: inherit; font-size: 1rem; font-weight: 800; line-height: 1; cursor: pointer; padding: 0; } .lm-fx-mn:hover { background: #F3F1EC; border-color: #C9C4BB; }
 @media (max-width: 1100px) { .lm-fx { grid-template-columns: 28px 1fr 92px !important; } }
 
-.lm-q-sum { padding: 8px 12px; margin-bottom: 8px; background: #FAF9F7; border: 1px solid #EAE7E2; font-size: .8rem; color: #3D3A36; } .lm-q-sum span { color: #8F8B83; }
+.lm-q-sum { padding: 10px 14px; margin-bottom: 8px; background: #FAF9F7; border: 1px solid #EAE7E2; }
+.lm-q-sum__r { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lm-q-sum__t { font-size: .88rem; color: #1F1D1B; margin-right: 4px; }
+.lm-q-chip { font-size: .76rem; color: #3D3A36; background: #fff; border: 1px solid #E4E0D9; padding: 2px 8px; } .lm-q-chip b { color: #1F4FA8; margin-left: 3px; }
+.lm-q-sum__n { margin-top: 6px; font-size: .74rem; color: #8F8B83; }
+.lm-q-w { display: flex; align-items: center; gap: 10px; }
+.lm-q-pos { min-width: 24px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; color: #5C5851; background: #F1EFEB; border: 1px solid #E4E0D9; font-variant-numeric: tabular-nums; }
+.lm-q-w b { font-size: .82rem; font-weight: 600; color: #1F1D1B; white-space: nowrap; } .lm-q-tz { font-weight: 500; font-size: .7rem; color: #8F8B83; margin-left: 2px; }
+.lm-q-sub { font-size: .7rem; color: #8F8B83; margin-top: 1px; }

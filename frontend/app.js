@@ -23886,9 +23886,11 @@ ${foot}
       const _q = _seqMsgs.filter(m => m.estado === 'approved' && m.est_send_at).sort((a, b) => new Date(a.est_send_at) - new Date(b.est_send_at));
       _q.forEach((m, i) => { m._pos = i + 1; });
       const _rest = _seqMsgs.filter(m => !_q.includes(m));
-      const _byDay = {}; _q.forEach(m => { const d = new Date(m.est_send_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }); _byDay[d] = (_byDay[d] || 0) + 1; });
       const _sq = (_sequences || []).find(x => x.id === id) || {};
-      const _sum = _q.length ? `<div class="lm-q-sum"><b>${_q.length} en cola</b> · ${Object.entries(_byDay).map(([d, n]) => `${esc(d)}: <b>${n}</b>`).join(' · ')}<span> — salen en orden, repartidos según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit}/día en esta secuencia)` : ''}, la ventana horaria y el tope del buzón del cliente.</span></div>` : '';
+      const _tzs = _sq.timezone || '';
+      const _byDay = {}; _q.forEach(m => { const d = new Date(m.est_send_at).toLocaleDateString('es-PE', _tzs ? { timeZone: _tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, ''); _byDay[d] = (_byDay[d] || 0) + 1; });
+      const _cityS = String(_tzs).split('/').pop().replace(/_/g, ' ');
+      const _sum = _q.length ? `<div class="lm-q-sum"><div class="lm-q-sum__r"><b class="lm-q-sum__t">${_q.length} en cola</b>${Object.entries(_byDay).map(([d, n]) => `<span class="lm-q-chip">${esc(d)} <b>${n}</b></span>`).join('')}</div><div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''}</div></div>` : '';
       return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${[..._q, ..._rest].map(m => _msgRow(m)).join('')}</tbody></table></div>`;
     }
     if (_seqTab === 'aprobar') {
@@ -36945,11 +36947,15 @@ ${foot}
     const ST = { sent: ['Enviado', '#F1EFEB', '#1E5FA8'], replied: ['Respondió', '#F1EFEB', '#15803D'], failed: ['Falló', '#F1EFEB', '#C4342B'], queued: ['En cola', '#F1EFEB', '#6C6862'], bounced: ['Rebotó', '#F1EFEB', '#C4342B'] };
     ST.approved = ST.queued; ST.awaiting = ['Por aprobar', '#FEF3C7', '#92400E'];
     const s = ST[m.estado] || ST.queued;
-    const fmt = d => new Date(d).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const _city = tz => String(tz || '').split('/').pop().replace(/_/g, ' ');
+    const _myTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) { return ''; } })();
+    const _dt = (d, tz) => { const o = tz ? { timeZone: tz } : {}; return new Date(d).toLocaleDateString('es-PE', { ...o, weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '') + ' · ' + new Date(d).toLocaleTimeString('es-PE', { ...o, hour: '2-digit', minute: '2-digit', hour12: false }); };
     let when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     if (!m.sent_at && m.estado === 'approved' && m.est_send_at) {
-      let pr = ''; try { if (m.seq_timezone) pr = ' · allá ' + new Date(m.est_send_at).toLocaleTimeString('es-ES', { timeZone: m.seq_timezone, hour: '2-digit', minute: '2-digit' }); } catch (_) {}
-      when = `<span title="Estimado: respeta el límite diario, la ventana horaria del prospecto, los días permitidos y el intervalo entre envíos">${m._pos ? '<b>#' + m._pos + '</b> · ' : ''}Sale ~${fmt(m.est_send_at)}${pr}</span>`;
+      const hasPr = m.seq_timezone && m.seq_timezone !== _myTz;
+      const main = hasPr ? `${_dt(m.est_send_at, m.seq_timezone)} <span class="lm-q-tz">${esc(_city(m.seq_timezone))}</span>` : `${_dt(m.est_send_at)}`;
+      const sub = hasPr ? `<div class="lm-q-sub">${_dt(m.est_send_at).split(' · ')[1]} en tu hora (${esc(_city(_myTz))})</div>` : '';
+      when = `<div class="lm-q-w" title="Estimado: respeta el límite diario, la ventana horaria del prospecto, los días permitidos y el intervalo entre envíos">${m._pos ? `<span class="lm-q-pos">${m._pos}</span>` : ''}<div><b>${main}</b>${sub}</div></div>`;
     }
     return `<tr class="clients-table__row" onclick="LeadManagerModule.ibAbrirDesdeEnviados(${m.contact_id})" style="cursor:pointer">
       <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
