@@ -41120,6 +41120,7 @@ const QuickWaModule = (() => {
   }
   function modoCola(usar) { _cola.usar = !!usar; _pintarModoCola(); }
   function _pintarModoCola() {
+    const _cw = $$('qwa-clock-wrap'); if (_cw) _cw.style.display = (_cola.disponible && _cola.usar) ? 'none' : '';   // con ritmo, "Enviar" ya programa solo
     const el = $$('qwa-cola-bar'); if (!el) return;
     const i = _cola.info;
     if (!_cola.disponible || !i) { el.innerHTML = ''; return; }
@@ -41128,7 +41129,7 @@ const QuickWaModule = (() => {
     if (i.pausada) h += `<div class="qwa-cola qwa-cola--warn">⏸ Esta línea está en pausa${i.pausa_motivo ? ': ' + esc(i.pausa_motivo) : ''}. Lo que pongas en cola espera hasta que se reanude.</div>`;
     if (_cola.usar) {
       const fuera = !i.en_ventana ? ' Ahora está fuera del horario de envío: saldrá en la próxima jornada.' : '';
-      h += `<div class="qwa-cola">🕒 <b>Con ritmo</b>: 1 cada ~${i.intervalo_min} min · hoy ${i.hoy}/${i.tope}${i.en_cola ? ` · ${i.en_cola} antes en la cola` : ''}.${fuera} <a href="javascript:void(0)" onclick="QuickWaModule.modoCola(false)">Enviar al instante</a></div>`;
+      h += `<div class="qwa-cola">🕒 <b>Con ritmo</b>: se envía en cola, en el horario del prospecto · 1 cada ~${i.intervalo_min} min · hoy ${i.hoy}/${i.tope}${i.en_cola ? ` · ${i.en_cola} antes en la cola` : ''}.${fuera} <a href="javascript:void(0)" onclick="QuickWaModule.modoCola(false)">Enviar al instante</a></div>`;
     } else {
       h += `<div class="qwa-cola qwa-cola--off">Envío al instante · <a href="javascript:void(0)" onclick="QuickWaModule.modoCola(true)">Usar el ritmo de la línea</a> <span title="Recomendado para contactos nuevos: WhatsApp puede bloquear números que escriben a muchos desconocidos seguidos">ⓘ</span></div>`;
     }
@@ -41210,7 +41211,7 @@ const QuickWaModule = (() => {
           <button class="wa-clock" title="Emoji" onclick="QuickWaModule.emojiPicker(event)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
-          <div class="wa-clock-wrap">
+          <div class="wa-clock-wrap" id="qwa-clock-wrap">
             <button class="wa-clock" title="Programar envío" onclick="QuickWaModule.programarToggle(event)">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
             </button>
