@@ -24834,7 +24834,7 @@ ${foot}
         slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
-        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?q=' + qAI + '" target="_blank" rel="noopener"', true),
+        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?hl=es&q=' + qAI + '" target="_blank" rel="noopener"', true),
         slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
       ].join('');
       const tag = bad === 'rebote'
