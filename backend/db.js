@@ -811,6 +811,7 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT '';`);
     // Arranque escalonado (drip): nº de contactos nuevos a arrancar por día al enrolar. 0 = todos el mismo día.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS drip_per_day INTEGER NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE sequences ALTER COLUMN drip_per_day SET DEFAULT 20;`);   // arranque escalonado: 20 contactos por día por defecto (editable; 0 = todos el mismo día)
     // Días de cadencia permitidos (Lun→Dom, '1'=sí). Default L–V. Los pasos/tareas caen solo en estos días.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_days TEXT NOT NULL DEFAULT '1111100';`);
     // Fecha de inicio (calendario): el "día 1" de los contactos que enroles no arranca antes de esta fecha. NULL = arranca al enrolar.
