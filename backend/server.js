@@ -14938,6 +14938,8 @@ async function start() {
   await initDb();
   setTimeout(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 90 * 1000);
   setTimeout(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 120 * 1000);
+  setTimeout(() => { try { require('./services/cargoSweep').run(pool); } catch (_) {} }, 150 * 1000);
+  setInterval(() => { try { require('./services/cargoSweep').run(pool); } catch (_) {} }, 60 * 60 * 1000);
   setInterval(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 60 * 60 * 1000);
   setInterval(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 60 * 60 * 1000);
 
