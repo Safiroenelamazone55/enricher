@@ -835,28 +835,48 @@ async function estimateSendTimes(pool, uid) {
   const { rows } = await pool.query(`
     SELECT m.id, m.sequence_id, m.scheduled_at, s.send_days, s.timezone AS seq_tz, COALESCE(s.send_interval_min,5) AS iv,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone AS cfg_tz,
-           s.daily_limit AS seq_limit,
+           s.daily_limit AS seq_limit, s.outbound_client_id AS ocid,
            (SELECT MAX(mi.sent_at) FROM lm_messages mi WHERE mi.sequence_id=m.sequence_id) AS last_sent,
+           (SELECT e.next_action_at FROM lm_contact_sequences e WHERE e.sequence_id=m.sequence_id AND e.contact_id=m.contact_id LIMIT 1) AS enr_next,
            (SELECT COUNT(*)::int FROM lm_messages x WHERE x.sequence_id=m.sequence_id AND x.estado IN ('sent','replied','bounced')
-               AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS sent_today
+               AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS sent_today,
+           (SELECT COUNT(*)::int FROM lm_messages x JOIN sequences xs ON xs.id=x.sequence_id WHERE xs.outbound_client_id=s.outbound_client_id AND x.estado IN ('sent','replied','bounced')
+               AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS client_today,
+           (SELECT row_to_json(b) FROM (SELECT mb.daily_limit, mb.ramp_on, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS ramp_started_on, mb.ramp_start, mb.ramp_step, mb.ramp_target
+              FROM lm_mailboxes mb WHERE mb.outbound_client_id = s.outbound_client_id LIMIT 1) b) AS mbx
       FROM lm_messages m JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
-     WHERE m.user_id=$1 AND m.estado='approved' ORDER BY m.sequence_id, m.created_at ASC`, [uid]);
-  const out = {}, cursor = {}, perDay = {};
+     WHERE m.user_id=$1 AND m.estado='approved' ORDER BY COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC`, [uid]);
+  const out = {}, cursor = {}, perDay = {}, clientDay = {};
+  // Tope del buzón del cliente en una fecha (mismo criterio que _mailboxFull): límite propio, o calentamiento semanal.
+  const mbCap = (mb, dk) => {
+    if (!mb) return 0;
+    if (mb.daily_limit > 0) return mb.daily_limit;
+    if (mb.ramp_on && mb.ramp_started_on) {
+      const wk = Math.floor(Math.max((Date.parse(dk) - Date.parse(mb.ramp_started_on)) / 864e5, 0) / 7);
+      return Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * wk);
+    }
+    return 0;
+  };
   for (const r of rows) {
     const tz = r.seq_tz || r.cfg_tz || 'America/Lima', ws = r.window_start ?? 9, we = r.window_end ?? 18, mask = _sanSendDays(r.send_days);
     const wsTz = r.cfg_tz || 'America/Lima', lim = r.seq_limit > 0 ? r.seq_limit : 0;
     const dayKey = d => new Intl.DateTimeFormat('en-CA', { timeZone: wsTz }).format(d);
     const ivMs = Math.max(r.iv, 1) * 60000;
-    const days = perDay[r.sequence_id] || (perDay[r.sequence_id] = { [dayKey(new Date())]: r.sent_today });
-    let t = Math.max(Date.now(), cursor[r.sequence_id] || 0, r.last_sent ? new Date(r.last_sent).getTime() + ivMs : 0, r.scheduled_at ? new Date(r.scheduled_at).getTime() : 0);
+    const today = dayKey(new Date());
+    const days = perDay[r.sequence_id] || (perDay[r.sequence_id] = { [today]: r.sent_today });
+    const cdays = clientDay[r.ocid] || (clientDay[r.ocid] = { [today]: r.client_today });
+    let t = Math.max(Date.now(), cursor[r.sequence_id] || 0, r.last_sent ? new Date(r.last_sent).getTime() + ivMs : 0,
+      r.scheduled_at ? new Date(r.scheduled_at).getTime() : 0, r.enr_next ? new Date(r.enr_next).getTime() : 0);
     for (let i = 0; i < 1500; i++) {
       const { hour, weekend, wdIdx } = _localNow(tz, new Date(t));
       const dk = dayKey(new Date(t));
-      if (hour >= ws && hour < we && !(weekend && !r.send_weekends) && mask[wdIdx] === '1' && !(lim && (days[dk] || 0) >= lim)) break;
+      const cap = mbCap(r.mbx, dk);
+      if (hour >= ws && hour < we && !(weekend && !r.send_weekends) && mask[wdIdx] === '1'
+          && !(lim && (days[dk] || 0) >= lim) && !(cap && (cdays[dk] || 0) >= cap)) break;
       t += 30 * 60000;
     }
-    const dk = dayKey(new Date(t)); days[dk] = (days[dk] || 0) + 1;
+    const dk = dayKey(new Date(t)); days[dk] = (days[dk] || 0) + 1; cdays[dk] = (cdays[dk] || 0) + 1;
     out[r.id] = new Date(t).toISOString();
     cursor[r.sequence_id] = t + ivMs;
   }
@@ -920,7 +940,7 @@ async function _flushApproved(pool, apiBase) {
                 >= CASE WHEN mb3.daily_limit > 0 THEN mb3.daily_limit ELSE LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int) END)
        -- El goteo escalonado manda: aunque lo aprobaras antes, no sale hasta el día que le toca a SU contacto.
        AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences e WHERE e.sequence_id = m.sequence_id AND e.contact_id = m.contact_id AND e.next_action_at > NOW())
-     ORDER BY m.sequence_id, m.created_at ASC
+     ORDER BY m.sequence_id, COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC
   `);
   for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
     try {

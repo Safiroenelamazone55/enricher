@@ -23883,7 +23883,13 @@ ${foot}
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
       if (!_seqMsgs.length) return `<div class="cp-empty2" style="padding:22px">Aún no hay emails enviados por el motor en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
-      return `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_seqMsgs.map(_msgRow).join('')}</tbody></table></div>`;
+      const _q = _seqMsgs.filter(m => m.estado === 'approved' && m.est_send_at).sort((a, b) => new Date(a.est_send_at) - new Date(b.est_send_at));
+      _q.forEach((m, i) => { m._pos = i + 1; });
+      const _rest = _seqMsgs.filter(m => !_q.includes(m));
+      const _byDay = {}; _q.forEach(m => { const d = new Date(m.est_send_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }); _byDay[d] = (_byDay[d] || 0) + 1; });
+      const _sq = (_sequences || []).find(x => x.id === id) || {};
+      const _sum = _q.length ? `<div class="lm-q-sum"><b>${_q.length} en cola</b> · ${Object.entries(_byDay).map(([d, n]) => `${esc(d)}: <b>${n}</b>`).join(' · ')}<span> — salen en orden, repartidos según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit}/día en esta secuencia)` : ''}, la ventana horaria y el tope del buzón del cliente.</span></div>` : '';
+      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${[..._q, ..._rest].map(m => _msgRow(m)).join('')}</tbody></table></div>`;
     }
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null || _seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
@@ -36943,7 +36949,7 @@ ${foot}
     let when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     if (!m.sent_at && m.estado === 'approved' && m.est_send_at) {
       let pr = ''; try { if (m.seq_timezone) pr = ' · allá ' + new Date(m.est_send_at).toLocaleTimeString('es-ES', { timeZone: m.seq_timezone, hour: '2-digit', minute: '2-digit' }); } catch (_) {}
-      when = `<span title="Estimado: respeta la ventana horaria del prospecto, los días permitidos y el intervalo entre envíos">Sale ~${fmt(m.est_send_at)}${pr}</span>`;
+      when = `<span title="Estimado: respeta el límite diario, la ventana horaria del prospecto, los días permitidos y el intervalo entre envíos">${m._pos ? '<b>#' + m._pos + '</b> · ' : ''}Sale ~${fmt(m.est_send_at)}${pr}</span>`;
     }
     return `<tr class="clients-table__row" onclick="LeadManagerModule.ibAbrirDesdeEnviados(${m.contact_id})" style="cursor:pointer">
       <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
