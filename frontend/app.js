@@ -24823,7 +24823,7 @@ ${foot}
       const lugar = [c.ciudad, c.pais].filter(Boolean).join(', ');
       const qAI = encodeURIComponent('Find the corporate email address of ' + nm + (cargoTxt ? ', ' + cargoTxt : '') + (empresa ? ' at ' + empresa : '') + (dom ? ' (' + dom + ')' : '') + (lugar ? ', based in ' + lugar : '') + '. '
         + 'If their email is not public, find other employees of ' + (empresa || 'that company') + (lugar ? ' (preferably in ' + lugar + ')' : '') + ' whose business email IS publicly listed, compare how those addresses are built (e.g. first.last@, flast@, first@), say which format is most common and how many examples support it, and then propose the most likely email for ' + nm + ' in that format. '
-        + 'Also include any alternative or personal email and their LinkedIn profile.');
+        + 'Also include any alternative or personal email and their LinkedIn profile. Write the entire answer in Spanish (responde completamente en español).');
       // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
       const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
