@@ -5755,15 +5755,16 @@ const CanteraModule = (() => {
     if (!L.length) return '';
     const rows = L.map((x, i) => {
       const who = (x.personas || []).join(', ') + ((x.n || 0) > (x.personas || []).length ? '…' : '');
-      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="margin-top:6px" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
-      return `<div class="cant-al-row" data-i="${i}" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:12px;align-items:start;padding:9px 0;border-top:1px solid #E5E2DC">
-        <div><b>${esc(x.archivo || '(sin nombre de empresa)')}</b><div class="cant-hint" style="margin:2px 0 0">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</div>${x.archivo ? sug : ''}</div>
-        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D9D6CF;border-radius:8px;font:inherit;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
+      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="padding:2px 8px;font-size:.72rem;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
+      return `<div class="cant-al-row" data-i="${i}" style="display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:4px 0;border-top:1px solid #E5E2DC">
+        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.84rem"><b>${esc(x.archivo || '(sin nombre de empresa)')}</b> <span class="cant-hint" style="margin:0 0 0 6px">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</span></div>
+        <div>${x.archivo ? sug : ''}</div>
+        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:4px 8px;border:1px solid #D9D6CF;border-radius:0;font:inherit;font-size:.8rem;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
       </div>`;
     }).join('');
     return `<div class="lm-imp-err" style="background:#FAF8F4;border-color:#E5E2DC;color:inherit">
       <div style="font-weight:600;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
-      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas. Lo que no resuelvas ahora queda guardado en la pestaña Información, con su LinkedIn, para verificarlo después.</div>
+      <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas. Lo que no resuelvas ahora queda guardado en la pestaña Configuración, con su LinkedIn, para verificarlo después.</div>
       ${rows}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn--sm" type="button" onclick="CanteraModule.impCrearFaltantes()">Crear las demás como empresas nuevas</button>
