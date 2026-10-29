@@ -4372,6 +4372,13 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[lm-ct] POST', err.message); res.status(500).json({ error: 'Error al crear contacto' }); }
 });
+// Exclusiones automáticas por deals (services/dealExclusions.js): se revisan al cambiar un contacto, cada hora y al arrancar.
+const _dealEx = require('./services/dealExclusions');
+app.use('/api/lm/contacts/:id', (req, res, next) => {
+  if (!['PATCH', 'PUT', 'POST'].includes(req.method)) return next();
+  res.on('finish', () => { if (res.statusCode >= 200 && res.statusCode < 300 && req.workspaceOwnerId) _dealEx.syncSoon(pool, req.workspaceOwnerId); });
+  next();
+});
 app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
@@ -4590,6 +4597,7 @@ app.post('/api/lm/exclusions/bulk-delete', requireAuth, async (req, res) => {
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
   const lista = typeof b.lista === 'string' ? b.lista : null;
   try {
+    if (ids.length) await _dealEx.rememberManualRemoval(pool, uid, ids).catch(() => {});
     const r = b.todas === true
       ? await pool.query(`DELETE FROM lm_exclusions WHERE user_id=$1`, [uid])
       : ids.length
@@ -14920,6 +14928,8 @@ const httpServer = http.createServer(app);
 
 async function start() {
   await initDb();
+  setTimeout(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 90 * 1000);
+  setInterval(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 60 * 60 * 1000);
 
   // ── Socket.io setup ──────────────────────────────────────────
   const io = new SocketIOServer(httpServer, {
