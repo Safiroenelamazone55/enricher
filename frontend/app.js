@@ -22284,6 +22284,8 @@ const LeadManagerModule = (() => {
   let _gcli = null, _gcAll = [], _gcTimer = null, _gcBox = null;
   try { const v = parseInt(localStorage.getItem('nova_lm_gclient'), 10); if (v) _gcli = v; } catch (_) {}
   // Se llama justo después de cargar los datos: guarda la lista completa de clientes y recorta lo demás al cliente elegido.
+  let _gcSeqIds = new Set(), _gcCampIds = new Set();
+  function _gcOkContact(c) { return !!c && (c.outbound_client_id === _gcli || (c.sequences || []).some(q => _gcSeqIds.has(q.id)) || (c.campaigns || []).some(k => _gcCampIds.has(k.id))); }
   function _gcApply(fullClients) {
     if (Array.isArray(fullClients)) _gcAll = fullClients.slice(); else if (Array.isArray(_clients) && !_gcli) _gcAll = _clients.slice();
     if (_gcli && _gcAll.length && !_gcAll.some(c => c.id === _gcli)) { _gcli = null; try { localStorage.removeItem('nova_lm_gclient'); } catch (_) {} }
@@ -22292,9 +22294,11 @@ const LeadManagerModule = (() => {
     _clients = (_gcAll || []).filter(c => c.id === id);
     _campaigns = (_campaigns || []).filter(mine);
     _sequences = (_sequences || []).filter(mine);
-    const sids = new Set(_sequences.map(x => x.id));
+    const sids = new Set(_sequences.map(x => x.id)), cmpIds = new Set(_campaigns.map(x => x.id));
+    _gcSeqIds = sids; _gcCampIds = cmpIds;
     _steps = (_steps || []).filter(x => sids.has(x.sequence_id));
-    _contacts = (_contacts || []).filter(mine);
+    // Un contacto es del cliente si lo trajo ese cliente O está en alguna de sus secuencias/campañas (un contacto que ya existía y se reutilizó conserva su cliente original).
+    _contacts = (_contacts || []).filter(_gcOkContact);
     const cids = new Set(_contacts.map(c => c.company_id).filter(Boolean)), kids = new Set(_contacts.map(c => c.id));
     _companies = (_companies || []).filter(c => mine(c) || cids.has(c.id));
     _activities = (_activities || []).filter(a => mine(a) || kids.has(a.contact_id) || kids.has(a.lead_id));
@@ -24241,7 +24245,7 @@ ${foot}
     setTimeout(() => $(`coq-nombre-${companySeqId}`)?.focus(), 60);
   }
   async function _reloadContacts() {
-    try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = _gcli ? d.filter(x => x.outbound_client_id === _gcli) : d; } } catch (e) {}
+    try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = _gcli ? d.filter(_gcOkContact) : d; } } catch (e) {}
     _refreshNav();
   }
   // ── Disposición outbound (independiente del paso; pausa en todas sus secuencias) ──
