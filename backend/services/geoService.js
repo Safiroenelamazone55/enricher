@@ -236,4 +236,30 @@ function normalizeLanguage(v) {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-module.exports = { normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES, normalizeLanguage };
+// Idioma que PRIORIZA un contacto con varios idiomas y niveles (nativo > competencia completa > avanzado > profesional > limitado > elemental).
+// Empate (o sin nivel): gana el que va primero en su lista. lista = [{idioma, nivel}] (o textos).
+function _nivelRank(n) {
+  const t = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!t) return 0;
+  if (/nativ|bilingual|bilingue|materna/.test(t)) return 100;
+  if (/full professional|completa|fluent|fluido|c2|c1/.test(t)) return 85;
+  if (/advanced|avanzad|upper|b2/.test(t)) return 75;
+  if (/professional working|profesional|working|laboral|b1/.test(t)) return 60;
+  if (/limited|limitad|intermedi/.test(t)) return 40;
+  if (/elementary|basic|basico|elemental|a2|a1/.test(t)) return 20;
+  return 10;
+}
+function bestLanguage(lista) {
+  let a = lista;
+  if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) { a = []; } }
+  if (!Array.isArray(a) || !a.length) return '';
+  let top = null, topR = -1;
+  a.forEach((x, i) => {
+    const nm = (x && typeof x === 'object') ? x.idioma : x; if (!nm) return;
+    const r = _nivelRank(x && typeof x === 'object' ? x.nivel : '') ;
+    if (r > topR) { topR = r; top = nm; }
+  });
+  return top ? normalizeLanguage(top) : '';
+}
+
+module.exports = { _nivelRank, bestLanguage, normalizeCountry, countryFromPlace, languageFor, findCountry, LANG_NAMES, normalizeLanguage };

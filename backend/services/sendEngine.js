@@ -36,7 +36,10 @@ function stepVariants(st) {
 function langList(ctx) {
   let a = ctx && ctx.idiomas;
   if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) { a = []; } }
-  return (Array.isArray(a) ? a : []).map(x => (x && typeof x === 'object') ? x.idioma : x).filter(Boolean);
+  // Orden por prioridad: el de mayor nivel primero (nativo > avanzado > …); a igual nivel, el orden de su lista.
+  const geo = require('./geoService');
+  const arr = (Array.isArray(a) ? a : []).map((x, i) => ({ nm: (x && typeof x === 'object') ? x.idioma : x, r: geo._nivelRank ? geo._nivelRank(x && typeof x === 'object' ? x.nivel : '') : 0, i })).filter(x => x.nm);
+  return arr.sort((p, q) => (q.r - p.r) || (p.i - q.i)).map(x => x.nm);
 }
 function pickVariant(st, ctx) {
   const vars = stepVariants(st);
