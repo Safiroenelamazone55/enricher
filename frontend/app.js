@@ -25454,7 +25454,13 @@ ${foot}
       const r = await apiFetch(`${API}/lm/sequences/${seqId}/contacts-idioma`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desde, a }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       showBanner(`✓ ${d.actualizados} contacto${d.actualizados !== 1 ? 's' : ''} → ${a}`, 'success');
-      _seqContacts = null; await _seqLoadContacts(seqId); try { await _reloadContacts(); } catch (_) {}
+      // Se actualiza en pantalla al instante (sin vaciar ni recargar la página); lo demás se refresca por detrás.
+      (_seqContacts || []).forEach(c => { if (desde === '_none' ? !c.idioma_ef : c.idioma_ef === desde) { c.idioma = a; c.idioma_ef = a; c.idioma_origen = 'guardado'; } });
+      _seqCtRepaint();
+      (async () => {
+        try { const r2 = await apiFetch(`${API}/lm/sequences/${seqId}/contacts`); if (r2 && r2.ok) { const nd = await r2.json(); if (Array.isArray(nd) && _activeSeq === seqId) { _seqContacts = nd; _seqCtRepaint(); } } } catch (_) {}
+        try { await _reloadContacts(); } catch (_) {}
+      })();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function seqCtSetLang(v) { _seqCtPage = 0; _seqCtLang = (v && _seqCtLang === v) ? '' : (v || ''); _seqCtRepaint(); }
