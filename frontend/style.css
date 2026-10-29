@@ -19067,3 +19067,9 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .lm-fx-ic { grid-template-columns: 28px 28px 28px 28px 52px 66px !important; }
 .lm-fx-i--lbl { width: auto !important; gap: 3px; padding: 0 5px; font-size: .68rem; } .lm-fx-i--lbl b { font-weight: 800; }
 .lm-fx { grid-template-columns: 28px minmax(150px, 1.1fr) 92px 232px minmax(110px, 1fr) minmax(110px, 1fr) 70px 104px !important; }
+
+/* Fila activa de «Por corregir»: marca suave por uso (clic / enlace / escribir), no por el mouse */
+.lm-fx:not(.lm-fx-hd):hover { background: #fff !important; }
+.lm-fx.is-active { background: #F3F8FF !important; box-shadow: inset 3px 0 0 #7FA8F0; }
+.lm-fx.is-active .lm-fx-n b { color: #1F4FA8; }
+.lm-fx.is-active .lm-fx-in { border-color: #C9DCF7; }

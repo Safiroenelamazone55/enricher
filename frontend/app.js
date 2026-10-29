@@ -13096,6 +13096,16 @@ async function saveEstimateG(id, inp, onDone) {
     inp.value = _fmtEst(m); if (onDone) onDone(m);
   } catch (e) { showBanner('No se pudo guardar el estimado: ' + e.message, 'error'); }
 }
+
+// «Por corregir»: la fila en la que estás trabajando queda marcada (suave) desde que abres un enlace, escribes o pulsas algo en ella, hasta que pasas a otra. No depende del mouse.
+(() => {
+  let activeCid = null, raf = 0;
+  const paint = () => { document.querySelectorAll('.lm-fx[data-cid]').forEach(r => r.classList.toggle('is-active', activeCid != null && r.dataset.cid === activeCid)); };
+  const pick = ev => { const r = ev.target && ev.target.closest && ev.target.closest('.lm-fx[data-cid]'); if (r && r.dataset.cid !== activeCid) { activeCid = r.dataset.cid; paint(); } };
+  document.addEventListener('click', pick, true);
+  document.addEventListener('focusin', pick, true);
+  new MutationObserver(() => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; if (activeCid != null) paint(); }); }).observe(document.body, { childList: true, subtree: true });
+})();
 // Insignias de tarjeta: etiquetas, avance del checklist y duración estimada (compartido por los Kanban).
 const _fmtEst = m => !m ? '' : (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm');
 const _tagHue = tx => { let h = 0; for (const c of String(tx)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -24847,7 +24857,7 @@ ${foot}
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
         : '<span class="lm-fix-tag" title="' + esc(sq) + '">Sin email</span>';
       const sv = 'LeadManagerModule.fixEmailSave(' + c.id + ')';
-      return '<div class="lm-fx"><button type="button" class="lm-fx-go" title="Abrir la ficha del contacto" onclick="LeadManagerModule.openContactPage(' + c.id + ')">→</button>' +
+      return '<div class="lm-fx" data-cid="' + c.id + '"><button type="button" class="lm-fx-go" title="Abrir la ficha del contacto" onclick="LeadManagerModule.openContactPage(' + c.id + ')">→</button>' +
         '<div class="lm-fx-n"><b title="' + esc(nm) + '">' + esc(nm) + '</b><span title="' + esc(empresa) + '">' + esc(empresa) + '</span></div>' + tag +
         '<div class="lm-fx-ic">' + icons + '</div>' +
         '<input class="lm-fx-in" id="fix-em-' + c.id + '" type="email" placeholder="Email profesional" title="Email de trabajo (el que se usa para enviar)" onkeydown="if(event.key===\'Enter\'){' + sv + '}">' +
