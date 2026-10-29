@@ -6549,27 +6549,21 @@ const CanteraModule = (() => {
     const by = new Map();
     L.forEach(c => { const nm = String(c.empresa_archivo || '').trim(), k = nm.toLowerCase() || ('#' + c.id); if (!by.has(k)) by.set(k, { nombre: nm, items: [] }); by.get(k).items.push(c); });
     _orphGroups = [...by.values()];
-    const cards = _orphGroups.map((g, gi) => {
-      const members = g.items.map(c => {
-        const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
-        const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)';
-        const sub = [c.cargo, [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion].filter(Boolean).join(' · ');
-        return `<div class="orp-m">
-          <button type="button" class="cgd__go" title="Abrir la ficha del contacto" onclick="CanteraModule.openFicha(${c.id})">→</button>
-          <span class="orp-m__n" title="${esc(full)}">${esc(full)}</span>
-          <span class="orp-m__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="LinkedIn" style="color:#0A66C2">${IN}</a>` : '<i class="orp-m__no" title="Sin LinkedIn">in</i>'}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Sales Navigator" style="color:#0A66C2">${SN}</a>` : '<i class="orp-m__no" title="Sin Sales Navigator">◎</i>'}</span>
-          <span class="orp-m__s" title="${esc(sub)}">${esc(sub)}</span>
-          <button class="orp-m__x" type="button" title="Eliminar este contacto" onclick="CanteraModule.orphDel(${c.id})">Eliminar</button></div>`;
-      }).join('');
-      return `<div class="orp-g">
-        <div class="orp-g__h">
-          <div class="orp-g__t"><span class="orp-g__k">Empresa en el archivo</span><b title="${esc(g.nombre || '')}">${esc(g.nombre || '(sin nombre de empresa)')}</b><span class="orp-g__n">${g.items.length} contacto(s)</span></div>
-          <div class="orp-g__a" id="cant-or-box-${gi}">
-            <input id="cant-or-in-${gi}" autocomplete="off" placeholder="Vincular a una empresa de este borrador…" oninput="CanteraModule.orphSearch(${gi}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-or-menu-${gi}')?.remove(),180)">
-            ${g.nombre ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.orphCreate(${gi})" title="Crear la empresa «${esc(g.nombre)}»">＋ Crear «${esc(g.nombre.length > 22 ? g.nombre.slice(0, 22) + '…' : g.nombre)}»</button>` : ''}
-          </div></div>
-        ${members}</div>`;
-    }).join('');
+    const cards = `<div class="cgd__w orp-w"><table class="cgd__t orp-t"><thead><tr><th></th><th>Contacto</th><th>Empresa en el archivo</th><th>Cargo</th><th>Ubicación</th><th>LinkedIn</th><th>Vincular a una empresa del borrador</th><th></th></tr></thead><tbody>` + _orphGroups.map((g, gi) => g.items.map((c, mi) => {
+      const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)';
+      const loc = [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion || '';
+      const link = mi === 0 ? `<td rowspan="${g.items.length}" class="orp-t__v"><div class="orp-v" id="cant-or-box-${gi}">
+          <input id="cant-or-in-${gi}" autocomplete="off" placeholder="Buscar empresa del borrador…" oninput="CanteraModule.orphSearch(${gi}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-or-menu-${gi}')?.remove(),180)">
+          ${g.nombre ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.orphCreate(${gi})" title="Crear la empresa «${esc(g.nombre)}»">＋ Crear «${esc(g.nombre.length > 24 ? g.nombre.slice(0, 24) + '…' : g.nombre)}»</button>` : ''}</div></td>` : '';
+      return `<tr class="${mi === 0 ? 'orp-t__first' : ''}">
+        <td style="width:34px"><button type="button" class="cgd__go" title="Abrir la ficha del contacto" onclick="CanteraModule.openFicha(${c.id})">→</button></td>
+        <td class="cgd__n">${esc(full)}</td>
+        <td title="${esc(g.nombre || '')}">${mi === 0 ? esc(g.nombre || '(sin nombre de empresa)') : '<span class="cgd__d">″</span>'}</td>
+        <td>${esc(c.cargo || '—')}</td><td>${esc(loc || '—')}</td>
+        <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="LinkedIn">${IN}</a>` : '<span class="cgd__d" title="Sin LinkedIn">—</span>'}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Sales Navigator">${SN}</a>` : ''}</td>
+        ${link}<td style="width:80px"><button class="orp-m__x" type="button" title="Eliminar este contacto" onclick="CanteraModule.orphDel(${c.id})">Eliminar</button></td></tr>`;
+    }).join('')).join('') + `</tbody></table></div>`;
     return `<div class="cant-info-block" id="cant-orphans">
       <h3 class="cant-info-block__h">Contactos sin empresa (${L.length})</h3>
       <div class="cant-hint" style="margin:0 0 4px">Ninguna empresa de este borrador coincidió con ellos al importar. Verifica su LinkedIn y vincúlalos a una empresa, créales su empresa o elimínalos.</div>
