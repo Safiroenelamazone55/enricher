@@ -19050,3 +19050,15 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .lm-fx-pb { height: 26px; padding: 0 6px; border: 1px solid #E4E0D9; background: #F7F6F3; color: #5C5851; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; white-space: nowrap; } .lm-fx-pb:hover { border-color: #C9C4BB; }
 .lm-fx-pb.is-hi { background: #E6F3EA; border-color: #B7D9C2; color: #2C6B43; } .lm-fx-pb.is-mid { background: #FBF3DE; border-color: #EBD8A2; color: #8A6516; } .lm-fx-pb.is-lo { background: #F3F1EC; border-color: #DAD5CB; color: #8F8B83; }
 @media (max-width: 1100px) { .lm-fx { grid-template-columns: 28px 1fr 92px; } .lm-fx-hd { display: none; } .lm-fx-ic, .lm-fx-in, .lm-fx-sv, .lm-fx-pb { grid-column: auto; } }
+
+/* Por corregir: al achicar la ventana, cada contacto pasa a tarjeta ordenada (sin desordenarse) */
+@media (max-width: 1280px) {
+  .lm-fx-hd { display: none !important; }
+  .lm-fx:not(.lm-fx-hd) { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fx-go { flex: none; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fx-n { flex: 1 1 140px; min-width: 0; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fix-tag { flex: none; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fx-ic { flex: 1 0 100%; grid-column: auto; padding-left: 36px; box-sizing: border-box; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fx-in { flex: 1 1 140px; width: auto; min-width: 120px; grid-column: auto; }
+  .lm-fx:not(.lm-fx-hd) > .lm-fx-sv, .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: none; grid-column: auto; width: auto; }
+}
