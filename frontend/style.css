@@ -18997,3 +18997,5 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 .cant-imp-file-row { padding: 5px 12px; gap: 10px; min-height: 0; } .cant-imp-file-row__ico svg { width: 16px; height: 16px; }
 .cant-imp-file-row__txt { flex-direction: row; align-items: baseline; gap: 14px; } .cant-imp-file-row__txt b { font-size: .84rem; flex: 0 1 auto; } .cant-imp-file-row__txt span { font-size: .76rem; white-space: nowrap; flex-shrink: 0; }
 .cant-imp-file-row .lm-mini-x { padding: 2px 4px; }
+/* Editor de paso: fuerza capa propia al desplazar (evita zonas en blanco al hacer scroll en ventanas largas) */
+#lm-step-modal .fin-pi-form { transform: translateZ(0); will-change: scroll-position; }

@@ -33809,7 +33809,7 @@ ${foot}
     if (!single && d.mode === 'idioma') {
       const counts = _stepLangCounts(), cov = new Set(d.variants.map(v => (v.targets || [])[0]).filter(Boolean));
       const ks = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-      langInfo = `<div class="step-vars__hint" style="margin-bottom:8px">Cada contacto recibe el mensaje de <b>su idioma</b> (según su ubicación). El primero es el <b>mensaje base</b>. Con <b>＋ Variante A/B</b> añades otro mensaje del mismo idioma y se reparten al azar (prueba A/B dentro de cada idioma).` + (ks.length ? `<br>Contactos de esta secuencia: ${ks.map(k => `<span style="color:${cov.has(k) ? '#15803D' : '#B45309'}">${cov.has(k) ? '✓' : '⚠'} ${esc(k)} · ${counts[k]}</span>`).join(' &nbsp; ')}` : '') + `</div>`;
+      langInfo = `<div class="step-vars__hint" style="margin-bottom:8px">Cada contacto recibe el mensaje de <b>su idioma</b> (según su ubicación). El primero es el <b>mensaje base</b>. Con <b>＋ Variante A/B</b> añades otro mensaje del mismo idioma y se reparten al azar (prueba A/B dentro de cada idioma).` + (ks.length ? `<br>Contactos de esta secuencia: ${ks.map(k => `<span style="color:${cov.has(k) ? '#15803D' : '#B45309'}">${cov.has(k) ? '✓' : '⚠'} ${esc(k)} · ${counts[k]}</span>`).join(' &nbsp; ')}` : '') + (ks.some(k => !cov.has(k)) ? `<br><button type="button" class="flt-add" style="margin-top:6px" onclick="LeadManagerModule.stepAddMissingLangs()">＋ Añadir un cuadro por cada idioma que falta (${ks.filter(k => !cov.has(k)).map(esc).join(', ')})</button>` : '') + `</div>`;
     }
     if (isLike) {
       // Reaccionar no lleva texto: solo la ventana de la publicación y qué reacción usar.
@@ -33828,8 +33828,9 @@ ${foot}
   const _IDIOMAS_UI = ['Español', 'Inglés', 'Francés', 'Alemán', 'Italiano', 'Portugués', 'Neerlandés', 'Árabe', 'Sueco', 'Noruego', 'Danés', 'Finés', 'Polaco', 'Checo', 'Rumano', 'Griego', 'Turco', 'Ruso', 'Ucraniano', 'Chino', 'Japonés', 'Coreano', 'Hebreo', 'Hindi', 'Indonesio', 'Filipino'];
   // Idiomas de los contactos de la secuencia del paso abierto (con cuántos hay de cada uno), si ya están cargados.
   function _stepLangCounts() {
-    const d = _stepDraft; if (!d || !Array.isArray(_seqContacts) || _activeSeq !== d.seqId) return {};
-    const m = {}; _seqContacts.forEach(c => { if (c.idioma_ef) m[c.idioma_ef] = (m[c.idioma_ef] || 0) + 1; }); return m;
+    const d = _stepDraft; if (!d) return {};
+    const src = (Array.isArray(_seqContacts) && _activeSeq === d.seqId) ? _seqContacts : (Array.isArray(d._langCounts) ? d._langCounts : null); if (!src) return {};
+    const m = {}; src.forEach(c => { if (c.idioma_ef) m[c.idioma_ef] = (m[c.idioma_ef] || 0) + 1; }); return m;
   }
   // Test A/B dentro de un idioma: varios mensajes con el mismo idioma. El 1.º se llama como el idioma, los demás «Idioma B», «Idioma C»…
   function _stepAbPos(i) {
@@ -33852,6 +33853,12 @@ ${foot}
     _stepAbNames(); _stepRenderMsg();
   }
   function stepVarLang(i, v) { _stepSyncDraft(); const x = _stepDraft && _stepDraft.variants[i]; if (!x) return; x.targets = v ? [v] : []; x.nombre = v; _stepAbNames(); _stepRenderMsg(); }
+  function stepAddMissingLangs() {
+    _stepSyncDraft(); const counts = _stepLangCounts(), ks = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    const have = new Set(_stepDraft.variants.map(v => (v.targets || [])[0]).filter(Boolean));
+    ks.filter(l => !have.has(l)).forEach(l => _stepDraft.variants.push({ nombre: l, asunto: '', cuerpo: '', targets: [l], tplId: '' }));
+    _stepRenderMsg();
+  }
   function stepAddLang() {
     _stepSyncDraft();
     const used = new Set(_stepDraft.variants.map(v => (v.targets || [])[0]).filter(Boolean));
@@ -33913,14 +33920,22 @@ ${foot}
   }
   function stepTagRemove(i, ti) { if (!_stepDraft || !_stepDraft.variants[i]) return; (_stepDraft.variants[i].targets || []).splice(ti, 1); _stepRefreshChips(i); stepTagInput(i); }
   function stepTagBlur(i) { setTimeout(() => document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'), 130); }
-  function stepSetMode(mode) {
+  async function stepSetMode(mode) {
     _stepSyncDraft(); _stepDraft.mode = mode;
     if (mode === 'idioma') {
-      // Primer mensaje = base, con el idioma más frecuente entre los contactos; segundo = el siguiente idioma detectado.
+      // Si los contactos de la secuencia aún no están cargados, se cargan antes de armar los cuadros por idioma.
+      const d0 = _stepDraft;
+      if (!Array.isArray(_seqContacts) || _activeSeq !== d0.seqId) {
+        try { const r = await apiFetch(`${API}/lm/sequences/${d0.seqId}/contacts`); if (r && r.ok) { const cts = await r.json(); if (Array.isArray(cts) && _stepDraft === d0) { if (_activeSeq === d0.seqId) _seqContacts = cts; else d0._langCounts = cts; } } } catch (_) {}
+      }
+      if (_stepDraft !== d0) return;
+      // Primer mensaje = base, con el idioma más frecuente entre los contactos; después, un cuadro por CADA otro idioma detectado.
       const counts = _stepLangCounts(), ks = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
       const first = _stepDraft.variants[0] || (_stepDraft.variants[0] = { nombre: '', asunto: '', cuerpo: '', targets: [], tplId: '' });
       if (!(first.targets || []).length) { const l = ks[0] || 'Español'; first.targets = [l]; first.nombre = l; }
       _stepDraft.variants.slice(1).forEach(v => { if (!(v.targets || []).length && v.nombre) v.targets = [v.nombre]; });
+      const have = new Set(_stepDraft.variants.map(v => (v.targets || [])[0]).filter(Boolean));
+      ks.filter(l => !have.has(l)).slice(0, 8).forEach(l => { have.add(l); _stepDraft.variants.push({ nombre: l, asunto: '', cuerpo: '', targets: [l], tplId: '' }); });
       if (_stepDraft.variants.length < 2) { const l2 = ks.find(l => l !== first.targets[0]) || (first.targets[0] === 'Inglés' ? 'Español' : 'Inglés'); _stepDraft.variants.push({ nombre: l2, asunto: '', cuerpo: '', targets: [l2], tplId: '' }); }
       _stepRenderMsg(); return;
     }
@@ -37770,7 +37785,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, wamColaSave, wamColaPausa, wamColaItem, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
+    rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, wamColaSave, wamColaPausa, wamColaItem, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddMissingLangs, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
