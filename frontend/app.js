@@ -6549,7 +6549,7 @@ const CanteraModule = (() => {
     const by = new Map();
     L.forEach(c => { const nm = String(c.empresa_archivo || '').trim(), k = nm.toLowerCase() || ('#' + c.id); if (!by.has(k)) by.set(k, { nombre: nm, items: [] }); by.get(k).items.push(c); });
     _orphGroups = [...by.values()];
-    const cards = `<div class="cgd__w orp-w"><table class="cgd__t orp-t"><thead><tr><th></th><th>Contacto</th><th>Empresa en el archivo</th><th>Cargo</th><th>Ubicación</th><th>LinkedIn</th><th>Vincular a una empresa del borrador</th><th>Crear empresa</th><th></th></tr></thead><tbody>` + _orphGroups.map((g, gi) => g.items.map((c, mi) => {
+    const cards = `<div class="cgd__w orp-w"><table class="cgd__t orp-t"><colgroup><col style="width:44px"><col style="width:15%"><col style="width:15%"><col style="width:14%"><col style="width:14%"><col style="width:74px"><col style="width:18%"><col style="width:118px"><col style="width:84px"></colgroup><thead><tr><th></th><th>Contacto</th><th>Empresa en el archivo</th><th>Cargo</th><th>Ubicación</th><th>LinkedIn</th><th>Vincular a una empresa del borrador</th><th>Crear empresa</th><th></th></tr></thead><tbody>` + _orphGroups.map((g, gi) => g.items.map((c, mi) => {
       const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)';
       const loc = [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion || '';
