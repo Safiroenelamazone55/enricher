@@ -19062,3 +19062,8 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
   .lm-fx:not(.lm-fx-hd) > .lm-fx-in { flex: 1 1 140px; width: auto; min-width: 120px; grid-column: auto; }
   .lm-fx:not(.lm-fx-hd) > .lm-fx-sv, .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: none; grid-column: auto; width: auto; }
 }
+
+/* Los dos últimos iconos llevan texto para no confundirlos: «IA» (análisis con Gemini) y «Buscar» (búsqueda simple) */
+.lm-fx-ic { grid-template-columns: 28px 28px 28px 28px 52px 66px !important; }
+.lm-fx-i--lbl { width: auto !important; gap: 3px; padding: 0 5px; font-size: .68rem; } .lm-fx-i--lbl b { font-weight: 800; }
+.lm-fx { grid-template-columns: 28px minmax(150px, 1.1fr) 92px 232px minmax(110px, 1fr) minmax(110px, 1fr) 70px 104px !important; }

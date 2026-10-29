@@ -24832,15 +24832,15 @@ ${foot}
       // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
       const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
-      const slot = (title, inner, attrs, on) => on ? '<a class="lm-fx-i" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
+      const slot = (title, inner, attrs, on, lbl) => on ? '<a class="lm-fx-i' + (lbl ? ' lm-fx-i--lbl' : '') + '" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + (lbl ? '<b>' + lbl + '</b>' : '') + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
       const wa = _waDigits(c);
       const icons = [
         slot('Abrir su LinkedIn', NI('linkedin', 14), 'href="' + esc(fx(c.linkedin)) + '" target="_blank" rel="noopener"', !!c.linkedin),
         slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
-        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?hl=es&q=' + qAI + '" target="_blank" rel="noopener"', true),
-        slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
+        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?hl=es&q=' + qAI + '" target="_blank" rel="noopener"', true, 'IA'),
+        slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true, 'Buscar'),
       ].join('');
       const tag = bad === 'rebote'
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
