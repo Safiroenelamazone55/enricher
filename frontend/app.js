@@ -26259,7 +26259,7 @@ ${foot}
     const markedTxt = draft ? null : _seqRenderTpl(variant.cuerpo || '', src, true);
     _seqDoMissing = markedTxt != null ? _seqMissingOf(markedTxt) : [];
     _seqDoText = rendered;
-    const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : '';
+    const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : (_isInmailStep(st) ? _inmailTitleFor(st, src) : '');
     _seqDoSubject = subject;
     const hasMsg = !!rendered.trim();
     // Paso "Comentar una publicación": en vez del mensaje se muestra el generador de
@@ -26313,7 +26313,7 @@ ${foot}
           ? `<button class="cp-taskbar__mt cp-taskbar__mt--liopen${_cpFlag('open') ? ' is-done' : ''}" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado para enviar la conexión o la nota"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v cp-taskbar__mt-v--li">${esc(c.linkedin)}</span><span class="cp-taskbar__open">${_cpFlag("open") ? NI("check", 12) + "Abierto" : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Abrir`}</span></button>`
           : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
       </div>` : ''}
-      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs${_cpFlag('subj') ? ' is-done' : ''}" data-act="subj" onclick="LeadManagerModule.seqDoCopySubject()" title="Copiar el asunto">${_cpFlag('subj') ? NI('check', 13) : NI('copy')}</button></div>` : ''}
+      ${(st.canal === 'email' || _isInmailStep(st)) && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">${st.canal === 'email' ? 'Asunto' : 'Título'}</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs${_cpFlag('subj') ? ' is-done' : ''}" data-act="subj" onclick="LeadManagerModule.seqDoCopySubject()" title="Copiar el asunto">${_cpFlag('subj') ? NI('check', 13) : NI('copy')}</button></div>` : ''}
       ${_isContentStep(st.canal, st.accion) ? (() => {
         const dias = parseInt(st.post_dias) || 0;
         const re = _reaccionLabel(st.reaccion);
@@ -26337,6 +26337,12 @@ ${foot}
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
       </div>
     </div>`;
+  }
+  // InMail de LinkedIn: título (asunto) + mensaje, y cada uno se copia por separado.
+  const _isInmailStep = st => !!st && st.canal === 'linkedin' && st.accion === 'inmail';
+  function _inmailTitleFor(st, src) {
+    const v = _stepVariant(st, src), raw = (v && v.asunto) ? v.asunto : (st && st.asunto) || '';
+    return raw ? _seqRenderTpl(raw, src).trim() : '';
   }
   function seqDoCopySubject() {
     const s = _seqDoSubject || ''; if (!s) return;
@@ -33786,13 +33792,14 @@ ${foot}
       const opts = _CT_FILTER_FIELDS.map(f => `<option value="${f[0]}"${d.field === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('');
       fieldSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Campo del segmento</span><select class="form-input" onchange="LeadManagerModule.stepSetField(this.value)">${opts}</select></label>`;
     }
-    const usesSubject = canal === 'email';
+    const isInmail = canal === 'linkedin' && (($('step-accion') || {}).value === 'inmail' || (!$('step-accion') && _stepOpenId && ((_steps.find(x => x.id === _stepOpenId) || {}).accion === 'inmail')));
+    const usesSubject = canal === 'email' || isInmail;   // el InMail de LinkedIn tiene título + mensaje, igual que un correo (asunto + cuerpo)
     const tplOpts = _lmTpls.length ? `<select class="step-var-tplsel" onchange="LeadManagerModule.stepVarUseTpl(${'IDX'},this.value);this.selectedIndex=0;"><option value="">↧ Usar plantilla…</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select>` : '';
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? _delVarBtn(i, 'Eliminar esta variante') : ''}</div>`;
       const _prevS = $('step-reply')?.checked ? _stepPrevSubject() : null;
-      const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
+      const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">${isInmail ? 'Título del InMail' : 'Asunto'} <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:600;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${_stepAbBadge(i)}<span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${(v.targets || [])[0] ? `<button type="button" class="flt-add" style="margin:0 6px 0 0;padding:2px 8px;font-size:11.5px" title="Añade otro mensaje en este mismo idioma para probar A/B" onclick="LeadManagerModule.stepAddAB(${i})">＋ Variante A/B</button>` : ''}${d.variants.length > 1 ? _delVarBtn(i, _stepAbPos(i).n >= 2 ? 'Eliminar esta variante A/B' : (i === 0 ? 'Eliminar el mensaje base (el siguiente pasa a ser el base)' : 'Quitar este idioma')) : ''}</div>` : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
