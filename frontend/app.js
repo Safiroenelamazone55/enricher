@@ -21959,6 +21959,7 @@ const _NI_LIB = {
   checksq: '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   pen: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  compass: '<circle cx="12" cy="12" r="10"/><polygon points="16 8 14 14 8 16 10 10 16 8"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
@@ -24738,6 +24739,7 @@ ${foot}
       const r = await apiFetch(API + '/lm/contacts/' + cid + '/email-hints'); const h = await r.json();
       if (!r.ok) throw new Error(h.error || 'Error');
       box.dataset.loaded = '1'; box.innerHTML = _fixHintsHtml(cid, h);
+      { const best = Math.max(0, ...(h.suggestions || []).map(x => x.pct || 0), h.existing ? 100 : 0, (h.reference && h.reference.pct) || 0), pb = document.getElementById('fix-pb-' + cid); if (pb) { pb.classList.remove('is-hi', 'is-mid', 'is-lo'); pb.classList.add(best >= 70 ? 'is-hi' : best >= 40 ? 'is-mid' : 'is-lo'); pb.title = best ? 'Certeza estimada: ' + best + '%' : 'Sin datos para deducir el email'; } }
     } catch (e) { box.innerHTML = '<div class="lm-fix-hints__msg">No se pudo consultar: ' + esc(e.message) + '</div>'; }
   }
   function _fixHintsHtml(cid, h) {
@@ -24812,25 +24814,33 @@ ${foot}
       const co = (_companies || []).find(x => String(x.id) === String(c.company_id));
       const empresa = c.company_nombre || (co && co.nombre) || '';
       const sq = seqs.map(s => ((_sequences || []).find(x => x.id === s.id) || {}).nombre).filter(Boolean).join(', ');
-      // Atajos para ir a buscar el dato que falta: LinkedIn, WhatsApp, teléfono, sitio de la empresa, o una búsqueda lista.
-      const ic = (title, inner, attrs) => '<a class="lm-fix-ic" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>';
+      // Enlaces en columnas fijas (siempre en el mismo sitio): LinkedIn · Sales Navigator · Web · WhatsApp/Tel · Google. Si falta uno, queda un guion.
       const q = encodeURIComponent('"' + nm + '" ' + empresa);
-      const site = co && co.website ? String(co.website).replace(/^(?!https?:\/\/)/i, 'https://') : '';
-      const tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
+      const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+      const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
+      const slot = (title, inner, attrs, on) => on ? '<a class="lm-fx-i" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
+      const wa = _waDigits(c);
       const icons = [
-        c.linkedin ? ic('Abrir su LinkedIn', NI('linkedin', 13), 'href="' + esc(c.linkedin) + '" target="_blank" rel="noopener"') : ic('Buscar a ' + nm + ' en LinkedIn', NI('linkedin', 13), 'href="https://www.linkedin.com/search/results/people/?keywords=' + q + '" target="_blank" rel="noopener" style="opacity:.45"'),
-        _waDigits(c) ? ic('Abrir WhatsApp', NI('whatsapp', 13), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"') : '',
-        tel ? ic('Llamar: ' + tel, NI('phone', 13), 'href="tel:' + esc(tel) + '"') : '',
-        site ? ic('Sitio de la empresa', NI('external', 13), 'href="' + esc(site) + '" target="_blank" rel="noopener"') : '',
-        ic('Buscar su email en Google', NI('search', 13), 'href="https://www.google.com/search?q=' + q + '%20email" target="_blank" rel="noopener"'),
+        slot('Abrir su LinkedIn', NI('linkedin', 14), 'href="' + esc(fx(c.linkedin)) + '" target="_blank" rel="noopener"', !!c.linkedin),
+        slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
+        slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
+        wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
+        slot('Buscar su email en Google', NI('search', 14), 'href="https://www.google.com/search?q=' + q + '%20email" target="_blank" rel="noopener"', true),
       ].join('');
       const tag = bad === 'rebote'
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
         : '<span class="lm-fix-tag" title="' + esc(sq) + '">Sin email</span>';
-      return '<div class="lm-fix-row"><div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (empresa ? '<span class="lm-fix-row__co"> · ' + esc(empresa) + '</span>' : '') + '<span class="lm-fix-ics">' + icons + '</span></div>' + tag +
-        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="Email profesional" title="Email de trabajo (el que se usa para enviar)" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><input class="lm-fix-row__in lm-fix-row__in--p" id="fix-emp-' + c.id + '" type="email" placeholder="Email personal" value="' + esc(c.email_personal || '') + '" title="Email personal (gmail, outlook…). Si no hay profesional, los envíos van a este." onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a><a href="#" class="lm-fix-row__a" title="Buscar en todo el sistema si hay un patrón de email para esta empresa" onclick="event.preventDefault();LeadManagerModule.fixHints(' + c.id + ')">Patrón</a></span></div><div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
+      const sv = 'LeadManagerModule.fixEmailSave(' + c.id + ')';
+      return '<div class="lm-fx"><button type="button" class="lm-fx-go" title="Abrir la ficha del contacto" onclick="LeadManagerModule.openContactPage(' + c.id + ')">→</button>' +
+        '<div class="lm-fx-n"><b title="' + esc(nm) + '">' + esc(nm) + '</b><span title="' + esc(empresa) + '">' + esc(empresa) + '</span></div>' + tag +
+        '<div class="lm-fx-ic">' + icons + '</div>' +
+        '<input class="lm-fx-in" id="fix-em-' + c.id + '" type="email" placeholder="Email profesional" title="Email de trabajo (el que se usa para enviar)" onkeydown="if(event.key===\'Enter\'){' + sv + '}">' +
+        '<input class="lm-fx-in" id="fix-emp-' + c.id + '" type="email" placeholder="Email personal" value="' + esc(c.email_personal || '') + '" title="Email personal (gmail, outlook…). Si no hay profesional, los envíos van a este." onkeydown="if(event.key===\'Enter\'){' + sv + '}">' +
+        '<button class="btn btn--primary btn--sm lm-fx-sv" onclick="' + sv + '">Guardar</button>' +
+        '<button type="button" class="lm-fx-pb" id="fix-pb-' + c.id + '" title="Deducir el email probable a partir de los correos de esa empresa que ya hay en el sistema" onclick="LeadManagerModule.fixHints(' + c.id + ')">Email probable</button></div>' +
+        '<div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
-    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fix-hd"><span>Contacto</span><span>Problema</span><span>Email profesional · personal</span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · Google</span><span>Email profesional</span><span>Email personal</span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
