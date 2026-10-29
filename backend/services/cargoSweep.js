@@ -8,8 +8,8 @@ async function run(pool) {
   for (const t of [{ tabla: 'lm_contacts', emp: 'empresa_nombre' }, { tabla: 'cantera_contacts', emp: null }]) {
     try {
       const q = t.emp
-        ? `SELECT id, cargo, ${t.emp} AS emp, raw FROM lm_contacts WHERE cargo ~* '(\s+at\s+|\s[|@]\s)' LIMIT 2000`
-        : `SELECT k.id, k.cargo, c.nombre AS emp, k.raw FROM cantera_contacts k LEFT JOIN cantera_companies c ON c.id=k.company_id WHERE k.cargo ~* '(\s+at\s+|\s[|@]\s)' LIMIT 2000`;
+        ? `SELECT id, cargo, ${t.emp} AS emp, raw FROM lm_contacts WHERE cargo ~* '([[:space:]]+at[[:space:]]+|[[:space:]][|@][[:space:]])' LIMIT 2000`
+        : `SELECT k.id, k.cargo, c.nombre AS emp, k.raw FROM cantera_contacts k LEFT JOIN cantera_companies c ON c.id=k.company_id WHERE k.cargo ~* '([[:space:]]+at[[:space:]]+|[[:space:]][|@][[:space:]])' LIMIT 2000`;
       const { rows } = await pool.query(q);
       for (const r of rows) {
         const nuevo = limpiarCargo(r.cargo, r.emp, { seguro: true });
