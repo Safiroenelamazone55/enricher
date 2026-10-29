@@ -18986,3 +18986,5 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 
 .orp-w { max-height: none; overflow: visible; } .orp-t td { vertical-align: middle; } .orp-t__first td { border-top: 2px solid #ECE9E4; } .orp-t__v { border-left: 1px solid #F3F1EC; background: #FAF9F7; min-width: 250px; max-width: none !important; overflow: visible !important; }
 .orp-v { position: relative; display: flex; flex-direction: column; gap: 6px; } .orp-v input { width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #D9D6CF; border-radius: 0; font: inherit; font-size: .78rem; background: #fff; } .orp-v .btn { white-space: nowrap; align-self: flex-start; padding-top: 2px; padding-bottom: 2px; }
+
+.orp-t__v { min-width: 200px !important; } .orp-t__c { background: #FAF9F7; width: 130px; max-width: none !important; overflow: visible !important; text-align: center; border-left: 1px solid #F3F1EC; } .orp-t__c .btn { white-space: nowrap; }

@@ -6549,13 +6549,13 @@ const CanteraModule = (() => {
     const by = new Map();
     L.forEach(c => { const nm = String(c.empresa_archivo || '').trim(), k = nm.toLowerCase() || ('#' + c.id); if (!by.has(k)) by.set(k, { nombre: nm, items: [] }); by.get(k).items.push(c); });
     _orphGroups = [...by.values()];
-    const cards = `<div class="cgd__w orp-w"><table class="cgd__t orp-t"><thead><tr><th></th><th>Contacto</th><th>Empresa en el archivo</th><th>Cargo</th><th>Ubicación</th><th>LinkedIn</th><th>Vincular a una empresa del borrador</th><th></th></tr></thead><tbody>` + _orphGroups.map((g, gi) => g.items.map((c, mi) => {
+    const cards = `<div class="cgd__w orp-w"><table class="cgd__t orp-t"><thead><tr><th></th><th>Contacto</th><th>Empresa en el archivo</th><th>Cargo</th><th>Ubicación</th><th>LinkedIn</th><th>Vincular a una empresa del borrador</th><th>Crear empresa</th><th></th></tr></thead><tbody>` + _orphGroups.map((g, gi) => g.items.map((c, mi) => {
       const li = fix(c.linkedin), sn = fix(c.linkedin_sales_nav);
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)';
       const loc = [c.ciudad, c.pais].filter(Boolean).join(', ') || c.ubicacion || '';
       const link = mi === 0 ? `<td rowspan="${g.items.length}" class="orp-t__v"><div class="orp-v" id="cant-or-box-${gi}">
           <input id="cant-or-in-${gi}" autocomplete="off" placeholder="Buscar empresa del borrador…" oninput="CanteraModule.orphSearch(${gi}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-or-menu-${gi}')?.remove(),180)">
-          ${g.nombre ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.orphCreate(${gi})" title="Crear la empresa «${esc(g.nombre)}»">＋ Crear «${esc(g.nombre.length > 24 ? g.nombre.slice(0, 24) + '…' : g.nombre)}»</button>` : ''}</div></td>` : '';
+          </div></td><td rowspan="${g.items.length}" class="orp-t__c">${g.nombre ? `<button class="btn btn--sm" type="button" onclick="CanteraModule.orphCreate(${gi})" title="Crear la empresa «${esc(g.nombre)}» y vincular estos contactos">＋ Crear empresa</button>` : '<span class="cgd__d">—</span>'}</td>` : '';
       return `<tr class="${mi === 0 ? 'orp-t__first' : ''}">
         <td style="width:34px"><button type="button" class="cgd__go" title="Abrir la ficha del contacto" onclick="CanteraModule.openFicha(${c.id})">→</button></td>
         <td class="cgd__n">${esc(full)}</td>
