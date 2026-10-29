@@ -5830,7 +5830,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     // Idioma efectivo: el guardado (confirmado/editado) o, si no hay, el deducido de la ubicación del contacto.
     const geo = require('./services/geoService');
     for (const r of rows) {
-      if (r.idioma) { r.idioma_ef = r.idioma; r.idioma_origen = 'guardado'; continue; }
+      if (r.idioma) { r.idioma_ef = geo.normalizeLanguage(r.idioma) || r.idioma; r.idioma_origen = 'guardado'; continue; }   // «Inglese», «Inglés» y «English» son el mismo idioma
       const l = geo.languageFor(r.pais || geo.countryFromPlace(r.ciudad, r.region) || '', r.ciudad);
       r.idioma_ef = l.lang ? (geo.LANG_NAMES[l.lang] || l.lang) : ''; r.idioma_origen = l.lang ? 'deducido' : '';
     }
@@ -14929,6 +14929,8 @@ const httpServer = http.createServer(app);
 async function start() {
   await initDb();
   setTimeout(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 90 * 1000);
+  setTimeout(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 120 * 1000);
+  setInterval(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 60 * 60 * 1000);
   setInterval(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 60 * 60 * 1000);
 
   // ── Socket.io setup ──────────────────────────────────────────
