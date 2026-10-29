@@ -23907,11 +23907,13 @@ ${foot}
       const _items = _all.filter(m => (!_envF.canal || m._ch === _envF.canal) && (!_envF.estado || _stK(m) === _envF.estado) && (!_envF.dia || (m.est_send_at && _dk(m) === _envF.dia)));
       const _iq = _items.filter(m => m.estado === 'approved' && m.est_send_at).sort(_byEst);
       const _ir = _items.filter(m => !_iq.includes(m)).sort((a, b) => new Date(b.sent_at || b.created_at || 0) - new Date(a.sent_at || a.created_at || 0));
+      const _sel = (k, ph, opts) => `<select class="lm-q-sel${_envF[k] ? ' is-on' : ''}" onchange="LeadManagerModule.envFilter('${k}',this.value)"><option value="">${ph}</option>${opts.filter(o => o[2]).map(([v, l, n]) => `<option value="${esc(v)}"${_envF[k] === v ? ' selected' : ''}>${l} (${n})</option>`).join('')}</select>`;
       const _sum = `<div class="lm-q-sum">
-        <div class="lm-q-sum__r"><b class="lm-q-sum__t">${_queued.length} en cola</b></div>
-        <div class="lm-q-sum__r"><span class="lm-q-lbl">Canal</span>${_chip('canal', 'email', 'Email', _cnt(m => m._ch === 'email'))}${_chip('canal', 'whatsapp', 'WhatsApp', _cnt(m => m._ch === 'whatsapp'))}</div>
-        <div class="lm-q-sum__r"><span class="lm-q-lbl">Día de envío</span>${_days.map(d => _chip('dia', d.k, esc(d.l), d.n)).join('') || '<span class="lm-q-none">Sin envíos programados</span>'}</div>
-        <div class="lm-q-sum__r"><span class="lm-q-lbl">Estado</span>${_stOpts.map(([v, l]) => _chip('estado', v, l, _cnt(m => _stK(m) === v))).join('')}</div>
+        <div class="lm-q-sum__r"><b class="lm-q-sum__t">${_queued.length} en cola</b>
+          ${_sel('canal', 'Canal: todos', [['email', 'Email', _cnt(m => m._ch === 'email')], ['whatsapp', 'WhatsApp', _cnt(m => m._ch === 'whatsapp')]])}
+          ${_sel('dia', 'Día de envío: todos', _days.map(d => [d.k, esc(d.l), d.n]))}
+          ${_sel('estado', 'Estado: todos', _stOpts.map(([v, l]) => [v, l, _cnt(m => _stK(m) === v)]))}
+          ${(_envF.canal || _envF.dia || _envF.estado) ? `<button type="button" class="lm-q-clr" onclick="LeadManagerModule.envFilter('canal','');LeadManagerModule.envFilter('dia','');LeadManagerModule.envFilter('estado','')">Limpiar</button>` : ''}</div>
         <div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''} LinkedIn es manual: se gestiona desde Tareas.</div></div>`;
       const _rows = [..._iq, ..._ir].map(m => _msgRow(m)).join('') || `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--muted)">Sin envíos con estos filtros</td></tr>`;
       return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_rows}</tbody></table></div>`;
