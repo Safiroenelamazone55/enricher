@@ -1170,42 +1170,22 @@ async function _draftPreapproved(pool) {
   }
 }
 
-// ── Auto-activación ──────────────────────────────────────────────────────────
-// Dos disparadores independientes:
-//
-//  1. Por fecha (opt-in): 'inicia el 5 de agosto' → ese día pasa a activa sola.
-//     Sigue detrás de auto_activar porque la fecha por sí sola no prueba que la
-//     secuencia esté terminada — puede faltarle pasos.
-//
-//  2. Por actividad real (siempre): si ya hay contactos ACTIVOS en la secuencia,
-//     no es un borrador — se está trabajando. Esto no necesita bandera: enrolar a
-//     alguien y ponerse a hacer sus tareas es la prueba. Sin esto, una secuencia
-//     con la casilla apagada se quedaba en 'draft' para siempre aunque estuvieras
-//     completando pasos todos los días.
-//
-// 'pausada' NO entra en el disparador 2: pausar es una decisión deliberada y
-// reactivarla sola sería pisarla. Solo el de fecha puede sacar de 'pausada'.
-//
-// En ambos casos se propaga a la campaña padre: no tiene sentido que la secuencia
-// esté corriendo y la campaña siga en borrador.
-// OJO (corregido 2026-10-06): el disparador por fecha ya NO toca las 'pausada'. Antes las reactivaba cada minuto mientras 'activar sola' siguiera marcado.
+// ── Auto-activación ─────────────────────────────────────────────────────────
+// Una secuencia en borrador (draft) NO tiene tareas ni envíos hasta que tú la actives. Se activa solo de dos maneras:
+//  1. Manualmente (botón/estado «Activa»).
+//  2. Por fecha: si le pones una fecha de inicio, ese día pasa a activa sola.
+// Enrolar o mover contactos a una secuencia en borrador YA NO la activa (antes se activaba al tener contactos en curso, y aparecían todas las
+// tareas de golpe aunque no la hubieras lanzado). 'pausada' no se reactiva sola: pausar es una decisión deliberada.
+// Al activarse, se propaga a la campaña padre: no tiene sentido que la secuencia corra y la campaña siga en borrador.
 async function _autoActivate(pool) {
   const { rows: porFecha } = await pool.query(`
     UPDATE sequences SET estado='activa', updated_at=NOW()
-     WHERE auto_activar AND estado = 'draft'
+     WHERE estado = 'draft'
        AND starts_on IS NOT NULL AND starts_on <= CURRENT_DATE
      RETURNING id, nombre, campaign_id`);
   for (const s of porFecha) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
 
-  const { rows: porTrabajo } = await pool.query(`
-    UPDATE sequences s SET estado='activa', updated_at=NOW()
-     WHERE s.estado='draft'
-       AND EXISTS (SELECT 1 FROM lm_contact_sequences cs
-                    WHERE cs.sequence_id = s.id AND cs.estado = 'activo')
-     RETURNING s.id, s.nombre, s.campaign_id`);
-  for (const s of porTrabajo) console.log(`[send-engine] auto-activada: "${s.nombre}" (ya tiene contactos en curso)`);
-
-  const campIds = [...new Set([...porFecha, ...porTrabajo].map(r => r.campaign_id).filter(Boolean))];
+  const campIds = [...new Set([...porFecha].map(r => r.campaign_id).filter(Boolean))];
   if (campIds.length) {
     const { rows: cs } = await pool.query(
       `UPDATE campaigns SET estado='activa', updated_at=NOW()
