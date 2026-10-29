@@ -24732,6 +24732,7 @@ ${foot}
   async function fixHints(cid) {
     const box = $('fix-hints-' + cid); if (!box) return;
     if (!box.hidden && box.dataset.loaded) { box.hidden = true; return; }
+    document.querySelectorAll('.lm-fix-hints').forEach(b => { if (b !== box) b.hidden = true; });   // solo uno abierto a la vez
     box.hidden = false; box.innerHTML = '<div class="lm-fix-hints__msg">Buscando en el sistema…</div>';
     try {
       const r = await apiFetch(API + '/lm/contacts/' + cid + '/email-hints'); const h = await r.json();
