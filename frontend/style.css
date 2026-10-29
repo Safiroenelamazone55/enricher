@@ -18992,3 +18992,8 @@ select.cgr__rank { width: 62px; padding: 0 2px; cursor: pointer; text-align: cen
 /* La tabla de contactos sin empresa mide lo mismo que las demás: ancho fijo, sin desbordar */
 .orp-w { width: 100%; max-width: 100%; box-sizing: border-box; } .orp-t { table-layout: fixed; width: 100%; } .orp-t th { white-space: normal; line-height: 1.25; vertical-align: middle; } .orp-t td { max-width: none !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orp-t td.orp-t__v, .orp-t td.orp-t__c { overflow: visible !important; white-space: normal; min-width: 0 !important; } .orp-t .orp-v input { min-width: 0; } .orp-t .orp-m__x { padding: 2px 6px; }
+
+/* Importar: filas de archivos compactas, en una sola línea */
+.cant-imp-file-row { padding: 5px 12px; gap: 10px; min-height: 0; } .cant-imp-file-row__ico svg { width: 16px; height: 16px; }
+.cant-imp-file-row__txt { flex-direction: row; align-items: baseline; gap: 14px; } .cant-imp-file-row__txt b { font-size: .84rem; flex: 0 1 auto; } .cant-imp-file-row__txt span { font-size: .76rem; white-space: nowrap; flex-shrink: 0; }
+.cant-imp-file-row .lm-mini-x { padding: 2px 4px; }
