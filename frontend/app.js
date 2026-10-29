@@ -24476,7 +24476,7 @@ ${foot}
     if (canal === 'linkedin' || (cid && _pendingAccept().some(x => x.c.id === cid))) probItems.push(iitem('linkedin', 'Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
     if (canal === 'linkedin') probItems.push(iitem('ban', 'LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
     if (canal === 'email') probItems.push(iitem('reply', 'Email rebotó', 'LeadManagerModule.seqDoBounced()'));
-    if (canal === 'whatsapp') probItems.push(iitem('ban', 'WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
+    if (canal === 'whatsapp') probItems.push(iitem('ban', 'WhatsApp no disponible', 'LeadManagerModule.seqDoNoWhatsapp()'));
     if (canal === 'call') probItems.push(iitem('ban', 'Teléfono no válido', 'LeadManagerModule.seqDoNoPhone()'));
     // El paso depende de que el prospecto haya publicado y hoy no hay nada: no es "hecha"
     // (no se comentó) ni un problema de dato (el perfil está bien). Se registra como paso
@@ -24624,7 +24624,7 @@ ${foot}
     try {
       await _noWhatsappCore(cid, true);
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_whatsapp = true;
-      showBanner('📵 WhatsApp no válido — salta sus pasos de WhatsApp', 'success');
+      showBanner('WhatsApp no disponible — se omiten sus pasos de WhatsApp', 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -24672,7 +24672,7 @@ ${foot}
     try {
       await _noWhatsappCore(cid, to);
       if (c) c.no_whatsapp = to;
-      showBanner(to ? '📵 WhatsApp no válido — saltará sus pasos' : '✓ WhatsApp habilitado de nuevo', 'success');
+      showBanner(to ? 'WhatsApp no disponible — se omitirán sus pasos' : 'WhatsApp habilitado de nuevo', 'success');
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
