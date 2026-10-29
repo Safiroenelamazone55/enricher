@@ -835,20 +835,28 @@ async function estimateSendTimes(pool, uid) {
   const { rows } = await pool.query(`
     SELECT m.id, m.sequence_id, m.scheduled_at, s.send_days, s.timezone AS seq_tz, COALESCE(s.send_interval_min,5) AS iv,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone AS cfg_tz,
-           (SELECT MAX(mi.sent_at) FROM lm_messages mi WHERE mi.sequence_id=m.sequence_id) AS last_sent
+           s.daily_limit AS seq_limit,
+           (SELECT MAX(mi.sent_at) FROM lm_messages mi WHERE mi.sequence_id=m.sequence_id) AS last_sent,
+           (SELECT COUNT(*)::int FROM lm_messages x WHERE x.sequence_id=m.sequence_id AND x.estado IN ('sent','replied','bounced')
+               AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS sent_today
       FROM lm_messages m JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
      WHERE m.user_id=$1 AND m.estado='approved' ORDER BY m.sequence_id, m.created_at ASC`, [uid]);
-  const out = {}, cursor = {};
+  const out = {}, cursor = {}, perDay = {};
   for (const r of rows) {
     const tz = r.seq_tz || r.cfg_tz || 'America/Lima', ws = r.window_start ?? 9, we = r.window_end ?? 18, mask = _sanSendDays(r.send_days);
+    const wsTz = r.cfg_tz || 'America/Lima', lim = r.seq_limit > 0 ? r.seq_limit : 0;
+    const dayKey = d => new Intl.DateTimeFormat('en-CA', { timeZone: wsTz }).format(d);
     const ivMs = Math.max(r.iv, 1) * 60000;
+    const days = perDay[r.sequence_id] || (perDay[r.sequence_id] = { [dayKey(new Date())]: r.sent_today });
     let t = Math.max(Date.now(), cursor[r.sequence_id] || 0, r.last_sent ? new Date(r.last_sent).getTime() + ivMs : 0, r.scheduled_at ? new Date(r.scheduled_at).getTime() : 0);
-    for (let i = 0; i < 700; i++) {
+    for (let i = 0; i < 1500; i++) {
       const { hour, weekend, wdIdx } = _localNow(tz, new Date(t));
-      if (hour >= ws && hour < we && !(weekend && !r.send_weekends) && mask[wdIdx] === '1') break;
+      const dk = dayKey(new Date(t));
+      if (hour >= ws && hour < we && !(weekend && !r.send_weekends) && mask[wdIdx] === '1' && !(lim && (days[dk] || 0) >= lim)) break;
       t += 30 * 60000;
     }
+    const dk = dayKey(new Date(t)); days[dk] = (days[dk] || 0) + 1;
     out[r.id] = new Date(t).toISOString();
     cursor[r.sequence_id] = t + ivMs;
   }
