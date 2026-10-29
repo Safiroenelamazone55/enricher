@@ -24482,6 +24482,7 @@ ${foot}
     // (no se comentó) ni un problema de dato (el perfil está bien). Se registra como paso
     // omitido y el contacto avanza — es como lo resuelven HubSpot, Apollo y Salesloft.
     if (_isContentStep(canal, accion)) probItems.push(iitem('skip', 'Sin actividad reciente', 'LeadManagerModule.seqDoNoActivity()'));
+    probItems.push(iitem('skip', 'Terminar en esta secuencia', 'LeadManagerModule.seqDoEnd()'));
     probItems.push(iitem('mail', 'Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')"));
     probItems.push(iitem('linkedin', 'Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')"));
     probItems.push(iitem('alert', 'Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')"));
@@ -24602,6 +24603,27 @@ ${foot}
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Omite un canal SOLO en esta inscripción (el dato inválido queda en el contacto, aparte).
+  async function _skipCanalSeq(seqId, cid, canal) {
+    const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skip_canal: canal }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo omitir el canal');
+    const row = await res.json();
+    const c = (_contacts || []).find(x => x.id === cid); const en = c && (c.sequences || []).find(s => s.id === seqId); if (en) en.skip_canales = row.skip_canales || '';
+  }
+  // "Terminar en esta secuencia": lo saca de ESTA secuencia sin descalificarlo ni marcarlo como contactado.
+  async function seqDoEnd() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    if (!confirm('¿Terminar a este contacto en esta secuencia?\n\nSale de ESTA secuencia y no vuelve a aparecer en sus tareas. No lo descalifica ni afecta otras secuencias.')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'terminado', sin_etapa: true }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const c = (_contacts || []).find(x => x.id === cid); const en = c && (c.sequences || []).find(s => s.id === seqId); if (en) en.estado = 'terminado';
+      showBanner('Contacto terminado en esta secuencia', 'success');
+      const next = _cpNextTask(seqId, cid);
+      if (next) _cpOpenNext(next, seqId); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
   async function seqDoNoLinkedIn() {
     if (!_cpTaskCtx) return;
@@ -24610,7 +24632,8 @@ ${foot}
     try {
       await _noLinkedInCore(cid, true);
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_linkedin = true;
-      showBanner('🚫 LinkedIn no válido — este contacto sigue por email (Ruta B)', 'success');
+      await _skipCanalSeq(seqId, cid, 'linkedin');
+      showBanner('LinkedIn no válido — se omiten sus pasos de LinkedIn en esta secuencia', 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -24624,7 +24647,8 @@ ${foot}
     try {
       await _noWhatsappCore(cid, true);
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_whatsapp = true;
-      showBanner('WhatsApp no disponible — se omiten sus pasos de WhatsApp', 'success');
+      await _skipCanalSeq(seqId, cid, 'whatsapp');
+      showBanner('WhatsApp no disponible — se omiten sus pasos de WhatsApp en esta secuencia', 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -24636,7 +24660,8 @@ ${foot}
     try {
       await _noPhoneCore(cid, true);
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_phone = true;
-      showBanner('📵 Teléfono no válido — salta sus pasos de llamada', 'success');
+      await _skipCanalSeq(seqId, cid, 'call');
+      showBanner('Teléfono no válido — se omiten sus pasos de llamada en esta secuencia', 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) _cpOpenNext(next, seqId); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -25735,10 +25760,13 @@ ${foot}
   function _noWhatsappC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !!c.no_whatsapp; }
   function _noPhoneC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !!c.no_phone; }
   function _stepCondMatch(st, cid) {
-    // Canal LinkedIn no válido para este contacto (perfil falso/inactivo) → sus pasos de LinkedIn se saltan.
-    if (st && st.canal === 'linkedin' && _noLinkedInC(cid)) return false;
-    if (st && st.canal === 'whatsapp' && _noWhatsappC(cid)) return false;
-    if (st && st.canal === 'call' && _noPhoneC(cid)) return false;
+    // Canal marcado como no disponible PARA ESTA SECUENCIA (LinkedIn/WhatsApp/teléfono inválido): sus pasos de ese canal se omiten aquí.
+    // El dato queda en el contacto (aviso en otras secuencias), pero la omisión es por inscripción, como en los CRM de outreach.
+    if (st && st.canal) {
+      const c0 = (_contacts || []).find(x => x.id === cid);
+      const en0 = c0 && (c0.sequences || []).find(s => s.id === st.sequence_id);
+      if (en0 && String(en0.skip_canales || '').split(',').includes(st.canal)) return false;
+    }
     const cd = (st && st.cond) || ''; if (!cd) return true;
     const sig = st.cond_step_id ? ((_seqSignals || {})[cid] || {})[st.cond_step_id] : null;
     if (['opened', 'not_opened', 'clicked', 'not_clicked'].includes(cd)) {
@@ -25873,6 +25901,12 @@ ${foot}
     if (tz) { const sug = _suggestHour(tz); return `<span class="seq-task__sug" title="Hora sugerida en tu horario para caer en la mañana del prospecto (${esc(_tzShort(tz))}${c && _contactTz(c) ? ' · por su estado: ' + esc(c.region || '') : ''})">sug. ${sug}</span>`; }
     return '';
   }
+  // Aviso (no omisión): el contacto está marcado sin este canal en otra secuencia; aquí la decisión es tuya.
+  function _canalAviso(cid, canal) {
+    const c = (_contacts || []).find(x => x.id === cid); if (!c) return '';
+    const m = { whatsapp: ['no_whatsapp', 'Sin WhatsApp'], linkedin: ['no_linkedin', 'Sin LinkedIn válido'], call: ['no_phone', 'Teléfono no válido'] }[canal];
+    return (m && c[m[0]]) ? `<span class="seq-task__warn" title="Marcado como no disponible en otra secuencia. Aquí decides tú: haz la tarea, salta el paso u omite este canal.">${m[1]}</span>` : '';
+  }
   function _seqTaskRow(t, seqId, today) {
     const { e, st, due } = t;
     const touch = _TOUCH[st.canal] || _TOUCH.email;
@@ -25880,7 +25914,7 @@ ${foot}
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})">
       <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || touch[0])}<span class="seq-task__ch">${touch[0]}</span>${_canalAviso(e.contact_id, st.canal)}</div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId, e)}
       <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;
@@ -37968,7 +38002,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

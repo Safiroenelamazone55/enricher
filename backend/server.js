@@ -4346,7 +4346,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
         co.campo1 AS company_campo1, co.campo2 AS company_campo2, co.campo3 AS company_campo3, co.campo4 AS company_campo4, co.campo5 AS company_campo5, co.campo6 AS company_campo6, co.campo7 AS company_campo7, co.campo8 AS company_campo8, co.campo9 AS company_campo9, co.campo10 AS company_campo10,
-        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text, 'contact_sequence_id', cs.id, 'paused_reason', cs.paused_reason, 'next_action_at', cs.next_action_at) ORDER BY s.nombre)
+        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text, 'contact_sequence_id', cs.id, 'paused_reason', cs.paused_reason, 'skip_canales', cs.skip_canales, 'next_action_at', cs.next_action_at) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
         COALESCE((SELECT json_agg(json_build_object('id', cp.id, 'nombre', cp.nombre) ORDER BY cp.nombre)
@@ -5854,13 +5854,18 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
   // Al avanzar de paso se sella paso_date=HOY: el siguiente paso se agenda desde el día en que
   // realmente completaste este (un retraso corre toda la cadencia, no la comprime).
   if (b.paso != null) { vals.push(parseInt(b.paso) || 1); sets.push(`paso=$${vals.length}`); sets.push(`paso_date=CURRENT_DATE`); }
+  // Omitir un canal SOLO en esta inscripción (WhatsApp/LinkedIn/teléfono no disponibles). Idempotente.
+  if (['whatsapp', 'linkedin', 'call', 'email', 'task'].includes(b.skip_canal)) {
+    vals.push(b.skip_canal);
+    sets.push(`skip_canales = CASE WHEN (',' || skip_canales || ',') LIKE ('%,' || $${vals.length} || ',%') THEN skip_canales ELSE concat_ws(',', NULLIF(skip_canales,''), $${vals.length}::text) END`);
+  }
   if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
   vals.push(req.workspaceOwnerId, req.params.id, req.params.cid);
   try {
     const { rows } = await pool.query(`UPDATE lm_contact_sequences SET ${sets.join(',')} WHERE user_id=$${vals.length - 2} AND sequence_id=$${vals.length - 1} AND contact_id=$${vals.length} RETURNING *`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
     // Completó al menos el paso 1 (avanza de paso o termina) → el contacto ya fue contactado.
-    const stage = ((b.paso != null && (parseInt(b.paso) || 1) > 1) || b.estado === 'terminado')
+    const stage = (!b.sin_etapa && ((b.paso != null && (parseInt(b.paso) || 1) > 1) || b.estado === 'terminado'))
       ? await _lmAdvanceStage(req.workspaceOwnerId, req.params.cid, 'contactado') : null;
     // Rotación por empresa (pasos manuales: WhatsApp/LinkedIn/llamada/tarea, que se
     // completan a mano acá — no pasan por advancePastStep). Ver rotacion_empresa

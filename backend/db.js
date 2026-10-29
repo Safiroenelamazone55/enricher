@@ -1597,6 +1597,16 @@ async function initDb() {
     // incorrecto (no ausente — la ausencia de dato ya se detecta sola sin necesitar esta marca).
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_whatsapp BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_phone    BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Canales omitidos POR INSCRIPCIÓN (coma-separados). Antes los canales "no válidos" se omitían en TODAS las secuencias
+    // del contacto; ahora la omisión es de la secuencia donde se marcó y el dato queda en el contacto como aviso.
+    {
+      const { rows: [had] } = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name='lm_contact_sequences' AND column_name='skip_canales'`);
+      await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS skip_canales TEXT NOT NULL DEFAULT '';`);
+      if (!had) {   // una sola vez: conserva el comportamiento actual de lo ya marcado
+        await pool.query(`UPDATE lm_contact_sequences cs SET skip_canales = concat_ws(',', CASE WHEN k.no_whatsapp THEN 'whatsapp' END, CASE WHEN k.no_linkedin THEN 'linkedin' END, CASE WHEN k.no_phone THEN 'call' END)
+                            FROM lm_contacts k WHERE k.id = cs.contact_id AND (k.no_whatsapp OR k.no_linkedin OR k.no_phone)`);
+      }
+    }
     // "Por corregir": falta/está mal un dato para contactar → pausa sus secuencias hasta arreglarlo.
     // '' (ok) | falta_email | falta_linkedin | dato_incorrecto
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS data_issue TEXT NOT NULL DEFAULT '';`);
