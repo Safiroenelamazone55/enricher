@@ -26226,6 +26226,7 @@ ${foot}
     (_cpFlags[_cpKey] = _cpFlags[_cpKey] || {})[act] = true;
     if (act === 'copy') document.querySelectorAll('[data-act="copy"]').forEach(b => { b.classList.add('is-done'); b.innerHTML = NI('check', 13) + ' Copiado'; b.title = 'Ya copiado: pulsa para copiar otra vez'; });
     if (act === 'subj') document.querySelectorAll('[data-act="subj"]').forEach(b => { b.classList.add('is-done'); b.innerHTML = NI('check', 13); b.title = 'Asunto copiado'; });
+    if (act === 'open') document.querySelectorAll('.cp-li-row').forEach(r => { if (!r.querySelector('.cp-li-done')) r.insertAdjacentHTML('beforeend', `<span class="cp-li-done">${NI('check', 12)} Abierto</span>`); });
     if (act === 'open') document.querySelectorAll('.cp-taskbar__mt--liopen').forEach(b => { b.classList.add('is-done'); const o = b.querySelector('.cp-taskbar__open'); if (o) o.innerHTML = NI('check', 12) + 'Abierto'; b.title = 'Ya abierto: pulsa para abrirlo otra vez'; });
   }
   function _cpTaskBar(cid) {
