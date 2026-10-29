@@ -26,18 +26,6 @@ window.addEventListener('error', function (ev) {
 // (Chrome/Android calcula distinto vh según la orientación), esto muestra
 // el tamaño real que el navegador reporta, todo el tiempo, en una esquina.
 // Quitar junto con el banner de errores de arriba una vez resuelto el caso.
-window.addEventListener('DOMContentLoaded', function () {
-  try {
-    const d = document.createElement('div');
-    d.id = 'nova-diag-size';
-    d.style.cssText = 'position:fixed;bottom:4px;right:4px;z-index:999999;background:#000;color:#0F0;font-family:monospace;font-size:11px;padding:3px 6px;opacity:.85;pointer-events:none';
-    const upd = () => { d.textContent = window.innerWidth + 'x' + window.innerHeight + ' dpr' + (window.devicePixelRatio || 1); };
-    upd();
-    window.addEventListener('resize', upd);
-    window.addEventListener('orientationchange', () => setTimeout(upd, 300));
-    document.body.appendChild(d);
-  } catch (_) {}
-});
 
 /**
  * app.js — B2B Email Enricher Frontend
@@ -6665,7 +6653,21 @@ const CanteraModule = (() => {
         <div class="cfi__g">${fld('nombre', 'Nombre')}${fld('apellido', 'Apellido')}${fld('cargo', 'Cargo', '', true)}${fld('email', 'Email')}${fld('idioma', 'Idioma', 'es, en, it…')}${fld('ciudad', 'Ciudad')}${fld('pais', 'País')}${fld('linkedin', 'LinkedIn (URL)', '', true)}${fld('linkedin_sales_nav', 'Sales Navigator (URL)', '', true)}</div>
         <h4>Empresa <small>se edita en Resultados</small></h4>
         <div class="cfi__co"><b>${esc(k.empresa || '—')}</b>${[k.industria, k.empresa_pais, k.tamano].filter(Boolean).length ? `<span>${esc([k.industria, k.empresa_pais, k.tamano].filter(Boolean).join(' · '))}</span>` : ''}${web ? `<a href="${esc(web)}" target="_blank" rel="noopener">${esc(String(k.website || k.dominio).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗</a>` : ''}</div></div>
-      <div class="cfi__ft"><span id="cfi-msg"></span><button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeFicha()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveFicha()">Guardar cambios</button></div>`;
+      <div class="cfi__ft"><span id="cfi-msg"></span><button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteFicha()">Eliminar</button><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveFicha()">Guardar cambios</button></div>`;
+  }
+  // Eliminar el contacto del borrador desde su ficha (si ya está en el CRM, se elimina allá)
+  async function deleteFicha() {
+    if (!_fk) return;
+    if (!confirm(`¿Eliminar a ${[_fk.nombre, _fk.apellido].filter(Boolean).join(' ') || 'este contacto'} del borrador? No se puede deshacer.`)) return;
+    const id = _fk.id;
+    try {
+      const r = await apiFetch(`${API}/cantera/contacts/${id}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error');
+      closeFicha(); showBanner('✓ Contacto eliminado', 'success');
+      Object.keys(_cargoCt).forEach(k => { _cargoCt[k] = (_cargoCt[k] || []).filter(x => x.id !== id); });
+      if (_orphans) _orphans = _orphans.filter(c => c.id !== id);
+      _cargoRepaint(); _orphRepaint(); _orphRefreshQuiet();
+    } catch (e) { showBanner('No se pudo eliminar: ' + e.message, 'error'); }
   }
   async function saveFicha() {
     if (!_fk) return; const body = {}, cargoAntes = _fk.cargo || '';
@@ -8397,7 +8399,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, deleteFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,

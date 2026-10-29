@@ -8371,6 +8371,15 @@ app.get('/api/cantera/contacts/:id', requireAuth, async (req, res) => {
     const r = rows[0]; delete r.raw; res.json(r);
   } catch (e) { console.error('[cantera] contact GET', e.message); res.status(500).json({ error: 'No se pudo cargar el contacto' }); }
 });
+app.delete('/api/cantera/contacts/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: [k] } = await pool.query('SELECT id, promoted_contact_id FROM cantera_contacts WHERE id=$1 AND user_id=$2', [parseInt(req.params.id, 10), req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    if (k.promoted_contact_id) return res.status(409).json({ error: 'Este contacto ya está en el CRM: elimínalo desde allá' });
+    await pool.query('DELETE FROM cantera_contacts WHERE id=$1 AND user_id=$2', [k.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (e) { console.error('[cantera] contact DELETE', e.message); res.status(500).json({ error: 'No se pudo eliminar' }); }
+});
 app.patch('/api/cantera/contacts/:id', requireAuth, async (req, res) => {
   const b = req.body || {}, vals = {};
   for (const k of _CT_EDIT) if (k in b) vals[k] = String(b[k] == null ? '' : b[k]).replace(/\s+/g, ' ').trim().slice(0, k.includes('linkedin') ? 400 : 160);
