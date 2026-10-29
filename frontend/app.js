@@ -6542,7 +6542,7 @@ const CanteraModule = (() => {
   }
   function _orphansHtml() {
     const L = _orphans || [];
-    if (!L.length) return '<div id="cant-orphans"></div>';
+    if (!L.length) return Array.isArray(_orphans) ? '<div id="cant-orphans"><div class="cant-hint" style="margin:6px 0 0">No hay contactos sin empresa clara en este borrador.</div></div>' : '<div id="cant-orphans"></div>';
     const fix = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
     const IN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
     const SN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>';
@@ -6589,6 +6589,13 @@ const CanteraModule = (() => {
       } catch (_) { /* sin red: vuelve a escribir */ }
     }, 180);
   }
+  // Repinta SOLO el bloque de contactos sin empresa; los datos del borrador (empresas, cargos, contadores) se actualizan por detrás.
+  function _orphRepaint() { const box = document.getElementById('cant-orphans'); if (box) box.outerHTML = _orphansHtml(); }
+  async function _orphRefreshQuiet() {
+    try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
+    try { await _loadCompanies(); } catch (_) {}
+    try { await _cargosRefresh(); } catch (_) {}
+  }
   async function _orphAssign(gi, body, okMsg) {
     const g = _orphGroups[gi]; if (!g) return;
     try {
@@ -6596,9 +6603,9 @@ const CanteraModule = (() => {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'No se pudo vincular');
       showBanner(`✓ ${d.vinculados} contacto(s) ${okMsg}`, 'success');
-      _orphans = null;
-      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
-      await _loadCompanies(); _paint();
+      const ids = new Set(g.items.map(c => c.id)); _orphans = (_orphans || []).filter(c => !ids.has(c.id));
+      _orphRepaint();   // desaparecen de la lista al instante, sin recargar la página
+      _orphRefreshQuiet();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function orphPick(gi, j) {
@@ -6615,8 +6622,7 @@ const CanteraModule = (() => {
       if (!res.ok) throw new Error(d.error || 'No se pudo eliminar');
       _orphans = (_orphans || []).filter(c => c.id !== id);
       showBanner('✓ Contacto eliminado', 'success');
-      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch (_) {}
-      _paint();
+      _orphRepaint(); _orphRefreshQuiet();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── Prioridad por cargo (Información) ──
@@ -6784,7 +6790,6 @@ const CanteraModule = (() => {
       <div class="cant-hint" style="margin:0 0 14px;max-width:none">Aquí configuras el borrador: asigna la prioridad por cargo y resuelve los contactos que quedaron sin empresa clara. El resumen de lo importado, limpiado y enriquecido está en <b>Información</b>.</div>
       <div class="cant-cfg-h">Prioridad por cargo</div>${_cargosHtml()}
       <div class="cant-cfg-h">Contactos sin empresa clara</div>${_orphansHtml()}
-      ${(_orphans && !_orphans.length) ? '<div class="cant-hint" style="margin:0">No hay contactos sin empresa clara en este borrador.</div>' : ''}
     </div>`;
   }
   function _infoHtml(calificadas) {
