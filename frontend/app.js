@@ -24821,7 +24821,8 @@ ${foot}
       const dom = String((co && (co.dominio || co.website)) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0];
       const cargoTxt = String(c.cargo || '').trim();
       const qAI = encodeURIComponent('What is the corporate email address of ' + nm + (cargoTxt ? ', ' + cargoTxt : '') + (empresa ? ' at ' + empresa : '') + (dom ? ' (' + dom + ')' : '') + '? Include alternative or personal emails, the email format used at ' + (dom || 'the company') + ', and their LinkedIn profile.');
-      const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? '"' + empresa + '" ' : '') + (dom ? '("@' + dom + '" OR "' + dom + '") ' : '') + '(email OR correo OR contact OR contacto) -site:linkedin.com -site:facebook.com -site:instagram.com');
+      // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
+      const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
       const slot = (title, inner, attrs, on) => on ? '<a class="lm-fx-i" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
       const wa = _waDigits(c);
@@ -24831,7 +24832,7 @@ ${foot}
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
         slot('Búsqueda inteligente del email (Google con IA): pregunta completa con nombre, cargo, empresa y dominio', NI('sparkles', 14), 'href="https://www.google.com/search?q=' + qAI + '" target="_blank" rel="noopener"', true),
-        slot('Búsqueda por operadores: nombre + empresa + dominio + «email»/«@dominio», sin redes', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
+        slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true),
       ].join('');
       const tag = bad === 'rebote'
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
