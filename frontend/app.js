@@ -23184,6 +23184,7 @@ const LeadManagerModule = (() => {
       ['tareas', 'Tareas', taskN],
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
+      ['info', 'Información', null],
       ['config', 'Configuración', null],
     ];
     const apN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : 0;
@@ -23679,7 +23680,7 @@ ${foot}
     document.getElementById('lm-rpt-modal')?.remove();
   }
   // ════════════ CONFIGURACIÓN DE LA SECUENCIA (resumen: configuración, audiencia, calidad de datos, avance) ════════════
-  function _seqConfigTab(id) {
+  function _seqConfigTab(id, mode) {
     const s = (_sequences || []).find(x => x.id === id); if (!s) return '';
     const list = Array.isArray(_seqContacts) ? _seqContacts : null;
     const cli = (_clients || []).find(c => c.id === s.outbound_client_id), cmp = (_campaigns || []).find(c => c.id === s.campaign_id);
@@ -23710,11 +23711,12 @@ ${foot}
     // Estado del grupo: ✓ si el idioma ya está guardado en todos sus contactos; si no, cuántos son solo deducidos (por nivel o por país).
     const _idiEstado = key => { const g = list.filter(c => key === '_none' ? !c.idioma_ef : c.idioma_ef === key); if (!g.length || key === '_none') return ''; const ded = g.filter(c => c.idioma_origen !== 'guardado').length; return ded ? `<span title="Idioma deducido (nivel o país), todavía no guardado en el contacto. Elige «Confirmar» para fijarlo." style="font-size:11px;color:#B45309;white-space:nowrap">${ded === g.length ? 'deducido' : ded + ' deducidos'}</span>` : `<span title="Idioma guardado en todos los contactos del grupo" style="font-size:11px;color:#15803D;white-space:nowrap">✓ guardado</span>`; };
     const _idiAsig = (n, key) => { const sug = _idiSug(key), opts = sug ? [sug, ..._IDIOMAS_UI.filter(l => l !== sug)] : _IDIOMAS_UI; return `<span onclick="event.preventDefault();event.stopPropagation()" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center"><span style="font-size:11.5px;color:#64748B">Asignar a todo el grupo:</span>${_idiEstado(key)}<select class="form-input" id="idi-to-${n}" onchange="if(this.value)LeadManagerModule.seqIdiAsignar(${id},'${encodeURIComponent(key)}',${n})" style="width:auto;min-width:170px;padding:2px 8px;font-size:12px"><option value="" selected>${key === '_none' ? 'Elegir idioma…' : esc(key) + ' · actual'}</option>${key !== '_none' ? `<option value="${esc(key)}">Confirmar «${esc(key)}» para todos</option>` : ''}${opts.filter(l => l !== key).map((l, k) => `<option value="${esc(l)}">${esc(l)}${k === 0 && sug ? ' · sugerido' : ''}</option>`).join('')}</select></span>`; };
-    const idiBlock = idiNames.map((k, n) => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px"><span><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</span>${_idiAsig(n, k)}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
-      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309;display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</span>${_idiAsig(99, '_none')}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
+    const mkIdi = asig => idiNames.map((k, n) => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px"><span><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</span>${asig ? _idiAsig(n, k) : _idiEstado(k)}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
+      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309;display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</span>${asig ? _idiAsig(99, '_none') : ''}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
+    const idiBlock = mkIdi(true), idiRead = mkIdi(false);
     const aud = card('Audiencia', kv([['Empresas', empresasN], ['Contactos', list.length], ['Con email', conEmail + ' (' + Math.round(100 * conEmail / (list.length || 1)) + '%)'], ['Idiomas distintos', idiNames.length || '']])
       + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:14px"><div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por país</div>${bars(porPais, list.length, sinPais ? sinPais + ' sin país' : '') || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos</div>'}</div>
-        <div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
+        <div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiRead || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
     // Calidad de los datos
     const emails = {}; list.forEach(c => { const e = String(c.email || '').toLowerCase(); if (e) emails[e] = (emails[e] || 0) + 1; });
     const dup = Object.values(emails).filter(n => n > 1).length;
@@ -23741,7 +23743,9 @@ ${foot}
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid #EEF1F4"><label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:4px">Si a un contacto le falta el mensaje de su idioma</label>
         <select class="form-input" style="max-width:420px" onchange="LeadManagerModule.seqIdiomaFaltante(${id},this.value)"><option value="base"${faltante === 'base' ? ' selected' : ''}>Enviarle el mensaje base</option><option value="detener"${faltante === 'detener' ? ' selected' : ''}>Detenerlo y avisarme (pasa a Pausados)</option></select>
         <div style="font-size:12px;color:#64748B;margin-top:4px">Con “Detener”, nadie recibe un mensaje en un idioma que no habla. Al añadir la traducción, el contacto se reanuda solo.</div></div>`, 'cada contacto recibe el mensaje de su idioma');
-    return cfg + aud + idiCard + cal + avance + res;
+    const idiAsigCard = card('Idioma de los contactos', `<div style="font-size:12.5px;color:#475569;margin-bottom:8px">Elige el idioma de un grupo entero desde su selector: queda guardado en cada contacto y manda sobre el que se deduce por su nivel o su país. «Confirmar» fija el idioma actual.</div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin contactos todavía.</div>'}`);
+    if (mode === 'info') return aud + cal + avance + res;
+    return cfg + idiAsigCard + idiCard;
   }
   async function seqIdiomaFaltante(id, valor) {
     try {
@@ -23755,7 +23759,8 @@ ${foot}
   function _seqTabContent(id) {
     const steps = _seqSteps(id);
     if (_seqTab === 'empresas') return _seqEmpresasTab(id);
-    if (_seqTab === 'config') return _seqConfigTab(id);
+    if (_seqTab === 'info') return _seqConfigTab(id, 'info');
+    if (_seqTab === 'config') return _seqConfigTab(id, 'config');
     if (_seqTab === 'contactos') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
       if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -25068,7 +25073,7 @@ ${foot}
       </div>
       <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas' || t === 'config') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas' || t === 'config' || t === 'info') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
