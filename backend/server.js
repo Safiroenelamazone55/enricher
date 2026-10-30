@@ -13536,6 +13536,8 @@ async function _lmWaResolve(req) {
         LEFT JOIN lm_contact_sequences cs ON cs.contact_id = k.id AND cs.estado IN ('activo','pausado')
        WHERE k.user_id = $1
          AND (cs.id IS NOT NULL
+              -- también quien YA recibió (o tiene en cola) un mensaje enviado desde Nova (contact_id guardado en el mensaje), aunque su secuencia ya terminó: si no, ese chat desaparece de Outreach
+              OR EXISTS (SELECT 1 FROM wa_messages mq WHERE mq.contact_id = k.id)
               -- también quien tiene un mensaje de WhatsApp EN COLA aunque su inscripción ya no esté activa/pausada (si no, ese mensaje no se ve en ninguna parte)
               OR EXISTS (SELECT 1 FROM wa_messages m JOIN wa_connections wc ON wc.id = m.connection_id
                           WHERE wc.user_id = $1 AND m.estado = 'programado'

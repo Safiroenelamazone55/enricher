@@ -2314,6 +2314,7 @@ async function initDb() {
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS prioridad TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS con_firma BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS firma_html TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_contact_idx ON wa_messages (contact_id) WHERE contact_id IS NOT NULL;`);
     // Una sola vez: los chats donde ya salió un mensaje desde la cuenta quedan asignados a quien la conectó (aparecen en «Mías»).
     await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     const { rowCount: yaAsig } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre='wa_asignar_salientes'`);

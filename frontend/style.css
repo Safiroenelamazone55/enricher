@@ -19156,3 +19156,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 /* Firma enviada con el correo, visible en el hilo del Inbox */
 .ibx-m__sig { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #D5D1CA; font-size: .82rem; max-width: 100%; overflow: hidden; } .ibx-m__sig img { max-width: 100%; height: auto; }
 .chat-ctx-item--accent { font-weight: 700; color: #2F5BB7; }
+/* Mensaje en cola/programado: el texto se leía blanco sobre blanco */
+.wa-msg--sched .wa-msg__bubble { color: #1F1D1B; }
