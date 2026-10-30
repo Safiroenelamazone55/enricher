@@ -5341,6 +5341,9 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
        WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
          AND (a.fecha AT TIME ZONE 'UTC')::date < (NOW() AT TIME ZONE $2::text)::date
+         -- Los avisos del sistema («[Secuencia] Contacto sin email — agregar email», rebotes…) viven en «Por corregir»: no son además filas de Prioridad.
+         AND NOT (a.tipo='tarea' AND a.nota LIKE '[%' AND a.nota NOT LIKE '[Reunión #%')
+         AND NOT (a.tipo='tarea' AND a.nota LIKE 'Rebote:%')
        ORDER BY a.fecha ASC`, [uid, _tz]);
 
     // 4. HOY (actividades pendientes con fecha de hoy y no vencidas aún).
