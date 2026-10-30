@@ -237,11 +237,28 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
   return { id: row.id, scheduledAt: r2 && r2.scheduled_at };
 }
 
+// Un paso de WhatsApp en cola NO cierra la secuencia hasta que el mensaje sale de verdad: el contacto queda «en espera de envío» (pausado, motivo espera_envio_wa)
+// y pasa a «terminado» cuando ya no le queda ningún mensaje de esa secuencia en cola (enviado o cancelado).
+async function finalizarEsperaWa(pool, contactId, sequenceId) {
+  if (!contactId || !sequenceId) return 0;
+  const { rows: [q] } = await pool.query(`SELECT COUNT(*)::int n FROM wa_messages m WHERE m.contact_id=$1 AND m.sequence_id=$2 AND m.estado IN ('programado','enviando','error_programado')`, [contactId, sequenceId]);
+  if (q.n > 0) return 0;
+  const { rows } = await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', paused_reason='', next_action_at=NULL WHERE contact_id=$1 AND sequence_id=$2 AND estado='pausado' AND paused_reason='espera_envio_wa' RETURNING user_id, sequence_id`, [contactId, sequenceId]);
+  if (rows.length) {
+    try {
+      const { rows: [ctx] } = await pool.query(`SELECT k.company_id, k.disposition, k.li_aceptado_at FROM lm_contacts k WHERE k.id=$1`, [contactId]);
+      if (ctx && ctx.company_id) await require('./sendEngine').maybeActivateNextInRotation(pool, { user_id: rows[0].user_id, sequence_id: sequenceId, company_id: ctx.company_id, disposition: ctx.disposition, li_aceptado_at: ctx.li_aceptado_at });
+    } catch (e) { console.warn('[wa] rotacion tras envio:', e.message); }
+  }
+  return rows.length;
+}
+
 // ── Motor ───────────────────────────────────────────────────────────────────────────────────────────────────────
 // El mensaje ya salió: se guarda su id real. Si justo apareció otra fila con ese mismo id (p. ej. una sincronización), se conserva UNA sola.
 async function _marcarEnviado(pool, m, msgId) {
   try {
     await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), scheduled_at=NULL, ultimo_error='' WHERE id=$1`, [m.id, msgId]);
+    finalizarEsperaWa(pool, m.contact_id, m.sequence_id).catch(e2 => console.warn('[wa] finalizar espera:', e2.message));
   } catch (e) {
     if (e && e.code === '23505') {
       await pool.query(`UPDATE wa_messages SET via_cola=$3, contact_id=$4, sequence_id=$5, step_id=$6, origen=$7 WHERE connection_id=(SELECT connection_id FROM wa_messages WHERE id=$1) AND msg_id=$2`,
@@ -423,4 +440,4 @@ function mount(app, { pool, requireAuth, cargarConexion }) {
   });
 }
 
-module.exports = { tzDeJid, _procesarLinea: procesarLinea, mount, tick, encolar, replanificar, getSettings, saveSettings, pausarLinea, reanudarLinea, resumen, partes, zonedToUtc, ajustarVentana, enVentana, intervaloMs, topeEfectivo };
+module.exports = { finalizarEsperaWa, tzDeJid, _procesarLinea: procesarLinea, mount, tick, encolar, replanificar, getSettings, saveSettings, pausarLinea, reanudarLinea, resumen, partes, zonedToUtc, ajustarVentana, enVentana, intervaloMs, topeEfectivo };

@@ -5864,6 +5864,15 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
   try {
     const { rows } = await pool.query(`UPDATE lm_contact_sequences SET ${sets.join(',')} WHERE user_id=$${vals.length - 2} AND sequence_id=$${vals.length - 1} AND contact_id=$${vals.length} RETURNING *`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
+    // Si el último paso era un WhatsApp que TODAVÍA está en cola, la secuencia no termina hasta que el mensaje salga de verdad.
+    let _enEspera = false;
+    if (b.estado === 'terminado') {
+      const { rows: [pq] } = await pool.query(`SELECT COUNT(*)::int n FROM wa_messages WHERE contact_id=$1 AND sequence_id=$2 AND estado IN ('programado','enviando','error_programado')`, [req.params.cid, req.params.id]);
+      if (pq.n > 0) {
+        await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='espera_envio_wa', next_action_at=NULL WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [req.workspaceOwnerId, req.params.id, req.params.cid]);
+        rows[0].estado = 'pausado'; rows[0].paused_reason = 'espera_envio_wa'; _enEspera = true;
+      }
+    }
     // Completó al menos el paso 1 (avanza de paso o termina) → el contacto ya fue contactado.
     const stage = (!b.sin_etapa && ((b.paso != null && (parseInt(b.paso) || 1) > 1) || b.estado === 'terminado'))
       ? await _lmAdvanceStage(req.workspaceOwnerId, req.params.cid, 'contactado') : null;
@@ -5878,7 +5887,7 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
         [req.params.cid, req.workspaceOwnerId, req.params.id]);
       if (ctx && ctx.company_id) {
         const paso = rows[0].paso;
-        const terminado = b.estado === 'terminado';
+        const terminado = b.estado === 'terminado' && !_enEspera;
         if (terminado || (ctx.rotacion_empresa_paso > 0 && paso >= ctx.rotacion_empresa_paso)) {
           const { maybeActivateNextInRotation } = require('./services/sendEngine');
           await maybeActivateNextInRotation(pool, {
@@ -14027,9 +14036,10 @@ app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, 
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const r = await pool.query(
-      `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado IN ('programado','error_programado') RETURNING via_cola`,
+      `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado IN ('programado','error_programado') RETURNING via_cola, contact_id, sequence_id`,
       [req.params.msgId, req.params.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'No encontrado o ya se envió' });
+    waQueue.finalizarEsperaWa(pool, r.rows[0].contact_id, r.rows[0].sequence_id).catch(() => {});
     if (r.rows[0].via_cola) await waQueue.replanificar(pool, +req.params.id);   // los demás de la cola se reacomodan
     res.json({ ok: true });
   } catch (err) { console.error('[wa] cancelar programado', err.message); res.status(500).json({ error: 'No se pudo cancelar' }); }
@@ -15007,6 +15017,9 @@ async function start() {
   setTimeout(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 90 * 1000);
   setTimeout(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 120 * 1000);
   setTimeout(() => { try { require('./services/cargoSweep').run(pool); } catch (_) {} }, 150 * 1000);
+  // Red de seguridad: contactos «en espera de envío WhatsApp» que ya no tienen nada en cola pasan a terminado.
+  const _waEsperaSweep = async () => { try { const { rows } = await pool.query(`SELECT DISTINCT contact_id, sequence_id FROM lm_contact_sequences WHERE estado='pausado' AND paused_reason='espera_envio_wa'`); for (const r of rows) await waQueue.finalizarEsperaWa(pool, r.contact_id, r.sequence_id); } catch (e) { console.warn('[wa] sweep espera:', e.message); } };
+  setTimeout(_waEsperaSweep, 180 * 1000); setInterval(_waEsperaSweep, 10 * 60 * 1000);
   setInterval(() => { try { require('./services/cargoSweep').run(pool); } catch (_) {} }, 60 * 60 * 1000);
   setInterval(() => { try { require('./services/idiomaNormalize').run(pool); } catch (_) {} }, 60 * 60 * 1000);
   setInterval(() => { try { require('./services/dealExclusions').syncAll(pool); } catch (_) {} }, 60 * 60 * 1000);
