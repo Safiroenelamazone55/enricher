@@ -27708,6 +27708,28 @@ ${foot}
       return '<tr style="cursor:default"><td>' + fd(c.sent_at) + (c.estado === 'bounced' ? '<div class="kdr__d" style="color:#DC2626">Rebotó</div>' : '') + '</td><td>' + esc(c.asunto || '(sin asunto)') + '</td><td>' + esc(c.secuencia || '—') + '</td><td>' + ap + '</td><td>' + cl + '</td></tr>';
     }).join('') + '</tbody></table><div class="kdr__d" style="margin-top:8px">Las aperturas son aproximadas (algunos clientes de correo precargan las imágenes).</div>';
   }
+  // «Resolver respuesta» desde un chat de WhatsApp: mismas opciones y mismo efecto que en el Inbox (registra el resultado en el contacto, pausa/reanuda sus pasos…).
+  function waResolveMenu(x, y, cid, jid, connId) {
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+    const q = (jid || '').replace(/'/g, "\'");
+    const html = `<div style="padding:7px 12px 4px;font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8F8B83">Resolver respuesta</div><div class="cp-mark-menu__list">`
+      + _DISPOS.filter(d => d[0] !== 'aceptado').map(d => item(esc(d[1]), `LeadManagerModule.waResolveDo(${cid},'${d[0]}','${q}',${connId || 0})`, d[2])).join('')
+      + `<div class="cp-mark-menu__sep"></div>` + item('Aplazar hasta… (fuera de oficina / vacaciones)', `LeadManagerModule.ldAplazar(${cid})`, '#0E7490') + `</div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.innerHTML = html; document.body.appendChild(menu);
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - 300))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+    setTimeout(() => { const off = e => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 0);
+  }
+  async function waResolveDo(cid, disp, jid, connId) {
+    await ibResolveDisp(cid, disp);
+    // con las opciones directas (no las que abren una ventana propia) el chat también queda «Resuelto» y sale de Prioridad
+    if (!['mas_adelante', 'derivado', 'no_es_persona'].includes(disp) && connId && jid) {
+      try { await apiFetch(`${API}/wa/connections/${connId}/chats/${encodeURIComponent(jid)}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estadoConv: 'resuelto' }) }); } catch (_) {}
+    }
+    try { _tiReload(); } catch (_) {}
+  }
   function ibOpenResolveMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
@@ -28752,7 +28774,7 @@ ${foot}
     catch { _waList = []; }
     // Con filtro de cliente: contactos del cliente O que están en sus secuencias/campañas (un contacto reutilizado conserva su cliente original, y filtrar solo por ése ocultaba chats que sí le pertenecen).
     if (_gcli && Array.isArray(_waList)) { const k = new Set((_contacts || []).map(c => c.id)); const loaded = k.size > 0; _waList = _waList.filter(w => w.outbound_client_id === _gcli || (loaded && k.has(w.contact_id))); }
-    if (_section === 'wa' && document.getElementById('lm-wa-host')) { try { WaChatModule.setScopeJids(new Set((_waList || []).map(w => w.chat_jid))); } catch (_) {} }
+    if (_section === 'wa' && document.getElementById('lm-wa-host')) { try { WaChatModule.setScopeJids(new Set((_waList || []).map(w => w.chat_jid)), Object.fromEntries((_waList || []).map(w => [w.chat_jid, w.contact_id]))); } catch (_) {} }
     _refreshNav();
   }
   function waCli(v) { _waCli = parseInt(v) || 0; }
@@ -28769,7 +28791,7 @@ ${foot}
     if (!host || !fc) return;
     host.appendChild(fc);
     const key = String(_gcli || 0), fresh = _waMountCache && _waMountCache.k === key && Date.now() - _waMountCache.at < 30000;
-    if (fresh) { await WaChatModule.loadScoped({ jids: _waMountCache.jids, connId: _waMountCache.connId }); return; }
+    if (fresh) { await WaChatModule.loadScoped({ jids: _waMountCache.jids, connId: _waMountCache.connId, byJid: _waMountCache.byJid }); return; }
     WaChatModule.scopeLoading(true);
     // la lista de contactos con chat y el WhatsApp del cliente se piden a la vez
     const [rowsR, connsR] = await Promise.all([
@@ -28778,12 +28800,12 @@ ${foot}
     ]);
     const rows = (rowsR && rowsR.ok) ? await rowsR.json() : [];
     if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
-    const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; });
+    const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}, byJid = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; byJid[w.chat_jid] = w.contact_id; });
     let connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
     // Con un cliente filtrado, el WhatsApp es el de ESE cliente (cada cliente tiene el suyo; aquí no se cambia de número).
     if (connsR && connsR.ok) { try { const cs = await connsR.json(); const ok = cs.find(x => x.estado === 'conectado') || cs[0]; if (ok) connId = ok.id; } catch (_) {} }
-    _waMountCache = { k: key, at: Date.now(), jids, connId };
-    await WaChatModule.loadScoped({ jids, connId });
+    _waMountCache = { k: key, at: Date.now(), jids, connId, byJid };
+    await WaChatModule.loadScoped({ jids, connId, byJid });
   }
   function _vWaList() {
     return `<div class="lm-wa-host pane--wa" id="lm-wa-host"></div>`;
@@ -38150,7 +38172,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -42172,7 +42194,14 @@ const WaChatModule = (() => {
     if (_scope) setFiltroAsignado('mias');
   }
   function clearScope() { _scopeLoading = false; if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
-  function setScopeJids(jids) { if (_scope) { _scope.jids = jids; _pintaChats(); } }
+  function setScopeJids(jids, byJid) { if (_scope) { _scope.jids = jids; if (byJid) _scope.byJid = byJid; _pintaChats(); } }
+  // «Resolver respuesta» desde el menú ⋮ del chat: solo en Outreach, donde cada chat está ligado a un contacto
+  function _resolverRespuesta(ev) {
+    const jid = _chatMenuJid, cid = _scope && _scope.byJid && _scope.byJid[jid];
+    const r = (ev && ev.currentTarget) ? ev.currentTarget.getBoundingClientRect() : { left: 120, bottom: 120 };
+    _closeChatMenu();
+    if (cid) LeadManagerModule.waResolveMenu(r.left, r.bottom, cid, jid, _conn && _conn.id);
+  }
 
   // Respuestas rápidas ("/atajo" en el composer) — cache lazy, compartida por
   // todas las conexiones (igual que _waTagsCache).
@@ -43054,7 +43083,9 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     const nNotas  = +c.notas_count || 0;
     const estado  = _WA_ESTADOS[c.estado_conv] || _WA_ESTADOS.abierto;
     const prioridad = _WA_PRIORIDADES[c.prioridad || ''] || _WA_PRIORIDADES[''];
+    const _cidLm = _scope && _scope.byJid && _scope.byJid[c.chat_jid];
     return `
+      ${_cidLm ? `<button class="chat-ctx-item chat-ctx-item--accent" onclick="WaChatModule._resolverRespuesta(event)">${_ICO_STATUS}Resolver respuesta ▸</button><div class="chat-ctx-sep"></div>` : ''}
       <button class="chat-ctx-item" onclick="WaChatModule._editarNombreContacto()">${_ICO_PENCIL}Editar nombre del contacto</button>
       <div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule._toggleArchivado()">${_ICO_ARCH}${c.archivado ? 'Desarchivar chat' : 'Archivar chat'}</button>
@@ -44178,7 +44209,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { loadScoped, scopeLoading, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  return { _resolverRespuesta, loadScoped, scopeLoading, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
