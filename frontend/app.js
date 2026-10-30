@@ -28078,14 +28078,50 @@ ${foot}
     const d = (_ibThread && _ibThread.destinatarios) || {};
     const to = (d.to || [c.email]).filter(Boolean).join(', ');
     const cc = (d.cc || []).filter(Boolean).join(', ');
-    return `<div class="ibx-dest">
-      <span class="ibx-dest__k">Para</span>
-      <span class="ibx-dest__v" title="${esc(to)}">${esc(to)}</span>
+    const fld = (id, k, val, ph, tt) => `<span class="ibx-dest__k">${k}</span>
+      <span class="ibx-dest__w"><input class="ibx-dest__i" id="${id}" value="${esc(val)}" placeholder="${ph}" title="${tt}" autocomplete="off"
+        oninput="LeadManagerModule.ibDestSuggest('${id}')" onfocus="LeadManagerModule.ibDestSuggest('${id}')" onkeydown="LeadManagerModule.ibDestKey(event,'${id}')" onblur="LeadManagerModule.ibDestTidy('${id}')">
+        <div class="cmp-sug cmp-sug--up" id="${id}-sug" hidden></div></span>`;
+    return `<div class="ibx-dest">${fld('ibx-to', 'Para', to, 'destinatario', 'Puedes añadir más destinatarios: separa con comas o elige las sugerencias del equipo del cliente.')}
       <span class="ibx-dest__sep">·</span>
-      <span class="ibx-dest__k">CC</span>
-      <input class="ibx-dest__i" id="ibx-cc" value="${esc(cc)}" placeholder="nadie en copia"
-             title="Separa varios con comas. Se rellena con quienes venian en el hilo.">
+      ${fld('ibx-cc', 'CC', cc, 'nadie en copia', 'Separa varios con comas. Se rellena con quienes venían en el hilo; escribe para ver al equipo del cliente.')}
     </div>`;
+  }
+  // Sugerencias en Para/CC del hilo: el equipo del cliente outbound (mismo origen que el CC de «Nuevo correo»)
+  async function ibDestSuggest(id) {
+    const box = document.getElementById(id + '-sug'), inp = document.getElementById(id); if (!box || !inp) return;
+    const cid = (_ibThread && _ibThread.contact && _ibThread.contact.outbound_client_id) || 0;
+    if (!cid) { box.hidden = true; return; }
+    if (!_cmpTeam[cid]) { try { const r = await apiFetch(`${API}/lm/clients/${cid}/team-emails`); _cmpTeam[cid] = (r && r.ok) ? await r.json() : []; } catch (_) { _cmpTeam[cid] = []; } }
+    const parts = inp.value.split(/[,;]/), q = (parts[parts.length - 1] || '').trim().toLowerCase();
+    const other = document.getElementById(id === 'ibx-to' ? 'ibx-cc' : 'ibx-to');
+    const taken = new Set([...parts.slice(0, -1), ...(other ? other.value.split(/[,;]/) : [])].map(x => x.trim().toLowerCase()));
+    const list = _cmpTeam[cid].filter(t => !taken.has(t.email) && (!q || t.email.includes(q) || t.nombre.toLowerCase().includes(q))).slice(0, 8);
+    if (!list.length) { box.hidden = true; return; }
+    box.innerHTML = list.map(t => `<button type="button" class="cmp-sug__i" onmousedown="event.preventDefault();LeadManagerModule.ibDestPick('${id}','${esc(t.email)}')"><b>${esc(t.nombre || t.email)}</b>${t.nombre ? `<span>${esc(t.email)}</span>` : ''}<em>${esc(t.cargo || t.fuente)}</em></button>`).join('');
+    box.hidden = false;
+  }
+  function ibDestPick(id, email) {
+    const inp = document.getElementById(id); if (!inp) return;
+    const parts = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    if (inp.value.trim() && !/[,;]\s*$/.test(inp.value)) parts.pop();
+    parts.push(email);
+    inp.value = parts.join(', ') + ', ';
+    const box = document.getElementById(id + '-sug'); if (box) box.hidden = true;
+    inp.focus();
+  }
+  function ibDestKey(e, id) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const first = document.querySelector('#' + id + '-sug:not([hidden]) .cmp-sug__i');
+    if (first) first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); else ibDestTidy(id);
+  }
+  function ibDestTidy(id) {
+    setTimeout(() => {
+      const inp = document.getElementById(id), box = document.getElementById(id + '-sug');
+      if (box) box.hidden = true;
+      if (inp) inp.value = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean).join(', ');
+    }, 180);
   }
 
   let _ibMenuClose = null;
@@ -28698,6 +28734,8 @@ ${foot}
       if (schedIso) body.scheduled_at = schedIso;
       const asuntoEl = document.getElementById('ibx-asunto');
       if (asuntoEl) { body.asunto = asuntoEl.value.trim(); body.con_firma = true; }   // correo nuevo (con asunto propio): lleva la firma del buzón del cliente
+      const toRaw = document.getElementById('ibx-to')?.value;
+      if (toRaw != null) body.to = toRaw.split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
       const ccRaw = document.getElementById('ibx-cc')?.value || '';
       body.cc = ccRaw.split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
       const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -38182,7 +38220,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { ibDestSuggest, ibDestPick, ibDestKey, ibDestTidy, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

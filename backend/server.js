@@ -7121,6 +7121,8 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
       const f = String(lastIn.from_email).toLowerCase();
       if (!to.includes(f)) to.push(f);
     }
+    // «Para» editable desde el Inbox: si llega una lista válida, manda esa (puede sumar o quitar destinatarios)
+    if (Array.isArray(b.to)) { const t2 = [...new Set(b.to.map(x => String(x).trim().toLowerCase()).filter(x => /^\S+@\S+\.\S+$/.test(x)))]; if (t2.length) { to.length = 0; to.push(...t2); } }
     let cc = [];
     if (replyAll && lastIn) {
       cc = [..._lista(lastIn.to_emails), ..._lista(lastIn.cc_emails)]

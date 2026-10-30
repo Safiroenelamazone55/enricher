@@ -19177,3 +19177,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .ldh-lead-table td.ldh-acts { padding-right: 12px; }
 .ldh-lead-table .ldh-act { width: 26px; height: 26px; margin-left: 3px; }
 .ibx-sighint { margin: 4px 2px 0; font-size: .72rem; color: #15803D; }
+/* Inbox: «Para» y «CC» editables con sugerencias del equipo del cliente */
+.ibx-dest__w { position: relative; flex: 1 1 0; min-width: 0; }
+.ibx-dest__w .ibx-dest__i { width: 100%; box-sizing: border-box; }
+.cmp-sug--up { top: auto; bottom: 100%; }
