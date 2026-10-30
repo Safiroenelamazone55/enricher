@@ -237,6 +237,17 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
   return { id: row.id, scheduledAt: r2 && r2.scheduled_at };
 }
 
+async function registrarEnvioReal(pool, m) {
+  const { rows: steps } = await pool.query(`SELECT id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [m.sequence_id]);
+  const idx = steps.findIndex(x => x.id === m.step_id); if (idx < 0) return;
+  const paso = idx + 1;
+  const { rows: [k] } = await pool.query(`SELECT outbound_client_id, user_id FROM lm_contacts WHERE id=$1`, [m.contact_id]);
+  if (!k) return;
+  const { rows: [a] } = await pool.query(
+    `SELECT id, nota FROM activities WHERE contact_id=$1 AND canal='whatsapp_mensaje' AND nota LIKE $2 AND nota NOT LIKE '%· enviado%' ORDER BY id DESC LIMIT 1`, [m.contact_id, 'Paso ' + paso + '%']);
+  if (a) await pool.query(`UPDATE activities SET fecha=NOW(), nota=nota || ' · enviado por la cola de WhatsApp', estado='hecha' WHERE id=$1`, [a.id]);
+  else await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,$3,'nota','whatsapp_mensaje',$4,NOW(),'hecha')`, [k.user_id, m.contact_id, k.outbound_client_id, 'Paso ' + paso + ' · WhatsApp enviado por la cola']);
+}
 // Un paso de WhatsApp en cola NO cierra la secuencia hasta que el mensaje sale de verdad: el contacto queda «en espera de envío» (pausado, motivo espera_envio_wa)
 // y pasa a «terminado» cuando ya no le queda ningún mensaje de esa secuencia en cola (enviado o cancelado).
 async function finalizarEsperaWa(pool, contactId, sequenceId) {
@@ -259,6 +270,8 @@ async function _marcarEnviado(pool, m, msgId) {
   try {
     await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), scheduled_at=NULL, ultimo_error='' WHERE id=$1`, [m.id, msgId]);
     finalizarEsperaWa(pool, m.contact_id, m.sequence_id).catch(e2 => console.warn('[wa] finalizar espera:', e2.message));
+    // Historial del contacto: la actividad del paso se crea al MARCAR la tarea (solo con el día); cuando el mensaje sale de verdad, pasa a llevar la fecha y la HORA reales del envío.
+    if (m.contact_id && m.sequence_id && m.step_id) registrarEnvioReal(pool, m).catch(e3 => console.warn('[wa] historial envio real:', e3.message));
     // La fecha del último paso es la del ENVÍO REAL (no la del día en que se marcó la tarea): si la inscripción ya figuraba terminada, se corrige.
     if (m.contact_id && m.sequence_id) pool.query(`UPDATE lm_contact_sequences SET paso_date=CURRENT_DATE WHERE contact_id=$1 AND sequence_id=$2 AND estado='terminado'`, [m.contact_id, m.sequence_id]).catch(() => {});
   } catch (e) {
