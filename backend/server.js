@@ -6977,7 +6977,7 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     const { rows: msgs } = await pool.query(`
       SELECT * FROM (
         SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, m.estado, '' AS tipo,
-               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails, '' AS cuerpo_html
+               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails, COALESCE(m.firma_html,'') AS cuerpo_html
           FROM lm_messages m
           LEFT JOIN sequences s ON s.id = m.sequence_id
           LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
@@ -7128,9 +7128,9 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const schedAt = b.scheduled_at ? new Date(b.scheduled_at) : null;
     if (schedAt && !isNaN(schedAt) && schedAt.getTime() > Date.now() + 30 * 1000) {
       const { rows: [msg] } = await pool.query(
-        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails, track_token, con_firma)
-         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10,$11) RETURNING id, asunto, cuerpo, scheduled_at`,
-        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', '), track_token, conFirma]);
+        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails, track_token, con_firma, firma_html)
+         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10,$11,$12) RETURNING id, asunto, cuerpo, scheduled_at`,
+        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', '), track_token, conFirma, firmaHtml || '']);
       return res.status(201).json({ ok: true, scheduled: true, message: msg });
     }
 
@@ -7143,9 +7143,9 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
       references: lastIn?.message_id || undefined,
     });
     const { rows: [msg] } = await pool.query(
-      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails, track_token)
-       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8,$9) RETURNING id, asunto, cuerpo, sent_at`,
-      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '', cc.join(', '), track_token]);
+      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails, track_token, firma_html)
+       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8,$9,$10) RETURNING id, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '', cc.join(', '), track_token, firmaHtml || '']);
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,

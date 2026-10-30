@@ -2313,6 +2313,7 @@ async function initDb() {
     // y la pestaña WhatsApp de Outreach) y editable desde el menú "⋮" en ambos lugares.
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS prioridad TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS con_firma BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS firma_html TEXT NOT NULL DEFAULT '';`);
     // Una sola vez: los chats donde ya salió un mensaje desde la cuenta quedan asignados a quien la conectó (aparecen en «Mías»).
     await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     const { rowCount: yaAsig } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre='wa_asignar_salientes'`);

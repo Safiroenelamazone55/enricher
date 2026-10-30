@@ -27662,6 +27662,7 @@ ${foot}
           <button class="ibx-m__cancel" onclick="LeadManagerModule.ibCancelSched(${m.id})">Cancelar</button></div>
         ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
         ${_ibBodyHtml(m.cuerpo)}
+        ${m.cuerpo_html ? `<div class="ibx-m__sig">${String(m.cuerpo_html).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '')}</div>` : ''}
       </div>`;
     }
     const tag = inMsg
@@ -27672,6 +27673,7 @@ ${foot}
       ${!inMsg && m.cc_emails ? `<div class="ibx-m__subj" style="font-weight:400;color:var(--text-secondary)">CC: ${esc(m.cc_emails)}</div>` : ''}
       ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
       ${inMsg && m.cuerpo_html ? _ibMailFrame(m) : _ibBodyHtml(m.cuerpo)}
+      ${!inMsg && m.cuerpo_html ? `<div class="ibx-m__sig" title="Firma que se envió con este correo">${String(m.cuerpo_html).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '')}</div>` : ''}
     </div>`;
   }
   // ── Bloque 5: acciones rápidas de "Resolver respuesta" dentro del chat — sin salir de la conversación ──
