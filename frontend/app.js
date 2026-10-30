@@ -28074,54 +28074,84 @@ ${foot}
   // ultimo interlocutor real detectado); "CC" si — asi Jenny decide "responder a
   // todos" (default, viene precargado con quienes estaban en el hilo) o solo al
   // prospecto con solo borrar el campo.
+  // Para / CC como CHIPS: cada dirección se convierte en una etiqueta con ✕ (válida = azul, inválida = roja y no se envía).
+  // El valor real vive en un <input hidden> (id = ibx-to / ibx-cc, separado por comas) para que el envío no cambie.
+  const _rcpRe = /^\S+@\S+\.\S+$/;
+  const _rcpChip = (e, ok, main) => `<span class="rcp__c ${ok ? 'rcp__c--ok' : 'rcp__c--bad'}${main ? ' rcp__c--main' : ''}" data-e="${esc(e)}" title="${ok ? (main ? 'Destinatario principal · queda registrado en el hilo' : 'Recibirá este correo · queda registrado en el hilo') : 'Dirección no válida: no se enviará'}"><span class="rcp__e">${esc(e)}</span><button type="button" class="rcp__x" onmousedown="event.preventDefault();LeadManagerModule.rcpDel(this)" aria-label="Quitar">✕</button></span>`;
   function _ibDestHtml(c) {
     const d = (_ibThread && _ibThread.destinatarios) || {};
-    const to = (d.to || [c.email]).filter(Boolean).join(', ');
-    const cc = (d.cc || []).filter(Boolean).join(', ');
-    const fld = (id, k, val, ph, tt) => `<span class="ibx-dest__k">${k}</span>
-      <span class="ibx-dest__w"><input class="ibx-dest__i" id="${id}" value="${esc(val)}" placeholder="${ph}" title="${tt}" autocomplete="off"
-        oninput="LeadManagerModule.ibDestSuggest('${id}')" onfocus="LeadManagerModule.ibDestSuggest('${id}')" onkeydown="LeadManagerModule.ibDestKey(event,'${id}')" onblur="LeadManagerModule.ibDestTidy('${id}')">
-        <div class="cmp-sug cmp-sug--up" id="${id}-sug" hidden></div></span>`;
-    return `<div class="ibx-dest">${fld('ibx-to', 'Para', to, 'destinatario', 'Puedes añadir más destinatarios: separa con comas o elige las sugerencias del equipo del cliente.')}
-      <span class="ibx-dest__sep">·</span>
-      ${fld('ibx-cc', 'CC', cc, 'nadie en copia', 'Separa varios con comas. Se rellena con quienes venían en el hilo; escribe para ver al equipo del cliente.')}
-    </div>`;
+    const to = (d.to || [c.email]).filter(Boolean), cc = (d.cc || []).filter(Boolean);
+    const mainE = String(c.email || '').toLowerCase();
+    const fld = (id, k, list, ph) => `<span class="ibx-dest__k">${k}</span>
+      <span class="ibx-dest__w rcp" id="${id}-w" onclick="document.getElementById('${id}-t').focus()">
+        ${list.map(e => _rcpChip(String(e).toLowerCase(), _rcpRe.test(e), String(e).toLowerCase() === mainE && id === 'ibx-to')).join('')}<input class="rcp__t" id="${id}-t" autocomplete="off" placeholder="${list.length ? '' : ph}"
+          oninput="LeadManagerModule.rcpInput('${id}')" onfocus="LeadManagerModule.ibDestSuggest('${id}')" onkeydown="LeadManagerModule.rcpKey(event,'${id}')" onblur="LeadManagerModule.rcpBlur('${id}')" onpaste="LeadManagerModule.rcpPaste(event,'${id}')">
+        <input type="hidden" id="${id}" value="${esc(list.filter(e => _rcpRe.test(e)).map(e => String(e).toLowerCase()).join(', '))}">
+        <div class="cmp-sug cmp-sug--up" id="${id}-sug" hidden></div>
+      </span>`;
+    return `<div class="ibx-dest">${fld('ibx-to', 'Para', to, 'añadir destinatario')}${fld('ibx-cc', 'CC', cc, 'añadir en copia')}</div>`;
   }
+  function _rcpSync(id) {
+    const w = document.getElementById(id + '-w'), h = document.getElementById(id); if (!w || !h) return;
+    h.value = [...w.querySelectorAll('.rcp__c--ok')].map(x => x.getAttribute('data-e')).join(', ');
+    const t = document.getElementById(id + '-t'); if (t) t.placeholder = w.querySelector('.rcp__c') ? '' : (id === 'ibx-to' ? 'añadir destinatario' : 'añadir en copia');
+  }
+  // Convierte lo escrito/pegado en chips (separa por coma, punto y coma, espacio o salto de línea)
+  function rcpAdd(id, raw) {
+    const w = document.getElementById(id + '-w'), t = document.getElementById(id + '-t'); if (!w || !t) return;
+    const have = new Set([...w.querySelectorAll('.rcp__c')].map(x => x.getAttribute('data-e')));
+    String(raw || '').split(/[\s,;]+/).map(x => x.trim().replace(/^<|>$/g, '').toLowerCase()).filter(Boolean).forEach(e => {
+      if (have.has(e)) return; have.add(e);
+      t.insertAdjacentHTML('beforebegin', _rcpChip(e, _rcpRe.test(e), false));
+    });
+    _rcpSync(id);
+  }
+  function rcpInput(id) {
+    const t = document.getElementById(id + '-t'); if (!t) return;
+    if (/[,;\s]$/.test(t.value) && t.value.trim()) { rcpAdd(id, t.value); t.value = ''; }
+    ibDestSuggest(id);
+  }
+  function rcpKey(e, id) {
+    const t = document.getElementById(id + '-t'); if (!t) return;
+    if (e.key === 'Enter' || e.key === 'Tab' && t.value.trim()) {
+      const first = document.querySelector('#' + id + '-sug:not([hidden]) .cmp-sug__i');
+      if (e.key === 'Enter') e.preventDefault();
+      if (first && e.key === 'Enter') { first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); return; }
+      if (t.value.trim()) { if (e.key === 'Tab') e.preventDefault(); rcpAdd(id, t.value); t.value = ''; const b = document.getElementById(id + '-sug'); if (b) b.hidden = true; }
+    } else if (e.key === 'Backspace' && !t.value) {
+      const w = document.getElementById(id + '-w'), last = w && [...w.querySelectorAll('.rcp__c')].pop(); if (last) { last.remove(); _rcpSync(id); }
+    }
+  }
+  function rcpBlur(id) {
+    setTimeout(() => { const t = document.getElementById(id + '-t'); if (t && t.value.trim()) { rcpAdd(id, t.value); t.value = ''; } const b = document.getElementById(id + '-sug'); if (b) b.hidden = true; }, 180);
+  }
+  function rcpPaste(e, id) {
+    const txt = (e.clipboardData || window.clipboardData).getData('text'); if (!txt) return;
+    e.preventDefault(); rcpAdd(id, txt);
+  }
+  function rcpDel(btn) {
+    const chip = btn.closest('.rcp__c'), w = btn.closest('.rcp'); if (!chip || !w) return;
+    const id = w.id.replace(/-w$/, ''); chip.remove(); _rcpSync(id);
+  }
+  function _rcpFlush() { ['ibx-to', 'ibx-cc'].forEach(id => { const t = document.getElementById(id + '-t'); if (t && t.value.trim()) { rcpAdd(id, t.value); t.value = ''; } }); }
   // Sugerencias en Para/CC del hilo: el equipo del cliente outbound (mismo origen que el CC de «Nuevo correo»)
   async function ibDestSuggest(id) {
-    const box = document.getElementById(id + '-sug'), inp = document.getElementById(id); if (!box || !inp) return;
+    const box = document.getElementById(id + '-sug'), inp = document.getElementById(id + '-t'); if (!box || !inp) return;
     const cid = (_ibThread && _ibThread.contact && _ibThread.contact.outbound_client_id) || 0;
     if (!cid) { box.hidden = true; return; }
     if (!_cmpTeam[cid]) { try { const r = await apiFetch(`${API}/lm/clients/${cid}/team-emails`); _cmpTeam[cid] = (r && r.ok) ? await r.json() : []; } catch (_) { _cmpTeam[cid] = []; } }
-    const parts = inp.value.split(/[,;]/), q = (parts[parts.length - 1] || '').trim().toLowerCase();
-    const other = document.getElementById(id === 'ibx-to' ? 'ibx-cc' : 'ibx-to');
-    const taken = new Set([...parts.slice(0, -1), ...(other ? other.value.split(/[,;]/) : [])].map(x => x.trim().toLowerCase()));
+    const q = inp.value.trim().toLowerCase();
+    const taken = new Set([...document.querySelectorAll('#' + id + '-w .rcp__c')].map(x => x.getAttribute('data-e')));
     const list = _cmpTeam[cid].filter(t => !taken.has(t.email) && (!q || t.email.includes(q) || t.nombre.toLowerCase().includes(q))).slice(0, 8);
     if (!list.length) { box.hidden = true; return; }
     box.innerHTML = list.map(t => `<button type="button" class="cmp-sug__i" onmousedown="event.preventDefault();LeadManagerModule.ibDestPick('${id}','${esc(t.email)}')"><b>${esc(t.nombre || t.email)}</b>${t.nombre ? `<span>${esc(t.email)}</span>` : ''}<em>${esc(t.cargo || t.fuente)}</em></button>`).join('');
     box.hidden = false;
   }
   function ibDestPick(id, email) {
-    const inp = document.getElementById(id); if (!inp) return;
-    const parts = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean);
-    if (inp.value.trim() && !/[,;]\s*$/.test(inp.value)) parts.pop();
-    parts.push(email);
-    inp.value = parts.join(', ') + ', ';
+    const t = document.getElementById(id + '-t'); if (!t) return;
+    rcpAdd(id, email); t.value = '';
     const box = document.getElementById(id + '-sug'); if (box) box.hidden = true;
-    inp.focus();
-  }
-  function ibDestKey(e, id) {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const first = document.querySelector('#' + id + '-sug:not([hidden]) .cmp-sug__i');
-    if (first) first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); else ibDestTidy(id);
-  }
-  function ibDestTidy(id) {
-    setTimeout(() => {
-      const inp = document.getElementById(id), box = document.getElementById(id + '-sug');
-      if (box) box.hidden = true;
-      if (inp) inp.value = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean).join(', ');
-    }, 180);
+    t.focus();
   }
 
   let _ibMenuClose = null;
@@ -28725,6 +28755,8 @@ ${foot}
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
     if (!cuerpo) { if (schedIso) showBanner('Escribe el mensaje antes de programarlo', 'info'); return; }
+    _rcpFlush();
+    if (document.querySelector('#ibx-to-w .rcp__c--bad, #ibx-cc-w .rcp__c--bad')) { showBanner('Hay direcciones no válidas (en rojo): corrígelas o quítalas con la ✕', 'info'); return; }
     const asuntoEl0 = document.getElementById('ibx-asunto');
     if (asuntoEl0 && !asuntoEl0.value.trim()) { showBanner('Escribe el asunto — es un correo nuevo, no una respuesta', 'info'); asuntoEl0.focus(); return; }
     _ibSending = true;
@@ -38220,7 +38252,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { ibDestSuggest, ibDestPick, ibDestKey, ibDestTidy, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

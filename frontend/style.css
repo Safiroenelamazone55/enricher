@@ -19181,3 +19181,15 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .ibx-dest__w { position: relative; flex: 1 1 0; min-width: 0; }
 .ibx-dest__w .ibx-dest__i { width: 100%; box-sizing: border-box; }
 .cmp-sug--up { top: auto; bottom: 100%; }
+/* Para / CC con chips */
+.ibx-dest { flex-wrap: wrap; align-items: flex-start; row-gap: 4px; }
+.ibx-dest .ibx-dest__k { padding-top: 5px; }
+.ibx-dest__w.rcp { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; padding: 2px 4px; border: 1px solid transparent; cursor: text; flex: 1 1 280px; }
+.ibx-dest__w.rcp:focus-within { border-color: #A7C8F5; background: #fff; }
+.rcp__c { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px 2px 8px; font-size: .74rem; line-height: 1.4; }
+.rcp__c--ok { background: #EAF2FE; color: #1E4FA8; border: 1px solid #C8DBF7; }
+.rcp__c--main { background: #E4F3EA; color: #1F6B3E; border-color: #BFE0CB; font-weight: 600; }
+.rcp__c--bad { background: #FDECEA; color: #B42318; border: 1px solid #F5C2BD; }
+.rcp__e { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+.rcp__x { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: .68rem; padding: 0 3px; line-height: 1; } .rcp__x:hover { opacity: 1; }
+.rcp__t { flex: 1 1 120px; min-width: 100px; border: 0; outline: 0; background: transparent; font: inherit; font-size: .76rem; padding: 3px 2px; }
