@@ -19193,3 +19193,16 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .rcp__e { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
 .rcp__x { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: .68rem; padding: 0 3px; line-height: 1; } .rcp__x:hover { opacity: 1; }
 .rcp__t { flex: 1 1 120px; min-width: 100px; border: 0; outline: 0; background: transparent; font: inherit; font-size: .76rem; padding: 3px 2px; }
+/* Telefonía */
+.tel-dock { position: fixed; right: 22px; bottom: 22px; z-index: 10060; width: 320px; background: #fff; border: 1px solid #E4E0D9; box-shadow: 0 14px 40px rgba(0,0,0,.22); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.tel-dock__hd b { font-size: .95rem; color: #1F1D1B; } .tel-dock__sub { font-size: .76rem; color: #8F8B83; margin-top: 2px; }
+.tel-dock__st { font-size: .9rem; font-weight: 700; color: #1F6B3E; }
+.tel-dock__btns { display: flex; gap: 8px; justify-content: flex-end; }
+.tel-hang { background: #C4342B; border-color: #C4342B; color: #fff; } .tel-hang:hover { background: #A82820; }
+.tel-res { display: flex; flex-wrap: wrap; gap: 6px; }
+.tel-res__b { border: 1px solid #E4E0D9; background: #FAF9F7; padding: 4px 9px; font: inherit; font-size: .76rem; cursor: pointer; } .tel-res__b.on { background: #EAF2FE; border-color: #A7C8F5; color: #1E4FA8; font-weight: 700; }
+.tel-dock__ta { resize: none; font-size: .8rem; }
+.tel-sec { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #8F8B83; margin-bottom: 6px; }
+.tel-steps { margin: 0 0 10px 18px; padding: 0; font-size: .8rem; color: #5C5851; line-height: 1.5; }
+.tel-hook { display: flex; gap: 8px; align-items: center; margin-top: 4px; } .tel-hook code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: #F3F1EC; padding: 4px 8px; font-size: .72rem; }
+.tel-code { margin-left: 6px; padding: 1px 7px; background: #F3F1EC; font: 700 .74rem ui-monospace, Consolas, monospace; }

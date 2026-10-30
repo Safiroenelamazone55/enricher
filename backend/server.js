@@ -7940,6 +7940,7 @@ app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 require('./services/translateRoutes').mount(app, { requireAuth });
 require('./services/accessRoutes').mount(app, { pool, requireAuth, rateLimit, findUserById, mailboxSvc });
+require('./services/telRoutes').mount(app, { pool, requireAuth, mailboxSvc });   // Telefonía: llamadas desde el navegador con el número del cliente
 
 // ── LM · A/B (Fase B3): métricas por variante de cada paso email ──
 // Combina: envíos AUTOMÁTICOS (lm_messages: funnel completo con opens/clics/replies)

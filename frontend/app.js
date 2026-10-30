@@ -22383,6 +22383,7 @@ const LeadManagerModule = (() => {
   function _gcClose(now) { clearTimeout(_gcTimer); const hide = () => { if (_gcBox) _gcBox.style.display = 'none'; }; if (now) hide(); else _gcTimer = setTimeout(hide, 220); }
   function gcLeave() { _gcClose(); }
   function go(section) {
+    if (!_tph.loaded && !_tph.loading) _telLoad();
     _section = section; _activeClient = null; _seqTaskCanal = ''; _refreshNav(); _renderBody();
     // Recuerda la última sección (sin parámetros — no vistas de un contacto/secuencia/cliente
     // puntual) para volver aquí si se recarga la página en vez de caer siempre al Dashboard.
@@ -26453,7 +26454,7 @@ ${foot}
     // el chat interno de Nova no hace llamadas. "WhatsApp" sigue abriendo el chat
     // de Nova con el mensaje ya puesto, para escribir sin salir del sistema.
     else if (st.canal === 'whatsapp' && wa) chanPrimary = `<a class="cp-ch cp-ch--primary" href="https://wa.me/${wa}" target="_blank" rel="noopener" title="Abre WhatsApp para llamar">${NI('phone')}<span>Llamar WhatsApp</span></a><button class="cp-ch cp-ch--primary" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="Abre el WhatsApp de Nova con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></button>`;
-    else if (st.canal === 'call' && _tel) chanPrimary = `<a class="cp-ch cp-ch--primary" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar ${esc(_tel)}">${NI('phone')}<span>Llamar</span></a>`;
+    else if (st.canal === 'call' && _tel) chanPrimary = `<a class="cp-ch cp-ch--primary" href="tel:${esc(_tel.replace(/\s/g, ''))}" onclick="return LeadManagerModule.telClick(${c.id})" title="Llamar ${esc(_tel)}">${NI('phone')}<span>Llamar</span></a>`;
     const chanIcons = [];
     if (wa && st.canal !== 'whatsapp') chanIcons.push(`<button class="cp-ch cp-ch--ic" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="WhatsApp — ${esc(_tel)}">${NI('whatsapp')}</button>`);
     if (_tel && st.canal !== 'call') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar — ${esc(_tel)}">${NI('phone')}</a>`);
@@ -29429,11 +29430,191 @@ ${foot}
       <div class="lm-obc__cta">Abrir workspace <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
     </button>`;
   }
+  // ── Telefonía: llamadas reales desde el navegador, mostrando el número del cliente (opción A: su línea sigue con su operador) ──
+  const _tph = { loaded: false, loading: false, configured: false, lines: [], device: null, devClient: 0, call: null, timer: null, t0: 0, ctx: null, muted: false };
+  async function _telLoad() {
+    if (_tph.loading) return; _tph.loading = true;
+    try { const r = await apiFetch(`${API}/tel/lines`); if (r && r.ok) { const j = await r.json(); _tph.configured = !!j.configured; _tph.lines = j.lines || []; } } catch (_) {}
+    _tph.loaded = true; _tph.loading = false;
+  }
+  const _telLine = clientId => _tph.lines.find(l => l.outbound_client_id === clientId && l.estado === 'verificado');
+  const _telReady = cid => { const c = (_contacts || []).find(x => x.id === cid); return !!(_tph.configured && c && c.outbound_client_id && _telLine(c.outbound_client_id)); };
+  const _TEL_CC = { espana: '34', spain: '34', italia: '39', italy: '39', alemania: '49', germany: '49', francia: '33', france: '33', portugal: '351', peru: '51', mexico: '52', colombia: '57', chile: '56', argentina: '54',
+    'estados unidos': '1', usa: '1', 'united states': '1', canada: '1', 'reino unido': '44', 'united kingdom': '44', uk: '44', brasil: '55', brazil: '55', 'paises bajos': '31', netherlands: '31', belgica: '32', belgium: '32', suiza: '41', switzerland: '41', austria: '43' };
+  function _telE164(c) {
+    let t = String(c.telefono || c.movil || '').trim().replace(/[^\d+]/g, '');
+    if (!t) return '';
+    if (t.startsWith('00')) t = '+' + t.slice(2);
+    if (!t.startsWith('+')) {
+      const k = String(c.pais || c.company_pais || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), cc = _TEL_CC[k];
+      if (!cc) return '';
+      t = '+' + cc + t.replace(/^0+/, '');
+    }
+    return /^\+\d{8,15}$/.test(t) ? t : '';
+  }
+  // Para los enlaces de teléfono: si el cliente tiene línea verificada, llama desde Nova (return false = no abrir el teléfono del sistema); si no, queda el enlace tel: de siempre.
+  function telClick(cid) {
+    if (!_tph.loaded) { _telLoad(); return true; }
+    if (_telReady(cid)) { telCall(cid); return false; }
+    return true;
+  }
+  const _telSdk = () => new Promise((ok, ko) => {
+    if (window.Twilio && window.Twilio.Device) return ok();
+    const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.10.2/dist/twilio.min.js';
+    s.onload = () => ok(); s.onerror = () => ko(new Error('No se pudo cargar el teléfono del navegador')); document.head.appendChild(s);
+  });
+  async function _telDevice(clientId) {
+    if (_tph.device && _tph.devClient === clientId) return _tph.device;
+    const r = await apiFetch(`${API}/tel/token?client=${clientId}`);
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Sin acceso al teléfono');
+    await _telSdk();
+    if (_tph.device) { try { _tph.device.destroy(); } catch (_) {} }
+    const dev = new window.Twilio.Device(j.token, { codecPreferences: ['opus', 'pcmu'] });
+    dev.on('tokenWillExpire', async () => { try { const r2 = await apiFetch(`${API}/tel/token?client=${clientId}`); const j2 = await r2.json(); if (j2.token) dev.updateToken(j2.token); } catch (_) {} });
+    dev.on('error', e => showBanner('Teléfono: ' + ((e && e.message) || e), 'error'));
+    _tph.device = dev; _tph.devClient = clientId;
+    return dev;
+  }
+  function _telDock(html) {
+    let d = document.getElementById('tel-dock');
+    if (!d) { d = document.createElement('div'); d.id = 'tel-dock'; d.className = 'tel-dock'; document.body.appendChild(d); }
+    d.innerHTML = html;
+  }
+  const _telFmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  function _telCtxHead() {
+    const x = _tph.ctx || {};
+    return `<div class="tel-dock__hd"><div><b>${esc(x.nombre || '')}</b>${x.codigo ? ` <span class="lm-code">${esc(x.codigo)}</span>` : ''}</div><div class="tel-dock__sub">${esc(x.to || '')}${x.from ? ' · desde ' + esc(x.from) : ''}</div></div>`;
+  }
+  function _telLive(estado) {
+    _telDock(`${_telCtxHead()}<div class="tel-dock__st" id="tel-st">${esc(estado)}</div>
+      <div class="tel-dock__btns"><button class="btn btn--ghost btn--sm" id="tel-mute" onclick="LeadManagerModule.telMute()">${_tph.muted ? 'Activar micrófono' : 'Silenciar'}</button>
+      <button class="btn btn--sm tel-hang" onclick="LeadManagerModule.telHang()">Colgar</button></div>`);
+  }
+  async function telCall(cid) {
+    if (_tph.call) { showBanner('Ya hay una llamada en curso', 'info'); return; }
+    const c = (_contacts || []).find(x => x.id === cid); if (!c) return;
+    const to = _telE164(c);
+    if (!to) { showBanner('El teléfono de este contacto necesita el prefijo de país (por ejemplo +34…). Edítalo en su ficha.', 'info'); return; }
+    const line = _telLine(c.outbound_client_id); if (!line) { window.location.href = 'tel:' + to; return; }
+    try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach(t => t.stop()); }
+    catch (_) { showBanner('Permite el micrófono en el navegador para llamar desde Nova', 'error'); return; }
+    _tph.ctx = { cid, to, from: line.numero, nombre: [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Contacto', codigo: c.codigo || '', sid: '', dur: 0 };
+    _tph.muted = false; _telLive('Conectando…');
+    try {
+      const dev = await _telDevice(c.outbound_client_id);
+      const call = await dev.connect({ params: { To: to, LineId: String(line.id), ContactId: String(c.id) } });
+      _tph.call = call;
+      call.on('ringing', () => { const e = document.getElementById('tel-st'); if (e) e.textContent = 'Sonando…'; });
+      call.on('accept', () => {
+        _tph.ctx.sid = (call.parameters && call.parameters.CallSid) || _tph.ctx.sid; _tph.t0 = Date.now();
+        const e = document.getElementById('tel-st'); if (e) e.textContent = 'En llamada · 0:00';
+        clearInterval(_tph.timer); _tph.timer = setInterval(() => { const e2 = document.getElementById('tel-st'); if (e2) e2.textContent = 'En llamada · ' + _telFmt(Math.floor((Date.now() - _tph.t0) / 1000)); }, 1000);
+      });
+      const fin = () => { if (!_tph.call) return; _telEnd(); };
+      call.on('disconnect', fin); call.on('cancel', fin); call.on('reject', fin);
+      call.on('error', e => { showBanner('Llamada: ' + ((e && e.message) || e), 'error'); fin(); });
+    } catch (e) { _tph.call = null; document.getElementById('tel-dock')?.remove(); showBanner('No se pudo llamar: ' + e.message, 'error'); }
+  }
+  function telMute() { if (!_tph.call) return; _tph.muted = !_tph.muted; try { _tph.call.mute(_tph.muted); } catch (_) {} const b = document.getElementById('tel-mute'); if (b) b.textContent = _tph.muted ? 'Activar micrófono' : 'Silenciar'; }
+  function telHang() { try { if (_tph.call) _tph.call.disconnect(); } catch (_) {} }
+  function _telEnd() {
+    clearInterval(_tph.timer);
+    const dur = _tph.t0 ? Math.floor((Date.now() - _tph.t0) / 1000) : 0;
+    _tph.ctx.dur = dur; _tph.ctx.sid = _tph.ctx.sid || (_tph.call && _tph.call.parameters && _tph.call.parameters.CallSid) || ''; _tph.call = null; _tph.t0 = 0;
+    _tph.ctx.res = dur > 0 ? 'Habló con él/ella' : 'No contestó';
+    _telResultUi();
+  }
+  const _TEL_RES = ['Habló con él/ella', 'No contestó', 'Buzón de voz', 'Ocupado', 'Número incorrecto'];
+  function _telResultUi() {
+    const x = _tph.ctx;
+    _telDock(`${_telCtxHead()}<div class="tel-dock__st">Llamada terminada${x.dur ? ' · ' + _telFmt(x.dur) : ''}</div>
+      <div class="tel-res">${_TEL_RES.map(r => `<button type="button" class="tel-res__b${r === x.res ? ' on' : ''}" onclick="LeadManagerModule.telPickRes(this)" data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+      <textarea class="form-input tel-dock__ta" id="tel-nota" rows="2" placeholder="Nota de la llamada (opcional)"></textarea>
+      <div class="tel-dock__btns"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telResolve(event)">Resolver respuesta ▸</button>
+      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.telSaveRes()">Guardar</button></div>`);
+  }
+  function telPickRes(btn) { document.querySelectorAll('.tel-res__b').forEach(b => b.classList.remove('on')); btn.classList.add('on'); if (_tph.ctx) _tph.ctx.res = btn.getAttribute('data-r'); }
+  function telResolve(ev) { const x = _tph.ctx; if (!x) return; const r = ev.currentTarget.getBoundingClientRect(); waResolveMenu(r.left, r.top - 260, x.cid, '', 0); }
+  async function telSaveRes() {
+    const x = _tph.ctx; if (!x) return;
+    try {
+      const r = await apiFetch(`${API}/tel/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: x.cid, call_sid: x.sid, duracion: x.dur, resultado: x.res || '', nota: (document.getElementById('tel-nota') || {}).value || '' }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error ' + r.status);
+      document.getElementById('tel-dock')?.remove(); showBanner('✓ Llamada registrada en el contacto', 'success');
+      try { const ra = await apiFetch(`${API}/activities`); if (ra && ra.ok) _activities = await ra.json(); } catch (_) {}
+      if (_section === 'contact-view') { try { _cpReloadActs(x.cid); } catch (_) {} }
+    } catch (e) { showBanner('No se pudo registrar: ' + e.message, 'error'); }
+  }
+  // ── Configuración de Telefonía (credenciales de Twilio y números de los clientes) ──
+  async function telConfigOpen() {
+    document.getElementById('lm-tel-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-tel-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = '<div class="fin-pi-box" style="max-width:720px"><div class="fin-pi-box__hd"><h3>Telefonía</h3><button class="fin-pi-x" onclick="document.getElementById(\'lm-tel-modal\').remove()">✕</button></div><div class="clients-loading" style="padding:30px"><div class="clients-spin"></div></div></div>';
+    document.body.appendChild(m);
+    let cfg = {}, lines = [];
+    try { cfg = await (await apiFetch(`${API}/tel/config`)).json(); const j = await (await apiFetch(`${API}/tel/lines`)).json(); lines = j.lines || []; _tph.configured = !!j.configured; _tph.lines = lines; } catch (_) {}
+    _telConfigPaint(cfg, lines);
+  }
+  function _telConfigPaint(cfg, lines) {
+    const m = document.getElementById('lm-tel-modal'); if (!m) return;
+    const inp = (id, lbl, val, ph, type) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${id}" type="${type || 'text'}" value="${esc(val || '')}" placeholder="${esc(ph || '')}" autocomplete="off"></label>`;
+    const lineRow = l => `<tr><td>${esc(l.cliente || '')}</td><td><b>${esc(l.numero)}</b></td><td>${l.estado === 'verificado' ? '<span class="client-badge" style="background:#E4F3EA;color:#1F6B3E">Verificado</span>' : `<span class="client-badge" style="background:#FEF3C7;color:#92400E">Pendiente</span>${l.codigo ? ` <span class="tel-code" title="Twilio llamará a este número: introduce este código">código ${esc(l.codigo)}</span>` : ''}`}</td>
+      <td style="text-align:right;white-space:nowrap">${l.estado !== 'verificado' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telRefreshLine(${l.id})">Comprobar</button> ` : ''}<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telDelLine(${l.id})">Quitar</button></td></tr>`;
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:720px"><div class="fin-pi-box__hd"><h3>Telefonía · llamadas con el número del cliente</h3><button class="fin-pi-x" onclick="document.getElementById('lm-tel-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:14px;overflow:auto;max-height:70vh">
+        <p class="cant-hint" style="margin:0">Nova llama desde el navegador (con auriculares) y el prospecto ve el <b>número del cliente</b>. El número sigue con su operador: el cliente puede seguir llamando como siempre y recibe las devoluciones en su teléfono. No se graba nada.</p>
+        <div><div class="tel-sec">1 · Cuenta de Twilio</div>
+          <ol class="tel-steps"><li>Crea la cuenta en twilio.com (con tarjeta; se paga por minuto).</li><li><b>Voice › TwiML Apps › Create</b>: en <i>Voice Request URL</i> (método POST) pega esta dirección y guarda:
+            <div class="tel-hook"><code id="tel-hook">${cfg.hook_url ? esc(cfg.hook_url) : 'Se genera al guardar las credenciales (paso siguiente); vuelve aquí y cópiala.'}</code>${cfg.hook_url ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telCopyHook()">Copiar</button>' : ''}</div></li>
+            <li><b>Account › API keys › Create</b> (tipo Standard): copia el <i>SID</i> (SK…) y el <i>Secret</i> (solo se muestra una vez).</li><li>Pega los datos aquí. Se guardan cifrados.</li></ol>
+          <div class="fin-pi-form" style="grid-template-columns:1fr 1fr;gap:8px">
+            ${inp('tel-sid', 'Account SID (AC…)', cfg.account_sid, 'AC…')}${inp('tel-key', 'API Key SID (SK…)', cfg.api_key_sid, 'SK…')}
+            ${inp('tel-sec', 'API Secret', '', cfg.has_secret ? '(guardado — déjalo vacío para conservarlo)' : 'secreto de la API key', 'password')}${inp('tel-app', 'TwiML App SID (AP…)', cfg.twiml_app_sid, 'AP…')}
+          </div><div style="margin-top:8px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.telSaveCfg()">Guardar y probar</button> <span class="cant-hint" id="tel-msg"></span></div></div>
+        <div><div class="tel-sec">2 · Números de los clientes</div>
+          ${lines.length ? `<table class="clients-table"><thead><tr><th>Cliente</th><th>Número</th><th>Estado</th><th></th></tr></thead><tbody>${lines.map(lineRow).join('')}</tbody></table>` : '<p class="cant-hint" style="margin:0 0 8px">Aún no hay números. Añade el del cliente: Twilio le llamará una vez y él introduce el código que verás aquí.</p>'}
+          <div class="fin-pi-form" style="grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px">
+            <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente</span><select class="form-input" id="tel-cli">${(_clients || []).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+            ${inp('tel-num', 'Número con prefijo de país', '', '+34911222333')}
+            <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.telAddLine()">Añadir y verificar</button>
+          </div><div class="cant-hint" id="tel-msg2" style="margin-top:6px"></div></div>
+      </div></div>`;
+  }
+  async function telSaveCfg() {
+    const g = id => (document.getElementById(id) || {}).value || '', msg = document.getElementById('tel-msg');
+    if (msg) msg.textContent = 'Probando con Twilio…';
+    try {
+      const r = await apiFetch(`${API}/tel/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_sid: g('tel-sid'), api_key_sid: g('tel-key'), api_secret: g('tel-sec'), twiml_app_sid: g('tel-app') }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner('✓ Credenciales guardadas', 'success'); _tph.loaded = false; await _telLoad();
+      const cfg = await (await apiFetch(`${API}/tel/config`)).json(); _telConfigPaint(cfg, _tph.lines);
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = '#B42318'; } }
+  }
+  async function telAddLine() {
+    const msg = document.getElementById('tel-msg2'); if (msg) { msg.style.color = ''; msg.textContent = 'Pidiendo la verificación a Twilio…'; }
+    try {
+      const r = await apiFetch(`${API}/tel/lines`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id: +document.getElementById('tel-cli').value, numero: document.getElementById('tel-num').value }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _tph.loaded = false; await _telLoad(); const cfg = await (await apiFetch(`${API}/tel/config`)).json(); _telConfigPaint(cfg, _tph.lines);
+      const m2 = document.getElementById('tel-msg2'); if (m2) m2.textContent = j.estado === 'verificado' ? 'Este número ya estaba verificado en Twilio: listo.' : `Twilio está llamando a ${j.numero}. Quien conteste debe introducir el código ${j.codigo} en el teclado del teléfono. Luego pulsa «Comprobar».`;
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = '#B42318'; } }
+  }
+  async function telRefreshLine(id) {
+    try { const r = await apiFetch(`${API}/tel/lines/${id}/refresh`, { method: 'POST' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _tph.loaded = false; await _telLoad(); const cfg = await (await apiFetch(`${API}/tel/config`)).json(); _telConfigPaint(cfg, _tph.lines);
+      showBanner(j.estado === 'verificado' ? '✓ Número verificado' : 'Aún pendiente: falta introducir el código', j.estado === 'verificado' ? 'success' : 'info');
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function telDelLine(id) {
+    if (!confirm('¿Quitar este número de Nova? (No se borra nada del operador del cliente.)')) return;
+    try { await apiFetch(`${API}/tel/lines/${id}`, { method: 'DELETE' }); _tph.loaded = false; await _telLoad(); const cfg = await (await apiFetch(`${API}/tel/config`)).json(); _telConfigPaint(cfg, _tph.lines); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function telCopyHook() { const t = (document.getElementById('tel-hook') || {}).textContent || ''; try { navigator.clipboard.writeText(t); showBanner('Dirección copiada', 'success'); } catch (_) {} }
   function _vClients() {
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Clientes outbound</h2></div>
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
+        <div style="display:flex;gap:8px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telConfigOpen()" title="Llamadas con el número del cliente">☎ Telefonía</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button></div>
       </div>
       ${_clients.length ? `<div class="ldh-toolbar"><select class="ldh-sel" onchange="LeadManagerModule.clSetEst(this.value)"><option value="">Estado: todos</option>${_OBC_OPTS.map(([k, l]) => `<option value="${k}"${_clEst === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="ldh-toolbar__sp"></span><div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Buscar cliente…" value="${esc(_clQ)}" oninput="LeadManagerModule.clSetQ(this.value)"></div>${_lmViews('cl', ['tarjetas', 'lista', 'tablero'])}</div><div id="cl-wrap">${_clBody()}</div>`
         : _empty('clients', 'Aún no tienes clientes outbound', 'Crea tu primer cliente para organizar campañas, secuencias y leads como un workspace propio.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()')}`;
@@ -32395,7 +32576,7 @@ ${foot}
       const slot = (title, inner, attrs) => attrs ? `<a class="ldh-cto__b" ${attrs} title="${esc(title)}" onclick="event.stopPropagation()">${inner}</a>` : `<span class="ldh-cto__b ldh-cto__b--off" title="Sin dato">–</span>`;
       const contacto = `<div class="ldh-cto5" onclick="event.stopPropagation()">
         ${slot(mail ? 'Escribir a ' + mail + ' desde el buzón de ' + (cli ? cli.nombre : 'su cliente') : '', NI('mail', 13), mail ? `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"` : '')}
-        ${slot('Llamar: ' + tel, NI('phone', 13), tel ? `href="tel:${esc(tel.replace(/\s/g, ''))}"` : '')}
+        ${slot('Llamar: ' + tel, NI('phone', 13), tel ? `href="tel:${esc(tel.replace(/\s/g, ''))}" onclick="event.stopPropagation();return LeadManagerModule.telClick(${c.id})"` : '')}
         ${slot('Abrir su LinkedIn', NI('linkedin', 13), li ? `href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener"` : '')}
         ${slot('Abrir su Sales Navigator', NI('compass', 13), sn ? `href="${esc(_goUrl(sn))}" target="_blank" rel="noopener"` : '')}
         ${slot('Abrir WhatsApp', NI('whatsapp', 13), _waDigits(c) ? `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"` : '')}
@@ -35811,7 +35992,7 @@ ${foot}
     // (compone y envía desde el buzón conectado del cliente, queda registrado).
     if (c.email) items.push(['mail', 'Email', `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"`]);
     const tel = c.telefono || c.movil;
-    if (tel) items.push(['phone', 'Teléfono', `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`, esc(String(tel))]);
+    if (tel) items.push(['phone', 'Teléfono', `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}" onclick="event.stopPropagation();return LeadManagerModule.telClick(${c.id})"`, esc(String(tel))]);
     if (_waDigits(c)) items.push(['phone', 'WhatsApp', `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"`, esc(String(c.movil || c.telefono || ''))]);
     if (c.linkedin) items.push(['in', 'LinkedIn', `href="${esc(c.linkedin)}" target="_blank" rel="noopener"`]);
     if (c.linkedin_sales_nav) items.push(['sn', 'Sales Navigator', `href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener"`, esc(c.linkedin_sales_nav)]);
@@ -38253,7 +38434,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
