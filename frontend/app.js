@@ -27105,6 +27105,8 @@ ${foot}
     const hdr = (cls, txt, n) => '<div class="lm-tsec-h' + cls + '"><span class="lm-tsec-h__dot"></span>' + txt + '<span class="lm-tsec-h__n">' + n + '</span></div>';
     const blocks = [];
     if (sel === 'priority') blocks.push(_vTaskInboxPriority());
+    // En «Todas», lo prioritario va primero (antes que aprobaciones y vencidas) — solo si hay algo
+    if (!sel && _tiData && Array.isArray(_tiData.items) && _tiData.items.length) blocks.push('<div class="lm-prio-top">' + _vTaskInboxPriority() + '</div>');
     if (showApr) blocks.push(_apSectionHtml());
     if (!sel || sel === 'fix') blocks.push(_fixSectionHtml());
     if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
