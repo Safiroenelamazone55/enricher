@@ -28604,7 +28604,8 @@ ${foot}
   async function _waReload() {
     try { const r = await apiFetch(`${API}/lm/wa-list`); _waList = (r && r.ok) ? await r.json() : []; }
     catch { _waList = []; }
-    if (_gcli && Array.isArray(_waList)) _waList = _waList.filter(w => w.outbound_client_id === _gcli);
+    // Con filtro de cliente: contactos del cliente O que están en sus secuencias/campañas (un contacto reutilizado conserva su cliente original, y filtrar solo por ése ocultaba chats que sí le pertenecen).
+    if (_gcli && Array.isArray(_waList)) { const k = new Set((_contacts || []).map(c => c.id)); const loaded = k.size > 0; _waList = _waList.filter(w => w.outbound_client_id === _gcli || (loaded && k.has(w.contact_id))); }
     if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
     _refreshNav();
   }
