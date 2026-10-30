@@ -27171,7 +27171,7 @@ ${foot}
     const _reasonTxt = (it.reason || '').replace(/^\[Reunión #[^\]]*\]\s*/, '');
     const mainBtn = _isMt ? 'Reunión' : (_TI_ACTION_LBL[it.task_type] || 'Ver');
     let mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
-    if (it.task_type === 'review_reply') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    if (it.task_type === 'review_reply') mainAction = `LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${it.contact_id})`;   // «Revisar respuesta» abre la conversación del Inbox; «Ver ficha», la ficha
     else if (it.task_type === 'approve_email') mainAction = `LeadManagerModule.go('tasks');LeadManagerModule.taskSetView('list')`;
     else if (it.task_type === 'fix_data') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;

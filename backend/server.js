@@ -5252,7 +5252,13 @@ app.post('/api/lm/contacts/:id/resume-sequence', requireAuth, async (req, res) =
 app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
-    // 1. RESPUESTAS pendientes de revisar (tarea real, no solo disposition).
+    // 0. Las «respuestas por revisar» que YA se atendieron se cierran solas: el contacto ya fue clasificado (cambió su resultado) o ya se le contestó después.
+    await pool.query(`UPDATE activities a SET estado='hecha' FROM lm_contacts k
+       WHERE k.id=a.contact_id AND a.user_id=$1 AND a.tipo='revisar_respuesta' AND a.estado='pendiente'
+         AND ( COALESCE(k.disposition,'') NOT IN ('','respondio')
+               OR EXISTS (SELECT 1 FROM lm_messages m WHERE m.contact_id=k.id AND m.sent_at > a.fecha AND m.estado IN ('sent','replied'))
+               OR EXISTS (SELECT 1 FROM lm_inbox_messages im WHERE im.contact_id=k.id AND im.tipo<>'reply' AND im.received_at > a.fecha) )`, [uid]).catch(e => console.warn('[tasks/inbox] autocierre', e.message));
+    // 1. RESPUESTAS pendientes de revisar (tarea real, no solo disposición).
     const { rows: reps } = await pool.query(`
       SELECT a.id, a.contact_id, a.outbound_client_id, a.fecha AS due_at, a.nota AS reason,
              k.nombre, k.apellido, k.email,

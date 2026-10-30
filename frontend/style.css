@@ -19103,3 +19103,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 
 /* WhatsApp dentro de Outreach: el mismo cliente de Operaciones, sin márgenes extra */
 .lm-wa-host { margin: -26px -30px -60px; min-height: 420px; } .lm-wa-host #wa-fc-inner { display: flex; flex-direction: column; }
+/* El contenido de Outreach usa todo el ancho disponible */
+.lm2-body { max-width: none; }
