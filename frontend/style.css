@@ -19163,9 +19163,9 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm-code { display: inline-block; padding: 1px 7px; background: #F3F1EC; color: #6B675F; font: 600 .7rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; white-space: nowrap; user-select: all; }
 .lm-code--hd { margin-left: 8px; vertical-align: middle; font-size: .72rem; }
 /* Leads (v2): columnas fijas, filas de la misma altura, iconos de contacto siempre en su sitio */
-.ldh-table-wrap .ldh-lead-table { table-layout: fixed; width: 100%; min-width: 1130px; }
+.ldh-table-wrap .ldh-lead-table { table-layout: fixed; width: 100%; min-width: 1070px; }
 .ldh-lead-table th { padding: 9px 12px; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: #8F8B83; }
-.ldh-lead-table td { padding: 8px 12px; height: 62px; vertical-align: middle; }
+.ldh-lead-table td { padding: 8px 12px; height: 66px; vertical-align: middle; }
 .ldh-lead-table tbody tr:hover { background: #FAF9F7; }
 .ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim { max-width: none; }
 .ldh-lead-table .ldh-name { font-size: .88rem; }
