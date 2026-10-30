@@ -20,6 +20,10 @@ let _timer = null;
 let _running = false;
 
 async function tick(pool) {
+  // APAGADO (2026-10-30): este aviso («sin respuesta hace 24 h») solo se creaba para contactos SIN clasificar, es decir, prospectos fríos que nunca respondieron.
+  // A ellos no se les da seguimiento aparte: la secuencia sigue sola o termina, y qué hacer después lo decide la persona (o la nutrición, si la secuencia la tiene).
+  // El seguimiento por inactividad vive solo en quienes ya interactuaron: Interesado / Respondió / Deals (interesadoWatcher) y Más adelante (nurtureWatcher).
+  return;
   if (_running) return;
   _running = true;
   try {
