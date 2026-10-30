@@ -12,6 +12,8 @@ let _timer = null;
 let _running = false;
 
 async function tick(pool) {
+  // APAGADO (2026-10-30): activar al siguiente contacto de la empresa es AUTOMÁTICO (opción «Un contacto por empresa a la vez» de la secuencia); no se avisa en Prioridad ni hay que activarlo a mano.
+  return;
   if (_running) return;
   _running = true;
   try {
