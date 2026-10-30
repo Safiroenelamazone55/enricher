@@ -13403,8 +13403,13 @@ async function _lmWaResolve(req) {
   const { rows: contactos } = await pool.query(`
       SELECT DISTINCT k.id, k.nombre, k.apellido, k.movil, k.telefono, k.outbound_client_id
         FROM lm_contacts k
-        JOIN lm_contact_sequences cs ON cs.contact_id = k.id AND cs.estado IN ('activo','pausado')
-       WHERE k.user_id = $1`, [req.workspaceOwnerId]);
+        LEFT JOIN lm_contact_sequences cs ON cs.contact_id = k.id AND cs.estado IN ('activo','pausado')
+       WHERE k.user_id = $1
+         AND (cs.id IS NOT NULL
+              -- también quien tiene un mensaje de WhatsApp EN COLA aunque su inscripción ya no esté activa/pausada (si no, ese mensaje no se ve en ninguna parte)
+              OR EXISTS (SELECT 1 FROM wa_messages m JOIN wa_connections wc ON wc.id = m.connection_id
+                          WHERE wc.user_id = $1 AND m.estado = 'programado'
+                            AND m.chat_jid = regexp_replace(COALESCE(NULLIF(k.movil,''), k.telefono, ''), '[^0-9]', '', 'g') || '@s.whatsapp.net'))`, [req.workspaceOwnerId]);
   if (!contactos.length) return [];
 
   const { rows: conns } = await pool.query(
