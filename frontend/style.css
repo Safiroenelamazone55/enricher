@@ -19114,7 +19114,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .wcl-cv__r { margin-top: 10px; font-size: .8rem; color: #6C6862; } .wcl-cv__r b { font-size: 1.5rem; color: #1F1D1B; } .wcl-cv__h { font-size: .74rem; font-weight: 700; margin-top: 2px; } .wcl-cv__h.ok { color: #1F7A45; } .wcl-cv__h.no { color: #A19D95; } .wcl-cv__n { font-size: .66rem; color: #A19D95; margin-top: 4px; }
 
 /* Pendientes de aceptación (v2): filas limpias, sin scroll horizontal */
-.fin-pi-box.pax-box { max-width: 720px; }
+.fin-pi-box.pax-box { max-width: 640px; }
 .pax-n { display: inline-block; margin-left: 6px; padding: 1px 8px; background: #EEF4FF; color: #2F5BB7; font-size: .78rem; font-weight: 800; vertical-align: middle; }
 .pax-help { padding: 10px 20px 0; font-size: .82rem; color: #6B675F; line-height: 1.45; }
 .pax-bar { padding: 12px 20px 10px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #F0EDE8; }
@@ -19131,7 +19131,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pax-nm b { font-size: .88rem; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pax-nm span { font-size: .75rem; color: #8F8B83; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pax-sq { display: flex; gap: 4px; justify-content: flex-end; }
-.pax-chip { padding: 2px 7px; background: #F3F1EC; color: #5C5851; font-size: .68rem; font-weight: 700; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; } .pax-chip--m { background: #E7ECF5; color: #2F5BB7; }
+.pax-chip { padding: 2px 7px; background: #F3F1EC; color: #5C5851; font-size: .68rem; font-weight: 700; white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis; } .pax-chip--m { background: #E7ECF5; color: #2F5BB7; }
 .pax-when { font-size: .74rem; color: #8F8B83; text-align: right; white-space: nowrap; }
 .pax-li { width: 30px; height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 1px; border: 1px solid #D5E3F7; background: #F2F8FF; color: #0A66C2; font-size: .74rem; font-weight: 800; text-decoration: none; } .pax-li span { font-size: .6rem; } .pax-li:hover { background: #E2EEFC; }
 .pax-li--off { border-color: #ECE9E4; background: #FAF9F7; color: #D0CBC2; font-weight: 400; }
