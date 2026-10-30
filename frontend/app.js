@@ -27166,9 +27166,16 @@ ${foot}
     const seq = it.sequence_id ? (_sequences || []).find(x => x.id === it.sequence_id) : null;
     const due = it.due_at ? new Date(it.due_at) : null;
     const dueTxt = due && !isNaN(due) ? due.toLocaleDateString('es', { day: 'numeric', month: 'short' }) : '';
-    const meta = [it.contact_name, cli ? cli.nombre : '', seq ? seq.nombre : '', it.channel, dueTxt ? 'Vence: ' + dueTxt : ''].filter(Boolean);
+    const dias = due && !isNaN(due) ? Math.floor((Date.now() - due.getTime()) / 86400000) : null;
+    const edad = dias == null ? '' : (dias <= 0 ? 'hoy' : dias === 1 ? 'hace 1 día' : 'hace ' + dias + ' días');
+    const edadCol = dias == null ? '#8F8B83' : dias >= 14 ? '#C0574D' : dias >= 4 ? '#B7791F' : '#8F8B83';
+    const meta = [cli ? cli.nombre : '', seq ? seq.nombre : '', it.channel].filter(Boolean);
     const _isMt = /^\[Reunión #/.test(it.reason || '');
-    const _reasonTxt = (it.reason || '').replace(/^\[Reunión #[^\]]*\]\s*/, '');
+    let _reasonTxt = (it.reason || '').replace(/^\[Reunión #[^\]]*\]\s*/, '');
+    if (it.task_type === 'review_reply') {   // solo lo que escribió el cliente: sin «De: …», «Enviado el: …» ni el hilo citado
+      _reasonTxt = _reasonTxt.replace(/^Revisar respuesta:\s*/i, '').replace(/\s*(De|From|Enviado( el)?|Sent|Para|To)\s*:.*$/i, '').replace(/\s*(El .{5,70} escribi|On .{5,70} wrote).*$/i, '').trim();
+      if (_reasonTxt.length > 220) _reasonTxt = _reasonTxt.slice(0, 220).replace(/\s+\S*$/, '') + '…';
+    }
     const mainBtn = _isMt ? 'Reunión' : (_TI_ACTION_LBL[it.task_type] || 'Ver');
     let mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     if (it.task_type === 'review_reply') mainAction = `LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${it.contact_id})`;   // «Revisar respuesta» abre la conversación del Inbox; «Ver ficha», la ficha
@@ -27180,13 +27187,24 @@ ${foot}
     if (_isMt) mainAction = `LeadManagerModule.mtOpen(${it.contact_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
+        <div><b>${esc(it.contact_name || '')}</b>${edad ? ` <span style="font-size:.74rem;font-weight:700;color:${edadCol}">· ${edad}</span>` : ''}<div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
+          ${it.activity_id && ['review_reply', 'fix_data', 'retomar_nurture', 'activar_siguiente'].includes(it.task_type) ? `<button class="cp-dispo-b" title="Ya la atendí: cierra esta tarea" onclick="LeadManagerModule.tiDone(${it.activity_id})">✓ Ya la atendí</button>` : ''}
         </div>
       </div>
     </div>`;
+  }
+  const _tiOpen = new Set();
+  function tiMore(k) { _tiOpen.add(k); _renderBody(); }
+  async function tiDone(actId) {
+    try {
+      const r = await apiFetch(`${API}/lm/activities/${actId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'hecha' }) });
+      if (!r.ok) throw new Error('Error ' + r.status);
+      if (_tiData && Array.isArray(_tiData.items)) { _tiData.items = _tiData.items.filter(x => x.activity_id !== actId); const c = {}; _tiData.items.forEach(x => { c[x.category] = (c[x.category] || 0) + 1; }); _tiData.counts = c; }
+      showBanner('✓ Tarea cerrada', 'success'); _renderBody();
+    } catch (e) { showBanner('No se pudo cerrar: ' + e.message, 'error'); }
   }
   function _vTaskInboxPriority() {
     if (!_tiData || _tiData.loading) return `<div class="lm-task-empty">Cargando centro de tareas…</div>`;
@@ -27194,9 +27212,14 @@ ${foot}
     if (!items.length) return `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Sin tareas prioritarias — todo al día.</div>`;
     const byCat = {};
     for (const it of items) (byCat[it.category] = byCat[it.category] || []).push(it);
-    return _TI_CATS.filter(([k]) => byCat[k] && byCat[k].length).map(([k, lbl]) =>
-      `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>${esc(lbl)}<span class="lm-tsec-h__n">${byCat[k].length}</span></div>${byCat[k].map(_tiCard).join('')}`
-    ).join('');
+    // Respuestas: lo reciente primero (lo viejo ya se enfrió); el resto, de lo más antiguo a lo más nuevo. Cada sección muestra 5 y el resto bajo «Ver las N restantes».
+    const ts = it => it.due_at ? new Date(it.due_at).getTime() : 0;
+    return _TI_CATS.filter(([k]) => byCat[k] && byCat[k].length).map(([k, lbl]) => {
+      const L = byCat[k].slice().sort((a, b) => k === 'respuestas' ? ts(b) - ts(a) : ts(a) - ts(b));
+      const open = _tiOpen.has(k), shown = open ? L : L.slice(0, 5);
+      return `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>${esc(lbl)}<span class="lm-tsec-h__n">${L.length}</span></div>${shown.map(_tiCard).join('')}`
+        + (L.length > shown.length ? `<button class="lm-fix-more" onclick="LeadManagerModule.tiMore('${k}')">Ver las ${L.length - shown.length} restantes</button>` : '');
+    }).join('');
   }
   // taskSetFilter definido junto a _vTasks
   function calPrev() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() - 1, 1); _renderBody(); }
@@ -38002,7 +38025,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { tiMore, tiDone, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
