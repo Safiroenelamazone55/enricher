@@ -28602,7 +28602,7 @@ ${foot}
   // vez): acá se ven TODOS los números juntos, mezclados en una sola lista; lo único
   // que se puede acotar es por cliente outbound (pedido explícito 2026-09-02).
   async function _waReload() {
-    try { const r = await apiFetch(`${API}/lm/wa-list`); _waList = (r && r.ok) ? await r.json() : []; }
+    try { const r = await apiFetch(`${API}/lm/wa-list${_gcli ? '?client=' + _gcli : ''}`); _waList = (r && r.ok) ? await r.json() : []; }
     catch { _waList = []; }
     // Con filtro de cliente: contactos del cliente O que están en sus secuencias/campañas (un contacto reutilizado conserva su cliente original, y filtrar solo por ése ocultaba chats que sí le pertenecen).
     if (_gcli && Array.isArray(_waList)) { const k = new Set((_contacts || []).map(c => c.id)); const loaded = k.size > 0; _waList = _waList.filter(w => w.outbound_client_id === _gcli || (loaded && k.has(w.contact_id))); }

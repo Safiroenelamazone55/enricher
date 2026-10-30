@@ -13467,7 +13467,19 @@ async function _lmWaResolve(req) {
 }
 app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
   try {
-    const resueltos = await _lmWaResolve(req);
+    let resueltos = await _lmWaResolve(req);
+    // Filtro global de cliente (?client=ID), aplicado AQUÍ en el servidor para que no dependa de lo que la pantalla tenga cargado:
+    // el contacto es del cliente si lo trajo ese cliente o está en alguna de sus secuencias/campañas.
+    const _fc = parseInt(req.query.client, 10);
+    if (_fc && resueltos.length) {
+      const ids = resueltos.map(r => r.contacto.id);
+      const { rows: ok } = await pool.query(
+        `SELECT DISTINCT k.id FROM lm_contacts k WHERE k.id = ANY($1::int[]) AND (k.outbound_client_id = $2
+            OR EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id WHERE cs.contact_id = k.id AND s.outbound_client_id = $2)
+            OR EXISTS (SELECT 1 FROM lm_contact_campaigns cc JOIN campaigns c ON c.id = cc.campaign_id WHERE cc.contact_id = k.id AND c.outbound_client_id = $2))`, [ids, _fc]);
+      const set = new Set(ok.map(x => x.id));
+      resueltos = resueltos.filter(r => set.has(r.contacto.id));
+    }
     if (!resueltos.length) return res.json([]);
 
     // Último mensaje, no leídos y prioridad: antes eran 3 consultas POR CONTACTO
