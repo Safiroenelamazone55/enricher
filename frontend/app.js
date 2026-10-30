@@ -22184,7 +22184,9 @@ const LeadManagerModule = (() => {
       }
     }
     // Repintado: solo en pantallas sin edición en curso (no se repinta el borrador que se está revisando ni la ficha/tarea abierta)
-    const SAFE = ['dashboard', 'clients', 'campaigns', 'sequences', 'companies', 'contacts', 'leads', 'deals', 'activities'];
+    // Tareas comerciales también se pone al día sola (aprobaciones, «Por corregir», etc.): sin necesidad de recargar la página.
+    if (_section === 'tasks') { try { await _apReload(); } catch (_) {} }
+    const SAFE = ['dashboard', 'clients', 'campaigns', 'sequences', 'companies', 'contacts', 'leads', 'deals', 'activities', 'tasks'];
     const seqSafe = _section === 'sequence' && !['aprobar', 'bloqueos'].includes(_seqTab);
     if (SAFE.includes(_section) || seqSafe) { const sc = document.scrollingElement ? document.scrollingElement.scrollTop : 0; _renderBody(); if (document.scrollingElement) document.scrollingElement.scrollTop = sc; }
     if (_dgContainerId && document.getElementById('dg-tbody')) _dgRenderRows();                 // grid de Datos
