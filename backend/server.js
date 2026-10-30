@@ -7021,7 +7021,7 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     await pool.query(`UPDATE lm_inbox_messages SET leido=TRUE WHERE user_id=$1 AND contact_id=$2 AND NOT leido`,
       [req.workspaceOwnerId, cid]);
     const { rows: [contact] } = await pool.query(`
-      SELECT k.id, k.nombre, k.apellido, k.email, k.cargo,
+      SELECT k.id, k.nombre, k.apellido, COALESCE(NULLIF(k.email,''), k.email_personal, '') AS email, k.cargo,
              COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
              k.estado AS pipeline, k.disposition, k.outbound_client_id,
              oc.nombre AS cliente, mb.id AS mailbox_id, mb.email AS buzon, mb.estado AS buzon_estado,
@@ -7099,7 +7099,9 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
              AND mb.user_id = k.user_id AND mb.estado IN ('conectado','solo_envio')
        WHERE k.id=$1 AND k.user_id=$2`, [cid, req.workspaceOwnerId]);
     if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
-    if (!k.email) return res.status(400).json({ error: 'El contacto no tiene email' });
+    // Sin email profesional, el correo va al personal (misma regla del motor de envíos)
+    const emailDestino = String(k.email || k.email_personal || '').trim();
+    if (!emailDestino) return res.status(400).json({ error: 'El contacto no tiene email' });
     if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
     const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1`, [k.mb_id]);
 
@@ -7114,7 +7116,7 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const _lista = t => String(t || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(x => x.includes('@'));
     const _mios = new Set([String(mb.email || '').toLowerCase(), String(mb.cc_email || '').toLowerCase()].filter(Boolean));
     const replyAll = b.reply_all !== false;
-    const to = [String(k.email).toLowerCase()];
+    const to = [emailDestino.toLowerCase()];
     if (lastIn?.from_email && !_mios.has(String(lastIn.from_email).toLowerCase())) {
       const f = String(lastIn.from_email).toLowerCase();
       if (!to.includes(f)) to.push(f);
