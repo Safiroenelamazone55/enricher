@@ -28628,8 +28628,9 @@ ${foot}
   // separados, ver convención de este archivo) en vez de compartir estado.
   const _WA_PRIO = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
   function _waRow(w) {
-    const when = _ibFmtAgo(w.ultimo_ts);
-    const snippet = (w.from_me ? 'Tú: ' : '') + (w.ultimo_texto || '');
+    const when = w.ultimo_ts ? _ibFmtAgo(w.ultimo_ts) : '';
+    const _pg = w.programado_at ? `<span class="wa-prog" title="Todavía no se envió: sale al ritmo de la línea">⏳ ${w.programado_n > 1 ? w.programado_n + ' programados' : 'Programado'} · ${new Date(w.programado_at).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span> ` : '';
+    const snippet = w.ultimo_ts ? (w.from_me ? 'Tú: ' : '') + (w.ultimo_texto || '') : (w.programado_texto ? String(w.programado_texto).replace(/\s+/g, ' ') : 'Sin mensajes todavía');
     const prio = w.prioridad ? _WA_PRIO[w.prioridad] : null;
     return `<div class="ibx-row${w.no_leidos ? ' unread' : ''}">
       <div class="ibx-row__l1">
@@ -28641,7 +28642,7 @@ ${foot}
         <button class="cp-act" style="padding:2px 6px;margin-left:6px" title="Prioridad" onclick="event.stopPropagation();LeadManagerModule.waRowMenu(event,${w.contact_id})">⋮</button>
       </div>
       <div class="ibx-row__l1" onclick="LeadManagerModule.openWaFromList(${w.contact_id})" style="cursor:pointer">
-        <span class="ibx-row__sn">${esc(snippet)}</span>
+        <span class="ibx-row__sn">${(!w.ultimo_ts || w.programado_at) ? _pg : ''}${esc(snippet)}</span>
         ${w.no_leidos ? `<span class="ibx-b" style="background:var(--primary);color:#fff">${w.no_leidos}</span>` : ''}
       </div>
     </div>`;

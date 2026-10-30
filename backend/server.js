@@ -13465,15 +13465,22 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
       porConexion.get(r.connection_id).add(r.chat_jid);
     }
     const lastMap = new Map();   // `${connId}|${jid}` -> {texto,ts,from_me,eliminado}
+    const progMap = new Map();   // `${connId}|${jid}` -> primer mensaje programado (aún no enviado)
     const unreadMap = new Map();
     const metaMap = new Map();
     for (const [connId, jidSet] of porConexion) {
       const jids = [...jidSet];
       const { rows: lasts } = await pool.query(
+        // Último mensaje REAL (enviado o recibido). Los «programados» todavía no salieron: no cuentan como último mensaje ni muestran «hace 3h».
         `SELECT DISTINCT ON (chat_jid) chat_jid, texto, ts, from_me, eliminado
-           FROM wa_messages WHERE connection_id=$1 AND chat_jid = ANY($2)
+           FROM wa_messages WHERE connection_id=$1 AND chat_jid = ANY($2) AND COALESCE(estado,'enviado') <> 'programado'
           ORDER BY chat_jid, ts DESC`, [connId, jids]);
       for (const l of lasts) lastMap.set(`${connId}|${l.chat_jid}`, l);
+      const { rows: progs } = await pool.query(
+        `SELECT DISTINCT ON (chat_jid) chat_jid, texto, scheduled_at, (SELECT COUNT(*)::int FROM wa_messages x WHERE x.connection_id=m.connection_id AND x.chat_jid=m.chat_jid AND x.estado='programado') AS n
+           FROM wa_messages m WHERE connection_id=$1 AND chat_jid = ANY($2) AND estado='programado'
+          ORDER BY chat_jid, scheduled_at ASC NULLS LAST`, [connId, jids]);
+      for (const g of progs) progMap.set(`${connId}|${g.chat_jid}`, g);
       const { rows: unreads } = await pool.query(
         `SELECT chat_jid, COUNT(*)::int AS n FROM wa_messages
           WHERE connection_id=$1 AND chat_jid = ANY($2) AND NOT leido AND NOT from_me
@@ -13498,6 +13505,7 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
         ultimo_texto: last?.eliminado ? 'Se eliminó este mensaje' : (last?.texto || ''),
         ultimo_ts: last?.ts || null,
         from_me: !!last?.from_me,
+        programado_at: progMap.get(key)?.scheduled_at || null, programado_n: progMap.get(key)?.n || 0, programado_texto: progMap.get(key)?.texto || '',
         no_leidos: unreadMap.get(key) || 0,
         prioridad: metaMap.get(key) || '',
       };
