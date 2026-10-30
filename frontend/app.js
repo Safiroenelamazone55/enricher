@@ -26920,7 +26920,7 @@ ${foot}
       const today = _dayOf(new Date());
       const seq = _allSeqTasks().filter(t => t.due <= today).length;
       const inactivas = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
-      const sys = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #'));
+      const sys = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && ((String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #')) || String(a.nota || '').startsWith('Rebote:')));   // igual que la lista: los rebotes viven en «Por corregir»
       const delInactiva = a => a.tipo === 'tarea' && inactivas.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
       const acts = (_activities || []).filter(a => a.estado === 'pendiente' && !sys(a) && !delInactiva(a) && _dayOf(a.fecha) <= today).length;
       const aprob = Array.isArray(_apList) ? _apList.length : (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
