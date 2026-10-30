@@ -35093,6 +35093,8 @@ ${foot}
     try { const s = JSON.parse(localStorage.getItem('lm_ct_cols') || 'null'); if (Array.isArray(s) && s.length) _ctCols = s.filter(k => _CT_COLDEFS.some(d => d.k === k)); } catch {}
     if (!_ctCols || !_ctCols.length) _ctCols = [..._CT_COLS_DEFAULT];
     if (!_ctCols.includes('contacto')) _ctCols.unshift('contacto');
+    // Una vez: la columna ID (código del contacto) se añade a quien ya tenía columnas guardadas; después puede quitarla si quiere.
+    try { if (!localStorage.getItem('lm_ct_codigo_v1')) { if (!_ctCols.includes('codigo')) _ctCols.splice(1, 0, 'codigo'); localStorage.setItem('lm_ct_codigo_v1', '1'); _ctColsSave(); } } catch (_) {}
     return _ctCols;
   }
   function _ctColsSave() { try { localStorage.setItem('lm_ct_cols', JSON.stringify(_ctCols)); } catch {} }
