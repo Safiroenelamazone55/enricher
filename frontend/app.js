@@ -27722,6 +27722,7 @@ ${foot}
     menu.style.top = `${Math.max(8, Math.min(y + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
     setTimeout(() => { const off = e => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 0);
   }
+  function waContactBadge(cid) { const c = (_contacts || []).find(x => x.id === cid); return c && c.disposition ? _dispoBadge(c.disposition) : ''; }
   async function waResolveDo(cid, disp, jid, connId) {
     await ibResolveDisp(cid, disp);
     // con las opciones directas (no las que abren una ventana propia) el chat también queda «Resuelto» y sale de Prioridad
@@ -27729,6 +27730,7 @@ ${foot}
       try { await apiFetch(`${API}/wa/connections/${connId}/chats/${encodeURIComponent(jid)}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estadoConv: 'resuelto' }) }); } catch (_) {}
     }
     try { _tiReload(); } catch (_) {}
+    try { WaChatModule.pintaBadgeEstado(); } catch (_) {}
   }
   function ibOpenResolveMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
@@ -28774,7 +28776,7 @@ ${foot}
     catch { _waList = []; }
     // Con filtro de cliente: contactos del cliente O que están en sus secuencias/campañas (un contacto reutilizado conserva su cliente original, y filtrar solo por ése ocultaba chats que sí le pertenecen).
     if (_gcli && Array.isArray(_waList)) { const k = new Set((_contacts || []).map(c => c.id)); const loaded = k.size > 0; _waList = _waList.filter(w => w.outbound_client_id === _gcli || (loaded && k.has(w.contact_id))); }
-    if (_section === 'wa' && document.getElementById('lm-wa-host')) { try { WaChatModule.setScopeJids(new Set((_waList || []).map(w => w.chat_jid)), Object.fromEntries((_waList || []).map(w => [w.chat_jid, w.contact_id]))); } catch (_) {} }
+    if (_section === 'wa' && document.getElementById('lm-wa-host')) { try { WaChatModule.setScopeJids(new Set((_waList || []).map(w => w.chat_jid)), Object.fromEntries((_waList || []).map(w => [w.chat_jid, w.contact_id])), Object.fromEntries((_waList || []).filter(w => w.nombre).map(w => [w.chat_jid, w.nombre]))); } catch (_) {} }
     _refreshNav();
   }
   function waCli(v) { _waCli = parseInt(v) || 0; }
@@ -28791,7 +28793,7 @@ ${foot}
     if (!host || !fc) return;
     host.appendChild(fc);
     const key = String(_gcli || 0), fresh = _waMountCache && _waMountCache.k === key && Date.now() - _waMountCache.at < 30000;
-    if (fresh) { await WaChatModule.loadScoped({ jids: _waMountCache.jids, connId: _waMountCache.connId, byJid: _waMountCache.byJid }); return; }
+    if (fresh) { await WaChatModule.loadScoped({ jids: _waMountCache.jids, connId: _waMountCache.connId, byJid: _waMountCache.byJid, names: _waMountCache.names }); return; }
     WaChatModule.scopeLoading(true);
     // la lista de contactos con chat y el WhatsApp del cliente se piden a la vez
     const [rowsR, connsR] = await Promise.all([
@@ -28800,12 +28802,12 @@ ${foot}
     ]);
     const rows = (rowsR && rowsR.ok) ? await rowsR.json() : [];
     if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
-    const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}, byJid = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; byJid[w.chat_jid] = w.contact_id; });
+    const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}, byJid = {}, names = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; byJid[w.chat_jid] = w.contact_id; if (w.nombre) names[w.chat_jid] = w.nombre; });
     let connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
     // Con un cliente filtrado, el WhatsApp es el de ESE cliente (cada cliente tiene el suyo; aquí no se cambia de número).
     if (connsR && connsR.ok) { try { const cs = await connsR.json(); const ok = cs.find(x => x.estado === 'conectado') || cs[0]; if (ok) connId = ok.id; } catch (_) {} }
-    _waMountCache = { k: key, at: Date.now(), jids, connId, byJid };
-    await WaChatModule.loadScoped({ jids, connId, byJid });
+    _waMountCache = { k: key, at: Date.now(), jids, connId, byJid, names };
+    await WaChatModule.loadScoped({ jids, connId, byJid, names });
   }
   function _vWaList() {
     return `<div class="lm-wa-host pane--wa" id="lm-wa-host"></div>`;
@@ -38172,7 +38174,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -42194,7 +42196,15 @@ const WaChatModule = (() => {
     if (_scope) setFiltroAsignado('mias');
   }
   function clearScope() { _scopeLoading = false; if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
-  function setScopeJids(jids, byJid) { if (_scope) { _scope.jids = jids; if (byJid) _scope.byJid = byJid; _pintaChats(); } }
+  function setScopeJids(jids, byJid, names) { if (_scope) { _scope.jids = jids; if (byJid) _scope.byJid = byJid; if (names) _scope.names = names; _pintaChats(); pintaBadgeEstado(); } }
+  // Etiqueta del resultado del contacto (Interesado, No interesado…) junto al nombre en la cabecera del chat
+  function pintaBadgeEstado() {
+    const nameEl = $$('wa-main-name'); if (!nameEl) return;
+    let b = $$('wa-main-badge');
+    if (!b) { b = document.createElement('span'); b.id = 'wa-main-badge'; b.style.cssText = 'margin-left:8px;display:inline-flex;align-items:center'; nameEl.insertAdjacentElement('afterend', b); }
+    const cid = _scope && _scope.byJid && _chatAct ? _scope.byJid[_chatAct] : 0;
+    b.innerHTML = cid ? LeadManagerModule.waContactBadge(cid) : '';
+  }
   // «Resolver respuesta» desde el menú ⋮ del chat: solo en Outreach, donde cada chat está ligado a un contacto
   function _resolverRespuesta(ev) {
     const jid = _chatMenuJid, cid = _scope && _scope.byJid && _scope.byJid[jid];
@@ -42495,6 +42505,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
   }
 
   function _nombreChat(row) {
+    if (_scope && _scope.names && _scope.names[row.chat_jid]) return _scope.names[row.chat_jid];   // en Outreach: el nombre del contacto, no el número
     if (row.nombre) return row.nombre;
     const esGrupo = row.es_grupo || String(row.chat_jid || '').endsWith('@g.us');
     if (String(row.chat_jid || '').endsWith('@lid')) return 'Contacto sin número (…' + String(row.chat_jid).split('@')[0].slice(-4) + ')';
@@ -43658,6 +43669,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     const _pb = $$('wa-hdr-people'); if (_pb) _pb.style.display = _chatActGrupo ? '' : 'none';
     _cerrarPersonas();
     if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
+    pintaBadgeEstado();
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
     await _cargarMensajes(jid);
@@ -44209,7 +44221,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { _resolverRespuesta, loadScoped, scopeLoading, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  return { pintaBadgeEstado, _resolverRespuesta, loadScoped, scopeLoading, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
