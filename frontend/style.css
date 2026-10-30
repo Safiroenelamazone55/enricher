@@ -19158,3 +19158,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .chat-ctx-item--accent { font-weight: 700; color: #2F5BB7; }
 /* Mensaje en cola/programado: el texto se leía blanco sobre blanco */
 .wa-msg--sched .wa-msg__bubble { color: #1F1D1B; }
+.wa-msg--out.wa-msg--sched .wa-msg__bubble, .pane--wa .wa-msg--out.wa-msg--sched .wa-msg__bubble { color: #1F1D1B !important; }
