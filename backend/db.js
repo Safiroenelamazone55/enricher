@@ -2315,6 +2315,33 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS con_firma BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS firma_html TEXT NOT NULL DEFAULT '';`);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_contact_idx ON wa_messages (contact_id) WHERE contact_id IS NOT NULL;`);
+    // Una sola vez: fusiona las empresas duplicadas (mismo cliente, mismo nombre normalizado, sin dominios distintos) que dejaron las altas anteriores.
+    await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    {
+      const { rowCount: yaDup } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre='dedup_empresas_20261030'`);
+      if (!yaDup) {
+        const { rows: all } = await pool.query(`SELECT id, user_id, outbound_client_id, dominio, linkedin, regexp_replace(translate(lower(nombre),'áàäâéèëêíìïîóòöôúùüûñç','aaaaeeeeiiiioooouuuunc'),'[^a-z0-9]+','','g') AS k FROM lm_companies ORDER BY id`);
+        const groups = new Map();
+        for (const c of all) { if (!c.k) continue; const key = [c.user_id, c.outbound_client_id || 0, c.k].join('|'); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(c); }
+        let merged = 0;
+        for (const g of groups.values()) {
+          if (g.length < 2) continue;
+          const doms = new Set(g.map(c => c.dominio).filter(Boolean)); if (doms.size > 1) continue;
+          const surv = g.find(c => c.dominio) || g[0], dups = g.filter(c => c.id !== surv.id).map(c => c.id);
+          try {
+            await pool.query('BEGIN');
+            await pool.query(`UPDATE lm_contacts SET company_id=$1, updated_at=NOW() WHERE company_id = ANY($2::int[])`, [surv.id, dups]);
+            await pool.query(`UPDATE cantera_contacts SET company_id=$1 WHERE company_id = ANY($2::int[])`, [surv.id, dups]).catch(() => {});
+            await pool.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE promoted_company_id = ANY($2::int[])`, [surv.id, dups]).catch(() => {});
+            await pool.query(`INSERT INTO lm_company_clients (company_id, outbound_client_id) SELECT $1, outbound_client_id FROM lm_company_clients WHERE company_id = ANY($2::int[]) ON CONFLICT DO NOTHING`, [surv.id, dups]).catch(() => {});
+            await pool.query(`DELETE FROM lm_companies WHERE id = ANY($1::int[])`, [dups]);
+            await pool.query('COMMIT'); merged += dups.length;
+          } catch (e) { await pool.query('ROLLBACK').catch(() => {}); console.warn('[db] dedup empresas', e.message); }
+        }
+        await pool.query(`INSERT INTO migraciones_una_vez (nombre) VALUES ('dedup_empresas_20261030') ON CONFLICT DO NOTHING`);
+        console.log('[db] empresas duplicadas fusionadas:', merged);
+      }
+    }
     // Una sola vez: los chats donde ya salió un mensaje desde la cuenta quedan asignados a quien la conectó (aparecen en «Mías»).
     await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     const { rowCount: yaAsig } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre='wa_asignar_salientes'`);

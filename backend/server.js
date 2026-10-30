@@ -3814,6 +3814,25 @@ function _lmSplitLocation(raw) {
   let pais1 = ''; try { pais1 = require('./services/geoService').countryFromPlace(ciudad1, '') || ''; } catch (_) {}
   return { ciudad: ciudad1, region: '', pais: pais1 };
 }
+// UNA sola regla para «¿esta empresa ya existe?» (la usan Cantera→CRM, la importación y cualquier alta automática):
+//  1) mismo dominio  2) mismo LinkedIn  3) mismo nombre (sin tildes, mayúsculas ni signos) siempre que no tengan dominios DISTINTOS.
+// Si la existente no tenía dominio y la nueva sí, se lo completa. Antes cada sitio comparaba distinto y quedaban duplicadas.
+const _lmCoKey = n => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+async function _lmFindCompany(q, uid, { dominio, linkedin, nombre } = {}) {
+  let hit;
+  if (dominio) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND dominio=$2 ORDER BY id LIMIT 1`, [uid, dominio])).rows[0];
+  if (!hit && linkedin) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND LOWER(linkedin)=$2 ORDER BY id LIMIT 1`, [uid, String(linkedin).toLowerCase()])).rows[0];
+  if (!hit) {
+    const key = _lmCoKey(nombre);
+    if (key) {
+      const { rows } = await q.query(
+        `SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND regexp_replace(translate(lower(nombre),'áàäâéèëêíìïîóòöôúùüûñç','aaaaeeeeiiiioooouuuunc'),'[^a-z0-9]+','','g')=$2 ORDER BY id LIMIT 10`, [uid, key]);
+      hit = rows.find(c => !c.dominio || !dominio || c.dominio === dominio);
+    }
+  }
+  if (hit && dominio && !hit.dominio) { try { await q.query(`UPDATE lm_companies SET dominio=$1, updated_at=NOW() WHERE id=$2`, [dominio, hit.id]); } catch (_) {} }
+  return hit || null;
+}
 function _lmNormDomain(raw) {
   let s = _lmS(raw).toLowerCase();
   if (!s) return '';
@@ -8169,10 +8188,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     if (linkedin) keys.push('l:' + linkedin);
     if (nombreKey) keys.push('n:' + nombreKey);
     for (const k of keys) if (coCache.has(k)) return coCache.get(k);
-    let found;
-    if (dominio) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0];
-    if (!found && linkedin) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND LOWER(linkedin)=$2 LIMIT 1`, [uid, linkedin])).rows[0];
-    if (!found && nombreKey) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombreKey])).rows[0];
+    const found = await _lmFindCompany(pool, uid, { dominio, linkedin, nombre: nombreKey });
     if (found) {
       keys.forEach(k => coCache.set(k, found.id));
       // Actualiza los campos de la empresa YA existente (antes solo se enlazaba sin tocar sus datos).
@@ -10286,9 +10302,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       { const _x = _cantGateCompany(_gate, co); if (_x) { _gate.excluidas.push({ empresa: co.nombre, motivo: _x.ex.motivo || _x.ex.categoria || '', lista: _x.ex.lista || '', scope: _x.ex.scope }); continue; } }
       const dominio = _lmNormDomain(co.dominio || co.website || '');
       let coId;
-      const existing = dominio
-        ? (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0]
-        : (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, (co.nombre || '').toLowerCase()])).rows[0];
+      const existing = await _lmFindCompany(cl, uid, { dominio, nombre: co.nombre });
       if (existing) {
         coId = existing.id;
       } else {
@@ -10430,9 +10444,7 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
       { const _x = _cantGateCompany(_gate, co); if (_x) { _gate.excluidas.push({ empresa: co.nombre, motivo: _x.ex.motivo || _x.ex.categoria || '', lista: _x.ex.lista || '', scope: _x.ex.scope }); continue; } }
       const dominio = _lmNormDomain(co.dominio || co.website || '');
       let coId;
-      const existing = dominio
-        ? (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0]
-        : (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, (co.nombre || '').toLowerCase()])).rows[0];
+      const existing = await _lmFindCompany(cl, uid, { dominio, nombre: co.nombre });
       if (existing) {
         coId = existing.id;
       } else {
