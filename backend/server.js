@@ -7845,7 +7845,8 @@ app.get('/api/lm/pulse', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT relname, (n_tup_ins + n_tup_upd + n_tup_del)::bigint AS n FROM pg_stat_user_tables WHERE relname = ANY($1::text[]) ORDER BY relname",
       [['lm_companies', 'lm_contacts', 'lm_contact_sequences', 'sequences', 'sequence_steps', 'campaigns', 'outbound_clients', 'lm_messages', 'activities']]);
-    res.json({ sig: rows.map(r => r.relname + ':' + r.n).join('|') });
+    const { rows: w } = await pool.query("SELECT relname, n_tup_ins::bigint AS n FROM pg_stat_user_tables WHERE relname = ANY($1::text[]) ORDER BY relname", [['wa_messages', 'lm_inbox_messages']]);
+    res.json({ sig: rows.map(r => r.relname + ':' + r.n).join('|'), ti: w.map(r => r.relname + ':' + r.n).join('|') });
   } catch (e) { res.status(500).json({ error: 'pulse' }); }
 });
 app.get('/api/lm/inbox/history/:cid', requireAuth, async (req, res) => {

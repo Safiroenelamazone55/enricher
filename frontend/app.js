@@ -248,7 +248,12 @@ function _netStart() { _netInflight++; if (_netInflight === 1) _netBarT = setTim
 function _netEnd() { _netInflight = Math.max(0, _netInflight - 1); if (!_netInflight) { clearTimeout(_netBarT); _netBarT = null; document.getElementById('nova-topbar')?.classList.remove('on'); } }
 function apiFetch(url, opts = {}) {
   _netStart();
-  return fetch(url, { credentials: 'include', ...opts }).finally(_netEnd);
+  const p = fetch(url, { credentials: 'include', ...opts }).finally(_netEnd);
+  // Un mensaje enviado (WhatsApp o correo) avisa a la app: Prioridad se pone al día al instante, sin recargar.
+  if (String(opts.method || '').toUpperCase() === 'POST' && /\/chats\/[^/]+\/mensajes(\/imagen)?$|\/lm\/inbox\/reply$/.test(String(url).split('?')[0])) {
+    p.then(r => { if (r && r.ok) window.dispatchEvent(new Event('nova:sent')); }).catch(() => {});
+  }
+  return p;
 }
 
 function applyBranding({ companyLogo, workspaceName } = {}) {
@@ -22011,6 +22016,8 @@ const LeadManagerModule = (() => {
   let _repChartData = null;   // datos calculados para los charts de Reportes
   let _taskView = 'list';     // 'list' | 'calendar' | 'priority' en Tareas comerciales
   let _tiData = null;         // cache de GET /api/lm/tasks/inbox (Bloque 8: Centro de tareas por prioridad)
+  window.addEventListener('nova:sent', () => { if (_tiData && !_tiData.loading) setTimeout(() => { try { _tiReload(); } catch (_) {} }, 700); });
+  let _pulseTi = null;        // firma de los mensajes de WhatsApp/correo: si cambia (llegó o salió uno), Prioridad se actualiza sola
   let _taskFCli = '', _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (cliente / campaña / secuencia)
   let _taskCanalOpen = false;                            // panel «Canal y paso»: oculto por defecto
   function taskToggleCanal() { _taskCanalOpen = !_taskCanalOpen; _renderBody(); }
@@ -22160,6 +22167,7 @@ const LeadManagerModule = (() => {
     try {
       const r = await apiFetch(API + '/lm/pulse'); if (!r || !r.ok) return;
       const j = await r.json();
+      if (j.ti !== undefined) { if (_pulseTi !== null && j.ti !== _pulseTi && _tiData && !_tiData.loading) { try { _tiReload(); } catch (_) {} } _pulseTi = j.ti; }
       if (_pulseSig === null) { _pulseSig = j.sig; return; }
       if (j.sig !== _pulseSig) _pulsePending = true;
       if (!_pulsePending || _liveBusy()) return;           // si estás escribiendo, espera a que termines
