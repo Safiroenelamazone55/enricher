@@ -19136,3 +19136,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pax-li { width: 30px; height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 1px; border: 1px solid #D5E3F7; background: #F2F8FF; color: #0A66C2; font-size: .74rem; font-weight: 800; text-decoration: none; } .pax-li span { font-size: .6rem; } .pax-li:hover { background: #E2EEFC; }
 .pax-li--off { border-color: #ECE9E4; background: #FAF9F7; color: #D0CBC2; font-weight: 400; }
 @media (max-width: 640px) { .pax-filters { grid-template-columns: 1fr; } #lm-pa-modal .pax-row { grid-template-columns: 18px 32px minmax(0, 1fr) 34px; } .pax-sq, .pax-when { display: none; } }
+
+.cp-dispo-b--act { background: #EEF4FF; border-color: #BFD3F5; color: #2F5BB7; font-weight: 700; } .cp-dispo-b--act:hover { background: #DCE8FD; }

@@ -27190,6 +27190,12 @@ ${foot}
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
+          ${['deals', 'seguimiento', 'nutricion'].includes(it.category) ? (() => {
+            const c0 = (_contacts || []).find(x => x.id === it.contact_id) || {};
+            const em = !!(it.email || c0.email), wa = !!_waDigits(c0);
+            return (em ? `<button class="cp-dispo-b cp-dispo-b--act" title="Abre el Inbox con un correo nuevo y un texto sugerido (editable)" onclick="LeadManagerModule.fuQuick(${it.contact_id},'email','${it.category}')">✉ Escribir correo</button>` : '')
+              + (wa ? `<button class="cp-dispo-b cp-dispo-b--act" title="Abre WhatsApp con un texto sugerido (editable)" onclick="LeadManagerModule.fuQuick(${it.contact_id},'wa','${it.category}')">WhatsApp</button>` : '');
+          })() : ''}
           ${it.task_type === 'follow_deal' ? `<button class="cp-dispo-b" title="Ya le diste seguimiento: reinicia el conteo de días" onclick="LeadManagerModule.tiDealDone(${it.contact_id})">✓ Ya le di seguimiento</button>` : ''}
           ${it.activity_id && ['review_reply', 'fix_data', 'retomar_nurture', 'activar_siguiente'].includes(it.task_type) ? `<button class="cp-dispo-b" title="Ya la atendí: cierra esta tarea" onclick="LeadManagerModule.tiDone(${it.activity_id})">✓ Ya la atendí</button>` : ''}
         </div>
@@ -27205,6 +27211,42 @@ ${foot}
       if (_tiData && Array.isArray(_tiData.items)) { _tiData.items = _tiData.items.filter(x => x.activity_id !== actId); const c = {}; _tiData.items.forEach(x => { c[x.category] = (c[x.category] || 0) + 1; }); _tiData.counts = c; }
       showBanner('✓ Tarea cerrada', 'success'); _renderBody();
     } catch (e) { showBanner('No se pudo cerrar: ' + e.message, 'error'); }
+  }
+  // ── Acción rápida: escribir al contacto por correo o WhatsApp con un texto sugerido (en su idioma; español si no se sabe), editable antes de enviar ──
+  const _FU = {
+    es: { s: ['Retomando nuestra conversación', 'Siguiente paso{emp}'], b: ['Hola {n},\n\nEspero que estés muy bien. Quería retomar nuestra conversación y saber si sigue siendo un buen momento para avanzar.\n\nSi te viene bien, te comparto más detalles o coordinamos una llamada breve esta semana.\n\nQuedo atento,', 'Hola {n},\n\nQuería saber cómo vas con lo que conversamos y si hay algo en lo que pueda ayudarte para dar el siguiente paso.\n\n¿Te parece si agendamos una llamada breve esta semana para resolver cualquier duda?\n\nQuedo atento,'], w: ['Hola {n}, ¿cómo estás? Quería retomar nuestra conversación: ¿sigue siendo un buen momento para avanzar? Si quieres te cuento más o coordinamos una llamada breve.', 'Hola {n}, ¿cómo vas? Quería saber si tienes dudas sobre lo que conversamos o si podemos dar el siguiente paso. ¿Coordinamos una llamada breve esta semana?'] },
+    en: { s: ['Picking up our conversation', 'Next step{emp}'], b: ["Hi {n},\n\nI hope you're doing well. I wanted to pick up where we left off and check whether it's still a good time to move forward.\n\nIf it helps, I can share more details or we can set up a quick call this week.\n\nBest regards,", "Hi {n},\n\nI wanted to check in on what we discussed and see if there's anything I can help with to take the next step.\n\nWould a short call this week work to answer any questions?\n\nBest regards,"], w: ["Hi {n}, hope you're well! I wanted to pick up our conversation: is it still a good time to move forward? Happy to share more or set up a quick call.", "Hi {n}, how are things? I wanted to see if you have any questions about what we discussed or if we can take the next step. Shall we schedule a quick call this week?"] },
+    pt: { s: ['Retomando nossa conversa', 'Próximo passo{emp}'], b: ['Olá {n},\n\nEspero que esteja bem. Queria retomar nossa conversa e saber se ainda é um bom momento para avançarmos.\n\nSe fizer sentido, posso compartilhar mais detalhes ou marcarmos uma ligação rápida esta semana.\n\nAtenciosamente,', 'Olá {n},\n\nQueria saber como estão as coisas com o que conversamos e se posso ajudar em algo para darmos o próximo passo.\n\nPodemos marcar uma ligação rápida esta semana para tirar qualquer dúvida?\n\nAtenciosamente,'], w: ['Olá {n}, tudo bem? Queria retomar nossa conversa: ainda é um bom momento para avançarmos? Se quiser, conto mais ou marcamos uma ligação rápida.', 'Olá {n}, como vai? Queria saber se tem dúvidas sobre o que conversamos ou se podemos dar o próximo passo. Marcamos uma ligação rápida esta semana?'] },
+    it: { s: ['Riprendiamo la nostra conversazione', 'Prossimo passo{emp}'], b: ['Buongiorno {n},\n\nspero stia bene. Volevo riprendere la nostra conversazione e capire se è ancora il momento giusto per andare avanti.\n\nSe può essere utile, posso condividere maggiori dettagli oppure fissare una breve chiamata questa settimana.\n\nCordiali saluti,', 'Buongiorno {n},\n\nvolevo sapere come procede rispetto a quanto ci siamo detti e se posso aiutarla a fare il prossimo passo.\n\nLe andrebbe una breve chiamata questa settimana per chiarire ogni dubbio?\n\nCordiali saluti,'], w: ['Buongiorno {n}, come sta? Volevo riprendere la nostra conversazione: è ancora il momento giusto per andare avanti? Se vuole le racconto di più o fissiamo una breve chiamata.', 'Buongiorno {n}, come procede? Volevo sapere se ha dubbi su quanto ci siamo detti o se possiamo fare il prossimo passo. Fissiamo una breve chiamata questa settimana?'] },
+    de: { s: ['Wieder aufgreifen unseres Gesprächs', 'Nächster Schritt{emp}'], b: ['Guten Tag {n},\n\nich hoffe, es geht Ihnen gut. Ich wollte unser Gespräch wieder aufgreifen und fragen, ob der Zeitpunkt für die nächsten Schritte noch passt.\n\nGerne sende ich Ihnen weitere Details oder wir vereinbaren diese Woche ein kurzes Telefonat.\n\nFreundliche Grüße,', 'Guten Tag {n},\n\nich wollte nachfragen, wie es bei Ihnen mit unserem Gespräch aussieht und ob ich Sie beim nächsten Schritt unterstützen kann.\n\nPasst Ihnen diese Woche ein kurzes Telefonat, um offene Fragen zu klären?\n\nFreundliche Grüße,'], w: ['Guten Tag {n}, wie geht es Ihnen? Ich wollte unser Gespräch wieder aufgreifen: Passt der Zeitpunkt noch? Gerne erzähle ich mehr oder wir vereinbaren ein kurzes Telefonat.', 'Guten Tag {n}, haben Sie Fragen zu unserem Gespräch, oder können wir den nächsten Schritt gehen? Sollen wir diese Woche kurz telefonieren?'] },
+    fr: { s: ['Reprise de notre échange', 'Prochaine étape{emp}'], b: ["Bonjour {n},\n\nJ'espère que vous allez bien. Je souhaitais reprendre notre échange et savoir si le moment est toujours opportun pour avancer.\n\nSi cela vous convient, je peux vous donner plus de détails ou nous pouvons convenir d'un court appel cette semaine.\n\nCordialement,", "Bonjour {n},\n\nJe voulais savoir où vous en êtes par rapport à notre échange et si je peux vous aider à passer à l'étape suivante.\n\nUn court appel cette semaine vous conviendrait-il pour répondre à vos questions ?\n\nCordialement,"], w: ["Bonjour {n}, comment allez-vous ? Je souhaitais reprendre notre échange : le moment est-il toujours opportun pour avancer ? Je peux vous en dire plus ou convenir d'un court appel.", "Bonjour {n}, avez-vous des questions sur notre échange, ou peut-on passer à l'étape suivante ? On fait un court appel cette semaine ?"] },
+  };
+  function _fuLang(c) {
+    const raw = _pnorm(c && (c.idioma_ef || c.idioma || '')).trim();
+    if (!raw) return 'es';
+    if (_FU[raw.slice(0, 2)] && raw.length <= 5) return raw.slice(0, 2);
+    if (/^(en|ing)/.test(raw)) return 'en'; if (/^port/.test(raw)) return 'pt'; if (/^ital/.test(raw)) return 'it';
+    if (/^(ale|ger|deu)/.test(raw)) return 'de'; if (/^fran|^fren/.test(raw)) return 'fr';
+    return 'es';
+  }
+  function _fuText(c, kind, canal) {
+    const L = _FU[_fuLang(c)] || _FU.es, k = kind === 'deals' ? 1 : 0, n = (c.nombre || '').trim().split(/\s+/)[0] || '';
+    const emp = c.company_nombre ? ' · ' + c.company_nombre : '';
+    const fill = t => t.replace('{n}', n).replace(/\s+,/g, ',').replace('{emp}', emp);
+    return canal === 'wa' ? { cuerpo: fill(L.w[k]) } : { asunto: fill(L.s[k]), cuerpo: fill(L.b[k]) };
+  }
+  async function fuQuick(cid, canal, kind) {
+    const c = (_contacts || []).find(x => x.id === cid);
+    if (!c) { showBanner('No se encontró el contacto', 'error'); return; }
+    const t = _fuText(c, kind, canal);
+    if (canal === 'wa') { openWaFor(cid, t.cuerpo); return; }
+    go('inbox');                       // cambia de sección dentro de Outreach: el correo se redacta en el Inbox
+    await composeAbrir();
+    _cmpElegir(cid);
+    const a = $('cmp-asunto'), b = $('cmp-cuerpo');
+    if (a) a.value = t.asunto; if (b) { b.value = t.cuerpo; b.dispatchEvent(new Event('input')); }
+    _cmpPreviewUpdate();
+    if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
   }
   async function tiDealDone(cid) {
     try {
@@ -38033,7 +38075,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { tiMore, tiDone, tiDealDone, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -42047,8 +42089,9 @@ const WaChatModule = (() => {
   let _scope = null;   // { jids:Set, connId }
   async function loadScoped(scope) {
     _scope = scope || null;
-    if (_scope) { _filtroAsignado = 'todas'; _filtroEstado = 'todas'; _verArchivados = false; if (_scope.connId) { try { localStorage.setItem('wa_selected_conn_id', String(_scope.connId)); } catch (_) {} } }
+    if (_scope) { _filtroAsignado = 'mias'; _filtroEstado = 'todas'; _verArchivados = false; if (_scope.connId) { try { localStorage.setItem('wa_selected_conn_id', String(_scope.connId)); } catch (_) {} } }
     await load();
+    if (_scope) setFiltroAsignado('mias');
   }
   function clearScope() { if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
   function setScopeJids(jids) { if (_scope) { _scope.jids = jids; _pintaChats(); } }

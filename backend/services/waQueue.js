@@ -232,6 +232,7 @@ async function encolar(pool, { connId, jid, texto, respondeA, contactId, sequenc
     `INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, estado, scheduled_at, via_cola, contact_id, sequence_id, step_id, origen, tz_destino)
      VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,'programado',NOW(),TRUE,$7,$8,$9,$10,$11) RETURNING id`,
     [connId, jidFull, placeholder, texto, respondeA || '', replyToTexto, contactId || null, sequenceId || null, stepId || null, origen || 'manual', tzDeJid(jidFull)]);
+  asignarChatAlDueno(pool, connId, jidFull);
   await replanificar(pool, connId);
   const { rows: [r2] } = await pool.query('SELECT scheduled_at FROM wa_messages WHERE id=$1', [row.id]);
   return { id: row.id, scheduledAt: r2 && r2.scheduled_at };
@@ -266,8 +267,21 @@ async function finalizarEsperaWa(pool, contactId, sequenceId) {
 
 // ── Motor ───────────────────────────────────────────────────────────────────────────────────────────────────────
 // El mensaje ya salió: se guarda su id real. Si justo apareció otra fila con ese mismo id (p. ej. una sincronización), se conserva UNA sola.
+// Un chat que sale desde la cuenta de WhatsApp queda ASIGNADO a quien la conectó (si nadie lo tenía): así aparece en «Mías» sin que tengas que hacer nada.
+async function asignarChatAlDueno(pool, connId, jid) {
+  try {
+    await pool.query(
+      `INSERT INTO wa_chat_meta (connection_id, chat_jid, asignado_a)
+       SELECT wc.id, $2, COALESCE(NULLIF(tm.nombre,''), u.name)
+         FROM wa_connections wc JOIN users u ON u.id = wc.connected_by
+         LEFT JOIN team_members tm ON tm.user_id = wc.user_id AND LOWER(tm.email) = LOWER(u.email)
+        WHERE wc.id = $1 AND COALESCE(NULLIF(tm.nombre,''), u.name) IS NOT NULL
+       ON CONFLICT (connection_id, chat_jid) DO UPDATE SET asignado_a = EXCLUDED.asignado_a WHERE COALESCE(wa_chat_meta.asignado_a,'') = ''`, [connId, jid]);
+  } catch (e) { console.warn('[wa] asignar chat:', e.message); }
+}
 async function _marcarEnviado(pool, m, msgId) {
   try {
+    asignarChatAlDueno(pool, m.connection_id, m.chat_jid);
     await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), scheduled_at=NULL, ultimo_error='' WHERE id=$1`, [m.id, msgId]);
     finalizarEsperaWa(pool, m.contact_id, m.sequence_id).catch(e2 => console.warn('[wa] finalizar espera:', e2.message));
     // Historial del contacto: la actividad del paso se crea al MARCAR la tarea (solo con el día); cuando el mensaje sale de verdad, pasa a llevar la fecha y la HORA reales del envío.

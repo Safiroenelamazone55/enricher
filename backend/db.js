@@ -2312,6 +2312,19 @@ async function initDb() {
     // mismo patrón que estado_conv. Visible con color en la lista de chats (Operaciones
     // y la pestaña WhatsApp de Outreach) y editable desde el menú "⋮" en ambos lugares.
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS prioridad TEXT NOT NULL DEFAULT '';`);
+    // Una sola vez: los chats donde ya salió un mensaje desde la cuenta quedan asignados a quien la conectó (aparecen en «Mías»).
+    await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    const { rowCount: yaAsig } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre='wa_asignar_salientes'`);
+    if (!yaAsig) {
+      await pool.query(`
+        INSERT INTO wa_chat_meta (connection_id, chat_jid, asignado_a)
+        SELECT DISTINCT m.connection_id, m.chat_jid, COALESCE(NULLIF(tm.nombre,''), u.name)
+          FROM wa_messages m JOIN wa_connections wc ON wc.id = m.connection_id JOIN users u ON u.id = wc.connected_by
+          LEFT JOIN team_members tm ON tm.user_id = wc.user_id AND LOWER(tm.email) = LOWER(u.email)
+         WHERE m.from_me AND m.chat_jid LIKE '%@s.whatsapp.net' AND COALESCE(NULLIF(tm.nombre,''), u.name) IS NOT NULL
+        ON CONFLICT (connection_id, chat_jid) DO UPDATE SET asignado_a = EXCLUDED.asignado_a WHERE COALESCE(wa_chat_meta.asignado_a,'') = ''`);
+      await pool.query(`INSERT INTO migraciones_una_vez (nombre) VALUES ('wa_asignar_salientes') ON CONFLICT DO NOTHING`);
+    }
     // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
     await pool.query(`
       CREATE TABLE IF NOT EXISTS wa_chat_notes (
