@@ -13455,7 +13455,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
     const conn = await _cargarConexionAutorizada(req, res, req.params.id);
     if (!conn) return;
     const { rows } = await pool.query(`
-      SELECT DISTINCT ON (m.chat_jid) m.chat_jid,
+      SELECT m.chat_jid,
              COALESCE(NULLIF(c.nombre,''),
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
@@ -13471,11 +13471,14 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              COALESCE((SELECT json_agg(json_build_object('id',t.id,'nombre',t.nombre,'color',t.color) ORDER BY t.nombre)
                          FROM wa_chat_tags ct JOIN wa_tags t ON t.id=ct.tag_id
                         WHERE ct.connection_id=m.connection_id AND ct.chat_jid=m.chat_jid), '[]') AS etiquetas
-        FROM wa_messages m
+        FROM (
+          -- primero se queda con el ÚLTIMO mensaje de cada chat (solo columnas simples); los conteos se calculan después, una vez por chat (antes se calculaban por CADA mensaje y la consulta tardaba minutos)
+          SELECT DISTINCT ON (chat_jid) connection_id, chat_jid, nombre, texto, ts, from_me, estado, eliminado
+            FROM wa_messages WHERE connection_id=$1
+           ORDER BY chat_jid, ts DESC
+        ) m
         LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
-        LEFT JOIN wa_chat_meta cm ON cm.connection_id = m.connection_id AND cm.chat_jid = m.chat_jid
-       WHERE m.connection_id=$1
-       ORDER BY m.chat_jid, m.ts DESC`, [req.params.id]);
+        LEFT JOIN wa_chat_meta cm ON cm.connection_id = m.connection_id AND cm.chat_jid = m.chat_jid`, [req.params.id]);
     const ahora = Date.now();
     rows.sort((a, b) => {
       const aPos = a.snooze_until && new Date(a.snooze_until).getTime() > ahora;
