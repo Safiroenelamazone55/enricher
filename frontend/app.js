@@ -25237,9 +25237,17 @@ ${foot}
   let _seqApprovals = null;
   let _seqAppIdx = 0; // Bloque: índice del email por aprobar mostrado (una tarjeta a la vez, no lista con scroll)
   async function _seqLoadApprovals(id) {
-    try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; }
-    catch { _seqApprovals = []; }
+    // Si la consulta falla (red, límite de peticiones, sesión), se CONSERVA la lista que ya había: antes se vaciaba y las aprobaciones «desaparecían» hasta la siguiente carga.
+    let _prevApr = _seqApprovals;
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); if (r && r.ok) { const d = await r.json(); _seqApprovals = Array.isArray(d) ? d : (_prevApr || []); } else _seqApprovals = Array.isArray(_prevApr) ? _prevApr : (r && r.ok === false ? null : []); }
+    catch { _seqApprovals = Array.isArray(_prevApr) ? _prevApr : null; }
+    const _sigA = a => Array.isArray(a) ? a.map(x => x.id + ':' + x.estado).join(',') : '';
+    const _chg = _sigA(_prevApr) !== _sigA(_seqApprovals);
     _seqRefreshStrip();
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'tareas' && _chg) {
+      const el = document.getElementById('seq-tabwrap'); const dirty = el && [...el.querySelectorAll('input, textarea')].some(x => x.value !== x.defaultValue);
+      if (el && !dirty) el.innerHTML = _seqTabContent(id);   // en Tareas, la lista de aprobaciones se pone al día sola cuando cambia
+    }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'aprobar') {
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
     }
