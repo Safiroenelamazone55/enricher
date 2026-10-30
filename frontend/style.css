@@ -19141,3 +19141,8 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 
 /* WhatsApp en Outreach: es un solo WhatsApp (cada chat sale del número del cliente): sin número ni cambio de cuenta ni desconectar */
 .lm-wa-host #wa-numero, .lm-wa-host #wa-accts-bar, .lm-wa-host .wa-accts-bar, .lm-wa-host [onclick*="desconectar"] { display: none !important; }
+
+/* Sugerencias del campo CC (equipo del cliente) */
+.cmp-sug { position: absolute; left: 0; right: 0; top: 100%; z-index: 30; background: #fff; border: 1px solid #E4E0D9; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; }
+.cmp-sug__i { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 8px 12px; border: 0; border-bottom: 1px solid #F3F1EC; background: #fff; text-align: left; font: inherit; font-size: .84rem; cursor: pointer; } .cmp-sug__i:hover { background: #F2F7FF; }
+.cmp-sug__i b { font-weight: 700; color: #1F1D1B; white-space: nowrap; } .cmp-sug__i span { color: #6B675F; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cmp-sug__i em { margin-left: auto; font-style: normal; font-size: .7rem; color: #8F8B83; white-space: nowrap; }

@@ -5493,6 +5493,27 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-tasks-inbox]', err.message); res.status(500).json({ error: 'Error al cargar inbox de tareas' }); }
 });
 
+// Personas del EQUIPO del cliente outbound (no los prospectos): contactos del cliente en Operaciones, cuentas del portal y los CC fijos. Para sugerir en el campo CC del correo.
+app.get('/api/lm/clients/:id/team-emails', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rows: [oc] } = await pool.query(`SELECT id, client_id, cc_email FROM outbound_clients WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]);
+    if (!oc) return res.json([]);
+    const out = new Map();
+    const add = (email, nombre, cargo, fuente) => { const e = String(email || '').trim().toLowerCase(); if (e.includes('@') && !out.has(e)) out.set(e, { email: e, nombre: String(nombre || '').trim(), cargo: String(cargo || '').trim(), fuente }); };
+    if (oc.client_id) {
+      const { rows } = await pool.query(`SELECT nombre, email, cargo FROM client_contacts WHERE client_id=$1 AND COALESCE(email,'')<>'' ORDER BY created_at`, [oc.client_id]);
+      rows.forEach(r => add(r.email, r.nombre, r.cargo, 'Contacto del cliente'));
+    }
+    const { rows: acc } = await pool.query(`SELECT nombre, email FROM client_accounts WHERE outbound_client_id=$1 AND activo`, [id]);
+    acc.forEach(r => add(r.email, r.nombre, '', 'Portal del cliente'));
+    String(oc.cc_email || '').split(/[,;\s]+/).forEach(e => add(e, '', '', 'CC del cliente'));
+    const { rows: mb } = await pool.query(`SELECT cc_email FROM lm_mailboxes WHERE outbound_client_id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]);
+    mb.forEach(r => String(r.cc_email || '').split(/[,;\s]+/).forEach(e => add(e, '', '', 'CC del buzón')));
+    res.json([...out.values()]);
+  } catch (err) { console.error('[team-emails]', err.message); res.status(500).json({ error: 'Error' }); }
+});
+
 // «Ya le di seguimiento» a un deal: registra la interacción y reinicia el reloj de los 7 días sin respuesta.
 app.post('/api/lm/deals/:id/followed', requireAuth, async (req, res) => {
   try {

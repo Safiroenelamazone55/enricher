@@ -28136,7 +28136,7 @@ ${foot}
             </div>
           </div>
         </div>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">CC (opcional)</span><input class="form-input" id="cmp-cc" placeholder="Separa varios con comas…" autocomplete="off" oninput="LeadManagerModule._cmpPreviewUpdate()"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">CC (opcional)</span><div style="position:relative"><input class="form-input" id="cmp-cc" placeholder="Escribe para buscar al equipo del cliente…" autocomplete="off" oninput="LeadManagerModule._cmpCcSuggest();LeadManagerModule._cmpPreviewUpdate()" onfocus="LeadManagerModule._cmpCcSuggest()" onblur="setTimeout(()=>{const b=document.getElementById('cmp-cc-sug');if(b)b.hidden=true},180)"><div class="cmp-sug" id="cmp-cc-sug" hidden></div></div></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencia (opcional)</span>
           <div style="display:flex;gap:8px">
             <select class="form-input" id="cmp-seq" style="flex:1"><option value="">— Sin secuencia —</option></select>
@@ -28358,6 +28358,29 @@ ${foot}
     const lk = want && Object.keys(sg).find(k => nz(k) === want);
     const sig = (lk && String(sg[lk]).trim()) ? sg[lk] : (mb.signature_html || '');
     return sig ? '<div style="margin-top:12px;padding-top:8px;border-top:1px dashed #D5D1CA">' + String(sig).replace(/<script[\s\S]*?<\/script>/gi, '') + '</div>' : '';
+  }
+  // Sugerencias en CC: las personas del EQUIPO del cliente outbound elegido (no sus prospectos).
+  const _cmpTeam = {};
+  async function _cmpCcSuggest() {
+    const box = $('cmp-cc-sug'), inp = $('cmp-cc'); if (!box || !inp) return;
+    const cid = parseInt($('cmp-client')?.value) || 0;
+    if (!cid) { box.hidden = true; return; }
+    if (!_cmpTeam[cid]) { try { const r = await apiFetch(`${API}/lm/clients/${cid}/team-emails`); _cmpTeam[cid] = (r && r.ok) ? await r.json() : []; } catch (_) { _cmpTeam[cid] = []; } }
+    const parts = inp.value.split(/[,;]/), q = (parts[parts.length - 1] || '').trim().toLowerCase();
+    const taken = new Set(parts.slice(0, -1).map(x => x.trim().toLowerCase()));
+    const list = _cmpTeam[cid].filter(t => !taken.has(t.email) && (!q || t.email.includes(q) || t.nombre.toLowerCase().includes(q))).slice(0, 8);
+    if (!list.length) { box.hidden = true; return; }
+    box.innerHTML = list.map(t => `<button type="button" class="cmp-sug__i" onmousedown="event.preventDefault();LeadManagerModule._cmpCcPick('${esc(t.email)}')"><b>${esc(t.nombre || t.email)}</b>${t.nombre ? `<span>${esc(t.email)}</span>` : ''}<em>${esc(t.cargo || t.fuente)}</em></button>`).join('');
+    box.hidden = false;
+  }
+  function _cmpCcPick(email) {
+    const inp = $('cmp-cc'); if (!inp) return;
+    const parts = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    if (inp.value.trim() && !/[,;]\s*$/.test(inp.value)) parts.pop();
+    parts.push(email);
+    inp.value = parts.join(', ') + ', ';
+    const box = $('cmp-cc-sug'); if (box) box.hidden = true;
+    _cmpPreviewUpdate(); inp.focus();
   }
   function _cmpPreviewUpdate() {
     const toEl = $('cmp-prev-to'); if (toEl) toEl.textContent = _cmpCurrentEmail() || '—';
@@ -38102,7 +38125,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { _cmpCcSuggest, _cmpCcPick, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
