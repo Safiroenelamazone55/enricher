@@ -28755,17 +28755,26 @@ ${foot}
     if (fc && pane && fc.parentNode !== pane) pane.appendChild(fc);
     try { WaChatModule.clearScope(); if (_section !== 'wa') WaChatModule.detener(); } catch (_) {}
   }
+  let _waMountCache = null;   // { k, at, jids, connId }: al volver a pintar la sección no se espera de nuevo a la red
   async function _waMount() {
     const host = document.getElementById('lm-wa-host'), fc = document.getElementById('wa-fc-inner');
     if (!host || !fc) return;
     host.appendChild(fc);
-    let rows = []; try { const r = await apiFetch(`${API}/lm/wa-list${_gcli ? '?client=' + _gcli : ''}`); rows = (r && r.ok) ? await r.json() : []; } catch (_) {}
+    const key = String(_gcli || 0), fresh = _waMountCache && _waMountCache.k === key && Date.now() - _waMountCache.at < 30000;
+    if (fresh) { await WaChatModule.loadScoped({ jids: _waMountCache.jids, connId: _waMountCache.connId }); return; }
+    WaChatModule.scopeLoading(true);
+    // la lista de contactos con chat y el WhatsApp del cliente se piden a la vez
+    const [rowsR, connsR] = await Promise.all([
+      apiFetch(`${API}/lm/wa-list${_gcli ? '?client=' + _gcli : ''}`).catch(() => null),
+      _gcli ? apiFetch(`${API}/wa/connections?outboundClientId=${_gcli}`).catch(() => null) : Promise.resolve(null),
+    ]);
+    const rows = (rowsR && rowsR.ok) ? await rowsR.json() : [];
     if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
     const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; });
     let connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
     // Con un cliente filtrado, el WhatsApp es el de ESE cliente (cada cliente tiene el suyo; aquí no se cambia de número).
-    if (_gcli) { try { const rc = await apiFetch(`${API}/wa/connections?outboundClientId=${_gcli}`); const cs = (rc && rc.ok) ? await rc.json() : []; const ok = cs.find(x => x.estado === 'conectado') || cs[0]; if (ok) connId = ok.id; } catch (_) {} }
-    if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
+    if (connsR && connsR.ok) { try { const cs = await connsR.json(); const ok = cs.find(x => x.estado === 'conectado') || cs[0]; if (ok) connId = ok.id; } catch (_) {} }
+    _waMountCache = { k: key, at: Date.now(), jids, connId };
     await WaChatModule.loadScoped({ jids, connId });
   }
   function _vWaList() {
@@ -42145,13 +42154,16 @@ const WaChatModule = (() => {
 
   // Alcance: cuando se muestra dentro de Outreach, solo se ven los chats de sus contactos (y del cliente filtrado).
   let _scope = null;   // { jids:Set, connId }
+  let _scopeLoading = false;
+  function scopeLoading(on) { _scopeLoading = !!on; if (on) _pintaChats(); }
   async function loadScoped(scope) {
     _scope = scope || null;
     if (_scope) { _filtroAsignado = 'mias'; _filtroEstado = 'todas'; _verArchivados = false; if (_scope.connId) { try { localStorage.setItem('wa_selected_conn_id', String(_scope.connId)); } catch (_) {} } }
     await load();
+    if (!_conn) _scopeLoading = false;
     if (_scope) setFiltroAsignado('mias');
   }
-  function clearScope() { if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
+  function clearScope() { _scopeLoading = false; if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
   function setScopeJids(jids) { if (_scope) { _scope.jids = jids; _pintaChats(); } }
 
   // Respuestas rápidas ("/atajo" en el composer) — cache lazy, compartida por
@@ -42458,6 +42470,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats`);
       _chats = r.ok ? await r.json() : [];
     } catch (_) { if (!silencioso) _chats = []; }
+    _scopeLoading = false;
     _pintaChats();
   }
 
@@ -42528,6 +42541,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
 
   // Fila "Archivados" arriba de la lista (como en WhatsApp): abre/cierra la carpeta de archivados
   function _pintaChats() {
+    if (_scopeLoading) { const lb = $$('wa-chats'); if (lb) lb.innerHTML = '<div class="chat-ch-empty">Cargando conversaciones…</div>'; return; }
     _pintaChatsBase();
     const box = $$('wa-chats'); if (!box) return;
     const nArch = _chats.filter(c => c.archivado).length;
@@ -44156,7 +44170,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { loadScoped, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  return { loadScoped, scopeLoading, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
