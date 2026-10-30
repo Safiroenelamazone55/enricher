@@ -243,7 +243,7 @@ async function finalizarEsperaWa(pool, contactId, sequenceId) {
   if (!contactId || !sequenceId) return 0;
   const { rows: [q] } = await pool.query(`SELECT COUNT(*)::int n FROM wa_messages m WHERE m.contact_id=$1 AND m.sequence_id=$2 AND m.estado IN ('programado','enviando','error_programado')`, [contactId, sequenceId]);
   if (q.n > 0) return 0;
-  const { rows } = await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', paused_reason='', next_action_at=NULL WHERE contact_id=$1 AND sequence_id=$2 AND estado='pausado' AND paused_reason='espera_envio_wa' RETURNING user_id, sequence_id`, [contactId, sequenceId]);
+  const { rows } = await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', paused_reason='', next_action_at=NULL, paso_date=CURRENT_DATE WHERE contact_id=$1 AND sequence_id=$2 AND estado='pausado' AND paused_reason='espera_envio_wa' RETURNING user_id, sequence_id`, [contactId, sequenceId]);
   if (rows.length) {
     try {
       const { rows: [ctx] } = await pool.query(`SELECT k.company_id, k.disposition, k.li_aceptado_at FROM lm_contacts k WHERE k.id=$1`, [contactId]);
@@ -259,6 +259,8 @@ async function _marcarEnviado(pool, m, msgId) {
   try {
     await pool.query(`UPDATE wa_messages SET msg_id=$2, estado='enviado', ts=NOW(), scheduled_at=NULL, ultimo_error='' WHERE id=$1`, [m.id, msgId]);
     finalizarEsperaWa(pool, m.contact_id, m.sequence_id).catch(e2 => console.warn('[wa] finalizar espera:', e2.message));
+    // La fecha del último paso es la del ENVÍO REAL (no la del día en que se marcó la tarea): si la inscripción ya figuraba terminada, se corrige.
+    if (m.contact_id && m.sequence_id) pool.query(`UPDATE lm_contact_sequences SET paso_date=CURRENT_DATE WHERE contact_id=$1 AND sequence_id=$2 AND estado='terminado'`, [m.contact_id, m.sequence_id]).catch(() => {});
   } catch (e) {
     if (e && e.code === '23505') {
       await pool.query(`UPDATE wa_messages SET via_cola=$3, contact_id=$4, sequence_id=$5, step_id=$6, origen=$7 WHERE connection_id=(SELECT connection_id FROM wa_messages WHERE id=$1) AND msg_id=$2`,

@@ -41301,6 +41301,7 @@ const QuickWaModule = (() => {
     menu.innerHTML = `<div class="cp-mark-menu__list">`
       + Object.entries(_QWA_PRIO).map(([k, cfg]) => prioItem(k, cfg)).join('')
       + `<div class="cp-mark-menu__sep"></div>`
+      + (_contactId ? item('Ver ficha de contacto', `QuickWaModule.close();LeadManagerModule.go('contacts');LeadManagerModule.openContactPage(${_contactId})`) : '')
       + item('Mover a Deal', `LeadManagerModule.dlOpen(${_contactId})`)
       + item('¿No es esta? Vincular otra', 'QuickWaModule.vincularAbrir()')
       + `</div>`
