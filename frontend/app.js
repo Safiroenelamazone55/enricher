@@ -27258,6 +27258,8 @@ ${foot}
     go('inbox');                       // cambia de sección dentro de Outreach: el correo se redacta en el Inbox
     await composeAbrir();
     _cmpElegir(cid);
+    { const sel = $('cmp-client'), cl = (_clients || []).find(x => x.id === c.outbound_client_id), mb = cl ? _mbFor(cl.id) : null;
+      if (sel) { const op = sel.options[sel.selectedIndex]; if (op) op.textContent = (cl ? cl.nombre : op.textContent) + (mb && mb.email ? ' · ' + mb.email : ''); sel.disabled = true; sel.classList.add('cmp-fixed'); } }
     const a = $('cmp-asunto'), b = $('cmp-cuerpo');
     if (a) a.value = t.asunto; if (b) { b.value = t.cuerpo; b.dispatchEvent(new Event('input')); }
     _cmpPreviewUpdate();
@@ -28136,7 +28138,7 @@ ${foot}
             </div>
           </div>
         </div>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">CC (opcional)</span><div style="position:relative"><input class="form-input" id="cmp-cc" placeholder="Escribe para buscar al equipo del cliente…" autocomplete="off" oninput="LeadManagerModule._cmpCcSuggest();LeadManagerModule._cmpPreviewUpdate()" onfocus="LeadManagerModule._cmpCcSuggest()" onblur="setTimeout(()=>{const b=document.getElementById('cmp-cc-sug');if(b)b.hidden=true},180)"><div class="cmp-sug" id="cmp-cc-sug" hidden></div></div></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">CC (opcional)</span><div style="position:relative"><input class="form-input" id="cmp-cc" placeholder="Escribe para buscar al equipo del cliente…" autocomplete="off" oninput="LeadManagerModule._cmpCcSuggest();LeadManagerModule._cmpPreviewUpdate()" onfocus="LeadManagerModule._cmpCcSuggest()" onkeydown="LeadManagerModule._cmpCcKey(event)" onblur="LeadManagerModule._cmpCcTidy()"><div class="cmp-sug" id="cmp-cc-sug" hidden></div></div></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencia (opcional)</span>
           <div style="display:flex;gap:8px">
             <select class="form-input" id="cmp-seq" style="flex:1"><option value="">— Sin secuencia —</option></select>
@@ -28372,6 +28374,21 @@ ${foot}
     if (!list.length) { box.hidden = true; return; }
     box.innerHTML = list.map(t => `<button type="button" class="cmp-sug__i" onmousedown="event.preventDefault();LeadManagerModule._cmpCcPick('${esc(t.email)}')"><b>${esc(t.nombre || t.email)}</b>${t.nombre ? `<span>${esc(t.email)}</span>` : ''}<em>${esc(t.cargo || t.fuente)}</em></button>`).join('');
     box.hidden = false;
+  }
+  function _cmpCcKey(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const first = document.querySelector('#cmp-cc-sug:not([hidden]) .cmp-sug__i');
+    if (first) { first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); return; }
+    _cmpCcTidy();
+  }
+  // Deja el CC como «a@x.com, b@y.com» (sin coma ni espacios sobrantes) y oculta las sugerencias
+  function _cmpCcTidy() {
+    setTimeout(() => {
+      const inp = $('cmp-cc'), box = $('cmp-cc-sug');
+      if (box) box.hidden = true;
+      if (inp) { inp.value = inp.value.split(/[,;]/).map(x => x.trim()).filter(Boolean).join(', '); _cmpPreviewUpdate(); }
+    }, 180);
   }
   function _cmpCcPick(email) {
     const inp = $('cmp-cc'); if (!inp) return;
@@ -38125,7 +38142,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { _cmpCcSuggest, _cmpCcPick, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
