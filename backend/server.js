@@ -3818,9 +3818,12 @@ function _lmSplitLocation(raw) {
 //  1) mismo dominio  2) mismo LinkedIn  3) mismo nombre (sin tildes, mayúsculas ni signos) siempre que no tengan dominios DISTINTOS.
 // Si la existente no tenía dominio y la nueva sí, se lo completa. Antes cada sitio comparaba distinto y quedaban duplicadas.
 const _lmCoKey = n => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-async function _lmFindCompany(q, uid, { dominio, linkedin, nombre } = {}) {
+// «12», «EMP-00012» o «CON-00012» → 12 (0 si no es un id)
+const _lmIdFrom = v => { const t = String(v == null ? '' : v).trim(); if (/^\d+$/.test(t)) return parseInt(t, 10); const m = t.match(/^(?:EMP|CON|CLI)-0*(\d+)$/i); return m ? parseInt(m[1], 10) : 0; };
+async function _lmFindCompany(q, uid, { id, dominio, linkedin, nombre } = {}) {
   let hit;
-  if (dominio) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND dominio=$2 ORDER BY id LIMIT 1`, [uid, dominio])).rows[0];
+  if (id) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND id=$2`, [uid, id])).rows[0];
+  if (!hit && dominio) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND dominio=$2 ORDER BY id LIMIT 1`, [uid, dominio])).rows[0];
   if (!hit && linkedin) hit = (await q.query(`SELECT id, dominio FROM lm_companies WHERE user_id=$1 AND LOWER(linkedin)=$2 ORDER BY id LIMIT 1`, [uid, String(linkedin).toLowerCase()])).rows[0];
   if (!hit) {
     const key = _lmCoKey(nombre);
@@ -4361,7 +4364,7 @@ const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','mov
 app.get('/api/lm/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
+      SELECT k.*, co.nombre AS company_nombre, co.codigo AS company_codigo, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
         co.campo1 AS company_campo1, co.campo2 AS company_campo2, co.campo3 AS company_campo3, co.campo4 AS company_campo4, co.campo5 AS company_campo5, co.campo6 AS company_campo6, co.campo7 AS company_campo7, co.campo8 AS company_campo8, co.campo9 AS company_campo9, co.campo10 AS company_campo10,
@@ -8188,7 +8191,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     if (linkedin) keys.push('l:' + linkedin);
     if (nombreKey) keys.push('n:' + nombreKey);
     for (const k of keys) if (coCache.has(k)) return coCache.get(k);
-    const found = await _lmFindCompany(pool, uid, { dominio, linkedin, nombre: nombreKey });
+    const found = await _lmFindCompany(pool, uid, { id: _lmIdFrom(f.id), dominio, linkedin, nombre: nombreKey });
     if (found) {
       keys.forEach(k => coCache.set(k, found.id));
       // Actualiza los campos de la empresa YA existente (antes solo se enlazaba sin tocar sus datos).
@@ -8245,9 +8248,9 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
         // ── UPSERT: si ya existe (por ID del export, o por email) se ACTUALIZA — no se duplica.
         // Solo se pisan los campos que VIENEN con valor: una celda vacía nunca borra datos.
         let existing = null;
-        const idStr = _lmS(f.id);
-        if (/^\d+$/.test(idStr)) {
-          existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND id=$2 LIMIT 1`, [uid, parseInt(idStr, 10)])).rows[0] || null;
+        const idNum = _lmIdFrom(f.id);   // acepta el número o el código (CON-00012) del export
+        if (idNum) {
+          existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND id=$2 LIMIT 1`, [uid, idNum])).rows[0] || null;
         }
         if (!existing && email) {
           existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] || null;

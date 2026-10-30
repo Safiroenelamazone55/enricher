@@ -2315,6 +2315,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS con_firma BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS firma_html TEXT NOT NULL DEFAULT '';`);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_contact_idx ON wa_messages (contact_id) WHERE contact_id IS NOT NULL;`);
+    // Código legible y ESTABLE de cada registro (columna generada: sale solo de su id, no se puede editar y todo alta futuro lo trae).
+    await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS codigo TEXT GENERATED ALWAYS AS ('EMP-' || CASE WHEN id < 100000 THEN lpad(id::text, 5, '0') ELSE id::text END) STORED`).catch(e => console.warn('[db] codigo empresas', e.message));
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS codigo TEXT GENERATED ALWAYS AS ('CON-' || CASE WHEN id < 100000 THEN lpad(id::text, 5, '0') ELSE id::text END) STORED`).catch(e => console.warn('[db] codigo contactos', e.message));
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS codigo TEXT GENERATED ALWAYS AS ('CLI-' || lpad(id::text, 3, '0')) STORED`).catch(e => console.warn('[db] codigo clientes', e.message));
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_companies_codigo_uq ON lm_companies (codigo)`).catch(() => {});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_contacts_codigo_uq ON lm_contacts (codigo)`).catch(() => {});
     // Una sola vez: fusiona las empresas duplicadas (mismo cliente, mismo nombre normalizado, sin dominios distintos) que dejaron las altas anteriores.
     await pool.query(`CREATE TABLE IF NOT EXISTS migraciones_una_vez (nombre TEXT PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     {

@@ -27194,7 +27194,7 @@ ${foot}
     if (_isMt) mainAction = `LeadManagerModule.mtOpen(${it.contact_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div><b>${esc(it.contact_name || '')}</b>${edad ? ` <span style="font-size:.74rem;font-weight:700;color:${edadCol}">· ${edad}</span>` : ''}<div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
+        <div><b>${esc(it.contact_name || '')}</b>${(() => { const k0 = (_contacts || []).find(x => x.id === it.contact_id); return k0 && k0.codigo ? ` <span class="lm-code" title="Identificador único del contacto">${esc(k0.codigo)}</span>` : ''; })()}${edad ? ` <span style="font-size:.74rem;font-weight:700;color:${edadCol}">· ${edad}</span>` : ''}<div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
@@ -27722,7 +27722,7 @@ ${foot}
     menu.style.top = `${Math.max(8, Math.min(y + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
     setTimeout(() => { const off = e => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 0);
   }
-  function waContactBadge(cid) { const c = (_contacts || []).find(x => x.id === cid); return c && c.disposition ? _dispoBadge(c.disposition) : ''; }
+  function waContactBadge(cid) { const c = (_contacts || []).find(x => x.id === cid); return c ? ((c.codigo ? `<span class="lm-code" style="margin-right:6px" title="Identificador único del contacto">${esc(c.codigo)}</span>` : '') + (c.disposition ? _dispoBadge(c.disposition) : '')) : ''; }
   async function waResolveDo(cid, disp, jid, connId) {
     await ibResolveDisp(cid, disp);
     // con las opciones directas (no las que abren una ventana propia) el chat también queda «Resuelto» y sale de Prioridad
@@ -35079,13 +35079,14 @@ ${foot}
     { k: 'departamento', l: 'Departamento',  w: 140 },
     { k: 'buyer_role',   l: 'Rol de compra', w: 130 },
     { k: 'contact_priority', l: 'Prioridad', w: 105 },
+    { k: 'codigo',       l: 'ID',            w: 92 },
     { k: 'estado',       l: 'Estado',        w: 108 },
     { k: 'disposition',  l: 'Disposición',   w: 120 },
     { k: 'fuente',       l: 'Fuente',        w: 96 },
     { k: 'secuencias',   l: 'Secuencias',    w: 150 },
     { k: 'creado',       l: 'Creado',        w: 100 },
   ];
-  const _CT_COLS_DEFAULT = ['contacto', 'cargo', 'empresa', 'email', 'verificacion', 'telefono', 'estado'];
+  const _CT_COLS_DEFAULT = ['contacto', 'codigo', 'cargo', 'empresa', 'email', 'verificacion', 'telefono', 'estado'];
   let _ctCols = null;
   function _ctColsGet() {
     if (_ctCols) return _ctCols;
@@ -35136,6 +35137,7 @@ ${foot}
         const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || (c.email || '—');
         return `<div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div class="lm-cellmain"><span class="client-nombre cell-clip" title="${esc(full)}">${esc(full)}</span>${_dispoBadge(c.disposition)}</div></div>`;
       }
+      case 'codigo':   return c.codigo ? `<span class="lm-code" title="Identificador único del contacto">${esc(c.codigo)}</span>` : '<span class="lm-dim">—</span>';
       case 'cargo':    return clip(c.cargo);
       case 'empresa': { const emp = c.company_nombre || c.empresa_nombre || ''; return emp ? `<span class="lm-emp-chip cell-clip" title="${esc(emp)}">${esc(emp)}</span>` : '<span class="lm-dim">—</span>'; }
       case 'email':    return c.email ? `<a class="cell-clip" style="max-width:100%" href="mailto:${esc(c.email)}" title="${esc(c.email)}" onclick="event.stopPropagation()">${esc(c.email)}</a>` : '<span class="lm-dim">—</span>';
@@ -35162,7 +35164,7 @@ ${foot}
   function _ctVisible() {
     const q = _ctQuery;
     let list = _contacts;
-    if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
+    if (q) list = list.filter(c => (`${c.codigo || ''} ${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.company_codigo || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
     if (_ctClientFilter) list = list.filter(c => String(c.outbound_client_id) === String(_ctClientFilter));
     if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
     if (_ctDataIssue) list = list.filter(c => c.data_issue);
@@ -35605,7 +35607,7 @@ ${foot}
       <div class="cp-head">
         <img class="cp-ava" src="${_av(full)}" alt="">
         <div class="cp-id">
-          <h2 class="cp-name">${esc(full)}</h2>
+          <h2 class="cp-name">${esc(full)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</h2>
           <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
           <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato — corrige el dato y sus secuencias se reanudan">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
           ${_cpStrip(c)}
@@ -36217,7 +36219,7 @@ ${foot}
   function _coVisible() {
     const q = _coQuery;
     let list = _companies;
-    if (q) list = list.filter(c => (`${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
+    if (q) list = list.filter(c => (`${c.codigo || ''} ${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
     if (_coFilters.length) list = list.filter(c => _lmMatch(c, _coFilters));
     if (_coQF.tier) list = list.filter(c => (c.target_tier || '').trim() === _coQF.tier);
     if (_coQF.seq) list = list.filter(c => _coSeqAgg(c.id).some(g => String(g.id) === _coQF.seq));
@@ -36279,7 +36281,7 @@ ${foot}
     const pageList = list.slice(_coPage * ps, (_coPage + 1) * ps);
     el.innerHTML = `<div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt${_coSelMode ? ' sel-on' : ''}"><thead><tr>
         <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCoAll(this.checked)"></th>
-        <th>Empresa</th><th>Secuencia</th><th>Estado</th><th>Nº contactos</th><th>Industria</th><th>País</th><th></th>
+        <th>Empresa</th><th>ID</th><th>Secuencia</th><th>Estado</th><th>Nº contactos</th><th>Industria</th><th>País</th><th></th>
       </tr></thead><tbody>${pageList.map(_coRow).join('')}</tbody></table></div>${_pagerHtml(list.length, _coPage, 'coGoPage')}`;
     _renderCoBulkBar();
     _syncCoSelAll();
@@ -36329,6 +36331,7 @@ ${foot}
     return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompanyPage(${c.id})" style="cursor:pointer">
       <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
       <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${li ? `<a class="lm-co-li" href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
+      <td class="client-meta"><span class="lm-code" title="Identificador único de la empresa">${esc(c.codigo || '')}</span></td>
       <td class="client-meta">${_coSeqChips(c.id)}</td>
       <td class="client-meta"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span></td>
       <td class="client-meta"><span class="lm-cnt-chip">${c.contact_count || 0}</span></td>
@@ -36458,8 +36461,8 @@ ${foot}
     if (!rows.length) { alert(filtered ? 'El filtro actual no tiene resultados para exportar.' : 'No hay nada para exportar.'); return; }
     // La columna ID permite re-importar ACTUALIZANDO el contacto exacto (sin duplicar).
     const cols = (isCo
-      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['notas', 'Notas']]
-      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['notas', 'Notas']]
+      ? [['codigo', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['notas', 'Notas']]
+      : [['codigo', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['notas', 'Notas']]
     ).concat(_lmActiveCustomFields(isCo ? 'company' : 'contact').map(f => [f.field_key, f.label]));
     const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
@@ -37006,7 +37009,7 @@ ${foot}
       <div class="cp-head">
         <div class="cp-ava cp-ava--co"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
         <div class="cp-id">
-          <h2 class="cp-name">${esc(name)}</h2>
+          <h2 class="cp-name">${esc(name)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único de la empresa">${esc(c.codigo)}</span>` : ''}</h2>
           <div class="cp-sub">${c.dominio ? esc(c.dominio) : ''}${c.industria ? `${c.dominio ? ' · ' : ''}${esc(c.industria)}` : ''}</div>
           <div class="cp-badges"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span><span class="lm-cnt-chip">${cts.length} contacto${cts.length !== 1 ? 's' : ''}</span>${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
         </div>
