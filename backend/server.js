@@ -5508,8 +5508,6 @@ app.get('/api/lm/clients/:id/team-emails', requireAuth, async (req, res) => {
     const { rows: acc } = await pool.query(`SELECT nombre, email FROM client_accounts WHERE outbound_client_id=$1 AND activo`, [id]);
     acc.forEach(r => add(r.email, r.nombre, '', 'Portal del cliente'));
     String(oc.cc_email || '').split(/[,;\s]+/).forEach(e => add(e, '', '', 'CC del cliente'));
-    const { rows: mb } = await pool.query(`SELECT cc_email FROM lm_mailboxes WHERE outbound_client_id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]);
-    mb.forEach(r => String(r.cc_email || '').split(/[,;\s]+/).forEach(e => add(e, '', '', 'CC del buzón')));
     res.json([...out.values()]);
   } catch (err) { console.error('[team-emails]', err.message); res.status(500).json({ error: 'Error' }); }
 });
