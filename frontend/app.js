@@ -25054,6 +25054,7 @@ ${foot}
   function pendingAcceptUpdateSel() {
     const n = document.querySelectorAll('#lm-pa-modal .pa-ck:checked').length, el = document.getElementById('pa-sel');
     if (el) el.innerHTML = n ? `<b style="color:#0062CC">${n}</b> seleccionado${n === 1 ? '' : 's'}` : '';
+    document.querySelectorAll('#lm-pa-modal .pax-row').forEach(r => { const k = r.querySelector('.pa-ck'); r.classList.toggle('on', !!(k && k.checked)); });
     const b = document.getElementById('pa-mark'); if (b) b.textContent = n ? `✓ Marcar ${n} como aceptado${n === 1 ? '' : 's'}` : '✓ Marcar como aceptados';
   }
   function pendingAcceptOpen(seqId) {
@@ -25073,28 +25074,31 @@ ${foot}
       seqCamp[s.id] = cid || '';
       if (cid) campMap.set(cid, _campaignName(cid) || ('Campaña ' + cid));
     }));
+    const _hue = str => { let h = 0; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
     const rows = sorted.length ? sorted.map(({ c, seqs }) => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
-      const inv = invOf(seqs); const invTxt = inv ? ` · invitado ${_relAgo(inv)}` : '';
+      const inv = invOf(seqs);
       const sData = esc(_pnorm(full + ' ' + (c.company_nombre || '')));
       const seqIds = seqs.map(s => s.id).join(' ');
       const campIds = [...new Set(seqs.map(s => seqCamp[s.id]).filter(Boolean))].join(' ');
-      const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="lm-link" style="font-size:.74rem;white-space:nowrap" onclick="event.stopPropagation()">LinkedIn ↗</a>` : '';
-      return `<label class="pa-row" data-s="${sData}" data-seq="${seqIds}" data-camp="${campIds}" style="${rowS}"><input type="checkbox" class="pa-ck" value="${c.id}"><span style="flex:1;min-width:0;font-size:.85rem"><b>${esc(full)}</b>${c.company_nombre ? ` · <span style="color:var(--muted)">${esc(c.company_nombre)}</span>` : ''}<span style="display:block;font-size:.72rem;color:var(--muted)">${seqs.map(s => esc(s.nombre)).join(' · ')}${invTxt}</span></span>${li}</label>`;
+      const ini = esc((full.split(/\s+/).map(w => w[0]).join('').slice(0, 2) || '?').toUpperCase()), hue = _hue(full);
+      const code = nm => String(nm || '').split(/\s+[-–|]\s+/)[0].trim();
+      const chips = seqs.slice(0, 2).map(s => `<span class="pax-chip" title="${esc(s.nombre)}">${esc(code(s.nombre))}</span>`).join('') + (seqs.length > 2 ? `<span class="pax-chip pax-chip--m" title="${esc(seqs.slice(2).map(s => s.nombre).join(' · '))}">+${seqs.length - 2}</span>` : '');
+      const sub = [c.company_nombre, c.cargo].filter(Boolean).join(' · ');
+      const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="pax-li" title="Abrir su perfil de LinkedIn" onclick="event.stopPropagation()">in<span>↗</span></a>` : '<span class="pax-li pax-li--off" title="Sin LinkedIn">–</span>';
+      return `<label class="pa-row pax-row" data-s="${sData}" data-seq="${seqIds}" data-camp="${campIds}"><input type="checkbox" class="pa-ck" value="${c.id}"><span class="pax-av" style="background:hsl(${hue} 45% 92%);color:hsl(${hue} 45% 32%)">${ini}</span><span class="pax-nm"><b title="${esc(full)}">${esc(full)}</b><span title="${esc(sub)}">${esc(sub) || '&nbsp;'}</span></span><span class="pax-sq">${chips}</span><span class="pax-when" title="Cuándo se envió la invitación">${inv ? esc(_relAgo(inv)) : ''}</span>${li}</label>`;
     }).join('') : `<div class="lm-act-empty" style="padding:22px"><div class="lm-act-empty__i">✅</div><p>No hay pendientes de aceptación</p><span>Aparecerán aquí los contactos de secuencias con rama que aún no marcas como aceptados.</span></div>`;
-    const selCss = 'flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #EAE7E2;border-radius:8px;font-size:.85rem;background:#fff';
     const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-    const campSel = campMap.size ? `<select id="pa-fcamp" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
-    const seqSel = seqMap.size ? `<select id="pa-fseq" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las secuencias</option>${optSort(seqMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:560px">
-      <div class="fin-pi-box__hd"><h3>Pendientes de aceptación${list.length ? ` (${list.length})` : ''}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-pa-modal').remove()">✕</button></div>
-      <div class="fin-pi-form" style="grid-template-columns:1fr;gap:8px">
-        <span class="seq-drip-hint">Contactos de <b>todas</b> tus secuencias con rama que aún no marcas como aceptados. Abre tus <b>Conexiones</b> en LinkedIn, marca aquí quién ya aparece conectado y <b>saltarán al mensaje de LinkedIn (Ruta A)</b>.</span>
-        ${list.length > 6 ? `<div style="display:flex;gap:8px">${campSel}${seqSel}</div>` : ''}
-        ${list.length > 6 ? `<input id="pa-search" type="text" placeholder="🔍 Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptApplyFilters()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #EAE7E2;border-radius:8px;font-size:.85rem">` : ''}
-        ${list.length ? `<label style="${rowS};background:#FAF8F5"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(<span id="pa-count">${sorted.length}</span> visibles)</span></span></label>` : ''}
-        <div style="max-height:min(50vh,400px);overflow:auto;display:flex;flex-direction:column;gap:3px">${rows}</div>
-      </div>
+    const campSel = campMap.size ? `<select id="pa-fcamp" class="pax-sel" onchange="LeadManagerModule.pendingAcceptApplyFilters()"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
+    const seqSel = seqMap.size ? `<select id="pa-fseq" class="pax-sel" onchange="LeadManagerModule.pendingAcceptApplyFilters()"><option value="">Todas las secuencias</option>${optSort(seqMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
+    m.innerHTML = `<div class="fin-pi-box pax-box">
+      <div class="fin-pi-box__hd"><h3>Pendientes de aceptación${list.length ? ` <span class="pax-n">${list.length}</span>` : ''}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-pa-modal').remove()">✕</button></div>
+      <div class="pax-help">Abre tus <b>Conexiones</b> en LinkedIn, marca a quienes ya aparecen conectados y pasarán al mensaje de LinkedIn (Ruta A).</div>
+      ${list.length ? `<div class="pax-bar">
+        <div class="pax-filters">${campSel}${seqSel}<input id="pa-search" class="pax-search" type="text" placeholder="Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptApplyFilters()"></div>
+        <label class="pax-all"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><b>Seleccionar todos</b><span>(<span id="pa-count">${sorted.length}</span> visibles)</span></label>
+      </div>` : ''}
+      <div class="pax-list">${rows}</div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-sel" style="font-size:.85rem"></span><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-pa-modal').remove()">Cerrar</button>
         ${list.length ? `<button class="btn btn--primary btn--sm" id="pa-mark" onclick="LeadManagerModule.pendingAcceptMark()">✓ Marcar como aceptados</button>` : ''}
