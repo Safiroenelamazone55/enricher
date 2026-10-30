@@ -32318,13 +32318,15 @@ ${foot}
       const tel = c.telefono || c.movil || '';
       const mail = c.email || c.email_personal || '';
       const li = c.linkedin || '';
-      const contacto = `<div class="ldh-cto" onclick="event.stopPropagation()">
-        ${mail ? `<a class="ldh-cto__b" href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})" title="Escribir a ${esc(mail)} desde el buzón de ${esc(cli ? cli.nombre : 'su cliente')}">${NI('mail', 13)}</a>` : ''}
-        ${tel ? `<a class="ldh-cto__b" href="tel:${esc(tel.replace(/\s/g, ''))}" title="${esc(tel)}">${NI('phone', 13)}</a>` : ''}
-        ${li ? `<a class="ldh-cto__b" href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener" title="LinkedIn">${NI('linkedin', 13)}</a>` : ''}
-        ${_waDigits(c) ? `<button class="ldh-cto__b" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})" title="WhatsApp">${NI('whatsapp', 13)}</button>` : ''}
-        ${(mail || tel || li) ? '' : '<span class="ldh-none">—</span>'}
-        <div class="ldh-cto__txt">${mail ? esc(mail) : tel ? esc(tel) : '&nbsp;'}</div>
+      // Cinco huecos FIJOS (correo · teléfono · LinkedIn · Sales Navigator · WhatsApp): cada icono siempre en su sitio, con un guion si falta.
+      const sn = c.linkedin_sales_nav || '';
+      const slot = (title, inner, attrs) => attrs ? `<a class="ldh-cto__b" ${attrs} title="${esc(title)}" onclick="event.stopPropagation()">${inner}</a>` : `<span class="ldh-cto__b ldh-cto__b--off" title="Sin dato">–</span>`;
+      const contacto = `<div class="ldh-cto5" onclick="event.stopPropagation()">
+        ${slot(mail ? 'Escribir a ' + mail + ' desde el buzón de ' + (cli ? cli.nombre : 'su cliente') : '', NI('mail', 13), mail ? `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"` : '')}
+        ${slot('Llamar: ' + tel, NI('phone', 13), tel ? `href="tel:${esc(tel.replace(/\s/g, ''))}"` : '')}
+        ${slot('Abrir su LinkedIn', NI('linkedin', 13), li ? `href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener"` : '')}
+        ${slot('Abrir su Sales Navigator', NI('compass', 13), sn ? `href="${esc(_goUrl(sn))}" target="_blank" rel="noopener"` : '')}
+        ${slot('Abrir WhatsApp', NI('whatsapp', 13), _waDigits(c) ? `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"` : '')}
       </div>`;
       const paso = _ldPaso(c);
       return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
@@ -32347,7 +32349,7 @@ ${foot}
         </td></tr>`;
     }).join('');
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
-      <colgroup><col style="width:170px"><col style="width:110px"><col style="width:90px"><col style="width:160px"><col style="width:110px"><col style="width:70px"><col><col style="width:106px"></colgroup>
+      <colgroup><col style="width:210px"><col style="width:150px"><col style="width:104px"><col style="width:176px"><col style="width:150px"><col style="width:76px"><col><col style="width:150px"></colgroup>
       <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }

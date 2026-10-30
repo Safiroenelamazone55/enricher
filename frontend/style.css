@@ -19162,3 +19162,17 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 /* Códigos de registro (EMP-00012, CON-00034): identificador estable, solo lectura */
 .lm-code { display: inline-block; padding: 1px 7px; background: #F3F1EC; color: #6B675F; font: 600 .7rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; white-space: nowrap; user-select: all; }
 .lm-code--hd { margin-left: 8px; vertical-align: middle; font-size: .72rem; }
+/* Leads (v2): columnas fijas, filas de la misma altura, iconos de contacto siempre en su sitio */
+.ldh-table-wrap .ldh-lead-table { table-layout: fixed; width: 100%; min-width: 1130px; }
+.ldh-lead-table th { padding: 9px 12px; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: #8F8B83; }
+.ldh-lead-table td { padding: 8px 12px; height: 62px; vertical-align: middle; }
+.ldh-lead-table tbody tr:hover { background: #FAF9F7; }
+.ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim { max-width: none; }
+.ldh-lead-table .ldh-name { font-size: .88rem; }
+.ldh-lead-table .ldh-sub { margin-top: 2px; }
+.ldh-cto5 { display: grid; grid-template-columns: repeat(5, 26px); gap: 3px; align-items: center; }
+.ldh-cto5 .ldh-cto__b { width: 26px; height: 26px; background: #F5F3EF; }
+.ldh-cto5 .ldh-cto__b--off { background: transparent; color: #D6D1C9; font-size: .8rem; cursor: default; }
+.ldh-lead-table .ldh-note__in { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; max-width: none; max-height: none; overflow: hidden; line-height: 1.35; }
+.ldh-lead-table td.ldh-acts { padding-right: 12px; }
+.ldh-lead-table .ldh-act { width: 26px; height: 26px; margin-left: 3px; }
