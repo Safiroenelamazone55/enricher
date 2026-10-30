@@ -5413,7 +5413,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
     for (const r of upcoming) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'proximas',    'manual_touch', 'upcoming'));
     // LinkedIn aceptado y Datos faltantes van al final — no compiten con lo urgente, solo se agregan si el contacto no salió ya en otra categoría.
     const seenSoFar = new Set(list.map(x => x.contact_id));
-    for (const r of liAccepted) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'linkedin_aceptado', 'next_step', 'li_accepted'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
+    // «LinkedIn aceptado — con siguiente acción» YA NO es prioridad (2026-10-30): aceptar la conexión no exige nada de ti; la secuencia sigue su curso y sus tareas ya salen en Vencidas/Para hoy.
     for (const r of dataIssues) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'datos_faltantes', 'fix_data', 'missing_data'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
 
     const counts = list.reduce((a, x) => ((a[x.category] = (a[x.category] || 0) + 1), a), {});
