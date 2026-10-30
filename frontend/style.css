@@ -19105,3 +19105,10 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm-wa-host { margin: -26px -30px -60px; min-height: 420px; } .lm-wa-host #wa-fc-inner { display: flex; flex-direction: column; }
 /* El contenido de Outreach usa todo el ancho disponible */
 .lm2-body { max-width: none; }
+
+/* Reloj de prospección: conversor de hora */
+.wcl-cv__t { margin: 8px 0 2px; border: 1px dashed #D6D1C9; background: #fff; font: inherit; font-size: .78rem; font-weight: 700; color: #2F5BB7; padding: 6px 10px; cursor: pointer; width: 100%; text-align: left; } .wcl-cv__t:hover { background: #F2F8FF; }
+.wcl-cv { margin-top: 8px; border: 1px solid #E4E0D9; background: #FAF9F7; padding: 10px 12px; } .wcl-cv__hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: .8rem; } .wcl-cv__hd button { border: 0; background: none; font-size: 1.1rem; cursor: pointer; color: #A19D95; }
+.wcl-cv__g { display: grid; grid-template-columns: 90px 1fr 30px 1fr; gap: 6px; align-items: end; } .wcl-cv__g label { display: flex; flex-direction: column; gap: 3px; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #8F8B83; min-width: 0; }
+.wcl-cv__g input, .wcl-cv__g select { height: 28px; border: 1px solid #E4E0D9; background: #fff; font: inherit; font-size: .76rem; padding: 0 4px; min-width: 0; text-transform: none; letter-spacing: 0; font-weight: 500; color: #33302C; } .wcl-cv__sw { height: 28px; border: 1px solid #E4E0D9; background: #fff; cursor: pointer; color: #2F5BB7; font-weight: 800; }
+.wcl-cv__r { margin-top: 10px; font-size: .8rem; color: #6C6862; } .wcl-cv__r b { font-size: 1.5rem; color: #1F1D1B; } .wcl-cv__h { font-size: .74rem; font-weight: 700; margin-top: 2px; } .wcl-cv__h.ok { color: #1F7A45; } .wcl-cv__h.no { color: #A19D95; } .wcl-cv__n { font-size: .66rem; color: #A19D95; margin-top: 4px; }

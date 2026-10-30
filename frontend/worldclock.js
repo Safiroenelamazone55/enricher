@@ -168,6 +168,41 @@ const WorldClockModule = (() => {
     const out = (show('open') ? _group('open', d.open) : '') + (show('soon') ? _group('soon', d.soon) : '') + (show('off') ? _group('off', d.off) : '');
     return note + (out || `<div class="wcl-empty">Nada en esta categoría${_q ? ' para «' + _esc(_q) + '»' : ''}.</div>`);
   }
+  // ── Conversor de hora: «a las HH:MM en [origen] son … en [destino]» ──
+  const _myTz = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Lima';
+  const _cv = { open: false, from: '', to: 'Europe/Madrid', time: '' };
+  function _tzOpts(sel) { return `<option value="${_myTz()}"${sel === _myTz() ? ' selected' : ''}>Mi zona · ${_esc(_myTz().split('/').pop().replace(/_/g, ' '))}</option>` + PLACES.map(pl => `<option value="${pl[2]}"${sel === pl[2] && pl[2] !== _myTz() ? ' selected' : ''}>${_esc(pl[0])} · ${_esc(pl[1])}</option>`).join(''); }
+  // Instante real (UTC) en que, en la zona tz, el reloj marca h:m del día de hoy de esa zona.
+  function _wallToUtc(tz, h, m) {
+    const f = d => { const o = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(d).forEach(x => { if (x.type !== 'literal') o[x.type] = +x.value; }); return o; };
+    const n = f(new Date()); let t = Date.UTC(n.year, n.month - 1, n.day, h, m);
+    for (let i = 0; i < 3; i++) { const p = f(new Date(t)); const diff = Date.UTC(n.year, n.month - 1, n.day, h, m) - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute); if (!diff) break; t += diff; }
+    return new Date(t);
+  }
+  function _cvResult() {
+    const from = _cv.from || _myTz(), to = _cv.to, mt = /^(\d{1,2}):(\d{2})$/.exec(_cv.time || '');
+    const base = mt ? _wallToUtc(from, +mt[1], +mt[2]) : new Date();
+    const fmt = (tz, d) => new Intl.DateTimeFormat('es', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    const day = (tz, d) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    const dd = Math.round((Date.parse(day(to, base)) - Date.parse(day(from, base))) / 86400000);
+    const tag = dd === 0 ? 'mismo día' : dd > 0 ? 'día siguiente (+1)' : 'día anterior (−1)';
+    const name = tz => { const pl = PLACES.find(x => x[2] === tz); return tz === _myTz() && !pl ? 'mi zona' : (pl ? pl[0] : tz.split('/').pop().replace(/_/g, ' ')); };
+    const hh = parseInt(fmt(to, base).slice(0, 2), 10), ok = hh >= 9 && hh < 18;
+    return `<div class="wcl-cv__r"><b>${fmt(to, base)}</b> <span>en ${_esc(name(to))} · ${tag}</span></div><div class="wcl-cv__h ${ok ? 'ok' : 'no'}">${ok ? '● Horario laboral allí' : '○ Fuera de horario laboral allí'}</div>`;
+  }
+  function _cvHtml() {
+    if (!_cv.open) return `<button type="button" class="wcl-cv__t" onclick="WorldClockModule.cvToggle()">⇄ Convertir hora entre zonas</button>`;
+    if (!_cv.from) _cv.from = _myTz();
+    return `<div class="wcl-cv"><div class="wcl-cv__hd"><b>Convertir hora</b><button type="button" onclick="WorldClockModule.cvToggle()">×</button></div>
+      <div class="wcl-cv__g"><label>Hora<input type="time" value="${_esc(_cv.time)}" oninput="WorldClockModule.cvSet('time',this.value)"></label>
+      <label>Desde<select onchange="WorldClockModule.cvSet('from',this.value)">${_tzOpts(_cv.from)}</select></label>
+      <button type="button" class="wcl-cv__sw" title="Invertir" onclick="WorldClockModule.cvSwap()">⇄</button>
+      <label>A<select onchange="WorldClockModule.cvSet('to',this.value)">${_tzOpts(_cv.to)}</select></label></div>
+      <div id="wcl-cv-out">${_cvResult()}</div><div class="wcl-cv__n">Sin hora = ahora mismo.</div></div>`;
+  }
+  function cvToggle() { _cv.open = !_cv.open; const b = _panel && _panel.querySelector('#wcl-cv-box'); if (b) b.innerHTML = _cvHtml(); }
+  function cvSet(k, v) { _cv[k] = v; const o = document.getElementById('wcl-cv-out'); if (o) o.innerHTML = _cvResult(); }
+  function cvSwap() { const f = _cv.from || _myTz(); _cv.from = _cv.to; _cv.to = f; const b = _panel && _panel.querySelector('#wcl-cv-box'); if (b) b.innerHTML = _cvHtml(); }
   function _head() {
     const now = new Date(), loc = _parts(Intl.DateTimeFormat().resolvedOptions().timeZone, now);
     const tzName = (Intl.DateTimeFormat().resolvedOptions().timeZone || '').split('/').pop().replace(/_/g, ' ');
@@ -190,7 +225,7 @@ const WorldClockModule = (() => {
         <button type="button" class="wcl-x" onclick="WorldClockModule.close()" aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></div>
         <label class="wcl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
           <input type="text" id="wcl-q" placeholder="Buscar país o ciudad" autocomplete="off" spellcheck="false" value="${_esc(_q)}" oninput="WorldClockModule.search(this.value)"></label>
-        <div class="wcl-seg">${_seg(d)}</div></div>
+        <div class="wcl-seg">${_seg(d)}</div><div id="wcl-cv-box">${_cvHtml()}</div></div>
       <div class="wcl-list">${_body(d)}</div>`;
     document.body.appendChild(_panel);
     requestAnimationFrame(() => { _panel && _panel.classList.add('on'); const i = document.getElementById('wcl-q'); if (i) i.focus(); });
@@ -216,5 +251,5 @@ const WorldClockModule = (() => {
   function search(v) { _q = v || ''; _paint(); }
   function filter(f) { _f = (_f === f && f !== 'all') ? 'all' : f; _paint(); }
   function toggleRow(k) { if (_exp.has(k)) _exp.delete(k); else _exp.add(k); _paint(); }
-  return { toggle, open, close, search, toggleRow, filter };
+  return { toggle, open, close, search, toggleRow, filter, cvToggle, cvSet, cvSwap };
 })();
