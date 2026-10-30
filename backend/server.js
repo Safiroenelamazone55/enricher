@@ -5412,25 +5412,97 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
       source: 'nova', reason: (r.reason || '').slice(0, 220),
     });
 
+    // PRIORIDAD = solo lo que exige que TÚ le escribas a alguien (2026-10-30):
+    //  · mensajes sin contestar (email → «respuestas»; WhatsApp → «whatsapp»)
+    //  · interesados / respondieron que dejaron de contestar («seguimiento») y los «Más adelante» que ya toca retomar («nutricion»)
+    //  · deals abiertos que llevan días sin ninguna interacción («deals»)
+    // Lo demás (vencidas, hoy, aprobaciones, fallos, datos faltantes…) vive en su propia sección.
     const list = [];
     for (const r of reps)  list.push(mk(r, 'respuestas',    'review_reply', 'reply_pending'));
     for (const r of nurture) list.push(mk(r, 'nutricion', 'retomar_nurture', 'nurture_due'));
-    for (const r of waiting) list.push({ ...mk(r, 'esperando', 'activar_siguiente', 'backup_waiting'), waiting_contacts: r.waiting_contacts || [], company_sequence_id: r.company_sequence_id || null });
     for (const r of seguimiento) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'seguimiento', 'manual_touch', 'inactivity'));
-    // Aprobaciones: si el contacto ya tiene tarea de respuesta, saltar (respuestas prioriza)
-    for (const r of apps)  if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'aprobaciones', 'approve_email', 'draft_awaiting'), message_id: r.id, activity_id: null });
-    for (const r of fails) if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'fallos', 'resolve_failure', 'send_failed'), message_id: r.id, activity_id: null });
-    for (const r of over)  if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'vencidas',      'manual_touch', 'overdue'));
-    for (const r of today) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'hoy',           'manual_touch', 'due_today'));
-    for (const r of upcoming) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'proximas',    'manual_touch', 'upcoming'));
-    // LinkedIn aceptado y Datos faltantes van al final — no compiten con lo urgente, solo se agregan si el contacto no salió ya en otra categoría.
-    const seenSoFar = new Set(list.map(x => x.contact_id));
-    // «LinkedIn aceptado — con siguiente acción» YA NO es prioridad (2026-10-30): aceptar la conexión no exige nada de ti; la secuencia sigue su curso y sus tareas ya salen en Vencidas/Para hoy.
-    for (const r of dataIssues) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'datos_faltantes', 'fix_data', 'missing_data'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
+
+    // WhatsApp sin contestar: el último mensaje real del chat es del contacto (no tuyo), el chat no está resuelto/archivado/pospuesto.
+    try {
+      const resueltos = await _lmWaResolve(req);
+      const byConn = new Map();
+      for (const r of resueltos) { if (!byConn.has(r.connection_id)) byConn.set(r.connection_id, []); byConn.get(r.connection_id).push(r); }
+      for (const [connId, rs] of byConn) {
+        const jids = rs.map(r => r.chat_jid);
+        const { rows: lasts } = await pool.query(
+          `SELECT DISTINCT ON (m.chat_jid) m.chat_jid, m.texto, m.ts, m.from_me, m.eliminado
+             FROM wa_messages m WHERE m.connection_id=$1 AND m.chat_jid = ANY($2) AND COALESCE(m.estado,'enviado') <> 'programado'
+            ORDER BY m.chat_jid, m.ts DESC`, [connId, jids]);
+        const { rows: metas } = await pool.query(
+          `SELECT chat_jid, archivado, estado_conv, snooze_until FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid = ANY($2)`, [connId, jids]);
+        const meta = new Map(metas.map(m => [m.chat_jid, m]));
+        const lastBy = new Map(lasts.map(l => [l.chat_jid, l]));
+        for (const r of rs) {
+          const l = lastBy.get(r.chat_jid); if (!l || l.from_me || l.eliminado) continue;
+          const mt = meta.get(r.chat_jid) || {};
+          if (mt.archivado || mt.estado_conv === 'resuelto' || (mt.snooze_until && new Date(mt.snooze_until) > new Date())) continue;
+          const k = r.contacto;
+          list.push({ category: 'whatsapp', task_type: 'reply_wa', reason_code: 'wa_unanswered', activity_id: null, message_id: null,
+            contact_id: k.id, contact_name: [k.nombre, k.apellido].filter(Boolean).join(' ') || `#${k.id}`, email: '',
+            outbound_client_id: k.outbound_client_id || null, sequence_id: null, step_id: null, campaign_id: null,
+            channel: 'whatsapp', due_at: l.ts, status: 'pendiente', source: 'nova', reason: String(l.texto || '').slice(0, 220) });
+        }
+      }
+    } catch (e) { console.warn('[tasks/inbox] whatsapp', e.message); }
+
+    // Deals abiertos sin ninguna interacción en 7+ días (se calcula al vuelo; «Ya le di seguimiento» registra una actividad y reinicia el reloj).
+    try {
+      const { rows: deals } = await pool.query(`
+        SELECT k.id AS contact_id, k.nombre, k.apellido, k.email, k.outbound_client_id,
+               COALESCE(NULLIF(co.nombre,''), k.empresa_nombre, '') AS empresa, k.deal_valor,
+               GREATEST(COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.estado='hecha' AND a.tipo NOT IN ('seguimiento_aviso','disposition_change')), 'epoch'),
+                        COALESCE((SELECT MAX(m.sent_at) FROM lm_messages m WHERE m.contact_id=k.id AND m.estado IN ('sent','replied')), 'epoch'),
+                        COALESCE((SELECT MAX(im.received_at) FROM lm_inbox_messages im WHERE im.contact_id=k.id), 'epoch'),
+                        COALESCE(CASE WHEN k.reunion_fecha <= CURRENT_DATE THEN k.reunion_fecha::timestamptz END,'epoch'),
+                        COALESCE(k.reunion_agendada_at,'epoch')) AS ultimo
+          FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id
+         WHERE k.user_id=$1 AND COALESCE(k.estado,'') NOT IN ('ganado','perdido')
+           AND COALESCE(k.disposition,'') NOT IN ('no_interesado','no_califica','no_contactar','derivado','no_es_persona','mas_adelante')
+           AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.estado IN ('propuesta','negociacion'))`, [uid]);
+      const seenDeal = new Set(list.map(x => x.contact_id));
+      for (const d of deals) {
+        const dias = Math.floor((Date.now() - new Date(d.ultimo).getTime()) / 86400000);
+        if (dias < 7 || seenDeal.has(d.contact_id)) continue;
+        list.push({ category: 'deals', task_type: 'follow_deal', reason_code: 'deal_inactive', activity_id: null, message_id: null,
+          contact_id: d.contact_id, contact_name: [d.nombre, d.apellido].filter(Boolean).join(' ') || d.email || `#${d.contact_id}`, email: d.email || '',
+          outbound_client_id: d.outbound_client_id || null, sequence_id: null, step_id: null, campaign_id: null,
+          channel: '', due_at: d.ultimo, status: 'pendiente', source: 'nova',
+          reason: `Deal${d.empresa ? ' · ' + d.empresa : ''} sin ninguna interacción hace ${dias} días` });
+      }
+    } catch (e) { console.warn('[tasks/inbox] deals', e.message); }
+
+    // Filtro global de cliente (?client=ID): el contacto es del cliente si lo trajo, o está en sus secuencias/campañas.
+    const _fc = parseInt(req.query.client, 10);
+    if (_fc && list.length) {
+      const { rows: ok } = await pool.query(
+        `SELECT k.id FROM lm_contacts k WHERE k.id = ANY($1::int[]) AND (k.outbound_client_id = $2
+            OR EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id WHERE cs.contact_id = k.id AND s.outbound_client_id = $2)
+            OR EXISTS (SELECT 1 FROM lm_contact_campaigns cc JOIN campaigns c ON c.id = cc.campaign_id WHERE cc.contact_id = k.id AND c.outbound_client_id = $2))`,
+        [[...new Set(list.map(x => x.contact_id))], _fc]);
+      const set = new Set(ok.map(x => x.id));
+      for (let i = list.length - 1; i >= 0; i--) if (!set.has(list[i].contact_id)) list.splice(i, 1);
+    }
 
     const counts = list.reduce((a, x) => ((a[x.category] = (a[x.category] || 0) + 1), a), {});
     res.json({ ok: true, counts, items: list });
   } catch (err) { console.error('[lm-tasks-inbox]', err.message); res.status(500).json({ error: 'Error al cargar inbox de tareas' }); }
+});
+
+// «Ya le di seguimiento» a un deal: registra la interacción y reinicia el reloj de los 7 días sin respuesta.
+app.post('/api/lm/deals/:id/followed', requireAuth, async (req, res) => {
+  try {
+    const cid = parseInt(req.params.id);
+    const { rows: [k] } = await pool.query(`SELECT id, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota','Seguimiento al deal',NOW(),'hecha')`,
+      [req.workspaceOwnerId, cid, k.outbound_client_id || null]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[deal-followed]', err.message); res.status(500).json({ error: 'No se pudo registrar el seguimiento' }); }
 });
 
 // ── Derivación: el lead no es la persona correcta → se registra al contacto NUEVO de la

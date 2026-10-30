@@ -22319,9 +22319,7 @@ const LeadManagerModule = (() => {
   }
   function _gcInbox() { if (_gcli && Array.isArray(_ibThreads)) { const k = new Set((_contacts || []).map(c => c.id)); _ibThreads = _ibThreads.filter(t => k.has(t.contact_id)); } }
   function _gcTi() {
-    if (!_gcli || !_tiData || !Array.isArray(_tiData.items)) return;
-    const k = new Set((_contacts || []).map(c => c.id));
-    _tiData.items = _tiData.items.filter(it => it.outbound_client_id === _gcli || (!it.outbound_client_id && it.contact_id && k.has(it.contact_id)));
+    if (!_gcli || !_tiData || !Array.isArray(_tiData.items)) return;   // el servidor ya filtra por cliente (?client=); aquí solo se recuentan
     const counts = {}; _tiData.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; }); _tiData.counts = counts;
   }
   // Logo del cliente filtrado (el del portal, si lo tiene) para mostrarlo en la barra contraída; si no, sus iniciales.
@@ -27086,13 +27084,12 @@ ${foot}
     const paCta = (_taskFCanal && _taskFCanal !== 'linkedin') || (_taskFAcc && _taskFAcc !== '__accept') ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
-    const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Centro de prioridad: respuestas, aprobaciones, fallos y más' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
+    const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
     const statStrip = anything ? `<div class="lm-stat-strip">
       ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
       ${stat('today', 'Para hoy', seqHoy.length + actToday.length, false)}
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
-      ${stat('follow', 'Follow-ups', acts.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
       ${(hasFilter ? _fixF() : _fixList()).length ? stat('fix', 'Por corregir', (hasFilter ? _fixF() : _fixList()).length, true) : ''}
       ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
@@ -27125,7 +27122,7 @@ ${foot}
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
-  let _taskStat = '';   // contador elegido en Tareas comerciales ('' = todo)
+  let _taskStat = 'priority';   // contador elegido en Tareas comerciales: arranca en Prioridad ('' = todo)
   function taskStat(k) {
     if (k === 'accept') { pendingAcceptOpen(); return; }
     if (k === 'priority' && _tiData === null) _tiReload();
@@ -27137,29 +27134,23 @@ ${foot}
   async function _tiReload() {
     _tiData = { loading: true };
     try {
-      const r = await apiFetch(`${API}/lm/tasks/inbox`);
+      const r = await apiFetch(`${API}/lm/tasks/inbox${_gcli ? '?client=' + _gcli : ''}`);
       _tiData = (r && r.ok) ? await r.json() : { ok: false, items: [] };
     } catch { _tiData = { ok: false, items: [] }; }
     _gcTi();
     if (_section === 'tasks' && (_taskView === 'priority' || _taskView === 'list')) _renderBody();
   }
   const _TI_CATS = [
-    ['respuestas', 'Respuestas pendientes de revisar'],
-    ['seguimiento', 'Sin respuesta hace 24h — dale seguimiento'],
-    ['esperando', 'Terminó sin respuesta — hay otro contacto esperando'],
-    ['nutricion', 'Para retomar (nutrición)'],
-    ['aprobaciones', 'Aprobaciones urgentes'],
-    ['fallos', 'Fallos y bloqueos'],
-    ['vencidas', 'Tareas vencidas'],
-    ['hoy', 'Acciones de hoy'],
-    ['proximas', 'Próximas tareas (7 días)'],
-    ['linkedin_aceptado', 'LinkedIn aceptado — con siguiente acción'],
-    ['datos_faltantes', 'Datos obligatorios faltantes'],
+    ['respuestas', 'Correos sin contestar'],
+    ['whatsapp', 'WhatsApp sin contestar'],
+    ['seguimiento', 'Dejaron de responder — dale seguimiento'],
+    ['deals', 'Deals sin respuesta — dale seguimiento'],
+    ['nutricion', 'Para retomar (Más adelante)'],
   ];
   const _TI_ACTION_LBL = {
     review_reply: 'Revisar respuesta', approve_email: 'Aprobar mensaje', resolve_failure: 'Resolver buzón',
     manual_touch: 'Marcar hecha', next_step: 'Abrir LinkedIn', fix_data: 'Corregir dato', retomar_nurture: 'Retomar',
-    activar_siguiente: 'Activar siguiente',
+    activar_siguiente: 'Activar siguiente', reply_wa: 'Abrir WhatsApp', follow_deal: 'Ver deal',
   };
   function _tiCard(it) {
     const cli = (_clients || []).find(x => x.id === it.outbound_client_id);
@@ -27184,6 +27175,7 @@ ${foot}
     else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'retomar_nurture') mainAction = `LeadManagerModule.nurtureRetomarMenu(event,${it.contact_id},${it.activity_id},${it.sequence_id || 'null'})`;
     else if (it.task_type === 'activar_siguiente') mainAction = `LeadManagerModule.waitingContactMenu(event,${it.activity_id})`;
+    else if (it.task_type === 'reply_wa') mainAction = `LeadManagerModule.openWaFor(${it.contact_id})`;
     if (_isMt) mainAction = `LeadManagerModule.mtOpen(${it.contact_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -27191,6 +27183,7 @@ ${foot}
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
+          ${it.task_type === 'follow_deal' ? `<button class="cp-dispo-b" title="Ya le diste seguimiento: reinicia el conteo de días" onclick="LeadManagerModule.tiDealDone(${it.contact_id})">✓ Ya le di seguimiento</button>` : ''}
           ${it.activity_id && ['review_reply', 'fix_data', 'retomar_nurture', 'activar_siguiente'].includes(it.task_type) ? `<button class="cp-dispo-b" title="Ya la atendí: cierra esta tarea" onclick="LeadManagerModule.tiDone(${it.activity_id})">✓ Ya la atendí</button>` : ''}
         </div>
       </div>
@@ -27205,6 +27198,14 @@ ${foot}
       if (_tiData && Array.isArray(_tiData.items)) { _tiData.items = _tiData.items.filter(x => x.activity_id !== actId); const c = {}; _tiData.items.forEach(x => { c[x.category] = (c[x.category] || 0) + 1; }); _tiData.counts = c; }
       showBanner('✓ Tarea cerrada', 'success'); _renderBody();
     } catch (e) { showBanner('No se pudo cerrar: ' + e.message, 'error'); }
+  }
+  async function tiDealDone(cid) {
+    try {
+      const r = await apiFetch(`${API}/lm/deals/${cid}/followed`, { method: 'POST' });
+      if (!r.ok) throw new Error('Error ' + r.status);
+      if (_tiData && Array.isArray(_tiData.items)) { _tiData.items = _tiData.items.filter(x => !(x.category === 'deals' && x.contact_id === cid)); const c = {}; _tiData.items.forEach(x => { c[x.category] = (c[x.category] || 0) + 1; }); _tiData.counts = c; }
+      showBanner('✓ Seguimiento registrado', 'success'); _renderBody();
+    } catch (e) { showBanner('No se pudo registrar: ' + e.message, 'error'); }
   }
   function _vTaskInboxPriority() {
     if (!_tiData || _tiData.loading) return `<div class="lm-task-empty">Cargando centro de tareas…</div>`;
@@ -38025,7 +38026,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { tiMore, tiDone, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { tiMore, tiDone, tiDealDone, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
