@@ -5375,6 +5375,8 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
          -- Un fallo ya no exige nada si el contacto fue clasificado (respondió, no interesado…) o salió de la secuencia: ese mensaje ya no se va a enviar.
          AND COALESCE(k.disposition,'') = ''
          AND COALESCE(m.error,'') NOT LIKE '%respondió o salió%'
+         -- Un rebote ya vive en «Por corregir» (el email vuelve a esa lista): no es además una fila aparte en Prioridad.
+         AND NOT (m.estado='bounced' AND COALESCE(k.email_status,'')='invalid')
          AND NOT EXISTS (SELECT 1 FROM lm_messages m2 WHERE m2.contact_id=m.contact_id AND m2.estado IN ('sent','replied') AND m2.sent_at > COALESCE(m.sent_at, m.created_at))
        ORDER BY due_at DESC`, [uid]);
 

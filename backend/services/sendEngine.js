@@ -970,7 +970,7 @@ async function _flushApproved(pool, apiBase) {
                   (SELECT cs.estado FROM lm_contact_sequences cs WHERE cs.user_id = $2 AND cs.contact_id = $1 AND cs.sequence_id = $4 LIMIT 1) AS enr_estado`,
           [m.contact_id, m.user_id, m.id, m.sequence_id]);
         if (g && (g.respondio || ['respondido', 'terminado'].includes(g.enr_estado))) {
-          await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`, ['No enviado: el contacto respondió o salió de la secuencia mientras este mensaje esperaba', m.id]);
+          await pool.query(`UPDATE lm_messages SET estado='omitido', error=$1 WHERE id=$2`, ['No enviado a propósito: el contacto respondió o salió de la secuencia mientras este mensaje esperaba', m.id]);   // no es un fallo: es lo esperado
           console.log(`[send-engine] approved SKIP → ${m.to_email} (respondió / fuera de la secuencia)`);
           continue;
         }
@@ -1155,7 +1155,7 @@ async function _draftPreapproved(pool) {
   if (Date.now() - _lastTaskSweep > 10 * 60 * 1000) {
     _lastTaskSweep = Date.now();
     // Red de seguridad: ningún mensaje en cola (por aprobar o ya aprobado) sale hacia alguien que respondió o salió de la secuencia mientras esperaba.
-    await pool.query(`UPDATE lm_messages m SET estado='failed', error='No enviado: el contacto respondió o salió de la secuencia mientras este mensaje esperaba'
+    await pool.query(`UPDATE lm_messages m SET estado='omitido', error='No enviado a propósito: el contacto respondió o salió de la secuencia mientras este mensaje esperaba'
         FROM lm_contacts k
        WHERE k.id = m.contact_id AND m.estado IN ('awaiting','approved')
          AND ( k.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar')
