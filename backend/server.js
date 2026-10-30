@@ -5372,12 +5372,19 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
         LEFT JOIN sequences s ON s.id=m.sequence_id
        WHERE m.user_id=$1 AND m.estado IN ('failed','bounced')
          AND COALESCE(m.sent_at, m.created_at) > NOW() - interval '14 days'
+         -- Un fallo ya no exige nada si el contacto fue clasificado (respondió, no interesado…) o salió de la secuencia: ese mensaje ya no se va a enviar.
+         AND COALESCE(k.disposition,'') = ''
+         AND COALESCE(m.error,'') NOT LIKE '%respondió o salió%'
+         AND NOT EXISTS (SELECT 1 FROM lm_messages m2 WHERE m2.contact_id=m.contact_id AND m2.estado IN ('sent','replied') AND m2.sent_at > COALESCE(m.sent_at, m.created_at))
        ORDER BY due_at DESC`, [uid]);
 
     // 6. DATOS OBLIGATORIOS FALTANTES — contactos pausados por falta/error de dato.
     const { rows: dataIssues } = await pool.query(`
       SELECT k.id AS contact_id, k.outbound_client_id, k.nombre, k.apellido, k.email, k.data_issue AS reason
         FROM lm_contacts k WHERE k.user_id=$1 AND k.data_issue <> ''
+         -- Si ya lo marcaste «Por corregir» (su secuencia quedó pausada esperando el dato), ya está registrado y resuelto en su lugar: no es una prioridad nueva.
+         AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs WHERE cs.contact_id=k.id AND cs.estado='pausado' AND cs.paused_reason LIKE 'dato\_%')
+         AND COALESCE(k.disposition,'') NOT IN ('no_interesado','no_califica','no_contactar','no_es_persona','derivado')
        ORDER BY k.updated_at DESC NULLS LAST`, [uid]);
 
     // 7. LINKEDIN ACEPTADO CON SIGUIENTE ACCIÓN — aceptó la invitación y tiene una secuencia activa esperando el siguiente paso.
