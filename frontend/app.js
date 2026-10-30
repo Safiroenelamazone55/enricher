@@ -27090,6 +27090,7 @@ ${foot}
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
     const statStrip = anything ? `<div class="lm-stat-strip">
+      <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length}</span></button>
       ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
       ${stat('today', 'Para hoy', seqHoy.length + actToday.length, false)}
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
@@ -27126,11 +27127,11 @@ ${foot}
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
-  let _taskStat = 'priority';   // contador elegido en Tareas comerciales: arranca en Prioridad ('' = todo)
+  let _taskStat = '';   // contador elegido en Tareas comerciales ('' = Todas, la vista por defecto)
   function taskStat(k) {
     if (k === 'accept') { pendingAcceptOpen(); return; }
     if (k === 'priority' && _tiData === null) _tiReload();
-    _taskStat = (_taskStat === k) ? '' : k;
+    _taskStat = (k === 'all' || _taskStat === k) ? '' : k;
     _renderBody();
   }
   function taskSetView(v) { _taskView = v; if (v === 'priority' && _tiData === null) _tiReload(); _renderBody(); }
