@@ -5258,6 +5258,11 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
          AND ( COALESCE(k.disposition,'') NOT IN ('','respondio')
                OR EXISTS (SELECT 1 FROM lm_messages m WHERE m.contact_id=k.id AND m.sent_at > a.fecha AND m.estado IN ('sent','replied'))
                OR EXISTS (SELECT 1 FROM lm_inbox_messages im WHERE im.contact_id=k.id AND im.tipo<>'reply' AND im.received_at > a.fecha) )`, [uid]).catch(e => console.warn('[tasks/inbox] autocierre', e.message));
+    // 0b. «Sin respuesta hace 24h» que ya no aplican: después del aviso se le envió otro correo (la secuencia siguió) o el contacto ya fue clasificado.
+    await pool.query(`UPDATE activities a SET estado='hecha' FROM lm_contacts k
+       WHERE k.id=a.contact_id AND a.user_id=$1 AND a.tipo='seguimiento_inactivo' AND a.estado='pendiente'
+         AND ( COALESCE(k.disposition,'') <> ''
+               OR EXISTS (SELECT 1 FROM lm_messages m WHERE m.contact_id=k.id AND m.estado IN ('sent','replied') AND m.sent_at > a.fecha) )`, [uid]).catch(e => console.warn('[tasks/inbox] autocierre seguimiento', e.message));
     // 1. RESPUESTAS pendientes de revisar (tarea real, no solo disposición).
     const { rows: reps } = await pool.query(`
       SELECT a.id, a.contact_id, a.outbound_client_id, a.fecha AS due_at, a.nota AS reason,
