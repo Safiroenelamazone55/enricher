@@ -32319,7 +32319,7 @@ ${foot}
       const mail = c.email || c.email_personal || '';
       const li = c.linkedin || '';
       const contacto = `<div class="ldh-cto" onclick="event.stopPropagation()">
-        ${mail ? `<a class="ldh-cto__b" href="mailto:${esc(mail)}" title="${esc(mail)}">${NI('mail', 13)}</a>` : ''}
+        ${mail ? `<a class="ldh-cto__b" href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})" title="Escribir a ${esc(mail)} desde el buzón de ${esc(cli ? cli.nombre : 'su cliente')}">${NI('mail', 13)}</a>` : ''}
         ${tel ? `<a class="ldh-cto__b" href="tel:${esc(tel.replace(/\s/g, ''))}" title="${esc(tel)}">${NI('phone', 13)}</a>` : ''}
         ${li ? `<a class="ldh-cto__b" href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener" title="LinkedIn">${NI('linkedin', 13)}</a>` : ''}
         ${_waDigits(c) ? `<button class="ldh-cto__b" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})" title="WhatsApp">${NI('whatsapp', 13)}</button>` : ''}
@@ -35142,7 +35142,7 @@ ${foot}
       case 'codigo':   return c.codigo ? `<span class="lm-code" title="Identificador único del contacto">${esc(c.codigo)}</span>` : '<span class="lm-dim">—</span>';
       case 'cargo':    return clip(c.cargo);
       case 'empresa': { const emp = c.company_nombre || c.empresa_nombre || ''; return emp ? `<span class="lm-emp-chip cell-clip" title="${esc(emp)}">${esc(emp)}</span>` : '<span class="lm-dim">—</span>'; }
-      case 'email':    return c.email ? `<a class="cell-clip" style="max-width:100%" href="mailto:${esc(c.email)}" title="${esc(c.email)}" onclick="event.stopPropagation()">${esc(c.email)}</a>` : '<span class="lm-dim">—</span>';
+      case 'email':    return c.email ? `<a class="cell-clip" style="max-width:100%" href="javascript:void(0)" title="Escribir a ${esc(c.email)} desde el buzón de su cliente" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})">${esc(c.email)}</a>` : '<span class="lm-dim">—</span>';
       case 'verificacion': return c.email ? _emailBadge(c) : '<span class="lm-dim">—</span>';
       case 'telefono': return clip(c.telefono || c.movil);
       case 'linkedin': return (c.linkedin || c.linkedin_sales_nav) ? `${c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link">Perfil ↗</a>` : ''}${c.linkedin_sales_nav ? `${c.linkedin ? ' · ' : ''}<a href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link" title="Abrir en Sales Navigator">Sales Nav ↗</a>` : ''}` : '<span class="lm-dim">—</span>';
