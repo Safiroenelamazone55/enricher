@@ -19176,3 +19176,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .ldh-lead-table .ldh-note__in { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; max-width: none; max-height: none; overflow: hidden; line-height: 1.35; }
 .ldh-lead-table td.ldh-acts { padding-right: 12px; }
 .ldh-lead-table .ldh-act { width: 26px; height: 26px; margin-left: 3px; }
+.ibx-sighint { margin: 4px 2px 0; font-size: .72rem; color: #15803D; }

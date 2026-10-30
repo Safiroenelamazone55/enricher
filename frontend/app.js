@@ -28010,6 +28010,7 @@ ${foot}
            <div class="ibx-tawrap">
              ${asuntoField}
              <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}"></textarea>
+             ${esNuevo ? `<div class="ibx-sighint">✓ La firma de ${esc(c.buzon)} se añade sola al enviar</div>` : ''}
              <div class="ibx-sendgrp">
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
                <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
@@ -28696,7 +28697,7 @@ ${foot}
       const body = { contact_id: _ibActive, cuerpo };
       if (schedIso) body.scheduled_at = schedIso;
       const asuntoEl = document.getElementById('ibx-asunto');
-      if (asuntoEl) body.asunto = asuntoEl.value.trim();
+      if (asuntoEl) { body.asunto = asuntoEl.value.trim(); body.con_firma = true; }   // correo nuevo (con asunto propio): lleva la firma del buzón del cliente
       const ccRaw = document.getElementById('ibx-cc')?.value || '';
       body.cc = ccRaw.split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
       const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
