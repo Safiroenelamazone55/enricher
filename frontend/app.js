@@ -22325,7 +22325,7 @@ const LeadManagerModule = (() => {
     _activities = (_activities || []).filter(a => mine(a) || kids.has(a.contact_id) || kids.has(a.lead_id));
     _data = (_data || []).filter(mine);
   }
-  function _gcInbox() { if (_gcli && Array.isArray(_ibThreads)) { const k = new Set((_contacts || []).map(c => c.id)); _ibThreads = _ibThreads.filter(t => k.has(t.contact_id)); } }
+  function _gcInbox() { /* el filtro por cliente ya lo aplica el servidor (?client=): un hilo es del cliente cuyo buzón lo envía/recibe */ }
   function _gcTi() {
     if (!_gcli || !_tiData || !Array.isArray(_tiData.items)) return;   // el servidor ya filtra por cliente (?client=); aquí solo se recuentan
     const counts = {}; _tiData.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; }); _tiData.counts = counts;
@@ -27406,7 +27406,7 @@ ${foot}
   }
   async function _ibReload(silent) {
     _ibLastAt = Date.now();
-    try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
+    try { const r = await apiFetch(`${API}/lm/inbox/threads${_gcli ? '?client=' + _gcli : ''}`); _ibThreads = (r && r.ok) ? await r.json() : []; }
     catch { _ibThreads = []; }
     _gcInbox();
     const sig = _ibSigOf(_ibThreads), changed = sig !== _ibSig; _ibSig = sig;

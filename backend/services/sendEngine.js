@@ -763,7 +763,7 @@ async function _flushScheduled(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name, COALESCE(m.con_firma, FALSE) AS con_firma,
+           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name, COALESCE(m.con_firma, FALSE) OR m.sequence_id IS NULL AS con_firma,
            mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, (SELECT k.idioma FROM lm_contacts k WHERE k.id = m.contact_id) AS k_idioma,
            COALESCE(cfg.track_opens, true) AS track_opens, COALESCE(cfg.track_clicks, true) AS track_clicks
       FROM lm_messages m

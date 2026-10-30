@@ -6983,9 +6983,10 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
            ORDER BY received_at DESC LIMIT 1
         ) li ON TRUE
        WHERE k.user_id=$1 AND (i.contact_id IS NOT NULL OR o.contact_id IS NOT NULL)
+         AND ($2::int IS NULL OR k.outbound_client_id = $2::int)   -- filtro global de cliente, en el servidor: el hilo es del cliente cuyo buzón lo envía/recibe
        ORDER BY GREATEST(COALESCE(i.last_in_at,'epoch'), COALESCE(o.last_out_at, o.proximo_programado, 'epoch')) DESC
        LIMIT 400
-    `, [req.workspaceOwnerId]);
+    `, [req.workspaceOwnerId, parseInt(req.query.client, 10) || null]);
     res.json(rows);
   } catch (err) { console.error('[inbox] THREADS', err.message); res.status(500).json({ error: 'Error al cargar el inbox' }); }
 });
