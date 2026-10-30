@@ -22250,7 +22250,7 @@ const LeadManagerModule = (() => {
       // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada,
       // el contador del servidor.
       const nc = _gcli ? {} : (_navCounts || {});   // con filtro de cliente los totales del servidor (de todos los clientes) no valen
-      const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
+      const cnt = n.k === 'tasks'  ? (Array.isArray(_contacts) && _contacts.length ? _pendingTaskCount() : (nc.tasks || 0))
                 : n.k === 'leads'  ? (_contacts.length ? _contacts.filter(c => _ldMatchPill(c, 'respondio')).length : (nc.leads || 0))   // = "Por calificar": lo que espera tu decisión (no los ya trabajados ni los que ya están en Deals)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
                 : n.k === 'clients' ? (_gcli ? 0 : _cuTotal())
@@ -26902,13 +26902,20 @@ ${foot}
     if (diff <= 6) { const dow = (today.getDay() + 6) % 7; return (diff <= (6 - dow) ? 'este ' : 'el próximo ') + wd + ' · ' + dm; }
     return 'el ' + wd + ' · ' + dm;
   }
+  // Insignia de «Tareas comerciales»: SOLO lo que hay que hacer ya = vencidas + para hoy + emails por aprobar + por corregir.
+  // Las «Próximas» (aún no son tareas), los follow-ups futuros y «Por aceptar» NO cuentan. Respeta el filtro global de cliente (las listas ya vienen acotadas) y,
+  // sin filtro, es la suma de todos los clientes.
   function _pendingTaskCount() {
     try {
       const today = _dayOf(new Date());
       const seq = _allSeqTasks().filter(t => t.due <= today).length;
-      const acts = (_activities || []).filter(a => a.estado === 'pendiente' && _dayOf(a.fecha) <= today).length;
-      const aprob = (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
-      return seq + acts + aprob;
+      const inactivas = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
+      const sys = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #'));
+      const delInactiva = a => a.tipo === 'tarea' && inactivas.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
+      const acts = (_activities || []).filter(a => a.estado === 'pendiente' && !sys(a) && !delInactiva(a) && _dayOf(a.fecha) <= today).length;
+      const aprob = Array.isArray(_apList) ? _apList.length : (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
+      let fix = 0; try { fix = _fixList().length; } catch (_) {}
+      return seq + acts + aprob + fix;
     } catch (e) { return 0; }
   }
   function _allTaskRow(t, today) {
