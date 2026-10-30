@@ -22433,6 +22433,7 @@ const LeadManagerModule = (() => {
     const body = $('lm2-body'); if (!body) return;
     _lmSaveViewState();
     if (_section === 'client' && _activeClient) _pcMount(_activeClient); else _pcUnmount();
+    if (document.getElementById('lm-wa-host')) _waUnmount();   // el WhatsApp vuelve a su sitio antes de repintar
     if      (_section === 'dashboard') body.innerHTML = _vDashboard();
     else if (_section === 'clients')   body.innerHTML = _vClients();
     else if (_section === 'client')    body.innerHTML = _vClientDetail(_activeClient);
@@ -22442,7 +22443,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'activities') body.innerHTML = _vActivities();
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
     else if (_section === 'inbox')     body.innerHTML = _vInbox();
-    else if (_section === 'wa')        body.innerHTML = _vWaList();
+    else if (_section === 'wa')        { body.innerHTML = _vWaList(); _waMount(); }
     else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
@@ -28608,11 +28609,31 @@ ${foot}
     catch { _waList = []; }
     // Con filtro de cliente: contactos del cliente O que están en sus secuencias/campañas (un contacto reutilizado conserva su cliente original, y filtrar solo por ése ocultaba chats que sí le pertenecen).
     if (_gcli && Array.isArray(_waList)) { const k = new Set((_contacts || []).map(c => c.id)); const loaded = k.size > 0; _waList = _waList.filter(w => w.outbound_client_id === _gcli || (loaded && k.has(w.contact_id))); }
-    if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
+    if (_section === 'wa' && document.getElementById('lm-wa-host')) { try { WaChatModule.setScopeJids(new Set((_waList || []).map(w => w.chat_jid))); } catch (_) {} }
     _refreshNav();
   }
-  function waCli(v) { _waCli = parseInt(v) || 0; const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
+  function waCli(v) { _waCli = parseInt(v) || 0; }
+  // WhatsApp de Outreach: es EL MISMO cliente de WhatsApp de Operaciones (se mueve su #wa-fc-inner aquí), pero solo con los chats de los contactos de Outreach
+  // (y del cliente filtrado). Al salir de la sección se devuelve a su sitio.
+  function _waUnmount() {
+    const fc = document.getElementById('wa-fc-inner'), pane = document.getElementById('pane-mgmt-wa');
+    if (fc && pane && fc.parentNode !== pane) pane.appendChild(fc);
+    try { WaChatModule.clearScope(); if (_section !== 'wa') WaChatModule.detener(); } catch (_) {}
+  }
+  async function _waMount() {
+    const host = document.getElementById('lm-wa-host'), fc = document.getElementById('wa-fc-inner');
+    if (!host || !fc) return;
+    host.appendChild(fc);
+    let rows = []; try { const r = await apiFetch(`${API}/lm/wa-list${_gcli ? '?client=' + _gcli : ''}`); rows = (r && r.ok) ? await r.json() : []; } catch (_) {}
+    if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
+    const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; });
+    const connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
+    await WaChatModule.loadScoped({ jids, connId });
+  }
   function _vWaList() {
+    return `<div class="lm-wa-host pane--wa" id="lm-wa-host"></div>`;
+  }
+  function _vWaListOld() {
     if (_waList === null) return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">WhatsApp</h2></div></div><div class="clients-loading"><div class="clients-spin"></div></div>`;
     const all = Array.isArray(_waList) ? _waList : [];
     const list = _waCli ? all.filter(w => w.outbound_client_id === _waCli) : all;
@@ -28704,7 +28725,7 @@ ${foot}
   async function waSetPrioridad(contactId, nivel) {
     const w = (_waList || []).find(x => x.contact_id === contactId); if (!w) return;
     w.prioridad = nivel;
-    if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
+    /* el chat de WhatsApp ya no se repinta desde aquí */
     try {
       await apiFetch(`${API}/wa/connections/${w.connection_id}/chats/${encodeURIComponent(w.chat_jid)}/meta`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad: nivel }),
@@ -37974,7 +37995,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -41984,6 +42005,16 @@ const WaChatModule = (() => {
   let _bulkMode = false;
   let _bulkSel  = new Set();
 
+  // Alcance: cuando se muestra dentro de Outreach, solo se ven los chats de sus contactos (y del cliente filtrado).
+  let _scope = null;   // { jids:Set, connId }
+  async function loadScoped(scope) {
+    _scope = scope || null;
+    if (_scope) { _filtroAsignado = 'todas'; _filtroEstado = 'todas'; _verArchivados = false; if (_scope.connId) { try { localStorage.setItem('wa_selected_conn_id', String(_scope.connId)); } catch (_) {} } }
+    await load();
+  }
+  function clearScope() { if (_scope) { _scope = null; _filtroAsignado = 'mias'; _filtroEstado = 'abierto'; } }
+  function setScopeJids(jids) { if (_scope) { _scope.jids = jids; _pintaChats(); } }
+
   // Respuestas rápidas ("/atajo" en el composer) — cache lazy, compartida por
   // todas las conexiones (igual que _waTagsCache).
   let _cannedCache = null;
@@ -42344,6 +42375,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
   function _chatsFiltrados() {
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     return _chats.filter(c => {
+      if (_scope && !_scope.jids.has(c.chat_jid)) return false;
       if (!!c.archivado !== _verArchivados) return false;   // archivados (como en el teléfono) solo se ven en su carpeta
       const asignado = (c.asignado_a || '').toLowerCase();
       if (_filtroAsignado === 'mias' && asignado !== _me) return false;
@@ -43985,7 +44017,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  return { loadScoped, clearScope, setScopeJids, reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
@@ -48130,7 +48162,7 @@ function initApp() {
     if (tabName === 'mgmt-team')      TeamModule.load();
     if (tabName === 'mgmt-chat')          SlackChat.load();
     else                                  SlackChat.detener();
-    if (tabName === 'mgmt-wa')            WaChatModule.load();
+    if (tabName === 'mgmt-wa')            { try { LeadManagerModule._waUnmount(); } catch (_) {} WaChatModule.load(); }
     else                                  WaChatModule.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
     if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();

@@ -19100,3 +19100,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm-dt--env th:nth-child(1) { width: 25%; } .lm-dt--env th:nth-child(2) { width: 33%; } .lm-dt--env th:nth-child(3) { width: 21%; } .lm-dt--env th:nth-child(4) { width: 8%; } .lm-dt--env th:nth-child(5) { width: 13%; }
 .lm-dt--env td { overflow: hidden; text-overflow: ellipsis; word-break: break-word; }
 .wa-prog { display: inline-block; font-size: .7rem; font-weight: 700; color: #8A6516; background: #FBF3DE; padding: 1px 7px; margin-right: 6px; white-space: nowrap; }
+
+/* WhatsApp dentro de Outreach: el mismo cliente de Operaciones, sin márgenes extra */
+.lm-wa-host { margin: -26px -30px -60px; min-height: 420px; } .lm-wa-host #wa-fc-inner { display: flex; flex-direction: column; }
