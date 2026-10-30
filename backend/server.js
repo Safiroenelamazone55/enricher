@@ -7612,8 +7612,9 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
        WHERE m.user_id=$1
          AND ($2::int IS NULL OR m.contact_id=$2)
          AND ($3::int IS NULL OR m.sequence_id=$3)
+         AND ($5::int IS NULL OR k.outbound_client_id=$5)   -- filtro global de cliente
        ORDER BY m.created_at DESC LIMIT $4
-    `, [uid, cid, sid, lim]);
+    `, [uid, cid, sid, lim, parseInt(req.query.client, 10) || null]);
     if (rows.some(r => r.estado === 'approved')) {
       try { const est = await require('./services/sendEngine').estimateSendTimes(pool, uid); rows.forEach(r => { if (est[r.id]) r.est_send_at = est[r.id]; }); } catch (e) { console.warn('[lm-msgs] est', e.message); }
     }

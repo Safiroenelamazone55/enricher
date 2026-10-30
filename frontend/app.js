@@ -37293,7 +37293,7 @@ ${foot}
 
   // ── Inbox real: mensajes enviados con opens/clicks/replied ──
   async function _loadLmMsgs(target) {
-    try { const r = await apiFetch(`${API}/lm/messages?limit=120`); _lmMsgs = (r && r.ok) ? await r.json() : []; } catch { _lmMsgs = []; }
+    try { const r = await apiFetch(`${API}/lm/messages?limit=120${_gcli ? '&client=' + _gcli : ''}`); _lmMsgs = (r && r.ok) ? await r.json() : []; } catch { _lmMsgs = []; }
     const el = document.getElementById(target || 'lm-real-inbox');
     if (el) el.innerHTML = _realInboxHtml();
   }
