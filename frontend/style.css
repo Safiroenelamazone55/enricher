@@ -19138,3 +19138,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 @media (max-width: 640px) { .pax-filters { grid-template-columns: 1fr; } #lm-pa-modal .pax-row { grid-template-columns: 18px 32px minmax(0, 1fr) 34px; } .pax-sq, .pax-when { display: none; } }
 
 .cp-dispo-b--act { background: #EEF4FF; border-color: #BFD3F5; color: #2F5BB7; font-weight: 700; } .cp-dispo-b--act:hover { background: #DCE8FD; }
+
+/* WhatsApp en Outreach: es un solo WhatsApp (cada chat sale del número del cliente): sin número ni cambio de cuenta ni desconectar */
+.lm-wa-host #wa-numero, .lm-wa-host #wa-accts-bar, .lm-wa-host .wa-accts-bar, .lm-wa-host [onclick*="desconectar"] { display: none !important; }

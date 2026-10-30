@@ -28731,7 +28731,10 @@ ${foot}
     let rows = []; try { const r = await apiFetch(`${API}/lm/wa-list${_gcli ? '?client=' + _gcli : ''}`); rows = (r && r.ok) ? await r.json() : []; } catch (_) {}
     if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
     const jids = new Set(rows.map(w => w.chat_jid)), byConn = {}; rows.forEach(w => { byConn[w.connection_id] = (byConn[w.connection_id] || 0) + 1; });
-    const connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
+    let connId = +Object.keys(byConn).sort((a, b) => byConn[b] - byConn[a])[0] || 0;
+    // Con un cliente filtrado, el WhatsApp es el de ESE cliente (cada cliente tiene el suyo; aquí no se cambia de número).
+    if (_gcli) { try { const rc = await apiFetch(`${API}/wa/connections?outboundClientId=${_gcli}`); const cs = (rc && rc.ok) ? await rc.json() : []; const ok = cs.find(x => x.estado === 'conectado') || cs[0]; if (ok) connId = ok.id; } catch (_) {} }
+    if (_section !== 'wa' || !document.getElementById('lm-wa-host')) return;
     await WaChatModule.loadScoped({ jids, connId });
   }
   function _vWaList() {
@@ -42524,7 +42527,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     }
     const filtrados = _chatsFiltrados();
     if (!filtrados.length) {
-      box.innerHTML = _filtroAsignado === 'mias'
+      box.innerHTML = (_scope && !_scope.jids.size) ? `<div class="chat-ch-empty">Todavía no hay conversaciones de WhatsApp<br>de los contactos de este cliente.</div>` : _filtroAsignado === 'mias'
         ? `<div class="chat-ch-empty">No tienes chats asignados a ti.<br>Cambia el filtro a "Todas" o asigna conversaciones desde el menú ⋯.</div>`
         : `<div class="chat-ch-empty">Ningún chat coincide con este filtro.</div>`;
       return;
