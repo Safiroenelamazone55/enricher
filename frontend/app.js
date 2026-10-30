@@ -25215,7 +25215,8 @@ ${foot}
   function _seqApRowsHtml(seqId) {
     // Secuencia pausada/draft/archivada: sus aprobaciones no son trabajo del día (reportado 2026-10-02: pausó la secuencia y seguían saliendo tareas).
     const _sq = (_sequences || []).find(x => x.id === seqId); if (_sq && _sq.estado !== 'activa') return '';
-    const list = (Array.isArray(_seqApprovals) ? _seqApprovals : []).filter(a => a.estado === 'awaiting');
+    if (!Array.isArray(_seqApprovals)) return '<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">…</span></div><div class="seq-tasks"><div class="cp-empty2" style="padding:12px">Cargando aprobaciones…</div></div>';   // aún no cargó: se avisa, no se omite la sección
+    const list = _seqApprovals.filter(a => a.estado === 'awaiting');
     if (!list.length) return '';
     const rows = list.map(a => {
       const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
