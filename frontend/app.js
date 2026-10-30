@@ -27213,13 +27213,26 @@ ${foot}
     } catch (e) { showBanner('No se pudo cerrar: ' + e.message, 'error'); }
   }
   // ── Acción rápida: escribir al contacto por correo o WhatsApp con un texto sugerido (en su idioma; español si no se sabe), editable antes de enviar ──
+  // Textos en voz del EQUIPO («desde el equipo de {cli}»). El correo cierra sin nombre: la firma del buzón del cliente se añade sola al enviar. WhatsApp cierra con «— Nombre · cliente».
   const _FU = {
-    es: { s: ['Retomando nuestra conversación', 'Siguiente paso{emp}'], b: ['Hola {n},\n\nEspero que estés muy bien. Quería retomar nuestra conversación y saber si sigue siendo un buen momento para avanzar.\n\nSi te viene bien, te comparto más detalles o coordinamos una llamada breve esta semana.\n\nQuedo atento,', 'Hola {n},\n\nQuería saber cómo vas con lo que conversamos y si hay algo en lo que pueda ayudarte para dar el siguiente paso.\n\n¿Te parece si agendamos una llamada breve esta semana para resolver cualquier duda?\n\nQuedo atento,'], w: ['Hola {n}, ¿cómo estás? Quería retomar nuestra conversación: ¿sigue siendo un buen momento para avanzar? Si quieres te cuento más o coordinamos una llamada breve.', 'Hola {n}, ¿cómo vas? Quería saber si tienes dudas sobre lo que conversamos o si podemos dar el siguiente paso. ¿Coordinamos una llamada breve esta semana?'] },
-    en: { s: ['Picking up our conversation', 'Next step{emp}'], b: ["Hi {n},\n\nI hope you're doing well. I wanted to pick up where we left off and check whether it's still a good time to move forward.\n\nIf it helps, I can share more details or we can set up a quick call this week.\n\nBest regards,", "Hi {n},\n\nI wanted to check in on what we discussed and see if there's anything I can help with to take the next step.\n\nWould a short call this week work to answer any questions?\n\nBest regards,"], w: ["Hi {n}, hope you're well! I wanted to pick up our conversation: is it still a good time to move forward? Happy to share more or set up a quick call.", "Hi {n}, how are things? I wanted to see if you have any questions about what we discussed or if we can take the next step. Shall we schedule a quick call this week?"] },
-    pt: { s: ['Retomando nossa conversa', 'Próximo passo{emp}'], b: ['Olá {n},\n\nEspero que esteja bem. Queria retomar nossa conversa e saber se ainda é um bom momento para avançarmos.\n\nSe fizer sentido, posso compartilhar mais detalhes ou marcarmos uma ligação rápida esta semana.\n\nAtenciosamente,', 'Olá {n},\n\nQueria saber como estão as coisas com o que conversamos e se posso ajudar em algo para darmos o próximo passo.\n\nPodemos marcar uma ligação rápida esta semana para tirar qualquer dúvida?\n\nAtenciosamente,'], w: ['Olá {n}, tudo bem? Queria retomar nossa conversa: ainda é um bom momento para avançarmos? Se quiser, conto mais ou marcamos uma ligação rápida.', 'Olá {n}, como vai? Queria saber se tem dúvidas sobre o que conversamos ou se podemos dar o próximo passo. Marcamos uma ligação rápida esta semana?'] },
-    it: { s: ['Riprendiamo la nostra conversazione', 'Prossimo passo{emp}'], b: ['Buongiorno {n},\n\nspero stia bene. Volevo riprendere la nostra conversazione e capire se è ancora il momento giusto per andare avanti.\n\nSe può essere utile, posso condividere maggiori dettagli oppure fissare una breve chiamata questa settimana.\n\nCordiali saluti,', 'Buongiorno {n},\n\nvolevo sapere come procede rispetto a quanto ci siamo detti e se posso aiutarla a fare il prossimo passo.\n\nLe andrebbe una breve chiamata questa settimana per chiarire ogni dubbio?\n\nCordiali saluti,'], w: ['Buongiorno {n}, come sta? Volevo riprendere la nostra conversazione: è ancora il momento giusto per andare avanti? Se vuole le racconto di più o fissiamo una breve chiamata.', 'Buongiorno {n}, come procede? Volevo sapere se ha dubbi su quanto ci siamo detti o se possiamo fare il prossimo passo. Fissiamo una breve chiamata questa settimana?'] },
-    de: { s: ['Wieder aufgreifen unseres Gesprächs', 'Nächster Schritt{emp}'], b: ['Guten Tag {n},\n\nich hoffe, es geht Ihnen gut. Ich wollte unser Gespräch wieder aufgreifen und fragen, ob der Zeitpunkt für die nächsten Schritte noch passt.\n\nGerne sende ich Ihnen weitere Details oder wir vereinbaren diese Woche ein kurzes Telefonat.\n\nFreundliche Grüße,', 'Guten Tag {n},\n\nich wollte nachfragen, wie es bei Ihnen mit unserem Gespräch aussieht und ob ich Sie beim nächsten Schritt unterstützen kann.\n\nPasst Ihnen diese Woche ein kurzes Telefonat, um offene Fragen zu klären?\n\nFreundliche Grüße,'], w: ['Guten Tag {n}, wie geht es Ihnen? Ich wollte unser Gespräch wieder aufgreifen: Passt der Zeitpunkt noch? Gerne erzähle ich mehr oder wir vereinbaren ein kurzes Telefonat.', 'Guten Tag {n}, haben Sie Fragen zu unserem Gespräch, oder können wir den nächsten Schritt gehen? Sollen wir diese Woche kurz telefonieren?'] },
-    fr: { s: ['Reprise de notre échange', 'Prochaine étape{emp}'], b: ["Bonjour {n},\n\nJ'espère que vous allez bien. Je souhaitais reprendre notre échange et savoir si le moment est toujours opportun pour avancer.\n\nSi cela vous convient, je peux vous donner plus de détails ou nous pouvons convenir d'un court appel cette semaine.\n\nCordialement,", "Bonjour {n},\n\nJe voulais savoir où vous en êtes par rapport à notre échange et si je peux vous aider à passer à l'étape suivante.\n\nUn court appel cette semaine vous conviendrait-il pour répondre à vos questions ?\n\nCordialement,"], w: ["Bonjour {n}, comment allez-vous ? Je souhaitais reprendre notre échange : le moment est-il toujours opportun pour avancer ? Je peux vous en dire plus ou convenir d'un court appel.", "Bonjour {n}, avez-vous des questions sur notre échange, ou peut-on passer à l'étape suivante ? On fait un court appel cette semaine ?"] },
+    es: { s: ['Retomando nuestra conversación', 'Siguiente paso{emp}'],
+      b: ['Hola {n},\n\nDesde el equipo de {cli} queríamos retomar nuestra conversación y saber si sigue siendo un buen momento para avanzar.\n\nSi te viene bien, te compartimos más detalles o coordinamos una llamada breve esta semana.\n\nQuedamos atentos,', 'Hola {n},\n\nDesde el equipo de {cli} queríamos saber cómo vas con lo que conversamos y si hay algo en lo que podamos ayudarte para dar el siguiente paso.\n\n¿Te parece si agendamos una llamada breve esta semana para resolver cualquier duda?\n\nQuedamos atentos,'],
+      w: ['Hola {n}, te escribimos desde {cli}. Queríamos retomar nuestra conversación: ¿sigue siendo un buen momento para avanzar? Si quieres te contamos más o coordinamos una llamada breve.', 'Hola {n}, te escribimos desde {cli}. ¿Tienes dudas sobre lo que conversamos o podemos dar el siguiente paso? ¿Coordinamos una llamada breve esta semana?'] },
+    en: { s: ['Picking up our conversation', 'Next step{emp}'],
+      b: ["Hi {n},\n\nThe {cli} team wanted to pick up where we left off and check whether it's still a good time to move forward.\n\nIf it helps, we can share more details or set up a quick call this week.\n\nBest regards,", "Hi {n},\n\nThe {cli} team wanted to check in on what we discussed and see if there's anything we can help with to take the next step.\n\nWould a short call this week work to answer any questions?\n\nBest regards,"],
+      w: ["Hi {n}, we're writing from {cli}. We wanted to pick up our conversation: is it still a good time to move forward? Happy to share more or set up a quick call.", "Hi {n}, we're writing from {cli}. Do you have any questions about what we discussed, or can we take the next step? Shall we schedule a quick call this week?"] },
+    pt: { s: ['Retomando nossa conversa', 'Próximo passo{emp}'],
+      b: ['Olá {n},\n\nA equipe da {cli} queria retomar nossa conversa e saber se ainda é um bom momento para avançarmos.\n\nSe fizer sentido, compartilhamos mais detalhes ou marcamos uma ligação rápida esta semana.\n\nAtenciosamente,', 'Olá {n},\n\nA equipe da {cli} queria saber como estão as coisas com o que conversamos e se podemos ajudar em algo para darmos o próximo passo.\n\nPodemos marcar uma ligação rápida esta semana para tirar qualquer dúvida?\n\nAtenciosamente,'],
+      w: ['Olá {n}, escrevemos da {cli}. Queríamos retomar nossa conversa: ainda é um bom momento para avançarmos? Se quiser, contamos mais ou marcamos uma ligação rápida.', 'Olá {n}, escrevemos da {cli}. Tem dúvidas sobre o que conversamos ou podemos dar o próximo passo? Marcamos uma ligação rápida esta semana?'] },
+    it: { s: ['Riprendiamo la nostra conversazione', 'Prossimo passo{emp}'],
+      b: ['Buongiorno {n},\n\nil team di {cli} voleva riprendere la nostra conversazione e capire se è ancora il momento giusto per andare avanti.\n\nSe può essere utile, possiamo condividere maggiori dettagli oppure fissare una breve chiamata questa settimana.\n\nCordiali saluti,', 'Buongiorno {n},\n\nil team di {cli} voleva sapere come procede rispetto a quanto ci siamo detti e se possiamo aiutarla a fare il prossimo passo.\n\nLe andrebbe una breve chiamata questa settimana per chiarire ogni dubbio?\n\nCordiali saluti,'],
+      w: ['Buongiorno {n}, le scriviamo da {cli}. Volevamo riprendere la nostra conversazione: è ancora il momento giusto per andare avanti? Se vuole le raccontiamo di più o fissiamo una breve chiamata.', 'Buongiorno {n}, le scriviamo da {cli}. Ha dubbi su quanto ci siamo detti, o possiamo fare il prossimo passo? Fissiamo una breve chiamata questa settimana?'] },
+    de: { s: ['Wieder aufgreifen unseres Gesprächs', 'Nächster Schritt{emp}'],
+      b: ['Guten Tag {n},\n\ndas Team von {cli} wollte unser Gespräch wieder aufgreifen und fragen, ob der Zeitpunkt für die nächsten Schritte noch passt.\n\nGerne senden wir Ihnen weitere Details oder vereinbaren diese Woche ein kurzes Telefonat.\n\nFreundliche Grüße,', 'Guten Tag {n},\n\ndas Team von {cli} wollte nachfragen, wie es bei Ihnen mit unserem Gespräch aussieht und ob wir Sie beim nächsten Schritt unterstützen können.\n\nPasst Ihnen diese Woche ein kurzes Telefonat, um offene Fragen zu klären?\n\nFreundliche Grüße,'],
+      w: ['Guten Tag {n}, wir schreiben von {cli}. Wir wollten unser Gespräch wieder aufgreifen: Passt der Zeitpunkt noch? Gerne erzählen wir mehr oder vereinbaren ein kurzes Telefonat.', 'Guten Tag {n}, wir schreiben von {cli}. Haben Sie Fragen zu unserem Gespräch, oder können wir den nächsten Schritt gehen? Sollen wir diese Woche kurz telefonieren?'] },
+    fr: { s: ['Reprise de notre échange', 'Prochaine étape{emp}'],
+      b: ["Bonjour {n},\n\nL'équipe de {cli} souhaitait reprendre notre échange et savoir si le moment est toujours opportun pour avancer.\n\nSi cela vous convient, nous pouvons vous donner plus de détails ou convenir d'un court appel cette semaine.\n\nCordialement,", "Bonjour {n},\n\nL'équipe de {cli} voulait savoir où vous en êtes par rapport à notre échange et si nous pouvons vous aider à passer à l'étape suivante.\n\nUn court appel cette semaine vous conviendrait-il pour répondre à vos questions ?\n\nCordialement,"],
+      w: ["Bonjour {n}, nous vous écrivons de la part de {cli}. Nous souhaitions reprendre notre échange : le moment est-il toujours opportun pour avancer ? Nous pouvons vous en dire plus ou convenir d'un court appel.", "Bonjour {n}, nous vous écrivons de la part de {cli}. Avez-vous des questions sur notre échange, ou peut-on passer à l'étape suivante ? On fait un court appel cette semaine ?"] },
   };
   function _fuLang(c) {
     const raw = _pnorm(c && (c.idioma_ef || c.idioma || '')).trim();
@@ -27231,9 +27244,11 @@ ${foot}
   }
   function _fuText(c, kind, canal) {
     const L = _FU[_fuLang(c)] || _FU.es, k = kind === 'deals' ? 1 : 0, n = (c.nombre || '').trim().split(/\s+/)[0] || '';
+    const cl = (_clients || []).find(x => x.id === c.outbound_client_id), cli = (cl && cl.nombre) || 'nuestro equipo';
+    const me = String((window._authUser && (window._authUser.memberNombre || window._authUser.name)) || '').trim().split(/\s+/)[0];
     const emp = c.company_nombre ? ' · ' + c.company_nombre : '';
-    const fill = t => t.replace('{n}', n).replace(/\s+,/g, ',').replace('{emp}', emp);
-    return canal === 'wa' ? { cuerpo: fill(L.w[k]) } : { asunto: fill(L.s[k]), cuerpo: fill(L.b[k]) };
+    const fill = t => t.replace(/\{n\}/g, n).replace(/\{cli\}/g, cli).replace(/\s+,/g, ',').replace('{emp}', emp);
+    return canal === 'wa' ? { cuerpo: fill(L.w[k]) + '\n\n— ' + (me ? me + ' · ' : '') + cli } : { asunto: fill(L.s[k]), cuerpo: fill(L.b[k]) };
   }
   async function fuQuick(cid, canal, kind) {
     const c = (_contacts || []).find(x => x.id === cid);
@@ -28335,6 +28350,15 @@ ${foot}
   function _cmpCcList() {
     return ($('cmp-cc')?.value || '').split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
   }
+  // Firma del buzón del cliente elegido (en el idioma del contacto si tiene una firma por idioma): es la que se añade sola al enviar.
+  function _cmpSigHtml() {
+    const cid = parseInt($('cmp-client')?.value) || 0, mb = cid ? _mbFor(cid) : null; if (!mb) return '';
+    const sel = $('cmp-selected'), c = (sel && sel.dataset.contactId) ? (_contacts || []).find(x => x.id === parseInt(sel.dataset.contactId)) : null;
+    const nz = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(), sg = mb.signatures || {}, want = nz(c && (c.idioma_ef || c.idioma));
+    const lk = want && Object.keys(sg).find(k => nz(k) === want);
+    const sig = (lk && String(sg[lk]).trim()) ? sg[lk] : (mb.signature_html || '');
+    return sig ? '<div style="margin-top:12px;padding-top:8px;border-top:1px dashed #D5D1CA">' + String(sig).replace(/<script[\s\S]*?<\/script>/gi, '') + '</div>' : '';
+  }
   function _cmpPreviewUpdate() {
     const toEl = $('cmp-prev-to'); if (toEl) toEl.textContent = _cmpCurrentEmail() || '—';
     const ccList = _cmpCcList();
@@ -28346,7 +28370,7 @@ ${foot}
     if (bodyEl) {
       const cuerpo = $('cmp-cuerpo')?.value || '';
       bodyEl.innerHTML = cuerpo.trim()
-        ? esc(cuerpo).replace(/\n/g, '<br>')
+        ? esc(cuerpo).replace(/\n/g, '<br>') + _cmpSigHtml()
         : '<span class="cmp-preview__ph">Escribe el mensaje para ver la vista previa…</span>';
     }
   }
@@ -28424,7 +28448,7 @@ ${foot}
         const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [contactId], sequence_id: seqId }) });
         if (!r.ok) { const d = await r.json().catch(() => ({})); showBanner('Contacto listo, pero no se pudo enrolar: ' + (d.error || ''), 'info'); }
       }
-      const replyBody = { contact_id: contactId, asunto, cuerpo };
+      const replyBody = { contact_id: contactId, asunto, cuerpo, con_firma: true };   // correo nuevo: lleva la firma del buzón del cliente
       const ccList = _cmpCcList();
       if (ccList.length) replyBody.cc = ccList;
       if (schedIso) replyBody.scheduled_at = schedIso;

@@ -763,7 +763,8 @@ async function _flushScheduled(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name,
+           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name, COALESCE(m.con_firma, FALSE) AS con_firma,
+           mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, (SELECT k.idioma FROM lm_contacts k WHERE k.id = m.contact_id) AS k_idioma,
            COALESCE(cfg.track_opens, true) AS track_opens, COALESCE(cfg.track_clicks, true) AS track_clicks
       FROM lm_messages m
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
@@ -779,7 +780,7 @@ async function _flushScheduled(pool, apiBase) {
       }
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       const html = buildHtml({
-        text: m.cuerpo, firma: '', trackToken: m.track_token, apiBase,
+        text: m.cuerpo, firma: m.con_firma ? pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma) : '', trackToken: m.track_token, apiBase,
         trackOpens: !!(apiBase && m.track_token && m.track_opens),
         trackClicks: !!(apiBase && m.track_token && m.track_clicks),
       });

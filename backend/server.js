@@ -7100,15 +7100,18 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const { rows: [sendCfg] } = await pool.query(`SELECT track_opens, track_clicks FROM lm_send_settings WHERE user_id=$1`, [req.workspaceOwnerId]);
     const trackOpens  = sendCfg ? sendCfg.track_opens  !== false : true;
     const trackClicks = sendCfg ? sendCfg.track_clicks !== false : true;
-    const html = buildHtml({ text: cuerpo, firma: '', trackToken: track_token, apiBase, trackOpens, trackClicks });
+    // Correo NUEVO (desde «Escribir correo» / Nuevo correo): lleva la firma del buzón del cliente, en el idioma del contacto. Las respuestas en hilo siguen sin firma.
+    const conFirma = b.con_firma === true;
+    const firmaHtml = conFirma ? require('./services/sendEngine').pickSignature(mb.signature_html, mb.signatures, k.idioma) : '';
+    const html = buildHtml({ text: cuerpo, firma: firmaHtml, trackToken: track_token, apiBase, trackOpens, trackClicks });
 
     // ── Envío programado: se guarda 'scheduled' y el motor lo despacha al vencer ──
     const schedAt = b.scheduled_at ? new Date(b.scheduled_at) : null;
     if (schedAt && !isNaN(schedAt) && schedAt.getTime() > Date.now() + 30 * 1000) {
       const { rows: [msg] } = await pool.query(
-        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails, track_token)
-         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10) RETURNING id, asunto, cuerpo, scheduled_at`,
-        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', '), track_token]);
+        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails, track_token, con_firma)
+         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10,$11) RETURNING id, asunto, cuerpo, scheduled_at`,
+        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', '), track_token, conFirma]);
       return res.status(201).json({ ok: true, scheduled: true, message: msg });
     }
 
