@@ -19096,3 +19096,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm-q-sel { height: 28px; max-width: 200px; padding: 0 8px; border: 1px solid #E4E0D9; background: #fff; font: inherit; font-size: .76rem; color: #3D3A36; border-radius: 0; cursor: pointer; } .lm-q-sel.is-on { background: #EAF2FE; border-color: #7FA8F0; color: #1F4FA8; }
 .lm-q-clr { height: 28px; padding: 0 10px; border: 0; background: none; font: inherit; font-size: .76rem; font-weight: 700; color: #1F4FA8; cursor: pointer; }
 .seq-task__warn { margin-left: 6px; font-size: .62rem; font-weight: 700; padding: 1px 6px; background: #FEF3C7; color: #92400E; }
+.lm-dt--env { table-layout: fixed; width: 100%; }
+.lm-dt--env th:nth-child(1) { width: 25%; } .lm-dt--env th:nth-child(2) { width: 33%; } .lm-dt--env th:nth-child(3) { width: 21%; } .lm-dt--env th:nth-child(4) { width: 8%; } .lm-dt--env th:nth-child(5) { width: 13%; }
+.lm-dt--env td { overflow: hidden; text-overflow: ellipsis; word-break: break-word; }

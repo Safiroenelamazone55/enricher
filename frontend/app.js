@@ -23888,7 +23888,7 @@ ${foot}
       const _cityS = String(_tzs).split('/').pop().replace(/_/g, ' ');
       const _waItems = (_seqWa || []).map(w => {
         const q = w.estado === 'programado' || w.estado === 'enviando';
-        return { _ch: 'whatsapp', id: 'wa' + w.id, contact_id: w.contact_id, nombre: w.nombre, apellido: w.apellido, to_email: w.telefono ? '+' + String(w.telefono).replace(/^\+/, '') : '', asunto: w.texto,
+        return { _ch: 'whatsapp', id: 'wa' + w.id, contact_id: w.contact_id, nombre: w.nombre, apellido: w.apellido, to_email: w.telefono ? '+' + String(w.telefono).replace(/^\+/, '') : '', asunto: String(w.texto || '').replace(/\s+/g, ' ').slice(0, 90) + (String(w.texto || '').length > 90 ? '…' : ''),
           estado: q ? 'approved' : (w.estado === 'enviado' ? 'sent' : 'failed'), sent_at: w.estado === 'enviado' ? w.ts : null, created_at: w.ts, est_send_at: q ? w.scheduled_at : null,
           seq_timezone: w.seq_timezone, error: w.estado === 'error_programado' ? w.ultimo_error : '', opens: 0, clicks: 0, seq_nombre: '' };
       });
@@ -23916,7 +23916,7 @@ ${foot}
           ${(_envF.canal || _envF.dia || _envF.estado) ? `<button type="button" class="lm-q-clr" onclick="LeadManagerModule.envFilter('canal','');LeadManagerModule.envFilter('dia','');LeadManagerModule.envFilter('estado','')">Limpiar</button>` : ''}</div>
         <div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''} LinkedIn es manual: se gestiona desde Tareas.</div></div>`;
       const _rows = [..._iq, ..._ir].map(m => _msgRow(m)).join('') || `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--muted)">Sin envíos con estos filtros</td></tr>`;
-      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_rows}</tbody></table></div>`;
+      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt lm-dt--env"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_rows}</tbody></table></div>`;
     }
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null || _seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
