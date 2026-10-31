@@ -450,10 +450,10 @@ async function initAuth() {
         if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab, { silent: true });
       }
       if (projectParam) {
-        ProjectsModule.load();
-        await TasksModule.setProjectFilter(+projectParam);
+        try { SpacesModule.openProject(+projectParam); } catch (_) {}
+        document.querySelector('.snav-item[data-tab="mgmt-spaces"]')?.click();
       } else if (taskParam) {
-        await TasksModule.openTaskPage(+taskParam);
+        openTaskAnywhere(+taskParam);
       }
       if (window.__novaBootDone) window.__novaBootDone();   // la sección ya está activa: se quita la pantalla de carga
       await FxRatesModule.load();
@@ -1010,9 +1010,8 @@ function _applyHomeMode(on) {
 // vuelva al mismo proyecto) — global porque se llama desde onclick de varios
 // módulos (Dashboard, Mi trabajo, Proyectos).
 function abrirVentanaProyecto(pid) {
-  window.__projLock = { pid, until: Date.now() + 8000 }; // un load() de Tareas en curso no debe quitar el filtro
-  document.querySelector('.snav-item[data-tab="mgmt-tasks"]')?.click();
-  setTimeout(() => TasksModule.setProjectFilter(pid), 250);
+  try { SpacesModule.openProject(pid); } catch (_) {}   // el proyecto se abre dentro de Espacios
+  document.querySelector('.snav-item[data-tab="mgmt-spaces"]')?.click();
 }
 
 // Vuelve al home desde cualquier módulo (llamado por el botón "← Módulos"
@@ -12161,7 +12160,7 @@ const MyWorkModule = (() => {
   // El menú, el panel y los selectores son los de Tareas: se le entrega la misma lista de tareas (compartida) y avisa de vuelta cuando algo cambia.
   function _adoptTT() { try { TasksModule._adopt(_tasks); } catch (e) { console.error('[mywork] adopt:', e); } }
   function openCardMenu(ev, id) { ev.preventDefault(); ev.stopPropagation(); _adoptTT(); TasksModule.openKanbanMenu(ev, id); }
-  function openCard(id) { _adoptTT(); document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
+  function openCard(id) { _adoptTT(); openTaskAnywhere(id); }
   function _fromTasks(arr) { if (arr && arr !== _tasks) _tasks = arr; render(); }
 
   // ── Filtros estilo Notion (propiedad · es / no es · valores) + búsqueda ──
@@ -13081,7 +13080,7 @@ const AnalyticsModule = (() => {
 // =================================================================
 
 // Abrir el detalle de una tarea desde cualquier sección, y recordar las últimas abiertas (tarjeta «Recientes» del Dashboard).
-function openTaskAnywhere(id) { document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
+function openTaskAnywhere(id) { window.__allowTasksPane = true; document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
 function _pushRecentTask(id) { try { const a = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]').filter(x => x !== id); a.unshift(id); localStorage.setItem('nova_recent_tasks', JSON.stringify(a.slice(0, 12))); } catch (_) {} }
 
 function _parseEstG(v) {
@@ -13822,7 +13821,7 @@ const TasksModule = (() => {
 
   async function openTaskPage(id) {
     _pushRecentTask(id);
-    if (!_tasks.length) await load();
+    if (!_tasks.length || !_tasks.some(x => x.id === id)) await load();
     await _renderTaskDetail(id);
   }
 
@@ -13832,7 +13831,7 @@ const TasksModule = (() => {
     window.open(location.origin + location.pathname + '?task=' + id, '_blank');
   }
 
-  function closeTaskPage() {
+  function closeTaskPage(goBack) {
     if (_tdCommentPoll) { clearInterval(_tdCommentPoll); _tdCommentPoll = null; }
     if (_tdResizeBound) { window.removeEventListener('resize', _tdFitHeight); _tdResizeBound = false; }
     _tdCurrentId = null;
@@ -13841,6 +13840,7 @@ const TasksModule = (() => {
     const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
     if (ph) ph.style.display = '';
     _applyView();
+    if (goBack === true) document.querySelector('.snav-item[data-tab="mgmt-spaces"]')?.click();   // Tareas ya no es una sección: se vuelve a Espacios
   }
 
   const _TD_ESTADOS = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['bloqueado', 'Bloqueado'], ['completado', 'Completado'], ['cancelado', 'Cancelado']];
@@ -13870,9 +13870,9 @@ const TasksModule = (() => {
     dv.innerHTML = `
       <div class="tskd">
         <div class="tskd__crumb">
-          <button class="tskd__back" onclick="TasksModule.closeTaskPage()">
+          <button class="tskd__back" onclick="TasksModule.closeTaskPage(true)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            Tareas
+            Espacios
           </button>
           ${t.project_nombre ? `<span class="tskd__crumb-sep">/</span><span class="tskd__crumb-txt">${esc(t.project_nombre)}</span>` : ''}
           ${parent ? `<span class="tskd__crumb-sep">/</span><a class="tskd__crumb-link" href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${parent.id})">${esc(parent.titulo)}</a>` : ''}
@@ -16146,7 +16146,7 @@ const TasksModule = (() => {
     toggleTaskExpand, toggleSubExpand, toggleTlGroup,
     tlOpenDepPop, tlAddDep, tlRemoveDep,
     kanbanDragStart, kanbanDragEnd, moveTaskToStatus,
-    openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
+    kcCard: _kcCard, timerBtn: _timerBtn, openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
     openKcPrioPopover, saveKcPrio,
     openKcDatePopover,
     openKcRespPopover, saveKcResp, _kcFilterResp,
@@ -20567,6 +20567,7 @@ const ProjectsModule = (() => {
       }
       closeDrawer();
       await load();
+      try { if (typeof SpacesModule !== 'undefined') SpacesModule.load(); } catch (_) {}   // Espacios muestra los mismos proyectos: se refresca
       try { TasksModule.refreshProjectHeader(pid); } catch (_) {}
       // Para que el proyecto no quede vacío: ofrecer crear la primera tarea
       // justo al terminar de crearlo (no al editar uno existente).
@@ -20619,6 +20620,7 @@ const ProjectsModule = (() => {
       if (!res.ok) throw new Error('Error al eliminar');
       closeDrawer();
       await load();
+      try { if (typeof SpacesModule !== 'undefined') SpacesModule.load(); } catch (_) {}   // Espacios muestra los mismos proyectos: se refresca
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -46549,7 +46551,7 @@ const RNotifPanel = (() => {
   function openMention(id, taskId) {
     apiFetch(`${API}/mentions/${id}/read`, { method: 'POST' }).catch(() => {});
     document.querySelector(`[data-notif-id="menciones:${id}"]`)?.remove();
-    if (taskId) { document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(taskId), 250); }
+    if (taskId) openTaskAnywhere(taskId);
     else document.querySelector('[data-tab=mgmt-projects]')?.click();
   }
 
@@ -48664,6 +48666,13 @@ function initApp() {
   // volver a empujarla a history (eso duplicaría entradas o pisaría un ?tab=
   // que el usuario acaba de pegar).
   function _switchTab(tabName, opts = {}) {
+    // Proyectos y Tareas se retiraron: todo ese trabajo vive ahora en Espacios (el detalle de una tarea sí usa el pane de Tareas)
+    let _soloDetalle = false;   // se entra al pane de Tareas solo para el detalle de una tarea: no se recarga su lista (taparía el detalle)
+    if (tabName === 'mgmt-projects') { try { SpacesModule.showProjects(); } catch (_) {} tabName = 'mgmt-spaces'; }
+    else if (tabName === 'mgmt-tasks') {
+      if (window.__allowTasksPane) { window.__allowTasksPane = false; _soloDetalle = true; }
+      else { try { SpacesModule.showTasks(); } catch (_) {} tabName = 'mgmt-spaces'; }
+    }
     try { localStorage.setItem('kw_activeTab', tabName); } catch (_) {}   // recuerda la sección para restaurarla al recargar
     // Si el pane de Equipo seguia montado dentro de Empresa > Usuarios,
     // devolverlo a su lugar ANTES de decidir que pane queda activo (abajo) --
@@ -48697,7 +48706,7 @@ function initApp() {
     if (tabName === 'mgmt-clients')   ClientsModule.load();
     if (tabName === 'mgmt-projects')  ProjectsModule.load();
     if (tabName === 'mgmt-opportunities') OpportunitiesModule.load();
-    if (tabName === 'mgmt-tasks')     TasksModule.load();
+    if (tabName === 'mgmt-tasks' && !_soloDetalle) TasksModule.load();
     if (tabName === 'mgmt-spaces' && typeof SpacesModule !== 'undefined') SpacesModule.load();
     if (tabName === 'mgmt-calendar')  CalendarModule.load();
     if (tabName === 'mgmt-blocks')    BlocksModule.load();

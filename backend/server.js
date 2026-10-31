@@ -2094,6 +2094,27 @@ app.get('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
 });
 
 // ── PUT /api/mgmt/projects/:id ────────────────────────────────────
+app.get('/api/mgmt/projects/:id/config-summary', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10), wid = req.workspaceOwnerId;
+    const { rows: [p] } = await pool.query('SELECT id FROM projects WHERE id=$1 AND user_id=$2', [id, wid]);
+    if (!p) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const c = await permsSvc.ctx(req), fin = c.isOwner || (c.perms.finanzas && c.perms.finanzas.n >= 1);
+    const [t, te, pp] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE estado NOT IN ('completado','cancelado'))::int AS abiertas, COUNT(*) FILTER (WHERE estado='completado')::int AS completadas,
+          COALESCE(SUM(duracion_est_min),0)::int AS est_min, COALESCE(SUM(monto),0)::float AS monto, COALESCE(SUM(monto) FILTER (WHERE cobrado),0)::float AS cobrado, COALESCE(SUM(monto) FILTER (WHERE en_cuenta),0)::float AS en_cuenta
+        FROM tasks WHERE project_id=$1 AND user_id=$2 AND NOT COALESCE(archivada,false)`, [id, wid]),
+      pool.query(`SELECT COALESCE(SUM(te.duration_s),0)::int AS real_s FROM time_entries te JOIN tasks t ON t.id=te.task_id WHERE t.project_id=$1 AND t.user_id=$2 AND te.ended_at IS NOT NULL`, [id, wid]),
+      pool.query(`SELECT u.id, COALESCE(NULLIF(tm.nombre,''), u.name) AS nombre, SUM(te.duration_s)::int AS s
+        FROM time_entries te JOIN tasks t ON t.id=te.task_id JOIN users u ON u.id=te.user_id
+        LEFT JOIN team_members tm ON tm.user_id=$2 AND LOWER(tm.email)=LOWER(u.email)
+        WHERE t.project_id=$1 AND t.user_id=$2 AND te.ended_at IS NOT NULL GROUP BY u.id, tm.nombre, u.name ORDER BY s DESC`, [id, wid]),
+    ]);
+    const r = t.rows[0], out = { tareas: { total: r.total, abiertas: r.abiertas, completadas: r.completadas }, tiempo: { est_min: r.est_min, real_s: te.rows[0].real_s, por_persona: pp.rows } };
+    if (fin) out.costos = { monto: r.monto, cobrado: r.cobrado, en_cuenta: r.en_cuenta };
+    res.json(out);
+  } catch (e) { console.error('[projects/config-summary]', e.message); res.status(500).json({ error: 'No se pudo cargar el resumen' }); }
+});
 app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
   const { nombre, client_id, descripcion, estado, responsable, responsable_id, responsables,
           fecha_inicio, fecha_fin, valor_total, prioridad,
@@ -2106,6 +2127,8 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
   const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
   const respFirst = respArr[0] || '';
   try {
+    const cur = (await pool.query('SELECT * FROM projects WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId])).rows[0] || {};
+    const _k = (f, v, d) => v === undefined ? (cur[f] == null ? d : cur[f]) : (v || d);   // no enviado = se conserva; enviado vacío = se limpia
     const { rows } = await pool.query(
       `UPDATE projects
           SET client_id=$3, nombre=$4, descripcion=$5, estado=$6,
@@ -2119,11 +2142,11 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
         WHERE id=$1 AND user_id=$2
         RETURNING *`,
       [req.params.id, req.workspaceOwnerId, client_id, _conCodigoProyecto(req.params.id, nombre),
-       descripcion || '', estado || 'activo', respFirst, responsable_id || null, respArr,
-       fecha_inicio || null, fecha_fin || null, valor_total || null, prioridad || 'media',
-       tipo_proyecto || 'fijo', moneda || 'USD',
-       tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
-       comision || null, touchResp]
+       descripcion === undefined ? (cur.descripcion || '') : (descripcion || ''), _k('estado', estado, 'activo'), respFirst, _k('responsable_id', responsable_id, null), respArr,
+       _k('fecha_inicio', fecha_inicio, null), _k('fecha_fin', fecha_fin, null), _k('valor_total', valor_total, null), _k('prioridad', prioridad, 'media'),
+       _k('tipo_proyecto', tipo_proyecto, 'fijo'), _k('moneda', moneda, 'USD'),
+       _k('tarifa_hora', tarifa_hora, null), _k('horas_estimadas', horas_estimadas, null), _k('horas_semanales', horas_semanales, null), _k('horario_semanal', horario_semanal, ''),
+       _k('comision', comision, null), touchResp]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
     if (['completado', 'cancelado'].includes(rows[0].estado)) await _slackArchivarCanalProyecto(req.workspaceOwnerId, rows[0].id);
