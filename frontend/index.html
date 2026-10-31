@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261031o"/>
+  <link rel="stylesheet" href="style.css?v=20261031s"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -935,6 +935,7 @@
           </div>
           <div class="d3-act-timer" id="dash2-act-timer"></div>
         </div>
+        <div class="d3-card hm-card hm-card--ag" id="dash2-agenda" style="display:none"></div>
       </div>
 
       <!-- Loading -->
@@ -946,10 +947,16 @@
       <!-- Body -->
       <div class="d3-body hidden" id="dash2-body">
         <div class="d3-grid" id="d3-grid">
-          <!-- Col 1: Mis tareas -->
-          <div class="d3-card" id="dash2-tasks"></div>
+          <!-- Col 1: Mis tareas + bloqueos, próximos 7 días y agenda -->
+          <div class="d3-leftcol">
+            <div class="d3-card" id="dash2-tasks"></div>
+            <div class="d3-card hm-card" id="dash2-bloq" style="display:none"></div>
+            <div class="d3-card hm-card" id="dash2-prox" style="display:none"></div>
+          </div>
           <!-- Col 2: Tareas de oportunidades (si hay) + Resumen de tareas / Tiempo de hoy lado a lado -->
           <div class="d3-sidebar-col">
+            <div class="d3-card hm-card hm-card--pt" id="dash2-paratii" style="display:none"></div>
+            <div class="d3-card hm-card" id="dash2-cobros" style="display:none"></div>
             <div class="d3-card d3-card--opp" id="dash2-opp-tasks" style="display:none"></div>
             <div class="d3-row2">
               <div class="d3-card d3-card--overview" id="dash2-overview" style="display:none"></div>
@@ -957,6 +964,8 @@
             </div>
             <div class="d3-card" id="dash2-prio" style="display:none"></div>
             <div class="d3-card" id="dash2-recent" style="display:none"></div>
+            <div class="d3-card hm-card" id="dash2-outreach" style="display:none"></div>
+            <div class="d3-card hm-card" id="dash2-team" style="display:none"></div>
           </div>
         </div>
         <div class="an-pane-wrap hidden" id="dash2-analytics-pane"></div>
@@ -3558,11 +3567,12 @@
   })();
 </script>
 
-<script src="app.js?v=2026103040"></script>
+<script src="app.js?v=2026103041"></script>
 <script src="worldclock.js?v=3"></script>
 <script src="agentes.js?v=3"></script>
 <script src="spaces.js?v=21"></script>
 <script src="permisos.js?v=4"></script>
+<script src="home.js?v=1"></script>
 <script src="contenido.js?v=7"></script>
 <script src="mobile.js?v=5"></script>
 <script src="varchips.js?v=2026101201"></script>

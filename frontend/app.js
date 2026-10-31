@@ -10252,6 +10252,7 @@ const DashboardModule = (() => {
       _renderOverview(_ovTasks);
       _renderOppTasks();
       _renderHours();
+      try { if (typeof HomeModule !== 'undefined') HomeModule.render(allTasks); } catch (e) { console.error('[home]', e); }
 
       loadEl.classList.add('hidden');
       bodyEl.classList.remove('hidden');
@@ -14121,19 +14122,43 @@ const TasksModule = (() => {
         box.innerHTML = '<div class="chat-ch-empty">Sin comentarios aún. Sé el primero.</div>';
         return;
       }
+      // comentarios asignados a alguien (bandeja «Para ti» del Inicio) y marca de «visto»
+      let asg = []; try { const ra = await apiFetch(`${API}/home/assignments?task=${id}`); asg = ra.ok ? await ra.json() : []; } catch (_) {}
+      const asgBy = new Map(); asg.forEach(a => { if (!asgBy.has(a.message_id)) asgBy.set(a.message_id, []); asgBy.get(a.message_id).push(a); });
+      apiFetch(`${API}/home/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id }) }).catch(() => {});
       box.innerHTML = msgs.map(m => {
         const time = m.created_at ? new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
         const ini = (m.sender_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
         return `<div class="tskd-cm">
           <div class="tskd-cm__av">${ini}</div>
           <div class="tskd-cm__body">
-            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span></div>
+            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span><button class="tskd-cm__as" title="Asignar este comentario a alguien: le queda pendiente en su Inicio hasta que lo resuelva" onclick="TasksModule._cmAssignMenu(event,${m.id},${id})">⚑ Asignar</button></div>
             <div class="tskd-cm__txt">${MentionPicker.highlight(esc(m.content))}</div>
+            ${(asgBy.get(m.id) || []).map(a => `<div class="tskd-asg${a.resolved ? ' is-done' : ''}">⚑ Asignado a <b>${esc(a.assigned_to_name)}</b>${a.resolved ? ` · resuelto${a.resolved_by_name ? ' por ' + esc(a.resolved_by_name) : ''} <button onclick="TasksModule._cmResolve(${a.id},${id},true)">Reabrir</button>` : ` <button onclick="TasksModule._cmResolve(${a.id},${id})">Marcar como resuelto</button>`}</div>`).join('')}
           </div>
         </div>`;
       }).join('');
       if (!silent || atBottom) box.scrollTop = box.scrollHeight;
     } catch (_) {}
+  }
+
+  // Asignar un comentario a una persona (queda en su «Para ti» hasta que lo resuelva)
+  function _cmAssignMenu(ev, msgId, taskId) {
+    ev.stopPropagation(); document.getElementById('cm-asg')?.remove();
+    const m = document.createElement('div'); m.id = 'cm-asg'; m.className = 'kc-ctxmenu';
+    const mem = (_teamMembers || []).filter(x => (x.estado || 'activo') === 'activo');
+    m.innerHTML = '<div class="kc-ctx-sublabel">Asignar comentario a…</div>' + (mem.map(x => `<button class="kc-ctx-item" onclick="TasksModule._cmAssign(${msgId},${x.id},${taskId})">${esc(x.nombre)}</button>`).join('') || '<div class="kc-ctx-sublabel">Sin personas</div>');
+    const r = ev.currentTarget.getBoundingClientRect(); m.style.cssText = `display:block;position:fixed;z-index:9600;left:${Math.min(r.left, innerWidth - 220)}px;top:${Math.min(r.bottom + 4, innerHeight - 260)}px`;
+    document.body.appendChild(m); setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+  }
+  async function _cmAssign(msgId, memberId, taskId) {
+    document.getElementById('cm-asg')?.remove();
+    try { const r = await apiFetch(`${API}/home/comments/${msgId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ member_id: memberId }) }); if (!r.ok) throw new Error((await r.json()).error || 'No se pudo asignar'); showBanner('✓ Comentario asignado', 'success'); await _tdLoadComments(taskId); }
+    catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function _cmResolve(asgId, taskId, reabrir) {
+    try { const r = await apiFetch(`${API}/home/assigned/${asgId}/resolve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reabrir: !!reabrir }) }); if (!r.ok) throw new Error((await r.json()).error || 'No se pudo actualizar'); await _tdLoadComments(taskId); }
+    catch (e) { showBanner(e.message, 'error'); }
   }
 
   async function _tdSendComment(id) {
@@ -16137,7 +16162,7 @@ const TasksModule = (() => {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
-    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
+    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment, _cmAssignMenu, _cmAssign, _cmResolve,
     pjTab, pjSendNote, pjLinkAdd, pjLinkDel, _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,

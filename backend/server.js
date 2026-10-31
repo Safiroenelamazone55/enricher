@@ -343,6 +343,7 @@ function requireAuth(req, res, next) {
 }
 // Roles y permisos: guardia global sobre /api (antes de las rutas) + filtros de listados
 const permsSvc = require('./services/permissions').mount(app, { pool, requireAuth });
+require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
 // que la Browser Extension / Desktop Agent consumen sin cookies (Fase 2.1).
