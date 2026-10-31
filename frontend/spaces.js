@@ -35,6 +35,7 @@ const SpacesModule = (() => {
       _spaces = sr.ok ? await sr.json() : []; _projects = pr.ok ? await pr.json() : []; _tasks = tr.ok ? await tr.json() : []; _team = mr.ok ? await mr.json() : [];
     } catch (e) { console.error('[spaces] load', e); }
     _loaded = true;
+    try { const pp = parseInt(new URLSearchParams(location.search).get('p'), 10); if (pp && !window.__spLinkDone) { window.__spLinkDone = true; const pj = _projects.find(x => x.id === pp); if (pj) { _selProj = pp; _selSpace = pj.space_id || 0; _openSp.add('p' + _selSpace); } } } catch (_) {}
     if (_selProj && !_projects.some(p => p.id === _selProj)) _selProj = null;
     render();
   }
@@ -42,10 +43,10 @@ const SpacesModule = (() => {
   function _adopt() { try { TasksModule._adopt(_tasks); } catch (e) { console.error('[spaces] adopt', e); } }
 
   // ── estructura ──
-  const _projsOf = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado');
+  const _projsOf = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado' && !p.archivado);
   const _cnt = pid => _tasks.filter(t => t.project_id === pid && !t.archivada && !t.parent_task_id && _isOpen(t)).length;
   const _scope = () => {
-    let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.map(p => p.id));
+    let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.filter(p => !p.archivado).map(p => p.id));
     return _tasks.filter(t => !t.archivada && ps.includes(t.project_id));
   };
   const _title = () => { const p = _projects.find(x => x.id === _selProj); const sp = _selSpace != null ? (_selSpace === 0 ? { nombre: 'Principal' } : _spaces.find(s => s.id === _selSpace)) : null; return { sp, p }; };
@@ -63,13 +64,25 @@ const SpacesModule = (() => {
       return `<div class="sp-sp${_selSpace === id && !_selProj ? ' on' : ''}">
         <div class="sp-sp__h" onclick="SpacesModule.toggleSp(${id})"><span class="sp-sq" style="background:${color}">${_nrm(nombre).slice(0, 1).toUpperCase() || '?'}</span><span class="sp-sp__n">${esc(nombre)}</span>
           <button class="sp-ic" title="Agregar lista" onclick="event.stopPropagation();SpacesModule.spaceMenu(event,${id})">+</button>${id ? `<button class="sp-ic" title="Más" onclick="event.stopPropagation();SpacesModule.spaceOpts(event,${id})">⋯</button>` : ''}</div>
-        ${open ? `<div class="sp-sp__b">${ps.map(p => `<button type="button" class="sp-pj${_selProj === p.id ? ' on' : ''}" onclick="SpacesModule.pick(${id},${p.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg><span>${esc(p.nombre)}</span><em>${_cnt(p.id) || ''}</em></button>`).join('') || '<div class="sp-e">Sin listas todavía</div>'}</div>` : ''}</div>`;
+        ${open ? `<div class="sp-sp__b">${ps.map(p => _pjRow(id, p)).join('') || '<div class="sp-e">Sin listas todavía</div>'}</div>` : ''}</div>`;
     };
     t.innerHTML = `<div class="sp-tree__h"><b>Espacios</b><button class="sp-add" title="Nuevo espacio" onclick="SpacesModule.newSpace()">+</button></div>
       <button type="button" class="sp-all${_selSpace == null && !_selProj ? ' on' : ''}" onclick="SpacesModule.pick(null,null)"><span class="sp-all__i">✱</span>Todas las tareas</button>
+      ${_favHtml()}
       ${spRow(0, 'Principal', '#7C5CE0', _openSp.has('p0'))}${_spaces.map(s => spRow(s.id, s.nombre, s.color, _openSp.has('p' + s.id))).join('')}
       ${_addingSpace ? `<div class="sp-newin"><input id="sp-new" placeholder="Nombre del espacio" onkeydown="if(event.key==='Enter')SpacesModule.saveSpace(this.value);if(event.key==='Escape')SpacesModule.cancelSpace()" onblur="SpacesModule.saveSpace(this.value)"></div>` : `<button type="button" class="sp-newsp" onclick="SpacesModule.newSpace()">+ Nuevo espacio</button>`}`;
     if (_addingSpace) setTimeout(() => $q('sp-new')?.focus(), 20);
+  }
+  // fila de un proyecto en el árbol (icono/color propios, contador y menú ⋯ al pasar el cursor)
+  const _fav = () => { try { return JSON.parse(localStorage.getItem('nova_sp_fav') || '[]'); } catch (_) { return []; } };
+  const _isFav = pid => _fav().includes(pid);
+  function _pjRow(sid, p) {
+    const ic = p.icono ? `<i class="sp-pj__e" style="${p.color ? 'background:' + p.color + '22' : ''}">${esc(p.icono)}</i>` : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${p.color || 'currentColor'}" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>`;
+    return `<div class="sp-pjw"><button type="button" class="sp-pj${_selProj === p.id ? ' on' : ''}" onclick="SpacesModule.pick(${sid},${p.id})">${ic}<span>${esc(p.nombre)}</span>${_isFav(p.id) ? '<b class="sp-pj__f">★</b>' : ''}<em>${_cnt(p.id) || ''}</em></button><button type="button" class="sp-pj__m" title="Opciones del proyecto" onclick="event.stopPropagation();SpacesModule.projMenu(event,${p.id})">⋯</button></div>`;
+  }
+  function _favHtml() {
+    const fv = _fav().map(id => _projects.find(p => p.id === id)).filter(p => p && !p.archivado); if (!fv.length) return '';
+    return `<div class="sp-favh">★ Favoritos</div>${fv.map(p => _pjRow(p.space_id || 0, p)).join('')}`;
   }
   function toggleSp(id) { const k = 'p' + id; if (_openSp.has(k)) _openSp.delete(k); else _openSp.add(k); _selSpace = id; _selProj = null; _save(); _paintTree(); _paintMain(); }
   function pick(sid, pid) { _selSpace = sid; _selProj = pid; if (sid != null) _openSp.add('p' + sid); _save(); _paintTree(); _paintMain(); }
@@ -94,7 +107,7 @@ const SpacesModule = (() => {
   }
   function spaceMenu(ev, sid) {
     const others = _projects.filter(p => (p.space_id || 0) !== (sid || 0) && (p.estado || 'activo') !== 'cancelado');
-    _openPop(ev.currentTarget, `<div class="sp-pop__h">Agregar lista a este espacio</div><button class="sp-pop__i" onclick="SpacesModule.newProject(${sid || 0})">＋ Crear proyecto nuevo en este espacio</button>${others.length ? '<div class="sp-pop__s">Mover un proyecto existente aquí</div><div class="sp-pop__l">' + others.map(p => `<button class="sp-pop__i" onclick="SpacesModule.moveProj(${p.id},${sid || 0})">${esc(p.nombre)}</button>`).join('') + '</div>' : ''}`);
+    _openPop(ev.currentTarget, `<div class="sp-pop__h">Agregar lista a este espacio</div><button class="sp-pop__i" onclick="SpacesModule.newProject(${sid || 0})">＋ Crear proyecto nuevo en este espacio</button><button class="sp-pop__i" onclick="SpacesModule.tplCreateOpen(${sid || 0})">＋ Crear proyecto desde plantilla</button>${others.length ? '<div class="sp-pop__s">Mover un proyecto existente aquí</div><div class="sp-pop__l">' + others.map(p => `<button class="sp-pop__i" onclick="SpacesModule.moveProj(${p.id},${sid || 0})">${esc(p.nombre)}</button>`).join('') + '</div>' : ''}`);
   }
   function newProject(sid) { _closePop(); try { document.querySelector('[data-tab=mgmt-projects]')?.click(); setTimeout(() => ProjectsModule.openDrawer && ProjectsModule.openDrawer(null, null, sid || null), 300); } catch (_) {} }
   async function moveProj(pid, sid) {
@@ -181,6 +194,194 @@ const SpacesModule = (() => {
       await apiFetch(`${API}/mgmt/space-views/${real.id}`, { method: 'DELETE' }); _views = _views.filter(v => v.id !== real.id); delete _viewSel[k]; _save();
     } catch (e) { showBanner('No se pudo quitar la vista', 'error'); }
     _paintMain();
+  }
+
+
+  // ═══ Menú ⋯ de un proyecto (como el de una «lista» de ClickUp): favorito, nombre, vínculo, crear, color/ícono, información, plantillas, importar, mover, duplicar, archivar, eliminar ═══
+  const _pjOf = pid => _projects.find(p => p.id === pid);
+  const _plain = n => String(n || '').replace(/^P\d{3,}\s*[·\-—:]?\s*/i, '').trim();
+  const _I = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _IC = { star: '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9"/>', edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>', plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', pal: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="10" r="1"/>', info: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/>', tpl: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>', imp: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', mv: '<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>', dup: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', arc: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>', del: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>' };
+  let _pmPid = 0;
+  function _pmMainHtml() {
+    const pid = _pmPid, p = _pjOf(pid); if (!p) return '';
+    const it = (ic, l, fn, cls) => `<button type="button" class="sp-pm__i${cls ? ' ' + cls : ''}" onclick="${fn}">${_I(_IC[ic])}<span>${l}</span></button>`;
+    const sub = (ic, l, k) => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmSub('${k}')">${_I(_IC[ic])}<span>${l}</span><i>›</i></button>`;
+    return `<div class="sp-pm__t">${esc(_plain(p.nombre))}</div>${it('star', _isFav(pid) ? 'Quitar de favoritos' : 'Marcar como favorito', 'SpacesModule.pmFav()')}${it('edit', 'Cambiar el nombre', 'SpacesModule.pmRename()')}${it('link', 'Copiar vínculo', 'SpacesModule.pmLink()')}<div class="sp-pm__s"></div>
+      ${sub('plus', 'Crear nuevo', 'new')}${sub('pal', 'Color e ícono', 'color')}${it('info', 'Información del proyecto', 'SpacesModule.pmInfo()')}<div class="sp-pm__s"></div>
+      ${sub('tpl', 'Plantillas', 'tpl')}${sub('imp', 'Importaciones', 'imp')}<div class="sp-pm__s"></div>${sub('mv', 'Mover', 'mv')}${it('dup', 'Duplicar', 'SpacesModule.pmDup()')}${it('arc', 'Archivar', 'SpacesModule.pmArch()')}${it('del', 'Eliminar', 'SpacesModule.pmDel()', 'sp-pm__i--del')}`;
+  }
+  function projMenu(ev, pid) { _pmPid = pid; if (!_pjOf(pid)) return; _openPop(ev.currentTarget, _pmMainHtml(), 'sp-pm'); }
+  function pmBack() { const pop = document.querySelector('.sp-pm'); if (pop) pop.innerHTML = _pmMainHtml(); }
+  function pmSub(k) {
+    const pop = document.querySelector('.sp-pm'); if (!pop) return; const p = _pjOf(_pmPid); if (!p) return;
+    const back = t => `<button type="button" class="sp-pm__b" onclick="SpacesModule.pmBack()">‹ ${t}</button>`;
+    const it = (ic, l, fn) => `<button type="button" class="sp-pm__i" onclick="${fn}">${_I(_IC[ic] || _IC.plus)}<span>${l}</span></button>`;
+    let h = '';
+    if (k === 'new') h = back('Crear nuevo') + it('plus', 'Tarea', 'SpacesModule.pmNewTask()') + [['documento', 'Documento'], ['formulario', 'Formulario'], ['panel', 'Panel'], ['pizarra', 'Pizarra']].map(([t, l]) => it('plus', l + ' <em>(vista)</em>', `SpacesModule.pmAddView('${t}')`)).join('') + '<div class="sp-pm__s"></div>' + it('imp', 'Importar hoja de cálculo', 'SpacesModule.impOpen()') + it('tpl', 'Aplicar una plantilla', 'SpacesModule.tplApplyOpen()');
+    else if (k === 'tpl') h = back('Plantillas') + it('tpl', 'Establecer plantilla de tarea predeterminada', 'SpacesModule.tdOpen()') + '<div class="sp-pm__s"></div>' + it('tpl', 'Aplicar una plantilla', 'SpacesModule.tplApplyOpen()') + it('imp', 'Guardar como plantilla', 'SpacesModule.tplSaveOpen()') + it('dup', 'Actualizar plantilla existente', 'SpacesModule.tplRefreshOpen()') + '<div class="sp-pm__s"></div>' + it('edit', 'Administrar plantillas', 'SpacesModule.tplManage()');
+    else if (k === 'imp') h = back('Importaciones') + it('imp', 'Archivo de hoja de cálculo (Excel / CSV)', 'SpacesModule.impOpen()') + '<div class="sp-pm__n">Otras herramientas (Asana, Trello, Notion…) llegarán después.</div>';
+    else if (k === 'mv') { const cur = p.space_id || 0; h = back('Mover a…') + [{ id: 0, nombre: 'Principal' }, ..._spaces].map(s => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmMove(${s.id})"><span class="sp-sq sp-sq--s" style="background:${s.color || '#7C5CE0'}">${_nrm(s.nombre).slice(0, 1).toUpperCase()}</span><span>${esc(s.nombre)}</span>${cur === s.id ? '<i>✓</i>' : ''}</button>`).join(''); }
+    else if (k === 'color') {
+      const cols = ['#7C5CE0', '#2F6BFF', '#0891B2', '#2E9E5B', '#E8920F', '#D9534F', '#D6409F', '#6B6760'], emos = ['📁', '📌', '🚀', '🎯', '📣', '💼', '🛒', '🧾', '📞', '✉️', '💡', '🔧', '📈', '🧪', '🏠', '🌍', '🎨', '🧠', '⚙️', '🔔', '📅', '⭐', '🤝', '💰'];
+      h = back('Color e ícono') + `<div class="sp-pm__n">Color</div><div class="sp-pm__cols">${cols.map(c => `<button type="button" style="background:${c}" class="${p.color === c ? 'on' : ''}" onclick="SpacesModule.pmStyle('color','${c}')"></button>`).join('')}</div><div class="sp-pm__n">Ícono</div><div class="sp-pm__emos">${emos.map(e => `<button type="button" class="${p.icono === e ? 'on' : ''}" onclick="SpacesModule.pmStyle('icono','${e}')">${e}</button>`).join('')}</div><button type="button" class="sp-pm__i" onclick="SpacesModule.pmStyle('reset')"><span>Restablecer</span></button>`;
+    }
+    pop.innerHTML = h;
+  }
+  async function _reload() {
+    try { const [pr, tr, sr, vr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/space-views`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok) _tasks = await tr.json(); if (sr.ok) _spaces = await sr.json(); if (vr.ok) _views = await vr.json(); } catch (_) {}
+    if (_selProj && !_projects.some(p => p.id === _selProj && !p.archivado)) _selProj = null;
+    _paintTree(); _paintMain();
+  }
+  const _post = (url, body, m) => apiFetch(`${API}${url}`, { method: m || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const _err = async (r, d) => { try { return (await r.json()).error || d; } catch (_) { return d; } };
+  function pmFav() { _closePop(); const f = _fav(), i = f.indexOf(_pmPid); if (i >= 0) f.splice(i, 1); else f.push(_pmPid); try { localStorage.setItem('nova_sp_fav', JSON.stringify(f)); } catch (_) {} _paintTree(); }
+  async function pmRename() {
+    _closePop(); const p = _pjOf(_pmPid); const v = prompt('Nombre del proyecto', _plain(p.nombre)); if (!v || !v.trim()) return;
+    const r = await _post(`/mgmt/projects/${_pmPid}/meta`, { nombre: v.trim() }, 'PATCH'); if (!r.ok) { showBanner(await _err(r, 'No se pudo renombrar'), 'error'); return; } const j = await r.json(); p.nombre = j.nombre; _paintTree(); _paintMain();
+  }
+  function pmLink() { _closePop(); const u = `${location.origin}/?tab=mgmt-spaces&p=${_pmPid}`; try { navigator.clipboard.writeText(u); showBanner('✓ Vínculo copiado', 'success'); } catch (_) { prompt('Copia el vínculo', u); } }
+  function pmNewTask() { _closePop(); pick(_pjOf(_pmPid).space_id || 0, _pmPid); setTimeout(() => newTask('pendiente'), 60); }
+  async function pmAddView(t) { _closePop(); const p = _pjOf(_pmPid); pick(p.space_id || 0, _pmPid); await addView(t); }
+  async function pmMove(sid) { _closePop(); await moveProj(_pmPid, sid); }
+  async function pmStyle(k, v) {
+    const body = k === 'reset' ? { color: '', icono: '' } : { [k]: v }; const r = await _post(`/mgmt/projects/${_pmPid}/meta`, body, 'PATCH'); if (!r.ok) return; const j = await r.json(); Object.assign(_pjOf(_pmPid), j); _paintTree(); _paintMain(); pmSub('color');
+  }
+  async function pmArch() {
+    _closePop(); const p = _pjOf(_pmPid); if (!confirm(`¿Archivar «${_plain(p.nombre)}»? Deja de verse en Espacios y Proyectos, pero no se borra nada.`)) return;
+    const r = await _post(`/mgmt/projects/${_pmPid}/meta`, { archivado: true }, 'PATCH'); if (!r.ok) { showBanner('No se pudo archivar', 'error'); return; } p.archivado = true; if (_selProj === _pmPid) _selProj = null; showBanner('✓ Proyecto archivado', 'success'); _paintTree(); _paintMain();
+  }
+  async function pmDel() {
+    _closePop(); const p = _pjOf(_pmPid), n = _tasks.filter(t => t.project_id === _pmPid).length;
+    if (!confirm(`¿Eliminar «${_plain(p.nombre)}» y sus ${n} tarea(s)? Esta acción no se puede deshacer.\n\n(Si solo quieres sacarlo de la vista, usa «Archivar».)`)) return;
+    const r = await apiFetch(`${API}/mgmt/projects/${_pmPid}`, { method: 'DELETE' }); if (!r.ok) { showBanner(await _err(r, 'No se pudo eliminar'), 'error'); return; } showBanner('Proyecto eliminado', 'success'); _selProj = null; await _reload();
+  }
+  // ── ventanas (modales) ──
+  function _modal(html, wide) { document.getElementById('sp-modal')?.remove(); const m = document.createElement('div'); m.id = 'sp-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); }; m.innerHTML = `<div class="fin-pi-box" style="max-width:${wide || 520}px"><div class="fin-pi-box__hd"><h3>${html.t}</h3><button class="fin-pi-x" onclick="document.getElementById('sp-modal').remove()">✕</button></div><div class="sp-mb">${html.b}</div></div>`; document.body.appendChild(m); return m; }
+  const _close = () => document.getElementById('sp-modal')?.remove();
+  const _ck = (id, l, on, hint) => `<label class="sp-ck"><input type="checkbox" id="${id}"${on ? ' checked' : ''}><span>${l}${hint ? `<em>${hint}</em>` : ''}</span></label>`;
+  const _v = id => (document.getElementById(id) || {}).value || '', _c = id => !!(document.getElementById(id) || {}).checked;
+  function pmInfo() {
+    _closePop(); const p = _pjOf(_pmPid), ts = _tasks.filter(t => t.project_id === _pmPid && !t.archivada), abiertas = ts.filter(t => _isOpen(t)).length;
+    const row = (k, v) => v ? `<div class="sp-if"><span>${k}</span><b>${v}</b></div>` : '';
+    _modal({ t: 'Información del proyecto', b: `${row('Nombre', esc(p.nombre))}${row('Cliente', esc((p.client_nombre || '') + (p.client_empresa ? ' · ' + p.client_empresa : '')))}${row('Estado', esc(p.estado || ''))}${row('Espacio', esc(p.space_id ? ((_spaces.find(s => s.id === p.space_id) || {}).nombre || '') : 'Principal'))}${row('Responsables', esc((p.responsables && p.responsables.length ? p.responsables : (p.responsable ? [p.responsable] : [])).join(', ')))}${row('Inicio', _fmtD(_d10(p.fecha_inicio)))}${row('Fin', _fmtD(_d10(p.fecha_fin)))}${row('Tareas', `${ts.length} (${abiertas} abiertas)`)}${row('Valor', p.valor_total ? esc((p.moneda || 'USD') + ' ' + p.valor_total) : '')}${row('Creado', p.created_at ? new Date(p.created_at).toLocaleDateString('es') : '')}${row('Código', esc((String(p.nombre).match(/^P\d{3,}/) || [''])[0]))}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="abrirVentanaProyecto(${p.id});document.getElementById('sp-modal').remove()">Abrir proyecto ›</button></div>` }, 460);
+  }
+  async function pmDup() {
+    _closePop(); const p = _pjOf(_pmPid);
+    _modal({ t: 'Duplicar proyecto', b: `<p class="sp-mp">Se crea «Copia de ${esc(_plain(p.nombre))}» en el mismo espacio y cliente.</p>${_ck('dp-t', 'Copiar tareas y subtareas', true, 'quedan como pendientes, sin horas ni cobros')}${_ck('dp-r', 'Mantener las personas asignadas', true)}${_ck('dp-v', 'Copiar vistas, documentos y pizarras', true)}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.pmDupGo()">Duplicar</button></div>` }, 460);
+  }
+  async function pmDupGo() {
+    const r = await _post(`/mgmt/projects/${_pmPid}/duplicate`, { con_tareas: _c('dp-t'), con_responsables: _c('dp-r'), con_vistas: _c('dp-v') }); if (!r.ok) { showBanner(await _err(r, 'No se pudo duplicar'), 'error'); return; }
+    const j = await r.json(); _close(); showBanner(`✓ Proyecto duplicado (${j.tareas} tareas)`, 'success'); await _reload(); const np = _pjOf(j.id); if (np) pick(np.space_id || 0, np.id);
+  }
+  // ── Plantillas de proyecto ──
+  let _tpls = [];
+  async function _loadTpls() { try { const r = await apiFetch(`${API}/mgmt/project-templates`); _tpls = r.ok ? await r.json() : []; } catch (_) { _tpls = []; } return _tpls; }
+  const _tplOpts = `${_ck('tp-t', 'Tareas y subtareas', true)}${_ck('tp-r', 'Personas asignadas', false)}${_ck('tp-f', 'Fechas', true, 'se guardan relativas al inicio (día 0, día 3…) y se recalculan al usar la plantilla')}${_ck('tp-v', 'Vistas, documentos y pizarras', true)}${_ck('tp-c', 'Datos de cobro y horarios', true)}`;
+  const _tplOptsRead = () => ({ tareas: _c('tp-t'), subtareas: _c('tp-t'), responsables: _c('tp-r'), fechas: _c('tp-f'), vistas: _c('tp-v'), cobro: _c('tp-c') });
+  function tplSaveOpen() {
+    _closePop(); const p = _pjOf(_pmPid);
+    _modal({ t: 'Guardar como plantilla', b: `<p class="sp-mp">Guarda la estructura de «${esc(_plain(p.nombre))}» para repetir ese proceso con otros clientes.</p><label class="sp-fl">Nombre de la plantilla<input id="tp-n" value="${esc(_plain(p.nombre))}"></label><label class="sp-fl">Descripción (opcional)<input id="tp-d" placeholder="Para qué sirve"></label><div class="sp-mh">Qué se guarda</div>${_tplOpts}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.tplSaveGo()">Guardar plantilla</button></div>` }, 520);
+  }
+  async function tplSaveGo() {
+    const n = _v('tp-n').trim(); if (!n) { showBanner('Ponle un nombre', 'error'); return; }
+    const r = await _post('/mgmt/project-templates', { project_id: _pmPid, nombre: n, descripcion: _v('tp-d'), opciones: _tplOptsRead() }); if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar'), 'error'); return; }
+    const j = await r.json(); _close(); showBanner(`✓ Plantilla «${j.nombre}» guardada (${j.n_tareas} tareas, ${j.n_vistas} vistas)`, 'success');
+  }
+  async function tplRefreshOpen() {
+    _closePop(); const ts = await _loadTpls(); if (!ts.length) { showBanner('Aún no hay plantillas: guarda una primero', 'info'); return; }
+    _modal({ t: 'Actualizar plantilla existente', b: `<p class="sp-mp">La plantilla elegida se reemplaza por el estado actual de este proyecto.</p><label class="sp-fl">Plantilla<select id="tr-id">${ts.map(t => `<option value="${t.id}">${esc(t.nombre)} · ${t.n_tareas} tareas</option>`).join('')}</select></label><div class="sp-mh">Qué se guarda</div>${_tplOpts}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.tplRefreshGo()">Actualizar</button></div>` }, 520);
+  }
+  async function tplRefreshGo() {
+    const r = await _post(`/mgmt/project-templates/${_v('tr-id')}/refresh`, { project_id: _pmPid, opciones: _tplOptsRead() }, 'PUT'); if (!r.ok) { showBanner(await _err(r, 'No se pudo actualizar'), 'error'); return; }
+    const j = await r.json(); _close(); showBanner(`✓ Plantilla «${j.nombre}» actualizada`, 'success');
+  }
+  async function tplApplyOpen() {
+    _closePop(); const ts = await _loadTpls(); if (!ts.length) { showBanner('Aún no hay plantillas: guarda una desde un proyecto («Plantillas › Guardar como plantilla»)', 'info'); return; }
+    const p = _pjOf(_pmPid), hoy = _today();
+    _modal({ t: 'Aplicar una plantilla', b: `<p class="sp-mp">Añade a «${esc(_plain(p.nombre))}» las tareas y vistas de una plantilla.</p><label class="sp-fl">Plantilla<select id="ta-id">${ts.map(t => `<option value="${t.id}">${esc(t.nombre)} · ${t.n_tareas} tareas</option>`).join('')}</select></label>
+      <label class="sp-fl">Fecha de inicio (las fechas de las tareas se calculan desde aquí)<input id="ta-f" type="date" value="${_d10(p.fecha_inicio) || hoy}"></label><div class="sp-mh">Personas asignadas</div>${_radios('ta-r', 'plantilla')}${_ck('ta-v', 'Añadir también las vistas, documentos y pizarras', true)}${_ck('ta-a', 'Aplicar los ajustes de la plantilla (descripción, cobro, horarios)', false)}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.tplApplyGo()">Aplicar</button></div>` }, 520);
+  }
+  const _radios = (n, def) => [['plantilla', 'Las de la plantilla'], ['yo', 'Asignármelas a mí'], ['ninguno', 'Sin asignar']].map(([v, l]) => `<label class="sp-rd"><input type="radio" name="${n}" value="${v}"${v === def ? ' checked' : ''}> ${l}</label>`).join('');
+  const _rad = n => (document.querySelector(`input[name="${n}"]:checked`) || {}).value || 'plantilla';
+  async function tplApplyGo() {
+    const r = await _post(`/mgmt/project-templates/${_v('ta-id')}/apply`, { project_id: _pmPid, fecha_inicio: _v('ta-f'), responsables: _rad('ta-r'), yo: _myNm(), con_vistas: _c('ta-v'), aplicar_ajustes: _c('ta-a') }); if (!r.ok) { showBanner(await _err(r, 'No se pudo aplicar'), 'error'); return; }
+    const j = await r.json(); _close(); showBanner(`✓ Plantilla aplicada: ${j.tareas} tareas y ${j.vistas} vistas`, 'success'); await _reload();
+  }
+  const _myNm = () => String(window._authUser?.memberNombre || window._authUser?.name || '');
+  // Crear un proyecto NUEVO desde una plantilla (desde «＋» del espacio o desde Proyectos)
+  async function tplCreateOpen(sid) {
+    _closePop(); const [ts, cr] = await Promise.all([_loadTpls(), apiFetch(`${API}/mgmt/clients`)]); const cls = cr.ok ? await cr.json() : [];
+    try { const sr = await apiFetch(`${API}/mgmt/spaces`); if (sr.ok) _spaces = await sr.json(); } catch (_) {}
+    if (!ts.length) { showBanner('Aún no hay plantillas: abre un proyecto y usa «Plantillas › Guardar como plantilla»', 'info'); return; }
+    _modal({ t: 'Crear proyecto desde plantilla', b: `<label class="sp-fl">Plantilla<select id="tc-id">${ts.map(t => `<option value="${t.id}">${esc(t.nombre)} · ${t.n_tareas} tareas</option>`).join('')}</select></label>
+      <label class="sp-fl">Nombre del proyecto *<input id="tc-n" placeholder="Ej.: Adquisición B2B · Cliente X"></label>
+      <div class="sp-fr"><label class="sp-fl">Cliente *<select id="tc-c"><option value="">Selecciona…</option>${cls.map(c => `<option value="${c.id}">${esc(c.nombre)}${c.empresa ? ' · ' + esc(c.empresa) : ''}</option>`).join('')}</select></label>
+      <label class="sp-fl">Espacio<select id="tc-s"><option value="0">Principal</option>${_spaces.map(s => `<option value="${s.id}"${s.id === sid ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select></label></div>
+      <label class="sp-fl">Fecha de inicio *<input id="tc-f" type="date" value="${_today()}"></label><div class="sp-mh">Personas asignadas</div>${_radios('tc-r', 'plantilla')}<div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="tc-go" onclick="SpacesModule.tplCreateGo()">Crear proyecto</button></div>` }, 540);
+  }
+  async function tplCreateGo() {
+    const n = _v('tc-n').trim(), cid = +_v('tc-c'), f = _v('tc-f'); if (!n || !cid || !f) { showBanner('Falta el nombre, el cliente o la fecha de inicio', 'error'); return; }
+    const btn = document.getElementById('tc-go'); if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      const r = await _post('/mgmt/projects', { nombre: n, client_id: cid, estado: 'activo', fecha_inicio: f, prioridad: 'media', tipo_proyecto: 'fijo', moneda: 'USD', responsables: [], responsable: '' }); if (!r.ok) throw new Error(await _err(r, 'No se pudo crear el proyecto'));
+      const np = await r.json(); const sid = +_v('tc-s') || 0;
+      if (sid) await _post(`/mgmt/projects/${np.id}/space`, { space_id: sid }, 'PATCH');
+      const ra = await _post(`/mgmt/project-templates/${_v('tc-id')}/apply`, { project_id: np.id, fecha_inicio: f, responsables: _rad('tc-r'), yo: _myNm(), con_vistas: true, aplicar_ajustes: true }); if (!ra.ok) throw new Error(await _err(ra, 'El proyecto se creó, pero no se pudo aplicar la plantilla'));
+      const j = await ra.json(); _close(); showBanner(`✓ Proyecto creado desde la plantilla (${j.tareas} tareas)`, 'success'); await _reload(); pick(sid, np.id);
+    } catch (e) { showBanner(e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Crear proyecto'; } }
+  }
+  async function tplManage() {
+    _closePop(); const ts = await _loadTpls();
+    _modal({ t: 'Plantillas de proyecto', b: ts.length ? `<div class="sp-tl">${ts.map(t => `<div class="sp-tl__r"><div><b>${esc(t.nombre)}</b><em>${t.n_tareas} tareas · ${t.n_vistas} vistas${t.created_by ? ' · por ' + esc(t.created_by) : ''}</em></div><span><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplRename(${t.id})">Renombrar</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplDelete(${t.id})">Eliminar</button></span></div>`).join('')}</div>` : '<p class="sp-mp">Aún no hay plantillas. Abre un proyecto y usa «Plantillas › Guardar como plantilla».</p>' }, 560);
+  }
+  async function tplRename(id) { const t = _tpls.find(x => x.id === id), v = prompt('Nombre de la plantilla', t ? t.nombre : ''); if (!v || !v.trim()) return; const r = await _post(`/mgmt/project-templates/${id}`, { nombre: v.trim() }, 'PATCH'); if (r.ok) tplManage(); }
+  async function tplDelete(id) { if (!confirm('¿Eliminar esta plantilla? Los proyectos ya creados con ella no cambian.')) return; await apiFetch(`${API}/mgmt/project-templates/${id}`, { method: 'DELETE' }); tplManage(); }
+  // ── plantilla de tarea predeterminada ──
+  function tdOpen() {
+    _closePop(); const p = _pjOf(_pmPid), td = p.task_defaults || {}, cl = (td.checklists && td.checklists[0]) || null;
+    _modal({ t: 'Plantilla de tarea predeterminada', b: `<p class="sp-mp">Cada tarea nueva de «${esc(_plain(p.nombre))}» nacerá con estos valores (lo que escribas al crearla manda sobre ellos).</p><label class="sp-fl">Descripción<textarea id="td-d" rows="3">${esc(td.descripcion || '')}</textarea></label>
+      <div class="sp-fr"><label class="sp-fl">Prioridad<select id="td-p"><option value="">Sin cambiar</option>${['alta', 'media', 'baja'].map(x => `<option value="${x}"${td.prioridad === x ? ' selected' : ''}>${x[0].toUpperCase() + x.slice(1)}</option>`).join('')}</select></label><label class="sp-fl">Duración estimada (min)<input id="td-m" type="number" min="0" value="${td.duracion_est_min || ''}"></label></div>
+      <label class="sp-fl">Etiquetas (separadas por comas)<input id="td-e" value="${esc((td.etiquetas || []).join(', '))}"></label>
+      <label class="sp-fl">Checklist — título<input id="td-ct" value="${esc(cl ? cl.titulo : '')}" placeholder="Ej.: Pasos del proceso"></label><label class="sp-fl">Checklist — un paso por línea<textarea id="td-ci" rows="4">${esc(cl ? (cl.items || []).map(i => i.texto).join('\n') : '')}</textarea></label>
+      <div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tdClear()">Quitar plantilla</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.tdSave()">Guardar</button></div>` }, 520);
+  }
+  async function tdSave() {
+    const items = _v('td-ci').split('\n').map(x => x.trim()).filter(Boolean), body = { descripcion: _v('td-d'), prioridad: _v('td-p'), duracion_est_min: _v('td-m'), etiquetas: _v('td-e').split(',').map(x => x.trim()).filter(Boolean), checklists: items.length ? [{ titulo: _v('td-ct') || 'Checklist', items: items.map(texto => ({ texto })) }] : [] };
+    const r = await _post(`/mgmt/projects/${_pmPid}/task-defaults`, body, 'PUT'); if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar'), 'error'); return; } _pjOf(_pmPid).task_defaults = (await r.json()).task_defaults; _close(); showBanner('✓ Plantilla de tarea guardada', 'success');
+  }
+  async function tdClear() { const r = await _post(`/mgmt/projects/${_pmPid}/task-defaults`, {}, 'PUT'); if (r.ok) { _pjOf(_pmPid).task_defaults = {}; _close(); showBanner('Plantilla de tarea quitada', 'success'); } }
+  // ── importar tareas desde Excel / CSV ──
+  let _imp = null;
+  function impOpen() {
+    _closePop(); const p = _pjOf(_pmPid);
+    _modal({ t: 'Importar tareas desde hoja de cálculo', b: `<p class="sp-mp">Sube un Excel o CSV: una fila por tarea. Se reconocen las columnas <b>Título</b> (o Tarea/Nombre), Descripción, Prioridad, Estado, Responsable, Fecha límite, Fecha inicio y «Subtarea de» (título de la tarea principal).</p><input type="file" id="im-f" accept=".csv,.xlsx,.xls" onchange="SpacesModule.impRead(this.files[0])"><div id="im-p" class="sp-imp"></div><div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sp-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="im-go" onclick="SpacesModule.impGo()" disabled>Importar</button></div>` }, 640);
+  }
+  const _HDR = { titulo: ['titulo', 'tarea', 'nombre', 'task', 'name', 'title', 'task name'], descripcion: ['descripcion', 'description', 'detalle', 'notas'], prioridad: ['prioridad', 'priority'], estado: ['estado', 'status'], responsable: ['responsable', 'asignado', 'persona asignada', 'assignee', 'owner', 'asignado a'], deadline: ['fecha limite', 'fecha de vencimiento', 'vence', 'deadline', 'due date', 'due', 'fecha fin', 'fin'], fecha_inicio: ['fecha inicio', 'fecha de inicio', 'inicio', 'start date', 'start'], subtarea_de: ['subtarea de', 'padre', 'parent', 'tarea principal'] };
+  const _iso = v => { if (v == null || v === '') return ''; if (v instanceof Date) return isNaN(v) ? '' : `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`; const s = String(v).trim(); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`; m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/); if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; } return ''; };
+  const _nz = s => _nrm(s).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  function impRead(file) {
+    if (!file) return; const box = $q('im-p'); if (typeof XLSX === 'undefined') { box.textContent = 'No se pudo cargar el lector de Excel. Recarga la página.'; return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const wb = XLSX.read(new Uint8Array(rd.result), { type: 'array', cellDates: true }), ws = wb.Sheets[wb.SheetNames[0]], rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
+        if (!rows.length) { box.textContent = 'El archivo no tiene filas.'; return; }
+        const keys = Object.keys(rows[0]), map = {}; Object.entries(_HDR).forEach(([f, al]) => { const k = keys.find(k => al.includes(_nz(k))); if (k) map[f] = k; });
+        if (!map.titulo) { box.innerHTML = `<span style="color:#B42318">No encuentro la columna del título. Columnas del archivo: ${esc(keys.join(', '))}. Renombra una a «Título» o «Tarea».</span>`; return; }
+        const PR = { alta: 'alta', urgente: 'alta', high: 'alta', urgent: 'alta', media: 'media', normal: 'media', medium: 'media', baja: 'baja', low: 'baja' };
+        const ES = { pendiente: 'pendiente', 'to do': 'pendiente', todo: 'pendiente', 'por hacer': 'pendiente', 'en curso': 'en_progreso', 'en progreso': 'en_progreso', 'in progress': 'en_progreso', bloqueado: 'bloqueado', blocked: 'bloqueado', completado: 'completado', hecho: 'completado', done: 'completado', complete: 'completado', cancelado: 'cancelado' };
+        const out = rows.map(r => ({ titulo: String(r[map.titulo] || '').trim(), descripcion: map.descripcion ? String(r[map.descripcion] || '') : '', prioridad: map.prioridad ? (PR[_nz(r[map.prioridad])] || '') : '', estado: map.estado ? (ES[_nz(r[map.estado])] || '') : '', responsable: map.responsable ? String(r[map.responsable] || '').trim() : '', deadline: map.deadline ? _iso(r[map.deadline]) : '', fecha_inicio: map.fecha_inicio ? _iso(r[map.fecha_inicio]) : '', subtarea_de: map.subtarea_de ? String(r[map.subtarea_de] || '').trim() : '' })).filter(r => r.titulo);
+        _imp = out; $q('im-go').disabled = !out.length;
+        box.innerHTML = `<div class="sp-mh">${out.length} tarea(s) listas · columnas reconocidas: ${Object.keys(map).map(k => esc(k)).join(', ')}</div><table class="sp-it"><thead><tr><th>Título</th><th>Prioridad</th><th>Estado</th><th>Responsable</th><th>Fecha límite</th></tr></thead><tbody>${out.slice(0, 6).map(r => `<tr><td>${esc(r.titulo)}</td><td>${esc(r.prioridad || '—')}</td><td>${esc(r.estado || 'pendiente')}</td><td>${esc(r.responsable || '—')}</td><td>${esc(r.deadline || '—')}</td></tr>`).join('')}</tbody></table>${out.length > 6 ? `<em>…y ${out.length - 6} más</em>` : ''}`;
+      } catch (e) { box.textContent = 'No se pudo leer el archivo: ' + e.message; }
+    };
+    rd.readAsArrayBuffer(file);
+  }
+  async function impGo() {
+    if (!_imp || !_imp.length) return; const btn = $q('im-go'); btn.disabled = true; btn.textContent = 'Importando…';
+    const r = await _post(`/mgmt/projects/${_pmPid}/import-tasks`, { rows: _imp }); if (!r.ok) { showBanner(await _err(r, 'No se pudo importar'), 'error'); btn.disabled = false; btn.textContent = 'Importar'; return; }
+    const j = await r.json(); _close(); showBanner(`✓ ${j.creadas} tareas importadas`, 'success'); _imp = null; await _reload();
   }
 
   // ── filtros / opciones ──
@@ -627,6 +828,7 @@ const SpacesModule = (() => {
   }
 
   return { load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+    projMenu, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask };
 })();

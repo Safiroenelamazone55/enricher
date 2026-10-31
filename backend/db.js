@@ -390,6 +390,13 @@ async function initDb() {
       id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#7C5CE0',
       orden INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS space_id INTEGER;`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS icono TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS archivado BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS task_defaults JSONB NOT NULL DEFAULT '{}'::jsonb`);
+    // Plantillas de PROYECTO (procesos que se repiten): estructura de tareas/subtareas, vistas y ajustes, con fechas relativas al inicio.
+    await pool.query(`CREATE TABLE IF NOT EXISTS project_templates (
+      id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, descripcion TEXT NOT NULL DEFAULT '',
+      data JSONB NOT NULL DEFAULT '{}'::jsonb, created_by TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     // Vistas de cada espacio (Lista, Tablero, Tabla, Calendario, Gantt, Galería, Panel, Formulario…), como en ClickUp. space_id: id del espacio, 0 = Principal, -1 = «Todas las tareas».
     await pool.query(`CREATE TABLE IF NOT EXISTS space_views (
       id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, space_id INTEGER NOT NULL, tipo TEXT NOT NULL, nombre TEXT NOT NULL DEFAULT '',

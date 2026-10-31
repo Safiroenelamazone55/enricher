@@ -1834,6 +1834,171 @@ app.post('/api/mgmt/space-views/:id/ops', requireAuth, async (req, res) => {
   } catch (err) { await cl.query('ROLLBACK').catch(() => {}); res.status(500).json({ error: err.message }); }
   finally { cl.release(); }
 });
+// ═══ Opciones de proyecto (menú ⋯ de Espacios) ═══
+app.patch('/api/mgmt/projects/:id/meta', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10), b = req.body || {}, sets = [], vals = [];
+  try {
+    if (typeof b.nombre === 'string' && b.nombre.trim()) { vals.push(_conCodigoProyecto(id, b.nombre.trim().slice(0, 120))); sets.push(`nombre=$${vals.length}`); }
+    if (typeof b.color === 'string') { vals.push(/^#[0-9a-f]{6}$/i.test(b.color) ? b.color : ''); sets.push(`color=$${vals.length}`); }
+    if (typeof b.icono === 'string') { vals.push(b.icono.slice(0, 8)); sets.push(`icono=$${vals.length}`); }
+    if (typeof b.archivado === 'boolean') { vals.push(b.archivado); sets.push(`archivado=$${vals.length}`); }
+    if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+    vals.push(id, req.workspaceOwnerId);
+    const { rows } = await pool.query(`UPDATE projects SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${vals.length - 1} AND user_id=$${vals.length} RETURNING id, nombre, color, icono, archivado`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' }); res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.put('/api/mgmt/projects/:id/task-defaults', requireAuth, async (req, res) => {
+  const b = req.body || {}, txt = (v, n) => String(v == null ? '' : v).slice(0, n);
+  const td = { descripcion: txt(b.descripcion, 4000), prioridad: ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : '',
+    etiquetas: (Array.isArray(b.etiquetas) ? b.etiquetas : []).slice(0, 12).map(x => txt(x, 30)).filter(Boolean), duracion_est_min: b.duracion_est_min ? Math.max(0, Math.round(+b.duracion_est_min)) || null : null,
+    checklists: (Array.isArray(b.checklists) ? b.checklists : []).slice(0, 10).map((c, i) => ({ id: 'c' + Date.now().toString(36) + i, titulo: txt(c && c.titulo, 120) || 'Checklist', items: (Array.isArray(c && c.items) ? c.items : []).slice(0, 60).map((it, j) => ({ id: 'i' + Date.now().toString(36) + i + j, texto: txt(it && it.texto, 300), hecho: false })) })) };
+  const vacio = !td.descripcion && !td.prioridad && !td.etiquetas.length && !td.duracion_est_min && !td.checklists.length;
+  try {
+    const { rows } = await pool.query(`UPDATE projects SET task_defaults=$3::jsonb WHERE id=$1 AND user_id=$2 RETURNING id, task_defaults`, [parseInt(req.params.id, 10), req.workspaceOwnerId, JSON.stringify(vacio ? {} : td)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' }); res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// Copia tareas (y subtareas) de un proyecto a otro: estado «pendiente», sin horas ni cobros. fechas: 'iguales' o { base: 'YYYY-MM-DD' } (relativas al inicio original)
+async function _pmCopyTasks(cl, uid, fromId, toId, opts, creador) {
+  const { rows: ts } = await cl.query(`SELECT * FROM tasks WHERE project_id=$1 AND user_id=$2 AND COALESCE(archivada,false)=false ORDER BY id`, [fromId, uid]);
+  const map = new Map();
+  for (const t of ts) {
+    const resp = opts.responsables === false ? [] : (t.responsables && t.responsables.length ? t.responsables : (t.responsable ? [t.responsable] : []));
+    const { rows: [n] } = await cl.query(`INSERT INTO tasks (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, fecha_inicio, notas, etiquetas, checklists, duracion_est_min, visible_cliente, titulo_cliente, created_by_name)
+      VALUES ($1,$2,$3,$4,'pendiente',$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16) RETURNING id`,
+      [uid, toId, t.titulo, t.descripcion || '', t.prioridad || 'media', resp[0] || '', resp, t.deadline, t.fecha_inicio, t.notas || '', JSON.stringify(t.etiquetas || []),
+       JSON.stringify((t.checklists || []).map(c => ({ ...c, items: (c.items || []).map(i => ({ ...i, hecho: false })) }))), t.duracion_est_min, !!t.visible_cliente, t.titulo_cliente || '', creador || '']);
+    map.set(t.id, n.id);
+  }
+  for (const t of ts) if (t.parent_task_id && map.has(t.parent_task_id)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(t.id), map.get(t.parent_task_id)]);
+  return ts.length;
+}
+async function _pmCopyViews(cl, uid, fromId, toId) {
+  const { rows } = await cl.query(`SELECT space_id, tipo, nombre, orden, config FROM space_views WHERE user_id=$1 AND project_id=$2 ORDER BY orden, id`, [uid, fromId]);
+  for (const v of rows) await cl.query(`INSERT INTO space_views (user_id, space_id, project_id, tipo, nombre, orden, config) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`, [uid, v.space_id, toId, v.tipo, v.nombre, v.orden, JSON.stringify(v.config || {})]);
+  return rows.length;
+}
+app.post('/api/mgmt/projects/:id/duplicate', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, id = parseInt(req.params.id, 10), b = req.body || {}, cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const { rows: [p] } = await cl.query(`SELECT * FROM projects WHERE id=$1 AND user_id=$2`, [id, uid]);
+    if (!p) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Proyecto no encontrado' }); }
+    const { rows: [n] } = await cl.query(`INSERT INTO projects (user_id, client_id, nombre, descripcion, estado, responsable, responsables, fecha_inicio, fecha_fin, valor_total, prioridad, tipo_proyecto, moneda, tarifa_hora, horas_estimadas, horas_semanales, horario_semanal, responsable_id, comision, cobro_semanal, precio_semanal, reparto, semana_auto, abrev, plan_dias, plan_horas, plan_hora, color, icono, recur_freq, outbound_client_id, space_id, links, task_defaults)
+      VALUES ($1,$2,$3,$4,'activo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb,$33::jsonb) RETURNING id`,
+      [uid, p.client_id, 'Copia de ' + p.nombre, p.descripcion, p.responsable, p.responsables, p.fecha_inicio, p.fecha_fin, p.valor_total, p.prioridad, p.tipo_proyecto, p.moneda, p.tarifa_hora, p.horas_estimadas, p.horas_semanales, p.horario_semanal, p.responsable_id, p.comision, p.cobro_semanal, p.precio_semanal, JSON.stringify(p.reparto || []), p.semana_auto, p.abrev, p.plan_dias, p.plan_horas, p.plan_hora, p.color, p.icono || '', p.recur_freq, p.outbound_client_id, p.space_id, JSON.stringify(p.links || []), JSON.stringify(p.task_defaults || {})]);
+    await cl.query(`UPDATE projects SET nombre=$2 WHERE id=$1`, [n.id, _conCodigoProyecto(n.id, 'Copia de ' + p.nombre)]);
+    const nT = b.con_tareas === false ? 0 : await _pmCopyTasks(cl, uid, id, n.id, { responsables: b.con_responsables !== false }, req.user.name);
+    const nV = b.con_vistas === false ? 0 : await _pmCopyViews(cl, uid, id, n.id);
+    await cl.query('COMMIT');
+    res.status(201).json({ id: n.id, tareas: nT, vistas: nV });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[proj] duplicar', err.message); res.status(500).json({ error: 'No se pudo duplicar' }); }
+  finally { cl.release(); }
+});
+
+// ── Plantillas de proyecto ──
+async function _tplBuild(cl, uid, pid, o) {
+  const { rows: [p] } = await cl.query(`SELECT * FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]); if (!p) return null;
+  const { rows: [bs] } = await cl.query(`SELECT COALESCE(p.fecha_inicio, (SELECT MIN(LEAST(COALESCE(t.fecha_inicio,t.deadline), COALESCE(t.deadline,t.fecha_inicio))) FROM tasks t WHERE t.project_id=p.id)) AS base FROM projects p WHERE p.id=$1`, [pid]);
+  const proj = { descripcion: p.descripcion || '', prioridad: p.prioridad, color: p.color || '', icono: p.icono || '', task_defaults: p.task_defaults || {} };
+  if (o.cobro !== false) Object.assign(proj, { tipo_proyecto: p.tipo_proyecto, moneda: p.moneda, valor_total: p.valor_total, tarifa_hora: p.tarifa_hora, horas_estimadas: p.horas_estimadas, horas_semanales: p.horas_semanales, horario_semanal: p.horario_semanal, comision: p.comision, cobro_semanal: p.cobro_semanal, precio_semanal: p.precio_semanal, reparto: p.reparto || [], semana_auto: p.semana_auto, plan_dias: p.plan_dias, plan_horas: p.plan_horas, plan_hora: p.plan_hora, recur_freq: p.recur_freq });
+  let tasks = [];
+  if (o.tareas !== false) {
+    const { rows } = await cl.query(`SELECT t.id, t.parent_task_id, t.titulo, t.descripcion, t.prioridad, t.responsables, t.responsable, t.notas, t.etiquetas, t.checklists, t.duracion_est_min,
+         (t.fecha_inicio - $2::date) AS off_ini, (t.deadline - $2::date) AS off_dl FROM tasks t WHERE t.project_id=$1 AND t.user_id=$3 AND COALESCE(t.archivada,false)=false ORDER BY t.id`, [pid, bs && bs.base, uid]);
+    tasks = rows.filter(t => o.subtareas !== false || !t.parent_task_id).map(t => ({ ref: t.id, parent: (o.subtareas !== false ? t.parent_task_id : null) || null, titulo: t.titulo, descripcion: t.descripcion || '', prioridad: t.prioridad || 'media',
+      responsables: o.responsables ? (t.responsables && t.responsables.length ? t.responsables : (t.responsable ? [t.responsable] : [])) : [], notas: t.notas || '', etiquetas: t.etiquetas || [],
+      checklists: (t.checklists || []).map(c => ({ ...c, items: (c.items || []).map(i => ({ ...i, hecho: false })) })), duracion_est_min: t.duracion_est_min,
+      off_ini: o.fechas !== false && t.off_ini !== null ? Number(t.off_ini) : null, off_dl: o.fechas !== false && t.off_dl !== null ? Number(t.off_dl) : null }));
+  }
+  let views = [];
+  if (o.vistas !== false) { const { rows } = await cl.query(`SELECT tipo, nombre, orden, config FROM space_views WHERE user_id=$1 AND project_id=$2 ORDER BY orden, id`, [uid, pid]); views = rows; }
+  return { proyecto: proj, tareas: tasks, vistas: views, fuente: p.nombre };
+}
+app.get('/api/mgmt/project-templates', requireAuth, async (req, res) => {
+  try { const { rows } = await pool.query(`SELECT id, nombre, descripcion, created_by, created_at, updated_at, jsonb_array_length(COALESCE(data->'tareas','[]'::jsonb)) AS n_tareas, jsonb_array_length(COALESCE(data->'vistas','[]'::jsonb)) AS n_vistas, data->>'fuente' AS fuente FROM project_templates WHERE user_id=$1 ORDER BY nombre`, [req.workspaceOwnerId]); res.json(rows); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/mgmt/project-templates', requireAuth, async (req, res) => {
+  const b = req.body || {}, cl = await pool.connect();
+  try {
+    const nombre = String(b.nombre || '').trim().slice(0, 80); if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la plantilla' });
+    const data = await _tplBuild(cl, req.workspaceOwnerId, parseInt(b.project_id, 10), b.opciones || {}); if (!data) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const { rows } = await cl.query(`INSERT INTO project_templates (user_id, nombre, descripcion, data, created_by) VALUES ($1,$2,$3,$4::jsonb,$5) RETURNING id, nombre`, [req.workspaceOwnerId, nombre, String(b.descripcion || '').slice(0, 500), JSON.stringify(data), req.user.name || '']);
+    res.status(201).json({ ...rows[0], n_tareas: data.tareas.length, n_vistas: data.vistas.length });
+  } catch (err) { console.error('[tpl] crear', err.message); res.status(500).json({ error: 'No se pudo guardar la plantilla' }); }
+  finally { cl.release(); }
+});
+app.put('/api/mgmt/project-templates/:id/refresh', requireAuth, async (req, res) => {   // «Actualizar plantilla existente» con el estado actual de un proyecto
+  const b = req.body || {}, cl = await pool.connect();
+  try {
+    const data = await _tplBuild(cl, req.workspaceOwnerId, parseInt(b.project_id, 10), b.opciones || {}); if (!data) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const { rows } = await cl.query(`UPDATE project_templates SET data=$3::jsonb, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id, nombre`, [parseInt(req.params.id, 10), req.workspaceOwnerId, JSON.stringify(data)]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' }); res.json({ ...rows[0], n_tareas: data.tareas.length, n_vistas: data.vistas.length });
+  } catch (err) { res.status(500).json({ error: 'No se pudo actualizar la plantilla' }); }
+  finally { cl.release(); }
+});
+app.patch('/api/mgmt/project-templates/:id', requireAuth, async (req, res) => {
+  try { const { rows } = await pool.query(`UPDATE project_templates SET nombre=COALESCE(NULLIF($3,''), nombre), descripcion=COALESCE($4, descripcion), updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id, nombre, descripcion`, [parseInt(req.params.id, 10), req.workspaceOwnerId, String(req.body?.nombre || '').trim().slice(0, 80), typeof req.body?.descripcion === 'string' ? req.body.descripcion.slice(0, 500) : null]); if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' }); res.json(rows[0]); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/mgmt/project-templates/:id', requireAuth, async (req, res) => {
+  try { await pool.query(`DELETE FROM project_templates WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId]); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+// Aplica una plantilla a un proyecto YA creado (vacío o no): añade sus tareas/subtareas (fechas desde fecha_inicio), vistas y ajustes.
+app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {}, pid = parseInt(b.project_id, 10), cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const { rows: [t] } = await cl.query(`SELECT data FROM project_templates WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), uid]);
+    const { rows: [p] } = await cl.query(`SELECT id, fecha_inicio FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]);
+    if (!t || !p) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Plantilla o proyecto no encontrado' }); }
+    const d = t.data || {}, pr = d.proyecto || {}, base = /^\d{4}-\d{2}-\d{2}$/.test(b.fecha_inicio || '') ? b.fecha_inicio : null;
+    const modo = ['plantilla', 'yo', 'ninguno'].includes(b.responsables) ? b.responsables : 'plantilla', yo = String(b.yo || req.user.name || '').slice(0, 80);
+    if (b.aplicar_ajustes !== false) {
+      const keys = ['descripcion', 'prioridad', 'tipo_proyecto', 'moneda', 'valor_total', 'tarifa_hora', 'horas_estimadas', 'horas_semanales', 'horario_semanal', 'comision', 'cobro_semanal', 'precio_semanal', 'semana_auto', 'plan_dias', 'plan_horas', 'plan_hora', 'recur_freq', 'color', 'icono'];
+      const sets = [], vals = []; keys.forEach(k => { if (pr[k] !== undefined && pr[k] !== null && pr[k] !== '') { vals.push(pr[k]); sets.push(`${k}=$${vals.length}`); } });
+      if (pr.reparto) { vals.push(JSON.stringify(pr.reparto)); sets.push(`reparto=$${vals.length}::jsonb`); }
+      if (pr.task_defaults && Object.keys(pr.task_defaults).length) { vals.push(JSON.stringify(pr.task_defaults)); sets.push(`task_defaults=$${vals.length}::jsonb`); }
+      if (sets.length) { vals.push(pid); await cl.query(`UPDATE projects SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${vals.length}`, vals); }
+    }
+    const map = new Map();
+    for (const x of (d.tareas || [])) {
+      const resp = modo === 'ninguno' ? [] : (modo === 'yo' ? (yo ? [yo] : []) : (x.responsables || []));
+      const { rows: [n] } = await cl.query(`INSERT INTO tasks (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, fecha_inicio, deadline, notas, etiquetas, checklists, duracion_est_min, created_by_name)
+        VALUES ($1,$2,$3,$4,'pendiente',$5,$6,$7, CASE WHEN $8::date IS NOT NULL AND $9::int IS NOT NULL THEN $8::date + $9::int END, CASE WHEN $8::date IS NOT NULL AND $10::int IS NOT NULL THEN $8::date + $10::int END,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING id`,
+        [uid, pid, x.titulo, x.descripcion || '', x.prioridad || 'media', resp[0] || '', resp, base, x.off_ini, x.off_dl, x.notas || '', JSON.stringify(x.etiquetas || []), JSON.stringify(x.checklists || []), x.duracion_est_min || null, req.user.name || '']);
+      map.set(x.ref, n.id);
+    }
+    for (const x of (d.tareas || [])) if (x.parent && map.has(x.parent)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(x.ref), map.get(x.parent)]);
+    let nv = 0;
+    if (b.con_vistas !== false) for (const v of (d.vistas || [])) { await cl.query(`INSERT INTO space_views (user_id, space_id, project_id, tipo, nombre, orden, config) VALUES ($1,0,$2,$3,$4,$5,$6::jsonb)`, [uid, pid, v.tipo, v.nombre || '', v.orden || 0, JSON.stringify(v.config || {})]); nv++; }
+    await cl.query('COMMIT');
+    res.json({ ok: true, tareas: (d.tareas || []).length, vistas: nv });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[tpl] aplicar', err.message); res.status(500).json({ error: 'No se pudo aplicar la plantilla' }); }
+  finally { cl.release(); }
+});
+// Importar tareas de una hoja de cálculo (el navegador ya leyó el archivo y manda filas ya mapeadas)
+app.post('/api/mgmt/projects/:id/import-tasks', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, pid = parseInt(req.params.id, 10), rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 1000) : [], cl = await pool.connect();
+  try {
+    const { rows: [p] } = await cl.query(`SELECT id FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]); if (!p) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const date = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null, est = v => ['pendiente', 'en_progreso', 'bloqueado', 'completado', 'cancelado'].includes(v) ? v : 'pendiente', pri = v => ['alta', 'media', 'baja'].includes(v) ? v : 'media';
+    await cl.query('BEGIN'); const byTitle = new Map(); let n = 0;
+    for (const r of rows) {
+      const titulo = String(r.titulo || '').trim().slice(0, 300); if (!titulo) continue;
+      const resp = String(r.responsable || '').trim();
+      const { rows: [t] } = await cl.query(`INSERT INTO tasks (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, fecha_inicio, created_by_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [uid, pid, titulo, String(r.descripcion || '').slice(0, 4000), est(r.estado), pri(r.prioridad), resp, resp ? [resp] : [], date(r.deadline), date(r.fecha_inicio), req.user.name || '']);
+      byTitle.set(titulo.toLowerCase(), t.id); n++;
+      const par = String(r.subtarea_de || '').trim().toLowerCase(); if (par && byTitle.has(par)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [t.id, byTitle.get(par)]);
+    }
+    await cl.query('COMMIT'); res.json({ ok: true, creadas: n });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); res.status(500).json({ error: 'No se pudo importar' }); }
+  finally { cl.release(); }
+});
 app.patch('/api/mgmt/projects/:id/space', requireAuth, async (req, res) => {
   const sid = req.body?.space_id ? parseInt(req.body.space_id, 10) : null;
   try {
@@ -2264,6 +2429,19 @@ app.post('/api/mgmt/tasks', requireAuth, async (req, res) => {
        parent_task_id || null,
        plan_dias || '', plan_horas != null && plan_horas !== '' ? +plan_horas : null, plan_hora != null && plan_hora !== '' ? +plan_hora : null, req.user.name || '']
     );
+    // «Plantilla de tarea predeterminada» del proyecto: lo que la tarea nueva no trae, se rellena con los valores definidos allí (solo tareas principales)
+    if (!parent_task_id) {
+      try {
+        const { rows: [pj] } = await pool.query(`SELECT task_defaults FROM projects WHERE id=$1 AND user_id=$2`, [project_id, req.workspaceOwnerId]);
+        const td = (pj && pj.task_defaults) || {};
+        if (td && Object.keys(td).length) {
+          const { rows: up } = await pool.query(`UPDATE tasks SET descripcion = CASE WHEN COALESCE(descripcion,'')='' THEN $2 ELSE descripcion END, prioridad = CASE WHEN $3::text IS NULL THEN COALESCE(NULLIF($4,''), prioridad) ELSE prioridad END,
+              etiquetas = $5::jsonb, checklists = $6::jsonb, duracion_est_min = COALESCE(duracion_est_min, $7::int) WHERE id=$1 RETURNING *`,
+            [rows[0].id, String(td.descripcion || ''), prioridad || null, String(td.prioridad || ''), JSON.stringify(Array.isArray(td.etiquetas) ? td.etiquetas : []), JSON.stringify(Array.isArray(td.checklists) ? td.checklists : []), td.duracion_est_min || null]);
+          if (up[0]) rows[0] = up[0];
+        }
+      } catch (e) { console.warn('[tasks] defaults', e.message); }
+    }
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[mgmt/tasks] POST error:', err.message);

@@ -18063,6 +18063,7 @@ const ProjectsModule = (() => {
     const q = ($('projects-search')?.value || '').toLowerCase();
     let list = _projects;
     if (_filterEstado && !skipEstado) list = list.filter(p => p.estado === _filterEstado);
+    list = list.filter(p => !p.archivado);   // archivados: fuera de la lista (se archivan desde el menú ⋯ de Espacios)
     if (_filterSpace !== '') list = list.filter(p => String(p.space_id || 0) === _filterSpace);
     if (_filterMember === '__none__') {
       list = list.filter(p => !p.responsable && !p.responsable_id && (!p.responsables || !p.responsables.length));
