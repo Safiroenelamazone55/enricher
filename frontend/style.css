@@ -19423,3 +19423,14 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sp-gd--line::before, .sp-gd--mid::before, .sp-gd--end::before { border-left: 2px solid #B9B3AA; left: 26px; }
 .sp-gd--mid::after, .sp-gd--end::after { border-top: 2px solid #B9B3AA; left: 26px; width: 10px; }
 .sp-gd--end::before { border-bottom-left-radius: 7px; }
+
+/* Todos los proyectos: una línea por proyecto, filas bajas y columnas fijas */
+.pj2-bar { padding: 4px 0 10px; gap: 8px; } .pj2-bar__l { gap: 6px; flex-wrap: nowrap; } .pj2-bar .sp-search input { width: 150px; }
+.pj2-sel { height: 30px; font-size: 12.5px; padding: 0 8px; color: var(--text2); max-width: 150px; }
+.pj2 { overflow-x: auto; } .pj2-r { min-width: 780px; min-height: 40px; padding: 0 14px; gap: 10px; font-size: 13px; }
+.pj2-r--h { min-height: 32px; font-size: 12px; padding-top: 0; padding-bottom: 0; }
+.pj2-n { flex: 1; min-width: 200px; gap: 8px; } .pj2-n b { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pj2-c { flex: none; width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text2); }
+.pj2-e { width: 104px; } .pj2-p { width: 70px; } .pj2-f { width: 150px; white-space: nowrap; font-size: 12.5px; } .pj2-t { width: 112px; } .pj2-v { width: 92px; white-space: nowrap; font-size: 12.5px; color: var(--text2); }
+.pj2-st { height: 20px; padding: 0 8px; font-size: 10.5px; }
+.pj2-bar { padding-left: 22px; padding-right: 22px; }

@@ -862,8 +862,8 @@ const SpacesModule = (() => {
     box.innerHTML = ps.length ? `<div class="pj2-r pj2-r--h"><div class="pj2-n">Proyecto</div><div class="pj2-c">Cliente</div><div class="pj2-e">Estado</div><div class="pj2-p">Equipo</div><div class="pj2-f">Fechas</div><div class="pj2-t">Tareas</div>${money ? '<div class="pj2-v">Valor</div>' : ''}<div class="pj2-x"></div></div>`
       + ps.map(p => { const e = _PJE.find(x => x[0] === (p.estado || 'activo')) || _PJE[0], g = _pjProg(p.id), pc = g.n ? Math.round(g.done / g.n * 100) : 0, rs = _resp(p);
         const ic = p.icono ? `<i class="sp-pj__e" style="${p.color ? 'background:' + p.color + '22' : ''}">${esc(p.icono)}</i>` : `<i class="pj2-dot" style="background:${p.color || '#007AFF'}"></i>`;
-        return `<div class="pj2-r" onclick="SpacesModule.pick(${p.space_id || 0},${p.id})"><div class="pj2-n">${ic}<div><b>${esc(p.nombre)}</b><span>${esc(spN(p.space_id))}</span></div></div>
-          <div class="pj2-c">${esc(p.client_nombre || '—')}</div>
+        return `<div class="pj2-r" onclick="SpacesModule.pick(${p.space_id || 0},${p.id})"><div class="pj2-n">${ic}<b title="${esc(p.nombre)} · ${esc(spN(p.space_id))}">${esc(p.nombre)}</b></div>
+          <div class="pj2-c" title="${esc(p.client_nombre || '')}">${esc(p.client_nombre || '—')}</div>
           <div class="pj2-e"><button class="pj2-st" style="--c:${e[2]}" onclick="event.stopPropagation();SpacesModule.pjEst(event,${p.id})">${e[1]}</button></div>
           <div class="pj2-p">${rs.slice(0, 4).map(n => `<span class="sp-av" title="${esc(n)}">${esc(_ini(n))}</span>`).join('') || '<span class="sp-dim">—</span>'}</div>
           <div class="pj2-f">${p.fecha_inicio || p.fecha_fin ? `${_fmtD(_d10(p.fecha_inicio)) || '…'} → ${_fmtD(_d10(p.fecha_fin)) || '…'}` : '<span class="sp-dim">—</span>'}</div>
@@ -877,9 +877,9 @@ const SpacesModule = (() => {
     const n = _projects.filter(p => !p.archivado && (p.estado || 'activo') === 'activo').length;
     m.innerHTML = `<div class="sp-top"><div class="sp-crumb"><b>Todos los proyectos</b><span class="sp-crumb__c">${n} activos</span></div></div>
       <div class="pj2-bar"><div class="pj2-bar__l"><label class="sp-search"><input value="${esc(_pq)}" placeholder="Buscar proyecto o cliente…" oninput="SpacesModule.pjF('q',this.value)"></label>
-        <select class="pj2-sel" onchange="SpacesModule.pjF('e',this.value)"><option value="">Estado: todos (sin cancelados)</option>${_PJE.map(e => `<option value="${e[0]}"${_pfE === e[0] ? ' selected' : ''}>${e[1]}</option>`).join('')}</select>
-        <select class="pj2-sel" onchange="SpacesModule.pjF('p',this.value)"><option value="">Persona: todas</option>${names.map(x => `<option${_pfP === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
-        <select class="pj2-sel" onchange="SpacesModule.pjF('c',this.value)"><option value="">Cliente: todos</option>${cls.map(([id, nm]) => `<option value="${id}"${_pfC === String(id) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
+        <select class="pj2-sel" onchange="SpacesModule.pjF('e',this.value)"><option value="">Todos los estados</option>${_PJE.map(e => `<option value="${e[0]}"${_pfE === e[0] ? ' selected' : ''}>${e[1]}</option>`).join('')}</select>
+        <select class="pj2-sel" onchange="SpacesModule.pjF('p',this.value)"><option value="">Toda persona</option>${names.map(x => `<option${_pfP === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+        <select class="pj2-sel" onchange="SpacesModule.pjF('c',this.value)"><option value="">Todo cliente</option>${cls.map(([id, nm]) => `<option value="${id}"${_pfC === String(id) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
         <button type="button" class="sp-me${_pMe ? ' on' : ''}" title="Solo mis proyectos" onclick="SpacesModule.pjF('me')">${esc(_ini(window._authUser?.memberNombre || window._authUser?.name || 'Yo'))}</button></div>
         <button type="button" class="btn btn--primary btn--sm" onclick="SpacesModule.newProject(0)">＋ Proyecto</button></div>
       <div class="sp-body"><div id="pj2-body" class="pj2"></div></div>`;
