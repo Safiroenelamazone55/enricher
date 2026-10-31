@@ -1745,20 +1745,22 @@ app.delete('/api/mgmt/spaces/:id', requireAuth, async (req, res) => {
 // ── Vistas de cada espacio ──
 const _SV_TIPOS = ['lista', 'tablero', 'tabla', 'calendario', 'gantt', 'galeria', 'panel', 'formulario', 'documento', 'pizarra'];
 app.get('/api/mgmt/space-views', requireAuth, async (req, res) => {
-  try { const { rows } = await pool.query(`SELECT id, space_id, tipo, nombre, orden, config FROM space_views WHERE user_id=$1 ORDER BY space_id, orden, id`, [req.workspaceOwnerId]); res.json(rows); }
+  try { const { rows } = await pool.query(`SELECT id, space_id, project_id, tipo, nombre, orden, config FROM space_views WHERE user_id=$1 ORDER BY space_id, project_id NULLS FIRST, orden, id`, [req.workspaceOwnerId]); res.json(rows); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.post('/api/mgmt/space-views', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, b = req.body || {}, sid = parseInt(b.space_id, 10);
   if (!Number.isInteger(sid) || sid < -1) return res.status(400).json({ error: 'Espacio inválido' });
   const lista = Array.isArray(b.views) ? b.views : [{ tipo: b.tipo, nombre: b.nombre }];
+  const pid = b.project_id ? parseInt(b.project_id, 10) : null;
   try {
+    if (pid) { const okp = await pool.query(`SELECT 1 FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]); if (!okp.rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' }); }
     if (sid > 0) { const ok = await pool.query(`SELECT 1 FROM spaces WHERE id=$1 AND user_id=$2`, [sid, uid]); if (!ok.rows[0]) return res.status(404).json({ error: 'Espacio no encontrado' }); }
     const out = [];
     for (const v of lista) {
       if (!_SV_TIPOS.includes(v.tipo)) continue;
-      const { rows } = await pool.query(`INSERT INTO space_views (user_id, space_id, tipo, nombre, orden) VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX(orden),0)+1 FROM space_views WHERE user_id=$1 AND space_id=$2)) RETURNING id, space_id, tipo, nombre, orden`,
-        [uid, sid, v.tipo, String(v.nombre || '').trim().slice(0, 40)]);
+      const { rows } = await pool.query(`INSERT INTO space_views (user_id, space_id, project_id, tipo, nombre, orden) VALUES ($1,$2,$5,$3,$4,(SELECT COALESCE(MAX(orden),0)+1 FROM space_views WHERE user_id=$1 AND space_id=$2 AND project_id IS NOT DISTINCT FROM $5::int)) RETURNING id, space_id, project_id, tipo, nombre, orden`,
+        [uid, sid, v.tipo, String(v.nombre || '').trim().slice(0, 40), pid]);
       out.push(rows[0]);
     }
     res.status(201).json(Array.isArray(b.views) ? out : out[0]);

@@ -396,6 +396,7 @@ async function initDb() {
       orden INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await pool.query(`CREATE INDEX IF NOT EXISTS space_views_idx ON space_views (user_id, space_id, orden)`);
     await pool.query(`ALTER TABLE space_views ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb`);
+    await pool.query(`ALTER TABLE space_views ADD COLUMN IF NOT EXISTS project_id INTEGER`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS checklists       JSONB   NOT NULL DEFAULT '[]'::jsonb;`);
     // Lunes de la semana que representa la tarea (idempotencia de la creación automática).
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS semana_week DATE;`);

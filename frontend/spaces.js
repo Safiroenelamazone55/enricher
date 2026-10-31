@@ -128,17 +128,20 @@ const SpacesModule = (() => {
   };
   const _VT_SOON = [['Artifact', 'Crear con IA en esta ubicación']];
   const _VT_DEFAULT = ['lista', 'tablero', 'tabla', 'calendario'];
-  const _sk = () => (_selSpace == null ? -1 : _selSpace);
+  // clave de las vistas: «p<id>» si hay un proyecto (lista) elegido; si no, «s<id>» del espacio (s-1 = Todas las tareas)
+  const _sk = () => (_selProj ? 'p' + _selProj : 's' + (_selSpace == null ? -1 : _selSpace));
+  const _isProjKey = k => String(k).startsWith('p');
+  const _realViews = k => _views.filter(v => _isProjKey(k) ? v.project_id === +String(k).slice(1) : (!v.project_id && v.space_id === +String(k).slice(1)));
   function _viewsOf(k) {
-    const own = _views.filter(v => v.space_id === k).sort((a, b) => a.orden - b.orden || a.id - b.id);
-    return own.length ? own : _VT_DEFAULT.map(t => ({ id: 'd:' + t, space_id: k, tipo: t, nombre: _VT[t][0], virtual: true }));
+    const own = _realViews(k).sort((a, b) => a.orden - b.orden || a.id - b.id);
+    return own.length ? own : _VT_DEFAULT.map(t => ({ id: 'd:' + t, tipo: t, nombre: _VT[t][0], virtual: true }));
   }
   function _curView() { const vs = _viewsOf(_sk()), id = _viewSel[_sk()]; return vs.find(v => String(v.id) === String(id)) || vs[0]; }
   // las vistas por defecto (virtuales) se guardan de verdad la primera vez que se modifica algo
   async function _materialize(k) {
-    if (_views.some(v => v.space_id === k)) return;
+    if (_realViews(k).length) return;
     const defs = _VT_DEFAULT.map(t => ({ tipo: t, nombre: _VT[t][0] }));
-    const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: k, views: defs }) });
+    const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: _isProjKey(k) ? 0 : +String(k).slice(1), project_id: _isProjKey(k) ? +String(k).slice(1) : null, views: defs }) });
     if (!r.ok) throw new Error('No se pudieron guardar las vistas');
     const rows = await r.json(); _views.push(...rows);
     const cur = _viewSel[k]; if (String(cur || '').startsWith('d:')) { const m = rows.find(x => 'd:' + x.tipo === cur); if (m) _viewSel[k] = m.id; }
@@ -152,7 +155,7 @@ const SpacesModule = (() => {
     _closePop();
     try {
       const k = _sk(); await _materialize(k);
-      const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: k, tipo, nombre: _VT[tipo][0] }) });
+      const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: _isProjKey(k) ? 0 : +String(k).slice(1), project_id: _isProjKey(k) ? +String(k).slice(1) : null, tipo, nombre: _VT[tipo][0] }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
       const v = await r.json(); _views.push(v); _viewSel[k] = v.id; _save();
     } catch (e) { showBanner('No se pudo añadir la vista: ' + e.message, 'error'); }
@@ -163,7 +166,7 @@ const SpacesModule = (() => {
     _closePop();
     try {
       const k = _sk(); const cur = _viewsOf(k).find(v => String(v.id) === String(id)); const nm = prompt('Nombre de la vista', cur ? cur.nombre : ''); if (!nm || !nm.trim()) return;
-      await _materialize(k); const real = String(id).startsWith('d:') ? _views.find(v => v.space_id === k && 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
+      await _materialize(k); const real = String(id).startsWith('d:') ? _realViews(k).find(v => 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
       const r = await apiFetch(`${API}/mgmt/space-views/${real.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nm.trim() }) });
       if (r.ok) Object.assign(real, await r.json());
     } catch (e) { showBanner('No se pudo renombrar', 'error'); }
@@ -172,9 +175,9 @@ const SpacesModule = (() => {
   async function delView(id) {
     _closePop();
     try {
-      const k = _sk(); if (_viewsOf(k).length <= 1) { showBanner('Deja al menos una vista en el espacio', 'info'); return; }
+      const k = _sk(); if (_viewsOf(k).length <= 1) { showBanner('Deja al menos una vista aquí', 'info'); return; }
       if (!confirm('¿Quitar esta vista? Las tareas no se borran.')) return;
-      await _materialize(k); const real = String(id).startsWith('d:') ? _views.find(v => v.space_id === k && 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
+      await _materialize(k); const real = String(id).startsWith('d:') ? _realViews(k).find(v => 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
       await apiFetch(`${API}/mgmt/space-views/${real.id}`, { method: 'DELETE' }); _views = _views.filter(v => v.id !== real.id); delete _viewSel[k]; _save();
     } catch (e) { showBanner('No se pudo quitar la vista', 'error'); }
     _paintMain();
