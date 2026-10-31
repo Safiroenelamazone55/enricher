@@ -33931,6 +33931,7 @@ ${foot}
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
         ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
+        ${c ? '<div class="fin-pi-full" id="obc-team" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px"></div>' : ''}
         <div class="fin-pi-full" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
           <div class="fin-cfg-lbl" style="margin-bottom:2px">Perfil de LinkedIn desde el que se comenta e invita</div>
           <span class="seq-drip-hint">Cada cliente tiene su propio LinkedIn personal. La IA de comentarios usa esto para saber <b>quién</b> escribe — sin ello se inventa un rol. No aparece en el texto del comentario: sirve para que suene como esa persona y no como un vendedor.</span>
@@ -33950,6 +33951,7 @@ ${foot}
       </div></div>`;
     document.body.appendChild(m);
     _obcLoadResp(c?.responsable || '');
+    if (c && typeof PermsUI !== 'undefined') PermsUI.clientTeam(c.id);
     setTimeout(() => $('obc-nombre')?.focus(), 60);
   }
   // Puebla el <select> de Responsable con los miembros del workspace (/mgmt/team).

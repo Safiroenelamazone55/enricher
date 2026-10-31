@@ -11,7 +11,7 @@ const MODULOS = [
   { k: 'espacios', l: 'Espacios', g: 'Trabajo', alc: true }, { k: 'tareas', l: 'Tareas', g: 'Trabajo', alc: true }, { k: 'calendario', l: 'Calendario', g: 'Trabajo', alc: true },
   { k: 'tiempo', l: 'Time Tracking', g: 'Gestión', alc: true }, { k: 'equipo', l: 'Equipo', g: 'Gestión', alc: false }, { k: 'finanzas', l: 'Finanzas y montos', g: 'Gestión', alc: false },
   { k: 'slack', l: 'Slack', g: 'Comunicación', alc: false }, { k: 'whatsapp', l: 'WhatsApp', g: 'Comunicación', alc: false }, { k: 'bloqueos', l: 'Bloqueos', g: 'Comunicación', alc: true },
-  { k: 'outreach', l: 'Outreach', g: 'Outreach', alc: false }, { k: 'datos', l: 'Datos (enriquecimiento)', g: 'Datos', alc: false },
+  { k: 'outreach', l: 'Outreach', g: 'Outreach', alc: true }, { k: 'datos', l: 'Datos (enriquecimiento)', g: 'Datos', alc: false },
   { k: 'contenido', l: 'Contenido', g: 'Contenido', alc: false }, { k: 'plantillas', l: 'Plantillas', g: 'Plantillas', alc: false },
   { k: 'config', l: 'Configuración y usuarios', g: 'Administración', alc: false },
 ];
@@ -58,6 +58,7 @@ function mount(app, { pool, requireAuth }) {
     try {
       await pool.query(`ALTER TABLE team_members ADD COLUMN IF NOT EXISTS permisos JSONB NOT NULL DEFAULT '{}'::jsonb`);
       await pool.query(`CREATE TABLE IF NOT EXISTS perm_roles (user_id INTEGER NOT NULL, rol TEXT NOT NULL, permisos JSONB NOT NULL DEFAULT '{}'::jsonb, PRIMARY KEY (user_id, rol))`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS outbound_client_team (user_id INTEGER NOT NULL, outbound_client_id INTEGER NOT NULL, member_id INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (outbound_client_id, member_id))`);
       await pool.query(`CREATE TABLE IF NOT EXISTS resource_shares (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, tipo TEXT NOT NULL, recurso_id INTEGER NOT NULL, member_id INTEGER NOT NULL, nivel TEXT NOT NULL DEFAULT 'editar', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (tipo, recurso_id, member_id))`);
     } catch (e) { console.warn('[perms] tablas', e.message); }
   })();
@@ -120,6 +121,32 @@ function mount(app, { pool, requireAuth }) {
     return rows.filter(r => ok.has(r.id));
   }
 
+  // ── Outreach «solo sus clientes»: clientes outbound asignados a la persona (o donde es el responsable) ──
+  async function allowedClients(c) {
+    const { rows } = await pool.query(`SELECT outbound_client_id AS id FROM outbound_client_team WHERE user_id=$1 AND member_id=$2
+        UNION SELECT id FROM outbound_clients WHERE user_id=$1 AND LOWER(TRIM(responsable))=LOWER(TRIM($3)) AND $3<>''`, [c.owner, c.memberId || 0, c.nombre || '']);
+    return new Set(rows.map(r => r.id));
+  }
+  const OWN = [[/^\/lm\/(contacts|inbox\/thread|inbox\/history)\/(\d+)/, 'lm_contacts'], [/^\/lm\/companies\/(\d+)/, 'lm_companies'], [/^\/(lm\/)?sequences\/(\d+)/, 'sequences'], [/^\/campaigns\/(\d+)/, 'campaigns'], [/^\/leads\/(\d+)/, 'leads'], [/^\/lm\/mailboxes\/(\d+)/, 'lm_mailboxes']];
+  const BODY_OWN = { contact_id: 'lm_contacts', company_id: 'lm_companies', sequence_id: 'sequences', campaign_id: 'campaigns' };
+  const HIDE_NULL = /^\/(lm\/(contacts|companies|inbox|messages|tasks|approvals|por-calificar)|sequences|campaigns|leads)/;
+  const idOf = async (table, id, owner) => { const { rows: [r] } = await pool.query(`SELECT outbound_client_id AS c FROM ${table} WHERE id=$1 AND user_id=$2`, [id, owner]); return r ? r.c : undefined; };
+  async function outreachScope(req, res, c, p, method) {   // false = ya respondió (denegado)
+    const A = await allowedClients(c), no = () => { res.status(404).json({ error: 'No encontrado' }); return false; };
+    const okc = v => v != null && A.has(+v);
+    const mc = p.match(/^\/(?:outbound-clients|lm\/clients)\/(\d+)/); if (mc && !okc(mc[1])) return no();
+    for (const [re, t] of OWN) { const m = p.match(re); if (m) { const id = +m[m.length - 1], cl = await idOf(t, id, c.owner); if (cl === undefined || !okc(cl)) return no(); } }
+    const q = req.query || {}, b = req.body || {};
+    for (const v of [q.client, q.client_id, q.outbound_client_id, q.outboundClientId, b.client_id, b.outbound_client_id]) if (v != null && v !== '' && v !== 'all' && !isNaN(+v) && !okc(v)) return no();
+    for (const [k, t] of Object.entries(BODY_OWN)) if (b[k] != null && !isNaN(+b[k])) { const cl = await idOf(t, +b[k], c.owner); if (cl === undefined || !okc(cl)) return no(); }
+    if (method === 'GET') {
+      const keep = r => !r || typeof r !== 'object' || (p === '/outbound-clients' ? okc(r.id) : !('outbound_client_id' in r) || (r.outbound_client_id == null ? !HIDE_NULL.test(p) : okc(r.outbound_client_id)));
+      const f = a => a.filter(keep), orig = res.json.bind(res);
+      res.json = body => orig(Array.isArray(body) ? f(body) : (body && typeof body === 'object' ? Object.fromEntries(Object.entries(body).map(([k, v]) => [k, Array.isArray(v) ? f(v) : v])) : body));
+    }
+    return true;
+  }
+
   // ── guardia global: ningún endpoint de un módulo sin permiso, ni escribir con permiso de solo ver ──
   app.use('/api', async (req, res, next) => {
     try {
@@ -148,6 +175,7 @@ function mount(app, { pool, requireAuth }) {
         }
       }
       if (have < need) return res.status(403).json({ error: 'No tienes permiso para esto', modulo: mod });
+      if (mod === 'outreach' && scope(c, 'outreach') === 'suyo' && !/^\/lm\/(gmail|mailboxes\/oauth)\/callback|\/callback$/.test(p)) { if (!(await outreachScope(req, res, c, p, method))) return; }
       next();
     } catch (e) { console.error('[perms]', e.message); res.status(503).json({ error: 'No se pudieron comprobar los permisos' }); }
   });
@@ -189,6 +217,27 @@ function mount(app, { pool, requireAuth }) {
       const ov = {}; if (b.permisos && typeof b.permisos === 'object') for (const m of MODULOS) { const v = norm(b.permisos[m.k], m); if (v) ov[m.k] = v; }
       await pool.query(`UPDATE team_members SET rol=$3, permisos=$4::jsonb, updated_at=NOW() WHERE id=$1 AND user_id=$2`, [id, owner, rol, JSON.stringify(rol === 'admin' ? {} : ov)]);
       clear(); res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // equipo asignado a cada cliente outbound
+  app.get('/api/perms/client-team', requireAuth, async (req, res) => {
+    try {
+      const c = await ctx(req), cid = parseInt(req.query.client, 10) || 0;
+      if (!c.isOwner && lvl(c, 'outreach') < 2) return res.status(403).json({ error: 'Sin permiso' });
+      const { rows } = await pool.query(`SELECT member_id FROM outbound_client_team WHERE user_id=$1 AND outbound_client_id=$2`, [req.workspaceOwnerId, cid]);
+      const { rows: [oc] } = await pool.query(`SELECT responsable FROM outbound_clients WHERE id=$1 AND user_id=$2`, [cid, req.workspaceOwnerId]);
+      const { rows: ms } = await pool.query(`SELECT id, nombre, email, rol, cargo FROM team_members WHERE user_id=$1 AND estado<>'inactivo' ORDER BY nombre`, [req.workspaceOwnerId]);
+      res.json({ asignados: rows.map(r => r.member_id), responsable: oc ? oc.responsable : '', equipo: ms.map(m => ({ ...m, ve_todo: m.rol === 'admin' || m.cargo === 'Propietario' || (resolve(m.rol, null, null).outreach.n > 0 && resolve(m.rol, null, null).outreach.a === 'todo') })) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.put('/api/perms/client-team', requireAuth, async (req, res) => {
+    try {
+      const c = await ctx(req), b = req.body || {}, cid = parseInt(b.client_id, 10), mid = parseInt(b.member_id, 10);
+      if (!c.isOwner && !(await isAdmin(req)) && !(lvl(c, 'outreach') >= 3 && scope(c, 'outreach') === 'todo')) return res.status(403).json({ error: 'Solo un administrador puede asignar el equipo de un cliente' });
+      if (!cid || !mid) return res.status(400).json({ error: 'Datos incompletos' });
+      if (b.asignado) await pool.query(`INSERT INTO outbound_client_team (user_id, outbound_client_id, member_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [req.workspaceOwnerId, cid, mid]);
+      else await pool.query(`DELETE FROM outbound_client_team WHERE user_id=$1 AND outbound_client_id=$2 AND member_id=$3`, [req.workspaceOwnerId, cid, mid]);
+      res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // uso compartido de un espacio o proyecto

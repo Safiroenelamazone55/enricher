@@ -32,7 +32,7 @@ const PermsUI = (() => {
       const eff = v || (opts.base && opts.base[m.k]) || { n: 0, a: 'todo' };
       h += `<tr><td class="pm-m">${esc(m.l)}</td>
         <td><select class="pm-s" data-k="${m.k}" data-f="n" onchange="PermsUI.set('${m.k}','n',this.value)"${opts.ro ? ' disabled' : ''}>${opts.inherit ? `<option value="-1"${inh ? ' selected' : ''}>Según el rol (${NIVELES[eff.n]})</option>` : ''}${NIVELES.map((l, i) => `<option value="${i}"${!inh && eff.n === i ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
-        <td>${m.alc ? `<select class="pm-s" data-k="${m.k}" data-f="a" onchange="PermsUI.set('${m.k}','a',this.value)"${opts.ro || inh ? ' disabled' : ''}><option value="todo"${eff.a === 'todo' ? ' selected' : ''}>Todo el equipo</option><option value="suyo"${eff.a === 'suyo' ? ' selected' : ''}>Solo lo suyo y lo compartido</option></select>` : '<span class="pm-na">—</span>'}</td></tr>`;
+        <td>${m.alc ? `<select class="pm-s" data-k="${m.k}" data-f="a" onchange="PermsUI.set('${m.k}','a',this.value)"${opts.ro || inh ? ' disabled' : ''}><option value="todo"${eff.a === 'todo' ? ' selected' : ''}>Todo el equipo</option><option value="suyo"${eff.a === 'suyo' ? ' selected' : ''}>${m.k === 'outreach' ? 'Solo sus clientes asignados' : 'Solo lo suyo y lo compartido'}</option></select>` : '<span class="pm-na">—</span>'}</td></tr>`;
     }
     return `<table class="pm-t"><thead><tr><th>Módulo</th><th>Nivel de acceso</th><th>Qué ve</th></tr></thead><tbody>${h}</tbody></table>`;
   }
@@ -120,5 +120,19 @@ const PermsUI = (() => {
     catch (e) { showBanner(e.message, 'error'); }
   }
 
-  return { load, pickRol, saveRol, resetRol, set, openPersona, setPRol, savePersona, share, setShare, applyNav };
+  // ── Equipo asignado a un cliente outbound (dentro de la ficha del cliente) ──
+  async function clientTeam(cid) {
+    const box = document.getElementById('obc-team'); if (!box) return;
+    let j; try { j = await api('/perms/client-team?client=' + cid); } catch (e) { box.innerHTML = ''; return; }
+    const set = new Set(j.asignados);
+    box.innerHTML = `<div class="fin-cfg-lbl" style="margin-bottom:2px">Equipo asignado a este cliente</div>
+      <span class="seq-drip-hint">Las personas con acceso «Solo sus clientes asignados» a Outreach solo verán los clientes donde estén marcadas (o sean el Responsable). Los administradores ven todos.</span>
+      <div class="pm-chips">${j.equipo.map(m => { const auto = m.ve_todo, on = set.has(m.id) || (j.responsable && j.responsable.trim().toLowerCase() === (m.nombre || '').trim().toLowerCase());
+        return `<label class="pm-chip${on ? ' on' : ''}${auto ? ' pm-chip--auto' : ''}" title="${auto ? 'Ya ve todos los clientes por su rol' : ''}"><input type="checkbox" ${on ? 'checked' : ''} ${auto ? 'disabled' : ''} onchange="PermsUI.setClientTeam(${cid},${m.id},this.checked,this)">${esc(m.nombre)}</label>`; }).join('')}</div>`;
+  }
+  async function setClientTeam(cid, mid, on, el) {
+    try { await put('/perms/client-team', { client_id: cid, member_id: mid, asignado: !!on }); el.parentElement.classList.toggle('on', !!on); }
+    catch (e) { el.checked = !on; showBanner(e.message, 'error'); }
+  }
+  return { clientTeam, setClientTeam, load, pickRol, saveRol, resetRol, set, openPersona, setPRol, savePersona, share, setShare, applyNav };
 })();
