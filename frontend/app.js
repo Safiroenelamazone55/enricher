@@ -22227,6 +22227,7 @@ const LeadManagerModule = (() => {
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
     { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
+    { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
@@ -22245,6 +22246,7 @@ const LeadManagerModule = (() => {
     activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     wa:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+    calls:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
     tasks:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
     reports:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
     templates:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
@@ -22358,7 +22360,7 @@ const LeadManagerModule = (() => {
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
     _gcClose(true);
-    _gcli = id || null;
+    _gcli = id || null; _callsData = null;
     try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
     _refreshNav();
     const body = $('lm2-body'); if (body) body.style.opacity = '.5';
@@ -22395,6 +22397,7 @@ const LeadManagerModule = (() => {
     if (section === 'wa')        { _waList = null; _waReload(); }
     if (section === 'tasks')     { _apList = null; _apReload(); }
     if (section === 'leads')     _reloadActivities();
+    if (section === 'calls')     { _callsData = null; }
     if (section === 'exclusions') { _exList = null; _exLoad(); }
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
@@ -22451,6 +22454,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
     else if (_section === 'inbox')     body.innerHTML = _vInbox();
     else if (_section === 'wa')        { body.innerHTML = _vWaList(); _waMount(); }
+    else if (_section === 'calls')     body.innerHTML = _vCalls();
     else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
@@ -29430,6 +29434,50 @@ ${foot}
       <div class="lm-obc__cta">Abrir workspace <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
     </button>`;
   }
+  // ── Llamadas (Outreach): historial de las llamadas hechas desde Nova con el número del cliente + minutos del mes ──
+  let _callsData = null, _callsTab = '', _callsQ = '';
+  async function _callsLoad() {
+    try { const r = await apiFetch(`${API}/tel/calls${_gcli ? '?client=' + _gcli : ''}`); _callsData = (r && r.ok) ? await r.json() : { calls: [], resumen_mes: [] }; } catch (_) { _callsData = { calls: [], resumen_mes: [] }; }
+    if (_section === 'calls') _renderBody();
+  }
+  function callsTab(k) { _callsTab = k; _renderBody(); }
+  function callsSearch(v) { _callsQ = String(v || '').toLowerCase().trim(); _renderBody(); const i = document.getElementById('calls-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+  function _vCalls() {
+    if (_callsData === null) { _callsLoad(); return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Llamadas</h2></div></div><div class="lm-task-empty">Cargando llamadas…</div>`; }
+    if (!_tph.loaded) _telLoad();
+    const all = _callsData.calls || [], sum = _callsData.resumen_mes || [];
+    const answered = c => (c.duracion || 0) > 0;
+    const list = all.filter(c => (!_callsTab || (_callsTab === 'ok' ? answered(c) : !answered(c)))
+      && (!_callsQ || `${c.nombre || ''} ${c.apellido || ''} ${c.codigo || ''} ${c.empresa || ''} ${c.cliente || ''} ${c.to_number || ''} ${c.nota || ''}`.toLowerCase().includes(_callsQ)));
+    const fmt = s => { s = s || 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    const tot = sum.reduce((a, x) => ({ n: a.n + x.llamadas, ok: a.ok + x.contestadas, s: a.s + x.segundos }), { n: 0, ok: 0, s: 0 });
+    const kpi = (l, v, sub) => `<div class="calls-kpi"><span class="calls-kpi__l">${l}</span><span class="calls-kpi__n">${v}</span>${sub ? `<span class="calls-kpi__s">${sub}</span>` : ''}</div>`;
+    const tab = (k, l, n) => `<button type="button" class="lm-filter-btn${_callsTab === k ? ' on' : ''}" onclick="LeadManagerModule.callsTab('${k}')">${l} · ${n}</button>`;
+    const when = d => { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }) + ' · ' + x.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); };
+    const rows = list.map(c => {
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.to_number || '—';
+      const ok = answered(c);
+      return `<tr class="ldh-row" onclick="${c.contact_id ? `LeadManagerModule.openContactPage(${c.contact_id})` : ''}">
+        <td class="ldh-date">${esc(when(c.started_at))}</td>
+        <td><div class="ldh-name">${esc(full)} ${c.codigo ? `<span class="lm-code">${esc(c.codigo)}</span>` : ''}</div><div class="ldh-sub">${esc(c.empresa || '') || '&nbsp;'}</div></td>
+        <td class="ldh-dim">${esc(c.cliente || '—')}</td>
+        <td class="ldh-dim"><div>${esc(c.to_number || '')}</div><div class="ldh-sub">desde ${esc(c.from_number || '')}</div></td>
+        <td class="ldh-date"><b>${ok ? fmt(c.duracion) : '—'}</b></td>
+        <td><span class="calls-res ${ok ? 'calls-res--ok' : ''}">${esc(c.resultado || (ok ? 'Contestada' : (c.estado === 'iniciada' ? 'En curso / sin cerrar' : 'No contestada')))}</span></td>
+        <td class="ldh-note"><div class="ldh-note__in">${esc(c.nota || '')}</div></td></tr>`;
+    }).join('');
+    const sinCfg = !_tph.configured ? `<div class="calls-setup"><b>Aún no hay telefonía conectada.</b> Conecta tu cuenta de Twilio y el número de cada cliente para llamar desde Nova mostrando su número. <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.telConfigOpen()">☎ Configurar telefonía</button></div>` : '';
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Llamadas</h2></div>
+        <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.telConfigOpen()">☎ Configurar telefonía</button></div></div>
+      ${sinCfg}
+      <div class="calls-kpis">${kpi('Llamadas este mes', tot.n)}${kpi('Contestadas', tot.ok, tot.n ? Math.round(tot.ok * 100 / tot.n) + '%' : '')}${kpi('Minutos hablados', Math.round(tot.s / 60), 'este mes')}
+        ${sum.length > 1 || (!_gcli && sum.length) ? `<div class="calls-kpi calls-kpi--wide"><span class="calls-kpi__l">Minutos por cliente · este mes</span><div class="calls-by">${sum.map(x => `<span><b>${esc(x.cliente || '—')}</b> ${Math.round(x.segundos / 60)} min · ${x.llamadas} llam.</span>`).join('')}</div></div>` : ''}</div>
+      <div class="ldh-toolbar">${tab('', 'Todas', all.length)}${tab('ok', 'Contestadas', all.filter(answered).length)}${tab('no', 'Sin contestar', all.filter(c => !answered(c)).length)}
+        <span class="ldh-toolbar__sp"></span><input class="lm-search" id="calls-q" placeholder="Buscar contacto, empresa, número…" value="${esc(_callsQ)}" oninput="LeadManagerModule.callsSearch(this.value)"></div>
+      ${list.length ? `<div class="ldh-table-wrap"><table class="ldh-table calls-table"><colgroup><col style="width:120px"><col style="width:230px"><col style="width:120px"><col style="width:170px"><col style="width:80px"><col style="width:170px"><col></colgroup>
+        <thead><tr><th>Fecha</th><th>Contacto</th><th>Cliente</th><th>Número</th><th>Duración</th><th>Resultado</th><th>Nota</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('phone', 13)}</span>${all.length ? 'Ninguna llamada coincide con este filtro.' : 'Todavía no hay llamadas. Pulsa el teléfono de cualquier contacto (tarea de llamada, ficha o Leads) para llamar desde Nova.'}</div>`}`;
+  }
   // ── Telefonía: llamadas reales desde el navegador, mostrando el número del cliente (opción A: su línea sigue con su operador) ──
   const _tph = { loaded: false, loading: false, configured: false, lines: [], device: null, devClient: 0, call: null, timer: null, t0: 0, ctx: null, muted: false };
   async function _telLoad() {
@@ -29540,7 +29588,7 @@ ${foot}
     try {
       const r = await apiFetch(`${API}/tel/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: x.cid, call_sid: x.sid, duracion: x.dur, resultado: x.res || '', nota: (document.getElementById('tel-nota') || {}).value || '' }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error ' + r.status);
-      document.getElementById('tel-dock')?.remove(); showBanner('✓ Llamada registrada en el contacto', 'success');
+      document.getElementById('tel-dock')?.remove(); showBanner('✓ Llamada registrada en el contacto', 'success'); _callsData = null; if (_section === 'calls') _callsLoad();
       try { const ra = await apiFetch(`${API}/activities`); if (ra && ra.ok) _activities = await ra.json(); } catch (_) {}
       if (_section === 'contact-view') { try { _cpReloadActs(x.cid); } catch (_) {} }
     } catch (e) { showBanner('No se pudo registrar: ' + e.message, 'error'); }
@@ -38434,7 +38482,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,

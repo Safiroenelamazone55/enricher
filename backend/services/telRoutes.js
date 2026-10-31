@@ -171,6 +171,22 @@ function mount(app, { pool, requireAuth, mailboxSvc }) {
     } catch (e) { console.error('[tel] dial-done', e.message); xml(res, ''); }
   });
 
+  // ── Historial de llamadas y minutos del mes por cliente ──
+  app.get('/api/tel/calls', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT c.id, c.started_at, c.estado, c.duracion, c.resultado, c.nota, c.to_number, c.from_number, c.contact_id, c.outbound_client_id, oc.nombre AS cliente,
+               k.nombre, k.apellido, k.codigo, COALESCE(NULLIF(co.nombre,''), k.empresa_nombre, '') AS empresa
+          FROM tel_calls c LEFT JOIN outbound_clients oc ON oc.id = c.outbound_client_id LEFT JOIN lm_contacts k ON k.id = c.contact_id LEFT JOIN lm_companies co ON co.id = k.company_id
+         WHERE c.user_id=$1 AND ($2::int IS NULL OR c.outbound_client_id=$2::int) ORDER BY c.started_at DESC LIMIT 300`, [req.workspaceOwnerId, parseInt(req.query.client, 10) || null]);
+      const { rows: sum } = await pool.query(`
+        SELECT c.outbound_client_id, oc.nombre AS cliente, COUNT(*)::int AS llamadas, COUNT(*) FILTER (WHERE c.duracion > 0)::int AS contestadas, COALESCE(SUM(c.duracion),0)::int AS segundos
+          FROM tel_calls c LEFT JOIN outbound_clients oc ON oc.id = c.outbound_client_id
+         WHERE c.user_id=$1 AND c.started_at >= date_trunc('month', NOW()) AND ($2::int IS NULL OR c.outbound_client_id=$2::int) GROUP BY 1,2 ORDER BY 5 DESC`, [req.workspaceOwnerId, parseInt(req.query.client, 10) || null]);
+      res.json({ calls: rows, resumen_mes: sum });
+    } catch (e) { console.error('[tel] calls', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
   // ── Resultado de la llamada → actividad del contacto ──
   app.post('/api/tel/result', requireAuth, async (req, res) => {
     try {
