@@ -116,7 +116,7 @@ const SpacesModule = (() => {
     catch (e) { showBanner('No se pudo mover el proyecto', 'error'); }
     _paintTree(); _paintMain();
   }
-  function spaceOpts(ev, sid) { _openPop(ev.currentTarget, `<button class="sp-pop__i" onclick="SpacesModule.renameSpace(${sid})">Renombrar</button><button class="sp-pop__i sp-pop__i--del" onclick="SpacesModule.delSpace(${sid})">Eliminar espacio</button>`); }
+  function spaceOpts(ev, sid) { _openPop(ev.currentTarget, `<button class="sp-pop__i" onclick="SpacesModule.renameSpace(${sid})">Renombrar</button><button class="sp-pop__i" onclick="SpacesModule.shareSpace(${sid})">Uso compartido y permisos</button><button class="sp-pop__i sp-pop__i--del" onclick="SpacesModule.delSpace(${sid})">Eliminar espacio</button>`); }
   async function renameSpace(sid) { _closePop(); const s = _spaces.find(x => x.id === sid); const v = prompt('Nombre del espacio', s ? s.nombre : ''); if (!v || !v.trim()) return; try { const r = await apiFetch(`${API}/mgmt/spaces/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v }) }); if (r.ok) Object.assign(s, await r.json()); } catch (_) {} _paintTree(); _paintMain(); }
   async function delSpace(sid) {
     _closePop(); const s = _spaces.find(x => x.id === sid); if (!confirm(`¿Eliminar el espacio «${s ? s.nombre : ''}»? Sus proyectos NO se borran: pasan a «Principal».`)) return;
@@ -209,7 +209,7 @@ const SpacesModule = (() => {
     const sub = (ic, l, k) => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmSub('${k}')">${_I(_IC[ic])}<span>${l}</span><i>›</i></button>`;
     return `<div class="sp-pm__t">${esc(_plain(p.nombre))}</div>${it('star', _isFav(pid) ? 'Quitar de favoritos' : 'Marcar como favorito', 'SpacesModule.pmFav()')}${it('edit', 'Cambiar el nombre', 'SpacesModule.pmRename()')}${it('link', 'Copiar vínculo', 'SpacesModule.pmLink()')}<div class="sp-pm__s"></div>
       ${sub('plus', 'Crear nuevo', 'new')}${sub('pal', 'Color e ícono', 'color')}${it('info', 'Información del proyecto', 'SpacesModule.pmInfo()')}<div class="sp-pm__s"></div>
-      ${sub('tpl', 'Plantillas', 'tpl')}${sub('imp', 'Importaciones', 'imp')}<div class="sp-pm__s"></div>${sub('mv', 'Mover', 'mv')}${it('dup', 'Duplicar', 'SpacesModule.pmDup()')}${it('arc', 'Archivar', 'SpacesModule.pmArch()')}${it('del', 'Eliminar', 'SpacesModule.pmDel()', 'sp-pm__i--del')}`;
+      ${sub('tpl', 'Plantillas', 'tpl')}${sub('imp', 'Importaciones', 'imp')}<div class="sp-pm__s"></div>${it('link', 'Uso compartido y permisos', 'SpacesModule.pmShare()')}${sub('mv', 'Mover', 'mv')}${it('dup', 'Duplicar', 'SpacesModule.pmDup()')}${it('arc', 'Archivar', 'SpacesModule.pmArch()')}${it('del', 'Eliminar', 'SpacesModule.pmDel()', 'sp-pm__i--del')}`;
   }
   function projMenu(ev, pid) { _pmPid = pid; if (!_pjOf(pid)) return; _openPop(ev.currentTarget, _pmMainHtml(), 'sp-pm'); }
   function pmBack() { const pop = document.querySelector('.sp-pm'); if (pop) pop.innerHTML = _pmMainHtml(); }
@@ -261,6 +261,8 @@ const SpacesModule = (() => {
   const _close = () => document.getElementById('sp-modal')?.remove();
   const _ck = (id, l, on, hint) => `<label class="sp-ck"><input type="checkbox" id="${id}"${on ? ' checked' : ''}><span>${l}${hint ? `<em>${hint}</em>` : ''}</span></label>`;
   const _v = id => (document.getElementById(id) || {}).value || '', _c = id => !!(document.getElementById(id) || {}).checked;
+  function pmShare() { _closePop(); const p = _pjOf(_pmPid); if (p) PermsUI.share('project', p.id, _plain(p.nombre)); }
+  function shareSpace(sid) { _closePop(); const s = _spaces.find(x => x.id === sid); PermsUI.share('space', sid, s ? s.nombre : 'Espacio'); }
   function pmInfo() {
     _closePop(); const p = _pjOf(_pmPid), ts = _tasks.filter(t => t.project_id === _pmPid && !t.archivada), abiertas = ts.filter(t => _isOpen(t)).length;
     const row = (k, v) => v ? `<div class="sp-if"><span>${k}</span><b>${v}</b></div>` : '';
@@ -828,7 +830,7 @@ const SpacesModule = (() => {
   }
 
   return { load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
-    projMenu, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
+    projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask };
 })();

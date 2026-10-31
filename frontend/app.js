@@ -38732,6 +38732,7 @@ const WorkspaceModule = (() => {
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
     if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
     if (sec === 'uso') _loadUsage();
+    if (sec === 'permisos' && typeof PermsUI !== 'undefined') PermsUI.load();
     if (sec === 'agentes' && typeof AgentesModule !== 'undefined') AgentesModule.load();
     // "Usuarios" pasó de ser una pestaña propia del header a vivir acá dentro —
     // en vez de duplicar la tabla, se muda el propio #pane-mgmt-team (mismo truco que

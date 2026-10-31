@@ -341,6 +341,8 @@ function requireAuth(req, res, next) {
   }
   res.status(401).json({ error: 'Authentication required. Please log in.' });
 }
+// Roles y permisos: guardia global sobre /api (antes de las rutas) + filtros de listados
+const permsSvc = require('./services/permissions').mount(app, { pool, requireAuth });
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
 // que la Browser Extension / Desktop Agent consumen sin cookies (Fase 2.1).
@@ -570,8 +572,9 @@ app.get('/api/auth/me', async (req, res) => {
         memberId     = tm[0].id;
       }
     } catch (_) {}
+    let permisos = null; try { permisos = (await permsSvc.ctx(req)).perms; } catch (_) {}
     const timezone = await _tzOfUser(id);
-    return res.json({ loggedIn: true, id, email, name, avatar, workspace_id, workspaceName, companyName, companyLogo, isOwner, memberNombre, memberRol, memberId, timezone });
+    return res.json({ loggedIn: true, permisos, id, email, name, avatar, workspace_id, workspaceName, companyName, companyLogo, isOwner, memberNombre, memberRol, memberId, timezone });
   }
   res.json({ loggedIn: false });
 });
@@ -1541,7 +1544,7 @@ app.get('/api/mgmt/clients', requireAuth, async (req, res) => {
         ORDER BY c.created_at DESC`,
       [req.workspaceOwnerId]
     );
-    res.json(rows);
+    res.json(await permsSvc.filterClients(req, rows));
   } catch (err) {
     console.error('[mgmt/clients] GET error:', err.message);
     res.status(500).json({ error: 'Error al obtener clientes' });
@@ -1724,7 +1727,7 @@ app.delete('/api/mgmt/clients/:id/contacts/:contactId', requireAuth, async (req,
 // ── GET /api/mgmt/projects ────────────────────────────────────────
 // ── Espacios: agrupan proyectos (las «listas») ───────────────────────
 app.get('/api/mgmt/spaces', requireAuth, async (req, res) => {
-  try { const { rows } = await pool.query(`SELECT id, nombre, color, orden FROM spaces WHERE user_id=$1 ORDER BY orden, id`, [req.workspaceOwnerId]); res.json(rows); }
+  try { const { rows } = await pool.query(`SELECT id, nombre, color, orden FROM spaces WHERE user_id=$1 ORDER BY orden, id`, [req.workspaceOwnerId]); res.json(await permsSvc.filterSpaces(req, rows)); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.post('/api/mgmt/spaces', requireAuth, async (req, res) => {
@@ -2018,7 +2021,7 @@ app.get('/api/mgmt/projects', requireAuth, async (req, res) => {
         ORDER BY p.created_at DESC`,
       [req.workspaceOwnerId]
     );
-    res.json(rows);
+    res.json(await permsSvc.filterProjects(req, rows));
   } catch (err) {
     console.error('[mgmt/projects] GET error:', err.message);
     res.status(500).json({ error: 'Error al obtener proyectos' });
@@ -2400,7 +2403,7 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
           t.created_at DESC`,
       [req.workspaceOwnerId]
     );
-    res.json(rows);
+    res.json(await permsSvc.filterTasks(req, rows));
   } catch (err) {
     console.error('[mgmt/tasks] GET error:', err.message);
     res.status(500).json({ error: 'Error al obtener tareas' });

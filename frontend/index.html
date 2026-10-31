@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261030z"/>
+  <link rel="stylesheet" href="style.css?v=20261031a"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -855,6 +855,12 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </span>
           <span class="snav-item__label">Usuarios</span>
+        </button>
+        <button class="snav-item" data-sec="permisos" data-tooltip="Roles y permisos" onclick="WorkspaceModule.setSection('permisos')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          </span>
+          <span class="snav-item__label">Roles y permisos</span>
         </button>
         <button class="snav-item" data-sec="uso" data-tooltip="Uso" onclick="WorkspaceModule.setSection('uso')">
           <span class="snav-item__icon">
@@ -2385,6 +2391,11 @@
         <div id="cfg-usuarios-mount"></div>
       </section>
 
+      <section class="cfg__sec" data-sec="permisos" hidden>
+        <h3 style="font-size:.95rem;font-weight:700;margin:0 0 4px">Roles y permisos</h3>
+        <div id="cfg-permisos-mount"></div>
+      </section>
+
       <!-- Uso: pedido explicito con referencia a Clay Settings -- "Usage: ver
            lo que voy usando para asi saber cuando comprar mas plan". Cuenta
            real desde /api/workspace/usage, no inventada. -->
@@ -3550,7 +3561,8 @@
 <script src="app.js?v=2026103034"></script>
 <script src="worldclock.js?v=3"></script>
 <script src="agentes.js?v=3"></script>
-<script src="spaces.js?v=10"></script>
+<script src="spaces.js?v=11"></script>
+<script src="permisos.js?v=1"></script>
 <script src="contenido.js?v=7"></script>
 <script src="mobile.js?v=5"></script>
 <script src="varchips.js?v=2026101201"></script>
