@@ -19352,3 +19352,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pm2-av { width: 34px; height: 34px; border-radius: 50%; background: #E8F5EE; color: #00663D; display: grid; place-items: center; font-size: .78rem; font-weight: 700; flex: none; }
 .pm2-badge { font-size: .72rem; font-weight: 700; background: #EEF4FF; color: #2F5BB7; padding: 3px 9px; border-radius: 99px; white-space: nowrap; } .pm2-badge--aj { background: #FFF4E0; color: #9A6200; }
 #pm-modal .pm2-rows { margin-top: 4px; }
+
+/* Mismo margen que el resto de pantallas (antes Clientes y Proyectos sumaban 28px extra) y tablas que se desplazan en vez de cortarse */
+#pane-mgmt-clients .pv-topbar, #pane-mgmt-clients .clients-body, #pane-mgmt-projects .pv-topbar, #pane-mgmt-projects .pv-body { padding-left: 0; padding-right: 0; }
+.clients-table-wrap { overflow-x: auto; }
