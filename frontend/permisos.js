@@ -66,7 +66,11 @@ const PermsUI = (() => {
       <p class="pm-p">Cambia el rol de cada persona o dale permisos distintos a los de su rol.</p>
       <div class="pm-ppl">${_cat.miembros.map(m => `<div class="pm-pp"><div><b>${esc(m.nombre)}</b><span>${esc(m.email || '')}</span></div>
         <span class="pm-badge">${m.cargo === 'Propietario' ? 'Propietario' : esc((R(m.rol) || { l: m.rol }).l)}${m.permisos && Object.keys(m.permisos).length ? ' · ajustado' : ''}</span>
-        ${m.cargo === 'Propietario' ? '<span class="pm-na">Acceso total</span>' : `<button class="btn btn--ghost btn--sm" onclick="PermsUI.openPersona(${m.id})">Editar acceso</button>`}</div>`).join('') || '<p class="pm-p">Aún no hay personas en el equipo.</p>'}</div>`;
+        ${m.cargo === 'Propietario' ? '<span class="pm-na">Acceso total</span>' : `<button class="btn btn--ghost btn--sm" onclick="PermsUI.openPersona(${m.id})">Editar acceso</button>`}</div>`).join('') || '<p class="pm-p">Aún no hay personas en el equipo.</p>'}</div>
+      <h4 class="pm-h">Equipo por cliente outbound</h4>
+      <p class="pm-p">Marca quién trabaja en cada cliente. Las personas con Outreach en «Solo sus clientes asignados» solo verán los clientes donde estén marcadas (o sean el Responsable). Los administradores y quienes ven «Todo el equipo» aparecen atenuados: ya ven todos.</p>
+      <div id="pm-clients"></div>`;
+    paintClients();
   }
   async function saveRol() {
     try { await put('/perms/roles/' + _rol, { permisos: _draft }); showBanner('Permisos del rol guardados', 'success'); await load(); } catch (e) { showBanner(e.message, 'error'); }
@@ -121,14 +125,26 @@ const PermsUI = (() => {
   }
 
   // ── Equipo asignado a un cliente outbound (dentro de la ficha del cliente) ──
-  async function clientTeam(cid) {
-    const box = document.getElementById('obc-team'); if (!box) return;
+  function _chips(j, cid) {
+    const set = new Set(j.asignados);
+    return `<div class="pm-chips">${j.equipo.map(m => { const auto = m.ve_todo, on = set.has(m.id) || (j.responsable && j.responsable.trim().toLowerCase() === (m.nombre || '').trim().toLowerCase());
+      return `<label class="pm-chip${on ? ' on' : ''}${auto ? ' pm-chip--auto' : ''}" title="${auto ? 'Ya ve todos los clientes por su rol' : ''}"><input type="checkbox" ${on ? 'checked' : ''} ${auto ? 'disabled' : ''} onchange="PermsUI.setClientTeam(${cid},${m.id},this.checked,this)">${esc(m.nombre)}</label>`; }).join('')}</div>`;
+  }
+  // Configuración › Roles y permisos: equipo asignado a cada cliente outbound
+  async function paintClients() {
+    const box = document.getElementById('pm-clients'); if (!box) return;
+    let cl = []; try { cl = await api('/outbound-clients'); } catch (_) {}
+    box.innerHTML = cl.length ? cl.map(c => `<div class="pm-cl"><div class="pm-cl__n"><b>${esc(c.nombre)}</b><span>${esc(c.estado || '')}</span></div><div id="pm-cl-${c.id}" class="pm-cl__t"></div></div>`).join('') : '<p class="pm-p">Aún no hay clientes outbound.</p>';
+    cl.forEach(c => clientTeam(c.id, 'pm-cl-' + c.id, true));
+  }
+  async function clientTeam(cid, boxId, compact) {
+    const box = document.getElementById(boxId || 'obc-team'); if (!box) return;
     let j; try { j = await api('/perms/client-team?client=' + cid); } catch (e) { box.innerHTML = ''; return; }
     const set = new Set(j.asignados);
-    box.innerHTML = `<div class="fin-cfg-lbl" style="margin-bottom:2px">Equipo asignado a este cliente</div>
+    box.innerHTML = compact ? '' : `<div class="fin-cfg-lbl" style="margin-bottom:2px">Equipo asignado a este cliente</div>
       <span class="seq-drip-hint">Las personas con acceso «Solo sus clientes asignados» a Outreach solo verán los clientes donde estén marcadas (o sean el Responsable). Los administradores ven todos.</span>
-      <div class="pm-chips">${j.equipo.map(m => { const auto = m.ve_todo, on = set.has(m.id) || (j.responsable && j.responsable.trim().toLowerCase() === (m.nombre || '').trim().toLowerCase());
-        return `<label class="pm-chip${on ? ' on' : ''}${auto ? ' pm-chip--auto' : ''}" title="${auto ? 'Ya ve todos los clientes por su rol' : ''}"><input type="checkbox" ${on ? 'checked' : ''} ${auto ? 'disabled' : ''} onchange="PermsUI.setClientTeam(${cid},${m.id},this.checked,this)">${esc(m.nombre)}</label>`; }).join('')}</div>`;
+      ${_chips(j, cid)}`;
+    if (compact) box.innerHTML = _chips(j, cid);
   }
   async function setClientTeam(cid, mid, on, el) {
     try { await put('/perms/client-team', { client_id: cid, member_id: mid, asignado: !!on }); el.parentElement.classList.toggle('on', !!on); }
