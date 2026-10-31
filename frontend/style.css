@@ -19214,3 +19214,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .calls-setup { background: #FFF8E6; border: 1px solid #F0DDA8; padding: 10px 14px; margin-bottom: 12px; font-size: .84rem; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .calls-table td { padding: 8px 12px; height: 56px; vertical-align: middle; } .calls-table th { padding: 9px 12px; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: #8F8B83; }
 .calls-res { display: inline-block; padding: 2px 9px; font-size: .74rem; font-weight: 600; background: #F3F1EC; color: #6B675F; } .calls-res--ok { background: #E4F3EA; color: #1F6B3E; }
+
+/* ═══ Operaciones: UN solo contenedor para todas las secciones (como el Dashboard) ═══
+   Antes cada sección tenía su propio ancho (1060 / 1400 / sin tope), su propio margen superior y su propia barra de scroll,
+   así que al cambiar de sección el contenido saltaba de tamaño. Ahora todas arrancan en el mismo punto y ocupan el mismo ancho. */
+.content-wrap:has(> .pane.active[id^="pane-mgmt-"]) { max-width: none !important; padding-left: 28px; padding-right: 28px; }
+.app-main:has(.pane.active[id^="pane-mgmt-"]) { padding-top: 10px; scrollbar-gutter: stable; }
+#pane-mgmt-dashboard { scrollbar-gutter: stable; }
+#pane-mgmt-clients { padding-left: 28px; padding-right: 28px; box-sizing: border-box; }
+#pane-mgmt-clients .pane-header { padding-left: 0; padding-right: 0; }
