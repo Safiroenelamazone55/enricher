@@ -16146,7 +16146,7 @@ const TasksModule = (() => {
     toggleTaskExpand, toggleSubExpand, toggleTlGroup,
     tlOpenDepPop, tlAddDep, tlRemoveDep,
     kanbanDragStart, kanbanDragEnd, moveTaskToStatus,
-    kcCard: _kcCard, timerBtn: _timerBtn, openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
+    kcCard: _kcCard, timerBtn: _timerBtn, estadoBadge: _estadoBadge, prioBadge: _prioridadBadge, dueCell: _deadlineCell, openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
     openKcPrioPopover, saveKcPrio,
     openKcDatePopover,
     openKcRespPopover, saveKcResp, _kcFilterResp,

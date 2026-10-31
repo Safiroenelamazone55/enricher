@@ -19,7 +19,7 @@ const SpacesModule = (() => {
   const _today = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
   const _fmtD = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
   const _isOpen = t => t.estado !== 'completado' && t.estado !== 'cancelado';
-  const _ESTADOS = [['pendiente', 'Pendiente', '#9A958C'], ['en_progreso', 'En curso', '#3F5BD0'], ['bloqueado', 'Bloqueado', '#D9534F'], ['completado', 'Completado', '#2E9E5B'], ['cancelado', 'Cancelado', '#B4AFA8']];
+  const _ESTADOS = [['pendiente', 'Pendiente', '#87909E'], ['en_progreso', 'En progreso', '#4194F6'], ['bloqueado', 'Bloqueado', '#F04F4F'], ['completado', 'Completado', '#6BC950'], ['cancelado', 'Cancelado', '#B0B5BD']];
   const _EST = Object.fromEntries(_ESTADOS.map(e => [e[0], e]));
   const _PRIO = { alta: ['Alta', '#EF4444'], media: ['Media', '#F59E0B'], baja: ['Baja', '#10B981'] };
   const _resp = t => (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
@@ -72,7 +72,7 @@ const SpacesModule = (() => {
       <button type="button" class="sp-all${_mode === 'tasks' && _selSpace == null && !_selProj ? ' on' : ''}" onclick="SpacesModule.pick(null,null)"><span class="sp-all__i">✱</span>Todas las tareas</button>
       <button type="button" class="sp-all${_mode === 'proyectos' ? ' on' : ''}" onclick="SpacesModule.showProjectsGo()"><span class="sp-all__i">▤</span>Todos los proyectos</button>
       ${_favHtml()}
-      ${spRow(0, 'Principal', '#7C5CE0', _openSp.has('p0'))}${_spaces.map(s => spRow(s.id, s.nombre, s.color, _openSp.has('p' + s.id))).join('')}
+      ${spRow(0, 'Principal', '#007AFF', _openSp.has('p0'))}${_spaces.map(s => spRow(s.id, s.nombre, s.color, _openSp.has('p' + s.id))).join('')}
       ${_addingSpace ? `<div class="sp-newin"><input id="sp-new" placeholder="Nombre del espacio" onkeydown="if(event.key==='Enter')SpacesModule.saveSpace(this.value);if(event.key==='Escape')SpacesModule.cancelSpace()" onblur="SpacesModule.saveSpace(this.value)"></div>` : `<button type="button" class="sp-newsp" onclick="SpacesModule.newSpace()">+ Nuevo espacio</button>`}`;
     if (_addingSpace) setTimeout(() => $q('sp-new')?.focus(), 20);
   }
@@ -94,7 +94,7 @@ const SpacesModule = (() => {
   async function saveSpace(v) {
     v = String(v || '').trim(); if (!_addingSpace) return; _addingSpace = false;
     if (!v) { _paintTree(); return; }
-    try { const colors = ['#7C5CE0', '#2F6BFF', '#E8920F', '#2E9E5B', '#D9534F', '#0891B2']; const r = await apiFetch(`${API}/mgmt/spaces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v, color: colors[_spaces.length % colors.length] }) }); if (!r.ok) throw new Error((await r.json()).error); const s = await r.json(); _spaces.push(s); _openSp.add('p' + s.id); _selSpace = s.id; _selProj = null; _save(); }
+    try { const colors = ['#007AFF', '#2F6BFF', '#E8920F', '#2E9E5B', '#D9534F', '#0891B2']; const r = await apiFetch(`${API}/mgmt/spaces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v, color: colors[_spaces.length % colors.length] }) }); if (!r.ok) throw new Error((await r.json()).error); const s = await r.json(); _spaces.push(s); _openSp.add('p' + s.id); _selSpace = s.id; _selProj = null; _save(); }
     catch (e) { showBanner('No se pudo crear el espacio: ' + e.message, 'error'); }
     _paintTree(); _paintMain();
   }
@@ -224,9 +224,9 @@ const SpacesModule = (() => {
     if (k === 'new') h = back('Crear nuevo') + it('plus', 'Tarea', 'SpacesModule.pmNewTask()') + [['documento', 'Documento'], ['formulario', 'Formulario'], ['panel', 'Panel'], ['pizarra', 'Pizarra']].map(([t, l]) => it('plus', l + ' <em>(vista)</em>', `SpacesModule.pmAddView('${t}')`)).join('') + '<div class="sp-pm__s"></div>' + it('imp', 'Importar hoja de cálculo', 'SpacesModule.impOpen()') + it('tpl', 'Aplicar una plantilla', 'SpacesModule.tplApplyOpen()');
     else if (k === 'tpl') h = back('Plantillas') + it('tpl', 'Establecer plantilla de tarea predeterminada', 'SpacesModule.tdOpen()') + '<div class="sp-pm__s"></div>' + it('tpl', 'Aplicar una plantilla', 'SpacesModule.tplApplyOpen()') + it('imp', 'Guardar como plantilla', 'SpacesModule.tplSaveOpen()') + it('dup', 'Actualizar plantilla existente', 'SpacesModule.tplRefreshOpen()') + '<div class="sp-pm__s"></div>' + it('edit', 'Administrar plantillas', 'SpacesModule.tplManage()');
     else if (k === 'imp') h = back('Importaciones') + it('imp', 'Archivo de hoja de cálculo (Excel / CSV)', 'SpacesModule.impOpen()') + '<div class="sp-pm__n">Otras herramientas (Asana, Trello, Notion…) llegarán después.</div>';
-    else if (k === 'mv') { const cur = p.space_id || 0; h = back('Mover a…') + [{ id: 0, nombre: 'Principal' }, ..._spaces].map(s => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmMove(${s.id})"><span class="sp-sq sp-sq--s" style="background:${s.color || '#7C5CE0'}">${_nrm(s.nombre).slice(0, 1).toUpperCase()}</span><span>${esc(s.nombre)}</span>${cur === s.id ? '<i>✓</i>' : ''}</button>`).join(''); }
+    else if (k === 'mv') { const cur = p.space_id || 0; h = back('Mover a…') + [{ id: 0, nombre: 'Principal' }, ..._spaces].map(s => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmMove(${s.id})"><span class="sp-sq sp-sq--s" style="background:${s.color || '#007AFF'}">${_nrm(s.nombre).slice(0, 1).toUpperCase()}</span><span>${esc(s.nombre)}</span>${cur === s.id ? '<i>✓</i>' : ''}</button>`).join(''); }
     else if (k === 'color') {
-      const cols = ['#7C5CE0', '#2F6BFF', '#0891B2', '#2E9E5B', '#E8920F', '#D9534F', '#D6409F', '#6B6760'], emos = ['📁', '📌', '🚀', '🎯', '📣', '💼', '🛒', '🧾', '📞', '✉️', '💡', '🔧', '📈', '🧪', '🏠', '🌍', '🎨', '🧠', '⚙️', '🔔', '📅', '⭐', '🤝', '💰'];
+      const cols = ['#007AFF', '#2F6BFF', '#0891B2', '#2E9E5B', '#E8920F', '#D9534F', '#D6409F', '#6B6760'], emos = ['📁', '📌', '🚀', '🎯', '📣', '💼', '🛒', '🧾', '📞', '✉️', '💡', '🔧', '📈', '🧪', '🏠', '🌍', '🎨', '🧠', '⚙️', '🔔', '📅', '⭐', '🤝', '💰'];
       h = back('Color e ícono') + `<div class="sp-pm__n">Color</div><div class="sp-pm__cols">${cols.map(c => `<button type="button" style="background:${c}" class="${p.color === c ? 'on' : ''}" onclick="SpacesModule.pmStyle('color','${c}')"></button>`).join('')}</div><div class="sp-pm__n">Ícono</div><div class="sp-pm__emos">${emos.map(e => `<button type="button" class="${p.icono === e ? 'on' : ''}" onclick="SpacesModule.pmStyle('icono','${e}')">${e}</button>`).join('')}</div><button type="button" class="sp-pm__i" onclick="SpacesModule.pmStyle('reset')"><span>Restablecer</span></button>`;
     }
     pop.innerHTML = h;
@@ -429,7 +429,7 @@ const SpacesModule = (() => {
     const listish = ['lista', 'tabla', 'tablero'].includes(_view), noBar = ['formulario', 'documento', 'pizarra'].includes(_view) || (p && _cfg);
     const ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     const meOn = _me, persOn = _fPers.length;
-    m.innerHTML = `<div class="sp-top"><div class="sp-crumb">${sp ? `<span class="sp-sq sp-sq--s" style="background:${sp.color || '#7C5CE0'}">${_nrm(sp.nombre).slice(0, 1).toUpperCase()}</span><span class="sp-crumb__a">${esc(sp.nombre)}</span><span class="sp-crumb__s">/</span>` : ''}<b>${p ? esc(p.nombre) : (sp ? 'Todas las listas' : 'Todas las tareas')}</b>${p && p.client_nombre ? `<span class="sp-crumb__c">${esc(p.client_nombre)}</span>` : ''}</div>
+    m.innerHTML = `<div class="sp-top"><div class="sp-crumb">${sp ? `<span class="sp-sq sp-sq--s" style="background:${sp.color || '#007AFF'}">${_nrm(sp.nombre).slice(0, 1).toUpperCase()}</span><span class="sp-crumb__a">${esc(sp.nombre)}</span><span class="sp-crumb__s">/</span>` : ''}<b>${p ? esc(p.nombre) : (sp ? 'Todas las listas' : 'Todas las tareas')}</b>${p && p.client_nombre ? `<span class="sp-crumb__c">${esc(p.client_nombre)}</span>` : ''}</div>
 </div>
       <div class="sp-tabs">${_viewsOf(_sk()).map(v => `<span class="sp-tab sp-tab--v${cv.id === v.id && !_cfg ? ' on' : ''}" title="${esc(v.nombre || (_VT[v.tipo] || [''])[0])}" onclick="SpacesModule.selView('${v.id}')"><i class="sp-tab__i" style="color:${(_VT[v.tipo] || _VT.lista)[2]}">${_ico((_VT[v.tipo] || _VT.lista)[3])}</i><b class="sp-tab__x" title="Renombrar o quitar" onclick="SpacesModule.viewOpts(event,'${v.id}')">⋯</b></span>`).join('')}<button type="button" class="sp-tab sp-tab--add" title="Añadir vista" onclick="SpacesModule.viewMenu(event)">＋</button>${p ? `<span class="sp-tabs__gap"></span><button type="button" class="sp-tab sp-tab--cfg${_cfg ? ' on' : ''}" title="Configuración del proyecto: datos, tiempo, costos, equipo y plantillas" onclick="SpacesModule.cfgOpen()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><b>Configuración</b></button>` : ''}</div>
       ${noBar ? '' : `<div class="sp-bar"><div class="sp-bar__l">
@@ -507,7 +507,7 @@ const SpacesModule = (() => {
       _setSt('No se pudo guardar · reintentando…'); clearTimeout(_col.sendT); _col.sendT = setTimeout(_colFlush, 3000);
     }
   }
-  const _PCOL = ['#2F6BFF', '#E8920F', '#2E9E5B', '#D9534F', '#7C5CE0', '#0891B2'];
+  const _PCOL = ['#2F6BFF', '#E8920F', '#2E9E5B', '#D9534F', '#007AFF', '#0891B2'];
   const _pcol = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) % _PCOL.length; return _PCOL[h]; };
   function _paintPresence(ed) {
     const el = $q('sp-pres'); if (el) el.innerHTML = ed.length ? ed.map(e => `<span class="sp-pr" style="--c:${_pcol(e.name)}"><i></i>${esc(e.name)}</span>`).join('') + '<em>también está aquí</em>' : '';
@@ -705,7 +705,7 @@ const SpacesModule = (() => {
     const total = mains.length, pct = total ? Math.round(hechas.length * 100 / total) : 0;
     b.innerHTML = `<div class="sp-dash"><div class="sp-dash__k">${kpi('Abiertas', open.length)}${kpi('Vencidas', venc.length, venc.length ? '#D9534F' : '')}${kpi('Para hoy', hoy.length)}${kpi('Próximos 7 días', prox.length)}${kpi('Completadas', hechas.length, '#2E9E5B')}${kpi('Avance', pct + '%')}</div>
       <div class="sp-dash__g"><div class="sp-dc"><h4>Por estado</h4>${bars(porEst)}</div><div class="sp-dc"><h4>Por persona (abiertas)</h4>${bars(porPers, '#5B6BC0')}</div>
-        <div class="sp-dc"><h4>Por lista (abiertas)</h4>${bars(porProj, '#7C5CE0')}</div><div class="sp-dc"><h4>Por prioridad (abiertas)</h4>${bars(porPrio)}</div>
+        <div class="sp-dc"><h4>Por lista (abiertas)</h4>${bars(porProj, '#007AFF')}</div><div class="sp-dc"><h4>Por prioridad (abiertas)</h4>${bars(porPrio)}</div>
         <div class="sp-dc sp-dc--w"><h4>Próximos vencimientos</h4>${next.length ? next.map(t => { const od = dd(t) < td; return `<div class="sp-dn" onclick="openTaskAnywhere(${t.id})"><span class="${od ? 'is-od' : ''}">${_fmtD(dd(t))}</span><b>${esc(t.titulo)}</b><em>${esc(t.project_nombre || '')}</em></div>`; }).join('') : '<div class="sp-e">Nada con fecha</div>'}</div></div></div>`;
   }
 
@@ -752,7 +752,7 @@ const SpacesModule = (() => {
   function _row(t, depth, kids, cols) {
     const e = _EST[t.estado || 'pendiente'] || _EST.pendiente, d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
     const cell = {
-      prioridad: `<div class="sp-c sp-c--m"><button class="sp-pr" onclick="SpacesModule.prio(event,${t.id})">${p ? `<i style="background:${p[1]}"></i>${p[0]}` : '—'}</button></div>`,
+      prioridad: `<div class="sp-c sp-c--m"><button class="sp-cb" onclick="SpacesModule.prio(event,${t.id})">${TasksModule.prioBadge(t.prioridad || 'media')}</button></div>`,
       inicio: `<div class="sp-c sp-c--m sp-dim">${_fmtD(_d10(t.fecha_inicio)) || '—'}</div>`,
       estimado: `<div class="sp-c sp-c--m sp-dim">${t.duracion_est_min ? _fmtEst(t.duracion_est_min) : '—'}</div>`,
       etiquetas: `<div class="sp-c sp-c--l">${(t.etiquetas || []).slice(0, 3).map(_tagChip).join('') || '<span class="sp-dim">—</span>'}</div>`,
@@ -762,9 +762,9 @@ const SpacesModule = (() => {
     return `<div class="sp-r${depth ? ' sp-r--sub' : ''}" data-id="${t.id}" style="--d:${depth}" oncontextmenu="SpacesModule.ctx(event,${t.id})">
       <div class="sp-c sp-c--n"><span class="sp-ind" style="width:${depth * 22}px"></span>${kids ? `<button class="sp-car" onclick="SpacesModule.toggleT(${t.id})">${open ? '▾' : '▸'}</button>` : '<span class="sp-car"></span>'}<button class="sp-ring" title="Cambiar estado" onclick="SpacesModule.estMenu(event,${t.id})">${_statusRing(t)}</button>
         <span class="sp-tt" onclick="openTaskAnywhere(${t.id})">${esc(t.titulo)}</span>${kids ? `<span class="sp-sb" title="${kids} subtarea(s)">⑂ ${kids}</span>` : ''}${depth < 2 ? `<button class="sp-addsub" title="Agregar subtarea" onclick="SpacesModule.addSub(event,${t.id})">＋ subtarea</button>` : ''}</div>
-      <div class="sp-c sp-c--e"><button class="sp-est" style="--c:${e[2]}" onclick="SpacesModule.estMenu(event,${t.id})">${esc(e[1]).toUpperCase()}</button></div>
-      <div class="sp-c sp-c--d"><button class="sp-dt${od ? ' is-od' : ''}${d ? '' : ' is-empty'}" onclick="SpacesModule.date(event,${t.id})">${d ? _fmtD(d) : '＋'}</button></div>
-      <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? rs.slice(0, 3).map(n => `<span class="sp-av" title="${esc(n)}">${esc(_ini(n))}</span>`).join('') : '<span class="sp-av sp-av--add">＋</span>'}</button></div>
+      <div class="sp-c sp-c--e"><button class="sp-cb" onclick="SpacesModule.estMenu(event,${t.id})"><span class="sp-tag" style="--c:${e[2]}">${esc(e[1])}</span></button></div>
+      <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button></div>
+      <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '<span class="tl-who tl-who--add">＋</span>'}</button></div>
       ${cols.map(c => cell[c]).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
   function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas" onclick="SpacesModule.colsMenu(event)">＋</button></div></div>`; }
@@ -784,7 +784,7 @@ const SpacesModule = (() => {
     b.innerHTML = `<div class="sp-scroll">` + gs.filter(g => g.tasks.length || g.est).map(g => {
       const open = !_collapsedG.has(g.key), rows = [];
       if (open) g.tasks.forEach(t => _tree(t, byParent, 0, cols, rows));
-      return `<div class="sp-g">${g.flat ? '' : `<div class="sp-g__h"><button class="sp-car" onclick="SpacesModule.toggleG('${esc(g.key).replace(/'/g, '&#39;')}')">${open ? '▾' : '▸'}</button><span class="sp-gl" style="background:${g.color}">${esc(g.label)}</span><span class="sp-gn">${g.tasks.length}</span>${g.est ? `<button class="sp-gp" title="Agregar tarea" onclick="SpacesModule.newTask('${g.est}',this)">＋</button>` : ''}</div>`}
+      return `<div class="sp-g">${g.flat ? '' : `<div class="sp-g__h"><button class="sp-car" onclick="SpacesModule.toggleG('${esc(g.key).replace(/'/g, '&#39;')}')">${open ? '▾' : '▸'}</button><span class="sp-tag" style="--c:${g.color}">${esc(g.label)}</span><span class="sp-gn">${g.tasks.length}</span>${g.est ? `<button class="sp-gp" title="Agregar tarea" onclick="SpacesModule.newTask('${g.est}',this)">＋</button>` : ''}</div>`}
         ${open ? _head(cols) + rows.join('') + `<div class="sp-add-r"><button type="button" onclick="SpacesModule.newTask('${g.est || 'pendiente'}',this)">＋ Agregar Tarea</button></div>` : ''}</div>`;
     }).join('') + `</div>`;
   }
@@ -845,7 +845,7 @@ const SpacesModule = (() => {
     const p = _projects.find(x => x.id === pid); _mode = 'tasks'; _cfg = false; _selProj = pid; _selSpace = p ? (p.space_id || 0) : 0; if (_selSpace != null) _openSp.add('p' + _selSpace); _save();
     if ($q('spaces-root') && _loaded) { _paintTree(); _paintMain(); }
   }
-  const _PJE = [['activo', 'Activo', '#2E9E5B'], ['pausado', 'Pausado', '#E8920F'], ['completado', 'Completado', '#3F5BD0'], ['cancelado', 'Cancelado', '#B4AFA8']];
+  const _PJE = [['activo', 'Activo', '#4194F6'], ['pausado', 'Pausado', '#F8AE00'], ['completado', 'Completado', '#6BC950'], ['cancelado', 'Cancelado', '#87909E']];
   const _pjProg = pid => { const ts = _tasks.filter(t => t.project_id === pid && !t.archivada && !t.parent_task_id); return { n: ts.length, done: ts.filter(t => t.estado === 'completado').length }; };
   function pjF(k, v) { if (k === 'e') _pfE = v; else if (k === 'p') _pfP = v; else if (k === 'c') _pfC = v; else if (k === 'me') _pMe = !_pMe; else if (k === 'q') { _pq = v; _paintPjTable(); return; } _paintMain(); }
   function _paintPjTable() {
@@ -859,7 +859,7 @@ const SpacesModule = (() => {
     const money = _projects.some(p => 'valor_total' in p), spN = id => id ? ((_spaces.find(s => s.id === id) || {}).nombre || '') : 'Principal';
     box.innerHTML = ps.length ? `<div class="pj2-r pj2-r--h"><div class="pj2-n">Proyecto</div><div class="pj2-c">Cliente</div><div class="pj2-e">Estado</div><div class="pj2-p">Equipo</div><div class="pj2-f">Fechas</div><div class="pj2-t">Tareas</div>${money ? '<div class="pj2-v">Valor</div>' : ''}<div class="pj2-x"></div></div>`
       + ps.map(p => { const e = _PJE.find(x => x[0] === (p.estado || 'activo')) || _PJE[0], g = _pjProg(p.id), pc = g.n ? Math.round(g.done / g.n * 100) : 0, rs = _resp(p);
-        const ic = p.icono ? `<i class="sp-pj__e" style="${p.color ? 'background:' + p.color + '22' : ''}">${esc(p.icono)}</i>` : `<i class="pj2-dot" style="background:${p.color || '#7C5CE0'}"></i>`;
+        const ic = p.icono ? `<i class="sp-pj__e" style="${p.color ? 'background:' + p.color + '22' : ''}">${esc(p.icono)}</i>` : `<i class="pj2-dot" style="background:${p.color || '#007AFF'}"></i>`;
         return `<div class="pj2-r" onclick="SpacesModule.pick(${p.space_id || 0},${p.id})"><div class="pj2-n">${ic}<div><b>${esc(p.nombre)}</b><span>${esc(spN(p.space_id))}</span></div></div>
           <div class="pj2-c">${esc(p.client_nombre || '—')}</div>
           <div class="pj2-e"><button class="pj2-st" style="--c:${e[2]}" onclick="event.stopPropagation();SpacesModule.pjEst(event,${p.id})">${e[1]}</button></div>
