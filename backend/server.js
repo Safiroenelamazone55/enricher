@@ -1742,6 +1742,39 @@ app.delete('/api/mgmt/spaces/:id', requireAuth, async (req, res) => {
   try { const id = parseInt(req.params.id, 10); await pool.query(`UPDATE projects SET space_id=NULL WHERE space_id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]); await pool.query(`DELETE FROM spaces WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ── Vistas de cada espacio ──
+const _SV_TIPOS = ['lista', 'tablero', 'tabla', 'calendario', 'gantt', 'galeria', 'panel', 'formulario', 'documento', 'pizarra'];
+app.get('/api/mgmt/space-views', requireAuth, async (req, res) => {
+  try { const { rows } = await pool.query(`SELECT id, space_id, tipo, nombre, orden, config FROM space_views WHERE user_id=$1 ORDER BY space_id, orden, id`, [req.workspaceOwnerId]); res.json(rows); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/mgmt/space-views', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {}, sid = parseInt(b.space_id, 10);
+  if (!Number.isInteger(sid) || sid < -1) return res.status(400).json({ error: 'Espacio inválido' });
+  const lista = Array.isArray(b.views) ? b.views : [{ tipo: b.tipo, nombre: b.nombre }];
+  try {
+    if (sid > 0) { const ok = await pool.query(`SELECT 1 FROM spaces WHERE id=$1 AND user_id=$2`, [sid, uid]); if (!ok.rows[0]) return res.status(404).json({ error: 'Espacio no encontrado' }); }
+    const out = [];
+    for (const v of lista) {
+      if (!_SV_TIPOS.includes(v.tipo)) continue;
+      const { rows } = await pool.query(`INSERT INTO space_views (user_id, space_id, tipo, nombre, orden) VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX(orden),0)+1 FROM space_views WHERE user_id=$1 AND space_id=$2)) RETURNING id, space_id, tipo, nombre, orden`,
+        [uid, sid, v.tipo, String(v.nombre || '').trim().slice(0, 40)]);
+      out.push(rows[0]);
+    }
+    res.status(201).json(Array.isArray(b.views) ? out : out[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.patch('/api/mgmt/space-views/:id', requireAuth, async (req, res) => {
+  try {
+    const cfg = req.body && req.body.config && typeof req.body.config === 'object' ? JSON.stringify(req.body.config) : null;
+    if (cfg && cfg.length > 600000) return res.status(413).json({ error: 'El contenido es demasiado grande' });
+    const { rows } = await pool.query(`UPDATE space_views SET nombre=COALESCE(NULLIF($3,''), nombre), config=COALESCE($4::jsonb, config) WHERE id=$1 AND user_id=$2 RETURNING id, space_id, tipo, nombre, orden`, [parseInt(req.params.id, 10), req.workspaceOwnerId, String(req.body?.nombre || '').trim().slice(0, 40), cfg]); if (!rows[0]) return res.status(404).json({ error: 'Vista no encontrada' }); res.json(rows[0]); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/mgmt/space-views/:id', requireAuth, async (req, res) => {
+  try { await pool.query(`DELETE FROM space_views WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId]); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
 app.patch('/api/mgmt/projects/:id/space', requireAuth, async (req, res) => {
   const sid = req.body?.space_id ? parseInt(req.body.space_id, 10) : null;
   try {

@@ -390,6 +390,12 @@ async function initDb() {
       id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#7C5CE0',
       orden INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS space_id INTEGER;`);
+    // Vistas de cada espacio (Lista, Tablero, Tabla, Calendario, Gantt, Galería, Panel, Formulario…), como en ClickUp. space_id: id del espacio, 0 = Principal, -1 = «Todas las tareas».
+    await pool.query(`CREATE TABLE IF NOT EXISTS space_views (
+      id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, space_id INTEGER NOT NULL, tipo TEXT NOT NULL, nombre TEXT NOT NULL DEFAULT '',
+      orden INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS space_views_idx ON space_views (user_id, space_id, orden)`);
+    await pool.query(`ALTER TABLE space_views ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS checklists       JSONB   NOT NULL DEFAULT '[]'::jsonb;`);
     // Lunes de la semana que representa la tarea (idempotencia de la creación automática).
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS semana_week DATE;`);

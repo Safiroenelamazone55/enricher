@@ -4,14 +4,14 @@
 // ═══════════════════════════════════════════════════════════════
 const SpacesModule = (() => {
   const LS = 'nova_spaces_ui';
-  let _spaces = [], _projects = [], _tasks = [], _team = [], _loaded = false;
+  let _spaces = [], _projects = [], _tasks = [], _team = [], _loaded = false, _views = [], _viewSel = {}, _calRef = null, _ganttScale = 'semana';
   let _selSpace = null, _selProj = null;             // null/null = Todas las tareas
   let _view = 'lista', _group = 'estado', _showClosed = false, _expandSubs = true, _q = '', _me = false, _fEstado = [], _fPrio = [], _fPers = [];
   let _cols = ['prioridad'];                           // columnas extra visibles (además de Nombre · Estado · Fecha límite · Persona)
   const _collapsedG = new Set(), _collapsedT = new Set(), _openSp = new Set(['p0']);
   let _pop = null, _popOff = null, _addingSpace = false;
-  try { const u = JSON.parse(localStorage.getItem(LS) || '{}'); if (u.view) _view = u.view; if (u.group) _group = u.group; if (Array.isArray(u.cols)) _cols = u.cols; if (typeof u.expandSubs === 'boolean') _expandSubs = u.expandSubs; if (u.selProj) _selProj = u.selProj; if (u.selSpace != null) _selSpace = u.selSpace; } catch (_) {}
-  const _save = () => { try { localStorage.setItem(LS, JSON.stringify({ view: _view, group: _group, cols: _cols, expandSubs: _expandSubs, selProj: _selProj, selSpace: _selSpace })); } catch (_) {} };
+  try { const u = JSON.parse(localStorage.getItem(LS) || '{}'); if (u.view) _view = u.view; if (u.group) _group = u.group; if (Array.isArray(u.cols)) _cols = u.cols; if (typeof u.expandSubs === 'boolean') _expandSubs = u.expandSubs; if (u.selProj) _selProj = u.selProj; if (u.selSpace != null) _selSpace = u.selSpace; if (u.viewSel) _viewSel = u.viewSel; } catch (_) {}
+  const _save = () => { try { localStorage.setItem(LS, JSON.stringify({ view: _view, group: _group, cols: _cols, expandSubs: _expandSubs, selProj: _selProj, selSpace: _selSpace, viewSel: _viewSel })); } catch (_) {} };
   const $q = id => document.getElementById(id);
   const _nrm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const _d10 = v => v ? String(v).split('T')[0] : '';
@@ -30,7 +30,8 @@ const SpacesModule = (() => {
     const root = $q('spaces-root'); if (!root) return;
     if (!_loaded) root.innerHTML = '<div class="sp-load">Cargando espacios…</div>';
     try {
-      const [sr, pr, tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`)]);
+      const [sr, pr, tr, mr, vr] = await Promise.all([apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`), apiFetch(`${API}/mgmt/space-views`)]);
+      _views = vr.ok ? await vr.json() : [];
       _spaces = sr.ok ? await sr.json() : []; _projects = pr.ok ? await pr.json() : []; _tasks = tr.ok ? await tr.json() : []; _team = mr.ok ? await mr.json() : [];
     } catch (e) { console.error('[spaces] load', e); }
     _loaded = true;
@@ -110,6 +111,75 @@ const SpacesModule = (() => {
     _paintTree(); _paintMain();
   }
 
+
+  // ── Vistas del espacio (como ClickUp): cada espacio tiene sus propias vistas, con nombre, y se pueden añadir, renombrar y quitar ──
+  const _ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _VT = {
+    lista:      ['Lista', 'Ve tareas, estados y personas', '#6B6760', '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>'],
+    tablero:    ['Tablero – Kanban', 'Mueve tareas entre columnas', '#4A55E0', '<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/>'],
+    tabla:      ['Tabla', 'Todas las tareas en filas y columnas', '#2E9E5B', '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/>'],
+    calendario: ['Calendario', 'Planifica por fecha límite', '#F2762E', '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+    gantt:      ['Gantt', 'Planifica tiempos y duración', '#E5484D', '<line x1="4" y1="6" x2="14" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="6" y1="18" x2="16" y2="18"/>'],
+    galeria:    ['Galería', 'Tarjetas de tareas', '#5B6BC0', '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'],
+    panel:      ['Panel', 'Métricas y estadísticas', '#B050D0', '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'],
+    formulario: ['Formulario', 'Crea tareas desde un formulario', '#6C4CE0', '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'],
+    documento:  ['Documento', 'Colabora y documenta lo que sea', '#2F6BFF', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>'],
+    pizarra:    ['Pizarra', 'Visualiza y debate ideas', '#E8920F', '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>'],
+  };
+  const _VT_SOON = [['Artifact', 'Crear con IA en esta ubicación']];
+  const _VT_DEFAULT = ['lista', 'tablero', 'tabla', 'calendario'];
+  const _sk = () => (_selSpace == null ? -1 : _selSpace);
+  function _viewsOf(k) {
+    const own = _views.filter(v => v.space_id === k).sort((a, b) => a.orden - b.orden || a.id - b.id);
+    return own.length ? own : _VT_DEFAULT.map(t => ({ id: 'd:' + t, space_id: k, tipo: t, nombre: _VT[t][0], virtual: true }));
+  }
+  function _curView() { const vs = _viewsOf(_sk()), id = _viewSel[_sk()]; return vs.find(v => String(v.id) === String(id)) || vs[0]; }
+  // las vistas por defecto (virtuales) se guardan de verdad la primera vez que se modifica algo
+  async function _materialize(k) {
+    if (_views.some(v => v.space_id === k)) return;
+    const defs = _VT_DEFAULT.map(t => ({ tipo: t, nombre: _VT[t][0] }));
+    const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: k, views: defs }) });
+    if (!r.ok) throw new Error('No se pudieron guardar las vistas');
+    const rows = await r.json(); _views.push(...rows);
+    const cur = _viewSel[k]; if (String(cur || '').startsWith('d:')) { const m = rows.find(x => 'd:' + x.tipo === cur); if (m) _viewSel[k] = m.id; }
+  }
+  function selView(id) { _viewSel[_sk()] = id; _closePop(); _save(); _paintMain(); }
+  function viewMenu(ev) {
+    _openPop(ev.currentTarget, `<div class="sp-pop__h">Popular</div><div class="sp-vgrid">${Object.keys(_VT).map(t => `<button type="button" class="sp-vopt" onclick="SpacesModule.addView('${t}')"><span class="sp-vopt__i" style="background:${_VT[t][2]}">${_ico(_VT[t][3])}</span><span><b>${_VT[t][0]}</b><em>${_VT[t][1]}</em></span></button>`).join('')}</div>
+      <div class="sp-pop__h">Próximamente</div><div class="sp-vgrid">${_VT_SOON.map(([n, d]) => `<div class="sp-vopt sp-vopt--off"><span class="sp-vopt__i" style="background:#B4AFA8">${_ico('<circle cx="12" cy="12" r="9"/>')}</span><span><b>${n}</b><em>${d}</em></span></div>`).join('')}</div>`, 'sp-pop--vw');
+  }
+  async function addView(tipo) {
+    _closePop();
+    try {
+      const k = _sk(); await _materialize(k);
+      const r = await apiFetch(`${API}/mgmt/space-views`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: k, tipo, nombre: _VT[tipo][0] }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const v = await r.json(); _views.push(v); _viewSel[k] = v.id; _save();
+    } catch (e) { showBanner('No se pudo añadir la vista: ' + e.message, 'error'); }
+    _paintMain();
+  }
+  function viewOpts(ev, id) { ev.stopPropagation(); _openPop(ev.currentTarget, `<button class="sp-pop__i" onclick="SpacesModule.renameView('${id}')">Renombrar</button><button class="sp-pop__i sp-pop__i--del" onclick="SpacesModule.delView('${id}')">Quitar vista</button>`); }
+  async function renameView(id) {
+    _closePop();
+    try {
+      const k = _sk(); const cur = _viewsOf(k).find(v => String(v.id) === String(id)); const nm = prompt('Nombre de la vista', cur ? cur.nombre : ''); if (!nm || !nm.trim()) return;
+      await _materialize(k); const real = String(id).startsWith('d:') ? _views.find(v => v.space_id === k && 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
+      const r = await apiFetch(`${API}/mgmt/space-views/${real.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nm.trim() }) });
+      if (r.ok) Object.assign(real, await r.json());
+    } catch (e) { showBanner('No se pudo renombrar', 'error'); }
+    _paintMain();
+  }
+  async function delView(id) {
+    _closePop();
+    try {
+      const k = _sk(); if (_viewsOf(k).length <= 1) { showBanner('Deja al menos una vista en el espacio', 'info'); return; }
+      if (!confirm('¿Quitar esta vista? Las tareas no se borran.')) return;
+      await _materialize(k); const real = String(id).startsWith('d:') ? _views.find(v => v.space_id === k && 'd:' + v.tipo === String(id)) : _views.find(v => String(v.id) === String(id));
+      await apiFetch(`${API}/mgmt/space-views/${real.id}`, { method: 'DELETE' }); _views = _views.filter(v => v.id !== real.id); delete _viewSel[k]; _save();
+    } catch (e) { showBanner('No se pudo quitar la vista', 'error'); }
+    _paintMain();
+  }
+
   // ── filtros / opciones ──
   const _passes = t => {
     if (_q && !_nrm([t.titulo, t.project_nombre, t.client_nombre].join(' ')).includes(_nrm(_q))) return false;
@@ -119,7 +189,6 @@ const SpacesModule = (() => {
     if (_fPers.length && !_resp(t).some(r => _fPers.includes(r))) return false;
     return true;
   };
-  function setView(v) { _view = v; _save(); _paintMain(); }
   function setGroup(g) { _closePop(); _group = g; _save(); _paintMain(); }
   function toggleSubs() { _expandSubs = !_expandSubs; _save(); _paintMain(); }
   function toggleClosed() { _showClosed = !_showClosed; _paintMain(); }
@@ -145,33 +214,201 @@ const SpacesModule = (() => {
     const m = $q('sp-main'); if (!m) return;
     const { sp, p } = _title();
     const nF = _fEstado.length + _fPrio.length + (_q ? 1 : 0);
-    const tabs = [['lista', 'Lista'], ['tablero', 'Tablero'], ['tabla', 'Tabla'], ['calendario', 'Calendario']];
+    const cv = _curView(); _view = cv.tipo;
+    const listish = ['lista', 'tabla', 'tablero'].includes(_view), noBar = ['formulario', 'documento', 'pizarra'].includes(_view);
     const ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     const meOn = _me, persOn = _fPers.length;
     m.innerHTML = `<div class="sp-top"><div class="sp-crumb">${sp ? `<span class="sp-sq sp-sq--s" style="background:${sp.color || '#7C5CE0'}">${_nrm(sp.nombre).slice(0, 1).toUpperCase()}</span><span class="sp-crumb__a">${esc(sp.nombre)}</span><span class="sp-crumb__s">/</span>` : ''}<b>${p ? esc(p.nombre) : (sp ? 'Todas las listas' : 'Todas las tareas')}</b>${p && p.client_nombre ? `<span class="sp-crumb__c">${esc(p.client_nombre)}</span>` : ''}</div>
         ${p ? `<button type="button" class="sp-link" onclick="abrirVentanaProyecto(${p.id})">Abrir proyecto ›</button>` : ''}</div>
-      <div class="sp-tabs">${tabs.map(([k, l]) => `<button type="button" class="sp-tab${_view === k ? ' on' : ''}" onclick="SpacesModule.setView('${k}')">${l}</button>`).join('')}<span class="sp-tab sp-tab--add" title="Más vistas próximamente">＋ Vista</span></div>
-      <div class="sp-bar"><div class="sp-bar__l">
-          <button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group]}</button>
+      <div class="sp-tabs">${_viewsOf(_sk()).map(v => `<span class="sp-tab sp-tab--v${cv.id === v.id ? ' on' : ''}" onclick="SpacesModule.selView('${v.id}')"><i class="sp-tab__i" style="color:${(_VT[v.tipo] || _VT.lista)[2]}">${_ico((_VT[v.tipo] || _VT.lista)[3])}</i>${esc(v.nombre || (_VT[v.tipo] || [''])[0])}<b class="sp-tab__x" title="Opciones de la vista" onclick="SpacesModule.viewOpts(event,'${v.id}')">⋯</b></span>`).join('')}<button type="button" class="sp-tab sp-tab--add" onclick="SpacesModule.viewMenu(event)">＋ Vista</button></div>
+      ${noBar ? '' : `<div class="sp-bar"><div class="sp-bar__l">
+          ${listish ? `<button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group]}</button>
           <button type="button" class="sp-chip${_expandSubs ? ' on' : ''}" onclick="SpacesModule.toggleSubs()">${ico('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>')} ${_expandSubs ? 'Expandidos' : 'Contraídos'}</button>
-          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button></div>
+          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>` : ''}</div>
         <div class="sp-bar__r">
           <button type="button" class="sp-ibtn${nF ? ' on' : ''}" title="Filtros" onclick="SpacesModule.filterMenu(event)">${ico('<line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/>')}${nF ? `<i>${nF}</i>` : ''}</button>
           <button type="button" class="sp-ibtn${_showClosed ? ' on' : ''}" title="Mostrar tareas cerradas" onclick="SpacesModule.toggleClosed()">${ico('<circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/>')}</button>
           <button type="button" class="sp-ibtn${persOn ? ' on' : ''}" title="Persona asignada" onclick="SpacesModule.persMenu(event)">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><path d="M17 4a3.5 3.5 0 0 1 0 7"/>')}</button>
           <button type="button" class="sp-me${meOn ? ' on' : ''}" title="Sólo mis tareas" onclick="SpacesModule.toggleMe()">${esc(_ini(window._authUser?.memberNombre || window._authUser?.name || 'Yo'))}</button>
           <label class="sp-search">${ico('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/>')}<input value="${esc(_q)}" placeholder="Buscar…" oninput="SpacesModule.setQ(this.value)"></label>
-          <button type="button" class="btn btn--primary btn--sm sp-newt" onclick="SpacesModule.newTask()">＋ Tarea</button></div></div>
+          <button type="button" class="btn btn--primary btn--sm sp-newt" onclick="SpacesModule.newTask()">＋ Tarea</button></div></div>`}
       <div class="sp-body" id="sp-body"></div>`;
     _paintBody();
   }
   function _paintBody() {
     const b = $q('sp-body'); if (!b) return;
-    if (_view === 'calendario') { b.innerHTML = `<div class="sp-e sp-e--c">El calendario de un proyecto vive en su ventana de tareas.<br><button class="btn btn--primary btn--sm" onclick="${_selProj ? `abrirVentanaProyecto(${_selProj})` : `document.querySelector('[data-tab=mgmt-calendar]').click()`}">${_selProj ? 'Abrir calendario del proyecto' : 'Abrir calendario general'}</button></div>`; return; }
+    if (_view === 'formulario') { _paintForm(b); return; }
+    if (_view === 'documento') { _paintDoc(b); return; }
+    if (_view === 'pizarra') { _paintWb(b); return; }
     let all = _scope().filter(_passes);
+    if (_view === 'panel') { _paintPanel(b, all); return; }
     if (!_showClosed) all = all.filter(t => _isOpen(t) || all.some(c => c.parent_task_id === t.id && _isOpen(c)));
     if (_view === 'tablero') { _paintBoard(b, all); return; }
+    if (_view === 'calendario') { _paintCal(b, all); return; }
+    if (_view === 'gantt') { _paintGantt(b, all); return; }
+    if (_view === 'galeria') { _paintGal(b, all); return; }
     _paintList(b, all);
+  }
+  function setView(v) { const vs = _viewsOf(_sk()), m = vs.find(x => x.tipo === v); if (m) selView(m.id); }
+
+
+  // ── contenido guardado de las vistas Documento y Pizarra (se guarda solo, unos instantes después de escribir) ──
+  const _cfgT = {};
+  function _saveCfg(v, cfg, estado) {
+    v.config = cfg; clearTimeout(_cfgT[v.id]);
+    _cfgT[v.id] = setTimeout(async () => {
+      try { const r = await apiFetch(`${API}/mgmt/space-views/${v.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }); if (!r.ok) throw new Error('x'); const e = $q(estado); if (e) e.textContent = '✓ Guardado'; }
+      catch (_) { const e = $q(estado); if (e) e.textContent = 'No se pudo guardar'; }
+    }, 800);
+    const e = $q(estado); if (e) e.textContent = 'Guardando…';
+  }
+  const _clean = h => String(h || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '').replace(/javascript:/gi, '');
+
+  // ── Documento ──
+  function _paintDoc(b) {
+    const v = _curView(); if (v.virtual) { b.innerHTML = '<div class="sp-e sp-e--c">Añade un documento con «＋ Vista».</div>'; return; }
+    const btn = (c, l, t) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
+    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('formatBlock:H1', 'H1', 'Título')}${btn('formatBlock:H2', 'H2', 'Subtítulo')}${btn('formatBlock:P', '¶', 'Párrafo')}<span class="sp-dtbar__s"></span>${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}<span class="sp-dtbar__s"></span>${btn('insertUnorderedList', '• Lista', 'Lista con viñetas')}${btn('insertOrderedList', '1. Lista', 'Lista numerada')}${btn('link', 'Enlace', 'Enlace')}${btn('removeFormat', 'Limpiar', 'Quitar formato')}<span class="sp-dtbar__st" id="sp-doc-st"></span></div>
+      <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true" data-ph="Escribe aquí… Los cambios se guardan solos.">${_clean(v.config && v.config.html)}</div></div>`;
+    const ed = $q('sp-doc'); ed.addEventListener('input', () => _saveCfg(v, { ...(v.config || {}), html: ed.innerHTML }, 'sp-doc-st'));
+  }
+  function docCmd(c) {
+    const ed = $q('sp-doc'); if (!ed) return; ed.focus();
+    if (c === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
+    else if (c.startsWith('formatBlock:')) document.execCommand('formatBlock', false, c.split(':')[1]);
+    else document.execCommand(c, false, null);
+    ed.dispatchEvent(new Event('input'));
+  }
+
+  // ── Pizarra (notas y textos que se arrastran) ──
+  const _WB_COL = ['#FFF3A8', '#BFE3FF', '#C8F0CF', '#FFD0D8', '#E0D0FF'];
+  function _paintWb(b) {
+    const v = _curView(); if (v.virtual) { b.innerHTML = '<div class="sp-e sp-e--c">Añade una pizarra con «＋ Vista».</div>'; return; }
+    const cfg = v.config && Array.isArray(v.config.items) ? v.config : { items: [] };
+    b.innerHTML = `<div class="sp-wbw"><div class="sp-wbbar"><span>Añadir</span>${_WB_COL.map(c => `<button type="button" class="sp-wbn" style="background:${c}" title="Nota" onclick="SpacesModule.wbAdd('nota','${c}')"></button>`).join('')}<button type="button" class="sp-chip" onclick="SpacesModule.wbAdd('texto','')">＋ Texto</button><span class="sp-dtbar__st" id="sp-wb-st"></span></div>
+      <div class="sp-wbc" id="sp-wb">${cfg.items.map(_wbItem).join('')}</div></div>`;
+    const cv = $q('sp-wb'); v.config = cfg;
+    cv.addEventListener('input', e => { const el = e.target.closest('[data-id]'); if (!el) return; const it = cfg.items.find(x => x.id === el.dataset.id); if (it) { it.text = e.target.innerText; _saveCfg(v, cfg, 'sp-wb-st'); } });
+    cv.addEventListener('mousedown', e => {
+      const h = e.target.closest('.sp-wbi__h'); if (!h || e.target.closest('button')) return;
+      const el = h.closest('[data-id]'), it = cfg.items.find(x => x.id === el.dataset.id); if (!it) return;
+      const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y; el.classList.add('is-drag');
+      const mv = ev => { it.x = Math.max(0, ox + ev.clientX - sx); it.y = Math.max(0, oy + ev.clientY - sy); el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); el.classList.remove('is-drag'); _saveCfg(v, cfg, 'sp-wb-st'); };
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+    });
+  }
+  const _wbItem = it => `<div class="sp-wbi sp-wbi--${it.t}" data-id="${esc(it.id)}" style="left:${it.x}px;top:${it.y}px;${it.t === 'nota' ? 'background:' + esc(it.color || '#FFF3A8') : ''}"><div class="sp-wbi__h"><span>${it.t === 'nota' ? '' : 'Texto'}</span><button type="button" title="Quitar" onclick="SpacesModule.wbDel('${esc(it.id)}')">✕</button></div><div class="sp-wbi__t" contenteditable="true" spellcheck="true">${esc(it.text || '')}</div></div>`;
+  function wbAdd(t, color) {
+    const v = _curView(), cfg = v.config && Array.isArray(v.config.items) ? v.config : { items: [] }, cv = $q('sp-wb'); if (!cv) return;
+    const n = cfg.items.length, it = { id: 'i' + Date.now().toString(36) + n, t, x: 30 + (n % 6) * 40 + Math.floor(n / 6) * 20, y: 30 + (n % 6) * 30, color: color || '', text: '' };
+    cfg.items.push(it); v.config = cfg; cv.insertAdjacentHTML('beforeend', _wbItem(it)); _saveCfg(v, cfg, 'sp-wb-st');
+    const el = cv.querySelector(`[data-id="${it.id}"] .sp-wbi__t`); if (el) el.focus();
+  }
+  function wbDel(id) {
+    const v = _curView(), cfg = v.config; if (!cfg || !Array.isArray(cfg.items)) return;
+    cfg.items = cfg.items.filter(x => x.id !== id); const el = $q('sp-wb') && $q('sp-wb').querySelector(`[data-id="${id}"]`); if (el) el.remove(); _saveCfg(v, cfg, 'sp-wb-st');
+  }
+
+  // ── calendario del espacio: tareas en su fecha límite ──
+  function calNav(d) { const r = _calRef || new Date(); _calRef = d === 0 ? new Date() : new Date(r.getFullYear(), r.getMonth() + d, 1); _paintBody(); }
+  function _paintCal(b, all) {
+    const ref = _calRef || new Date(), y = ref.getFullYear(), mo = ref.getMonth();
+    const startDow = (new Date(y, mo, 1).getDay() + 6) % 7, dim = new Date(y, mo + 1, 0).getDate(), td = _today();
+    const by = {}; let sinFecha = 0;
+    all.forEach(t => { const d = _d10(t.deadline); if (!d) { sinFecha++; return; } (by[d] = by[d] || []).push(t); });
+    const wd = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'], total = Math.ceil((startDow + dim) / 7) * 7;
+    let cells = '';
+    for (let i = 0; i < total; i++) {
+      const n = i - startDow + 1;
+      if (n < 1 || n > dim) { cells += '<div class="sp-cal__c sp-cal__c--out"></div>'; continue; }
+      const key = `${y}-${String(mo + 1).padStart(2, '0')}-${String(n).padStart(2, '0')}`, ts = (by[key] || []).sort((a, c) => a.id - c.id);
+      const chip = t => { const e = _EST[t.estado || 'pendiente'] || _EST.pendiente; return `<button type="button" class="sp-cal__t" style="--c:${e[2]}" title="${esc(t.titulo)}${t.project_nombre ? ' · ' + esc(t.project_nombre) : ''}" onclick="openTaskAnywhere(${t.id})"><i></i>${esc(t.titulo)}</button>`; };
+      cells += `<div class="sp-cal__c${key === td ? ' is-today' : ''}${key < td ? ' is-past' : ''}"><div class="sp-cal__n">${n}</div>${ts.slice(0, 3).map(chip).join('')}${ts.length > 3 ? `<button type="button" class="sp-cal__m" onclick="this.parentNode.querySelectorAll('.sp-cal__x').forEach(e=>e.hidden=false);this.remove()">+${ts.length - 3} más</button>${ts.slice(3).map(t => chip(t).replace('class="sp-cal__t"', 'class="sp-cal__t sp-cal__x" hidden')).join('')}` : ''}</div>`;
+    }
+    b.innerHTML = `<div class="sp-cal"><div class="sp-cal__hd"><b>${ref.toLocaleDateString('es', { month: 'long', year: 'numeric' })}</b><span><button class="sp-chip" onclick="SpacesModule.calNav(-1)">‹</button><button class="sp-chip" onclick="SpacesModule.calNav(0)">Hoy</button><button class="sp-chip" onclick="SpacesModule.calNav(1)">›</button></span>${sinFecha ? `<em>${sinFecha} tarea${sinFecha === 1 ? '' : 's'} sin fecha límite</em>` : ''}</div>
+      <div class="sp-cal__g">${wd.map(w => `<div class="sp-cal__w">${w}</div>`).join('')}${cells}</div></div>`;
+  }
+
+  // ── Gantt: barras de inicio a fecha límite, agrupadas por lista (proyecto) ──
+  function ganttScale(v) { _ganttScale = v; _paintBody(); }
+  function _paintGantt(b, all) {
+    const mains = all.filter(t => !t.parent_task_id), dd = x => _d10(x), DAY = 864e5;
+    const ts = mains.map(t => { const s0 = dd(t.fecha_inicio) || dd(t.deadline), e0 = dd(t.deadline) || dd(t.fecha_inicio); return { t, s: s0 ? new Date(s0 + 'T00:00:00') : null, e: e0 ? new Date(e0 + 'T00:00:00') : null }; });
+    const dated = ts.filter(x => x.s && x.e), und = ts.filter(x => !(x.s && x.e));
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    let min = new Date(Math.min(now, ...dated.map(x => x.s))), max = new Date(Math.max(+now + 21 * DAY, ...dated.map(x => x.e)));
+    min = new Date(+min - 3 * DAY); max = new Date(+max + 7 * DAY);
+    const dw = { dia: 34, semana: 15, mes: 5 }[_ganttScale], days = Math.round((max - min) / DAY) + 1, W = days * dw, off = d => Math.round((d - min) / DAY) * dw;
+    // cabecera: meses arriba, días/semanas abajo
+    let months = '', labels = '';
+    for (let i = 0, cur = null, st = 0; i <= days; i++) {
+      const d = new Date(+min + i * DAY), key = i < days ? d.getFullYear() + '-' + d.getMonth() : null;
+      if (key !== cur) { if (cur !== null) months += `<div class="sp-gt__mo" style="left:${st * dw}px;width:${(i - st) * dw}px">${new Date(+min + st * DAY).toLocaleDateString('es', { month: 'long', year: 'numeric' })}</div>`; cur = key; st = i; }
+    }
+    for (let i = 0; i < days; i++) { const d = new Date(+min + i * DAY); if (_ganttScale === 'dia') labels += `<div class="sp-gt__d${d.getDay() % 6 === 0 ? ' we' : ''}" style="left:${i * dw}px;width:${dw}px">${d.getDate()}</div>`; else if (_ganttScale === 'semana' && d.getDay() === 1) labels += `<div class="sp-gt__d" style="left:${i * dw}px;width:${7 * dw}px">${d.getDate()}/${d.getMonth() + 1}</div>`; }
+    const byProj = new Map(); dated.sort((a, c) => a.s - c.s).forEach(x => { const k = x.t.project_nombre || 'Sin lista'; if (!byProj.has(k)) byProj.set(k, []); byProj.get(k).push(x); });
+    const bar = x => { const e = _EST[x.t.estado || 'pendiente'] || _EST.pendiente, w = Math.max(dw, off(x.e) - off(x.s) + dw); return `<div class="sp-gt__r"><div class="sp-gt__nm" title="${esc(x.t.titulo)}" onclick="openTaskAnywhere(${x.t.id})"><i style="background:${e[2]}"></i>${esc(x.t.titulo)}</div><div class="sp-gt__tl" style="width:${W}px"><button type="button" class="sp-gt__b" style="left:${off(x.s)}px;width:${w}px;background:${e[2]}" title="${esc(x.t.titulo)} · ${_fmtD(dd(x.t.fecha_inicio) || dd(x.t.deadline))} → ${_fmtD(dd(x.t.deadline) || dd(x.t.fecha_inicio))}" onclick="openTaskAnywhere(${x.t.id})">${w > 90 ? esc(x.t.titulo) : ''}</button></div></div>`; };
+    const groups = [...byProj.entries()].map(([k, xs]) => `<div class="sp-gt__g"><div class="sp-gt__gh"><span>${esc(k)}</span><em>${xs.length}</em></div>${xs.map(bar).join('')}</div>`).join('');
+    const todayX = off(now) + dw / 2;
+    b.innerHTML = `<div class="sp-gt"><div class="sp-gt__bar"><span>Escala</span>${['dia', 'semana', 'mes'].map(k => `<button class="sp-chip${_ganttScale === k ? ' on' : ''}" onclick="SpacesModule.ganttScale('${k}')">${{ dia: 'Día', semana: 'Semana', mes: 'Mes' }[k]}</button>`).join('')}</div>
+      ${dated.length ? `<div class="sp-gt__sc"><div class="sp-gt__in" style="min-width:${260 + W}px"><div class="sp-gt__hd"><div class="sp-gt__nm sp-gt__nm--h">Tarea</div><div class="sp-gt__tl" style="width:${W}px"><div class="sp-gt__m">${months}</div><div class="sp-gt__l">${labels}</div></div></div>
+        <div class="sp-gt__body">${groups}<div class="sp-gt__today" style="left:${260 + todayX}px"></div></div></div></div>` : '<div class="sp-e sp-e--c">Ninguna tarea tiene fecha de inicio o límite todavía.</div>'}
+      ${und.length ? `<div class="sp-gt__un"><b>Sin fechas (${und.length})</b>${und.slice(0, 12).map(x => `<button type="button" onclick="openTaskAnywhere(${x.t.id})">${esc(x.t.titulo)}</button>`).join('')}${und.length > 12 ? `<em>+${und.length - 12} más</em>` : ''}</div>` : ''}</div>`;
+  }
+
+  // ── galería: tarjetas ──
+  function _paintGal(b, all) {
+    const mains = all.filter(t => !t.parent_task_id).sort((a, c) => (_d10(a.deadline) || '9999').localeCompare(_d10(c.deadline) || '9999') || a.id - c.id);
+    if (!mains.length) { b.innerHTML = '<div class="sp-e sp-e--c">No hay tareas que mostrar aquí.</div>'; return; }
+    b.innerHTML = `<div class="sp-gal">${mains.map(t => {
+      const e = _EST[t.estado || 'pendiente'] || _EST.pendiente, d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), p = _PRIO[t.prioridad || 'media'], subs = all.filter(c => c.parent_task_id === t.id).length;
+      return `<div class="sp-gal__c" onclick="openTaskAnywhere(${t.id})"><div class="sp-gal__s" style="background:${e[2]}"></div><div class="sp-gal__b"><span class="sp-est" style="--c:${e[2]}">${esc(e[1]).toUpperCase()}</span><div class="sp-gal__t">${esc(t.titulo)}</div><div class="sp-gal__m">${esc([t.project_nombre, t.client_nombre].filter(Boolean).join(' · '))}</div>
+        <div class="sp-gal__f"><span>${p ? `<i class="sp-dot" style="background:${p[1]}"></i>${p[0]}` : ''}</span>${d ? `<span class="${od ? 'is-od' : ''}">${_fmtD(d)}</span>` : ''}${subs ? `<span>⑂ ${subs}</span>` : ''}<span class="sp-gal__av">${_resp(t).slice(0, 3).map(n => `<span class="sp-av" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}</span></div></div></div>`;
+    }).join('')}</div>`;
+  }
+
+  // ── panel: métricas del espacio ──
+  function _paintPanel(b, all) {
+    const td = _today(), wk = new Date(); wk.setDate(wk.getDate() + 7); const wks = `${wk.getFullYear()}-${String(wk.getMonth() + 1).padStart(2, '0')}-${String(wk.getDate()).padStart(2, '0')}`;
+    const mains = all.filter(t => !t.parent_task_id), open = mains.filter(_isOpen), dd = t => _d10(t.deadline);
+    const venc = open.filter(t => dd(t) && dd(t) < td), hoy = open.filter(t => dd(t) === td), prox = open.filter(t => dd(t) > td && dd(t) <= wks), hechas = mains.filter(t => t.estado === 'completado');
+    const kpi = (l, n, c) => `<div class="sp-dk"><span>${l}</span><b style="${c ? 'color:' + c : ''}">${n}</b></div>`;
+    const bars = (rows, color) => { const mx = Math.max(1, ...rows.map(r => r[1])); return rows.length ? rows.map(r => `<div class="sp-db"><span title="${esc(r[0])}">${esc(r[0])}</span><div><i style="width:${Math.round(r[1] * 100 / mx)}%;background:${r[2] || color}"></i></div><em>${r[1]}</em></div>`).join('') : '<div class="sp-e">Sin datos</div>'; };
+    const count = (arr, f) => { const m = new Map(); arr.forEach(t => [].concat(f(t)).forEach(k => m.set(k, (m.get(k) || 0) + 1))); return [...m.entries()].sort((a, c) => c[1] - a[1]); };
+    const porEst = _ESTADOS.map(e => [e[1], mains.filter(t => (t.estado || 'pendiente') === e[0]).length, e[2]]).filter(r => r[1]);
+    const porPers = count(open, t => _resp(t).length ? _resp(t) : ['Sin asignar']).slice(0, 8), porProj = count(open, t => t.project_nombre || 'Sin lista').slice(0, 8);
+    const porPrio = Object.entries(_PRIO).map(([k, v]) => [v[0], open.filter(t => (t.prioridad || 'media') === k).length, v[1]]);
+    const next = open.filter(t => dd(t)).sort((a, c) => dd(a).localeCompare(dd(c))).slice(0, 8);
+    const total = mains.length, pct = total ? Math.round(hechas.length * 100 / total) : 0;
+    b.innerHTML = `<div class="sp-dash"><div class="sp-dash__k">${kpi('Abiertas', open.length)}${kpi('Vencidas', venc.length, venc.length ? '#D9534F' : '')}${kpi('Para hoy', hoy.length)}${kpi('Próximos 7 días', prox.length)}${kpi('Completadas', hechas.length, '#2E9E5B')}${kpi('Avance', pct + '%')}</div>
+      <div class="sp-dash__g"><div class="sp-dc"><h4>Por estado</h4>${bars(porEst)}</div><div class="sp-dc"><h4>Por persona (abiertas)</h4>${bars(porPers, '#5B6BC0')}</div>
+        <div class="sp-dc"><h4>Por lista (abiertas)</h4>${bars(porProj, '#7C5CE0')}</div><div class="sp-dc"><h4>Por prioridad (abiertas)</h4>${bars(porPrio)}</div>
+        <div class="sp-dc sp-dc--w"><h4>Próximos vencimientos</h4>${next.length ? next.map(t => { const od = dd(t) < td; return `<div class="sp-dn" onclick="openTaskAnywhere(${t.id})"><span class="${od ? 'is-od' : ''}">${_fmtD(dd(t))}</span><b>${esc(t.titulo)}</b><em>${esc(t.project_nombre || '')}</em></div>`; }).join('') : '<div class="sp-e">Nada con fecha</div>'}</div></div></div>`;
+  }
+
+  // ── formulario: crear tareas del espacio ──
+  function _paintForm(b) {
+    const ps = (_selProj ? _projects.filter(p => p.id === _selProj) : (_selSpace != null ? _projsOf(_selSpace) : _projects).filter(p => (p.estado || 'activo') === 'activo'));
+    if (!ps.length) { b.innerHTML = '<div class="sp-e sp-e--c">Primero crea una lista (proyecto) en este espacio.</div>'; return; }
+    b.innerHTML = `<div class="sp-form"><h3>Nueva tarea</h3><p>Rellena el formulario y la tarea se crea en la lista que elijas.</p>
+      <label>Nombre de la tarea *<input id="sf-t" placeholder="Qué hay que hacer"></label>
+      <label>Lista<select id="sf-p">${ps.map(p => `<option value="${p.id}">${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}</option>`).join('')}</select></label>
+      <label>Descripción<textarea id="sf-d" rows="3" placeholder="Detalles (opcional)"></textarea></label>
+      <div class="sp-form__r"><label>Persona asignada<select id="sf-r"><option value="">Sin asignar</option>${_team.filter(m => m.estado !== 'inactivo').map(m => `<option value="${esc(m.nombre)}"${(window._authUser && (window._authUser.memberNombre || window._authUser.name)) === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('')}</select></label>
+        <label>Prioridad<select id="sf-pr"><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select></label>
+        <label>Fecha límite<input id="sf-f" type="date"></label></div>
+      <button class="btn btn--primary" onclick="SpacesModule.formSend()">Crear tarea</button><span class="sp-form__ok" id="sf-ok"></span></div>`;
+  }
+  async function formSend() {
+    const t = ($q('sf-t').value || '').trim(); if (!t) { showBanner('Escribe el nombre de la tarea', 'error'); return; }
+    const pid = +$q('sf-p').value, resp = $q('sf-r').value;
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo: t, project_id: pid, descripcion: $q('sf-d').value || '', prioridad: $q('sf-pr').value, deadline: $q('sf-f').value || null, responsables: resp ? [resp] : [], estado: 'pendiente' }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const nt = await r.json(); const pj = _projects.find(x => x.id === pid); nt.project_nombre = pj ? pj.nombre : ''; nt.client_nombre = pj ? pj.client_nombre : ''; _tasks.unshift(nt);
+      $q('sf-t').value = ''; $q('sf-d').value = ''; $q('sf-ok').textContent = '✓ Tarea creada'; setTimeout(() => { const o = $q('sf-ok'); if (o) o.textContent = ''; }, 3000); _paintTree();
+    } catch (e) { showBanner('No se pudo crear la tarea: ' + e.message, 'error'); }
   }
 
   // ── lista ──
@@ -278,6 +515,6 @@ const SpacesModule = (() => {
   }
 
   return { load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
-    setView, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
+    docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask };
 })();
