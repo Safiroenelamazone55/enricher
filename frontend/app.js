@@ -276,9 +276,7 @@ function applyBranding({ companyLogo, workspaceName } = {}) {
 const WS_LAUNCHER_ITEMS = [
   { tab: 'mgmt-dashboard', area: 'management', name: 'Operaciones', desc: 'Proyectos, tareas, clientes y finanzas',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="11" height="9" rx="2"/><rect x="16" y="3" width="5" height="9" rx="2"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="10" y="14" width="11" height="7" rx="2"/></svg>' },
-  { tab: 'single', area: 'enricher', name: 'Datos', desc: 'Preparación, verificación y scoring de leads',
-    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/><path d="M6.2 6.2l1.8 1.8M16 16l1.8 1.8M6.2 17.8l1.8-1.8M16 8l1.8-1.8"/></svg>' },
-  { tab: 'lead-manager', area: 'leadmanagement', name: 'Outreach', desc: 'CRM, campañas, actividades y seguimiento',
+  { tab: 'lead-manager', area: 'leadmanagement', name: 'Outreach', desc: 'Cantera, datos, CRM, campañas y seguimiento',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5v7.5l4 2v-9.5L22 3z"/></svg>' },
 ];
 
@@ -874,9 +872,7 @@ window.addEventListener('popstate', () => {
 const HOME_MODULES = [
   { id: 'management',    tab: 'mgmt-dashboard', name: 'Operaciones',    desc: 'Proyectos, tareas, clientes y finanzas',      color: 'orange',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>' },
-  { id: 'enricher',      tab: 'single',         name: 'Datos', desc: 'Preparación, verificación y scoring de leads', color: 'green',
-    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>' },
-  { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias y leads',            color: 'red',
+  { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'Cantera, datos, CRM, campañas, secuencias y leads',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
   // Finanzas salió de Operaciones y pasa a ser su propio módulo (pedido explícito
   // 2026-09-02: "todo lo que tenga que ver con contabilidad finanzas, lo quiero en
@@ -885,11 +881,6 @@ const HOME_MODULES = [
   // solo se le quitó el snav-item de Operaciones y se le puso uno propio.
   { id: 'finance',        tab: 'mgmt-finance',   name: 'Finanzas',       desc: 'Cobros, distribución y pagos internos',        color: 'blue',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>' },
-  // Cantera: prospección en borrador, separada del CRM real hasta que se
-  // "mueve" — no comparte pane ni datos con Enriquecimiento ni Outreach
-  // (pedido explícito 2026-09-04: evitar confundir lo real con lo investigado).
-  { id: 'cantera',        tab: 'cantera',        name: 'Cantera',        desc: 'Prospección en borrador: calificar antes de sumar al CRM', color: 'stone',
-    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>' },
   // Herramientas: extensiones y apps de escritorio que se conectan con Nova (descarga + vista previa).
   { id: 'herramientas',   tab: 'herramientas',   name: 'Herramientas',   desc: 'Extensiones y apps: scraper de LinkedIn y tracking de tiempo', color: 'teal',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
@@ -944,7 +935,7 @@ function _renderHomeInner(grid) {
   });
   // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
   // no son módulos reales, solo mantienen la grilla 3×3 llena mientras se agregan más.
-  for (let i = HOME_MODULES.length; i < 9; i++) {
+  for (let i = HOME_MODULES.length; i < HOME_MODULES.length; i++) {   // sin tarjetas «Próximamente»
     cards.push(`<div class="home-card home-card--placeholder" aria-hidden="true">
       <div class="home-card__top">
         <div class="home-card__body">
@@ -14132,9 +14123,9 @@ const TasksModule = (() => {
         return `<div class="tskd-cm">
           <div class="tskd-cm__av">${ini}</div>
           <div class="tskd-cm__body">
-            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span><button class="tskd-cm__as" title="Asignar este comentario a alguien: le queda pendiente en su Inicio hasta que lo resuelva" onclick="TasksModule._cmAssignMenu(event,${m.id},${id})">⚑ Asignar</button></div>
+            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span><button class="tskd-cm__as" title="Asignar este comentario a alguien: le queda pendiente en su Inicio hasta que lo resuelva" onclick="TasksModule._cmAssignMenu(event,${m.id},${id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg> Asignar</button></div>
             <div class="tskd-cm__txt">${MentionPicker.highlight(esc(m.content))}</div>
-            ${(asgBy.get(m.id) || []).map(a => `<div class="tskd-asg${a.resolved ? ' is-done' : ''}">⚑ Asignado a <b>${esc(a.assigned_to_name)}</b>${a.resolved ? ` · resuelto${a.resolved_by_name ? ' por ' + esc(a.resolved_by_name) : ''} <button onclick="TasksModule._cmResolve(${a.id},${id},true)">Reabrir</button>` : ` <button onclick="TasksModule._cmResolve(${a.id},${id})">Marcar como resuelto</button>`}</div>`).join('')}
+            ${(asgBy.get(m.id) || []).map(a => `<div class="tskd-asg${a.resolved ? ' is-done' : ''}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg> Asignado a <b>${esc(a.assigned_to_name)}</b>${a.resolved ? ` · resuelto${a.resolved_by_name ? ' por ' + esc(a.resolved_by_name) : ''} <button onclick="TasksModule._cmResolve(${a.id},${id},true)">Reabrir</button>` : ` <button onclick="TasksModule._cmResolve(${a.id},${id})">Marcar como resuelto</button>`}</div>`).join('')}
           </div>
         </div>`;
       }).join('');
@@ -22127,7 +22118,7 @@ const LeadManagerModule = (() => {
       try { _lmRawSavedView = sessionStorage.getItem(LM_STATE_KEY); } catch (_) {}
       let saved = null;
       try { saved = localStorage.getItem('lm_last_section'); } catch (_) {}
-      if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view') { _section = saved; _sectionRestored = true; }
+      if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view' && !(saved.startsWith('x-') && !_canDatos())) { _section = saved; _sectionRestored = true; }
     }
     if (!$('lm2-body')) _renderShell();
     _renderBody();
@@ -22270,6 +22261,16 @@ const LeadManagerModule = (() => {
   // ── Navegación interna del workspace ──
   const _NAV = [
     { k: 'dashboard',  l: 'Dashboard',          g: '' },
+    // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
+    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
+    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
+    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
+    { k: 'x-cantera-criterios',  l: 'Criterios guardados',  g: 'Prospección', x: 1 },
+    { k: 'x-cantera-config',     l: 'Config. de Cantera',   g: 'Prospección', x: 1 },
+    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
+    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
+    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
+    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
     { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
@@ -22288,6 +22289,15 @@ const LeadManagerModule = (() => {
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
   ];
   const _NAV_ICON = {
+    'x-cantera': '<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
+    'x-cantera-mesa': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
+    'x-cantera-global': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    'x-cantera-criterios': '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
+    'x-cantera-config': '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
+    'x-single': '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>',
+    'x-batch': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+    'x-verifications': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+    'x-datos': '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
     dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     clients:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
     campaigns:'<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
@@ -22306,9 +22316,26 @@ const LeadManagerModule = (() => {
     templates:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   };
+  // Prospección y Preparación solo aparecen para quien tiene acceso al módulo Datos (los permisos no cambian)
+  const _canDatos = () => { const u = window._authUser || {}; return !!(u.isOwner || !u.permisos || (u.permisos.datos && u.permisos.datos.n > 0)); };
+  // Pantallas de Cantera y Datos montadas dentro del cuerpo de Outreach (se mueve el propio panel, no una copia; al salir vuelve a su sitio)
+  let _xHome = null;
+  function _xUnmount() {
+    if (!_xHome) return; const { pane, parent, next } = _xHome; _xHome = null;
+    pane.classList.remove('active', 'pane--embedded');
+    try { parent.insertBefore(pane, next && next.parentNode === parent ? next : null); } catch (_) { parent.appendChild(pane); }
+  }
+  function _xMount(tab) {
+    const body = $('lm2-body'); if (!body) return;
+    const pane = $('pane-' + tab); if (!pane) { body.innerHTML = _vPlaceholder(tab); return; }
+    _xHome = { pane, parent: pane.parentElement, next: pane.nextSibling };
+    body.innerHTML = ''; body.appendChild(pane); pane.classList.add('active', 'pane--embedded');
+    try { if (typeof window._novaEmbedLoad === 'function') window._novaEmbedLoad(tab); } catch (e) { console.error('[outreach] embed', tab, e); }
+  }
+  function setEmbed(sec) { _section = sec; _activeClient = null; try { localStorage.setItem('lm_last_section', sec); } catch (_) {} }
   function _navHtml() {
     let html = _gcli ? (_gcLoadLogo(), `<div class="lm2-gc" title="Viendo sólo ${esc(gcName())} · clic para quitar el filtro" onclick="LeadManagerModule.gcSet(null)">${_gcTile()}<div class="lm2-gc__x"><span>Viendo sólo</span><b>${esc(gcName())}</b></div><button type="button" title="Quitar filtro">×</button></div>`) : '', lastG = null;
-    _NAV.forEach(n => {
+    _NAV.filter(n => !n.x || _canDatos()).forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
       // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada,
@@ -22336,6 +22363,7 @@ const LeadManagerModule = (() => {
   function toggleNav() { _setNavCollapsedGlobal(!_navCollapsedGlobal()); }
   function _renderShell() {
     const pane = $('pane-lead-manager'); if (!pane) return;
+    _xUnmount();
     _cuStart();
     const collapsed = _navCollapsedGlobal();
     pane.innerHTML = `<div class="lm2">
@@ -22495,6 +22523,7 @@ const LeadManagerModule = (() => {
   }
   function _renderBody() {
     const body = $('lm2-body'); if (!body) return;
+    _xUnmount();
     _lmSaveViewState();
     if (_section === 'client' && _activeClient) _pcMount(_activeClient); else _pcUnmount();
     if (document.getElementById('lm-wa-host')) _waUnmount();   // el WhatsApp vuelve a su sitio antes de repintar
@@ -22519,6 +22548,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'templates') body.innerHTML = _vTemplates();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
     else if (_section === 'settings') { body.innerHTML = _vSettings(); _countUp(); }
+    else if (String(_section).startsWith('x-') && _canDatos()) _xMount(_section.slice(2));
     else body.innerHTML = _vPlaceholder(_section);
   }
 
@@ -38004,6 +38034,12 @@ ${foot}
     if (!r) return `#${id}`;
     return isCo ? (r.nombre || `#${id}`) : ([r.nombre, r.apellido].filter(Boolean).join(' ') || `#${id}`);
   }
+  // «Tabla de datos» dentro de Outreach: se dibuja con lo ya cargado (renderDataGrid vuelve a llamar a load(), y eso repintaba Outreach en bucle)
+  function dgEmbed(containerId) {
+    _dgContainerId = containerId;
+    const el = document.getElementById(containerId); if (!el) return;
+    el.innerHTML = _dgShellHtml(); _dgRenderRows();
+  }
   function renderDataGrid(containerId) {
     _dgContainerId = containerId;
     const el = document.getElementById(containerId); if (!el) return;
@@ -38538,7 +38574,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { dgEmbed, setEmbed, callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -48690,8 +48726,22 @@ function initApp() {
   // (atrás/adelante del navegador) — la URL YA está donde debe, no hay que
   // volver a empujarla a history (eso duplicaría entradas o pisaría un ?tab=
   // que el usuario acaba de pegar).
+  // Cargas de cada pantalla cuando se muestra dentro de Outreach (las mismas que hacía _switchTab al abrirla por su cuenta)
+  window._novaEmbedLoad = function (tabName) {
+    if (tabName === 'batch') { _checkPersistedJob(); _loadBatchHistory(); }
+    if (tabName === 'verifications' && !_verifLoaded) { _verifLoaded = true; loadTagSuggestions(); loadVerifications(); }
+    if (tabName === 'datos') LeadManagerModule.dgEmbed('dg-body');
+    if (tabName === 'cantera') CanteraModule.render('cantera-body');
+    if (tabName === 'cantera-mesa') CanteraMesaModule.render('cantera-mesa-body');
+    if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
+    if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
+    if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
+  };
   function _switchTab(tabName, opts = {}) {
     // Proyectos y Tareas se retiraron: todo ese trabajo vive ahora en Espacios (el detalle de una tarea sí usa el pane de Tareas)
+    // Cantera y Datos viven dentro de Outreach: los enlaces y atajos antiguos entran por ahí
+    const _EMB = { cantera: 'x-cantera', 'cantera-mesa': 'x-cantera-mesa', 'cantera-global': 'x-cantera-global', 'cantera-criterios': 'x-cantera-criterios', 'cantera-config': 'x-cantera-config', single: 'x-single', batch: 'x-batch', verifications: 'x-verifications', datos: 'x-datos' };
+    if (_EMB[tabName]) { try { LeadManagerModule.setEmbed(_EMB[tabName]); } catch (_) {} tabName = 'lead-manager'; }
     let _soloDetalle = false;   // se entra al pane de Tareas solo para el detalle de una tarea: no se recarga su lista (taparía el detalle)
     if (tabName === 'mgmt-projects') { try { SpacesModule.showProjects(); } catch (_) {} tabName = 'mgmt-spaces'; }
     else if (tabName === 'mgmt-tasks') {

@@ -17,6 +17,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     } catch (e) { console.warn('[home] tablas', e.message); }
   })();
 
+  const ping = (req, kind) => { try { const io = req.app.get('io'); if (io) io.to(`ws:${req.workspaceOwnerId}`).emit('home_update', { kind, by: req.user.id }); } catch (_) {} };
   const strip = h => String(h || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
   async function who(req) {
     const owner = req.workspaceOwnerId, { rows: [tm] } = await pool.query(`SELECT id, nombre FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`, [owner, req.user.email]);
@@ -94,7 +95,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       if (!u) return res.status(400).json({ error: 'Esa persona aún no tiene acceso a Nova' });
       const taskId = parseInt(m.channel.slice(5), 10);
       await pool.query(`INSERT INTO comment_assign (workspace_owner_id, message_id, task_id, assigned_to_user_id, assigned_to_name, assigned_by_user_id, assigned_by_name) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, [me.owner, mid, taskId, u.id, tm.nombre, me.uid, me.name]);
-      res.json({ ok: true });
+      ping(req, 'assign'); res.json({ ok: true });
     } catch (e) { console.error('[home/assign]', e.message); res.status(500).json({ error: 'No se pudo asignar' }); }
   });
   app.post('/api/home/assigned/:id/resolve', requireAuth, async (req, res) => {
@@ -105,7 +106,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       if (!a) return res.status(404).json({ error: 'No encontrado' });
       if (![a.assigned_to_user_id, a.assigned_by_user_id].includes(me.uid) && !c.isOwner && c.rol !== 'admin') return res.status(403).json({ error: 'Solo quien lo asignó, quien lo recibió o un administrador' });
       await pool.query(`UPDATE comment_assign SET resolved=$2, resolved_at=CASE WHEN $2 THEN NOW() ELSE NULL END, resolved_by_name=CASE WHEN $2 THEN $3 ELSE '' END WHERE id=$1`, [id, !reabrir, me.name]);
-      res.json({ ok: true });
+      ping(req, 'resolve'); res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: 'No se pudo resolver' }); }
   });
 

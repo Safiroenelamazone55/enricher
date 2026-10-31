@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261031t"/>
+  <link rel="stylesheet" href="style.css?v=20261031v"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -330,7 +330,7 @@
       <button class="snav-mod active" data-module="management" onclick="selectModule('management')" data-tip="Operaciones" aria-label="Operaciones">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
       </button>
-      <button class="snav-mod" data-module="enricher" onclick="selectModule('enricher')" data-tip="Datos" aria-label="Datos">
+      <button class="snav-mod" data-module="enricher" style="display:none" onclick="selectModule('enricher')" data-tip="Datos" aria-label="Datos">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>
       </button>
       <button class="snav-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement')" data-tip="Outreach" aria-label="Outreach">
@@ -339,7 +339,7 @@
       <button class="snav-mod" data-module="finance" onclick="selectModule('finance')" data-tip="Finanzas" aria-label="Finanzas">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>
       </button>
-      <button class="snav-mod" data-module="cantera" onclick="selectModule('cantera')" data-tip="Cantera" aria-label="Cantera">
+      <button class="snav-mod" data-module="cantera" style="display:none" onclick="selectModule('cantera')" data-tip="Cantera" aria-label="Cantera">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
       </button>
       <button class="snav-mod" data-module="herramientas" onclick="selectModule('herramientas')" data-tip="Herramientas" aria-label="Herramientas">
@@ -2559,7 +2559,7 @@
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>
       <span class="ws-mod__lbl">Operaciones</span><span class="ws-mod__chk"></span>
     </button>
-    <button class="snav-mod ws-mod" data-module="enricher" onclick="selectModule('enricher');closeWorkspaceMenu()" role="menuitem">
+    <button class="snav-mod ws-mod" data-module="enricher" style="display:none" onclick="selectModule('enricher');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></span>
       <span class="ws-mod__lbl">Datos</span><span class="ws-mod__chk"></span>
     </button>
@@ -2571,7 +2571,7 @@
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg></span>
       <span class="ws-mod__lbl">Finanzas</span><span class="ws-mod__chk"></span>
     </button>
-    <button class="snav-mod ws-mod" data-module="cantera" onclick="selectModule('cantera');closeWorkspaceMenu()" role="menuitem">
+    <button class="snav-mod ws-mod" data-module="cantera" style="display:none" onclick="selectModule('cantera');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></span>
       <span class="ws-mod__lbl">Cantera</span><span class="ws-mod__chk"></span>
     </button>
@@ -3567,12 +3567,12 @@
   })();
 </script>
 
-<script src="app.js?v=2026103041"></script>
+<script src="app.js?v=2026103044"></script>
 <script src="worldclock.js?v=3"></script>
 <script src="agentes.js?v=3"></script>
-<script src="spaces.js?v=21"></script>
+<script src="spaces.js?v=22"></script>
 <script src="permisos.js?v=4"></script>
-<script src="home.js?v=2"></script>
+<script src="home.js?v=3"></script>
 <script src="contenido.js?v=7"></script>
 <script src="mobile.js?v=5"></script>
 <script src="varchips.js?v=2026101201"></script>

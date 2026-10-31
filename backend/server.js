@@ -12634,6 +12634,7 @@ app.post('/api/chat/messages/:channel', requireAuth, async (req, res) => {
       const mm = /^(task|project):(\d+)$/.exec(req.params.channel);
       if (mm && content.includes('@')) await _mentionSvc.process(pool, { wid: req.workspaceOwnerId, user: req.user, kind: mm[1] === 'task' ? 'task_comment' : 'project_comment', taskId: mm[1] === 'task' ? +mm[2] : null, projectId: mm[1] === 'project' ? +mm[2] : null, text: content });
     } catch (e) { console.warn('[mention] comentario:', e.message); }
+    try { const io = req.app.get('io'); if (io && /^(task|project):\d+$/.test(req.params.channel)) io.to(`ws:${req.workspaceOwnerId}`).emit('home_update', { kind: 'comment', channel: req.params.channel, by: req.user.id }); } catch (_) {}
     res.status(201).json({ ...rows[0], sender_name: req.user.name, sender_avatar: req.user.avatar || null });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -15487,6 +15488,7 @@ async function start() {
     // Fall back to long-polling if WebSocket upgrade is blocked by nginx
     transports: ['polling', 'websocket'],
   });
+  app.set('io', io);   // para avisar en tiempo real desde las rutas (Inicio / «Para ti»)
 
   // Auth middleware: parse session cookie → look up user
   const wrap = mw => (socket, next) => mw(socket.request, {}, next);

@@ -22,7 +22,11 @@ const HomeModule = (() => {
   }
   const money = (v, m) => (m || 'USD') + ' ' + Number(v || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 });
   const card = (id, title, body, right) => { const el = $(id); if (!el) return; el.style.display = ''; el.innerHTML = `<div class="hm-hd"><b>${title}</b>${right || ''}</div>${body}`; };
+  // iconos propios (nada de emojis)
+  const I = (d, sz) => `<svg class="hm-ic" width="${sz || 14}" height="${sz || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const IC = { check: '<polyline points="5 12.5 10 17.5 19 7"/>', flag: '<path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/>', ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' };
   const empty = t => `<div class="hm-e">${t}</div>`;
+  const emptyOk = t => `<div class="hm-e hm-e--ok">${I(IC.ok, 22)}<span>${t}</span></div>`;
 
   let _tab = 'todo', _d = null, _tasks = [], _poll = null, _msgs = { slack: 0, wa: 0, mail: 0 };
 
@@ -41,9 +45,9 @@ const HomeModule = (() => {
     const tipo = kind === 'asignado' ? 'asignado' : x.tipo, n = x.n > 1 ? `${x.n} comentarios nuevos en` : VERBO[tipo];
     const acts = kind === 'asignado'
       ? `<button class="hm-b2 hm-b2--ok" title="Marcar como resuelto" onclick="event.stopPropagation();HomeModule.resolve(${x.id})">Resolver</button>`
-      : `<button class="hm-b2" title="Marcar como visto" onclick="event.stopPropagation();HomeModule.seen(${x.task_id || 0},${x.tipo === 'mencion' ? x.id : 0})">✓</button>`;
+      : `<button class="hm-b2" title="Marcar como visto" onclick="event.stopPropagation();HomeModule.seen(${x.task_id || 0},${x.tipo === 'mencion' ? x.id : 0})">${I(IC.check, 13)}</button>`;
     return `<div class="hm-it hm-it--${tipo}" onclick="HomeModule.go(${x.task_id || 0},${x.tipo === 'mencion' ? x.id : 0})">
-      <span class="hm-av hm-av--${tipo}">${kind === 'asignado' ? '⚑' : esc(ini(x.by))}</span>
+      <span class="hm-av hm-av--${tipo}">${kind === 'asignado' ? I(IC.flag, 14) : esc(ini(x.by))}</span>
       <div class="hm-bd"><div class="hm-t"><b>${esc(x.by || 'Alguien')}</b> ${n} <span class="hm-ref">${esc(x.titulo || 'una tarea')}</span></div>
         ${x.texto ? `<div class="hm-x">${esc(x.texto)}</div>` : ''}<div class="hm-m">${esc(x.project_nombre || '')}${x.project_nombre ? ' · ' : ''}${ago(x.at)}</div></div>
       <div class="hm-ac">${acts}</div></div>`;
@@ -60,7 +64,7 @@ const HomeModule = (() => {
     else if (_tab === 'asignados') list = d.asignados.map(x => item(x, 'asignado')).join('');
     else if (_tab === 'nuevos') list = d.nuevos.map(x => item(x, '')).join('');
     const msgRows = `<div class="hm-msgs">${[['Slack', _msgs.slack, 'mgmt-chat', 'Chat con los clientes'], ['WhatsApp', _msgs.wa, 'mgmt-wa', 'Chats sin leer'], ['Respuestas de prospectos', _msgs.mail, 'outreach-inbox', 'Correo de Outreach']].filter(r => r[0] !== 'Respuestas de prospectos' || perm('outreach')).map(r => `<button class="hm-msg${r[1] ? ' hm-msg--on' : ''}" onclick="HomeModule.openMsg('${r[2]}')"><b>${r[1]}</b><span>${r[0]}<em>${r[3]}</em></span></button>`).join('')}</div>`;
-    const body = _tab === 'mensajes' ? msgRows : (list || empty({ respuestas: 'No tienes respuestas pendientes', asignados: 'No tienes comentarios asignados', nuevos: 'No hay comentarios nuevos', todo: 'Estás al día ✨' }[_tab])) + (_tab === 'todo' && nMsg ? msgRows : '');
+    const body = _tab === 'mensajes' ? msgRows : (list || emptyOk({ respuestas: 'No tienes respuestas pendientes', asignados: 'No tienes comentarios asignados', nuevos: 'No hay comentarios nuevos', todo: 'Estás al día' }[_tab])) + (_tab === 'todo' && nMsg ? msgRows : '');
     card('dash2-paratii', 'Para ti' + (total ? `<span class="hm-n">${total}</span>` : ''), `<div class="hm-tabs">${tabs.map(([k, l, n]) => `<button class="hm-tab${_tab === k ? ' on' : ''}" onclick="HomeModule.tab('${k}')">${l}${n ? `<i>${n > 99 ? '99+' : n}</i>` : ''}</button>`).join('')}</div><div class="hm-list">${body}</div>`,
       total ? '<button class="hm-lnk" onclick="HomeModule.seenAll()">Marcar todo como visto</button>' : '');
   }
@@ -96,7 +100,7 @@ const HomeModule = (() => {
     T.forEach(t => (t.waiting_on || []).forEach(w => { const wt = byId.get(w.id); if (wt && isOpen(wt) && mine(wt)) { if (!blocking.has(wt.id)) blocking.set(wt.id, []); blocking.get(wt.id).push(t); } }));
     const row = (t, extra) => `<div class="hm-row" onclick="openTaskAnywhere(${t.id})"><span class="hm-row__t">${esc(t.titulo)}<em>${esc(t.project_nombre || '')}${extra ? ' · ' + extra : ''}</em></span></div>`;
     const nBl = bloqueadas.length + blocking.size;
-    if (!nBl) { card('dash2-bloq', 'Bloqueos', empty('Nada bloqueado ni bloqueando a otros ✓')); return; }
+    if (!nBl) { card('dash2-bloq', 'Bloqueos', emptyOk('Nada bloqueado ni bloqueando a otros')); return; }
     card('dash2-bloq', 'Bloqueos', `${bloqueadas.length ? `<div class="hm-sub">Bloqueadas (${bloqueadas.length})</div>${bloqueadas.slice(0, 5).map(t => row(t)).join('')}` : ''}
       ${blocking.size ? `<div class="hm-sub">Bloqueas a otras personas (${blocking.size})</div>${[...blocking.entries()].slice(0, 5).map(([id, ws]) => row(byId.get(id), `espera: ${ws.slice(0, 2).map(x => esc(x.titulo)).join(', ')}${ws.length > 2 ? '…' : ''}`)).join('')}` : ''}`,
       `<span class="hm-n hm-n--w">${nBl}</span>`);
@@ -132,7 +136,7 @@ const HomeModule = (() => {
     const el = $('dash2-outreach'); if (!el) return; el.style.display = 'none'; if (!perm('outreach')) return;
     try {
       const n = await api('/lm/nav-counts'); const rows = [['Respuestas de prospectos sin leer', n.inbox], ['Tareas y seguimientos de hoy', n.tasks], ['Por calificar (respondieron)', n.leads], ['Por aprobar / WhatsApp', n.wa]].filter(r => r[1]);
-      card('dash2-outreach', 'Outreach', rows.length ? rows.map(r => `<div class="hm-row" onclick="HomeModule.openMsg('outreach-inbox')"><span class="hm-row__t">${r[0]}</span><b class="hm-cnt">${r[1]}</b></div>`).join('') : empty('Todo al día en Outreach ✓'));
+      card('dash2-outreach', 'Outreach', rows.length ? rows.map(r => `<div class="hm-row" onclick="HomeModule.openMsg('outreach-inbox')"><span class="hm-row__t">${r[0]}</span><b class="hm-cnt">${r[1]}</b></div>`).join('') : emptyOk('Todo al día en Outreach'));
     } catch (_) {}
   }
 
@@ -152,11 +156,27 @@ const HomeModule = (() => {
   }
 
   // ── orquestación ──
+  // Tiempo real: el servidor avisa («home_update») cuando alguien comenta, te menciona o te asigna un comentario; además se refresca al volver a la pestaña
+  let _sock = null, _deb = null;
+  const _active = () => { const p = $('pane-mgmt-dashboard'); return !!(p && p.classList.contains('active')); };
+  function _liveRefresh() { clearTimeout(_deb); _deb = setTimeout(() => { if (_active()) loadParaTi(); else _d = null; }, 350); }
+  function _connect() {
+    if (_sock || typeof io !== 'function') return;
+    try {
+      _sock = io('https://api.novacentrax.com', { withCredentials: true, transports: ['polling', 'websocket'] });
+      _sock.on('home_update', _liveRefresh);
+      _sock.on('new_message', _liveRefresh);                       // mensajes de Slack/chat: actualiza los contadores de «Mensajes»
+      _sock.on('reconnect', _liveRefresh);
+    } catch (_) {}
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && _active()) loadParaTi(); });
+    window.addEventListener('focus', () => { if (_active()) loadParaTi(); });
+  }
   function render(allTasks) {
+    _connect();
     _tasks = Array.isArray(allTasks) ? allTasks : _tasks;
     paintBloq(); paintProx();
     loadParaTi(); loadCobros(); loadAgenda(); loadOutreach(); loadTeam();
-    clearInterval(_poll); _poll = setInterval(() => { const p = $('pane-mgmt-dashboard'); if (p && p.classList.contains('active') && !document.hidden) loadParaTi(); }, 60000);
+    clearInterval(_poll); _poll = setInterval(() => { const p = $('pane-mgmt-dashboard'); if (p && p.classList.contains('active') && !document.hidden) loadParaTi(); }, 30000);
   }
   return { render, tab, go, seen, seenAll, resolve, openMsg, refresh: loadParaTi };
 })();

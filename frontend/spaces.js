@@ -501,7 +501,7 @@ const SpacesModule = (() => {
       const r = await apiFetch(`${API}/mgmt/space-views/${v.id}/ops`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops: [...p.set].map(([id, data]) => ({ id, data })), del: [...p.del], order: p.order, name: _myName() }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
       const j = await r.json(); _col.rev = j.rev; v.config = j.config; _col.sending = false;
-      if (_col.apply) _col.apply(j.config); _setSt(_col.pend.set.size || _col.pend.del.size ? 'Guardando…' : '✓ Guardado');
+      if (_col.apply) _col.apply(j.config); _setSt(_col.pend.set.size || _col.pend.del.size ? 'Guardando…' : 'Guardado');
     } catch (e) {
       _col.sending = false; p.set.forEach((d, id) => { if (!_col.pend.set.has(id)) _col.pend.set.set(id, d); }); p.del.forEach(id => _col.pend.del.add(id)); if (p.order && !_col.pend.order) _col.pend.order = p.order;
       _setSt('No se pudo guardar · reintentando…'); clearTimeout(_col.sendT); _col.sendT = setTimeout(_colFlush, 3000);
@@ -520,6 +520,21 @@ const SpacesModule = (() => {
   });
 
   // ── Documento (por bloques, estilo ClickUp: menú «/», barra flotante, colores, insignias, menciones) ──
+  // iconos del documento (SVG, no emojis)
+  const _SVG = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _DIC = {
+    p: '<path d="M13 4v16M17 4v16M13 4H9.5a4.5 4.5 0 0 0 0 9H13"/>', todo: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>',
+    ul: '<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+    ol: '<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4M4 10h2M4 14h2l-2 4h2"/>',
+    quote: '<path d="M7 7h4v4c0 3-1 5-4 6M15 7h4v4c0 3-1 5-4 6"/>', code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+    info: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/>', ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    warn: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+    err: '<path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    vio: '<path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9-4.9-1.8 4.9-1.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/>',
+    hr: '<line x1="4" y1="12" x2="20" y2="12"/>', link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+    eraser: '<path d="m7 21-4-4 10-10 7 7-6 6z"/><path d="M22 21H7"/>', at: '<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
+  };
+  const _DI = k => _SVG(_DIC[k]);
   const _DOC_T = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'todox', 'quote', 'code', 'hr', 'call-info', 'call-ok', 'call-warn', 'call-err', 'call-vio'];
   const _LISTY = ['ul', 'ol', 'todo', 'todox', 'quote', 'call-info', 'call-ok', 'call-warn', 'call-err', 'call-vio'];
   const _TXT = [['#1F1D1B', 'Predeterminado'], ['#D12F34', 'Rojo'], ['#E5600F', 'Naranja'], ['#B88700', 'Amarillo'], ['#2E6BE5', 'Azul'], ['#8147C0', 'Violeta'], ['#C73A93', 'Rosa'], ['#278A5B', 'Verde'], ['#757780', 'Gris']];
@@ -574,16 +589,17 @@ const SpacesModule = (() => {
   const _ESC = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   function _slashItems() {
     const T = (t, l, ic, kw) => ({ g: 'Texto', l, ic, kw, run: () => _applyType(t) });
+    const SV = (it, k) => (it.svg = _DI(k), it);
     const C = (t, l, ic, kw) => ({ g: 'Banners', l, ic, kw: 'banner callout ' + kw, run: () => _applyType(t) });
     const F = (g, l, ic, kw, run) => ({ g, l, ic, kw, run });
     return [
-      T('p', 'Texto normal', '¶', 'parrafo texto'), T('h1', 'Título 1', 'H1', 'titulo encabezado'), T('h2', 'Título 2', 'H2', 'subtitulo'), T('h3', 'Título 3', 'H3', 'subtitulo'),
-      T('todo', 'Lista de control', '☑', 'checklist tareas pendientes casilla'), T('ul', 'Lista con viñetas', '•', 'bullets'), T('ol', 'Lista numerada', '1.', 'numeros'), T('quote', 'Cita', '❝', 'bloque cita quote'), T('code', 'Bloque de código', '‹›', 'codigo code'),
-      C('call-info', 'Banner informativo', 'ℹ', 'info azul'), C('call-ok', 'Banner de éxito', '✓', 'exito verde'), C('call-warn', 'Banner de aviso', '!', 'aviso amarillo'), C('call-err', 'Banner de alerta', '⚠', 'alerta peligro rojo'), C('call-vio', 'Banner violeta', '✦', 'nota violeta'),
-      F('Avanzado', 'Divisor', '―', 'linea separador', () => _applyType('hr')),
-      F('Avanzado', 'Mencionar a una persona', '@', 'persona mencion arroba', () => _openMenu('mention', '')),
+      SV(T('p', 'Texto normal', '', 'parrafo texto'), 'p'), T('h1', 'Título 1', 'H1', 'titulo encabezado'), T('h2', 'Título 2', 'H2', 'subtitulo'), T('h3', 'Título 3', 'H3', 'subtitulo'),
+      SV(T('todo', 'Lista de control', '', 'checklist tareas pendientes casilla'), 'todo'), SV(T('ul', 'Lista con viñetas', '', 'bullets'), 'ul'), SV(T('ol', 'Lista numerada', '', 'numeros'), 'ol'), SV(T('quote', 'Cita', '', 'bloque cita quote'), 'quote'), SV(T('code', 'Bloque de código', '', 'codigo code'), 'code'),
+      SV(C('call-info', 'Banner informativo', '', 'info azul'), 'info'), SV(C('call-ok', 'Banner de éxito', '', 'exito verde'), 'ok'), SV(C('call-warn', 'Banner de aviso', '', 'aviso amarillo'), 'warn'), SV(C('call-err', 'Banner de alerta', '', 'alerta peligro rojo'), 'err'), SV(C('call-vio', 'Banner violeta', '', 'nota violeta'), 'vio'),
+      SV(F('Avanzado', 'Divisor', '', 'linea separador', () => _applyType('hr')), 'hr'),
+      SV(F('Avanzado', 'Mencionar a una persona', '', 'persona mencion arroba', () => _openMenu('mention', '')), 'at'),
       F('Formato', 'Negrita', 'B', 'bold', () => docCmd('bold')), F('Formato', 'Cursiva', 'I', 'italic', () => docCmd('italic')), F('Formato', 'Tachado', 'S', 'strike', () => docCmd('strikeThrough')),
-      F('Formato', 'Código insertado', '‹›', 'inline code', () => docCmd('icode')), F('Formato', 'Vínculo de sitio web', '🔗', 'enlace link url', () => docCmd('link')), F('Formato', 'Borrar formato', '⌫', 'limpiar quitar', () => docCmd('removeFormat')),
+      SV(F('Formato', 'Código insertado', '', 'inline code', () => docCmd('icode')), 'code'), SV(F('Formato', 'Vínculo de sitio web', '', 'enlace link url', () => docCmd('link')), 'link'), SV(F('Formato', 'Borrar formato', '', 'limpiar quitar', () => docCmd('removeFormat')), 'eraser'),
       ..._TXT.map(([c, n]) => ({ g: 'Colores del texto', l: n, ic: 'A', ic_c: c, kw: 'color texto ' + n, run: () => docCmd('fc:' + c) })),
       ..._HLT.map(([c, n]) => ({ g: 'Resaltados', l: 'Resaltado ' + n.toLowerCase(), ic: 'A', ic_bg: c, kw: 'resaltado destacado fondo ' + n, run: () => docCmd('bg:' + c) })),
       ..._BDG.map(([k, n]) => ({ g: 'Insignias', l: 'Insignia ' + n, ic: '●', ic_b: k, kw: 'insignia etiqueta badge ' + n, run: () => docCmd('bdg:' + k) })),
@@ -605,7 +621,7 @@ const SpacesModule = (() => {
     _sl.items.forEach((it, i) => {
       if (it.g !== g) { g = it.g; h += `<div class="sp-slash__g">${esc(g)}</div>`; }
       const icst = it.ic_c ? `color:${it.ic_c};font-weight:800` : it.ic_bg ? `background:${it.ic_bg}` : '';
-      const ic = it.ic_b ? `<i class="sp-slash__i"><span class="sp-bdg sp-bdg--${it.ic_b}" style="padding:0 5px">●</span></i>` : `<i class="sp-slash__i" style="${icst}">${esc(it.ic)}</i>`;
+      const ic = it.ic_b ? `<i class="sp-slash__i"><span class="sp-bdg sp-bdg--${it.ic_b}" style="padding:0 5px">Ab</span></i>` : `<i class="sp-slash__i" style="${icst}">${it.svg || esc(it.ic)}</i>`;
       h += `<button type="button" class="sp-slash__r${i === _sl.sel ? ' on' : ''}" data-i="${i}" onclick="SpacesModule.slashPick(${i})" onmousemove="SpacesModule.slashHover(${i})">${ic}<span>${esc(it.l)}</span></button>`;
     });
     el.innerHTML = h || '<div class="sp-slash__g">Sin resultados</div>'; const on = el.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
@@ -660,8 +676,8 @@ const SpacesModule = (() => {
     const btn = (c, l, t, x) => `<button type="button" class="sp-dtb${x ? ' ' + x : ''}" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
     const pal = (k, t, l) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docColor('${k}',this)">${l}</button>`;
     const cfg = v.config && Array.isArray(v.config.blocks) ? v.config : { blocks: [{ id: 'b0', t: 'p', html: (v.config && typeof v.config.html === 'string') ? v.config.html : '' }], rev: (v.config && v.config.rev) || 0 };
-    const inline = `${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('icode', '‹›', 'Código insertado')}${btn('link', '🔗', 'Enlace')}${pal('fc', 'Color del texto', '<span style="border-bottom:3px solid #E5600F;line-height:1">A</span>')}${pal('bg', 'Resaltado', '<span style="background:#FFF2B3;padding:0 4px">A</span>')}${pal('bdg', 'Insignia', '<span class="sp-bdg sp-bdg--blue" style="padding:0 5px;font-size:.7rem">Ab</span>')}`;
-    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título 1')}${btn('t:h2', 'H2', 'Título 2')}${btn('t:h3', 'H3', 'Título 3')}${btn('t:p', '¶', 'Texto normal')}<span class="sp-dtbar__s"></span>${btn('t:ul', '•', 'Lista con viñetas')}${btn('t:ol', '1.', 'Lista numerada')}${btn('t:todo', '☑', 'Lista de control')}${btn('t:quote', '❝', 'Cita')}${btn('t:code', '‹/›', 'Bloque de código')}${btn('t:call-info', 'ℹ', 'Banner')}${btn('t:hr', '―', 'Divisor')}<span class="sp-dtbar__s"></span>${inline}${btn('removeFormat', '⌫', 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">✓ Guardado</span></div>
+    const inline = `${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('icode', _DI('code'), 'Código insertado')}${btn('link', _DI('link'), 'Enlace')}${pal('fc', 'Color del texto', '<span style="border-bottom:3px solid #E5600F;line-height:1">A</span>')}${pal('bg', 'Resaltado', '<span style="background:#FFF2B3;padding:0 4px">A</span>')}${pal('bdg', 'Insignia', '<span class="sp-bdg sp-bdg--blue" style="padding:0 5px;font-size:.7rem">Ab</span>')}`;
+    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título 1')}${btn('t:h2', 'H2', 'Título 2')}${btn('t:h3', 'H3', 'Título 3')}${btn('t:p', _DI('p'), 'Texto normal')}<span class="sp-dtbar__s"></span>${btn('t:ul', _DI('ul'), 'Lista con viñetas')}${btn('t:ol', _DI('ol'), 'Lista numerada')}${btn('t:todo', _DI('todo'), 'Lista de control')}${btn('t:quote', _DI('quote'), 'Cita')}${btn('t:code', _DI('code'), 'Bloque de código')}${btn('t:call-info', _DI('info'), 'Banner')}${btn('t:hr', _DI('hr'), 'Divisor')}<span class="sp-dtbar__s"></span>${inline}${btn('removeFormat', _DI('eraser'), 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">Guardado</span></div>
       <div class="sp-dpage"><input class="sp-dtitle" id="sp-dtitle" value="${esc(v.nombre && v.nombre !== 'Documento' ? v.nombre : '')}" placeholder="Documento sin título" maxlength="120" onchange="SpacesModule.docTitle(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('sp-doc').focus();}">
         <div class="sp-dhint">Escribe <kbd>/</kbd> para insertar bloques, <kbd>@</kbd> para mencionar a alguien</div>
         <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true">${cfg.blocks.map((x, i) => _blkHtml(x, i + 1)).join('')}</div></div>
