@@ -19294,3 +19294,8 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sp-doc .sp-blk--ol { padding-left: 1.8em; } .sp-doc .sp-blk--ol::before { content: attr(data-n) '.'; position: absolute; left: 0; width: 1.4em; text-align: right; color: #8F8B83; }
 .sp-doc .sp-blk[data-ed] { box-shadow: -3px 0 0 var(--ec, #2F6BFF); background: color-mix(in srgb, var(--ec, #2F6BFF) 5%, transparent); } .sp-doc .sp-blk[data-ed]::after { content: attr(data-ed); position: absolute; right: 0; top: -1px; font-size: .64rem; font-weight: 700; color: #fff; background: var(--ec, #2F6BFF); padding: 0 6px; }
 .sp-wbi[data-ed] { outline: 2px solid var(--ec, #2F6BFF); } .sp-wbi[data-ed]::after { content: attr(data-ed); position: absolute; right: 0; top: -17px; font-size: .64rem; font-weight: 700; color: #fff; background: var(--ec, #2F6BFF); padding: 0 6px; }
+/* Vistas: solo iconos, todas en UNA fila (el nombre sale al pasar el cursor) */
+.sp-tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; } .sp-tabs::-webkit-scrollbar { display: none; }
+.sp-tab--v { position: relative; padding: 8px 12px; gap: 0; flex: 0 0 auto; } .sp-tab--v .sp-tab__i svg { width: 17px; height: 17px; }
+.sp-tab--v .sp-tab__x { position: absolute; top: 0; right: 0; padding: 0 4px; font-size: .7rem; line-height: 1.2; background: #fff; opacity: 0; } .sp-tab--v:hover .sp-tab__x { opacity: 1; }
+.sp-tab--add { flex: 0 0 auto; padding: 8px 12px; font-size: 1rem; }
