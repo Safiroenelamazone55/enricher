@@ -519,9 +519,15 @@ const SpacesModule = (() => {
     _col.focus = b ? b.dataset.id : '';
   });
 
-  // ── Documento (por bloques) ──
-  const _blkHtml = (b, n) => `<div class="sp-blk sp-blk--${b.t}" data-id="${esc(b.id)}" data-t="${b.t}"${b.t === 'ol' ? ` data-n="${n}"` : ''}>${_clean(b.html) || '<br>'}</div>`;
+  // ── Documento (por bloques, estilo ClickUp: menú «/», barra flotante, colores, insignias, menciones) ──
+  const _DOC_T = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'todox', 'quote', 'code', 'hr', 'call-info', 'call-ok', 'call-warn', 'call-err', 'call-vio'];
+  const _LISTY = ['ul', 'ol', 'todo', 'todox', 'quote', 'call-info', 'call-ok', 'call-warn', 'call-err', 'call-vio'];
+  const _TXT = [['#1F1D1B', 'Predeterminado'], ['#D12F34', 'Rojo'], ['#E5600F', 'Naranja'], ['#B88700', 'Amarillo'], ['#2E6BE5', 'Azul'], ['#8147C0', 'Violeta'], ['#C73A93', 'Rosa'], ['#278A5B', 'Verde'], ['#757780', 'Gris']];
+  const _HLT = [['#FDE3E3', 'Rojo'], ['#FFE6D2', 'Naranja'], ['#FFF2B3', 'Amarillo'], ['#DCEAFF', 'Azul'], ['#EBDEFA', 'Violeta'], ['#FBDDEF', 'Rosa'], ['#D9F2E3', 'Verde'], ['#ECECEF', 'Gris']];
+  const _BDG = [['red', 'roja'], ['orange', 'naranja'], ['yellow', 'amarilla'], ['blue', 'azul'], ['violet', 'violeta'], ['pink', 'rosa'], ['green', 'verde'], ['gray', 'gris']];
+  const _blkHtml = (b, n) => `<div class="sp-blk sp-blk--${b.t}" data-id="${esc(b.id)}" data-t="${b.t}"${b.t === 'ol' ? ` data-n="${n}"` : ''}${b.t === 'hr' ? ' contenteditable="false"' : ''}>${b.t === 'hr' ? '<br>' : (_clean(b.html) || '<br>')}</div>`;
   let _docLast = new Map(), _docOrder = '';
+  function _setT(el, t) { el.dataset.t = t; el.className = 'sp-blk sp-blk--' + t; if (t === 'hr') { el.setAttribute('contenteditable', 'false'); el.innerHTML = '<br>'; } else el.removeAttribute('contenteditable'); }
   function _numberOl() { let n = 0; document.querySelectorAll('#sp-doc > .sp-blk').forEach(x => { if (x.dataset.t === 'ol') { n++; x.dataset.n = n; } else n = 0; }); }
   function _docNorm() {
     const ed = $q('sp-doc'); if (!ed) return;
@@ -529,7 +535,7 @@ const SpacesModule = (() => {
     [...ed.childNodes].forEach(n => { if (n.nodeType === 3 || (n.nodeType === 1 && !/^(DIV|P|H1|H2|LI)$/.test(n.tagName))) { const d = document.createElement('div'); n.replaceWith(d); d.appendChild(n); } });
     [...ed.children].forEach(c => {
       if (c.tagName !== 'DIV') { const d = document.createElement('div'); d.innerHTML = c.innerHTML; c.replaceWith(d); c = d; }
-      c.classList.add('sp-blk'); const t = ['p', 'h1', 'h2', 'ul', 'ol'].includes(c.dataset.t) ? c.dataset.t : 'p'; c.dataset.t = t;
+      const t = _DOC_T.includes(c.dataset.t) ? c.dataset.t : 'p'; c.dataset.t = t;
       c.className = 'sp-blk sp-blk--' + t;
       if (!c.dataset.id || seen.has(c.dataset.id)) c.dataset.id = _uid();
       seen.add(c.dataset.id); if (!c.innerHTML.trim()) c.innerHTML = '<br>';
@@ -540,7 +546,7 @@ const SpacesModule = (() => {
   function _docSync() {
     const ed = $q('sp-doc'); if (!ed) return;
     _docNorm();
-    const blocks = [...ed.children].map(c => ({ id: c.dataset.id, t: c.dataset.t, html: c.innerHTML === '<br>' ? '' : c.innerHTML })), ids = blocks.map(x => x.id), order = ids.join(',');
+    const blocks = [...ed.children].map(c => ({ id: c.dataset.id, t: c.dataset.t, html: c.dataset.t === 'hr' ? '' : (c.innerHTML === '<br>' ? '' : c.innerHTML) })), ids = blocks.map(x => x.id), order = ids.join(',');
     let any = false;
     blocks.forEach(x => { const k = x.t + '|' + x.html; if (_docLast.get(x.id) !== k) { _colQueue(x.id, { t: x.t, html: x.html }); _docLast.set(x.id, k); any = true; } });
     [..._docLast.keys()].forEach(id => { if (!ids.includes(id)) { _docLast.delete(id); _colQueue(null, null, id); any = true; } });
@@ -553,40 +559,169 @@ const SpacesModule = (() => {
       let el = ed.querySelector(`[data-id="${CSS.escape(b.id)}"]`);
       if (!el) { const tmp = document.createElement('div'); tmp.innerHTML = _blkHtml(b, 1); el = tmp.firstChild; ed.insertBefore(el, ed.children[i] || null); }
       else if (!dirty.has(b.id)) {
-        if (el.dataset.t !== b.t) { el.dataset.t = b.t; el.className = 'sp-blk sp-blk--' + b.t; }
-        const cur = el.innerHTML === '<br>' ? '' : el.innerHTML, nh = _clean(b.html); if (cur !== nh) el.innerHTML = nh || '<br>';
+        if (el.dataset.t !== b.t) _setT(el, b.t);
+        if (b.t !== 'hr') { const cur = el.innerHTML === '<br>' ? '' : el.innerHTML, nh = _clean(b.html); if (cur !== nh) el.innerHTML = nh || '<br>'; }
         if (ed.children[i] !== el && !dirty.has(b.id)) ed.insertBefore(el, ed.children[i] || null);
       }
-      if (!dirty.has(b.id)) _docLast.set(b.id, b.t + '|' + (b.html || ''));
+      if (!dirty.has(b.id)) _docLast.set(b.id, b.t + '|' + (b.t === 'hr' ? '' : (b.html || '')));
     });
     const ids = new Set(want.map(b => b.id)); [...ed.children].forEach(c => { if (!ids.has(c.dataset.id) && !dirty.has(c.dataset.id)) { c.remove(); _docLast.delete(c.dataset.id); } });
     _numberOl(); _docOrder = [...ed.children].map(c => c.dataset.id).join(',');
   }
+
+  // menú «/» (bloques, formato, colores, insignias) y «@» (menciones)
+  const _nr = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const _ESC = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  function _slashItems() {
+    const T = (t, l, ic, kw) => ({ g: 'Texto', l, ic, kw, run: () => _applyType(t) });
+    const C = (t, l, ic, kw) => ({ g: 'Banners', l, ic, kw: 'banner callout ' + kw, run: () => _applyType(t) });
+    const F = (g, l, ic, kw, run) => ({ g, l, ic, kw, run });
+    return [
+      T('p', 'Texto normal', '¶', 'parrafo texto'), T('h1', 'Título 1', 'H1', 'titulo encabezado'), T('h2', 'Título 2', 'H2', 'subtitulo'), T('h3', 'Título 3', 'H3', 'subtitulo'),
+      T('todo', 'Lista de control', '☑', 'checklist tareas pendientes casilla'), T('ul', 'Lista con viñetas', '•', 'bullets'), T('ol', 'Lista numerada', '1.', 'numeros'), T('quote', 'Cita', '❝', 'bloque cita quote'), T('code', 'Bloque de código', '‹›', 'codigo code'),
+      C('call-info', 'Banner informativo', 'ℹ', 'info azul'), C('call-ok', 'Banner de éxito', '✓', 'exito verde'), C('call-warn', 'Banner de aviso', '!', 'aviso amarillo'), C('call-err', 'Banner de alerta', '⚠', 'alerta peligro rojo'), C('call-vio', 'Banner violeta', '✦', 'nota violeta'),
+      F('Avanzado', 'Divisor', '―', 'linea separador', () => _applyType('hr')),
+      F('Avanzado', 'Mencionar a una persona', '@', 'persona mencion arroba', () => _openMenu('mention', '')),
+      F('Formato', 'Negrita', 'B', 'bold', () => docCmd('bold')), F('Formato', 'Cursiva', 'I', 'italic', () => docCmd('italic')), F('Formato', 'Tachado', 'S', 'strike', () => docCmd('strikeThrough')),
+      F('Formato', 'Código insertado', '‹›', 'inline code', () => docCmd('icode')), F('Formato', 'Vínculo de sitio web', '🔗', 'enlace link url', () => docCmd('link')), F('Formato', 'Borrar formato', '⌫', 'limpiar quitar', () => docCmd('removeFormat')),
+      ..._TXT.map(([c, n]) => ({ g: 'Colores del texto', l: n, ic: 'A', ic_c: c, kw: 'color texto ' + n, run: () => docCmd('fc:' + c) })),
+      ..._HLT.map(([c, n]) => ({ g: 'Resaltados', l: 'Resaltado ' + n.toLowerCase(), ic: 'A', ic_bg: c, kw: 'resaltado destacado fondo ' + n, run: () => docCmd('bg:' + c) })),
+      ..._BDG.map(([k, n]) => ({ g: 'Insignias', l: 'Insignia ' + n, ic: '●', ic_b: k, kw: 'insignia etiqueta badge ' + n, run: () => docCmd('bdg:' + k) })),
+      ..._BDG.map(([k, n]) => ({ g: 'Insignias', l: 'Insignia ' + n + ' fuerte', ic: '●', ic_b: k + ' sp-bdg--s', kw: 'insignia etiqueta badge fuerte ' + n, run: () => docCmd('bdg:' + k + ' sp-bdg--s') })),
+    ];
+  }
+  const _sl = { open: false, mode: 'slash', items: [], all: [], sel: 0, q: '', el: null };
+  function _caretRect() { const sel = getSelection(); if (!sel.rangeCount) return null; const r = sel.getRangeAt(0).cloneRange(); r.collapse(true); let b = r.getBoundingClientRect(); if (!b.width && !b.height) { const cur = _curBlock(); if (cur) b = cur.getBoundingClientRect(); } return b; }
+  function _openMenu(mode, q) {
+    _sl.mode = mode; _sl.q = q;
+    _sl.all = mode === 'mention' ? [...new Set(_team.map(x => x.nombre).filter(Boolean))].map(n => ({ g: 'Personas', l: n, ic: _ini(n), kw: n, run: () => docCmd('men:' + n) })) : _slashItems();
+    _menuFilter(); if (!_sl.items.length) { _closeMenu(); return; }
+    if (!_sl.el) { _sl.el = document.createElement('div'); _sl.el.id = 'sp-slash'; _sl.el.className = 'sp-slash'; document.body.appendChild(_sl.el); _sl.el.addEventListener('mousedown', e => e.preventDefault()); }
+    _sl.open = true; _menuPaint(); _menuPlace();
+  }
+  function _menuFilter() { const q = _nr(_sl.q); _sl.items = q ? _sl.all.filter(i => _nr(i.l + ' ' + (i.kw || '')).includes(q)) : _sl.all; if (_sl.sel >= _sl.items.length) _sl.sel = 0; }
+  function _menuPaint() {
+    const el = _sl.el; if (!el) return; let g = '', h = '';
+    _sl.items.forEach((it, i) => {
+      if (it.g !== g) { g = it.g; h += `<div class="sp-slash__g">${esc(g)}</div>`; }
+      const icst = it.ic_c ? `color:${it.ic_c};font-weight:800` : it.ic_bg ? `background:${it.ic_bg}` : '';
+      const ic = it.ic_b ? `<i class="sp-slash__i"><span class="sp-bdg sp-bdg--${it.ic_b}" style="padding:0 5px">●</span></i>` : `<i class="sp-slash__i" style="${icst}">${esc(it.ic)}</i>`;
+      h += `<button type="button" class="sp-slash__r${i === _sl.sel ? ' on' : ''}" data-i="${i}" onclick="SpacesModule.slashPick(${i})" onmousemove="SpacesModule.slashHover(${i})">${ic}<span>${esc(it.l)}</span></button>`;
+    });
+    el.innerHTML = h || '<div class="sp-slash__g">Sin resultados</div>'; const on = el.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  }
+  function _menuPlace() {
+    const el = _sl.el, r = _caretRect(); if (!el || !r) return; const w = 300, x = Math.min(r.left, innerWidth - w - 12);
+    const below = innerHeight - r.bottom - 16, above = r.top - 16, down = below >= 260 || below >= above, room = Math.max(120, Math.min(360, down ? below : above));
+    el.style.maxHeight = room + 'px'; el.style.left = Math.max(10, x) + 'px';
+    el.style.top = (down ? r.bottom + 6 : Math.max(10, r.top - el.offsetHeight - 6)) + 'px';
+  }
+  function _closeMenu() { _sl.open = false; if (_sl.el) { _sl.el.remove(); _sl.el = null; } }
+  function slashHover(i) { if (_sl.sel === i) return; _sl.sel = i; const el = _sl.el; if (el) el.querySelectorAll('.sp-slash__r').forEach((b, k) => b.classList.toggle('on', k === i)); }
+  function slashPick(i) {
+    const it = _sl.items[i]; if (!it) return;
+    const mode = _sl.mode, q = _sl.q; _closeMenu(); _delTrigger(mode === 'mention' ? '@' : '/', q); it.run(); _docSync();
+  }
+  // borra el «/texto» o «@texto» escrito para abrir el menú
+  function _delTrigger(ch, q) {
+    const sel = getSelection(); if (!sel.rangeCount) return; const n = sel.anchorNode, off = sel.anchorOffset; if (!n || n.nodeType !== 3) return;
+    const before = n.textContent.slice(0, off), i = before.lastIndexOf(ch + q); if (i < 0) return;
+    const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + ch.length + q.length); r.deleteContents(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  function _slashCheck() {
+    const sel = getSelection(); if (!sel.rangeCount || !sel.isCollapsed) { if (_sl.open) _closeMenu(); return; }
+    const n = sel.anchorNode; if (!n || n.nodeType !== 3 || !$q('sp-doc') || !$q('sp-doc').contains(n)) { if (_sl.open) _closeMenu(); return; }
+    const before = n.textContent.slice(0, sel.anchorOffset), m = before.match(/(?:^|\s)\/([^\/\n]{0,24})$/), a = before.match(/(?:^|\s)@([^@\n]{0,24})$/);
+    if (m) { _sl.sel = _sl.open && _sl.mode === 'slash' ? _sl.sel : 0; _openMenu('slash', m[1]); }
+    else if (a) { _sl.sel = _sl.open && _sl.mode === 'mention' ? _sl.sel : 0; _openMenu('mention', a[1]); }
+    else if (_sl.open) _closeMenu();
+  }
+  function _applyType(t) {
+    const cur = _curBlock(); if (!cur) return;
+    if (t === 'hr') { _setT(cur, 'hr'); const p = document.createElement('div'); p.dataset.id = _uid(); p.dataset.t = 'p'; p.className = 'sp-blk sp-blk--p'; p.innerHTML = '<br>'; cur.after(p); const r = document.createRange(); r.setStart(p, 0); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return; }
+    const same = cur.dataset.t === t && t !== 'p';
+    _setT(cur, same ? 'p' : t);
+    if (!cur.innerHTML.trim()) cur.innerHTML = '<br>';
+  }
+
+  // barra flotante al seleccionar texto
+  function _bubUpdate() {
+    const ed = $q('sp-doc'), sel = getSelection(); let bub = $q('sp-bub');
+    const ok = ed && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode) && ed.contains(sel.focusNode);
+    if (!ok) { if (bub) bub.style.display = 'none'; return; }
+    if (!bub) return; const r = sel.getRangeAt(0).getBoundingClientRect(); if (!r.width && !r.height) { bub.style.display = 'none'; return; }
+    bub.style.display = 'flex'; const w = bub.offsetWidth || 300; bub.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px'; bub.style.top = Math.max(8, r.top - 44) + 'px';
+  }
+  document.addEventListener('selectionchange', _bubUpdate);
+  document.addEventListener('scroll', () => { if (_sl.open) _closeMenu(); const b = $q('sp-bub'); if (b) b.style.display = 'none'; }, true);
+
   function _paintDoc(b) {
     const v = _curView(); if (v.virtual) { b.innerHTML = '<div class="sp-e sp-e--c">Añade un documento con «＋ Vista».</div>'; return; }
-    const btn = (c, l, t) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
+    const btn = (c, l, t, x) => `<button type="button" class="sp-dtb${x ? ' ' + x : ''}" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
+    const pal = (k, t, l) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docColor('${k}',this)">${l}</button>`;
     const cfg = v.config && Array.isArray(v.config.blocks) ? v.config : { blocks: [{ id: 'b0', t: 'p', html: (v.config && typeof v.config.html === 'string') ? v.config.html : '' }], rev: (v.config && v.config.rev) || 0 };
-    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título')}${btn('t:h2', 'H2', 'Subtítulo')}${btn('t:p', '¶', 'Párrafo')}${btn('t:ul', '• Lista', 'Lista con viñetas')}${btn('t:ol', '1. Lista', 'Lista numerada')}<span class="sp-dtbar__s"></span>${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('link', 'Enlace', 'Enlace')}${btn('removeFormat', 'Limpiar', 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">✓ Guardado</span></div>
-      <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true">${cfg.blocks.map((x, i) => _blkHtml(x, i + 1)).join('')}</div></div>`;
-    v.config = cfg; _docLast = new Map(cfg.blocks.map(x => [x.id, x.t + '|' + (x.html || '')])); _docOrder = cfg.blocks.map(x => x.id).join(','); _numberOl();
+    const inline = `${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('icode', '‹›', 'Código insertado')}${btn('link', '🔗', 'Enlace')}${pal('fc', 'Color del texto', '<span style="border-bottom:3px solid #E5600F;line-height:1">A</span>')}${pal('bg', 'Resaltado', '<span style="background:#FFF2B3;padding:0 4px">A</span>')}${pal('bdg', 'Insignia', '<span class="sp-bdg sp-bdg--blue" style="padding:0 5px;font-size:.7rem">Ab</span>')}`;
+    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título 1')}${btn('t:h2', 'H2', 'Título 2')}${btn('t:h3', 'H3', 'Título 3')}${btn('t:p', '¶', 'Texto normal')}<span class="sp-dtbar__s"></span>${btn('t:ul', '•', 'Lista con viñetas')}${btn('t:ol', '1.', 'Lista numerada')}${btn('t:todo', '☑', 'Lista de control')}${btn('t:quote', '❝', 'Cita')}${btn('t:code', '‹/›', 'Bloque de código')}${btn('t:call-info', 'ℹ', 'Banner')}${btn('t:hr', '―', 'Divisor')}<span class="sp-dtbar__s"></span>${inline}${btn('removeFormat', '⌫', 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">✓ Guardado</span></div>
+      <div class="sp-dpage"><input class="sp-dtitle" id="sp-dtitle" value="${esc(v.nombre && v.nombre !== 'Documento' ? v.nombre : '')}" placeholder="Documento sin título" maxlength="120" onchange="SpacesModule.docTitle(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('sp-doc').focus();}">
+        <div class="sp-dhint">Escribe <kbd>/</kbd> para insertar bloques, <kbd>@</kbd> para mencionar a alguien</div>
+        <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true">${cfg.blocks.map((x, i) => _blkHtml(x, i + 1)).join('')}</div></div>
+      <div class="sp-bub" id="sp-bub" style="display:none">${inline}</div></div>`;
+    v.config = cfg; _docLast = new Map(cfg.blocks.map(x => [x.id, x.t + '|' + (x.t === 'hr' ? '' : (x.html || ''))])); _docOrder = cfg.blocks.map(x => x.id).join(','); _numberOl();
     const ed = $q('sp-doc');
-    ed.addEventListener('input', _docSync);
+    ed.addEventListener('input', () => { _docSync(); _slashCheck(); });
+    ed.addEventListener('blur', () => setTimeout(() => { if (_sl.open && document.activeElement !== ed) _closeMenu(); }, 120));
+    ed.addEventListener('click', e => {
+      const bl = e.target.closest && e.target.closest('.sp-blk'); if (!bl) return;
+      if (/^todox?$/.test(bl.dataset.t) && e.clientX - bl.getBoundingClientRect().left < 28) { _setT(bl, bl.dataset.t === 'todo' ? 'todox' : 'todo'); _docSync(); }
+    });
     ed.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text/plain'); if (t == null) return; e.preventDefault(); document.execCommand('insertText', false, t); });
     ed.addEventListener('keydown', e => {
-      const cur = _curBlock(); if (!cur) return;
-      if (e.key === 'Enter' && !e.shiftKey && ['ul', 'ol'].includes(cur.dataset.t) && !cur.textContent.trim()) { e.preventDefault(); cur.dataset.t = 'p'; cur.className = 'sp-blk sp-blk--p'; _docSync(); return; }
-      if (e.key === 'Enter' && !e.shiftKey && ['h1', 'h2'].includes(cur.dataset.t)) setTimeout(() => { const c2 = _curBlock(); if (c2 && c2 !== cur && /^h/.test(c2.dataset.t)) { c2.dataset.t = 'p'; c2.className = 'sp-blk sp-blk--p'; _docSync(); } }, 0);
-      if (e.key === 'Backspace' && cur.dataset.t !== 'p') { const sel = getSelection(); if (sel && sel.isCollapsed) { const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(cur); r.setEnd(sel.anchorNode, sel.anchorOffset); if (!r.toString().length) { e.preventDefault(); cur.dataset.t = 'p'; cur.className = 'sp-blk sp-blk--p'; _docSync(); } } }
+      if (_sl.open) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); _sl.sel = (_sl.sel + (e.key === 'ArrowDown' ? 1 : -1) + _sl.items.length) % _sl.items.length; _menuPaint(); return; }
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); slashPick(_sl.sel); return; }
+        if (e.key === 'Escape') { e.preventDefault(); _closeMenu(); return; }
+      }
+      const cur = _curBlock(); if (!cur) return; const t = cur.dataset.t;
+      if (e.key === 'Enter' && !e.shiftKey && _LISTY.includes(t) && !cur.textContent.trim()) { e.preventDefault(); _setT(cur, 'p'); cur.innerHTML = '<br>'; _docSync(); return; }
+      if (e.key === 'Enter' && !e.shiftKey && t === 'code') {
+        e.preventDefault();
+        const sel = getSelection(), rr = sel.getRangeAt(0).cloneRange(); rr.selectNodeContents(cur); rr.setStart(sel.anchorNode, sel.anchorOffset);
+        if (!rr.toString().length && /\n$/.test(cur.textContent)) {           // línea en blanco al final + Enter = salir del bloque de código
+          cur.textContent = cur.textContent.replace(/\n+$/, ''); const p = document.createElement('div'); p.dataset.id = _uid(); p.dataset.t = 'p'; p.className = 'sp-blk sp-blk--p'; p.innerHTML = '<br>'; cur.after(p);
+          const r2 = document.createRange(); r2.setStart(p, 0); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2); _docSync(); return;
+        }
+        document.execCommand('insertText', false, '\n'); return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey && /^h[123]$/.test(t)) setTimeout(() => { const c2 = _curBlock(); if (c2 && c2 !== cur && /^h/.test(c2.dataset.t)) { _setT(c2, 'p'); _docSync(); } }, 0);
+      if (e.key === 'Enter' && !e.shiftKey && t === 'todox') setTimeout(() => { const c2 = _curBlock(); if (c2 && c2 !== cur && c2.dataset.t === 'todox') { _setT(c2, 'todo'); _docSync(); } }, 0);
+      if (e.key === 'Backspace' && t !== 'p' && t !== 'hr') { const sel = getSelection(); if (sel && sel.isCollapsed) { const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(cur); r.setEnd(sel.anchorNode, sel.anchorOffset); if (!r.toString().length) { e.preventDefault(); _setT(cur, 'p'); if (!cur.innerHTML.trim()) cur.innerHTML = '<br>'; _docSync(); } } }
     });
     _colStart(v, 'sp-doc-st', _docApply); _colPoll();
   }
   function _curBlock() { const sel = getSelection(); const n = sel && sel.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); return el && el.closest ? el.closest('#sp-doc > .sp-blk') : null; }
   function docCmd(c) {
     const ed = $q('sp-doc'); if (!ed) return; ed.focus();
-    if (c.startsWith('t:')) { const cur = _curBlock(); if (!cur) return; const t = c.slice(2); cur.dataset.t = (cur.dataset.t === t && t !== 'p') ? 'p' : t; cur.className = 'sp-blk sp-blk--' + cur.dataset.t; }
+    if (c.startsWith('t:')) { const cur = _curBlock(); if (!cur) return; const t = c.slice(2); if (t === 'hr') _applyType('hr'); else _applyType(t); }
     else if (c === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
+    else if (c === 'icode') { const s = String(getSelection()); document.execCommand('insertHTML', false, `<code>${_ESC(s || 'código')}</code>&#8203;`); }
+    else if (c.startsWith('fc:')) document.execCommand('foreColor', false, c.slice(3));
+    else if (c.startsWith('bg:')) document.execCommand('hiliteColor', false, c.slice(3));
+    else if (c.startsWith('bdg:')) { const s = String(getSelection()); document.execCommand('insertHTML', false, `<span class="sp-bdg sp-bdg--${c.slice(4)}">${_ESC(s || 'Insignia')}</span>&#8203;`); }
+    else if (c.startsWith('men:')) document.execCommand('insertHTML', false, `<span class="sp-men">@${_ESC(c.slice(4))}</span>&nbsp;`);
     else document.execCommand(c, false, null);
-    _docSync();
+    _docSync(); _bubUpdate();
+  }
+  // selector de colores (texto, resaltado e insignias)
+  function docColor(kind, anchor) {
+    const sw = kind === 'fc' ? _TXT.map(([c, n]) => `<button type="button" class="sp-sw" title="${n}" style="background:${c}" onmousedown="event.preventDefault();SpacesModule.docColorSet('fc:${c}')"></button>`).join('')
+      : kind === 'bg' ? _HLT.map(([c, n]) => `<button type="button" class="sp-sw" title="${n}" style="background:${c};box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)" onmousedown="event.preventDefault();SpacesModule.docColorSet('bg:${c}')"></button>`).join('') + `<button type="button" class="sp-sw sp-sw--x" title="Quitar resaltado" onmousedown="event.preventDefault();SpacesModule.docColorSet('bg:transparent')">✕</button>`
+      : _BDG.map(([k, n]) => `<button type="button" class="sp-sw sp-sw--b" title="Insignia ${n}" onmousedown="event.preventDefault();SpacesModule.docColorSet('bdg:${k}')"><span class="sp-bdg sp-bdg--${k}">Ab</span></button>`).join('') + _BDG.map(([k, n]) => `<button type="button" class="sp-sw sp-sw--b" title="Insignia ${n} fuerte" onmousedown="event.preventDefault();SpacesModule.docColorSet('bdg:${k} sp-bdg--s')"><span class="sp-bdg sp-bdg--${k} sp-bdg--s">Ab</span></button>`).join('');
+    _openPop(anchor, `<div class="sp-sws">${sw}</div>`, 'sp-pop--w');
+  }
+  function docColorSet(c) { _closePop(); docCmd(c); }
+  async function docTitle(val) {
+    const v = _curView(); if (!v || v.virtual) return; const nm = String(val || '').trim() || 'Documento';
+    try { const r = await apiFetch(`${API}/mgmt/space-views/${v.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nm }) }); if (r.ok) { v.nombre = nm; const t = document.querySelector('.sp-tab--v.on'); if (t) t.title = nm; } } catch (_) { showBanner('No se pudo guardar el título', 'error'); }
   }
 
   // ── Pizarra (elementos que se arrastran) ──
@@ -998,5 +1133,5 @@ const SpacesModule = (() => {
   return { showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
-    toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask };
+    toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
 })();

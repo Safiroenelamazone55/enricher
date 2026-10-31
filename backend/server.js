@@ -1813,7 +1813,7 @@ app.post('/api/mgmt/space-views/:id/ops', requireAuth, async (req, res) => {
     const { rows: [v] } = await cl.query(`SELECT id, tipo, config FROM space_views WHERE id=$1 AND user_id=$2 FOR UPDATE`, [id, req.workspaceOwnerId]);
     if (!v || !['documento', 'pizarra'].includes(v.tipo)) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Vista no encontrada' }); }
     const cfg = _svNormCfg(v.tipo, v.config), key = v.tipo === 'documento' ? 'blocks' : 'items', list = cfg[key];
-    const clean = d => { const o = {}; if (v.tipo === 'documento') { o.t = ['p', 'h1', 'h2', 'ul', 'ol'].includes(d.t) ? d.t : 'p'; o.html = String(d.html == null ? '' : d.html).slice(0, 60000); } else { o.t = d.t === 'texto' ? 'texto' : 'nota'; o.x = Math.max(0, Math.min(4000, +d.x || 0)); o.y = Math.max(0, Math.min(3000, +d.y || 0)); o.color = String(d.color || '').slice(0, 9); o.text = String(d.text == null ? '' : d.text).slice(0, 4000); } return o; };
+    const clean = d => { const o = {}; if (v.tipo === 'documento') { o.t = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'todox', 'quote', 'code', 'hr', 'call-info', 'call-ok', 'call-warn', 'call-err', 'call-vio'].includes(d.t) ? d.t : 'p'; o.html = String(d.html == null ? '' : d.html).slice(0, 60000); } else { o.t = d.t === 'texto' ? 'texto' : 'nota'; o.x = Math.max(0, Math.min(4000, +d.x || 0)); o.y = Math.max(0, Math.min(3000, +d.y || 0)); o.color = String(d.color || '').slice(0, 9); o.text = String(d.text == null ? '' : d.text).slice(0, 4000); } return o; };
     const del = new Set((Array.isArray(b.del) ? b.del : []).map(String));
     let cur = list.filter(x => !del.has(String(x.id)));
     for (const op of (Array.isArray(b.ops) ? b.ops : [])) {
