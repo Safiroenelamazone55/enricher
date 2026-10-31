@@ -19512,3 +19512,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .d3-actcard { flex: 0 0 430px !important; max-width: 430px; } .d3-hero .hm-card--ag { flex: 1; min-width: 0; align-self: stretch; overflow-y: auto; max-height: 200px; }
 .hm-tabs { overflow: hidden; gap: 0; padding: 0 8px; } .hm-tab { padding: 8px 7px; font-size: .75rem; }
 #dash2-prio { display: none !important; }   /* repetía las vencidas de «Mis tareas» */
+
+.hm-tabs { overflow: visible; justify-content: space-between; padding: 0 10px; } .hm-tab { padding: 8px 4px; font-size: .73rem; gap: 3px; flex: none; } .hm-tab i { font-size: .62rem; padding: 0 5px; line-height: 1.5; }

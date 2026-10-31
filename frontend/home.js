@@ -61,7 +61,7 @@ const HomeModule = (() => {
     else if (_tab === 'nuevos') list = d.nuevos.map(x => item(x, '')).join('');
     const msgRows = `<div class="hm-msgs">${[['Slack', _msgs.slack, 'mgmt-chat', 'Chat con los clientes'], ['WhatsApp', _msgs.wa, 'mgmt-wa', 'Chats sin leer'], ['Respuestas de prospectos', _msgs.mail, 'outreach-inbox', 'Correo de Outreach']].filter(r => r[0] !== 'Respuestas de prospectos' || perm('outreach')).map(r => `<button class="hm-msg${r[1] ? ' hm-msg--on' : ''}" onclick="HomeModule.openMsg('${r[2]}')"><b>${r[1]}</b><span>${r[0]}<em>${r[3]}</em></span></button>`).join('')}</div>`;
     const body = _tab === 'mensajes' ? msgRows : (list || empty({ respuestas: 'No tienes respuestas pendientes', asignados: 'No tienes comentarios asignados', nuevos: 'No hay comentarios nuevos', todo: 'Estás al día ✨' }[_tab])) + (_tab === 'todo' && nMsg ? msgRows : '');
-    card('dash2-paratii', 'Para ti' + (total ? `<span class="hm-n">${total}</span>` : ''), `<div class="hm-tabs">${tabs.map(([k, l, n]) => `<button class="hm-tab${_tab === k ? ' on' : ''}" onclick="HomeModule.tab('${k}')">${l}${n ? `<i>${n}</i>` : ''}</button>`).join('')}</div><div class="hm-list">${body}</div>`,
+    card('dash2-paratii', 'Para ti' + (total ? `<span class="hm-n">${total}</span>` : ''), `<div class="hm-tabs">${tabs.map(([k, l, n]) => `<button class="hm-tab${_tab === k ? ' on' : ''}" onclick="HomeModule.tab('${k}')">${l}${n ? `<i>${n > 99 ? '99+' : n}</i>` : ''}</button>`).join('')}</div><div class="hm-list">${body}</div>`,
       total ? '<button class="hm-lnk" onclick="HomeModule.seenAll()">Marcar todo como visto</button>' : '');
   }
   function tab(k) { _tab = k; paintParaTi(); }
