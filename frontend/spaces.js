@@ -93,9 +93,9 @@ const SpacesModule = (() => {
   }
   function spaceMenu(ev, sid) {
     const others = _projects.filter(p => (p.space_id || 0) !== (sid || 0) && (p.estado || 'activo') !== 'cancelado');
-    _openPop(ev.currentTarget, `<div class="sp-pop__h">Agregar lista a este espacio</div><button class="sp-pop__i" onclick="SpacesModule.newProject()">＋ Crear proyecto nuevo</button>${others.length ? '<div class="sp-pop__s">Mover un proyecto existente aquí</div><div class="sp-pop__l">' + others.map(p => `<button class="sp-pop__i" onclick="SpacesModule.moveProj(${p.id},${sid || 0})">${esc(p.nombre)}</button>`).join('') + '</div>' : ''}`);
+    _openPop(ev.currentTarget, `<div class="sp-pop__h">Agregar lista a este espacio</div><button class="sp-pop__i" onclick="SpacesModule.newProject(${sid || 0})">＋ Crear proyecto nuevo en este espacio</button>${others.length ? '<div class="sp-pop__s">Mover un proyecto existente aquí</div><div class="sp-pop__l">' + others.map(p => `<button class="sp-pop__i" onclick="SpacesModule.moveProj(${p.id},${sid || 0})">${esc(p.nombre)}</button>`).join('') + '</div>' : ''}`);
   }
-  function newProject() { _closePop(); try { document.querySelector('[data-tab=mgmt-projects]')?.click(); setTimeout(() => ProjectsModule.openDrawer && ProjectsModule.openDrawer(), 300); } catch (_) {} }
+  function newProject(sid) { _closePop(); try { document.querySelector('[data-tab=mgmt-projects]')?.click(); setTimeout(() => ProjectsModule.openDrawer && ProjectsModule.openDrawer(null, null, sid || null), 300); } catch (_) {} }
   async function moveProj(pid, sid) {
     _closePop();
     try { const r = await apiFetch(`${API}/mgmt/projects/${pid}/space`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: sid || null }) }); if (!r.ok) throw new Error('Error'); const p = _projects.find(x => x.id === pid); if (p) p.space_id = sid || null; _openSp.add('p' + sid); }

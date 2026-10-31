@@ -17880,6 +17880,7 @@ const ProjectsModule = (() => {
   let _projects     = [];
   let _editId       = null;
   let _filterEstado    = 'activo';   // por defecto muestra solo Activos (pedido de Jenny)
+  let _spaces = [], _filterSpace = '';   // Espacios (macroproyectos): cada proyecto pertenece a uno («Principal» = ninguno)
   let _filterMember    = '';
   let _filterMemberSet = false;
   let _view         = 'timeline';
@@ -17986,7 +17987,7 @@ const ProjectsModule = (() => {
       if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) throw new Error(await res.text());
       _projects = await res.json();
-      await Promise.all([_populateMemberDropdown(), _ensureAllTasksLoaded()]);
+      await Promise.all([_populateMemberDropdown(), _ensureAllTasksLoaded(), _loadSpaces()]);
       render();
     } catch (e) {
       console.error('[projects] load error:', e);
@@ -17997,6 +17998,18 @@ const ProjectsModule = (() => {
   }
 
   function filter() { render(); }
+
+  async function _loadSpaces() {
+    try { const r = await apiFetch(`${API}/mgmt/spaces`); _spaces = r.ok ? await r.json() : []; } catch (_) { _spaces = []; }
+    const sel = $('proj-space-filter');
+    if (sel) {
+      sel.style.display = _spaces.length ? '' : 'none';
+      sel.innerHTML = '<option value="">Todos los espacios</option><option value="0">Principal</option>' + _spaces.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
+      sel.value = _filterSpace;
+    }
+  }
+  const _spaceName = p => p.space_id ? ((_spaces.find(s => s.id === p.space_id) || {}).nombre || '') : (_spaces.length ? 'Principal' : '');
+  function setSpaceFilter(v) { _filterSpace = v; $('proj-space-filter')?.classList.toggle('filter-select--active', v !== ''); render(); }
 
   function setFilter(estado) {
     _filterEstado = estado;
@@ -18050,6 +18063,7 @@ const ProjectsModule = (() => {
     const q = ($('projects-search')?.value || '').toLowerCase();
     let list = _projects;
     if (_filterEstado && !skipEstado) list = list.filter(p => p.estado === _filterEstado);
+    if (_filterSpace !== '') list = list.filter(p => String(p.space_id || 0) === _filterSpace);
     if (_filterMember === '__none__') {
       list = list.filter(p => !p.responsable && !p.responsable_id && (!p.responsables || !p.responsables.length));
     } else if (_filterMember) {
@@ -18207,7 +18221,7 @@ const ProjectsModule = (() => {
         <div class="pjcard__head">
           <div class="pjcard__title-block pjcard__title-block--link" onclick="ProjectsModule.openInNewTab(${p.id})" title="Abrir en una pestaña nueva: info + Kanban del proyecto">
             <div class="pjcard__name">${esc(p.nombre)}</div>
-            <div class="pjcard__client">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : ''}</div>
+            <div class="pjcard__client">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : ''}${_spaceName(p) ? ` <span class="pj-space" title="Espacio">▪ ${esc(_spaceName(p))}</span>` : ''}</div>
           </div>
           <div class="pjcard__actions">
             <button class="pjcard__act" title="Editar" onclick="ProjectsModule.openDrawer(${p.id})">
@@ -20215,7 +20229,14 @@ const ProjectsModule = (() => {
     }
   }
 
-  async function openDrawer(id = null, presetClientId = null) {
+  async function _fillSpaceSelect(selected) {
+    const sel = $('projects-space-select'); if (!sel) return;
+    try { const r = await apiFetch(`${API}/mgmt/spaces`); _spaces = r.ok ? await r.json() : _spaces; } catch (_) {}
+    sel.innerHTML = '<option value="">Principal</option>' + _spaces.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
+    sel.value = selected ? String(selected) : '';
+    sel.closest('.form-row').style.display = _spaces.length ? '' : 'none';   // sin espacios extra no hace falta preguntar
+  }
+  async function openDrawer(id = null, presetClientId = null, presetSpaceId = null) {
     _editId = id ?? null;
     const title   = $('projects-drawer-title');
     const saveBtn = $('projects-save-btn');
@@ -20261,6 +20282,7 @@ const ProjectsModule = (() => {
       if ($('proj-comision')) $('proj-comision').value = p.comision ?? '';
       await _renderRespCobro(p);
       await _fetchAndPopulateClients(p.client_id);
+      await _fillSpaceSelect(p.space_id);
     } else {
       title.textContent   = 'Nuevo proyecto';
       saveBtn.textContent = 'Crear proyecto';
@@ -20283,6 +20305,7 @@ const ProjectsModule = (() => {
       if ($('proj-comision')) $('proj-comision').value = '';
       await _renderRespCobro(null);
       await _fetchAndPopulateClients(presetClientId);
+      await _fillSpaceSelect(presetSpaceId);
     }
 
     $('projects-drawer').classList.add('open');
@@ -20515,6 +20538,9 @@ const ProjectsModule = (() => {
       const saved = await res.json().catch(() => null);
       // Config de cobro (endpoint dedicado — no viaja en el PUT full-row)
       const pid = _editId || (saved && saved.id);
+      if (pid && $('projects-space-select')) {
+        try { await apiFetch(`${API}/mgmt/projects/${pid}/space`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ space_id: parseInt($('projects-space-select').value, 10) || null }) }); } catch (e) { console.error('[projects] espacio:', e); }
+      }
       if (pid) {
         const cobroSem = $('proj-cobro-semanal')?.checked || false;
         const precioSem = $('proj-precio-semanal')?.value;
@@ -20618,7 +20644,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, kDragStart, kDragEnd, kDrop, calNav, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, useExistingClient, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+  return { setSpaceFilter, load, filter, setFilter, setMemberFilter, render, kDragStart, kDragEnd, kDrop, calNav, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, useExistingClient, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,

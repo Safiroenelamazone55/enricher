@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261030t"/>
+  <link rel="stylesheet" href="style.css?v=20261030u"/>
   <link rel="stylesheet" href="mobile.css?v=12"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -1011,6 +1011,9 @@
             <button class="filter-pill" data-estado="pausado" onclick="ProjectsModule.setFilter('pausado')">Pausados</button>
             <button class="filter-pill" data-estado="cancelado" onclick="ProjectsModule.setFilter('cancelado')">Cancelados</button>
           </div>
+          <select id="proj-space-filter" class="filter-select" onchange="ProjectsModule.setSpaceFilter(this.value)" style="display:none">
+            <option value="">Todos los espacios</option>
+          </select>
           <select id="proj-member-filter" class="filter-select" onchange="ProjectsModule.setMemberFilter(this.value)">
             <option value="">Todos los miembros</option>
             <option value="__none__">Sin asignar</option>
@@ -2815,6 +2818,10 @@
         <option value="">Seleccionar cliente…</option>
       </select>
     </div>
+    <div class="form-row">
+      <label class="form-label">Espacio</label>
+      <select class="form-input form-select" id="projects-space-select"><option value="">Principal</option></select>
+    </div>
 
     <!-- Tipo de contrato -->
     <div class="form-row">
@@ -3539,7 +3546,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026103032"></script>
+<script src="app.js?v=2026103033"></script>
 <script src="worldclock.js?v=3"></script>
 <script src="agentes.js?v=3"></script>
 <script src="spaces.js?v=2"></script>

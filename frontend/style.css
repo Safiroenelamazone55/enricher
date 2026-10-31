@@ -19223,3 +19223,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 #pane-mgmt-dashboard { scrollbar-gutter: stable; }
 #pane-mgmt-clients { padding-left: 28px; padding-right: 28px; box-sizing: border-box; }
 #pane-mgmt-clients .pane-header { padding-left: 0; padding-right: 0; }
+.pj-space { display: inline-block; margin-left: 6px; padding: 0 6px; background: #EEF0FB; color: #4A55B8; font-size: .68rem; font-weight: 700; }
