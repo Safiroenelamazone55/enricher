@@ -749,7 +749,7 @@ const SpacesModule = (() => {
     if (t.estado === 'en_progreso') return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.4"/><circle cx="12" cy="12" r="4.2" fill="${e[2]}"/></svg>`;
     return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.2" ${t.estado === 'pendiente' || !t.estado ? 'stroke-dasharray="3 3"' : ''}/></svg>`;
   }
-  function _row(t, depth, kids, cols) {
+  function _row(t, depth, kids, cols, trail, last) {
     const e = _EST[t.estado || 'pendiente'] || _EST.pendiente, d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
     const cell = {
       prioridad: `<div class="sp-c sp-c--m"><button class="sp-cb" onclick="SpacesModule.prio(event,${t.id})">${TasksModule.prioBadge(t.prioridad || 'media')}</button></div>`,
@@ -760,7 +760,7 @@ const SpacesModule = (() => {
       proyecto: `<div class="sp-c sp-c--l sp-dim">${esc(t.project_nombre || '')}</div>`,
     };
     return `<div class="sp-r${depth ? ' sp-r--sub' : ''}" data-id="${t.id}" style="--d:${depth}" oncontextmenu="SpacesModule.ctx(event,${t.id})">
-      <div class="sp-c sp-c--n"><span class="sp-ind" style="width:${depth * 22}px"></span>${kids ? `<button class="sp-car" onclick="SpacesModule.toggleT(${t.id})">${open ? '▾' : '▸'}</button>` : '<span class="sp-car"></span>'}<button class="sp-ring" title="Cambiar estado" onclick="SpacesModule.estMenu(event,${t.id})">${_statusRing(t)}</button>
+      <div class="sp-c sp-c--n">${Array.from({ length: depth }, (_, i) => `<span class="sp-gd${i === depth - 1 ? (last ? ' sp-gd--end' : ' sp-gd--mid') : (trail && trail[i + 1] ? ' sp-gd--line' : '')}"></span>`).join('')}${kids ? `<button class="sp-car" onclick="SpacesModule.toggleT(${t.id})">${open ? '▾' : '▸'}</button>` : (depth ? '' : '<span class="sp-car"></span>')}<button class="sp-ring" title="Cambiar estado" onclick="SpacesModule.estMenu(event,${t.id})">${_statusRing(t)}</button>
         <span class="sp-tt" onclick="openTaskAnywhere(${t.id})">${esc(t.titulo)}</span>${kids ? `<span class="sp-sb" title="${kids} subtarea(s)">⑂ ${kids}</span>` : ''}${depth < 2 ? `<button class="sp-addsub" title="Agregar subtarea" onclick="SpacesModule.addSub(event,${t.id})">＋ subtarea</button>` : ''}</div>
       <div class="sp-c sp-c--e"><button class="sp-cb" onclick="SpacesModule.estMenu(event,${t.id})"><span class="sp-tag" style="--c:${e[2]}">${esc(e[1])}</span></button></div>
       <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button></div>
@@ -768,10 +768,12 @@ const SpacesModule = (() => {
       ${cols.map(c => cell[c]).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
   function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas" onclick="SpacesModule.colsMenu(event)">＋</button></div></div>`; }
-  function _tree(t, byParent, depth, cols, out) {
+  // trail[d] = si el antepasado de nivel d tiene hermanos después (para dibujar las líneas guía en «L»); last = si esta fila es la última de su grupo
+  function _tree(t, byParent, depth, cols, out, trail, last) {
+    trail = trail || [];
     const kids = (byParent.get(t.id) || []).filter(c => _showClosed || _isOpen(c));
-    out.push(_row(t, depth, kids.length, cols));
-    if (kids.length && _expandSubs && !_collapsedT.has(t.id)) kids.forEach(k => _tree(k, byParent, depth + 1, cols, out));
+    out.push(_row(t, depth, kids.length, cols, trail, last));
+    if (kids.length && _expandSubs && !_collapsedT.has(t.id)) kids.forEach((k, i) => _tree(k, byParent, depth + 1, cols, out, trail.concat([!last]), i === kids.length - 1));
   }
   function _paintList(b, all) {
     const cols = _cols.filter(c => _COLS[c] && !(c === 'proyecto' && _selProj));

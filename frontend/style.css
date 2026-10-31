@@ -19410,3 +19410,16 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sp-r { min-height: 36px; font-size: 13px; color: var(--text); } .sp-r--h { min-height: 28px; } .sp-r--h .sp-c { font-size: 12px; } .sp-tt { font-size: 13px; }
 .sp-g__h { padding: 10px 4px 6px !important; gap: 8px; }
 .sp-c--e { width: 150px; }
+
+/* Subtareas: líneas guía en «L» que las unen a su tarea, y fondo suave para distinguirlas */
+.sp-gd { position: relative; flex: none; width: 28px; align-self: stretch; }
+.sp-gd--line::before, .sp-gd--mid::before, .sp-gd--end::before { content: ''; position: absolute; left: 27px; top: 0; bottom: 0; border-left: 1.5px solid #CFCAC3; }
+.sp-gd--end::before { bottom: 50%; border-bottom-left-radius: 6px; }
+.sp-gd--mid::after, .sp-gd--end::after { content: ''; position: absolute; left: 27px; top: 50%; width: 8px; border-top: 1.5px solid #CFCAC3; }
+.sp-r--sub { background: #FBFAF8; } .sp-r--sub:hover { background: #F5F3EF !important; } .sp-r--sub .sp-tt { font-size: 12.5px; }
+.sp-r .sp-c--n { align-self: stretch; }
+
+.sp-gd { width: 38px; }
+.sp-gd--line::before, .sp-gd--mid::before, .sp-gd--end::before { border-left: 2px solid #B9B3AA; left: 26px; }
+.sp-gd--mid::after, .sp-gd--end::after { border-top: 2px solid #B9B3AA; left: 26px; width: 10px; }
+.sp-gd--end::before { border-bottom-left-radius: 7px; }
