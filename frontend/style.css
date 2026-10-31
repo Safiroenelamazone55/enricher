@@ -9919,7 +9919,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-section-details[open] .d3-chevron { transform: rotate(180deg); }
 
 /* ── Mi trabajo (bandeja personal cross-proyecto) ─────────── */
-.mw-body { max-width: 760px; }
+.mw-body { max-width: none; }
 .mw-card { padding-bottom: 6px; }
 
 /* ── Status button (Linear-style) ───────────────────────── */
