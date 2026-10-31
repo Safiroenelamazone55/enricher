@@ -1777,6 +1777,63 @@ app.delete('/api/mgmt/space-views/:id', requireAuth, async (req, res) => {
   try { await pool.query(`DELETE FROM space_views WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId]); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ── Edición simultánea de Documento y Pizarra ──
+// El contenido se guarda por BLOQUES (documento) o por ELEMENTOS (pizarra), cada uno con su id: dos personas que editan partes distintas
+// no se pisan nunca; si tocan el mismo bloque, gana el último guardado. Cada cambio sube el número de revisión (rev); los demás lo ven en ~2 s.
+const _svPresence = new Map();   // view_id → Map(nombre → { ts, focus })
+const _svNormCfg = (tipo, cfg) => {
+  cfg = cfg && typeof cfg === 'object' ? cfg : {};
+  if (tipo === 'documento') {
+    let blocks = Array.isArray(cfg.blocks) ? cfg.blocks : null;
+    if (!blocks) blocks = [{ id: 'b0', t: 'p', html: typeof cfg.html === 'string' ? cfg.html : '' }];   // documentos guardados antes de los bloques
+    return { blocks, rev: parseInt(cfg.rev, 10) || 0 };
+  }
+  return { items: Array.isArray(cfg.items) ? cfg.items : [], rev: parseInt(cfg.rev, 10) || 0 };
+};
+const _svWho = req => String((req.query && req.query.name) || (req.body && req.body.name) || (req.user && req.user.name) || 'Alguien').slice(0, 40);
+const _svEditing = (vid, me) => { const m = _svPresence.get(vid); if (!m) return []; const now = Date.now(), out = []; for (const [n, p] of m) { if (now - p.ts > 7000) { m.delete(n); continue; } if (n !== me) out.push({ name: n, focus: p.focus || '' }); } return out; };
+app.get('/api/mgmt/space-views/:id/state', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10), { rows: [v] } = await pool.query(`SELECT id, tipo, config FROM space_views WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]);
+    if (!v) return res.status(404).json({ error: 'Vista no encontrada' });
+    const me = _svWho(req); if (!_svPresence.has(id)) _svPresence.set(id, new Map()); _svPresence.get(id).set(me, { ts: Date.now(), focus: String(req.query.focus || '').slice(0, 40) });
+    const cfg = _svNormCfg(v.tipo, v.config), editing = _svEditing(id, me);
+    if (req.query.rev !== undefined && parseInt(req.query.rev, 10) === cfg.rev) return res.json({ same: true, rev: cfg.rev, editing });
+    res.json({ rev: cfg.rev, config: cfg, editing });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/mgmt/space-views/:id/ops', requireAuth, async (req, res) => {
+  const cl = await pool.connect();
+  try {
+    const id = parseInt(req.params.id, 10), b = req.body || {};
+    await cl.query('BEGIN');
+    const { rows: [v] } = await cl.query(`SELECT id, tipo, config FROM space_views WHERE id=$1 AND user_id=$2 FOR UPDATE`, [id, req.workspaceOwnerId]);
+    if (!v || !['documento', 'pizarra'].includes(v.tipo)) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Vista no encontrada' }); }
+    const cfg = _svNormCfg(v.tipo, v.config), key = v.tipo === 'documento' ? 'blocks' : 'items', list = cfg[key];
+    const clean = d => { const o = {}; if (v.tipo === 'documento') { o.t = ['p', 'h1', 'h2', 'ul', 'ol'].includes(d.t) ? d.t : 'p'; o.html = String(d.html == null ? '' : d.html).slice(0, 60000); } else { o.t = d.t === 'texto' ? 'texto' : 'nota'; o.x = Math.max(0, Math.min(4000, +d.x || 0)); o.y = Math.max(0, Math.min(3000, +d.y || 0)); o.color = String(d.color || '').slice(0, 9); o.text = String(d.text == null ? '' : d.text).slice(0, 4000); } return o; };
+    const del = new Set((Array.isArray(b.del) ? b.del : []).map(String));
+    let cur = list.filter(x => !del.has(String(x.id)));
+    for (const op of (Array.isArray(b.ops) ? b.ops : [])) {
+      if (!op || !op.id || typeof op.data !== 'object') continue;
+      const i = cur.findIndex(x => String(x.id) === String(op.id)), n = { id: String(op.id).slice(0, 40), ...clean(op.data) };
+      if (i >= 0) cur[i] = n; else cur.push(n);
+    }
+    if (Array.isArray(b.order) && v.tipo === 'documento') {   // orden del cliente + bloques que otros añadieron mientras tanto (se colocan tras su vecino anterior)
+      const byId = new Map(cur.map(x => [String(x.id), x])), res2 = [], seen = new Set();
+      b.order.map(String).forEach(i => { if (byId.has(i) && !seen.has(i)) { res2.push(byId.get(i)); seen.add(i); } });
+      let prev = null;
+      for (const x of list) { const k = String(x.id); if (!seen.has(k) && byId.has(k)) { const at = prev === null ? 0 : res2.findIndex(y => String(y.id) === prev) + 1; res2.splice(at, 0, byId.get(k)); seen.add(k); } if (byId.has(k)) prev = k; }
+      cur = res2;
+    }
+    if (v.tipo === 'documento' && !cur.length) cur = [{ id: 'b' + Date.now().toString(36), t: 'p', html: '' }];
+    cfg[key] = cur; cfg.rev = (cfg.rev || 0) + 1;
+    if (JSON.stringify(cfg).length > 600000) { await cl.query('ROLLBACK'); return res.status(413).json({ error: 'El contenido es demasiado grande' }); }
+    await cl.query(`UPDATE space_views SET config=$3::jsonb WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId, JSON.stringify(cfg)]);
+    await cl.query('COMMIT');
+    res.json({ rev: cfg.rev, config: cfg });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); res.status(500).json({ error: err.message }); }
+  finally { cl.release(); }
+});
 app.patch('/api/mgmt/projects/:id/space', requireAuth, async (req, res) => {
   const sid = req.body?.space_id ? parseInt(req.body.space_id, 10) : null;
   try {

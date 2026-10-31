@@ -19284,3 +19284,13 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sp-wbi { position: absolute; width: 190px; min-height: 120px; box-shadow: 0 3px 10px rgba(0,0,0,.14); display: flex; flex-direction: column; } .sp-wbi--texto { background: #fff; box-shadow: 0 0 0 1px #E4E0D9; min-height: 56px; width: 240px; } .sp-wbi.is-drag { box-shadow: 0 10px 26px rgba(0,0,0,.25); z-index: 5; }
 .sp-wbi__h { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; cursor: grab; font-size: .66rem; font-weight: 700; color: #8F8B83; min-height: 20px; } .sp-wbi__h button { border: 0; background: none; cursor: pointer; opacity: 0; color: #5C5851; } .sp-wbi:hover .sp-wbi__h button { opacity: 1; }
 .sp-wbi__t { flex: 1; padding: 4px 10px 10px; outline: 0; font-size: .86rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+/* Edición simultánea: presencia y bloques del documento */
+.sp-pres { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; } .sp-pres em { font-style: normal; color: #8F8B83; }
+.sp-pr { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; background: color-mix(in srgb, var(--c) 14%, #fff); color: var(--c); font-weight: 700; } .sp-pr i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.sp-dtbar__st { margin-left: 10px; }
+.sp-doc .sp-blk { position: relative; min-height: 1.65em; padding: 1px 0; }
+.sp-doc .sp-blk--h1 { font-size: 1.7rem; font-weight: 800; margin: .5em 0 .2em; line-height: 1.25; } .sp-doc .sp-blk--h2 { font-size: 1.25rem; font-weight: 700; margin: .6em 0 .2em; }
+.sp-doc .sp-blk--ul { padding-left: 1.5em; } .sp-doc .sp-blk--ul::before { content: '•'; position: absolute; left: .4em; color: #8F8B83; }
+.sp-doc .sp-blk--ol { padding-left: 1.8em; } .sp-doc .sp-blk--ol::before { content: attr(data-n) '.'; position: absolute; left: 0; width: 1.4em; text-align: right; color: #8F8B83; }
+.sp-doc .sp-blk[data-ed] { box-shadow: -3px 0 0 var(--ec, #2F6BFF); background: color-mix(in srgb, var(--ec, #2F6BFF) 5%, transparent); } .sp-doc .sp-blk[data-ed]::after { content: attr(data-ed); position: absolute; right: 0; top: -1px; font-size: .64rem; font-weight: 700; color: #fff; background: var(--ec, #2F6BFF); padding: 0 6px; }
+.sp-wbi[data-ed] { outline: 2px solid var(--ec, #2F6BFF); } .sp-wbi[data-ed]::after { content: attr(data-ed); position: absolute; right: 0; top: -17px; font-size: .64rem; font-weight: 700; color: #fff; background: var(--ec, #2F6BFF); padding: 0 6px; }

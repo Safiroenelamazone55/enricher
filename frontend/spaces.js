@@ -240,6 +240,7 @@ const SpacesModule = (() => {
   }
   function _paintBody() {
     const b = $q('sp-body'); if (!b) return;
+    _colStop();
     if (_view === 'formulario') { _paintForm(b); return; }
     if (_view === 'documento') { _paintDoc(b); return; }
     if (_view === 'pizarra') { _paintWb(b); return; }
@@ -255,63 +256,171 @@ const SpacesModule = (() => {
   function setView(v) { const vs = _viewsOf(_sk()), m = vs.find(x => x.tipo === v); if (m) selView(m.id); }
 
 
-  // ── contenido guardado de las vistas Documento y Pizarra (se guarda solo, unos instantes después de escribir) ──
-  const _cfgT = {};
-  function _saveCfg(v, cfg, estado) {
-    v.config = cfg; clearTimeout(_cfgT[v.id]);
-    _cfgT[v.id] = setTimeout(async () => {
-      try { const r = await apiFetch(`${API}/mgmt/space-views/${v.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }); if (!r.ok) throw new Error('x'); const e = $q(estado); if (e) e.textContent = '✓ Guardado'; }
-      catch (_) { const e = $q(estado); if (e) e.textContent = 'No se pudo guardar'; }
-    }, 800);
-    const e = $q(estado); if (e) e.textContent = 'Guardando…';
-  }
+  // ═══ Edición SIMULTÁNEA de Documento y Pizarra ═══
+  // El contenido se guarda por bloques (documento) o elementos (pizarra), cada uno con su id. Lo que escribes se envía en ~0,6 s y los cambios de los demás
+  // llegan cada 2 s sin molestar lo que estás escribiendo: dos personas en partes distintas nunca se pisan; en el mismo bloque gana el último guardado.
+  const _col = { rev: 0, timer: null, view: null, pend: { set: new Map(), del: new Set(), order: null }, sendT: null, sending: false, focus: '', apply: null, statusId: '' };
+  const _myName = () => String(window._authUser?.memberNombre || window._authUser?.name || 'Alguien');
   const _clean = h => String(h || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '').replace(/javascript:/gi, '');
+  const _uid = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const _setSt = t => { const e = $q(_col.statusId); if (e) e.textContent = t; };
+  function _colStop() { if (_col.pend.set.size || _col.pend.del.size || _col.pend.order) _colFlush(); clearInterval(_col.timer); _col.timer = null; clearTimeout(_col.sendT); _col.view = null; _col.apply = null; }
+  function _colStart(v, statusId, apply) {
+    _colStop(); _col.view = v; _col.statusId = statusId; _col.apply = apply; _col.rev = (v.config && v.config.rev) || 0;
+    _col.timer = setInterval(_colPoll, 2000);
+  }
+  const _dirtyIds = () => new Set([..._col.pend.set.keys(), ..._col.pend.del, _col.focus].filter(Boolean));
+  async function _colPoll() {
+    const v = _col.view; if (!v || document.hidden || _col.sending) return;
+    if (!$q('sp-doc') && !$q('sp-wb')) { _colStop(); return; }   // saliste de la vista
+    try {
+      const r = await apiFetch(`${API}/mgmt/space-views/${v.id}/state?rev=${_col.rev}&name=${encodeURIComponent(_myName())}&focus=${encodeURIComponent(_col.focus || '')}`); if (!r.ok) return;
+      const j = await r.json(); _paintPresence(j.editing || []);
+      if (j.same) return;
+      _col.rev = j.rev; v.config = j.config; if (_col.apply) _col.apply(j.config);
+    } catch (_) {}
+  }
+  function _colQueue(setId, data, delId, order) {
+    const p = _col.pend; if (setId) { p.set.set(setId, data); p.del.delete(setId); } if (delId) { p.del.add(delId); p.set.delete(delId); } if (order) p.order = order;
+    _setSt('Guardando…'); clearTimeout(_col.sendT); _col.sendT = setTimeout(_colFlush, 600);
+  }
+  async function _colFlush() {
+    const v = _col.view, p = _col.pend; if (!v || _col.sending || (!p.set.size && !p.del.size && !p.order)) return;
+    _col.pend = { set: new Map(), del: new Set(), order: null }; _col.sending = true;
+    try {
+      const r = await apiFetch(`${API}/mgmt/space-views/${v.id}/ops`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops: [...p.set].map(([id, data]) => ({ id, data })), del: [...p.del], order: p.order, name: _myName() }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const j = await r.json(); _col.rev = j.rev; v.config = j.config; _col.sending = false;
+      if (_col.apply) _col.apply(j.config); _setSt(_col.pend.set.size || _col.pend.del.size ? 'Guardando…' : '✓ Guardado');
+    } catch (e) {
+      _col.sending = false; p.set.forEach((d, id) => { if (!_col.pend.set.has(id)) _col.pend.set.set(id, d); }); p.del.forEach(id => _col.pend.del.add(id)); if (p.order && !_col.pend.order) _col.pend.order = p.order;
+      _setSt('No se pudo guardar · reintentando…'); clearTimeout(_col.sendT); _col.sendT = setTimeout(_colFlush, 3000);
+    }
+  }
+  const _PCOL = ['#2F6BFF', '#E8920F', '#2E9E5B', '#D9534F', '#7C5CE0', '#0891B2'];
+  const _pcol = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) % _PCOL.length; return _PCOL[h]; };
+  function _paintPresence(ed) {
+    const el = $q('sp-pres'); if (el) el.innerHTML = ed.length ? ed.map(e => `<span class="sp-pr" style="--c:${_pcol(e.name)}"><i></i>${esc(e.name)}</span>`).join('') + '<em>también está aquí</em>' : '';
+    document.querySelectorAll('[data-ed]').forEach(x => { x.removeAttribute('data-ed'); x.style.removeProperty('--ec'); });
+    ed.forEach(e => { if (!e.focus) return; const t = document.querySelector(`[data-id="${CSS.escape(e.focus)}"]`); if (t) { t.setAttribute('data-ed', e.name); t.style.setProperty('--ec', _pcol(e.name)); } });
+  }
+  document.addEventListener('selectionchange', () => {
+    const sel = document.getSelection(); const n = sel && sel.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); const b = el && el.closest && el.closest('#sp-doc .sp-blk, #sp-wb .sp-wbi');
+    _col.focus = b ? b.dataset.id : '';
+  });
 
-  // ── Documento ──
+  // ── Documento (por bloques) ──
+  const _blkHtml = (b, n) => `<div class="sp-blk sp-blk--${b.t}" data-id="${esc(b.id)}" data-t="${b.t}"${b.t === 'ol' ? ` data-n="${n}"` : ''}>${_clean(b.html) || '<br>'}</div>`;
+  let _docLast = new Map(), _docOrder = '';
+  function _numberOl() { let n = 0; document.querySelectorAll('#sp-doc > .sp-blk').forEach(x => { if (x.dataset.t === 'ol') { n++; x.dataset.n = n; } else n = 0; }); }
+  function _docNorm() {
+    const ed = $q('sp-doc'); if (!ed) return;
+    const seen = new Set();
+    [...ed.childNodes].forEach(n => { if (n.nodeType === 3 || (n.nodeType === 1 && !/^(DIV|P|H1|H2|LI)$/.test(n.tagName))) { const d = document.createElement('div'); n.replaceWith(d); d.appendChild(n); } });
+    [...ed.children].forEach(c => {
+      if (c.tagName !== 'DIV') { const d = document.createElement('div'); d.innerHTML = c.innerHTML; c.replaceWith(d); c = d; }
+      c.classList.add('sp-blk'); const t = ['p', 'h1', 'h2', 'ul', 'ol'].includes(c.dataset.t) ? c.dataset.t : 'p'; c.dataset.t = t;
+      c.className = 'sp-blk sp-blk--' + t;
+      if (!c.dataset.id || seen.has(c.dataset.id)) c.dataset.id = _uid();
+      seen.add(c.dataset.id); if (!c.innerHTML.trim()) c.innerHTML = '<br>';
+    });
+    if (!ed.children.length) ed.innerHTML = _blkHtml({ id: _uid(), t: 'p', html: '' }, 1);
+    _numberOl();
+  }
+  function _docSync() {
+    const ed = $q('sp-doc'); if (!ed) return;
+    _docNorm();
+    const blocks = [...ed.children].map(c => ({ id: c.dataset.id, t: c.dataset.t, html: c.innerHTML === '<br>' ? '' : c.innerHTML })), ids = blocks.map(x => x.id), order = ids.join(',');
+    let any = false;
+    blocks.forEach(x => { const k = x.t + '|' + x.html; if (_docLast.get(x.id) !== k) { _colQueue(x.id, { t: x.t, html: x.html }); _docLast.set(x.id, k); any = true; } });
+    [..._docLast.keys()].forEach(id => { if (!ids.includes(id)) { _docLast.delete(id); _colQueue(null, null, id); any = true; } });
+    if (order !== _docOrder) { _docOrder = order; _colQueue(null, null, null, ids); any = true; }
+    if (!any) return;
+  }
+  function _docApply(cfg) {
+    const ed = $q('sp-doc'); if (!ed) return; const dirty = _dirtyIds(), want = cfg.blocks || [];
+    want.forEach((b, i) => {
+      let el = ed.querySelector(`[data-id="${CSS.escape(b.id)}"]`);
+      if (!el) { const tmp = document.createElement('div'); tmp.innerHTML = _blkHtml(b, 1); el = tmp.firstChild; ed.insertBefore(el, ed.children[i] || null); }
+      else if (!dirty.has(b.id)) {
+        if (el.dataset.t !== b.t) { el.dataset.t = b.t; el.className = 'sp-blk sp-blk--' + b.t; }
+        const cur = el.innerHTML === '<br>' ? '' : el.innerHTML, nh = _clean(b.html); if (cur !== nh) el.innerHTML = nh || '<br>';
+        if (ed.children[i] !== el && !dirty.has(b.id)) ed.insertBefore(el, ed.children[i] || null);
+      }
+      if (!dirty.has(b.id)) _docLast.set(b.id, b.t + '|' + (b.html || ''));
+    });
+    const ids = new Set(want.map(b => b.id)); [...ed.children].forEach(c => { if (!ids.has(c.dataset.id) && !dirty.has(c.dataset.id)) { c.remove(); _docLast.delete(c.dataset.id); } });
+    _numberOl(); _docOrder = [...ed.children].map(c => c.dataset.id).join(',');
+  }
   function _paintDoc(b) {
     const v = _curView(); if (v.virtual) { b.innerHTML = '<div class="sp-e sp-e--c">Añade un documento con «＋ Vista».</div>'; return; }
     const btn = (c, l, t) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
-    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('formatBlock:H1', 'H1', 'Título')}${btn('formatBlock:H2', 'H2', 'Subtítulo')}${btn('formatBlock:P', '¶', 'Párrafo')}<span class="sp-dtbar__s"></span>${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}<span class="sp-dtbar__s"></span>${btn('insertUnorderedList', '• Lista', 'Lista con viñetas')}${btn('insertOrderedList', '1. Lista', 'Lista numerada')}${btn('link', 'Enlace', 'Enlace')}${btn('removeFormat', 'Limpiar', 'Quitar formato')}<span class="sp-dtbar__st" id="sp-doc-st"></span></div>
-      <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true" data-ph="Escribe aquí… Los cambios se guardan solos.">${_clean(v.config && v.config.html)}</div></div>`;
-    const ed = $q('sp-doc'); ed.addEventListener('input', () => _saveCfg(v, { ...(v.config || {}), html: ed.innerHTML }, 'sp-doc-st'));
+    const cfg = v.config && Array.isArray(v.config.blocks) ? v.config : { blocks: [{ id: 'b0', t: 'p', html: (v.config && typeof v.config.html === 'string') ? v.config.html : '' }], rev: (v.config && v.config.rev) || 0 };
+    b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título')}${btn('t:h2', 'H2', 'Subtítulo')}${btn('t:p', '¶', 'Párrafo')}${btn('t:ul', '• Lista', 'Lista con viñetas')}${btn('t:ol', '1. Lista', 'Lista numerada')}<span class="sp-dtbar__s"></span>${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('link', 'Enlace', 'Enlace')}${btn('removeFormat', 'Limpiar', 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">✓ Guardado</span></div>
+      <div class="sp-doc" id="sp-doc" contenteditable="true" spellcheck="true">${cfg.blocks.map((x, i) => _blkHtml(x, i + 1)).join('')}</div></div>`;
+    v.config = cfg; _docLast = new Map(cfg.blocks.map(x => [x.id, x.t + '|' + (x.html || '')])); _docOrder = cfg.blocks.map(x => x.id).join(','); _numberOl();
+    const ed = $q('sp-doc');
+    ed.addEventListener('input', _docSync);
+    ed.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text/plain'); if (t == null) return; e.preventDefault(); document.execCommand('insertText', false, t); });
+    ed.addEventListener('keydown', e => {
+      const cur = _curBlock(); if (!cur) return;
+      if (e.key === 'Enter' && !e.shiftKey && ['ul', 'ol'].includes(cur.dataset.t) && !cur.textContent.trim()) { e.preventDefault(); cur.dataset.t = 'p'; cur.className = 'sp-blk sp-blk--p'; _docSync(); return; }
+      if (e.key === 'Enter' && !e.shiftKey && ['h1', 'h2'].includes(cur.dataset.t)) setTimeout(() => { const c2 = _curBlock(); if (c2 && c2 !== cur && /^h/.test(c2.dataset.t)) { c2.dataset.t = 'p'; c2.className = 'sp-blk sp-blk--p'; _docSync(); } }, 0);
+      if (e.key === 'Backspace' && cur.dataset.t !== 'p') { const sel = getSelection(); if (sel && sel.isCollapsed) { const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(cur); r.setEnd(sel.anchorNode, sel.anchorOffset); if (!r.toString().length) { e.preventDefault(); cur.dataset.t = 'p'; cur.className = 'sp-blk sp-blk--p'; _docSync(); } } }
+    });
+    _colStart(v, 'sp-doc-st', _docApply); _colPoll();
   }
+  function _curBlock() { const sel = getSelection(); const n = sel && sel.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); return el && el.closest ? el.closest('#sp-doc > .sp-blk') : null; }
   function docCmd(c) {
     const ed = $q('sp-doc'); if (!ed) return; ed.focus();
-    if (c === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
-    else if (c.startsWith('formatBlock:')) document.execCommand('formatBlock', false, c.split(':')[1]);
+    if (c.startsWith('t:')) { const cur = _curBlock(); if (!cur) return; const t = c.slice(2); cur.dataset.t = (cur.dataset.t === t && t !== 'p') ? 'p' : t; cur.className = 'sp-blk sp-blk--' + cur.dataset.t; }
+    else if (c === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
     else document.execCommand(c, false, null);
-    ed.dispatchEvent(new Event('input'));
+    _docSync();
   }
 
-  // ── Pizarra (notas y textos que se arrastran) ──
+  // ── Pizarra (elementos que se arrastran) ──
   const _WB_COL = ['#FFF3A8', '#BFE3FF', '#C8F0CF', '#FFD0D8', '#E0D0FF'];
+  const _wbItem = it => `<div class="sp-wbi sp-wbi--${it.t}" data-id="${esc(it.id)}" style="left:${it.x}px;top:${it.y}px;${it.t === 'nota' ? 'background:' + esc(it.color || '#FFF3A8') : ''}"><div class="sp-wbi__h"><span>${it.t === 'nota' ? '' : 'Texto'}</span><button type="button" title="Quitar" onclick="SpacesModule.wbDel('${esc(it.id)}')">✕</button></div><div class="sp-wbi__t" contenteditable="true" spellcheck="true">${esc(it.text || '')}</div></div>`;
+  let _wbItems = [];
+  const _wbData = it => ({ t: it.t, x: it.x, y: it.y, color: it.color || '', text: it.text || '' });
+  function _wbApply(cfg) {
+    const cv = $q('sp-wb'); if (!cv) return; const dirty = _dirtyIds(), want = cfg.items || [];
+    want.forEach(it => {
+      let el = cv.querySelector(`[data-id="${CSS.escape(it.id)}"]`);
+      if (!el) { cv.insertAdjacentHTML('beforeend', _wbItem(it)); }
+      else if (!dirty.has(it.id) && !el.classList.contains('is-drag')) {
+        el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; if (it.t === 'nota') el.style.background = it.color || '#FFF3A8';
+        const tx = el.querySelector('.sp-wbi__t'); if (tx && tx.innerText !== (it.text || '')) tx.textContent = it.text || '';
+      }
+    });
+    const ids = new Set(want.map(x => x.id)); [...cv.querySelectorAll('.sp-wbi')].forEach(el => { if (!ids.has(el.dataset.id) && !dirty.has(el.dataset.id)) el.remove(); });
+    _wbItems = want.map(x => ({ ...x }));
+  }
   function _paintWb(b) {
     const v = _curView(); if (v.virtual) { b.innerHTML = '<div class="sp-e sp-e--c">Añade una pizarra con «＋ Vista».</div>'; return; }
-    const cfg = v.config && Array.isArray(v.config.items) ? v.config : { items: [] };
-    b.innerHTML = `<div class="sp-wbw"><div class="sp-wbbar"><span>Añadir</span>${_WB_COL.map(c => `<button type="button" class="sp-wbn" style="background:${c}" title="Nota" onclick="SpacesModule.wbAdd('nota','${c}')"></button>`).join('')}<button type="button" class="sp-chip" onclick="SpacesModule.wbAdd('texto','')">＋ Texto</button><span class="sp-dtbar__st" id="sp-wb-st"></span></div>
+    const cfg = v.config && Array.isArray(v.config.items) ? v.config : { items: [], rev: (v.config && v.config.rev) || 0 }; v.config = cfg; _wbItems = cfg.items.map(x => ({ ...x }));
+    b.innerHTML = `<div class="sp-wbw"><div class="sp-wbbar"><span>Añadir</span>${_WB_COL.map(c => `<button type="button" class="sp-wbn" style="background:${c}" title="Nota" onclick="SpacesModule.wbAdd('nota','${c}')"></button>`).join('')}<button type="button" class="sp-chip" onclick="SpacesModule.wbAdd('texto','')">＋ Texto</button><span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-wb-st">✓ Guardado</span></div>
       <div class="sp-wbc" id="sp-wb">${cfg.items.map(_wbItem).join('')}</div></div>`;
-    const cv = $q('sp-wb'); v.config = cfg;
-    cv.addEventListener('input', e => { const el = e.target.closest('[data-id]'); if (!el) return; const it = cfg.items.find(x => x.id === el.dataset.id); if (it) { it.text = e.target.innerText; _saveCfg(v, cfg, 'sp-wb-st'); } });
+    const cv = $q('sp-wb');
+    cv.addEventListener('input', e => { const el = e.target.closest('[data-id]'); if (!el) return; const it = _wbItems.find(x => x.id === el.dataset.id); if (it) { it.text = e.target.innerText; _colQueue(it.id, _wbData(it)); } });
     cv.addEventListener('mousedown', e => {
       const h = e.target.closest('.sp-wbi__h'); if (!h || e.target.closest('button')) return;
-      const el = h.closest('[data-id]'), it = cfg.items.find(x => x.id === el.dataset.id); if (!it) return;
-      const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y; el.classList.add('is-drag');
+      const el = h.closest('[data-id]'), it = _wbItems.find(x => x.id === el.dataset.id); if (!it) return;
+      const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y; el.classList.add('is-drag'); _col.focus = it.id;
       const mv = ev => { it.x = Math.max(0, ox + ev.clientX - sx); it.y = Math.max(0, oy + ev.clientY - sy); el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; };
-      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); el.classList.remove('is-drag'); _saveCfg(v, cfg, 'sp-wb-st'); };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); el.classList.remove('is-drag'); _colQueue(it.id, _wbData(it)); };
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
     });
+    _colStart(v, 'sp-wb-st', _wbApply); _colPoll();
   }
-  const _wbItem = it => `<div class="sp-wbi sp-wbi--${it.t}" data-id="${esc(it.id)}" style="left:${it.x}px;top:${it.y}px;${it.t === 'nota' ? 'background:' + esc(it.color || '#FFF3A8') : ''}"><div class="sp-wbi__h"><span>${it.t === 'nota' ? '' : 'Texto'}</span><button type="button" title="Quitar" onclick="SpacesModule.wbDel('${esc(it.id)}')">✕</button></div><div class="sp-wbi__t" contenteditable="true" spellcheck="true">${esc(it.text || '')}</div></div>`;
   function wbAdd(t, color) {
-    const v = _curView(), cfg = v.config && Array.isArray(v.config.items) ? v.config : { items: [] }, cv = $q('sp-wb'); if (!cv) return;
-    const n = cfg.items.length, it = { id: 'i' + Date.now().toString(36) + n, t, x: 30 + (n % 6) * 40 + Math.floor(n / 6) * 20, y: 30 + (n % 6) * 30, color: color || '', text: '' };
-    cfg.items.push(it); v.config = cfg; cv.insertAdjacentHTML('beforeend', _wbItem(it)); _saveCfg(v, cfg, 'sp-wb-st');
+    const cv = $q('sp-wb'); if (!cv) return; const n = _wbItems.length;
+    const it = { id: _uid(), t, x: 30 + (n % 6) * 40 + Math.floor(n / 6) * 20, y: 30 + (n % 6) * 30, color: color || '', text: '' };
+    _wbItems.push(it); cv.insertAdjacentHTML('beforeend', _wbItem(it)); _colQueue(it.id, _wbData(it));
     const el = cv.querySelector(`[data-id="${it.id}"] .sp-wbi__t`); if (el) el.focus();
   }
-  function wbDel(id) {
-    const v = _curView(), cfg = v.config; if (!cfg || !Array.isArray(cfg.items)) return;
-    cfg.items = cfg.items.filter(x => x.id !== id); const el = $q('sp-wb') && $q('sp-wb').querySelector(`[data-id="${id}"]`); if (el) el.remove(); _saveCfg(v, cfg, 'sp-wb-st');
-  }
+  function wbDel(id) { _wbItems = _wbItems.filter(x => x.id !== id); const el = $q('sp-wb') && $q('sp-wb').querySelector(`[data-id="${CSS.escape(id)}"]`); if (el) el.remove(); _colQueue(null, null, id); }
 
   // ── calendario del espacio: tareas en su fecha límite ──
   function calNav(d) { const r = _calRef || new Date(); _calRef = d === 0 ? new Date() : new Date(r.getFullYear(), r.getMonth() + d, 1); _paintBody(); }
