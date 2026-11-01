@@ -1925,7 +1925,11 @@ async function _tplBuild(cl, uid, pid, o) {
   return { proyecto: proj, tareas: tasks, vistas: views, fuente: p.nombre };
 }
 app.get('/api/mgmt/project-templates', requireAuth, async (req, res) => {
-  try { const { rows } = await pool.query(`SELECT id, nombre, descripcion, created_by, created_at, updated_at, jsonb_array_length(COALESCE(data->'tareas','[]'::jsonb)) AS n_tareas, jsonb_array_length(COALESCE(data->'vistas','[]'::jsonb)) AS n_vistas, data->>'fuente' AS fuente FROM project_templates WHERE user_id=$1 ORDER BY nombre`, [req.workspaceOwnerId]); res.json(rows); }
+  try { const { rows } = await pool.query(`SELECT id, nombre, descripcion, created_by, created_at, updated_at, jsonb_array_length(COALESCE(data->'tareas','[]'::jsonb)) AS n_tareas, jsonb_array_length(COALESCE(data->'vistas','[]'::jsonb)) AS n_vistas, data->>'fuente' AS fuente, CASE WHEN jsonb_typeof(data->'proyecto'->'estados')='array' THEN jsonb_array_length(data->'proyecto'->'estados') ELSE 0 END AS n_estados, CASE WHEN jsonb_typeof(data->'proyecto'->'campos')='array' THEN jsonb_array_length(data->'proyecto'->'campos') ELSE 0 END AS n_campos, (SELECT COALESCE(array_agg(DISTINCT v->>'tipo'), '{}') FROM jsonb_array_elements(COALESCE(data->'vistas','[]'::jsonb)) v) AS tipos FROM project_templates WHERE user_id=$1 ORDER BY nombre`, [req.workspaceOwnerId]); res.json(rows); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.get('/api/mgmt/project-templates/:id', requireAuth, async (req, res) => {   // detalle completo (Centro de plantillas)
+  try { const { rows: [t] } = await pool.query(`SELECT id, nombre, descripcion, created_by, created_at, updated_at, data FROM project_templates WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId]); if (!t) return res.status(404).json({ error: 'Plantilla no encontrada' }); res.json(t); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 app.post('/api/mgmt/project-templates', requireAuth, async (req, res) => {
@@ -1961,9 +1965,12 @@ app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) 
   try {
     await cl.query('BEGIN');
     const { rows: [t] } = await cl.query(`SELECT data FROM project_templates WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), uid]);
-    const { rows: [p] } = await cl.query(`SELECT id, fecha_inicio FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]);
+    const { rows: [p] } = await cl.query(`SELECT id, to_char(fecha_inicio,'YYYY-MM-DD') AS fecha_inicio FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]);
     if (!t || !p) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Plantilla o proyecto no encontrado' }); }
-    const d = t.data || {}, pr = d.proyecto || {}, base = /^\d{4}-\d{2}-\d{2}$/.test(b.fecha_inicio || '') ? b.fecha_inicio : null;
+    const d = t.data || {}, pr = d.proyecto || {}, isoD = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null;
+    const base = b.fechas === 'ninguna' ? null : (isoD(b.fecha_inicio) || p.fecha_inicio || null);   // fechas relativas al inicio del proyecto (el de la plantilla se reprograma)
+    const conTareas = b.con_tareas !== false, conSub = b.con_subtareas !== false, applyCampos = b.con_campos !== false, tareas = conTareas ? (d.tareas || []).filter(x => conSub || !x.parent) : [];
+    if (b.existentes === 'archivar') await cl.query(`UPDATE tasks SET archivada=TRUE WHERE project_id=$1 AND user_id=$2`, [pid, uid]);
     const modo = ['plantilla', 'yo', 'ninguno'].includes(b.responsables) ? b.responsables : 'plantilla', yo = String(b.yo || req.user.name || '').slice(0, 80);
     if (b.aplicar_ajustes !== false) {
       const keys = ['descripcion', 'prioridad', 'tipo_proyecto', 'moneda', 'valor_total', 'tarifa_hora', 'horas_estimadas', 'horas_semanales', 'horario_semanal', 'comision', 'cobro_semanal', 'precio_semanal', 'semana_auto', 'plan_dias', 'plan_horas', 'plan_hora', 'recur_freq', 'color', 'icono'];
@@ -1972,26 +1979,26 @@ app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) 
       if (pr.task_defaults && Object.keys(pr.task_defaults).length) { vals.push(JSON.stringify(pr.task_defaults)); sets.push(`task_defaults=$${vals.length}::jsonb`); }
       if (sets.length) { vals.push(pid); await cl.query(`UPDATE projects SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${vals.length}`, vals); }
     }
-    if (b.aplicar_ajustes !== false && (Array.isArray(pr.estados) || (pr.campos && pr.campos.length))) {   // estados propios y columnas de la plantilla
+    if (applyCampos && (Array.isArray(pr.estados) || (pr.campos && pr.campos.length))) {   // estados propios y columnas de la plantilla
       const { rows: [cur] } = await cl.query(`SELECT campos FROM projects WHERE id=$1`, [pid]);
       const merged = [...(cur.campos || [])]; (pr.campos || []).forEach(f => { if (!merged.some(m => m.id === f.id)) merged.push(f); });
       await cl.query(`UPDATE projects SET estados=COALESCE($2::jsonb, estados), campos=$3::jsonb WHERE id=$1`, [pid, Array.isArray(pr.estados) ? JSON.stringify(pr.estados) : null, JSON.stringify(merged)]);
     }
     const map = new Map();
-    for (const x of (d.tareas || [])) {
+    for (const x of tareas) {
       const resp = modo === 'ninguno' ? [] : (modo === 'yo' ? (yo ? [yo] : []) : (x.responsables || []));
       const { rows: [n] } = await cl.query(`INSERT INTO tasks (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, fecha_inicio, deadline, notas, etiquetas, checklists, duracion_est_min, created_by_name)
         VALUES ($1,$2,$3,$4,'pendiente',$5,$6,$7, CASE WHEN $8::date IS NOT NULL AND $9::int IS NOT NULL THEN $8::date + $9::int END, CASE WHEN $8::date IS NOT NULL AND $10::int IS NOT NULL THEN $8::date + $10::int END,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING id`,
         [uid, pid, x.titulo, x.descripcion || '', x.prioridad || 'media', resp[0] || '', resp, base, x.off_ini, x.off_dl, x.notas || '', JSON.stringify(x.etiquetas || []), JSON.stringify(x.checklists || []), x.duracion_est_min || null, req.user.name || '']);
       map.set(x.ref, n.id);
-      if (x.campos && Object.keys(x.campos).length) await cl.query(`UPDATE tasks SET campos=$2::jsonb WHERE id=$1`, [n.id, JSON.stringify(x.campos)]);
-      if (b.aplicar_ajustes !== false && x.status_key && Array.isArray(pr.estados)) { const st = pr.estados.find(e => e.k === x.status_key); if (st) await cl.query(`UPDATE tasks SET status_key=$2, estado=$3 WHERE id=$1`, [n.id, st.k, st.t]); }
+      if (applyCampos && x.campos && Object.keys(x.campos).length) await cl.query(`UPDATE tasks SET campos=$2::jsonb WHERE id=$1`, [n.id, JSON.stringify(x.campos)]);
+      if (applyCampos && x.status_key && Array.isArray(pr.estados)) { const st = pr.estados.find(e => e.k === x.status_key); if (st) await cl.query(`UPDATE tasks SET status_key=$2, estado=$3 WHERE id=$1`, [n.id, st.k, st.t]); }
     }
-    for (const x of (d.tareas || [])) if (x.parent && map.has(x.parent)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(x.ref), map.get(x.parent)]);
+    for (const x of tareas) if (x.parent && map.has(x.parent)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(x.ref), map.get(x.parent)]);
     let nv = 0;
     if (b.con_vistas !== false) for (const v of (d.vistas || [])) { await cl.query(`INSERT INTO space_views (user_id, space_id, project_id, tipo, nombre, orden, config) VALUES ($1,0,$2,$3,$4,$5,$6::jsonb)`, [uid, pid, v.tipo, v.nombre || '', v.orden || 0, JSON.stringify(v.config || {})]); nv++; }
     await cl.query('COMMIT');
-    res.json({ ok: true, tareas: (d.tareas || []).length, vistas: nv });
+    res.json({ ok: true, tareas: tareas.length, vistas: nv });
   } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[tpl] aplicar', err.message); res.status(500).json({ error: 'No se pudo aplicar la plantilla' }); }
   finally { cl.release(); }
 });

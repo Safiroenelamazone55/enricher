@@ -301,7 +301,7 @@ const SpacesModule = (() => {
     const r = await _post(`/mgmt/project-templates/${_v('tr-id')}/refresh`, { project_id: _pmPid, opciones: _tplOptsRead() }, 'PUT'); if (!r.ok) { showBanner(await _err(r, 'No se pudo actualizar'), 'error'); return; }
     const j = await r.json(); _close(); showBanner(`✓ Plantilla «${j.nombre}» actualizada`, 'success');
   }
-  async function tplApplyOpen() {
+  async function _tplApplyOpenOld() {
     _closePop(); const ts = await _loadTpls(); if (!ts.length) { showBanner('Aún no hay plantillas: guarda una desde un proyecto («Plantillas › Guardar como plantilla»)', 'info'); return; }
     const p = _pjOf(_pmPid), hoy = _today();
     _modal({ t: 'Aplicar una plantilla', b: `<p class="sp-mp">Añade a «${esc(_plain(p.nombre))}» las tareas y vistas de una plantilla.</p><label class="sp-fl">Plantilla<select id="ta-id">${ts.map(t => `<option value="${t.id}">${esc(t.nombre)} · ${t.n_tareas} tareas</option>`).join('')}</select></label>
@@ -315,7 +315,7 @@ const SpacesModule = (() => {
   }
   const _myNm = () => String(window._authUser?.memberNombre || window._authUser?.name || '');
   // Crear un proyecto NUEVO desde una plantilla (desde «＋» del espacio o desde Proyectos)
-  async function tplCreateOpen(sid) {
+  async function _tplCreateOpenOld(sid) {
     _closePop(); const [ts, cr] = await Promise.all([_loadTpls(), apiFetch(`${API}/mgmt/clients`)]); const cls = cr.ok ? await cr.json() : [];
     try { const sr = await apiFetch(`${API}/mgmt/spaces`); if (sr.ok) _spaces = await sr.json(); } catch (_) {}
     if (!ts.length) { showBanner('Aún no hay plantillas: abre un proyecto y usa «Plantillas › Guardar como plantilla»', 'info'); return; }
@@ -336,7 +336,7 @@ const SpacesModule = (() => {
       const j = await ra.json(); _close(); showBanner(`✓ Proyecto creado desde la plantilla (${j.tareas} tareas)`, 'success'); await _reload(); pick(sid, np.id);
     } catch (e) { showBanner(e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Crear proyecto'; } }
   }
-  async function tplManage() {
+  async function _tplManageOld() {
     _closePop(); const ts = await _loadTpls();
     _modal({ t: 'Plantillas de proyecto', b: ts.length ? `<div class="sp-tl">${ts.map(t => `<div class="sp-tl__r"><div><b>${esc(t.nombre)}</b><em>${t.n_tareas} tareas · ${t.n_vistas} vistas${t.created_by ? ' · por ' + esc(t.created_by) : ''}</em></div><span><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplRename(${t.id})">Renombrar</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplDelete(${t.id})">Eliminar</button></span></div>`).join('')}</div>` : '<p class="sp-mp">Aún no hay plantillas. Abre un proyecto y usa «Plantillas › Guardar como plantilla».</p>' }, 560);
   }
@@ -1223,6 +1223,133 @@ const SpacesModule = (() => {
     box.innerHTML = fs.length ? fs.map(f => `<div class="fm-r"><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)}${f.v === false ? ' · oculto' : ''}</em></div>`).join('') : '<p class="pcf-p">Sin campos propios todavía.</p>';
   }
 
+  // ═══ Centro de plantillas (estilo ClickUp): galería con vista previa → detalle que se despliega → usar la plantilla ═══
+  const _tc = { list: [], full: {}, q: '', f: { estados: false, campos: false, documento: false, pizarra: false }, view: 'grid', cur: null, slide: 0, acc: new Set(), ctx: {}, o: null, ddq: '' };
+  const _VTN = { lista: 'Lista', tablero: 'Tablero', tabla: 'Tabla', calendario: 'Calendario', gantt: 'Cronograma', galeria: 'Galería', panel: 'Panel', formulario: 'Formulario', documento: 'Documento', pizarra: 'Pizarra' };
+  const _VTI = { lista: '<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>', tablero: '<rect x="3" y="3" width="6" height="14" rx="1.5"/><rect x="11" y="3" width="6" height="9" rx="1.5"/>', tabla: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>', calendario: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', gantt: '<line x1="4" y1="7" x2="14" y2="7"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="6" y1="17" x2="16" y2="17"/>', documento: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/>', pizarra: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>' };
+  const _tcSt = d => (d.proyecto && Array.isArray(d.proyecto.estados) && d.proyecto.estados.length) ? d.proyecto.estados : _defSt;
+  // vistas previas dibujadas con los datos reales de la plantilla (miniaturas)
+  function _pvList(d) { const es = _tcSt(d).slice(0, 3), ts = (d.tareas || []).filter(x => !x.parent); return `<div class="pv">${es.map((e, i) => `<div class="pv-g"><i class="pv-tag" style="background:${e.c}">${esc(e.n)}</i></div>${ts.slice(i * 2, i * 2 + 2).map(t => `<div class="pv-r"><u></u><span>${esc(t.titulo)}</span><i class="pv-chip" style="background:${e.c}"></i></div>`).join('')}`).join('')}</div>`; }
+  function _pvBoard(d) { const es = _tcSt(d).slice(0, 4), ts = (d.tareas || []).filter(x => !x.parent); return `<div class="pv pv--b">${es.map((e, i) => `<div class="pv-col"><i class="pv-tag" style="background:${e.c}">${esc(e.n)}</i>${ts.slice(i * 2, i * 2 + 2).map(t => `<div class="pv-card">${esc(t.titulo)}</div>`).join('')}</div>`).join('')}</div>`; }
+  function _pvDoc(d) { const v = (d.vistas || []).find(x => x.tipo === 'documento'), bl = v && v.config && v.config.blocks ? v.config.blocks.slice(0, 9) : []; return `<div class="pv pv--d">${bl.map(b => b.t === 'h1' ? `<div class="pv-h1">${esc(String(b.html).replace(/<[^>]*>/g, ''))}</div>` : b.t === 'h2' ? `<div class="pv-h2">${esc(String(b.html).replace(/<[^>]*>/g, ''))}</div>` : `<div class="pv-ln${/^call-/.test(b.t) ? ' pv-ln--c' : ''}"></div>`).join('')}</div>`; }
+  function _pvWb(d) { const v = (d.vistas || []).find(x => x.tipo === 'pizarra'), it = v && v.config && v.config.items ? v.config.items.slice(0, 6) : []; return `<div class="pv pv--w">${it.map((n, i) => `<div class="pv-note" style="background:${esc(n.color || '#FFF3A8')};left:${6 + (i % 3) * 32}%;top:${10 + Math.floor(i / 3) * 44}%">${esc(String(n.text || '').split('\n')[0])}</div>`).join('')}</div>`; }
+  const _slidesOf = d => { const t = (d.vistas || []).map(v => v.tipo); return [['Lista', _pvList], ...(t.includes('tablero') ? [['Tablero', _pvBoard]] : []), ...(t.includes('documento') ? [['Documento', _pvDoc]] : []), ...(t.includes('pizarra') ? [['Pizarra', _pvWb]] : [])]; };
+
+  async function tplCenter(ctx) {
+    _closePop(); document.getElementById('sp-modal')?.remove(); _tc.ctx = ctx || {}; _tc.view = 'grid'; _tc.cur = null; _tc.q = ''; _tc.acc = new Set();
+    const m = _tcMount(); m.querySelector('.tc-box').innerHTML = '<div class="sp-load" style="margin:auto">Cargando plantillas…</div>';
+    try {
+      _tc.list = await _loadTpls(); const fl = await Promise.all(_tc.list.map(t => apiFetch(`${API}/mgmt/project-templates/${t.id}`).then(r => r.ok ? r.json() : null).catch(() => null))); _tc.full = {}; fl.forEach(x => { if (x) _tc.full[x.id] = x; });
+      const [sr, cr] = await Promise.all([apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/clients`)]); if (sr.ok) _spaces = await sr.json(); _tc.clients = cr.ok ? await cr.json() : [];
+    } catch (e) { console.error('[tpl] centro', e); }
+    _tcPaint();
+  }
+  function _tcMount() { let m = $q('tc-modal'); if (!m) { m = document.createElement('div'); m.id = 'tc-modal'; m.className = 'tc-bd'; m.innerHTML = '<div class="tc-box"></div>'; m.onclick = e => { if (e.target === m) tcClose(); }; document.body.appendChild(m); } return m; }
+  function tcClose() { const m = $q('tc-modal'); if (m) m.remove(); }
+  const _XI = _SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 18);
+  function _tcPaint() {
+    const m = _tcMount(), box = m.querySelector('.tc-box'); box.className = 'tc-box' + (_tc.view === 'grid' ? '' : ' tc-box--col');
+    box.innerHTML = _tc.view === 'grid' ? _tcGrid() : _tc.view === 'detail' ? _tcDetail() : _tcUse();
+    const q = $q('tc-q'); if (q && document.activeElement !== q && _tc.focusQ) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  }
+  function _tcFiltered() {
+    const q = _nrm(_tc.q), f = _tc.f;
+    return _tc.list.filter(t => (!q || _nrm(t.nombre + ' ' + (t.descripcion || '')).includes(q)) && (!f.estados || t.n_estados > 0) && (!f.campos || t.n_campos > 0) && (!f.documento || (t.tipos || []).includes('documento')) && (!f.pizarra || (t.tipos || []).includes('pizarra')));
+  }
+  function _tcGrid() {
+    const ls = _tcFiltered(), ck = (k, l) => `<label class="tc-ck"><input type="checkbox" ${_tc.f[k] ? 'checked' : ''} onchange="SpacesModule.tcFilter('${k}',this.checked)"><span>${l}</span></label>`;
+    return `<aside class="tc-side"><div class="tc-logo"><i>${_SVGS('<path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9-4.9-1.8 4.9-1.8z"/>', 17)}</i><b>Centro de plantillas</b></div>
+      <button class="tc-nav on">${_SVGS('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>', 15)}Mis plantillas<em>${_tc.list.length}</em></button>
+      <div class="tc-sh">Contiene</div>${ck('estados', 'Estados propios')}${ck('campos', 'Campos personalizados')}${ck('documento', 'Documento')}${ck('pizarra', 'Pizarra')}
+      <div class="tc-sh">Cómo se usan</div><p class="tc-hint">Una plantilla incluye tareas, subtareas, estados, campos y vistas. Se puede crear un proyecto nuevo con ella o aplicarla a uno que ya existe.</p></aside>
+      <section class="tc-main"><div class="tc-top"><label class="tc-search">${_SVGS('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/>', 16)}<input id="tc-q" placeholder="Buscar plantillas…" value="${esc(_tc.q)}" oninput="SpacesModule.tcQ(this.value)"></label><button class="tc-x" title="Cerrar" onclick="SpacesModule.tcClose()">${_XI}</button></div>
+      <div class="tc-scroll"><h3 class="tc-h3">Mis plantillas</h3>${ls.length ? `<div class="tc-grid">${ls.map(t => { const f = _tc.full[t.id]; return `<div class="tc-card" onclick="SpacesModule.tcOpen(${t.id})"><div class="tc-prev">${f ? _pvList(f.data || {}) : ''}</div><div class="tc-cb"><i class="tc-cico">${_SVGS('<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/>', 15)}</i><div><b>${esc(t.nombre)}</b><span>${t.n_tareas} tareas · ${t.n_vistas} vistas${t.n_campos ? ' · ' + t.n_campos + ' campos' : ''}</span></div></div></div>`; }).join('')}</div>` : `<p class="sp-mp" style="padding:20px 4px">${_tc.list.length ? 'Ninguna plantilla coincide con la búsqueda.' : 'Aún no tienes plantillas: abre un proyecto y usa «Plantillas › Guardar como plantilla».'}</p>`}</div></section>`;
+  }
+  function tcQ(v) { _tc.q = v; _tc.focusQ = true; _tcPaint(); }
+  function tcFilter(k, on) { _tc.f[k] = on; _tc.focusQ = false; _tcPaint(); }
+  function tcOpen(id) { _tc.cur = _tc.full[id] || null; if (!_tc.cur) return; _tc.view = 'detail'; _tc.slide = 0; _tc.acc = new Set(['estados']); _tcPaint(); }
+  function tcBack() { if (_tc.view === 'use') _tc.view = 'detail'; else { _tc.view = 'grid'; _tc.cur = null; } _tc.focusQ = false; _tcPaint(); }
+  function tcSlide(d) { const n = _slidesOf(_tc.cur.data || {}).length; _tc.slide = (_tc.slide + d + n) % n; _tcPaint(); }
+  function tcAcc(k) { if (_tc.acc.has(k)) _tc.acc.delete(k); else _tc.acc.add(k); _tcPaint(); }
+  function _tcDetail() {
+    const t = _tc.cur, d = t.data || {}, pr = d.proyecto || {}, sl = _slidesOf(d), tareas = d.tareas || [], vistas = d.vistas || [], campos = pr.campos || [], es = Array.isArray(pr.estados) ? pr.estados : [];
+    const subs = tareas.filter(x => x.parent).length, mains = tareas.filter(x => !x.parent), open = k => _tc.acc.has(k);
+    const acc = (k, ico, title, sub, body) => `<div class="tc-acc"><button type="button" class="tc-ah" onclick="SpacesModule.tcAcc('${k}')"><i>${_SVGS(ico, 18)}</i><span><b>${title}</b><em>${sub}</em></span><svg width="12" height="12" viewBox="0 0 10 10" style="transform:rotate(${open(k) ? 180 : 0}deg)"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>${open(k) ? `<div class="tc-ab">${body}</div>` : ''}</div>`;
+    const dt = new Date(t.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `<div class="tc-dh"><button type="button" class="tc-back" onclick="SpacesModule.tcBack()">${_SVGS('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>', 16)} Atrás</button><b>Centro de plantillas</b><button class="tc-x" title="Cerrar" onclick="SpacesModule.tcClose()">${_XI}</button></div>
+      <div class="tc-dbody"><div class="tc-dmain"><div class="tc-dtitle"><i class="tc-ico">${_SVGS('<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>', 28)}</i><div><h2>${esc(t.nombre)}</h2><span>Tipo: Proyecto</span></div><button class="btn btn--primary" onclick="SpacesModule.tcUse()">Utilizar plantilla</button></div>
+        <div class="tc-gal"><div class="tc-slide"><div class="tc-sbar"><span>${sl[_tc.slide][0]}</span></div>${sl[_tc.slide][1](d)}${sl.length > 1 ? `<button class="tc-sa tc-sa--l" onclick="SpacesModule.tcSlide(-1)">‹</button><button class="tc-sa tc-sa--r" onclick="SpacesModule.tcSlide(1)">›</button><div class="tc-dots">${sl.map((_, i) => `<i class="${i === _tc.slide ? 'on' : ''}"></i>`).join('')}</div>` : ''}</div>
+          <div class="tc-desc"><h4>Descripción de la plantilla</h4><p>${esc(t.descripcion || pr.descripcion || 'Sin descripción.')}</p></div></div>
+        <h4 class="tc-inc">La plantilla incluye</h4>
+        ${acc('estados', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>', 'Estados', es.length ? `${es.length} estados propios incluidos` : 'Usa los 5 estados de siempre', es.length ? `<div class="tc-chips">${es.map(e => `<span class="sp-tag" style="--c:${e.c}">${esc(e.n)}</span>`).join('')}</div><p class="tc-note">Categorías: ${[...new Set(es.map(e => (_CATN[e.t] || e.t)))].join(' · ')}</p>` : '<p class="tc-note">Pendiente · En progreso · Bloqueado · Completado · Cancelado.</p>')}
+        ${acc('campos', '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 'Campos personalizados', campos.length ? `${campos.length} campos personalizados incluidos` : 'Sin campos propios', campos.length ? `<div class="tc-chips">${campos.map(f => `<span class="tc-chip">${esc(f.n)}<em>${esc(_FTN[f.t] || f.t)}</em></span>`).join('')}</div>` : '<p class="tc-note">Esta plantilla no trae columnas personalizadas.</p>')}
+        ${acc('vistas', '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>', 'Tipos de vista', `${vistas.length} vistas incluidas`, `<div class="tc-chips">${vistas.map(v => `<span class="tc-chip tc-chip--v">${_SVGS(_VTI[v.tipo] || _VTI.lista, 14)}${esc(v.nombre || _VTN[v.tipo] || v.tipo)}<em>${esc(_VTN[v.tipo] || v.tipo)}</em></span>`).join('')}</div>`)}
+        ${acc('tareas', '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 'Tareas y subtareas', `${mains.length} tareas · ${subs} subtareas`, `<ul class="tc-tl">${mains.slice(0, 60).map(x => { const k = tareas.filter(y => y.parent === x.ref).length; return `<li><b>${esc(x.titulo)}</b>${k ? `<em>${k} subtarea${k === 1 ? '' : 's'}</em>` : ''}${k ? `<ul>${tareas.filter(y => y.parent === x.ref).map(y => `<li>${esc(y.titulo)}</li>`).join('')}</ul>` : ''}</li>`; }).join('')}</ul>`)}
+      </div>
+      <aside class="tc-dside"><div class="tc-by"><i>${_SVGS('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>', 18)}</i><div><b>${t.created_by === 'Nova' ? 'Por Nova' : 'Por ' + esc(t.created_by || 'tu equipo')}</b><span>${t.created_by === 'Nova' ? 'Plantilla del sistema, editable y copiable.' : 'Creada en tu espacio de trabajo.'}</span></div></div>
+        <div class="tc-meta"><span>FECHA DE CREACIÓN</span><b>${dt}</b></div><div class="tc-meta"><span>CONTENIDO</span><b>${tareas.length} tareas · ${vistas.length} vistas</b></div>
+        <div class="tc-acts"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplRename(${t.id})">Renombrar</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tplDelete(${t.id})">Eliminar</button></div></aside></div>`;
+  }
+  // ── paso 2: usar la plantilla (proyecto nuevo o uno que ya existe) ──
+  function tcUse() {
+    const c = _tc.ctx || {}, pj = c.pid ? _pjOf(c.pid) : null;
+    _tc.o = { dest: c.pid ? 'existente' : 'nuevo', name: '', client: '', sid: c.sid || 0, pid: c.pid || 0, existentes: 'mantener', all: true, el: { tareas: true, sub: true, vistas: true, campos: true, ajustes: true }, resp: 'plantilla', fechas: 'reprogramar', fecha: (pj && pj.fecha_inicio ? _d10(pj.fecha_inicio) : '') || _today() };
+    _tc.view = 'use'; _tcPaint();
+  }
+  const _seg = (items, cur, js) => `<div class="tc-seg">${items.map(([k, l, ic]) => `<button type="button" class="${cur === k ? 'on' : ''}" onclick="${js.replace('%k', k)}">${ic ? _SVGS(ic, 15) : ''}${l}</button>`).join('')}</div>`;
+  function _ddHtml(id, items, sel, ph) { const cur = items.find(x => String(x.v) === String(sel)); return `<div class="tc-dd" id="tc-dd-${id}"><button type="button" class="tc-ddb" onclick="SpacesModule.tcDD('${id}')"><span>${cur ? esc(cur.l) : ph}</span><svg width="11" height="11" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button></div>`; }
+  const _ddItems = id => id === 'space' ? [{ v: 0, l: 'Principal' }, ..._spaces.map(s => ({ v: s.id, l: s.nombre }))] : _projects.filter(p => !p.archivado).map(p => ({ v: p.id, l: p.nombre, sub: p.space_id ? ((_spaces.find(s => s.id === p.space_id) || {}).nombre || '') : 'Principal' }));
+  function tcDD(id) {
+    const box = $q('tc-dd-' + id); if (!box) return; const ex = box.querySelector('.tc-ddl'); if (ex) { ex.remove(); return; }
+    document.querySelectorAll('.tc-ddl').forEach(x => x.remove()); _tc.ddq = '';
+    box.insertAdjacentHTML('beforeend', `<div class="tc-ddl"><input placeholder="Buscar…" oninput="SpacesModule.tcDDQ('${id}',this.value)"><div class="tc-dds">Explorar</div><div class="tc-ddi" id="tc-ddi-${id}"></div></div>`); _ddFill(id); const i = box.querySelector('input'); if (i) i.focus();
+  }
+  function _ddFill(id) { const el = $q('tc-ddi-' + id); if (!el) return; const q = _nrm(_tc.ddq), sel = id === 'space' ? _tc.o.sid : _tc.o.pid; el.innerHTML = _ddItems(id).filter(x => !q || _nrm(x.l).includes(q)).map(x => `<button type="button" class="${String(x.v) === String(sel) ? 'on' : ''}" onclick="SpacesModule.tcDDPick('${id}',${x.v})">${esc(x.l)}${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</button>`).join('') || '<div class="tc-dds">Sin resultados</div>'; }
+  function tcDDQ(id, v) { _tc.ddq = v; _ddFill(id); }
+  function tcDDPick(id, v) { if (id === 'space') _tc.o.sid = v; else { _tc.o.pid = v; const pj = _pjOf(v); if (pj && pj.fecha_inicio) _tc.o.fecha = _d10(pj.fecha_inicio); } _tcPaint(); }
+  function tcSet(k, v) { _tc.o[k] = v; }
+  function tcSeg(k, v) { _tc.o[k] = v; _tcPaint(); }
+  function tcEl(k, on) { _tc.o.el[k] = on; if (k === 'tareas' && !on) _tc.o.el.sub = false; _tcPaint(); }
+  function _tcUse() {
+    const o = _tc.o, t = _tc.cur, nuevo = o.dest === 'nuevo', el = o.el, ck = (k, l, dis) => `<label class="tc-ck"><input type="checkbox" ${el[k] ? 'checked' : ''} ${dis ? 'disabled' : ''} onchange="SpacesModule.tcEl('${k}',this.checked)"><span>${l}</span></label>`;
+    return `<div class="tc-dh"><button type="button" class="tc-back" onclick="SpacesModule.tcBack()">${_SVGS('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>', 16)} Atrás</button><b>Usa la plantilla de proyecto</b><button class="tc-x" title="Cerrar" onclick="SpacesModule.tcClose()">${_XI}</button></div>
+      <div class="tc-ubody"><div class="tc-uform">
+        <div class="tc-l">¿Qué quieres hacer?</div>${_seg([['nuevo', 'Crear un proyecto nuevo'], ['existente', 'Aplicar a un proyecto existente']], o.dest, "SpacesModule.tcSeg('dest','%k')")}
+        ${nuevo ? `<label class="tc-l" for="tc-name">Nombre del proyecto</label><input class="tc-in" id="tc-name" placeholder="${esc(t.nombre)}" value="${esc(o.name)}" oninput="SpacesModule.tcSet('name',this.value)">
+          <div class="tc-l">Cliente <b>*</b></div><select class="tc-in" onchange="SpacesModule.tcSet('client',this.value)"><option value="">Selecciona un cliente…</option>${(_tc.clients || []).map(c => `<option value="${c.id}"${String(o.client) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}${c.empresa ? ' · ' + esc(c.empresa) : ''}</option>`).join('')}</select>
+          <div class="tc-l">¿Dónde debería crearse este proyecto? <b>*</b></div>${_ddHtml('space', _ddItems('space'), o.sid, 'Elige un espacio')}`
+          : `<div class="tc-l">Proyecto al que se aplica <b>*</b></div>${_ddHtml('proj', _ddItems('proj'), o.pid, 'Elige un proyecto')}
+          <div class="tc-l">Si el proyecto ya tiene tareas</div><div class="tc-box2"><label class="tc-rd"><input type="radio" name="tc-ex" ${o.existentes === 'mantener' ? 'checked' : ''} onchange="SpacesModule.tcSet('existentes','mantener')"><span>Mantener las tareas actuales y añadir las de la plantilla</span></label><label class="tc-rd"><input type="radio" name="tc-ex" ${o.existentes === 'archivar' ? 'checked' : ''} onchange="SpacesModule.tcSet('existentes','archivar')"><span>Archivar las tareas actuales y empezar con las de la plantilla</span></label></div>`}
+        <div class="tc-l">Opciones de importación</div><div class="tc-box2">${_seg([['todo', 'Importar todo', '<path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9-4.9-1.8 4.9-1.8z"/>'], ['custom', 'Personalizar elementos importados', '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>']], o.all ? 'todo' : 'custom', "SpacesModule.tcSeg('all','%k'==='todo')".replace("'%k'==='todo'", "'%k'==='todo'"))}
+          ${o.all ? '<p class="tc-note">Todas las tareas, subtareas, vistas, estados, campos y ajustes se importarán exactamente como están.</p>' : `<div class="tc-cks">${ck('tareas', 'Tareas')}${ck('sub', 'Subtareas', !el.tareas)}${ck('vistas', 'Vistas (incluye documento y pizarra)')}${ck('campos', 'Estados y campos personalizados')}${ck('ajustes', 'Ajustes del proyecto (descripción, prioridad, cobro)')}</div>`}
+          <div class="tc-l" style="margin-top:12px">Personas asignadas a las tareas</div><div class="tc-cks">${[['plantilla', 'Las de la plantilla'], ['yo', 'Asignármelas a mí'], ['ninguno', 'Sin asignar']].map(([k, l]) => `<label class="tc-rd"><input type="radio" name="tc-rs" ${o.resp === k ? 'checked' : ''} onchange="SpacesModule.tcSet('resp','${k}')"><span>${l}</span></label>`).join('')}</div></div>
+        <div class="tc-l">Fecha de inicio y fecha límite</div><div class="tc-box2">${_seg([['reprogramar', 'Reprogramar fechas', '<path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/>'], ['ninguna', 'Sin fechas', '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>']], o.fechas, "SpacesModule.tcSeg('fechas','%k')")}
+          ${o.fechas === 'reprogramar' ? `<p class="tc-note">Las fechas de la plantilla se mueven a partir de esta fecha de inicio${nuevo ? '' : ' (por defecto, la del proyecto)'}.</p><input class="tc-in" type="date" value="${esc(o.fecha)}" onchange="SpacesModule.tcSet('fecha',this.value)">` : '<p class="tc-note">Las tareas se crearán sin fecha de inicio ni fecha límite.</p>'}</div>
+      </div></div>
+      <div class="tc-uf"><span class="tc-info">${_SVGS('<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 14)} ${nuevo ? 'Esto creará un proyecto nuevo en el espacio elegido.' : 'Esto añadirá el contenido de la plantilla al proyecto elegido.'}</span><span><button class="btn btn--ghost btn--sm" onclick="SpacesModule.tcClose()">Cancelar</button> <button class="btn btn--primary btn--sm" id="tc-go" onclick="SpacesModule.tcGo()">Utilizar plantilla</button></span></div>`;
+  }
+  async function tcGo() {
+    const o = _tc.o, t = _tc.cur, nuevo = o.dest === 'nuevo', f = o.fechas === 'reprogramar' ? o.fecha : '';
+    if (nuevo && !o.client) { showBanner('Elige el cliente del proyecto', 'error'); return; }
+    if (!nuevo && !o.pid) { showBanner('Elige el proyecto al que se aplicará', 'error'); return; }
+    if (o.fechas === 'reprogramar' && !f) { showBanner('Elige la fecha de inicio', 'error'); return; }
+    const btn = $q('tc-go'); if (btn) { btn.disabled = true; btn.textContent = 'Aplicando…'; }
+    try {
+      let pid = o.pid, sid = 0;
+      if (nuevo) {
+        const r = await _post('/mgmt/projects', { nombre: (o.name || '').trim() || t.nombre, client_id: +o.client, estado: 'activo', fecha_inicio: f || _today(), prioridad: 'media', tipo_proyecto: 'fijo', moneda: 'USD', responsables: [], responsable: '' }); if (!r.ok) throw new Error(await _err(r, 'No se pudo crear el proyecto'));
+        const np = await r.json(); pid = np.id; sid = +o.sid || 0; if (sid) await _post(`/mgmt/projects/${pid}/space`, { space_id: sid }, 'PATCH');
+      } else { const pj = _pjOf(pid); sid = pj ? (pj.space_id || 0) : 0; }
+      const el = o.el, all = o.all;
+      const ra = await _post(`/mgmt/project-templates/${t.id}/apply`, { project_id: pid, fecha_inicio: f || undefined, fechas: o.fechas, responsables: o.resp, yo: _myNm(), con_tareas: all || el.tareas, con_subtareas: all || el.sub, con_vistas: all || el.vistas, con_campos: all || el.campos, aplicar_ajustes: all || el.ajustes, existentes: nuevo ? undefined : o.existentes });
+      if (!ra.ok) throw new Error(await _err(ra, nuevo ? 'El proyecto se creó, pero no se pudo aplicar la plantilla' : 'No se pudo aplicar la plantilla'));
+      const j = await ra.json(); tcClose(); showBanner(`✓ Plantilla aplicada (${j.tareas} tareas, ${j.vistas} vistas)`, 'success'); await _reload(); pick(sid, pid);
+    } catch (e) { showBanner(e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Utilizar plantilla'; } }
+  }
+  const tplManage = () => tplCenter({});
+  const tplApplyOpen = () => tplCenter({ pid: _pmPid });
+  const tplCreateOpen = sid => tplCenter({ sid: sid || 0 });
+
   // ═══ Todos los proyectos (sustituye a la antigua sección «Proyectos») ═══
   function showProjects() { _mode = 'proyectos'; _selProj = null; _selSpace = null; _cfg = false; _save(); }
   function showTasks() { _mode = 'tasks'; _selProj = null; _selSpace = null; _cfg = false; _save(); }
@@ -1389,7 +1516,7 @@ const SpacesModule = (() => {
 
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
-  return { fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+  return { tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
