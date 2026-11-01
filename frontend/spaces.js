@@ -1118,32 +1118,62 @@ const SpacesModule = (() => {
 
   // ── administrador de campos (Se muestran · Crear nuevo · Agregar existente) ──
   let _fmPid = 0, _fmMode = 'list', _fmType = '', _fmEdit = null;
-  function fieldsOpen() { _closePop(); _fmPid = _selProj || 0; _fmMode = 'list'; _fmPaint(true); }
-  function _fmSync() { if (_selProj && _cfg) { const b = $q('sp-body'); if (b && $q('cfg-fld')) _cfgFldPaint(); } else if (_mode === 'tasks') _paintBody(); }
+  // ── panel lateral «Campos» (estilo ClickUp): buscador · Crear nuevo / Agregar existente · secciones plegables con interruptores ──
+  let _fmTab = 'exist', _fmQ = '', _fmFold = new Set();
+  const _BIC = { prioridad: '<path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/>', inicio: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', estimado: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', etiquetas: '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/>', horas: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', proyecto: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>', estado: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>', fecha: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', persona: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>', nombre: '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="14" y2="12"/>' };
+  function fieldsOpen() { _closePop(); document.getElementById('sp-modal')?.remove(); _fmPid = _selProj || 0; _fmMode = 'list'; _fmTab = 'exist'; _fmQ = ''; _fmPaint(true); }
+  function fdClose() { const d = $q('sp-fdr'); if (d) d.remove(); }
+  function fdTab(t) { _fmTab = t; _fmMode = 'list'; _fmPaint(); }
+  function fdQ(v) { _fmQ = v; _fmPaint(); }
+  function fdFold(k) { if (_fmFold.has(k)) _fmFold.delete(k); else _fmFold.add(k); _fmPaint(); }
+  function fmCol(k, on) { toggleCol(k, on); _fmPaint(); }
+  function _fmSync() { if ($q('sp-fdr')) _fmPaint(); if (_selProj && _cfg) { if ($q('cfg-fld')) _cfgFldPaint(); } else if (_mode === 'tasks') _paintBody(); }
   function _fmPaint(first) {
-    const p = _pjOf(_fmPid), fs = _fields(_fmPid); let b = '';
-    const cols = `<div class="sp-mh">Columnas de la lista</div>${Object.entries(_COLS).filter(([k]) => !(k === 'proyecto' && _selProj)).map(([k, l]) => `<div class="fm-r"><label class="fm-sw"><input type="checkbox" ${_cols.includes(k) ? 'checked' : ''} onchange="SpacesModule.toggleCol('${k}',this.checked)"><span></span></label><b>${l}</b></div>`).join('')}`;
-    if (!p && _fmMode === 'list') {
-      const keys = _aggKeys(), vis = new Set(_aggVis);
-      b = cols + `<div class="sp-mh">Campos de las tareas de esta vista</div>${keys.length ? keys.map(x => `<div class="fm-r"><label class="fm-sw"><input type="checkbox" data-k="${esc(x.k)}" ${vis.has(x.k) ? 'checked' : ''} onchange="SpacesModule.fmAggVis(this.dataset.k,this.checked)"><span></span></label><b>${esc(x.n)}</b><em>${esc(_FTN[x.t] || x.t)}</em></div>`).join('') : '<p class="sp-mp">Los proyectos de esta vista aún no tienen campos propios.</p>'}
-        <div class="sp-mh">Crear nuevo</div><div class="fm-grid">${_FT.map(x => `<button type="button" class="fm-t" onclick="SpacesModule.fmNew('${x[0]}')"><i>${_SVGS(x[3], 16)}</i><span><b>${x[1]}</b><em>${x[2]}</em></span></button>`).join('')}</div>`;
-    } else if (_fmMode === 'list') {
-      const others = []; _projects.forEach(q => { if (q.id !== _fmPid) (q.campos || []).forEach(f => { if (!fs.some(x => x.n === f.n && x.t === f.t) && !others.some(x => x.n === f.n && x.t === f.t)) others.push({ ...f, from: q.nombre }); }); });
-      b = cols + `<div class="sp-mh">Campos personalizados</div>
-        ${fs.length ? fs.map(f => `<div class="fm-r"><label class="fm-sw" title="Mostrar u ocultar la columna"><input type="checkbox" ${f.v !== false ? 'checked' : ''} onchange="SpacesModule.fmVis('${f.id}',this.checked)"><span></span></label><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)}</em><button class="fm-b" title="Editar" onclick="SpacesModule.fmEdit('${f.id}')">${_SVGS('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 14)}</button><button class="fm-b" title="Eliminar el campo y sus valores" onclick="SpacesModule.fmDel('${f.id}')">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 14)}</button></div>`).join('') : '<p class="sp-mp">Este proyecto todavía no tiene campos propios.</p>'}
-        <div class="sp-mh">Crear nuevo</div><div class="fm-grid">${_FT.map(x => `<button type="button" class="fm-t" onclick="SpacesModule.fmNew('${x[0]}')"><i>${_SVGS(x[3], 16)}</i><span><b>${x[1]}</b><em>${x[2]}</em></span></button>`).join('')}</div>
-        ${others.length ? `<div class="sp-mh">Agregar existente (de otros proyectos)</div>${others.slice(0, 20).map((f, i) => `<div class="fm-r"><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)} · ${esc(f.from)}</em><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmAdd(${i})">Añadir</button></div>`).join('')}` : ''}`;
-      _fmOthers = others;
-    } else {
+    const p = _pjOf(_fmPid), fs = _fields(_fmPid), q = _nrm(_fmQ), ok = n => !q || _nrm(n).includes(q);
+    const ic = d => `<i class="fd-i">${_SVGS(d, 15)}</i>`;
+    const ftIc = t => ic((_FT.find(x => x[0] === t) || [0, 0, 0, '<circle cx="12" cy="12" r="9"/>'])[3]);
+    const sw = (on, js, locked) => `<label class="fm-sw${locked ? ' fm-sw--off' : ''}"><input type="checkbox" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''} onchange="${js}"><span></span></label>`;
+    const row = (icon, name, on, js, extra, locked) => ok(name) ? `<div class="fd-r">${icon}<span class="fd-n">${esc(name)}</span>${extra || ''}${sw(on, js, locked)}</div>` : '';
+    const sec = (key, title, rows) => { const n = rows.filter(Boolean).length; return `<div class="fd-sec"><button type="button" class="fd-h" onclick="SpacesModule.fdFold('${key}')"><svg width="9" height="9" viewBox="0 0 10 10" style="transform:rotate(${_fmFold.has(key) ? -90 : 0}deg)"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>${title}<em>${n}</em></button>${_fmFold.has(key) ? '' : rows.join('')}</div>`; };
+    const editBtns = f => `<button class="fm-b fd-ed" title="Editar" onclick="SpacesModule.fmEdit('${f.id}')">${_SVGS('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 13)}</button><button class="fm-b fd-ed" title="Eliminar el campo y sus valores" onclick="SpacesModule.fmDel('${f.id}')">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 13)}</button>`;
+    let tabs = '', list = '';
+    if (_fmMode === 'form') {
       const f = _fmEdit ? fs.find(x => x.id === _fmEdit) : null, t = f ? f.t : _fmType, withOpt = ['lista', 'etiquetas'].includes(t);
-      b = `<button class="fm-back" onclick="SpacesModule.fmBack()">‹ Volver</button><div class="sp-mh">${f ? 'Editar campo' : 'Nuevo campo · ' + esc(_FTN[t] || t)}</div>
+      list = `<button class="fm-back" onclick="SpacesModule.fmBack()">‹ Volver</button><div class="sp-mh">${f ? 'Editar campo' : 'Nuevo campo · ' + esc(_FTN[t] || t)}</div>
         ${!p ? `<label class="pcf-f"><span>Aplicar a</span><select class="form-input" id="fm-ap"><option value="all">Todos los proyectos de esta vista (${_scopePids().length})</option>${_scopePids().map(id => `<option value="${id}">${esc(_plain((_pjOf(id) || {}).nombre || ''))}</option>`).join('')}</select></label>` : ''}
         <label class="pcf-f"><span>Nombre</span><input class="form-input" id="fm-n" value="${esc(f ? f.n : '')}" placeholder="Ej. Canal" maxlength="50"></label>
         ${withOpt ? `<label class="pcf-f"><span>Opciones (una por línea)</span><textarea class="form-input" id="fm-o" rows="6" placeholder="LinkedIn\nEmail\nWhatsApp">${esc(f ? (f.o || []).map(o => o.n).join('\n') : '')}</textarea></label>` : ''}
         ${t === 'dinero' ? `<label class="pcf-f"><span>Moneda</span><select class="form-input" id="fm-m">${['USD', 'EUR', 'COP', 'MXN', 'ARS', 'PEN', 'CLP', 'BRL'].map(m => `<option${f && f.mon === m ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
         <div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmBack()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.fmSave()">${f ? 'Guardar' : 'Crear campo'}</button></div>`;
+    } else {
+      tabs = `<button type="button" class="${_fmTab === 'new' ? 'on' : ''}" onclick="SpacesModule.fdTab('new')">Crear nuevo</button><button type="button" class="${_fmTab === 'exist' ? 'on' : ''}" onclick="SpacesModule.fdTab('exist')">Agregar existente</button>`;
+      if (_fmTab === 'new') {
+        const pop = ['lista', 'texto', 'fecha', 'area', 'numero', 'etiquetas'], card = x => ok(x[1]) ? `<button type="button" class="fd-t" onclick="SpacesModule.fmNew('${x[0]}')">${ic(x[3])}<span><b>${x[1]}</b><em>${x[2]}</em></span></button>` : '';
+        list = sec('pop', 'Popular', _FT.filter(x => pop.includes(x[0])).map(card)) + sec('all', 'Todos', _FT.map(card));
+      } else {
+        const vis = !p ? new Set(_aggVis) : null;
+        const customs = !p ? _aggKeys().map(x => ({ id: x.k, n: x.n, t: x.t, v: vis.has(x.k) })) : fs;
+        const toggle = f => !p ? `SpacesModule.fmAggVis(this.dataset.k,this.checked)" data-k="${esc(f.id)}` : `SpacesModule.fmVis('${f.id}',this.checked)`;
+        const crow = (f, extra) => row(ftIc(f.t), f.n, f.v !== false, toggle(f), extra || (p ? editBtns(f) : ''));
+        const lock = [['nombre', 'Nombre de la tarea'], ['estado', 'Estado'], ['fecha', 'Fecha límite'], ['persona', 'Persona asignada']].map(([k, l]) => row(ic(_BIC[k]), l, true, '', '', true));
+        const bi = Object.entries(_COLS).filter(([k]) => !(k === 'proyecto' && _selProj));
+        const shown = [...lock, ...bi.filter(([k]) => _cols.includes(k)).map(([k, l]) => row(ic(_BIC[k]), l, true, `SpacesModule.fmCol('${k}',this.checked)`)), ...customs.filter(f => f.v !== false).map(f => crow(f))];
+        const props = bi.filter(([k]) => !_cols.includes(k)).map(([k, l]) => row(ic(_BIC[k]), l, false, `SpacesModule.fmCol('${k}',this.checked)`));
+        const hidden = customs.filter(f => f.v === false).map(f => crow(f));
+        const others = [];
+        if (p) { _projects.forEach(o => { if (o.id !== _fmPid) (o.campos || []).forEach(f => { if (!fs.some(x => x.n === f.n && x.t === f.t) && !others.some(x => x.n === f.n && x.t === f.t)) others.push({ ...f, from: o.nombre }); }); }); _fmOthers = others; }
+        list = sec('se', 'Se muestran', shown) + sec('pr', 'Propiedades', props) + sec('cu', 'Campos personalizados', hidden.length || !customs.length ? hidden : [])
+          + (p && others.length ? sec('ot', 'De otros proyectos', others.slice(0, 30).map((f, i) => ok(f.n) ? `<div class="fd-r">${ftIc(f.t)}<span class="fd-n">${esc(f.n)}<small>${esc(f.from)}</small></span><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmAdd(${i})">Añadir</button></div>` : '')) : '')
+          + (!customs.length ? `<p class="sp-mp" style="padding:8px 14px">${p ? 'Este proyecto todavía no tiene campos propios.' : 'Los proyectos de esta vista aún no tienen campos propios.'} Crea uno en «Crear nuevo».</p>` : '');
+      }
     }
-    if (first || !$q('sp-modal')) _modal({ t: 'Columnas y campos' + (p ? ' · ' + esc(_plain(p.nombre)) : ''), b }, 680); else document.querySelector('#sp-modal .sp-mb').innerHTML = b;
+    let d = $q('sp-fdr');
+    if (!d) {
+      d = document.createElement('div'); d.id = 'sp-fdr'; d.className = 'fdr';
+      d.innerHTML = `<div class="fdr__hd"><b>Campos</b><button type="button" class="fm-b" title="Cerrar" onclick="SpacesModule.fdClose()">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 16)}</button></div><div class="fdr__q" id="fdr-q"><input id="fdr-qi" placeholder="Buscar campos de tarea" oninput="SpacesModule.fdQ(this.value)"></div><div class="fdr__tabs" id="fdr-tabs"></div><div class="fdr__body" id="fdr-list"></div>`;
+      document.body.appendChild(d);
+    }
+    $q('fdr-tabs').innerHTML = tabs; $q('fdr-q').style.display = _fmMode === 'form' ? 'none' : ''; $q('fdr-list').innerHTML = list;
   }
   let _fmOthers = [];
   function fmAggVis(k, on) { _aggVis = on ? [...new Set([..._aggVis, k])] : _aggVis.filter(x => x !== k); try { localStorage.setItem('nova_sp_aggf', JSON.stringify(_aggVis)); } catch (_) {} _fcc = null; if (_mode === 'tasks') _paintBody(); }
@@ -1359,7 +1389,7 @@ const SpacesModule = (() => {
 
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
-  return { fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+  return { fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
