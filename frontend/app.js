@@ -16416,7 +16416,7 @@ const CalendarModule = (() => {
   function _fmtT(t) {
     if (!t) return '';
     const { h, m } = _parseT(t);
-    return `${h % 12 || 12}:${_pad(m)} ${h < 12 ? 'AM' : 'PM'}`;
+    return _cp.h24 ? `${_pad(h)}:${_pad(m)}` : `${h % 12 || 12}:${_pad(m)} ${h < 12 ? 'AM' : 'PM'}`;
   }
   // Día en que la tarea vive en el calendario: día programado, o el deadline como fallback
   function _taskDay(t) {
@@ -16489,6 +16489,9 @@ const CalendarModule = (() => {
       } else if (_view === 'day') {
         weekStart = new Date(_anchor); weekStart.setHours(0, 0, 0, 0);
         weekEnd   = new Date(weekStart.getTime() + 86400000);
+      } else if (_view === 'ndays') {
+        weekStart = new Date(_anchor); weekStart.setHours(0, 0, 0, 0);
+        weekEnd   = new Date(weekStart.getTime() + _nDays * 86400000);
       }
       const [mr, tr, tor, gcr, ter, por, prr] = await Promise.all([
         apiFetch(`${API}/mgmt/meetings`),
@@ -16551,6 +16554,7 @@ const CalendarModule = (() => {
   function _viewDays(todayDs) {
     const mk = d => ({ d, ds: _iso(d), isToday: _iso(d) === todayDs });
     if (_view === 'day')  return [mk(new Date(_anchor))];
+    if (_view === 'ndays') { const a = new Date(_anchor); a.setHours(0, 0, 0, 0); return Array.from({ length: _nDays }, (_, i) => { const x = new Date(a); x.setDate(a.getDate() + i); return mk(x); }).filter(x => _cp.showWk || ![0, 6].includes(x.d.getDay())); }
     if (_view === 'month') {
       const a = new Date(_anchor); a.setDate(1);
       const ini = _monday(a);
@@ -16558,7 +16562,8 @@ const CalendarModule = (() => {
       const n = Math.ceil((fin - ini) / 86400000 / 7) * 7;
       return Array.from({ length: Math.max(35, n) }, (_, i) => mk(new Date(ini.getTime() + i * 86400000)));
     }
-    return Array.from({ length: 7 }, (_, i) => mk(new Date(_weekOf.getTime() + i * 86400000)));
+    const n = (_view === 'workweek' || !_cp.showWk) ? 5 : 7;
+    return Array.from({ length: n }, (_, i) => mk(new Date(_weekOf.getTime() + i * 86400000)));
   }
 
   // Título grande: "julio 2026" — el mes en negrita y el año en fino, como en macOS.
@@ -16567,6 +16572,7 @@ const CalendarModule = (() => {
     if (_view === 'day') return `<b>${a.getDate()} ${_MON[a.getMonth()]},</b> ${a.getFullYear()}`
       + `<span class="cal2m__dow">${_DOMF[a.getDay()]}</span>`;
     if (_view === 'month') return `<b>${_MON[a.getMonth()]}</b> ${a.getFullYear()}`;
+    if (_view === 'ndays') { const ds = _viewDays(_iso(new Date())), f = ds[0].d, l = ds[ds.length - 1].d; return f.getMonth() === l.getMonth() ? `<b>${f.getDate()}–${l.getDate()} ${_MONS[f.getMonth()]}</b> ${l.getFullYear()}` : `<b>${f.getDate()} ${_MONS[f.getMonth()]} – ${l.getDate()} ${_MONS[l.getMonth()]}</b> ${l.getFullYear()}`; }
     const s = new Date(_weekOf), e = new Date(_weekOf.getTime() + 6 * 86400000);
     return s.getMonth() === e.getMonth()
       ? `<b>${_MON[s.getMonth()]}</b> ${s.getFullYear()}`
@@ -16605,6 +16611,7 @@ const CalendarModule = (() => {
     requestAnimationFrame(() => {
       _fitHeight();
       _syncBands();
+      if (_cp.parallel) _agParallel();
       const wrap = document.getElementById('cal-grid-scroll');
       if (!wrap) return;
       // Arranca a la altura de la hora actual, con algo de contexto por encima.
@@ -16737,9 +16744,7 @@ const CalendarModule = (() => {
       </select>` : '';
     return `<div class="cal2m__bar">
       <div class="cal2m__title">${_viewTitle()}</div>
-      <div class="cal2m__seg">
-        ${segs.map(([id, lbl]) => `<button class="cal2m__segb${_view === id ? ' on' : ''}" onclick="CalendarModule.setView('${id}')">${lbl}</button>`).join('')}
-      </div>
+      <div class="cal2m__seg cal2m__seg--v"><button type="button" class="cal2m__vbtn" onclick="CalendarModule.agViewMenu(event)">${_viewLbl()}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></div>
       <div class="cal2m__right">
         ${memberSel}
         <div class="cal2m__nav">
@@ -16751,6 +16756,7 @@ const CalendarModule = (() => {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
+        <button type="button" class="cal2m__gear" title="Ajustes del calendario" onclick="CalendarModule.agSettings()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         ${_gcalConn
           ? `<button class="cal2m__gc cal2m__gc--on" onclick="CalendarModule.disconnectGcal()" title="Google Calendar conectado — clic para desconectar">Google Cal</button>`
           : `<button class="cal2m__gc" onclick="CalendarModule.connectGcal()" title="Conectar Google Calendar">Conectar Google Cal</button>`}
@@ -17040,28 +17046,25 @@ const CalendarModule = (() => {
       <button type="button" class="ag-t__p${isP ? ' on' : ''}" title="${isP ? 'Quitar de prioridades' : 'Marcar como prioridad'}" onclick="event.stopPropagation();CalendarModule.agPrioToggle(${t.id})">${_agI(_AG.flag, 13)}</button></div>`;
   }
   function _agList(key, list, o) {
-    const lim = 6, more = !!_agMore[key], shown = more ? list : list.slice(0, lim);
+    const lim = _cp.lim || 6, more = !!_agMore[key], shown = more ? list : list.slice(0, lim);
     return shown.map(t => _agRow(t, o)).join('') + (list.length > lim ? `<button type="button" class="ag-more" onclick="CalendarModule.agMore('${key}')">${more ? 'Ver menos' : `Ver ${list.length - lim} más`}</button>` : '');
   }
   function agMore(k) { _agMore[k] = !_agMore[k]; render(); }
   function _agPanel(todayDs) {
-    const mine = _tasks.filter(t => _agMine(t) && _agOpen(t) && _agLeaf(t));
+    const S = _cp.side, mine = _tasks.filter(t => _agMine(t) && _agOpen(t) && _agLeaf(t));
     const byDl = (a, z) => String(a.deadline || '9999').localeCompare(String(z.deadline || '9999'));
     const asig = [...mine].sort(byDl), vencido = mine.filter(t => t.deadline && String(t.deadline).split('T')[0] <= todayDs).sort(byDl), pend = mine.filter(t => !t.prog_inicio).sort(byDl);
     const pr = _prios.map(id => _tasks.find(t => t.id === id)).filter(Boolean);
     const sec = (t, body) => `<div class="ag-sec"><div class="ag-h">${t}</div>${body}</div>`;
     const empty = txt => `<div class="ag-empty">${txt}</div>`;
     const meetChips = _agMeet.map((n, i) => `<span class="ag-chip" style="--c:${_PROJ_COLORS[(i + 2) % _PROJ_COLORS.length]}"><i></i>${esc(n)}<button type="button" onclick="CalendarModule.agMeetDel(${i})">${_agI(_AG.x, 11)}</button></span>`).join('');
-    return `<aside class="cal2sb cal2sb--ag">${_agTabs()}
-      <div class="ag-scroll">
-        ${sec('Prioridades', pr.length ? `<div class="ag-box">${pr.map((t, i) => _agRow(t, { n: i + 1, date: true })).join('')}</div>` : `<div class="ag-box ag-box--e">${_agI(_AG.flag, 18)}<span>Prioriza una tarea para verla aquí</span></div>`)}
-        <button type="button" class="ag-add" onclick="CalendarModule.agPrioOpen(event)">${_agI(_AG.plus, 14)}Agregar prioridad</button>
-        ${sec('Reunir con', `<label class="ag-search">${_agI(_AG.users, 14)}<input id="ag-meet-q" type="text" autocomplete="off" placeholder="Buscar personas…" oninput="CalendarModule.agMeetSearch(this.value)" onfocus="CalendarModule.agMeetSearch(this.value)"></label><div class="ag-meetres" id="ag-meet-res"></div>${meetChips ? `<div class="ag-chips">${meetChips}</div><div class="ag-hint">Sus horas ocupadas se ven rayadas en el calendario.</div>` : ''}`)}
-        ${sec('Asignados a mí', asig.length ? _agList('asig', asig, { date: true }) : empty('No tienes tareas abiertas asignadas'))}
-        ${sec('Hoy y vencido', vencido.length ? _agList('venc', vencido, { date: true }) : empty('Nada vence hoy ni está vencido'))}
-        ${sec('Tareas pendientes', pend.length ? _agList('pend', pend, { date: true }) : empty('No hay tareas que coincidan con estos filtros'))}
-      </div>
-    </aside>`;
+    const parts = [];
+    if (S.prio) parts.push(sec('Prioridades', pr.length ? `<div class="ag-box">${pr.map((t, i) => _agRow(t, { n: i + 1, date: true })).join('')}</div>` : `<div class="ag-box ag-box--e">${_agI(_AG.flag, 18)}<span>Prioriza una tarea para verla aquí</span></div>`) + `<button type="button" class="ag-add" onclick="CalendarModule.agPrioOpen(event)">${_agI(_AG.plus, 14)}Agregar prioridad</button>`);
+    if (S.meet) parts.push(sec('Reunir con', `<label class="ag-search">${_agI(_AG.users, 14)}<input id="ag-meet-q" type="text" autocomplete="off" placeholder="Buscar personas…" oninput="CalendarModule.agMeetSearch(this.value)" onfocus="CalendarModule.agMeetSearch(this.value)"></label><div class="ag-meetres" id="ag-meet-res"></div>${meetChips ? `<div class="ag-chips">${meetChips}</div><div class="ag-hint">Sus horas ocupadas se ven rayadas en el calendario.</div>` : ''}`));
+    if (S.asig) parts.push(sec('Asignados a mí', asig.length ? _agList('asig', asig, { date: true }) : empty('No tienes tareas abiertas asignadas')));
+    if (S.venc) parts.push(sec('Hoy y vencido', vencido.length ? _agList('venc', vencido, { date: true }) : empty('Nada vence hoy ni está vencido')));
+    if (S.pend) parts.push(sec('Tareas pendientes', pend.length ? _agList('pend', pend, { date: true }) : empty('No hay tareas que coincidan con estos filtros')));
+    return `<aside class="cal2sb cal2sb--ag">${_agTabs()}<div class="ag-scroll">${parts.join('') || empty('Activa secciones en Ajustes → Barra lateral')}</div></aside>`;
   }
 
   // ── ventanitas propias de la Agenda ──
@@ -17133,10 +17136,77 @@ const CalendarModule = (() => {
   }
 
   // ── crear al elegir una hora libre (Evento · Tarea · Tiempo de concentración · No disponible · Tiempo libre) ──
+  // ── preferencias del calendario (guardadas en este navegador) ──
+  const _CP_DEF = { view: 'week', showWk: true, parallel: false, h24: false, side: { prio: 1, meet: 1, asig: 1, venc: 1, pend: 1 }, lim: 6, slot: 60, foco: 'Tiempo de concentración' };
+  let _cp = (() => { try { const s = JSON.parse(localStorage.getItem('cal_prefs2') || '{}'); return { ..._CP_DEF, ...s, side: { ..._CP_DEF.side, ...(s.side || {}) } }; } catch (_) { return { ..._CP_DEF, side: { ..._CP_DEF.side } }; } })();
+  const _cpSave = () => { try { localStorage.setItem('cal_prefs2', JSON.stringify(_cp)); } catch (_) {} };
+  let _nDays = (() => { try { return +localStorage.getItem('cal_ndays') || 3; } catch (_) { return 3; } })();
+  _view = _cp.view || 'week';
+
+  // ── vistas: Día · Semana laboral · Semana · Mes · Número de días (+ fines de semana y «en paralelo») ──
+  const _VLBL = { day: 'Día', workweek: 'Semana laboral', week: 'Semana', month: 'Mes' };
+  const _viewLbl = () => _view === 'ndays' ? `${_nDays} días` : (_VLBL[_view] || 'Semana');
+  function agViewMenu(ev) {
+    const a = ev.currentTarget, ck = _agI('<polyline points="20 6 9 17 4 12"/>', 14);
+    const it = (v, l) => `<button type="button" class="ag-vm__i${_view === v ? ' on' : ''}" onclick="CalendarModule.agSetView('${v}')"><span>${l}</span>${_view === v ? ck : ''}</button>`;
+    _agPopOpen(`<div class="ag-vm">${it('day', 'Día')}${it('workweek', 'Semana laboral')}${it('week', 'Semana')}${it('month', 'Mes')}<div class="ag-vm__s"></div>
+      <div class="ag-vm__n"><span>Número de días</span><div>${[2, 3, 4, 5, 6, 7, 10, 14].map(n => `<button type="button" class="${_view === 'ndays' && _nDays === n ? 'on' : ''}" onclick="CalendarModule.agNDays(${n})">${n}</button>`).join('')}</div></div><div class="ag-vm__s"></div>
+      <label class="ag-vm__t"><span>Mostrar fines de semana</span><input type="checkbox" ${_cp.showWk ? 'checked' : ''} onchange="CalendarModule.agToggle('showWk',this.checked)"><i></i></label>
+      <label class="ag-vm__t"><span>En paralelo</span><input type="checkbox" ${_cp.parallel ? 'checked' : ''} onchange="CalendarModule.agToggle('parallel',this.checked)"><i></i></label></div>`, 'ag-pop--vm',
+      p => { const r = a.getBoundingClientRect(); p.style.top = (r.bottom + 6) + 'px'; p.style.left = Math.max(8, Math.min(r.left, innerWidth - 268)) + 'px'; });
+  }
+  function agSetView(v) { _agPopClose(); setView(v); }
+  function agNDays(n) { _nDays = n; try { localStorage.setItem('cal_ndays', String(n)); } catch (_) {} _agPopClose(); setView('ndays'); }
+  function agToggle(k, v) { _cp[k] = !!v; _cpSave(); render(); }
+  // eventos que coinciden en el tiempo: lado a lado en vez de encimados
+  function _agParallel() {
+    document.querySelectorAll('.cal2-col__body').forEach(body => {
+      const els = [...body.querySelectorAll(':scope > .cal2-tblock, :scope > .cal2-planblock, :scope > .cal2-event')].map(e => ({ e, t: parseFloat(e.style.top) || 0, h: parseFloat(e.style.height) || 24 })).sort((a, z) => a.t - z.t || z.h - a.h);
+      let cl = [], end = -1;
+      const flush = () => { if (!cl.length) return; const cols = []; cl.forEach(it => { let c = cols.findIndex(x => x <= it.t + 0.5); if (c < 0) { c = cols.length; cols.push(0); } cols[c] = it.t + it.h; it.c = c; }); const n = cols.length; cl.forEach(it => { it.e.style.left = `calc(${it.c * 100 / n}% + 2px)`; it.e.style.width = `calc(${100 / n}% - 4px)`; it.e.style.right = 'auto'; }); cl = []; };
+      els.forEach(it => { if (cl.length && it.t >= end) { flush(); end = -1; } cl.push(it); end = Math.max(end, it.t + it.h); }); flush();
+    });
+  }
+
+  // ── Ajustes del calendario ──
+  let _setSec = 'apariencia';
+  function agSettings() {
+    _agPopClose(); document.getElementById('cal-set')?.remove();
+    const m = document.createElement('div'); m.id = 'cal-set'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); }; document.body.appendChild(m); _agSetPaint();
+  }
+  function agSetSec(k) { _setSec = k; _agSetPaint(); }
+  function _agSetPaint() {
+    const m = document.getElementById('cal-set'); if (!m) return;
+    const secs = [['apariencia', 'Apariencia'], ['cuentas', 'Cuentas'], ['barra', 'Barra lateral'], ['bloqueo', 'Bloqueo de tiempo']];
+    const sw = (on, fn) => `<label class="ag-sw"><input type="checkbox" ${on ? 'checked' : ''} onchange="${fn}"><i></i></label>`;
+    const row = (t, d, ctl) => `<div class="ag-sr"><div><b>${t}</b>${d ? `<small>${d}</small>` : ''}</div>${ctl}</div>`;
+    const opt = (v, l, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${l}</option>`;
+    let body = '';
+    if (_setSec === 'apariencia') body = `<h3>Apariencia</h3><p>Cómo se ve tu calendario. Se guarda en este navegador.</p>`
+      + row('Vista predeterminada', 'La que se abre al entrar', `<select class="ag-sel" onchange="CalendarModule.agPref('view',this.value)">${opt('day', 'Día', _cp.view)}${opt('workweek', 'Semana laboral', _cp.view)}${opt('week', 'Semana', _cp.view)}${opt('month', 'Mes', _cp.view)}</select>`)
+      + row('Mostrar fines de semana', 'En las vistas de semana y de varios días', sw(_cp.showWk, "CalendarModule.agPref('showWk',this.checked)"))
+      + row('En paralelo', 'Los eventos que coinciden se colocan lado a lado', sw(_cp.parallel, "CalendarModule.agPref('parallel',this.checked)"))
+      + row('Formato de hora', 'Cómo se muestran las horas', `<select class="ag-sel" onchange="CalendarModule.agPref('h24',this.value==='24')">${opt('12', '12 horas (3:00 PM)', _cp.h24 ? '24' : '12')}${opt('24', '24 horas (15:00)', _cp.h24 ? '24' : '12')}</select>`);
+    else if (_setSec === 'cuentas') body = `<h3>Cuentas</h3><p>Conecta tu calendario externo para ver sus eventos aquí.</p>
+      <div class="ag-acc"><span class="ag-acc__i">G</span><div><b>Google Calendar</b><small>${_gcalConn ? 'Conectado · sus eventos aparecen en tu calendario' : 'No conectado'}</small></div>${_gcalConn ? `<button type="button" class="ag-btn" onclick="CalendarModule.disconnectGcal()">Desconectar</button>` : `<button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.connectGcal()">Conectar</button>`}</div>`
+      + row('Videollamadas', 'Al crear un evento, pega el enlace de Meet, Zoom o Teams en «Agregar videollamada».', '');
+    else if (_setSec === 'barra') { const S = _cp.side, L = [['prio', 'Prioridades'], ['meet', 'Reunir con'], ['asig', 'Asignados a mí'], ['venc', 'Hoy y vencido'], ['pend', 'Tareas pendientes']];
+      body = `<h3>Barra lateral</h3><p>Elige qué secciones ver en el panel de la Agenda.</p>` + L.map(([k, l]) => row(l, '', sw(!!S[k], `CalendarModule.agPref('side.${k}',this.checked)`))).join('') + row('Tareas por sección', 'Cuántas se ven antes de «Ver más»', `<select class="ag-sel" onchange="CalendarModule.agPref('lim',this.value)">${[4, 6, 10, 15].map(n => opt(n, n, _cp.lim)).join('')}</select>`); }
+    else body = `<h3>Bloqueo de tiempo</h3><p>Valores por defecto al crear bloques con un clic en el calendario.</p>`
+      + row('Duración del bloque', 'Al hacer clic en una hora libre', `<select class="ag-sel" onchange="CalendarModule.agPref('slot',this.value)">${[[30, '30 min'], [60, '1 hora'], [90, '1 h 30 min'], [120, '2 horas']].map(([v, l]) => opt(v, l, _cp.slot)).join('')}</select>`)
+      + row('Título del tiempo de concentración', 'Si no escribes otro', `<input class="ag-inp" type="text" maxlength="60" value="${esc(_cp.foco)}" onchange="CalendarModule.agPref('foco',this.value)">`);
+    m.innerHTML = `<div class="fin-pi-box ag-set"><div class="ag-set__n"><div class="ag-set__t">${_agI('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>', 16)}Ajustes del calendario</div>${secs.map(([k, l]) => `<button type="button" class="ag-set__i${_setSec === k ? ' on' : ''}" onclick="CalendarModule.agSetSec('${k}')">${l}</button>`).join('')}</div><div class="ag-set__c"><button type="button" class="ag-set__x" onclick="document.getElementById('cal-set').remove()">${_agI(_AG.x, 16)}</button>${body}</div></div>`;
+  }
+  function agPref(k, v) {
+    if (k.startsWith('side.')) _cp.side[k.slice(5)] = v ? 1 : 0; else if (k === 'lim' || k === 'slot') _cp[k] = +v; else _cp[k] = v;
+    _cpSave(); if (k === 'view') return; render();
+  }
+
+  // ── crear al elegir una hora libre ──
   function agSlot(ev, ds) {
     if (ev.target.closest('.cal2-tblock, .cal2-planblock, .cal2-event, .cal2-draft, .cal2-busy')) return;
     const r = ev.currentTarget.getBoundingClientRect(), min = Math.floor(((ev.clientY - r.top) / HOUR_H * 60) / 30) * 30 + GRID_S * 60, s = Math.max(GRID_S * 60, Math.min(GRID_E * 60 - 30, min));
-    _draft = { ds, s, e: Math.min(GRID_E * 60, s + 60), tipo: 'evento', titulo: '', todo: false, link: '', ubic: '', desc: '', people: [..._agMeet], proj: 0 };
+    _draft = { ds, ds2: ds, s, e: Math.min(GRID_E * 60, s + (_cp.slot || 60)), tipo: 'evento', titulo: '', todo: false, link: '', ubic: '', desc: '', people: [..._agMeet], proj: 0, estado: 'pendiente', prio: '', tags: '', est: '', task: 0 };
     render(); requestAnimationFrame(_agCreatePop);
   }
   const _TIPOS = [['evento', 'Evento'], ['tarea', 'Tarea'], ['concentracion', 'Tiempo de concentración'], ['no_disponible', 'No disponible'], ['libre', 'Tiempo libre']];
@@ -17144,37 +17214,54 @@ const CalendarModule = (() => {
   function _agCreatePop() {
     const blk = document.querySelector('.cal2-draft'); if (!blk || !_draft) return;
     _agPopOpen(`<div class="ag-cp"><div class="ag-cp__tabs">${_TIPOS.map(([k, l]) => `<button type="button" class="${_draft.tipo === k ? 'on' : ''}" onclick="CalendarModule.agTipo('${k}')">${l}</button>`).join('')}<button type="button" class="ag-cp__x" onclick="CalendarModule.agCancel()" title="Cerrar">${_agI(_AG.x, 14)}</button></div><div id="ag-cp-body"></div></div>`, 'ag-pop--cp',
-      p => { const r = blk.getBoundingClientRect(), W = 500; let left = r.right + 12; if (left + W > innerWidth - 12) left = Math.max(12, r.left - W - 12); p.style.width = W + 'px'; p.style.left = left + 'px'; p.style.top = Math.max(60, Math.min(r.top - 30, innerHeight - 480)) + 'px'; }, () => { if (_draft) { _draft = null; render(); } });
+      p => { const r = blk.getBoundingClientRect(), W = 560; let left = r.right + 12; if (left + W > innerWidth - 12) left = Math.max(12, r.left - W - 12); p.style.width = W + 'px'; p.style.left = left + 'px'; p.style.top = Math.max(60, Math.min(r.top - 30, innerHeight - 480)) + 'px'; }, () => { if (_draft) { _draft = null; render(); } });
     _agCpBody(); setTimeout(() => $('ag-t')?.focus(), 30);
   }
-  function agTipo(k) { if (!_draft) return; _draft.tipo = k; if (k === 'concentracion' && !_draft.titulo) _draft.titulo = ''; document.querySelectorAll('.ag-cp__tabs button:not(.ag-cp__x)').forEach((b, i) => b.classList.toggle('on', _TIPOS[i][0] === k)); _agCpBody(); _agDraftPaint(); }
+  function agTipo(k) { if (!_draft) return; _draft.tipo = k; document.querySelectorAll('.ag-cp__tabs button:not(.ag-cp__x)').forEach((b, i) => b.classList.toggle('on', _TIPOS[i][0] === k)); _agCpBody(); _agDraftPaint(); setTimeout(() => $('ag-t')?.focus(), 20); }
+  const _parseEst = v => { v = String(v || '').trim().toLowerCase().replace(',', '.'); if (!v) return null; let m = /^(\d+(?:\.\d+)?)\s*h(?:\s*(\d+)\s*m?)?$/.exec(v); if (m) return Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0)); m = /^(\d+)\s*m(?:in)?$/.exec(v); if (m) return +m[1]; m = /^\d+(?:\.\d+)?$/.exec(v); if (m) return Math.round(parseFloat(v) * 60); return NaN; };
+  const _durTxt = d => d >= 60 ? `${Math.floor(d / 60)}h${d % 60 ? ' ' + d % 60 + 'm' : ''}` : `${d}m`;
   function _agCpBody() {
     const d = _draft, box = $('ag-cp-body'); if (!box || !d) return;
-    const ph = { evento: 'Agregar título del evento', tarea: 'Nombre de la tarea', concentracion: 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
-    if (d.tipo === 'libre') { box.innerHTML = `<div class="ag-cp__b"><div class="ag-cp__note">Registra una ausencia: vacaciones, permiso o un día libre. Se verá en el calendario del equipo.</div></div><div class="ag-cp__f"><button type="button" class="ts-btn ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.agLibre()">Registrar ausencia…</button></div>`; return; }
-    const dur = d.e - d.s, durTxt = dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ' ' + dur % 60 + 'm' : ''}` : `${dur}m`;
+    const ph = { evento: 'Agregar título del evento', tarea: 'Nombre de la tarea', concentracion: _cp.foco || 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
+    if (d.tipo === 'libre') { box.innerHTML = `<div class="ag-cp__b"><div class="ag-cp__note">Registra una ausencia: vacaciones, permiso o un día libre. Se verá en el calendario del equipo.</div></div><div class="ag-cp__f"><button type="button" class="ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.agLibre()">Registrar ausencia…</button></div>`; return; }
     const projs = _projects.filter(p => (p.estado || 'activo') === 'activo' && !p.archivado), last = +(localStorage.getItem('cal_last_proj') || 0);
-    const sel = d.proj || (projs.find(p => p.id === last) || projs[0] || {}).id || 0; d.proj = sel;
-    const evento = d.tipo === 'evento';
-    box.innerHTML = `<div class="ag-cp__b">
-        <input id="ag-t" class="ag-cp__title" type="text" autocomplete="off" placeholder="${ph}" value="${esc(d.titulo)}" oninput="CalendarModule.agSet('titulo',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();CalendarModule.agSave()}">
-        <div class="ag-cp__dt"><input type="date" value="${d.ds}" onchange="CalendarModule.agSet('ds',this.value)">${d.todo ? '' : `<input type="time" value="${_hhmm(d.s)}" onchange="CalendarModule.agSet('s',this.value)"><span>→</span><input type="time" value="${_hhmm(d.e)}" onchange="CalendarModule.agSet('e',this.value)"><em id="ag-dur">${durTxt}</em>`}</div>
-        ${d.tipo === 'tarea' ? `<label class="ag-cp__row">${_agI(_AG.sub, 15)}<select onchange="CalendarModule.agSet('proj',this.value)">${projs.map(p => `<option value="${p.id}"${p.id === sel ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></label>` : `<label class="ag-cp__chk"><input type="checkbox" ${d.todo ? 'checked' : ''} onchange="CalendarModule.agSet('todo',this.checked)"> Todo el día</label>`}
-        ${evento ? `<div class="ag-cp__rows">
+    d.proj = d.proj || (projs.find(p => p.id === last) || projs[0] || {}).id || 0;
+    const me = window._authUser?.memberNombre || window._authUser?.name || 'Yo', ini = String(me).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const opt = (v, l, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${l}</option>`;
+    const dt = d.tipo === 'tarea'
+      ? `<div class="ag-cp__dt ag-cp__dt--2"><input type="date" value="${d.ds}" onchange="CalendarModule.agSet('ds',this.value)"><input type="time" value="${_hhmm(d.s)}" onchange="CalendarModule.agSet('s',this.value)"><span>→</span><input type="date" value="${d.ds2 || d.ds}" onchange="CalendarModule.agSet('ds2',this.value)"><input type="time" value="${_hhmm(d.e)}" onchange="CalendarModule.agSet('e',this.value)"><em id="ag-dur">${_durTxt(d.e - d.s)}</em></div>`
+      : `<div class="ag-cp__dt"><input type="date" value="${d.ds}" onchange="CalendarModule.agSet('ds',this.value)">${d.todo ? '' : `<input type="time" value="${_hhmm(d.s)}" onchange="CalendarModule.agSet('s',this.value)"><span>→</span><input type="time" value="${_hhmm(d.e)}" onchange="CalendarModule.agSet('e',this.value)"><em id="ag-dur">${_durTxt(d.e - d.s)}</em>`}</div>`;
+    const title = `<input id="ag-t" class="ag-cp__title" type="text" autocomplete="off" placeholder="${esc(ph)}" value="${esc(d.titulo)}" oninput="CalendarModule.agSet('titulo',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();CalendarModule.agSave()}">`;
+    const desc = `<label class="ag-cp__row ag-cp__row--t">${_agI(_AG.text, 15)}<textarea rows="2" placeholder="Agregar descripción" oninput="CalendarModule.agSet('desc',this.value)">${esc(d.desc)}</textarea></label>`;
+    let body = '';
+    if (d.tipo === 'evento') body = `${title}${dt}<label class="ag-cp__chk"><input type="checkbox" ${d.todo ? 'checked' : ''} onchange="CalendarModule.agSet('todo',this.checked)"> Todo el día</label>
+        <div class="ag-cp__rows">
           <label class="ag-cp__row">${_agI(_AG.video, 15)}<input type="text" placeholder="Agregar videollamada (pega el enlace de Meet, Zoom…)" value="${esc(d.link)}" oninput="CalendarModule.agSet('link',this.value)"></label>
           <div class="ag-cp__row ag-cp__row--p">${_agI(_AG.users, 15)}<div class="ag-cp__ppl">${(_agTeam || []).filter(m => String(m.nombre || '').trim().toLowerCase() !== _agMe()).map(m => `<label class="${d.people.includes(m.nombre) ? 'on' : ''}"><input type="checkbox" ${d.people.includes(m.nombre) ? 'checked' : ''} data-n="${esc(m.nombre)}" onchange="CalendarModule.agPeople(this.dataset.n,this.checked)">${esc(m.nombre)}</label>`).join('') || '<span class="ag-empty">Sin equipo</span>'}</div></div>
-          <label class="ag-cp__row">${_agI(_AG.pin, 15)}<input type="text" placeholder="Agregar ubicación o sala" value="${esc(d.ubic)}" oninput="CalendarModule.agSet('ubic',this.value)"></label>
-          <label class="ag-cp__row ag-cp__row--t">${_agI(_AG.text, 15)}<textarea rows="2" placeholder="Agregar descripción" oninput="CalendarModule.agSet('desc',this.value)">${esc(d.desc)}</textarea></label></div>` : ''}
-      </div>
-      <div class="ag-cp__f"><span class="ag-cp__st">${{ evento: 'Ocupado', tarea: 'Se programa en tu calendario', concentracion: 'Se marca como concentración', no_disponible: 'Se marca como no disponible' }[d.tipo]}</span><button type="button" class="ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" id="ag-save" onclick="CalendarModule.agSave()">Crear</button></div>`;
+          <label class="ag-cp__row">${_agI(_AG.pin, 15)}<input type="text" placeholder="Agregar ubicación o sala" value="${esc(d.ubic)}" oninput="CalendarModule.agSet('ubic',this.value)"></label>${desc}</div>`;
+    else if (d.tipo === 'tarea') body = `<div class="ag-cp__chips"><label class="ag-cs"><span class="ag-cs__av">${esc(ini)}</span><select onchange="CalendarModule.agSet('proj',this.value)">${projs.map(p => `<option value="${p.id}"${p.id === d.proj ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('') || '<option value="0">Sin proyectos</option>'}</select></label><span class="ag-cs ag-cs--t">${_agI('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 14)}Tarea</span></div>${title}${dt}
+        <div class="ag-cp__grid">
+          <label class="ag-cp__f">${_agI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>', 15)}<select onchange="CalendarModule.agSet('estado',this.value)">${opt('pendiente', 'Pendiente', d.estado)}${opt('en_progreso', 'En progreso', d.estado)}${opt('bloqueado', 'Bloqueado', d.estado)}</select></label>
+          <div class="ag-cp__f ag-cp__f--w" title="Se asigna a ti">${_agI(_AG.users, 15)}<span class="ag-cs__av">${esc(ini)}</span></div>
+          <label class="ag-cp__f">${_agI(_AG.flag, 15)}<select onchange="CalendarModule.agSet('prio',this.value)">${opt('', 'Agregar prioridad', d.prio)}${opt('baja', 'Baja', d.prio)}${opt('media', 'Media', d.prio)}${opt('alta', 'Alta', d.prio)}${opt('urgente', 'Urgente', d.prio)}</select></label>
+          <label class="ag-cp__f">${_agI('<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/>', 15)}<input type="text" placeholder="Agregar etiqueta (separa con comas)" value="${esc(d.tags)}" oninput="CalendarModule.agSet('tags',this.value)"></label>
+          <label class="ag-cp__f">${_agI('<path d="M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4"/>', 15)}<input type="text" placeholder="Agregar duración estimada (ej. 2h, 90m)" value="${esc(d.est)}" oninput="CalendarModule.agSet('est',this.value)"></label>
+        </div>${desc}`;
+    else if (d.tipo === 'concentracion') { const mine = _tasks.filter(t => _agMine(t) && _agOpen(t) && _agLeaf(t)).sort((a, z) => String(a.deadline || '9999').localeCompare(String(z.deadline || '9999'))).slice(0, 80);
+      body = `${title}${dt}<label class="ag-cp__row">${_agI('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 15)}<select onchange="CalendarModule.agSet('task',this.value)"><option value="0">Agregar tarea (para qué es este bloque)</option>${mine.map(t => `<option value="${t.id}"${+d.task === t.id ? ' selected' : ''}>${esc(t.titulo)}${t.project_nombre ? ' · ' + esc(t.project_nombre) : ''}</option>`).join('')}</select></label>${desc}`; }
+    else body = `${title}${dt}${desc}`;
+    box.innerHTML = `<div class="ag-cp__b">${body}</div><div class="ag-cp__f"><span class="ag-cp__st">${{ evento: 'Ocupado', tarea: 'Se programa en tu calendario', concentracion: 'Se marca como tiempo de concentración', no_disponible: 'Se marca como no disponible' }[d.tipo]}</span><button type="button" class="ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" id="ag-save" onclick="CalendarModule.agSave()">Crear</button></div>`;
   }
   function agSet(k, v) {
     const d = _draft; if (!d) return;
-    if (k === 's' || k === 'e') { const m = _toMin(v); if (m == null) return; d[k] = m; if (k === 's' && d.e <= d.s) d.e = Math.min(1440, d.s + 60); if (k === 'e' && d.e <= d.s) d.s = Math.max(0, d.e - 60); const i = document.querySelectorAll('.ag-cp__dt input[type=time]'); if (i[0]) i[0].value = _hhmm(d.s); if (i[1]) i[1].value = _hhmm(d.e); const dur = d.e - d.s, el = $('ag-dur'); if (el) el.textContent = dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ' ' + dur % 60 + 'm' : ''}` : `${dur}m`; _agDraftPaint(); return; }
+    if (k === 's' || k === 'e') {
+      const m = _toMin(v); if (m == null) return; d[k] = m; if (k === 's' && d.e <= d.s) d.e = Math.min(1440, d.s + 60); if (k === 'e' && d.e <= d.s) d.s = Math.max(0, d.e - 60);
+      const i = document.querySelectorAll('.ag-cp__dt input[type=time]'); if (i[0]) i[0].value = _hhmm(d.s); if (i[1]) i[1].value = _hhmm(d.e); const el = $('ag-dur'); if (el) el.textContent = _durTxt(d.e - d.s); _agDraftPaint(); return;
+    }
     if (k === 'proj') { d.proj = +v; try { localStorage.setItem('cal_last_proj', String(v)); } catch (_) {} return; }
-    if (k === 'todo') { d[k] = !!v; _agCpBody(); return; }
+    if (k === 'todo') { d.todo = !!v; _agCpBody(); return; }
     d[k] = v; if (k === 'titulo') _agDraftPaint();
-    if (k === 'ds') { render(); requestAnimationFrame(() => { const b = document.querySelector('.cal2-draft'); if (b) _agPopEl && (_agPopEl.style.display = ''); }); }
+    if (k === 'ds') { if (!d.ds2 || d.ds2 < v) d.ds2 = v; render(); if (d.tipo === 'tarea') _agCpBody(); }
   }
   function agPeople(n, on) { const d = _draft; if (!d) return; d.people = on ? [...new Set([...d.people, n])] : d.people.filter(x => x !== n); document.querySelectorAll('.ag-cp__ppl label').forEach(l => { const i = l.querySelector('input'); l.classList.toggle('on', d.people.includes(i.dataset.n)); }); }
   function _agDraftPaint() {
@@ -17187,21 +17274,25 @@ const CalendarModule = (() => {
   function agLibre() { _agDraftClose(); try { TimeOffModule.openDrawer(); } catch (e) { showBanner('No se pudo abrir el registro de ausencias', 'error'); } }
   async function agSave() {
     const d = _draft; if (!d) return; const btn = $('ag-save'), titulo = (d.titulo || '').trim();
-    const def = { evento: '', tarea: '', concentracion: 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
+    const def = { evento: '', tarea: '', concentracion: _cp.foco || 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
     if (!titulo && !def) { showBanner('Escribe un título', 'info'); $('ag-t')?.focus(); return; }
-    if (!d.todo && d.e <= d.s) { showBanner('La hora de fin debe ser posterior a la de inicio', 'info'); return; }
+    if (!d.todo && d.tipo !== 'tarea' && d.e <= d.s) { showBanner('La hora de fin debe ser posterior a la de inicio', 'info'); return; }
     if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
     try {
       if (d.tipo === 'tarea') {
-        if (!d.proj) throw new Error('Elige el proyecto de la tarea');
+        if (!d.proj) throw new Error('Elige la lista (proyecto) de la tarea');
+        const est = _parseEst(d.est); if (Number.isNaN(est)) throw new Error('Escribe la duración así: 90m, 2h o 1h 30m');
+        const ds2 = d.ds2 && d.ds2 >= d.ds ? d.ds2 : d.ds; if (ds2 === d.ds && d.e <= d.s) throw new Error('La hora de fin debe ser posterior a la de inicio');
         const me = window._authUser?.memberNombre || '';
-        const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: d.proj, estado: 'pendiente', responsables: me ? [me] : [] }) });
+        const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: d.proj, estado: d.estado || 'pendiente', prioridad: d.prio || 'media', descripcion: d.desc || '', responsables: me ? [me] : [], fecha_inicio: d.ds, deadline: ds2 }) });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la tarea');
-        const t = await r.json(); const pj = _projects.find(x => x.id === d.proj); if (pj) t.project_nombre = pj.nombre; _tasks.push(t);
-        const ds = d.ds, ini = _hhmm(d.s), min = d.e - d.s; _agPopClose(); _draft = null;
+        const t = await r.json(); const pj = _projects.find(x => x.id === d.proj); if (pj) t.project_nombre = pj.nombre;
+        const tags = String(d.tags || '').split(',').map(x => x.trim()).filter(Boolean);
+        if (tags.length || est) { try { await apiFetch(`${API}/mgmt/tasks/${t.id}/extras`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etiquetas: tags, duracion_est_min: est || null }) }); t.etiquetas = tags; t.duracion_est_min = est || null; } catch (_) {} }
+        _tasks.push(t); const ds = d.ds, ini = _hhmm(d.s), min = ds2 === d.ds ? d.e - d.s : 60; _agPopClose(); _draft = null;
         await _assignSchedule(t.id, ds, ini, min); showBanner(`✓ Tarea creada y programada el ${_dlShort(ds)} a las ${_fmtT(ini)}`, 'success'); return;
       }
-      const body = { titulo: titulo || def, fecha: d.ds, hora_inicio: d.todo ? null : _hhmm(d.s), hora_fin: d.todo ? null : _hhmm(d.e), descripcion: ((d.ubic ? 'Ubicación: ' + d.ubic + '\n' : '') + (d.desc || '')).trim(), link: d.link || '', attendees: d.tipo === 'evento' ? d.people : [], tipo: d.tipo };
+      const body = { titulo: titulo || def, fecha: d.ds, hora_inicio: d.todo ? null : _hhmm(d.s), hora_fin: d.todo ? null : _hhmm(d.e), descripcion: ((d.ubic ? 'Ubicación: ' + d.ubic + '\n' : '') + (d.desc || '')).trim(), link: d.link || '', attendees: d.tipo === 'evento' ? d.people : [], tipo: d.tipo, task_id: d.tipo === 'concentracion' && +d.task ? +d.task : null };
       const r = await apiFetch(`${API}/mgmt/meetings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear');
       _meetings.push(await r.json()); _agPopClose(); _draft = null; render(); showBanner(`✓ ${d.tipo === 'evento' ? 'Evento creado' : d.tipo === 'concentracion' ? 'Tiempo de concentración reservado' : 'Horario marcado como no disponible'}`, 'success');
@@ -17286,6 +17377,7 @@ const CalendarModule = (() => {
       <div class="cal2-tlabels__hours">
         ${_nowPill}
         ${hours.map(h => {
+          if (_cp.h24) return `<div class="cal2-tlabel"><b>${_pad(h)}:00</b></div>`;
           if (h === 12) return `<div class="cal2-tlabel"><b>Mediodía</b></div>`;
           const n = h === 0 ? 12 : h > 12 ? h - 12 : h;
           return `<div class="cal2-tlabel"><b>${n}</b><i>${h < 12 ? 'AM' : 'PM'}</i></div>`;
@@ -17419,8 +17511,8 @@ const CalendarModule = (() => {
         const hPx    = Math.max(26, (endMin - stMin) / 60 * HOUR_H - 2);
         const tp = m.tipo || 'evento';
         return `<div class="cal2-event${tp === 'concentracion' ? ' cal2-event--foco' : tp === 'no_disponible' ? ' cal2-event--nd' : ''}" style="top:${topPx}px;height:${hPx}px;${tp === 'evento' ? 'background:' + bg : ''}" onclick="MeetingsModule.openDrawer(${m.id})">
-          <div class="cal2-event__title">${esc(m.titulo)}</div>
-          <div class="cal2-event__time">${_fmtT(m.hora_inicio)}${m.hora_fin ? ' – ' + _fmtT(m.hora_fin) : ''}</div>
+          <div class="cal2-event__title">${tp === 'concentracion' ? '◉ ' : ''}${esc(m.titulo)}</div>
+          <div class="cal2-event__time">${_fmtT(m.hora_inicio)}${m.hora_fin ? ' – ' + _fmtT(m.hora_fin) : ''}${m.task_id && _byId[m.task_id] ? ' · ' + esc(_byId[m.task_id].titulo) : ''}</div>
         </div>`;
       }).join('');
 
@@ -17796,13 +17888,14 @@ const CalendarModule = (() => {
     const a = new Date(_anchor);
     if (_view === 'day')        a.setDate(a.getDate() + dir);
     else if (_view === 'month') a.setMonth(a.getMonth() + dir, 1);
+    else if (_view === 'ndays') a.setDate(a.getDate() + _nDays * dir);
     else                        a.setDate(a.getDate() + 7 * dir);
     _anchor = a; _weekOf = _monday(a);
   }
   function prev()     { _shift(-1); load(); }
   function next()     { _shift(1);  load(); }
   function goToday()  { _anchor = new Date(); _weekOf = _monday(new Date()); load(); }
-  function setView(v) { _view = v; if (!_anchor) _anchor = new Date(); _weekOf = _monday(_anchor); render(); }
+  function setView(v) { _view = v; if (!_anchor) _anchor = new Date(); _weekOf = _monday(_anchor); load(); }
   function miniShift(dir) { const a = new Date(_anchor); a.setMonth(a.getMonth() + dir, 1); _anchor = a; _weekOf = _monday(a); load(); }
   function openDay(ds) { _anchor = new Date(ds + 'T00:00:00'); _weekOf = _monday(_anchor); _view = 'day'; load(); }
   async function refresh() { _meetings = []; _tasks = []; _timeOff = []; _timeEntries = []; await load(); }
@@ -17833,6 +17926,7 @@ const CalendarModule = (() => {
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
     openPlanPop, movePlan, startFromPlan, setView, openDay, selectItem, miniShift,
     toggleProj, openColorPick, setProjColor, toggleTodoBand,
+    agViewMenu, agSetView, agNDays, agToggle, agSettings, agSetSec, agPref,
     agTab, agMore, agPrioToggle, agPrioOpen, agPickSearch, agMeetSearch, agMeetAdd, agMeetDel, agDrag, agDragEnd, agOver, agLeave, agDrop, agSlot, agTipo, agSet, agPeople, agCancel, agLibre, agSave, agCmd, agCmdGo,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
