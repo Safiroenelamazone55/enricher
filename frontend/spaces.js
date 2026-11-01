@@ -1167,9 +1167,9 @@ const SpacesModule = (() => {
   // Para Mi trabajo y otras pantallas: estados propios y campos de cada tarea según SU proyecto
   async function ensure() { if (_projects.length) return; try { const [pr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
   function statusTag(t) { const st = _taskSt(t); return `<span class="sp-tag sp-tag--s" style="--c:${st.c}">${esc(st.n)}</span>`; }
-  function chipsFor(t, max) {
+  function chipsFor(t, max, only) {   // only: claves «nombre|tipo» elegidas por la persona (Mi trabajo → Campos); sin ella, las visibles del proyecto
     const out = [];
-    for (const f of _fields(t.project_id)) { if (f.v === false || f.t === 'progreso_auto' || f.t === 'votacion') continue; const v = (t.campos || {})[f.id]; if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue; out.push(`<span class="mw-fchip"><em>${esc(f.n)}</em>${_fview(t, f)}</span>`); if (out.length >= (max || 3)) break; }
+    for (const f of _fields(t.project_id)) { if (only && !only.includes(f.n + '|' + f.t)) continue; if ((!only && f.v === false) || f.t === 'progreso_auto' || f.t === 'votacion') continue; const v = (t.campos || {})[f.id]; if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue; out.push(`<span class="mw-fchip"><em>${esc(f.n)}</em>${_fview(t, f)}</span>`); if (out.length >= (max || 3)) break; }
     return out.join('');
   }
   function fieldKeys() { const m = new Map(); _projects.forEach(p => (p.campos || []).forEach(f => { const k = f.n + '|' + f.t; if (!m.has(k)) m.set(k, { k, n: f.n, t: f.t }); })); return [...m.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')); }

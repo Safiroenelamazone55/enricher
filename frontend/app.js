@@ -11989,7 +11989,7 @@ const MyWorkModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
-      <span class="mw-fst">${SpacesModule.statusTag(t)}</span>${(() => { const c = SpacesModule.chipsFor(t, 3); return c ? `<span class="mw-fch">${c}</span>` : ''; })()}
+      ${(() => { const c = SpacesModule.chipsFor(t, 3, _mwF); return c ? `<span class="mw-fch">${c}</span>` : ''; })()}<span class="mw-fst">${SpacesModule.statusTag(t)}</span>
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -12078,7 +12078,7 @@ const MyWorkModule = (() => {
   const _fieldCells = t => _mwF.map(k => `<td class="mw-td-f">${SpacesModule.fcellFor(t, k)}</td>`).join('');
   function fieldsMenu(ev) {
     const ks = SpacesModule.fieldKeys();
-    _openPop(ev.currentTarget, `<div class="mw-pop__h">Campos como columnas</div>${ks.length ? ks.map(f => `<label class="mw-pop__o"><input type="checkbox" data-k="${esc(f.k)}" ${_mwF.includes(f.k) ? 'checked' : ''} onchange="MyWorkModule.toggleField(this.dataset.k,this.checked)"><span>${esc(f.n)}</span></label>`).join('') : '<div class="mw-pop__o">Ningún proyecto tiene campos personalizados todavía.</div>'}`);
+    _openPop(ev.currentTarget, `<div class="mw-pop__h">Campos visibles en Lista, Tabla y Kanban</div>${ks.length ? ks.map(f => `<label class="mw-pop__o"><input type="checkbox" data-k="${esc(f.k)}" ${_mwF.includes(f.k) ? 'checked' : ''} onchange="MyWorkModule.toggleField(this.dataset.k,this.checked)"><span>${esc(f.n)}</span></label>`).join('') : '<div class="mw-pop__o">Ningún proyecto tiene campos personalizados todavía.</div>'}`);
   }
   function toggleField(k, on) { _mwF = on ? [...new Set([..._mwF, k])] : _mwF.filter(x => x !== k); try { localStorage.setItem('nova_mw_fields', JSON.stringify(_mwF)); } catch (_) {} render(); }
   function stMenu(ev, id) { const t = _tasks.find(x => x.id === id); _adoptTT(); if (t && SpacesModule.isCustom(t.project_id)) { ev.stopPropagation(); SpacesModule.estMenu(ev, id); } else DashboardModule.openStatusMenu(ev, id); }
@@ -12129,7 +12129,7 @@ const MyWorkModule = (() => {
         <td class="mw-td-d">${w.start ? _fmt(w.start) : '—'}</td>
         <td class="mw-td-d">${_dateBtn(t, w.end ? _fmt(w.end) : '')}</td>
         <td class="mw-td-a">${_playBtn(t)}</td>${_fieldCells(t)}</tr>`; }).join('');
-    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label><button type="button" class="mw-fbtn" onclick="MyWorkModule.fieldsMenu(event)" title="Elige qué campos personalizados ver como columnas">Campos${_mwF.length ? ` · ${_mwF.length}` : ''}</button></div>
+    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label><button type="button" class="mw-fbtn" onclick="MyWorkModule.fieldsMenu(event)" title="Elige qué campos personalizados ver en Lista, Tabla y Kanban">Campos${_mwF.length ? ` · ${_mwF.length}` : ''}</button></div>
       ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}<th class="mw-th-s">Estado</th>${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th>${_fieldHeads()}</tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
   }
@@ -12154,7 +12154,7 @@ const MyWorkModule = (() => {
           <button class="tt-task-play-btn tt-play--kc" data-timer-task="${t.id}" draggable="false" title="Iniciar seguimiento" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           <button class="kc-menu-btn" title="Opciones" onclick="MyWorkModule.openCardMenu(event,${t.id})"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button></div></div>
       ${(ctx || t.client_nombre) ? `<div class="kc-meta">${ctx ? `<span class="kc-project" title="${esc(ctx)}">${esc(ctx)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
-      ${_taskBadgesHtml(t)}<div class="mw-kchips">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 2)}</div><div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
+      ${_taskBadgesHtml(t)}<div class="mw-kchips">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 2, _mwF)}</div><div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
   }
   let _group = 'estado', _gcols = [];
   const _GROUPS = { estado: ['Estado', t => t.estado || 'pendiente'], prioridad: ['Prioridad', t => t.prioridad || 'media'], proyecto: ['Proyecto', t => t.project_nombre || 'Sin proyecto'], cliente: ['Cliente', t => t.client_nombre || 'Sin cliente'] };
