@@ -25440,8 +25440,8 @@ ${foot}
     _seqMetCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _seqMetCharts = [];
     if (typeof Chart === 'undefined' || !_seqMetrics || !_seqMetrics.kpi) return;
     const d = _seqMetrics;
-    const tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 8, titleFont: { size: 11 }, bodyFont: { size: 11 } };
-    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { color: '#94A3B8', font: { size: 10 }, precision: 0 } } };
+    const tip = { backgroundColor: '#fff', titleColor: '#14211B', bodyColor: '#5F6B64', borderColor: '#E2E7E3', borderWidth: 1, padding: 10, cornerRadius: 8, boxPadding: 4, titleFont: { size: 11, weight: '600' }, bodyFont: { size: 11 } };
+    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#8B9690', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { color: '#94A3B8', font: { size: 10 }, precision: 0 } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
     const weekly = (_seqMetGran === 'auto' ? days.length > 60 : _seqMetGran === 'week');
     const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
@@ -25480,8 +25480,8 @@ ${foot}
       </div>
       <div class="dash-row dash-row--b">
         <div class="cp-card"><div class="cp-card__t">Toques por canal</div>${donut}</div>
-        <div class="cp-card"><div class="cp-card__t">Cuándo responden · automático</div>${_dashHeat(d.heatAuto || [])}</div>
-        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
+        <div class="cp-card"><div class="cp-card__t">Cuándo responden<small>solo respuestas detectadas solas · hora de Lima</small></div>${_dashHeat(d.heatAuto || [])}</div>
+        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos<small>contactos a los que ya les pusiste estado</small></div>${_dashDispo(d.dispo)}</div>
       </div>
       <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
   }
@@ -29518,7 +29518,7 @@ ${foot}
     // toques por canal: dona + leyenda
     const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
     const chLeg = d.channels.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros; return `<tr><td><span class="dash-dot" style="background:${m[1]}"></span>${m[0]}</td><td>${_dashPct(r.touches, chTot)}%</td><td>${r.touches}</td></tr>`; }).join('');
-    const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="dash-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin actividad</div>';
+    const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="dash-ch"></canvas><div class="dash-donut__t"><b>${chTot}</b><span>toques</span></div></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin actividad</div>';
     // países: barras horizontales con %
     const cTot = d.countries.reduce((n, r) => n + r.contacted, 0), cMax = Math.max(1, ...d.countries.map(r => r.contacted));
     const ctry = d.countries.length ? `<div class="dash-bars">${d.countries.slice(0, 6).map(r => `<div class="dash-bar"><span class="dash-bar__l" title="${esc(r.pais)}">${esc(r.pais)}</span><div class="dash-bar__t"><div class="dash-bar__f" style="width:${Math.max(2, Math.round(r.contacted / cMax * 100))}%"></div></div><span class="dash-bar__v">${_dashPct(r.contacted, cTot)}%</span></div>`).join('')}</div>` : '<div class="rep-empty">Sin datos de país</div>';
@@ -29530,23 +29530,23 @@ ${foot}
       ${_kpiRowHtml('dash', c, p, d)}
       <div class="dash-row dash-row--a">
         <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal <span class="dash-info" title="Envíos y pasos hechos por canal (no incluye respuestas ni notas)">${_dashIco('info', 14)}</span></div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
-        <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="dash-funnel">${funnel}</div></div>
+        <div class="cp-card"><div class="cp-card__t">Embudo<small>de enrolados a reunión, con el filtro actual</small></div><div class="dash-funnel">${funnel}</div></div>
       </div>
       <div class="dash-row dash-row--b">
-        <div class="cp-card"><div class="cp-card__t">Toques por canal</div>${donut}</div>
-        <div class="cp-card"><div class="cp-card__t">Países contactados</div>${ctry}</div>
-        <div class="cp-card"><div class="cp-card__t">Respuesta por canal</div>${_dashRepCh(d)}</div>
+        <div class="cp-card"><div class="cp-card__t">Toques por canal<small>cuántos pasos se hicieron en cada canal</small></div>${donut}</div>
+        <div class="cp-card"><div class="cp-card__t">Países contactados<small>% del total de contactados</small></div>${ctry}</div>
+        <div class="cp-card"><div class="cp-card__t">Respuesta por canal<small>contactados frente a quienes respondieron</small></div>${_dashRepCh(d)}</div>
       </div>
       <div class="dash-row dash-row--b">
-        <div class="cp-card"><div class="cp-card__t">Cuándo responden · automático</div>${_dashHeat(d.heatAuto || [])}<div class="dash-kpi__s" style="margin-top:8px">Solo respuestas detectadas solas: email y WhatsApp conectado. LinkedIn y llamadas son manuales y no entran. Hora de Lima.</div></div>
-        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
-        <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
+        <div class="cp-card"><div class="cp-card__t">Cuándo responden<small>solo respuestas detectadas solas · hora de Lima</small></div>${_dashHeat(d.heatAuto || [])}<div class="dash-kpi__s" style="margin-top:8px">Solo respuestas detectadas solas: email y WhatsApp conectado. LinkedIn y llamadas son manuales y no entran. Hora de Lima.</div></div>
+        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos<small>contactos a los que ya les pusiste estado</small></div>${_dashDispo(d.dispo)}</div>
+        <div class="cp-card"><div class="cp-card__t">Respuestas recientes<small>las últimas del periodo</small></div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
       </div>
       <div id="dash-ab" style="margin-bottom:12px">${_dashAbShell()}</div>
       <div class="dash-row dash-row--c">
-        <div class="cp-card"><div class="cp-card__t">Rendimiento por secuencia</div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
-        <div class="cp-card"><div class="cp-card__t">Rendimiento por cliente</div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
-        <div class="cp-card"><div class="cp-card__t">Por país</div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
+        <div class="cp-card"><div class="cp-card__t">Por secuencia<small>enrolados, contactados y tasa de respuesta</small></div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
+        <div class="cp-card"><div class="cp-card__t">Por cliente<small>actividad y respuesta de cada cliente</small></div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
+        <div class="cp-card"><div class="cp-card__t">Por país<small>contactados y tasa de respuesta</small></div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
       </div>`;
   }
   function _dashRepCh(d) {
@@ -29574,7 +29574,7 @@ ${foot}
     h += '</div>';
     order.forEach(dw => {
       h += `<div class="dash-heat"><span class="dash-heat__d">${dn[dw]}</span>`;
-      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(67,181,129,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
+      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(0,128,76,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
       h += '</div>';
     });
     return h;
@@ -29582,8 +29582,8 @@ ${foot}
   function _dashInitCharts() {
     if (typeof Chart === 'undefined' || !_dashData) return;
     const d = _dashData;
-    const tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 8, titleFont: { size: 11 }, bodyFont: { size: 11 } };
-    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
+    const tip = { backgroundColor: '#fff', titleColor: '#14211B', bodyColor: '#5F6B64', borderColor: '#E2E7E3', borderWidth: 1, padding: 10, cornerRadius: 8, boxPadding: 4, titleFont: { size: 11, weight: '600' }, bodyFont: { size: 11 } };
+    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#8B9690', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#EEF0EE', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#8B9690', font: { size: 10 }, padding: 8 } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
     const weekly = (_dashGran === 'auto' ? days.length > 60 : _dashGran === 'week');
     const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
@@ -29593,9 +29593,9 @@ ${foot}
     const lbl = x => x.slice(5);
     const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
-    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 4 : 0, borderSkipped: false, barPercentage: .62, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
-    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
+    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
   function _vDashboard() {
     const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;

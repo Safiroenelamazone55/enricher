@@ -19810,3 +19810,59 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .ts-num { width: 90px; height: 34px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; padding: 0 10px; font: inherit; font-size: .86rem; } .ts-pp { display: flex; align-items: center; gap: 12px; } .ts-pp b { display: block; }
 .ts-cx { margin-bottom: 10px; justify-content: flex-start; } .ts-cx > div { flex: 1; } .ts-cx__i { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 10px; background: var(--surface-hover, #F1F3F0); color: var(--text-secondary, #5F6B64); }
 @media (max-width: 1100px) { .tsd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tsd-c4, .tsd-c6, .tsd-c8 { grid-column: span 12; } .ts-sl { grid-template-columns: 1fr; gap: 16px; } .ts-sn { position: static; flex-direction: row; flex-wrap: wrap; } .ts-sn__h { display: none; } }
+
+/* ═══ Outreach · Dashboard (Hoy / Rendimiento) en el estilo del dashboard de Time Tracking ═══ */
+.dash-scope { --ink: var(--text-primary, #14211B); --mut: var(--text-secondary, #5F6B64); --soft: var(--text-muted, #8B9690); --line: var(--border, #E2E7E3); --bg2: var(--surface-secondary, #F7F8F6); --blue: #4C7DF0; --green: var(--primary, #00804C); --amber: #F2A93B; --red: #E5484D; }
+.dash-scope .lm-sec-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -.01em; }
+.dash-tabs { background: var(--surface-hover, #EEF0EE); border: 0; border-radius: 10px; padding: 3px; }
+.dash-tab { padding: 8px 15px; border-radius: 8px; font: 500 .84rem/1 inherit; color: var(--text-secondary, #5F6B64); }
+.dash-tab:hover { color: var(--text-primary, #14211B); } .dash-tab.on { background: #fff; color: var(--text-primary, #14211B); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,20,.08); }
+.dash-btn { height: 34px; padding: 0 13px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; color: var(--text-primary, #14211B); font: 500 .84rem/1 inherit; box-shadow: none; }
+.dash-btn:hover { background: var(--surface-hover, #F1F3F0); border-color: var(--border-strong, #D5DDD7); box-shadow: none; }
+.dash-btn--p { background: var(--primary, #00804C); border-color: var(--primary, #00804C); color: #fff; box-shadow: none; } .dash-btn--p:hover { background: var(--primary-hover, #006B3F); border-color: var(--primary-hover, #006B3F); }
+/* filtros compactos */
+.dash-filters { flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+.dash-f { flex: 0 1 auto; min-width: 150px; height: 34px; padding: 0 10px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; background: #fff; }
+.dash-f:hover { border-color: #BFC8C2; } .dash-f.is-on { border-color: var(--primary-border, #BFE3D2); background: var(--primary-soft, #E6F4EE); color: var(--primary, #00804C); box-shadow: none; } .dash-f__i { color: var(--text-muted, #8B9690); } .dash-f.is-on .dash-f__i { color: var(--primary, #00804C); }
+.dash-f select, .dash-f input[type="text"] { font: 500 .84rem inherit; } .dash-f--sm { height: 30px; min-width: 0; }
+.dash-date { height: 34px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; font: 500 .84rem inherit; } .dash-clear { color: var(--primary, #00804C); font: 600 .84rem inherit; }
+.kpi-cfg { border: 1px solid var(--border, #E2E7E3); border-radius: 8px; background: #fff; color: var(--text-secondary, #5F6B64); font: 500 .78rem inherit; padding: 5px 11px; }
+/* KPI */
+.dash-kpis { gap: 12px; margin-bottom: 14px; }
+.dash-kpi { padding: 16px 18px; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; background: #fff; }
+.dash-kpi:hover { transform: none; box-shadow: none; } .dash-kpi--click:hover { border-color: var(--primary-border, #BFE3D2); }
+.dash-kpi__top { gap: 8px; margin-bottom: 4px; } .dash-kpi__ic { width: 18px; height: 18px; color: var(--text-muted, #8B9690); } .dash-kpi__ic svg { width: 17px; height: 17px; stroke-width: 1.7; }
+.dash-kpi__l { font-size: .78rem; font-weight: 500; color: var(--text-secondary, #5F6B64); }
+.dash-kpi__v { font-size: 1.7rem; font-weight: 600; letter-spacing: -.02em; color: var(--text-primary, #14211B); margin: 2px 0 4px; }
+.dash-d { font-size: .74rem; font-weight: 500; } .dash-d--up { color: var(--primary, #00804C); } .dash-d--down { color: #B54708; } .dash-d--0 { color: var(--text-muted, #8B9690); }
+.dash-kpi__s { font-size: .74rem; color: var(--text-muted, #8B9690); }
+/* tarjetas */
+.dash-scope .cp-card { padding: 16px 18px 14px; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; animation: none; }
+.dash-scope .cp-card__t { margin: 0 0 12px; font-size: .95rem; font-weight: 600; color: var(--text-primary, #14211B); }
+.dash-scope .cp-card__t small { display: block; margin-top: 2px; font-size: .74rem; font-weight: 400; color: var(--text-muted, #8B9690); }
+.dash-card-h .cp-card__t { margin-bottom: 8px; }
+.dash-legend { gap: 14px; color: var(--text-secondary, #5F6B64); font-size: .78rem; } .dash-dot { width: 8px; height: 8px; }
+.dash-chart { height: 250px; }
+/* embudo */
+.dash-funnel { gap: 12px; } .dash-fn:not(:last-child)::after { border-left: 1px solid var(--border, #E2E7E3); left: 13px; }
+.dash-fn__ic { width: 26px; height: 26px; color: var(--text-muted, #8B9690); } .dash-fn__ic svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.dash-fn__l { font-size: .88rem; font-weight: 600; color: var(--text-primary, #14211B); } .dash-fn__c { font-size: .74rem; color: var(--text-muted, #8B9690); } .dash-fn__n { font-size: 1.15rem; font-weight: 600; color: var(--text-primary, #14211B); }
+.dash-fn__track { height: 6px; background: var(--surface-hover, #EEF0EE); }
+/* dona */
+.dash-donut__c { width: 150px; height: 150px; } .dash-donut__t { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; } .dash-donut__t b { font-size: 1.3rem; font-weight: 600; line-height: 1.1; } .dash-donut__t span { font-size: .7rem; color: var(--text-muted, #8B9690); }
+.dash-leg { font-size: .8rem; color: var(--text-secondary, #5F6B64); } .dash-leg td { border-bottom: 1px solid var(--border, #EEF0EE); } .dash-leg td:nth-child(3) { color: var(--text-primary, #14211B); } .dash-leg__t td { border-top: 1px solid var(--border, #E2E7E3); color: var(--text-primary, #14211B) !important; }
+/* barras */
+.dash-bar { font-size: .8rem; color: var(--text-secondary, #5F6B64); } .dash-bar__t { height: 8px; background: var(--surface-hover, #EEF0EE); } .dash-bar__f { background: #4C7DF0; }
+/* tablas */
+.dash-scope .clients-table th { background: var(--surface-secondary, #F7F8F6); color: var(--text-muted, #8B9690); font-size: .74rem; font-weight: 500; border-bottom: 1px solid var(--border, #E2E7E3); }
+.dash-scope .clients-table td { font-size: .82rem; border-bottom: 1px solid var(--border, #EEF0EE); color: var(--text-secondary, #5F6B64); } .dash-scope .clients-table tbody tr:hover { background: var(--surface-secondary, #F7F8F6); } .dash-scope .clients-table b { color: var(--text-primary, #14211B); }
+.dash-good { color: var(--primary, #00804C) !important; font-weight: 600; } .dash-zero { color: var(--text-muted, #8B9690) !important; } .dash-tot td { background: var(--surface-secondary, #F7F8F6); border-top: 1px solid var(--border, #E2E7E3); }
+.dash-heat { gap: 3px; } .dash-heat__h, .dash-heat__d { color: var(--text-muted, #8B9690); } .dash-heat__c { height: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(16,24,20,.04); }
+.dash-scope .rep-empty { color: var(--text-muted, #8B9690); }
+.dash-scope .lm-link { color: var(--primary, #00804C); }
+@media (max-width: 1100px) { .dash-row--a, .dash-row--b, .dash-row--c { grid-template-columns: minmax(0, 1fr); } }
+.dash-kpis--row { overflow-x: auto; overflow-y: hidden; gap: 12px; }
+.dash-kpis--row .dash-kpi { padding: 16px 18px; } .dash-kpis--row .dash-kpi__v { font-size: 1.7rem; }
+.dash-f { flex: none; width: 176px; min-width: 0; } .dash-f select { width: 100%; max-width: 100%; text-overflow: ellipsis; } .dash-f--search { width: 260px; } .dash-f--sm { width: auto; }
+.dash-scope .cp-card__t { display: block; }
+.dash-scope .cp-card__t small { display: block; }
