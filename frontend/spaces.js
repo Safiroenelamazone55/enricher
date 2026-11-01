@@ -403,7 +403,7 @@ const SpacesModule = (() => {
   function toggleClosed() { _showClosed = !_showClosed; _paintMain(); }
   function toggleMe() { _me = !_me; _paintMain(); }
   function setQ(v) { _q = v; _paintBody(); }
-  function groupMenu(ev) { _openPop(ev.currentTarget, `<div class="sp-pop__h">Agrupar por</div>${[['estado', 'Estado'], ['prioridad', 'Prioridad'], ['persona', 'Persona asignada'], ['fecha', 'Fecha límite'], ['ninguno', 'Ninguno']].map(([k, l]) => `<button class="sp-pop__i${_group === k ? ' on' : ''}" onclick="SpacesModule.setGroup('${k}')">${l}${_group === k ? ' ✓' : ''}</button>`).join('')}`); }
+  function groupMenu(ev) { _openPop(ev.currentTarget, `<div class="sp-pop__h">Agrupar por</div>${[['estado', 'Estado'], ['prioridad', 'Prioridad'], ['persona', 'Persona asignada'], ['fecha', 'Fecha límite'], ...(_selProj ? _fields(_selProj).filter(f => ['lista', 'etiquetas', 'casilla', 'personas'].includes(f.t)).map(f => ['f:' + f.id, 'Campo: ' + f.n]) : []), ['ninguno', 'Ninguno']].map(([k, l]) => `<button class="sp-pop__i${_group === k ? ' on' : ''}" onclick="SpacesModule.setGroup('${k}')">${l}${_group === k ? ' ✓' : ''}</button>`).join('')}`); }
   function _chk(arr, v, fn) { return `<label class="sp-pop__o"><input type="checkbox" ${arr.includes(v[0]) ? 'checked' : ''} onchange="SpacesModule.${fn}('${esc(v[0]).replace(/'/g, '&#39;')}',this.checked)"><span>${esc(v[1])}</span></label>`; }
   function filterMenu(ev) {
     _openPop(ev.currentTarget, `<div class="sp-pop__h">Estado</div>${_ESTADOS.map(e => _chk(_fEstado, [e[0], e[1]], 'fEstado')).join('')}<div class="sp-pop__h">Prioridad</div>${Object.entries(_PRIO).map(([k, v]) => _chk(_fPrio, [k, v[0]], 'fPrio')).join('')}<button class="sp-pop__i sp-pop__i--del" onclick="SpacesModule.clearFilters()">Limpiar filtros</button>`, 'sp-pop--w');
@@ -433,9 +433,9 @@ const SpacesModule = (() => {
 </div>
       <div class="sp-tabs">${_viewsOf(_sk()).map(v => `<span class="sp-tab sp-tab--v${cv.id === v.id && !_cfg ? ' on' : ''}" title="${esc(v.nombre || (_VT[v.tipo] || [''])[0])}" onclick="SpacesModule.selView('${v.id}')"><i class="sp-tab__i" style="color:${(_VT[v.tipo] || _VT.lista)[2]}">${_ico((_VT[v.tipo] || _VT.lista)[3])}</i><b class="sp-tab__x" title="Renombrar o quitar" onclick="SpacesModule.viewOpts(event,'${v.id}')">⋯</b></span>`).join('')}<button type="button" class="sp-tab sp-tab--add" title="Añadir vista" onclick="SpacesModule.viewMenu(event)">＋</button>${p ? `<span class="sp-tabs__gap"></span><button type="button" class="sp-tab sp-tab--cfg${_cfg ? ' on' : ''}" title="Configuración del proyecto: datos, tiempo, costos, equipo y plantillas" onclick="SpacesModule.cfgOpen()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><b>Configuración</b></button>` : ''}</div>
       ${noBar ? '' : `<div class="sp-bar"><div class="sp-bar__l">
-          ${listish ? `<button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group]}</button>
+          ${listish ? `<button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group] || 'Campo'}</button>
           <button type="button" class="sp-chip${_expandSubs ? ' on' : ''}" onclick="SpacesModule.toggleSubs()">${ico('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>')} ${_expandSubs ? 'Expandidos' : 'Contraídos'}</button>
-          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>${p ? `<button type="button" class="sp-chip" title="Campos personalizados del proyecto" onclick="SpacesModule.fieldsOpen()">${ico('<path d="M12 5v14M5 12h14"/>')} Campos</button>` : ''}` : ''}</div>
+          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>` : ''}</div>
         <div class="sp-bar__r">
           <button type="button" class="sp-ibtn${nF ? ' on' : ''}" title="Filtros" onclick="SpacesModule.filterMenu(event)">${ico('<line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/>')}${nF ? `<i>${nF}</i>` : ''}</button>
           <button type="button" class="sp-ibtn${_showClosed ? ' on' : ''}" title="Mostrar tareas cerradas" onclick="SpacesModule.toggleClosed()">${ico('<circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/>')}</button>
@@ -447,7 +447,7 @@ const SpacesModule = (() => {
     _paintBody();
   }
   function _paintBody() {
-    const b = $q('sp-body'); if (!b) return;
+    const b = $q('sp-body'); if (!b) return; _fcc = null;
     if (_selProj && _cfg) { _colStop(); _paintCfg(); return; }
     _colStop();
     if (_view === 'formulario') { _paintForm(b); return; }
@@ -890,6 +890,15 @@ const SpacesModule = (() => {
     if (g === 'ninguno') return [{ key: 'all', label: '', color: '', tasks: mains, flat: true }];
     if (g === 'estado' && _selProj && _custom(_selProj)) return _stList(_selProj).filter(e => _showClosed || (e.t !== 'completado' && e.t !== 'cancelado')).map(e => ({ key: e.k, label: e.n, color: e.c, tasks: mains.filter(t => _taskSt(t).k === e.k), est: e.k }));
     if (g === 'estado') return _ESTADOS.filter(e => _showClosed || (e[0] !== 'completado' && e[0] !== 'cancelado')).map(e => ({ key: e[0], label: e[1], color: e[2], tasks: mains.filter(t => (t.estado || 'pendiente') === e[0]), est: e[0] }));
+    if (g.startsWith('f:') && _selProj) {
+      const f = _fields(_selProj).find(x => x.id === g.slice(2));
+      if (f) {
+        const val = t => (t.campos || {})[f.id];
+        if (f.t === 'casilla') return [['Sí', '#6BC950', t => !!val(t)], ['No', '#87909E', t => !val(t)]].map(([l, c, fn]) => ({ key: l, label: l, color: c, tasks: mains.filter(fn) }));
+        if (f.t === 'personas') { const ns = [...new Set(mains.flatMap(t => val(t) || []))].sort(); return [...ns.map(n => ({ key: n, label: n, color: '#4194F6', tasks: mains.filter(t => (val(t) || []).includes(n)) })), { key: '_', label: 'Sin valor', color: '#87909E', tasks: mains.filter(t => !(val(t) || []).length) }]; }
+        return [...(f.o || []).map(o => ({ key: o.k, label: o.n, color: o.c, tasks: mains.filter(t => f.t === 'lista' ? val(t) === o.k : (val(t) || []).includes(o.k)) })), { key: '_', label: 'Sin valor', color: '#87909E', tasks: mains.filter(t => f.t === 'lista' ? !val(t) : !(val(t) || []).length) }];
+      }
+    }
     if (g === 'prioridad') return Object.entries(_PRIO).map(([k, v]) => ({ key: k, label: v[0], color: v[1], tasks: mains.filter(t => (t.prioridad || 'media') === k) }));
     if (g === 'persona') { const names = [...new Set(mains.flatMap(t => _resp(t).length ? _resp(t) : ['Sin asignar']))].sort(); return names.map(n => ({ key: n, label: n, color: '#5B6BC0', tasks: mains.filter(t => (_resp(t).length ? _resp(t) : ['Sin asignar']).includes(n)) })); }
     const td = _today(), wk = new Date(); wk.setDate(wk.getDate() + 7); const wks = `${wk.getFullYear()}-${String(wk.getMonth() + 1).padStart(2, '0')}-${String(wk.getDate()).padStart(2, '0')}`; const dd = t => _d10(t.deadline);
@@ -919,7 +928,7 @@ const SpacesModule = (() => {
       <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '<span class="tl-who tl-who--add">＋</span>'}</button></div>
       ${cols.map(c => cell[c]).join('')}${_fcols().map(f => _fcell(t, f)).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
-  function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}${_fcols().map(f => `<div class="sp-c sp-c--f" title="${esc(f.n)}">${esc(f.n)}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas" onclick="SpacesModule.colsMenu(event)">＋</button></div></div>`; }
+  function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}${_fcols().map(f => `<div class="sp-c sp-c--f" title="${esc(f.n)}">${esc(f.n)}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas y campos" onclick="SpacesModule.fieldsOpen()">＋</button></div></div>`; }
   // trail[d] = si el antepasado de nivel d tiene hermanos después (para dibujar las líneas guía en «L»); last = si esta fila es la última de su grupo
   function _tree(t, byParent, depth, cols, out, trail, last) {
     trail = trail || [];
@@ -1013,7 +1022,12 @@ const SpacesModule = (() => {
   }
   const _tk = id => _tasks.find(x => x.id === id) || (typeof TasksModule !== 'undefined' && TasksModule.getTask ? TasksModule.getTask(id) : null);
   const _fields = pid => { const p = _pjOf(pid); return p && Array.isArray(p.campos) ? p.campos : []; };
-  const _fcols = () => (_selProj ? _fields(_selProj).filter(f => f.v !== false) : []);
+  // En un proyecto: sus campos visibles. En «Todas las tareas», un espacio o cualquier vista con varios proyectos: columnas por NOMBRE de campo (cada tarea muestra el de su proyecto)
+  let _aggVis = []; try { _aggVis = JSON.parse(localStorage.getItem('nova_sp_aggf') || '[]'); } catch (_) {}
+  let _fcc = null;
+  const _scopePids = () => [...new Set(_scope().map(t => t.project_id))].filter(Boolean);
+  function _aggKeys() { const m = new Map(); _scopePids().forEach(pid => _fields(pid).forEach(f => { const k = f.n + '|' + f.t; if (!m.has(k)) m.set(k, { k, n: f.n, t: f.t }); })); return [...m.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')); }
+  function _fcols() { if (_fcc) return _fcc; if (_selProj) return (_fcc = _fields(_selProj).filter(f => f.v !== false)); const vis = new Set(_aggVis); return (_fcc = _aggKeys().filter(x => vis.has(x.k)).map(x => ({ agg: true, key: x.k, n: x.n, t: x.t }))); }
   const _OPC = ['#4194F6', '#6BC950', '#F8AE00', '#FF7800', '#F04F4F', '#A875FF', '#08BDBA', '#87909E'];
   const _FT = [
     ['lista', 'Lista desplegable', 'Una opción para categorizar', '<polyline points="6 9 12 15 18 9"/>'], ['texto', 'Texto', 'Una línea de contexto', '<line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="14" x2="14" y2="14"/>'],
@@ -1050,13 +1064,13 @@ const SpacesModule = (() => {
     }
   }
   const _SVGS = (d, sz) => `<svg width="${sz || 15}" height="${sz || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  const _fcell = (t, f) => `<div class="sp-c sp-c--f"><button type="button" class="sp-fv" onclick="SpacesModule.fEdit(event,${t.id},'${f.id}')">${_fview(t, f)}</button></div>`;
+  const _fcell = (t, f) => { const r = f.agg ? _fields(t.project_id).find(x => x.n + '|' + x.t === f.key) : f; return `<div class="sp-c sp-c--f">${r ? `<button type="button" class="sp-fv" onclick="SpacesModule.fEdit(event,${t.id},'${r.id}')">${_fview(t, r)}</button>` : '<span class="sp-dim">—</span>'}</div>`; };
   async function _fSave(tid, fid, val) {
     const t = _tk(tid), r = await _post(`/mgmt/tasks/${tid}/campos`, { values: { [fid]: val } }, 'PATCH');
     if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar el campo'), 'error'); return false; }
     const j = await r.json(); if (t) t.campos = j.campos || {}; return true;
   }
-  function _refreshFields(tid) { if ($q('sp-body') && !(_selProj && _cfg) && _mode === 'tasks') _paintBody(); if ($q('tskd-fields')) renderTaskFields(tid, 'tskd-fields'); }
+  function _refreshFields(tid) { try { const mw = document.getElementById('pane-mgmt-mywork'); if (mw && mw.classList.contains('active') && window.MyWorkModule) MyWorkModule._fromTasks(); } catch (_) {} if ($q('sp-body') && !(_selProj && _cfg) && _mode === 'tasks') _paintBody(); if ($q('tskd-fields')) renderTaskFields(tid, 'tskd-fields'); }
   async function fSet(tid, fid, val, keep) { await _fSave(tid, fid, val); if (!keep) _closePop(); _refreshFields(tid); }
   async function fTog(tid, fid, key, on) { const t = _tk(tid), cur = (((t && t.campos) || {})[fid] || []).slice(), i = cur.indexOf(key); if (on && i < 0) cur.push(key); if (!on && i >= 0) cur.splice(i, 1); await _fSave(tid, fid, cur); _refreshFields(tid); }
   function fEdit(ev, tid, fid) {
@@ -1086,6 +1100,16 @@ const SpacesModule = (() => {
     box.innerHTML = (cust ? `<div class="tskd__field"><div class="tskd__lbl">Estado del proyecto</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.estMenu(event,${tid})"><span class="sp-tag" style="--c:${st.c}">${esc(st.n)}</span></button></div>` : '')
       + fs.map(f => `<div class="tskd__field"><div class="tskd__lbl">${esc(f.n)}</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.fEdit(event,${tid},'${f.id}')">${_fview(t, f)}</button></div>`).join('');
   }
+  // Para Mi trabajo y otras pantallas: estados propios y campos de cada tarea según SU proyecto
+  async function ensure() { if (_projects.length) return; try { const [pr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
+  function statusTag(t) { const st = _taskSt(t); return `<span class="sp-tag sp-tag--s" style="--c:${st.c}">${esc(st.n)}</span>`; }
+  function chipsFor(t, max) {
+    const out = [];
+    for (const f of _fields(t.project_id)) { if (f.v === false || f.t === 'progreso_auto' || f.t === 'votacion') continue; const v = (t.campos || {})[f.id]; if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue; out.push(`<span class="mw-fchip"><em>${esc(f.n)}</em>${_fview(t, f)}</span>`); if (out.length >= (max || 3)) break; }
+    return out.join('');
+  }
+  function fieldKeys() { const m = new Map(); _projects.forEach(p => (p.campos || []).forEach(f => { const k = f.n + '|' + f.t; if (!m.has(k)) m.set(k, { k, n: f.n, t: f.t }); })); return [...m.values()].sort((a, b) => a.n.localeCompare(b.n, 'es')); }
+  function fcellFor(t, key) { const [n, ty] = String(key).split('|'), f = _fields(t.project_id).find(x => x.n === n && x.t === ty); return f ? `<button type="button" class="sp-fv" onclick="MyWorkModule.fEdit(event,${t.id},'${f.id}')">${_fview(t, f)}</button>` : '<span class="sp-dim">—</span>'; }
   async function _saveSchema(pid, patch) {
     const r = await _post(`/mgmt/projects/${pid}/schema`, patch, 'PUT');
     if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar'), 'error'); return false; }
@@ -1094,13 +1118,18 @@ const SpacesModule = (() => {
 
   // ── administrador de campos (Se muestran · Crear nuevo · Agregar existente) ──
   let _fmPid = 0, _fmMode = 'list', _fmType = '', _fmEdit = null;
-  function fieldsOpen() { _closePop(); _fmPid = _selProj || _pmPid; if (!_pjOf(_fmPid)) return; _fmMode = 'list'; _fmPaint(true); }
+  function fieldsOpen() { _closePop(); _fmPid = _selProj || 0; _fmMode = 'list'; _fmPaint(true); }
   function _fmSync() { if (_selProj && _cfg) { const b = $q('sp-body'); if (b && $q('cfg-fld')) _cfgFldPaint(); } else if (_mode === 'tasks') _paintBody(); }
   function _fmPaint(first) {
     const p = _pjOf(_fmPid), fs = _fields(_fmPid); let b = '';
-    if (_fmMode === 'list') {
+    const cols = `<div class="sp-mh">Columnas de la lista</div>${Object.entries(_COLS).filter(([k]) => !(k === 'proyecto' && _selProj)).map(([k, l]) => `<div class="fm-r"><label class="fm-sw"><input type="checkbox" ${_cols.includes(k) ? 'checked' : ''} onchange="SpacesModule.toggleCol('${k}',this.checked)"><span></span></label><b>${l}</b></div>`).join('')}`;
+    if (!p && _fmMode === 'list') {
+      const keys = _aggKeys(), vis = new Set(_aggVis);
+      b = cols + `<div class="sp-mh">Campos de las tareas de esta vista</div>${keys.length ? keys.map(x => `<div class="fm-r"><label class="fm-sw"><input type="checkbox" data-k="${esc(x.k)}" ${vis.has(x.k) ? 'checked' : ''} onchange="SpacesModule.fmAggVis(this.dataset.k,this.checked)"><span></span></label><b>${esc(x.n)}</b><em>${esc(_FTN[x.t] || x.t)}</em></div>`).join('') : '<p class="sp-mp">Los proyectos de esta vista aún no tienen campos propios.</p>'}
+        <div class="sp-mh">Crear nuevo</div><div class="fm-grid">${_FT.map(x => `<button type="button" class="fm-t" onclick="SpacesModule.fmNew('${x[0]}')"><i>${_SVGS(x[3], 16)}</i><span><b>${x[1]}</b><em>${x[2]}</em></span></button>`).join('')}</div>`;
+    } else if (_fmMode === 'list') {
       const others = []; _projects.forEach(q => { if (q.id !== _fmPid) (q.campos || []).forEach(f => { if (!fs.some(x => x.n === f.n && x.t === f.t) && !others.some(x => x.n === f.n && x.t === f.t)) others.push({ ...f, from: q.nombre }); }); });
-      b = `<div class="sp-mh">Se muestran en el proyecto</div>
+      b = cols + `<div class="sp-mh">Campos personalizados</div>
         ${fs.length ? fs.map(f => `<div class="fm-r"><label class="fm-sw" title="Mostrar u ocultar la columna"><input type="checkbox" ${f.v !== false ? 'checked' : ''} onchange="SpacesModule.fmVis('${f.id}',this.checked)"><span></span></label><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)}</em><button class="fm-b" title="Editar" onclick="SpacesModule.fmEdit('${f.id}')">${_SVGS('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 14)}</button><button class="fm-b" title="Eliminar el campo y sus valores" onclick="SpacesModule.fmDel('${f.id}')">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 14)}</button></div>`).join('') : '<p class="sp-mp">Este proyecto todavía no tiene campos propios.</p>'}
         <div class="sp-mh">Crear nuevo</div><div class="fm-grid">${_FT.map(x => `<button type="button" class="fm-t" onclick="SpacesModule.fmNew('${x[0]}')"><i>${_SVGS(x[3], 16)}</i><span><b>${x[1]}</b><em>${x[2]}</em></span></button>`).join('')}</div>
         ${others.length ? `<div class="sp-mh">Agregar existente (de otros proyectos)</div>${others.slice(0, 20).map((f, i) => `<div class="fm-r"><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)} · ${esc(f.from)}</em><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmAdd(${i})">Añadir</button></div>`).join('')}` : ''}`;
@@ -1108,14 +1137,16 @@ const SpacesModule = (() => {
     } else {
       const f = _fmEdit ? fs.find(x => x.id === _fmEdit) : null, t = f ? f.t : _fmType, withOpt = ['lista', 'etiquetas'].includes(t);
       b = `<button class="fm-back" onclick="SpacesModule.fmBack()">‹ Volver</button><div class="sp-mh">${f ? 'Editar campo' : 'Nuevo campo · ' + esc(_FTN[t] || t)}</div>
+        ${!p ? `<label class="pcf-f"><span>Aplicar a</span><select class="form-input" id="fm-ap"><option value="all">Todos los proyectos de esta vista (${_scopePids().length})</option>${_scopePids().map(id => `<option value="${id}">${esc(_plain((_pjOf(id) || {}).nombre || ''))}</option>`).join('')}</select></label>` : ''}
         <label class="pcf-f"><span>Nombre</span><input class="form-input" id="fm-n" value="${esc(f ? f.n : '')}" placeholder="Ej. Canal" maxlength="50"></label>
         ${withOpt ? `<label class="pcf-f"><span>Opciones (una por línea)</span><textarea class="form-input" id="fm-o" rows="6" placeholder="LinkedIn\nEmail\nWhatsApp">${esc(f ? (f.o || []).map(o => o.n).join('\n') : '')}</textarea></label>` : ''}
         ${t === 'dinero' ? `<label class="pcf-f"><span>Moneda</span><select class="form-input" id="fm-m">${['USD', 'EUR', 'COP', 'MXN', 'ARS', 'PEN', 'CLP', 'BRL'].map(m => `<option${f && f.mon === m ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
         <div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmBack()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.fmSave()">${f ? 'Guardar' : 'Crear campo'}</button></div>`;
     }
-    if (first || !$q('sp-modal')) _modal({ t: 'Campos · ' + esc(_plain(p.nombre)), b }, 680); else document.querySelector('#sp-modal .sp-mb').innerHTML = b;
+    if (first || !$q('sp-modal')) _modal({ t: 'Columnas y campos' + (p ? ' · ' + esc(_plain(p.nombre)) : ''), b }, 680); else document.querySelector('#sp-modal .sp-mb').innerHTML = b;
   }
   let _fmOthers = [];
+  function fmAggVis(k, on) { _aggVis = on ? [...new Set([..._aggVis, k])] : _aggVis.filter(x => x !== k); try { localStorage.setItem('nova_sp_aggf', JSON.stringify(_aggVis)); } catch (_) {} _fcc = null; if (_mode === 'tasks') _paintBody(); }
   function fmBack() { _fmMode = 'list'; _fmEdit = null; _fmPaint(); }
   function fmNew(t) { _fmMode = 'form'; _fmType = t; _fmEdit = null; _fmPaint(); setTimeout(() => $q('fm-n') && $q('fm-n').focus(), 30); }
   function fmEdit(id) { _fmMode = 'form'; _fmEdit = id; _fmPaint(); }
@@ -1128,6 +1159,13 @@ const SpacesModule = (() => {
     const cur = _fields(_fmPid), f = _fmEdit ? cur.find(x => x.id === _fmEdit) : null, t = f ? f.t : _fmType;
     const o = ['lista', 'etiquetas'].includes(t) ? String(($q('fm-o') || {}).value || '').split('\n').map(s => s.trim()).filter(Boolean).map((nm, i) => { const old = f && (f.o || []).find(x => x.n === nm); return { n: nm, k: old ? old.k : undefined, c: old ? old.c : _OPC[i % _OPC.length] }; }) : undefined;
     if (['lista', 'etiquetas'].includes(t) && !o.length) { showBanner('Añade al menos una opción', 'error'); return; }
+    if (!_fmPid) {   // vista con varios proyectos: el campo se crea en cada proyecto elegido
+      const sel = ($q('fm-ap') || {}).value || 'all', targets = sel === 'all' ? _scopePids() : [+sel], base = { n, t, ...(o ? { o } : {}), ...(t === 'dinero' ? { mon: ($q('fm-m') || {}).value || 'USD' } : {}) };
+      let ok = true;
+      for (const pid of targets) { const c2 = _fields(pid); if (c2.some(x => x.n === n && x.t === t)) continue; if (!(await _saveSchema(pid, { campos: [...c2, { ...base, id: 'f' + Date.now().toString(36) + pid, v: true }] }))) { ok = false; break; } }
+      if (ok) { const k = n + '|' + t; if (!_aggVis.includes(k)) { _aggVis.push(k); try { localStorage.setItem('nova_sp_aggf', JSON.stringify(_aggVis)); } catch (_) {} } _fmMode = 'list'; _fmEdit = null; _fmPaint(); _fmSync(); showBanner('✓ Campo creado en ' + targets.length + ' proyecto' + (targets.length === 1 ? '' : 's'), 'success'); }
+      return;
+    }
     const nf = { ...(f || { id: 'f' + Date.now().toString(36), v: true }), n, t, ...(o ? { o } : {}), ...(t === 'dinero' ? { mon: ($q('fm-m') || {}).value || 'USD' } : {}) };
     const campos = f ? cur.map(x => x.id === f.id ? nf : x) : [...cur, nf];
     if (await _saveSchema(_fmPid, { campos })) { _fmMode = 'list'; _fmEdit = null; _fmPaint(); _fmSync(); }
@@ -1321,7 +1359,7 @@ const SpacesModule = (() => {
 
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
-  return { fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+  return { fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };

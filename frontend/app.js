@@ -11918,6 +11918,7 @@ const MyWorkModule = (() => {
       const res = await apiFetch(`${API}/mgmt/tasks`);
       _tasks = res.ok ? await res.json() : [];
     } catch (e) { console.error('[mywork] load:', e); _tasks = []; }
+    try { await SpacesModule.ensure(); } catch (_) {}   // estados propios y campos de cada proyecto
     if (loading) loading.style.display = 'none';
     wrap.style.display = '';
     render();
@@ -11982,12 +11983,13 @@ const MyWorkModule = (() => {
     const prio = _PRIO_CFG[t.prioridad] || _PRIO_CFG.media;
     return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
       <button class="d3-status-btn d3-status-btn--${(_CFG[estado] || _CFG.pendiente).dot}"
-        onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})" title="Cambiar estado">${_svg(estado)}</button>
+        onclick="event.stopPropagation();MyWorkModule.stMenu(event,${t.id})" title="Cambiar estado">${_svg(estado)}</button>
       <button class="mw-prio-btn" title="Prioridad: ${prio.label} — clic para cambiar" onclick="MyWorkModule.openPrioMenu(event,${t.id})">${_flagSvg(prio.color)}</button>
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
+      <span class="mw-fch">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 3)}</span>
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -12070,6 +12072,17 @@ const MyWorkModule = (() => {
     const box = $('mywork-views'); if (!box) return;
     box.innerHTML = _VIEWS.map(([k, l, ico]) => `<button type="button" class="mw-view${_view === k ? ' is-on' : ''}" onclick="MyWorkModule.setView('${k}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ico}</svg>${l}</button>`).join('');
   }
+  // Campos personalizados como columnas de la tabla (se eligen por nombre; cada tarea muestra el de SU proyecto)
+  let _mwF = []; try { _mwF = JSON.parse(localStorage.getItem('nova_mw_fields') || '[]'); } catch (_) {}
+  const _fieldHeads = () => _mwF.map(k => `<th title="${esc(String(k).split('|')[0])}">${esc(String(k).split('|')[0])}</th>`).join('');
+  const _fieldCells = t => _mwF.map(k => `<td class="mw-td-f">${SpacesModule.fcellFor(t, k)}</td>`).join('');
+  function fieldsMenu(ev) {
+    const ks = SpacesModule.fieldKeys();
+    _openPop(ev.currentTarget, `<div class="mw-pop__h">Campos como columnas</div>${ks.length ? ks.map(f => `<label class="mw-pop__o"><input type="checkbox" data-k="${esc(f.k)}" ${_mwF.includes(f.k) ? 'checked' : ''} onchange="MyWorkModule.toggleField(this.dataset.k,this.checked)"><span>${esc(f.n)}</span></label>`).join('') : '<div class="mw-pop__o">Ningún proyecto tiene campos personalizados todavía.</div>'}`);
+  }
+  function toggleField(k, on) { _mwF = on ? [...new Set([..._mwF, k])] : _mwF.filter(x => x !== k); try { localStorage.setItem('nova_mw_fields', JSON.stringify(_mwF)); } catch (_) {} render(); }
+  function stMenu(ev, id) { const t = _tasks.find(x => x.id === id); _adoptTT(); if (t && SpacesModule.isCustom(t.project_id)) { ev.stopPropagation(); SpacesModule.estMenu(ev, id); } else DashboardModule.openStatusMenu(ev, id); }
+  function fEdit(ev, id, fid) { _adoptTT(); SpacesModule.fEdit(ev, id, fid); }
   function setView(v) { if (!_VIEWS.some(x => x[0] === v)) return; _view = v; try { localStorage.setItem('nova_mw_view', v); } catch (_) {} render(); }
   function render() {
     _paintViews(); _paintFilters();
@@ -12108,15 +12121,15 @@ const MyWorkModule = (() => {
       const t = o.t, w = _wn(t), done = !_open(t);
       return `<tr class="mw-tr${done ? ' is-done' : ''}${o.sub ? ' mw-tr--sub' : ''}" data-task-id="${t.id}">
         <td class="mw-td-st">${_statusBtn(t)}</td>
-        <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span></td>
+        <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span><span class="mw-stg">${SpacesModule.statusTag(t)}</span></td>
         <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
         <td>${prio(t)}</td>
         <td class="mw-td-e"><input class="mw-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="—" onclick="event.stopPropagation()" onblur="saveEstimateG(${t.id},this,m=>{const x=MyWorkModule._byIdG(${t.id});if(x)x.duracion_est_min=m})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"></td>
         <td class="mw-td-d">${w.start ? _fmt(w.start) : '—'}</td>
         <td class="mw-td-d">${_dateBtn(t, w.end ? _fmt(w.end) : '')}</td>
-        <td class="mw-td-a">${_playBtn(t)}</td></tr>`; }).join('');
-    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label></div>
-      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+        <td class="mw-td-a">${_playBtn(t)}</td>${_fieldCells(t)}</tr>`; }).join('');
+    wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label><button type="button" class="mw-fbtn" onclick="MyWorkModule.fieldsMenu(event)" title="Elige qué campos personalizados ver como columnas">Campos${_mwF.length ? ` · ${_mwF.length}` : ''}</button></div>
+      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th>${_fieldHeads()}</tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
   }
 
@@ -12140,7 +12153,7 @@ const MyWorkModule = (() => {
           <button class="tt-task-play-btn tt-play--kc" data-timer-task="${t.id}" draggable="false" title="Iniciar seguimiento" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           <button class="kc-menu-btn" title="Opciones" onclick="MyWorkModule.openCardMenu(event,${t.id})"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button></div></div>
       ${(ctx || t.client_nombre) ? `<div class="kc-meta">${ctx ? `<span class="kc-project" title="${esc(ctx)}">${esc(ctx)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
-      ${_taskBadgesHtml(t)}<div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
+      ${_taskBadgesHtml(t)}<div class="mw-kchips">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 2)}</div><div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
   }
   let _group = 'estado', _gcols = [];
   const _GROUPS = { estado: ['Estado', t => t.estado || 'pendiente'], prioridad: ['Prioridad', t => t.prioridad || 'media'], proyecto: ['Proyecto', t => t.project_nombre || 'Sin proyecto'], cliente: ['Cliente', t => t.client_nombre || 'Sin cliente'] };
@@ -12316,7 +12329,7 @@ const MyWorkModule = (() => {
     const sc = $('mw-gantt'); if (sc) { const primero = Math.max(Math.min(...dated.map(x => _dayN(x.w.start))) - 2, tN - 45); sc.scrollLeft = Math.max(0, (Math.min(primero, tN - 6) - lo) * W); }
   }
 
-  return { load, render, setView, setGroup, setDeleg, _byIdG: id => _tasks.find(x => x.id === id), openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
+  return { stMenu, fEdit, fieldsMenu, toggleField, load, render, setView, setGroup, setDeleg, _byIdG: id => _tasks.find(x => x.id === id), openCard, openCardMenu, _fromTasks, setQ, removeFilter, clearFilters, openFilterAdd, openFilter, openQuick, toggleVal, setOp, _popSearch, sortBy, toggleDone, calNav, calToday, calPick, ganttZoom, _sync, _dragStart, _dragEnd, _dragOver, _dragLeave, _drop, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================

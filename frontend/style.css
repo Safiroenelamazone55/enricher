@@ -19545,3 +19545,10 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .fm-t i { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--bg2); color: var(--text2); display: inline-flex; align-items: center; justify-content: center; } .fm-t b { display: block; font-size: .8rem; color: var(--text); } .fm-t em { display: block; font-style: normal; font-size: .7rem; color: var(--muted); }
 .fm-back { border: 0; background: none; color: #0667D9; cursor: pointer; font: inherit; font-size: .8rem; padding: 0; align-self: flex-start; }
 .pcf-c--wide { grid-column: 1 / -1; } .pcf-er { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; } .pcf-er input[type=color] { width: 30px; height: 30px; border: 1px solid var(--border2); border-radius: 6px; padding: 2px; background: #fff; flex: none; } .pcf-er .form-input { flex: 1; min-width: 0; } .pcf-er select.form-input { flex: 0 0 190px; }
+
+/* Mi trabajo: estados propios y campos de cada proyecto */
+.sp-tag--s { height: 20px; font-size: 10.5px; padding: 0 8px; }
+.mw-fch { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin-right: 8px; max-width: 46%; overflow: hidden; flex: none; } .mw-fchip { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; color: var(--text2); white-space: nowrap; } .mw-fchip em { font-style: normal; color: var(--muted); }
+.mw-stg { margin-left: 8px; vertical-align: middle; } .mw-td-f { min-width: 130px; } .mw-fbtn { margin-left: auto; border: 1px solid var(--border2); background: #fff; border-radius: 7px; font: inherit; font-size: .76rem; color: var(--text2); padding: 3px 10px; cursor: pointer; } .mw-fbtn:hover { background: var(--bg2); }
+.mw-kchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; align-items: center; }
+.mw-pop__h { font-size: .7rem; font-weight: 600; color: var(--muted); padding: 6px 10px 2px; } .mw-pop__o { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: .8rem; cursor: pointer; }
