@@ -10,6 +10,9 @@ const SpacesModule = (() => {
   let _cols = ['prioridad'];                           // columnas extra visibles (además de Nombre · Estado · Fecha límite · Persona)
   const _collapsedG = new Set(), _collapsedT = new Set(), _openSp = new Set(['p0']);
   let _pop = null, _popOff = null, _addingSpace = false;
+  let _tq = '', _tqOpen = false, _showArch = false, _showAll = true;   // barra lateral: búsqueda, mostrar archivados, mostrar todos los espacios (incl. vacíos)
+  try { const u = JSON.parse(localStorage.getItem('nova_sp_tree') || '{}'); _showArch = !!u.arch; _showAll = u.all !== false; } catch (_) {}
+  const _saveT = () => { try { localStorage.setItem('nova_sp_tree', JSON.stringify({ arch: _showArch, all: _showAll })); } catch (_) {} };
   let _mode = 'tasks', _cfg = false, _pfE = '', _pfP = '', _pfC = '', _pq = '', _pMe = false;   // _mode: 'tasks' (vistas) o 'proyectos' (tabla de todos los proyectos); _cfg: pestaña Configuración del proyecto abierta
   try { const u = JSON.parse(localStorage.getItem(LS) || '{}'); if (u.view) _view = u.view; if (u.group) _group = u.group; if (Array.isArray(u.cols)) _cols = u.cols; if (typeof u.expandSubs === 'boolean') _expandSubs = u.expandSubs; if (u.selProj) _selProj = u.selProj; if (u.selSpace != null) _selSpace = u.selSpace; if (u.viewSel) _viewSel = u.viewSel; } catch (_) {}
   const _save = () => { try { localStorage.setItem(LS, JSON.stringify({ view: _view, group: _group, cols: _cols, expandSubs: _expandSubs, selProj: _selProj, selSpace: _selSpace, viewSel: _viewSel })); } catch (_) {} };
@@ -59,29 +62,72 @@ const SpacesModule = (() => {
     root.innerHTML = `<div class="spw"><aside class="sp-tree" id="sp-tree"></aside><section class="sp-main" id="sp-main"></section></div>`;
     _paintTree(); _paintMain();
   }
+  const _treeProjs = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado' && (_showArch || !p.archivado));
   function _paintTree() {
     const t = $q('sp-tree'); if (!t) return;
-    const spRow = (id, nombre, color, open) => {
-      const ps = _projsOf(id);
+    const q = _nrm(_tq.trim());
+    const spRow = (id, nombre, color, openBase) => {
+      let ps = _treeProjs(id); const nm = q && _nrm(nombre).includes(q);
+      if (q && !nm) ps = ps.filter(p => _nrm(p.nombre).includes(q));
+      if (q ? !(nm || ps.length) : (!_showAll && !ps.length && _selSpace !== id)) return '';
+      const open = q ? true : openBase;
       return `<div class="sp-sp${_mode === 'tasks' && _selSpace === id && !_selProj ? ' on' : ''}">
         <div class="sp-sp__h" onclick="SpacesModule.toggleSp(${id})"><span class="sp-sq" style="background:${color}">${_nrm(nombre).slice(0, 1).toUpperCase() || '?'}</span><span class="sp-sp__n">${esc(nombre)}</span>
           <button class="sp-ic" title="Agregar lista" onclick="event.stopPropagation();SpacesModule.spaceMenu(event,${id})">+</button>${id ? `<button class="sp-ic" title="Más" onclick="event.stopPropagation();SpacesModule.spaceOpts(event,${id})">⋯</button>` : ''}</div>
         ${open ? `<div class="sp-sp__b">${ps.map(p => _pjRow(id, p)).join('') || '<div class="sp-e">Sin listas todavía</div>'}</div>` : ''}</div>`;
     };
-    t.innerHTML = `<div class="sp-tree__h"><b>Espacios</b><button class="sp-add" title="Nuevo espacio" onclick="SpacesModule.newSpace()">+</button></div>
-      <button type="button" class="sp-all${_mode === 'tasks' && _selSpace == null && !_selProj ? ' on' : ''}" onclick="SpacesModule.pick(null,null)"><span class="sp-all__i">✱</span>Todas las tareas</button>
+    const rows = spRow(0, 'Principal', '#007AFF', _openSp.has('p0')) + _spaces.map(s => spRow(s.id, s.nombre, s.color, _openSp.has('p' + s.id))).join('');
+    const head = _tqOpen
+      ? `<div class="sp-tsearch">${_I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>')}<input id="sp-tq" type="text" autocomplete="off" placeholder="Buscar en la barra lateral…" value="${esc(_tq)}" oninput="SpacesModule.treeQ(this.value)" onkeydown="if(event.key==='Escape')SpacesModule.treeSearch(false)"><button type="button" class="sp-tsearch__x" title="${_tq ? 'Borrar' : 'Cerrar'}" onclick="SpacesModule.treeClear()">✕</button></div>`
+      : `<div class="sp-tree__h"><b>Espacios</b><span class="sp-hb"><button class="sp-add sp-add--g" title="Más opciones" onclick="SpacesModule.treeMenu(event)">⋯</button><button class="sp-add sp-add--g" title="Buscar en la barra lateral" onclick="SpacesModule.treeSearch(true)">${_I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>')}</button><button class="sp-add" title="Nuevo espacio" onclick="SpacesModule.newSpace()">+</button></span></div>`;
+    t.innerHTML = `${head}
+      ${q ? '' : `<button type="button" class="sp-all${_mode === 'tasks' && _selSpace == null && !_selProj ? ' on' : ''}" onclick="SpacesModule.pick(null,null)"><span class="sp-all__i">✱</span>Todas las tareas</button>
       <button type="button" class="sp-all${_mode === 'proyectos' ? ' on' : ''}" onclick="SpacesModule.showProjectsGo()"><span class="sp-all__i">▤</span>Todos los proyectos</button>
-      ${_favHtml()}
-      ${spRow(0, 'Principal', '#007AFF', _openSp.has('p0'))}${_spaces.map(s => spRow(s.id, s.nombre, s.color, _openSp.has('p' + s.id))).join('')}
-      ${_addingSpace ? `<div class="sp-newin"><input id="sp-new" placeholder="Nombre del espacio" onkeydown="if(event.key==='Enter')SpacesModule.saveSpace(this.value);if(event.key==='Escape')SpacesModule.cancelSpace()" onblur="SpacesModule.saveSpace(this.value)"></div>` : `<button type="button" class="sp-newsp" onclick="SpacesModule.newSpace()">+ Nuevo espacio</button>`}`;
+      ${_favHtml()}`}
+      ${rows || `<div class="sp-e">Sin resultados para «${esc(_tq)}»</div>`}
+      ${q ? '' : (_addingSpace ? `<div class="sp-newin"><input id="sp-new" placeholder="Nombre del espacio" onkeydown="if(event.key==='Enter')SpacesModule.saveSpace(this.value);if(event.key==='Escape')SpacesModule.cancelSpace()" onblur="SpacesModule.saveSpace(this.value)"></div>` : `<button type="button" class="sp-newsp" onclick="SpacesModule.newSpace()">+ Nuevo espacio</button>`)}`;
     if (_addingSpace) setTimeout(() => $q('sp-new')?.focus(), 20);
+    if (_tqOpen) { const i = $q('sp-tq'); if (i) { i.focus(); const n = i.value.length; try { i.setSelectionRange(n, n); } catch (_) {} } }
+  }
+  // buscar en la barra lateral + menú «···» (crear/administrar espacios, cerrar carpetas, mostrar todos/archivados)
+  function treeSearch(on) { _tqOpen = on === undefined ? !_tqOpen : !!on; if (!_tqOpen) _tq = ''; _paintTree(); }
+  function treeQ(v) { _tq = String(v || ''); _paintTree(); }
+  function treeClear() { if (_tq) _tq = ''; else _tqOpen = false; _paintTree(); }
+  function _tmHtml() {
+    const it = (ic, l, k, sw) => `<button type="button" class="sp-pm__i" onclick="SpacesModule.treeAct('${k}')">${_I(ic)}<span>${l}</span>${sw === undefined ? '' : `<i class="sp-sw${sw ? ' on' : ''}"></i>`}</button>`;
+    return it(_IC.plus, 'Crear espacio', 'new') + it('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>', 'Administrar espacios', 'mng') + '<div class="sp-pm__s"></div>'
+      + it('<polyline points="18 15 12 9 6 15"/>', 'Cerrar todas las carpetas', 'fold') + '<div class="sp-pm__s"></div>'
+      + it('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 'Mostrar todos los espacios', 'all', _showAll)
+      + it(_IC.arc, 'Mostrar archivados', 'arch', _showArch);
+  }
+  function treeMenu(ev) { _openPop(ev.currentTarget, _tmHtml(), 'sp-pm'); }
+  function treeAct(k) {
+    if (k === 'new') { _closePop(); newSpace(); }
+    else if (k === 'mng') { _closePop(); mgOpen(); }
+    else if (k === 'fold') { _closePop(); _openSp.clear(); _paintTree(); }
+    else if (k === 'all' || k === 'arch') {
+      if (k === 'all') _showAll = !_showAll; else _showArch = !_showArch; _saveT();
+      if (!_showArch && _selProj && (_pjOf(_selProj) || {}).archivado) { _selProj = null; _paintMain(); }
+      _paintTree(); const pop = document.querySelector('.sp-pm'); if (pop) pop.innerHTML = _tmHtml();
+    }
+  }
+  function mgOpen() {
+    const rows = [{ id: 0, nombre: 'Principal', color: '#007AFF' }, ..._spaces].map(s => { const n = _projects.filter(p => (p.space_id || 0) === s.id && !p.archivado && (p.estado || 'activo') !== 'cancelado').length;
+      return `<div class="sp-mg__r"><span class="sp-sq" style="background:${s.color || '#007AFF'}">${_nrm(s.nombre).slice(0, 1).toUpperCase() || '?'}</span><b>${esc(s.nombre)}</b><em>${n} proyecto${n === 1 ? '' : 's'}</em>${s.id ? `<span class="sp-mg__b"><button type="button" class="btn btn--ghost btn--sm" onclick="SpacesModule.mgAct('ren',${s.id})">Renombrar</button><button type="button" class="btn btn--ghost btn--sm" onclick="SpacesModule.mgAct('share',${s.id})">Permisos</button><button type="button" class="btn btn--ghost btn--danger btn--sm" onclick="SpacesModule.mgAct('del',${s.id})">Eliminar</button></span>` : ''}</div>`; }).join('');
+    _modal({ t: 'Administrar espacios', b: `<div class="sp-mg">${rows}</div><div class="sp-mg__f"><button type="button" class="btn btn--primary btn--sm" onclick="SpacesModule.mgAct('new')">+ Crear espacio</button></div>` }, 600);
+  }
+  async function mgAct(k, id) {
+    if (k === 'ren') { await renameSpace(id); mgOpen(); }
+    else if (k === 'del') { await delSpace(id); mgOpen(); }
+    else if (k === 'share') { _close(); shareSpace(id); }
+    else if (k === 'new') { _close(); newSpace(); }
   }
   // fila de un proyecto en el árbol (icono/color propios, contador y menú ⋯ al pasar el cursor)
   const _fav = () => { try { return JSON.parse(localStorage.getItem('nova_sp_fav') || '[]'); } catch (_) { return []; } };
   const _isFav = pid => _fav().includes(pid);
   function _pjRow(sid, p) {
     const ic = p.icono ? `<i class="sp-pj__e" style="${p.color ? 'background:' + p.color + '22' : ''}">${esc(p.icono)}</i>` : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${p.color || 'currentColor'}" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>`;
-    return `<div class="sp-pjw"><button type="button" class="sp-pj${_selProj === p.id ? ' on' : ''}" onclick="SpacesModule.pick(${sid},${p.id})">${ic}<span>${esc(p.nombre)}</span>${_isFav(p.id) ? '<b class="sp-pj__f">★</b>' : ''}<em>${_cnt(p.id) || ''}</em></button><button type="button" class="sp-pj__m" title="Opciones del proyecto" onclick="event.stopPropagation();SpacesModule.projMenu(event,${p.id})">⋯</button></div>`;
+    return `<div class="sp-pjw"><button type="button" class="sp-pj${_selProj === p.id ? ' on' : ''}${p.archivado ? ' sp-pj--arch' : ''}" onclick="SpacesModule.pick(${sid},${p.id})">${ic}<span>${esc(p.nombre)}</span>${p.archivado ? '<b class="sp-pj__arch">Archivado</b>' : ''}${_isFav(p.id) ? '<b class="sp-pj__f">★</b>' : ''}<em>${_cnt(p.id) || ''}</em></button><button type="button" class="sp-pj__m" title="Opciones del proyecto" onclick="event.stopPropagation();SpacesModule.projMenu(event,${p.id})">⋯</button></div>`;
   }
   function _favHtml() {
     const fv = _fav().map(id => _projects.find(p => p.id === id)).filter(p => p && !p.archivado); if (!fv.length) return '';
@@ -212,7 +258,7 @@ const SpacesModule = (() => {
     const sub = (ic, l, k) => `<button type="button" class="sp-pm__i" onclick="SpacesModule.pmSub('${k}')">${_I(_IC[ic])}<span>${l}</span><i>›</i></button>`;
     return `<div class="sp-pm__t">${esc(_plain(p.nombre))}</div>${it('star', _isFav(pid) ? 'Quitar de favoritos' : 'Marcar como favorito', 'SpacesModule.pmFav()')}${it('edit', 'Cambiar el nombre', 'SpacesModule.pmRename()')}${it('link', 'Copiar vínculo', 'SpacesModule.pmLink()')}<div class="sp-pm__s"></div>
       ${sub('plus', 'Crear nuevo', 'new')}${sub('pal', 'Color e ícono', 'color')}${it('info', 'Información del proyecto', 'SpacesModule.pmInfo()')}<div class="sp-pm__s"></div>
-      ${sub('tpl', 'Plantillas', 'tpl')}${sub('imp', 'Importaciones', 'imp')}<div class="sp-pm__s"></div>${it('link', 'Uso compartido y permisos', 'SpacesModule.pmShare()')}${sub('mv', 'Mover', 'mv')}${it('dup', 'Duplicar', 'SpacesModule.pmDup()')}${it('arc', 'Archivar', 'SpacesModule.pmArch()')}${it('del', 'Eliminar', 'SpacesModule.pmDel()', 'sp-pm__i--del')}`;
+      ${sub('tpl', 'Plantillas', 'tpl')}${sub('imp', 'Importaciones', 'imp')}<div class="sp-pm__s"></div>${it('link', 'Uso compartido y permisos', 'SpacesModule.pmShare()')}${sub('mv', 'Mover', 'mv')}${it('dup', 'Duplicar', 'SpacesModule.pmDup()')}${it('arc', p.archivado ? 'Restaurar (quitar de archivados)' : 'Archivar', 'SpacesModule.pmArch()')}${it('del', 'Eliminar', 'SpacesModule.pmDel()', 'sp-pm__i--del')}`;
   }
   function projMenu(ev, pid) { _pmPid = pid; if (!_pjOf(pid)) return; _openPop(ev.currentTarget, _pmMainHtml(), 'sp-pm'); }
   function pmBack() { const pop = document.querySelector('.sp-pm'); if (pop) pop.innerHTML = _pmMainHtml(); }
@@ -233,7 +279,7 @@ const SpacesModule = (() => {
   }
   async function _reload() {
     try { const [pr, tr, sr, vr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/space-views`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok) _tasks = await tr.json(); if (sr.ok) _spaces = await sr.json(); if (vr.ok) _views = await vr.json(); } catch (_) {}
-    if (_selProj && !_projects.some(p => p.id === _selProj && !p.archivado)) _selProj = null;
+    if (_selProj && !_projects.some(p => p.id === _selProj && (!p.archivado || _showArch))) _selProj = null;
     _paintTree(); _paintMain();
   }
   const _post = (url, body, m) => apiFetch(`${API}${url}`, { method: m || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -251,8 +297,8 @@ const SpacesModule = (() => {
     const body = k === 'reset' ? { color: '', icono: '' } : { [k]: v }; const r = await _post(`/mgmt/projects/${_pmPid}/meta`, body, 'PATCH'); if (!r.ok) return; const j = await r.json(); Object.assign(_pjOf(_pmPid), j); _paintTree(); _paintMain(); pmSub('color');
   }
   async function pmArch() {
-    _closePop(); const p = _pjOf(_pmPid); if (!confirm(`¿Archivar «${_plain(p.nombre)}»? Deja de verse en Espacios y Proyectos, pero no se borra nada.`)) return;
-    const r = await _post(`/mgmt/projects/${_pmPid}/meta`, { archivado: true }, 'PATCH'); if (!r.ok) { showBanner('No se pudo archivar', 'error'); return; } p.archivado = true; if (_selProj === _pmPid) _selProj = null; showBanner('✓ Proyecto archivado', 'success'); _paintTree(); _paintMain();
+    _closePop(); const p = _pjOf(_pmPid), back = !!p.archivado; if (!back && !confirm(`¿Archivar «${_plain(p.nombre)}»? Deja de verse en Espacios y Proyectos, pero no se borra nada. Puedes verlo de nuevo con «Mostrar archivados».`)) return;
+    const r = await _post(`/mgmt/projects/${_pmPid}/meta`, { archivado: !back }, 'PATCH'); if (!r.ok) { showBanner(back ? 'No se pudo restaurar' : 'No se pudo archivar', 'error'); return; } p.archivado = !back; if (!back && _selProj === _pmPid && !_showArch) _selProj = null; showBanner(back ? '✓ Proyecto restaurado' : '✓ Proyecto archivado', 'success'); _paintTree(); _paintMain();
   }
   async function pmDel() {
     _closePop(); const p = _pjOf(_pmPid), n = _tasks.filter(t => t.project_id === _pmPid).length;
@@ -1517,7 +1563,7 @@ const SpacesModule = (() => {
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
   return { tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
-    projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
+    treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
 })();
