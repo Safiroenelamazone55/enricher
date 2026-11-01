@@ -13968,6 +13968,7 @@ const TasksModule = (() => {
                 <div class="tskd__lbl">Etiquetas</div>
                 <div id="tskd-tags">${_tdTagsHtml(t)}</div>
               </div>
+              <div id="tskd-fields"></div>
               <div class="tskd__tools">
                 <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'link')">Copiar vínculo</button>
                 <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'id')">Copiar ID</button>
@@ -13995,6 +13996,7 @@ const TasksModule = (() => {
     if (!_tdResizeBound) { window.addEventListener('resize', _tdFitHeight); _tdResizeBound = true; }
     TimerModule.syncButtons();
     _tdLoadComments(id); _tdLoadActivity(id);
+    try { if (typeof SpacesModule !== 'undefined') SpacesModule.renderTaskFields(id, 'tskd-fields'); } catch (e) { console.error('[campos]', e); }
     if (_tdCommentPoll) clearInterval(_tdCommentPoll);
     _tdCommentPoll = setInterval(() => { if (_tdCurrentId === id) _tdLoadComments(id, true); }, 8000);
   }

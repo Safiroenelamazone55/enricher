@@ -343,7 +343,9 @@ function requireAuth(req, res, next) {
 }
 // Roles y permisos: guardia global sobre /api (antes de las rutas) + filtros de listados
 const permsSvc = require('./services/permissions').mount(app, { pool, requireAuth });
-require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });   // Inicio: bandeja «Para ti», comentarios asignados, cobros
+require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });
+require('./services/fieldsRoutes').mount(app, { pool, requireAuth });   // estados y campos personalizados por proyecto + plantilla «Adquisición comercial»
+//   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
 // que la Browser Extension / Desktop Agent consumen sin cookies (Fase 2.1).
@@ -1874,6 +1876,7 @@ async function _pmCopyTasks(cl, uid, fromId, toId, opts, creador) {
       [uid, toId, t.titulo, t.descripcion || '', t.prioridad || 'media', resp[0] || '', resp, t.deadline, t.fecha_inicio, t.notas || '', JSON.stringify(t.etiquetas || []),
        JSON.stringify((t.checklists || []).map(c => ({ ...c, items: (c.items || []).map(i => ({ ...i, hecho: false })) }))), t.duracion_est_min, !!t.visible_cliente, t.titulo_cliente || '', creador || '']);
     map.set(t.id, n.id);
+    if (t.campos && Object.keys(t.campos).length) await cl.query(`UPDATE tasks SET campos=$2::jsonb WHERE id=$1`, [n.id, JSON.stringify(t.campos)]);
   }
   for (const t of ts) if (t.parent_task_id && map.has(t.parent_task_id)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(t.id), map.get(t.parent_task_id)]);
   return ts.length;
@@ -1893,6 +1896,7 @@ app.post('/api/mgmt/projects/:id/duplicate', requireAuth, async (req, res) => {
       VALUES ($1,$2,$3,$4,'activo',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb,$33::jsonb) RETURNING id`,
       [uid, p.client_id, 'Copia de ' + p.nombre, p.descripcion, p.responsable, p.responsables, p.fecha_inicio, p.fecha_fin, p.valor_total, p.prioridad, p.tipo_proyecto, p.moneda, p.tarifa_hora, p.horas_estimadas, p.horas_semanales, p.horario_semanal, p.responsable_id, p.comision, p.cobro_semanal, p.precio_semanal, JSON.stringify(p.reparto || []), p.semana_auto, p.abrev, p.plan_dias, p.plan_horas, p.plan_hora, p.color, p.icono || '', p.recur_freq, p.outbound_client_id, p.space_id, JSON.stringify(p.links || []), JSON.stringify(p.task_defaults || {})]);
     await cl.query(`UPDATE projects SET nombre=$2 WHERE id=$1`, [n.id, _conCodigoProyecto(n.id, 'Copia de ' + p.nombre)]);
+    await cl.query(`UPDATE projects SET estados=s.estados, campos=s.campos FROM projects s WHERE s.id=$1 AND projects.id=$2`, [id, n.id]);
     const nT = b.con_tareas === false ? 0 : await _pmCopyTasks(cl, uid, id, n.id, { responsables: b.con_responsables !== false }, req.user.name);
     const nV = b.con_vistas === false ? 0 : await _pmCopyViews(cl, uid, id, n.id);
     await cl.query('COMMIT');
@@ -1905,15 +1909,15 @@ app.post('/api/mgmt/projects/:id/duplicate', requireAuth, async (req, res) => {
 async function _tplBuild(cl, uid, pid, o) {
   const { rows: [p] } = await cl.query(`SELECT * FROM projects WHERE id=$1 AND user_id=$2`, [pid, uid]); if (!p) return null;
   const { rows: [bs] } = await cl.query(`SELECT COALESCE(p.fecha_inicio, (SELECT MIN(LEAST(COALESCE(t.fecha_inicio,t.deadline), COALESCE(t.deadline,t.fecha_inicio))) FROM tasks t WHERE t.project_id=p.id)) AS base FROM projects p WHERE p.id=$1`, [pid]);
-  const proj = { descripcion: p.descripcion || '', prioridad: p.prioridad, color: p.color || '', icono: p.icono || '', task_defaults: p.task_defaults || {} };
+  const proj = { descripcion: p.descripcion || '', prioridad: p.prioridad, color: p.color || '', icono: p.icono || '', task_defaults: p.task_defaults || {}, estados: p.estados || null, campos: p.campos || [] };
   if (o.cobro !== false) Object.assign(proj, { tipo_proyecto: p.tipo_proyecto, moneda: p.moneda, valor_total: p.valor_total, tarifa_hora: p.tarifa_hora, horas_estimadas: p.horas_estimadas, horas_semanales: p.horas_semanales, horario_semanal: p.horario_semanal, comision: p.comision, cobro_semanal: p.cobro_semanal, precio_semanal: p.precio_semanal, reparto: p.reparto || [], semana_auto: p.semana_auto, plan_dias: p.plan_dias, plan_horas: p.plan_horas, plan_hora: p.plan_hora, recur_freq: p.recur_freq });
   let tasks = [];
   if (o.tareas !== false) {
-    const { rows } = await cl.query(`SELECT t.id, t.parent_task_id, t.titulo, t.descripcion, t.prioridad, t.responsables, t.responsable, t.notas, t.etiquetas, t.checklists, t.duracion_est_min,
+    const { rows } = await cl.query(`SELECT t.id, t.parent_task_id, t.titulo, t.descripcion, t.prioridad, t.responsables, t.responsable, t.notas, t.etiquetas, t.checklists, t.duracion_est_min, t.campos,
          (t.fecha_inicio - $2::date) AS off_ini, (t.deadline - $2::date) AS off_dl FROM tasks t WHERE t.project_id=$1 AND t.user_id=$3 AND COALESCE(t.archivada,false)=false ORDER BY t.id`, [pid, bs && bs.base, uid]);
     tasks = rows.filter(t => o.subtareas !== false || !t.parent_task_id).map(t => ({ ref: t.id, parent: (o.subtareas !== false ? t.parent_task_id : null) || null, titulo: t.titulo, descripcion: t.descripcion || '', prioridad: t.prioridad || 'media',
       responsables: o.responsables ? (t.responsables && t.responsables.length ? t.responsables : (t.responsable ? [t.responsable] : [])) : [], notas: t.notas || '', etiquetas: t.etiquetas || [],
-      checklists: (t.checklists || []).map(c => ({ ...c, items: (c.items || []).map(i => ({ ...i, hecho: false })) })), duracion_est_min: t.duracion_est_min,
+      checklists: (t.checklists || []).map(c => ({ ...c, items: (c.items || []).map(i => ({ ...i, hecho: false })) })), duracion_est_min: t.duracion_est_min, campos: t.campos || {},
       off_ini: o.fechas !== false && t.off_ini !== null ? Number(t.off_ini) : null, off_dl: o.fechas !== false && t.off_dl !== null ? Number(t.off_dl) : null }));
   }
   let views = [];
@@ -1968,6 +1972,11 @@ app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) 
       if (pr.task_defaults && Object.keys(pr.task_defaults).length) { vals.push(JSON.stringify(pr.task_defaults)); sets.push(`task_defaults=$${vals.length}::jsonb`); }
       if (sets.length) { vals.push(pid); await cl.query(`UPDATE projects SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${vals.length}`, vals); }
     }
+    if (b.aplicar_ajustes !== false && (Array.isArray(pr.estados) || (pr.campos && pr.campos.length))) {   // estados propios y columnas de la plantilla
+      const { rows: [cur] } = await cl.query(`SELECT campos FROM projects WHERE id=$1`, [pid]);
+      const merged = [...(cur.campos || [])]; (pr.campos || []).forEach(f => { if (!merged.some(m => m.id === f.id)) merged.push(f); });
+      await cl.query(`UPDATE projects SET estados=COALESCE($2::jsonb, estados), campos=$3::jsonb WHERE id=$1`, [pid, Array.isArray(pr.estados) ? JSON.stringify(pr.estados) : null, JSON.stringify(merged)]);
+    }
     const map = new Map();
     for (const x of (d.tareas || [])) {
       const resp = modo === 'ninguno' ? [] : (modo === 'yo' ? (yo ? [yo] : []) : (x.responsables || []));
@@ -1975,6 +1984,8 @@ app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) 
         VALUES ($1,$2,$3,$4,'pendiente',$5,$6,$7, CASE WHEN $8::date IS NOT NULL AND $9::int IS NOT NULL THEN $8::date + $9::int END, CASE WHEN $8::date IS NOT NULL AND $10::int IS NOT NULL THEN $8::date + $10::int END,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING id`,
         [uid, pid, x.titulo, x.descripcion || '', x.prioridad || 'media', resp[0] || '', resp, base, x.off_ini, x.off_dl, x.notas || '', JSON.stringify(x.etiquetas || []), JSON.stringify(x.checklists || []), x.duracion_est_min || null, req.user.name || '']);
       map.set(x.ref, n.id);
+      if (x.campos && Object.keys(x.campos).length) await cl.query(`UPDATE tasks SET campos=$2::jsonb WHERE id=$1`, [n.id, JSON.stringify(x.campos)]);
+      if (b.aplicar_ajustes !== false && x.status_key && Array.isArray(pr.estados)) { const st = pr.estados.find(e => e.k === x.status_key); if (st) await cl.query(`UPDATE tasks SET status_key=$2, estado=$3 WHERE id=$1`, [n.id, st.k, st.t]); }
     }
     for (const x of (d.tareas || [])) if (x.parent && map.has(x.parent)) await cl.query(`UPDATE tasks SET parent_task_id=$2 WHERE id=$1`, [map.get(x.ref), map.get(x.parent)]);
     let nv = 0;

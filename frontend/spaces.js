@@ -415,7 +415,7 @@ const SpacesModule = (() => {
   function fPers(v, on) { _fPers = _tog(_fPers, v, on); _paintMain(); }
   function clearFilters() { _fEstado = []; _fPrio = []; _fPers = []; _me = false; _q = ''; _closePop(); _paintMain(); }
   const _COLS = { prioridad: 'Prioridad', inicio: 'Fecha de inicio', estimado: 'Duración estimada', etiquetas: 'Etiquetas', horas: 'Horas trabajadas', proyecto: 'Lista' };
-  function colsMenu(ev) { _openPop(ev.currentTarget, `<div class="sp-pop__h">Columnas</div>${Object.entries(_COLS).map(([k, l]) => `<label class="sp-pop__o"><input type="checkbox" ${_cols.includes(k) ? 'checked' : ''} onchange="SpacesModule.toggleCol('${k}',this.checked)"><span>${l}</span></label>`).join('')}<div class="sp-pop__h">Opciones</div><label class="sp-pop__o"><input type="checkbox" ${_expandSubs ? 'checked' : ''} onchange="SpacesModule.toggleSubs()"><span>Mostrar subtareas</span></label>`, 'sp-pop--w'); }
+  function colsMenu(ev) { _openPop(ev.currentTarget, `<div class="sp-pop__h">Columnas</div>${Object.entries(_COLS).map(([k, l]) => `<label class="sp-pop__o"><input type="checkbox" ${_cols.includes(k) ? 'checked' : ''} onchange="SpacesModule.toggleCol('${k}',this.checked)"><span>${l}</span></label>`).join('')}${_selProj ? `<div class="sp-pop__h">Campos del proyecto</div>${_fields(_selProj).map(f => `<label class="sp-pop__o"><input type="checkbox" ${f.v !== false ? 'checked' : ''} onchange="SpacesModule.fmVisPop('${f.id}',this.checked)"><span>${esc(f.n)}</span></label>`).join('')}<button class="sp-pop__i" onclick="SpacesModule.fieldsOpen()">Administrar campos…</button>` : ''}<div class="sp-pop__h">Opciones</div><label class="sp-pop__o"><input type="checkbox" ${_expandSubs ? 'checked' : ''} onchange="SpacesModule.toggleSubs()"><span>Mostrar subtareas</span></label>`, 'sp-pop--w'); }
   function toggleCol(k, on) { _cols = on ? [...new Set([..._cols, k])] : _cols.filter(c => c !== k); _save(); _paintBody(); }
 
   // ── cabecera + barra ──
@@ -435,7 +435,7 @@ const SpacesModule = (() => {
       ${noBar ? '' : `<div class="sp-bar"><div class="sp-bar__l">
           ${listish ? `<button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group]}</button>
           <button type="button" class="sp-chip${_expandSubs ? ' on' : ''}" onclick="SpacesModule.toggleSubs()">${ico('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>')} ${_expandSubs ? 'Expandidos' : 'Contraídos'}</button>
-          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>` : ''}</div>
+          <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>${p ? `<button type="button" class="sp-chip" title="Campos personalizados del proyecto" onclick="SpacesModule.fieldsOpen()">${ico('<path d="M12 5v14M5 12h14"/>')} Campos</button>` : ''}` : ''}</div>
         <div class="sp-bar__r">
           <button type="button" class="sp-ibtn${nF ? ' on' : ''}" title="Filtros" onclick="SpacesModule.filterMenu(event)">${ico('<line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/>')}${nF ? `<i>${nF}</i>` : ''}</button>
           <button type="button" class="sp-ibtn${_showClosed ? ' on' : ''}" title="Mostrar tareas cerradas" onclick="SpacesModule.toggleClosed()">${ico('<circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/>')}</button>
@@ -888,6 +888,7 @@ const SpacesModule = (() => {
   function _groups(mains) {
     const g = _view === 'tabla' ? 'ninguno' : _group;
     if (g === 'ninguno') return [{ key: 'all', label: '', color: '', tasks: mains, flat: true }];
+    if (g === 'estado' && _selProj && _custom(_selProj)) return _stList(_selProj).filter(e => _showClosed || (e.t !== 'completado' && e.t !== 'cancelado')).map(e => ({ key: e.k, label: e.n, color: e.c, tasks: mains.filter(t => _taskSt(t).k === e.k), est: e.k }));
     if (g === 'estado') return _ESTADOS.filter(e => _showClosed || (e[0] !== 'completado' && e[0] !== 'cancelado')).map(e => ({ key: e[0], label: e[1], color: e[2], tasks: mains.filter(t => (t.estado || 'pendiente') === e[0]), est: e[0] }));
     if (g === 'prioridad') return Object.entries(_PRIO).map(([k, v]) => ({ key: k, label: v[0], color: v[1], tasks: mains.filter(t => (t.prioridad || 'media') === k) }));
     if (g === 'persona') { const names = [...new Set(mains.flatMap(t => _resp(t).length ? _resp(t) : ['Sin asignar']))].sort(); return names.map(n => ({ key: n, label: n, color: '#5B6BC0', tasks: mains.filter(t => (_resp(t).length ? _resp(t) : ['Sin asignar']).includes(n)) })); }
@@ -895,13 +896,13 @@ const SpacesModule = (() => {
     return [['v', 'Vencidas', '#D9534F', t => dd(t) && dd(t) < td], ['h', 'Hoy', '#3F5BD0', t => dd(t) === td], ['s', 'Próximos 7 días', '#E8920F', t => dd(t) > td && dd(t) <= wks], ['d', 'Más adelante', '#2E9E5B', t => dd(t) > wks], ['n', 'Sin fecha', '#9A958C', t => !dd(t)]].map(([k, l, c, f]) => ({ key: k, label: l, color: c, tasks: mains.filter(f) }));
   }
   function _statusRing(t) {
-    const e = _EST[t.estado || 'pendiente'] || _EST.pendiente;
+    const e0 = _EST[t.estado || 'pendiente'] || _EST.pendiente, e = [e0[0], e0[1], _taskSt(t).c];
     if (t.estado === 'completado') return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${e[2]}"/><polyline points="7 12.5 10.5 16 17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (t.estado === 'en_progreso') return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.4"/><circle cx="12" cy="12" r="4.2" fill="${e[2]}"/></svg>`;
     return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.2" ${t.estado === 'pendiente' || !t.estado ? 'stroke-dasharray="3 3"' : ''}/></svg>`;
   }
   function _row(t, depth, kids, cols, trail, last) {
-    const e = _EST[t.estado || 'pendiente'] || _EST.pendiente, d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
+    const st = _taskSt(t), e = [t.estado, st.n, st.c], d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
     const cell = {
       prioridad: `<div class="sp-c sp-c--m"><button class="sp-cb" onclick="SpacesModule.prio(event,${t.id})">${TasksModule.prioBadge(t.prioridad || 'media')}</button></div>`,
       inicio: `<div class="sp-c sp-c--m sp-dim">${_fmtD(_d10(t.fecha_inicio)) || '—'}</div>`,
@@ -916,9 +917,9 @@ const SpacesModule = (() => {
       <div class="sp-c sp-c--e"><button class="sp-cb" onclick="SpacesModule.estMenu(event,${t.id})"><span class="sp-tag" style="--c:${e[2]}">${esc(e[1])}</span></button></div>
       <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button></div>
       <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '<span class="tl-who tl-who--add">＋</span>'}</button></div>
-      ${cols.map(c => cell[c]).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
+      ${cols.map(c => cell[c]).join('')}${_fcols().map(f => _fcell(t, f)).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
-  function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas" onclick="SpacesModule.colsMenu(event)">＋</button></div></div>`; }
+  function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}${_fcols().map(f => `<div class="sp-c sp-c--f" title="${esc(f.n)}">${esc(f.n)}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas" onclick="SpacesModule.colsMenu(event)">＋</button></div></div>`; }
   // trail[d] = si el antepasado de nivel d tiene hermanos después (para dibujar las líneas guía en «L»); last = si esta fila es la última de su grupo
   function _tree(t, byParent, depth, cols, out, trail, last) {
     trail = trail || [];
@@ -947,8 +948,9 @@ const SpacesModule = (() => {
   // ── tablero ──
   function _paintBoard(b, all) {
     const mains = all.filter(t => !t.parent_task_id);
-    const cols = _ESTADOS.filter(e => _showClosed || (e[0] !== 'completado' && e[0] !== 'cancelado'));
-    b.innerHTML = `<div class="kanban-board sp-kb">${cols.map(([k, l, c]) => { const ts = mains.filter(t => (t.estado || 'pendiente') === k).sort((a, d) => (_d10(a.deadline) || '9999').localeCompare(_d10(d.deadline) || '9999')); return `<div class="kanban-col" ondragover="event.preventDefault();this.classList.add('is-over')" ondragleave="this.classList.remove('is-over')" ondrop="SpacesModule.drop(event,'${k}')"><div class="kanban-col__head"><div class="kanban-col__title"><span class="kanban-col__dot" style="background:${c}"></span>${l}<span class="kanban-count">${ts.length}</span></div><button class="kanban-col__add" title="Nueva tarea" onclick="SpacesModule.newTask('${k}',this)">+</button></div><div class="kanban-cards">${ts.map(_card).join('') || '<div class="kanban-empty">Sin tareas</div>'}</div></div>`; }).join('')}</div>`;
+    const cust = !!(_selProj && _custom(_selProj));
+    const cols = (cust ? _stList(_selProj).map(e => [e.k, e.n, e.c, e.t]) : _ESTADOS.map(e => [e[0], e[1], e[2], e[0]])).filter(e => _showClosed || (e[3] !== 'completado' && e[3] !== 'cancelado'));
+    b.innerHTML = `<div class="kanban-board sp-kb">${cols.map(([k, l, c]) => { const ts = mains.filter(t => (cust ? _taskSt(t).k : (t.estado || 'pendiente')) === k).sort((a, d) => (_d10(a.deadline) || '9999').localeCompare(_d10(d.deadline) || '9999')); return `<div class="kanban-col" ondragover="event.preventDefault();this.classList.add('is-over')" ondragleave="this.classList.remove('is-over')" ondrop="SpacesModule.drop(event,'${k}')"><div class="kanban-col__head"><div class="kanban-col__title"><span class="kanban-col__dot" style="background:${c}"></span>${l}<span class="kanban-count">${ts.length}</span></div><button class="kanban-col__add" title="Nueva tarea" onclick="SpacesModule.newTask('${k}',this)">+</button></div><div class="kanban-cards">${ts.map(_card).join('') || '<div class="kanban-empty">Sin tareas</div>'}</div></div>`; }).join('')}</div>`;
   }
   // La tarjeta es la misma que en Tareas: cronómetro, subtareas con progreso, menú ⋯ y clic derecho; aquí solo cambia a dónde abre y cómo se arrastra.
   function _card(t) {
@@ -958,11 +960,18 @@ const SpacesModule = (() => {
       .replace(/ondragstart="TasksModule\.kanbanDragStart\(event,\d+\)"/, `ondragstart="event.dataTransfer.setData('text/plain','${t.id}');event.dataTransfer.effectAllowed='move'"`)
       .replace(/\s*ondragend="TasksModule\.kanbanDragEnd\(event\)"/, '');
   }
-  async function drop(ev, estado) { ev.preventDefault(); ev.currentTarget.classList.remove('is-over'); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); if (!id) return; _adopt(); try { await TasksModule.moveTaskToStatus(id, estado); } catch (_) {} _paintMain(); }
+  async function drop(ev, estado) { ev.preventDefault(); ev.currentTarget.classList.remove('is-over'); const id = parseInt(ev.dataTransfer.getData('text/plain'), 10); if (!id) return; if (_selProj && _custom(_selProj)) { await setEstado(id, estado); return; } _adopt(); try { await TasksModule.moveTaskToStatus(id, estado); } catch (_) {} _paintMain(); }
 
   // ── acciones por tarea (mismo menú y selectores que Tareas) ──
-  function estMenu(ev, id) { ev.stopPropagation(); _openPop(ev.currentTarget, `<div class="sp-pop__h">Estado</div>${_ESTADOS.map(e => `<button class="sp-pop__i" onclick="SpacesModule.setEstado(${id},'${e[0]}')"><i class="sp-dot" style="background:${e[2]}"></i>${e[1]}</button>`).join('')}`); }
-  async function setEstado(id, est) { _closePop(); _adopt(); try { await TasksModule.moveTaskToStatus(id, est); } catch (_) {} const t = _tasks.find(x => x.id === id); if (t) t.estado = est; _paintMain(); _paintTree(); }
+  function estMenu(ev, id) { ev.stopPropagation(); const t = _tk(id), l = t ? _stList(t.project_id) : _defSt, cur = t ? _taskSt(t).k : ''; _openPop(ev.currentTarget, `<div class="sp-pop__h">Estado</div>${l.map(e => `<button class="sp-pop__i${e.k === cur ? ' on' : ''}" onclick="SpacesModule.setEstado(${id},'${e.k}')"><i class="sp-dot" style="background:${e.c}"></i>${esc(e.n)}</button>`).join('')}`); }
+  async function setEstado(id, key) {
+    _closePop(); _adopt(); const t = _tk(id); if (!t) return;
+    const st = _stList(t.project_id).find(e => e.k === key);
+    if (_custom(t.project_id) && st) {
+      try { if ((t.estado || 'pendiente') !== st.t) await TasksModule.moveTaskToStatus(id, st.t); const r = await _post(`/mgmt/tasks/${id}/status-key`, { key }, 'PATCH'); if (r.ok) { t.status_key = key; t.estado = st.t; } } catch (_) {}
+    } else { try { await TasksModule.moveTaskToStatus(id, key); } catch (_) {} t.estado = key; }
+    _paintMain(); _paintTree(); _refreshFields(id);
+  }
   function prio(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openKcPrioPopover(ev, id); }
   function resp(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openKcRespPopover(ev, id); }
   function date(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openKcDatePopover(ev, id); }
@@ -971,7 +980,7 @@ const SpacesModule = (() => {
     const ps = (_selProj ? _projects.filter(p => p.id === _selProj) : (_selSpace != null ? _projsOf(_selSpace) : _projects).filter(p => (p.estado || 'activo') === 'activo'));
     if (!ps.length) { showBanner('Primero crea o elige una lista (proyecto) en este espacio', 'error'); return; }
     const a = anchor || document.querySelector('.sp-newt') || document.body;
-    const p = _openPop(a, `<div class="sp-pop__h">Nueva tarea${estado && estado !== 'pendiente' ? ' · ' + (_EST[estado] || [0, ''])[1] : ''}</div>
+    const p = _openPop(a, `<div class="sp-pop__h">Nueva tarea${estado && estado !== 'pendiente' ? ' · ' + ((_EST[estado] || [0, ''])[1] || ((_stList(_selProj).find(e => e.k === estado) || {}).n) || '') : ''}</div>
       <input class="sp-pop__in" id="sp-nt" placeholder="Nombre de la tarea" autocomplete="off">
       ${ps.length > 1 ? `<select class="sp-pop__in" id="sp-np">${ps.map(x => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select>` : ''}
       <button class="btn btn--primary btn--sm sp-pop__go" id="sp-ngo">Crear tarea</button>`, 'sp-pop--w');
@@ -982,13 +991,168 @@ const SpacesModule = (() => {
   async function _createTask(titulo, pid, estado) {
     if (!titulo) { showBanner('Escribe el nombre de la tarea', 'error'); return; }
     _closePop();
+    const cs = _custom(pid) ? _stList(pid).find(e => e.k === estado) : null;
     try {
-      const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: pid, estado, responsables: window._authUser?.memberNombre ? [window._authUser.memberNombre] : [] }) });
+      const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: pid, estado: cs ? cs.t : estado, responsables: window._authUser?.memberNombre ? [window._authUser.memberNombre] : [] }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
-      const t = await r.json(); const pj = _projects.find(x => x.id === pid); t.project_nombre = pj ? pj.nombre : ''; t.client_nombre = pj ? pj.client_nombre : ''; _tasks.unshift(t);
+      const t = await r.json(); if (cs) { const r2 = await _post(`/mgmt/tasks/${t.id}/status-key`, { key: cs.k }, 'PATCH'); if (r2.ok) { t.status_key = cs.k; t.estado = cs.t; } } const pj = _projects.find(x => x.id === pid); t.project_nombre = pj ? pj.nombre : ''; t.client_nombre = pj ? pj.client_nombre : ''; _tasks.unshift(t);
       showBanner('✓ Tarea creada', 'success');
     } catch (e) { showBanner('No se pudo crear la tarea: ' + e.message, 'error'); }
     _paintMain(); _paintTree();
+  }
+
+  // ═══ Estados y campos personalizados por proyecto (estilo ClickUp) ═══
+  // Estados propios: la categoría («t») sigue siendo lo que usa el resto del sistema; tasks.status_key guarda el estado elegido.
+  const _defSt = _ESTADOS.map(e => ({ k: e[0], n: e[1], c: e[2], t: e[0] }));
+  const _custom = pid => { const p = _pjOf(pid); return !!(p && Array.isArray(p.estados) && p.estados.length); };
+  const _stList = pid => (_custom(pid) ? _pjOf(pid).estados : _defSt);
+  function _taskSt(t) {
+    const l = _stList(t.project_id);
+    if (_custom(t.project_id)) return l.find(e => e.k === t.status_key) || l.find(e => e.t === (t.estado || 'pendiente')) || l[0];
+    return l.find(e => e.k === (t.estado || 'pendiente')) || l[0];
+  }
+  const _tk = id => _tasks.find(x => x.id === id) || (typeof TasksModule !== 'undefined' && TasksModule.getTask ? TasksModule.getTask(id) : null);
+  const _fields = pid => { const p = _pjOf(pid); return p && Array.isArray(p.campos) ? p.campos : []; };
+  const _fcols = () => (_selProj ? _fields(_selProj).filter(f => f.v !== false) : []);
+  const _OPC = ['#4194F6', '#6BC950', '#F8AE00', '#FF7800', '#F04F4F', '#A875FF', '#08BDBA', '#87909E'];
+  const _FT = [
+    ['lista', 'Lista desplegable', 'Una opción para categorizar', '<polyline points="6 9 12 15 18 9"/>'], ['texto', 'Texto', 'Una línea de contexto', '<line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="14" x2="14" y2="14"/>'],
+    ['fecha', 'Fecha', 'Fechas que no son el límite', '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>'],
+    ['area', 'Texto extenso', 'Detalles largos', '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="11" x2="20" y2="11"/><line x1="4" y1="16" x2="14" y2="16"/>'], ['numero', 'Número', 'Cualquier cantidad', '<line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><line x1="10" y1="4" x2="8" y2="20"/><line x1="16" y1="4" x2="14" y2="20"/>'],
+    ['etiquetas', 'Etiquetas', 'Varias opciones a la vez', '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/>'], ['casilla', 'Casilla de selección', 'Sí o no', '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>'],
+    ['dinero', 'Dinero', 'Presupuestos, costos, tarifas', '<circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.5 2 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2a2.5 2 0 0 1-2.5-1.5M12 6v1.5M12 16.5V18"/>'],
+    ['correo', 'Correo electrónico', 'Direcciones de correo', '<rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/>'], ['telefono', 'Teléfono', 'Números de contacto', '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>'],
+    ['sitio', 'Sitio web', 'Vínculos y recursos', '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'], ['calificacion', 'Calificación', 'De 1 a 5 estrellas', '<polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9"/>'],
+    ['progreso', 'Progreso (manual)', 'Barra de 0 a 100 %', '<rect x="3" y="9" width="18" height="6" rx="3"/><path d="M3 12h9"/>'], ['progreso_auto', 'Progreso (automático)', 'Según las subtareas', '<path d="M21 12a9 9 0 1 1-9-9"/><polyline points="21 3 21 9 15 9"/>'],
+    ['personas', 'Personas', 'Equipo que no es el asignado', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/>'], ['votacion', 'Votación', 'Cuenta de votos a favor', '<path d="M12 19V5M5 12l7-7 7 7"/>'],
+  ];
+  const _FTN = Object.fromEntries(_FT.map(x => [x[0], x[1]]));
+  const _FDIM = '<span class="sp-dim">—</span>';
+  const _star = on => `<svg width="13" height="13" viewBox="0 0 24 24" fill="${on ? '#F8AE00' : 'none'}" stroke="${on ? '#F8AE00' : '#C9C5BD'}" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9"/></svg>`;
+  function _fview(t, f) {
+    const v = (t.campos || {})[f.id];
+    if (f.t === 'progreso_auto') { const kids = _tasks.filter(x => x.parent_task_id === t.id && !x.archivada); if (!kids.length) return _FDIM; const pc = Math.round(kids.filter(x => x.estado === 'completado').length / kids.length * 100); return `<span class="sp-fp"><i style="width:${pc}%"></i></span><em class="sp-fpn">${pc}%</em>`; }
+    if (f.t === 'casilla') return v ? `<span class="sp-fck sp-fck--on">${_SVGS('<path d="m5 12 4 4 10-10"/>', 12)}</span>` : '<span class="sp-fck"></span>';
+    if (f.t === 'votacion') return `<span class="sp-fvote">${_SVGS('<path d="M12 19V5M5 12l7-7 7 7"/>', 12)}${+v || 0}</span>`;
+    if (v === undefined || v === null || v === '') return _FDIM;
+    switch (f.t) {
+      case 'lista': { const o = (f.o || []).find(x => x.k === v); return o ? `<span class="sp-ftag" style="--c:${o.c}">${esc(o.n)}</span>` : _FDIM; }
+      case 'etiquetas': { const a = (v || []).map(k => (f.o || []).find(x => x.k === k)).filter(Boolean); return a.slice(0, 2).map(o => `<span class="sp-ftag" style="--c:${o.c}">${esc(o.n)}</span>`).join('') + (a.length > 2 ? `<em class="sp-fpn">+${a.length - 2}</em>` : ''); }
+      case 'numero': return esc(Number(v).toLocaleString('es-ES'));
+      case 'dinero': return esc((f.mon || 'USD') + ' ' + Number(v).toLocaleString('es-ES', { maximumFractionDigits: 2 }));
+      case 'fecha': return esc(_fmtD(v));
+      case 'calificacion': return [1, 2, 3, 4, 5].map(i => _star(i <= v)).join('');
+      case 'progreso': return `<span class="sp-fp"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span><em class="sp-fpn">${Math.round(v)}%</em>`;
+      case 'personas': return `<span class="tl-who-wrap">${v.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${v.length > 3 ? `<span class="tl-who tl-who--more">+${v.length - 3}</span>` : ''}</span>`;
+      case 'sitio': return `<a class="sp-flink" href="${esc(/^https?:/i.test(v) ? v : 'https://' + v)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(v).replace(/^https?:\/\//i, ''))}</a>`;
+      case 'correo': return `<a class="sp-flink" href="mailto:${esc(v)}" onclick="event.stopPropagation()">${esc(v)}</a>`;
+      default: return `<span class="sp-ftxt">${esc(v)}</span>`;
+    }
+  }
+  const _SVGS = (d, sz) => `<svg width="${sz || 15}" height="${sz || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _fcell = (t, f) => `<div class="sp-c sp-c--f"><button type="button" class="sp-fv" onclick="SpacesModule.fEdit(event,${t.id},'${f.id}')">${_fview(t, f)}</button></div>`;
+  async function _fSave(tid, fid, val) {
+    const t = _tk(tid), r = await _post(`/mgmt/tasks/${tid}/campos`, { values: { [fid]: val } }, 'PATCH');
+    if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar el campo'), 'error'); return false; }
+    const j = await r.json(); if (t) t.campos = j.campos || {}; return true;
+  }
+  function _refreshFields(tid) { if ($q('sp-body') && !(_selProj && _cfg) && _mode === 'tasks') _paintBody(); if ($q('tskd-fields')) renderTaskFields(tid, 'tskd-fields'); }
+  async function fSet(tid, fid, val, keep) { await _fSave(tid, fid, val); if (!keep) _closePop(); _refreshFields(tid); }
+  async function fTog(tid, fid, key, on) { const t = _tk(tid), cur = (((t && t.campos) || {})[fid] || []).slice(), i = cur.indexOf(key); if (on && i < 0) cur.push(key); if (!on && i >= 0) cur.splice(i, 1); await _fSave(tid, fid, cur); _refreshFields(tid); }
+  function fEdit(ev, tid, fid) {
+    ev.stopPropagation(); const t = _tk(tid), f = t && _fields(t.project_id).find(x => x.id === fid); if (!f) return;
+    const v = (t.campos || {})[fid];
+    if (f.t === 'casilla') { fSet(tid, fid, !v, true); return; }
+    if (f.t === 'votacion') { fSet(tid, fid, (+v || 0) + 1, true); return; }
+    if (f.t === 'progreso_auto') return;
+    let h = `<div class="sp-pop__h">${esc(f.n)}</div>`;
+    const clear = v ? `<button class="sp-pop__i" onclick="SpacesModule.fSet(${tid},'${fid}',null)">Quitar valor</button>` : '';
+    if (f.t === 'lista') h += (f.o || []).map(o => `<button class="sp-pop__i${v === o.k ? ' on' : ''}" onclick="SpacesModule.fSet(${tid},'${fid}','${o.k}')"><i class="sp-dot" style="background:${o.c}"></i>${esc(o.n)}</button>`).join('') + clear;
+    else if (f.t === 'etiquetas') h += `<div class="sp-pop__l">${(f.o || []).map(o => `<label class="sp-pop__o"><input type="checkbox" ${(v || []).includes(o.k) ? 'checked' : ''} onchange="SpacesModule.fTog(${tid},'${fid}','${o.k}',this.checked)"><span class="sp-ftag" style="--c:${o.c}">${esc(o.n)}</span></label>`).join('')}</div>`;
+    else if (f.t === 'personas') h += `<div class="sp-pop__l">${[...new Set(_team.map(x => x.nombre).filter(Boolean))].map(n => `<label class="sp-pop__o"><input type="checkbox" data-n="${esc(n)}" ${(v || []).includes(n) ? 'checked' : ''} onchange="SpacesModule.fTog(${tid},'${fid}',this.dataset.n,this.checked)"><span>${esc(n)}</span></label>`).join('')}</div>`;
+    else if (f.t === 'calificacion') h += `<div class="sp-frate">${[1, 2, 3, 4, 5].map(i => `<button type="button" onclick="SpacesModule.fSet(${tid},'${fid}',${i})">${_star(i <= (v || 0))}</button>`).join('')}</div>${clear}`;
+    else if (f.t === 'area') h += `<textarea class="sp-pop__in" id="sp-fin" rows="4">${esc(v || '')}</textarea><button class="btn btn--primary btn--sm sp-pop__go" onclick="SpacesModule.fSet(${tid},'${fid}',document.getElementById('sp-fin').value)">Guardar</button>`;
+    else { const ty = { numero: 'number', dinero: 'number', progreso: 'number', fecha: 'date', correo: 'email', telefono: 'tel', sitio: 'url' }[f.t] || 'text'; h += `<input class="sp-pop__in" id="sp-fin" type="${ty}" ${f.t === 'progreso' ? 'min="0" max="100"' : ''} step="any" value="${esc(v == null ? '' : v)}" placeholder="${f.t === 'progreso' ? '0 a 100' : (f.t === 'sitio' ? 'https://…' : '')}"><button class="btn btn--primary btn--sm sp-pop__go" onclick="SpacesModule.fSet(${tid},'${fid}',document.getElementById('sp-fin').value)">Guardar</button>${clear}`; }
+    const p = _openPop(ev.currentTarget, h, 'sp-pop--w'), inp = p && p.querySelector('#sp-fin');
+    if (inp) { inp.focus(); inp.onkeydown = e => { if (e.key === 'Enter' && f.t !== 'area') { e.preventDefault(); fSet(tid, fid, inp.value); } if (e.key === 'Escape') _closePop(); }; }
+  }
+  // campos y estados en el panel de la tarea (página de detalle)
+  async function renderTaskFields(tid, cid) {
+    const box = $q(cid); if (!box) return;
+    if (!_projects.length) { try { const [pr, tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok && !_tasks.length) _tasks = await tr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
+    const t = _tk(tid); if (!t || !t.project_id || !_pjOf(t.project_id)) { box.innerHTML = ''; return; }
+    const fs = _fields(t.project_id), cust = _custom(t.project_id); if (!fs.length && !cust) { box.innerHTML = ''; return; }
+    const st = _taskSt(t);
+    box.innerHTML = (cust ? `<div class="tskd__field"><div class="tskd__lbl">Estado del proyecto</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.estMenu(event,${tid})"><span class="sp-tag" style="--c:${st.c}">${esc(st.n)}</span></button></div>` : '')
+      + fs.map(f => `<div class="tskd__field"><div class="tskd__lbl">${esc(f.n)}</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.fEdit(event,${tid},'${f.id}')">${_fview(t, f)}</button></div>`).join('');
+  }
+  async function _saveSchema(pid, patch) {
+    const r = await _post(`/mgmt/projects/${pid}/schema`, patch, 'PUT');
+    if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar'), 'error'); return false; }
+    const j = await r.json(), p = _pjOf(pid); if (p) { p.estados = j.estados; p.campos = j.campos; } return true;
+  }
+
+  // ── administrador de campos (Se muestran · Crear nuevo · Agregar existente) ──
+  let _fmPid = 0, _fmMode = 'list', _fmType = '', _fmEdit = null;
+  function fieldsOpen() { _closePop(); _fmPid = _selProj || _pmPid; if (!_pjOf(_fmPid)) return; _fmMode = 'list'; _fmPaint(true); }
+  function _fmSync() { if (_selProj && _cfg) { const b = $q('sp-body'); if (b && $q('cfg-fld')) _cfgFldPaint(); } else if (_mode === 'tasks') _paintBody(); }
+  function _fmPaint(first) {
+    const p = _pjOf(_fmPid), fs = _fields(_fmPid); let b = '';
+    if (_fmMode === 'list') {
+      const others = []; _projects.forEach(q => { if (q.id !== _fmPid) (q.campos || []).forEach(f => { if (!fs.some(x => x.n === f.n && x.t === f.t) && !others.some(x => x.n === f.n && x.t === f.t)) others.push({ ...f, from: q.nombre }); }); });
+      b = `<div class="sp-mh">Se muestran en el proyecto</div>
+        ${fs.length ? fs.map(f => `<div class="fm-r"><label class="fm-sw" title="Mostrar u ocultar la columna"><input type="checkbox" ${f.v !== false ? 'checked' : ''} onchange="SpacesModule.fmVis('${f.id}',this.checked)"><span></span></label><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)}</em><button class="fm-b" title="Editar" onclick="SpacesModule.fmEdit('${f.id}')">${_SVGS('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 14)}</button><button class="fm-b" title="Eliminar el campo y sus valores" onclick="SpacesModule.fmDel('${f.id}')">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 14)}</button></div>`).join('') : '<p class="sp-mp">Este proyecto todavía no tiene campos propios.</p>'}
+        <div class="sp-mh">Crear nuevo</div><div class="fm-grid">${_FT.map(x => `<button type="button" class="fm-t" onclick="SpacesModule.fmNew('${x[0]}')"><i>${_SVGS(x[3], 16)}</i><span><b>${x[1]}</b><em>${x[2]}</em></span></button>`).join('')}</div>
+        ${others.length ? `<div class="sp-mh">Agregar existente (de otros proyectos)</div>${others.slice(0, 20).map((f, i) => `<div class="fm-r"><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)} · ${esc(f.from)}</em><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmAdd(${i})">Añadir</button></div>`).join('')}` : ''}`;
+      _fmOthers = others;
+    } else {
+      const f = _fmEdit ? fs.find(x => x.id === _fmEdit) : null, t = f ? f.t : _fmType, withOpt = ['lista', 'etiquetas'].includes(t);
+      b = `<button class="fm-back" onclick="SpacesModule.fmBack()">‹ Volver</button><div class="sp-mh">${f ? 'Editar campo' : 'Nuevo campo · ' + esc(_FTN[t] || t)}</div>
+        <label class="pcf-f"><span>Nombre</span><input class="form-input" id="fm-n" value="${esc(f ? f.n : '')}" placeholder="Ej. Canal" maxlength="50"></label>
+        ${withOpt ? `<label class="pcf-f"><span>Opciones (una por línea)</span><textarea class="form-input" id="fm-o" rows="6" placeholder="LinkedIn\nEmail\nWhatsApp">${esc(f ? (f.o || []).map(o => o.n).join('\n') : '')}</textarea></label>` : ''}
+        ${t === 'dinero' ? `<label class="pcf-f"><span>Moneda</span><select class="form-input" id="fm-m">${['USD', 'EUR', 'COP', 'MXN', 'ARS', 'PEN', 'CLP', 'BRL'].map(m => `<option${f && f.mon === m ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
+        <div class="sp-mf"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fmBack()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.fmSave()">${f ? 'Guardar' : 'Crear campo'}</button></div>`;
+    }
+    if (first || !$q('sp-modal')) _modal({ t: 'Campos · ' + esc(_plain(p.nombre)), b }, 680); else document.querySelector('#sp-modal .sp-mb').innerHTML = b;
+  }
+  let _fmOthers = [];
+  function fmBack() { _fmMode = 'list'; _fmEdit = null; _fmPaint(); }
+  function fmNew(t) { _fmMode = 'form'; _fmType = t; _fmEdit = null; _fmPaint(); setTimeout(() => $q('fm-n') && $q('fm-n').focus(), 30); }
+  function fmEdit(id) { _fmMode = 'form'; _fmEdit = id; _fmPaint(); }
+  async function fmVis(id, on) { const p = _pjOf(_fmPid), campos = _fields(_fmPid).map(f => f.id === id ? { ...f, v: on } : f); if (await _saveSchema(_fmPid, { campos })) _fmSync(); }
+  async function fmVisPop(id, on) { _fmPid = _selProj; await fmVis(id, on); _closePop(); }
+  async function fmDel(id) { const f = _fields(_fmPid).find(x => x.id === id); if (!f || !confirm(`¿Eliminar el campo «${f.n}»? Se borran sus valores en todas las tareas de este proyecto.`)) return; if (await _saveSchema(_fmPid, { campos: _fields(_fmPid).filter(x => x.id !== id) })) { _fmPaint(); _fmSync(); } }
+  async function fmAdd(i) { const f = _fmOthers[i]; if (!f) return; const copy = { ...f, id: 'f' + Date.now().toString(36), v: true }; delete copy.from; if (await _saveSchema(_fmPid, { campos: [..._fields(_fmPid), copy] })) { _fmPaint(); _fmSync(); } }
+  async function fmSave() {
+    const n = String(($q('fm-n') || {}).value || '').trim(); if (!n) { showBanner('Ponle un nombre al campo', 'error'); return; }
+    const cur = _fields(_fmPid), f = _fmEdit ? cur.find(x => x.id === _fmEdit) : null, t = f ? f.t : _fmType;
+    const o = ['lista', 'etiquetas'].includes(t) ? String(($q('fm-o') || {}).value || '').split('\n').map(s => s.trim()).filter(Boolean).map((nm, i) => { const old = f && (f.o || []).find(x => x.n === nm); return { n: nm, k: old ? old.k : undefined, c: old ? old.c : _OPC[i % _OPC.length] }; }) : undefined;
+    if (['lista', 'etiquetas'].includes(t) && !o.length) { showBanner('Añade al menos una opción', 'error'); return; }
+    const nf = { ...(f || { id: 'f' + Date.now().toString(36), v: true }), n, t, ...(o ? { o } : {}), ...(t === 'dinero' ? { mon: ($q('fm-m') || {}).value || 'USD' } : {}) };
+    const campos = f ? cur.map(x => x.id === f.id ? nf : x) : [...cur, nf];
+    if (await _saveSchema(_fmPid, { campos })) { _fmMode = 'list'; _fmEdit = null; _fmPaint(); _fmSync(); }
+  }
+
+  // ── estados del proyecto (en Configuración) ──
+  let _cfgEst = [];
+  const _CATN = { pendiente: 'Pendiente (sin empezar)', en_progreso: 'En curso', bloqueado: 'Bloqueado', completado: 'Completado', cancelado: 'Cancelado' };
+  function _cfgEstPaint() {
+    const box = $q('cfg-est'); if (!box) return;
+    box.innerHTML = _cfgEst.map((e, i) => `<div class="pcf-er"><input type="color" value="${esc(e.c)}" title="Color" onchange="SpacesModule.cfgEstSet(${i},'c',this.value)"><input class="form-input" value="${esc(e.n)}" maxlength="40" oninput="SpacesModule.cfgEstSet(${i},'n',this.value)"><select class="form-input" title="Categoría: lo que significa para el resto del sistema" onchange="SpacesModule.cfgEstSet(${i},'t',this.value)">${Object.entries(_CATN).map(([k, l]) => `<option value="${k}"${e.t === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="fm-b" title="Subir" onclick="SpacesModule.cfgEstMove(${i},-1)">${_SVGS('<polyline points="6 15 12 9 18 15"/>', 14)}</button><button type="button" class="fm-b" title="Bajar" onclick="SpacesModule.cfgEstMove(${i},1)">${_SVGS('<polyline points="6 9 12 15 18 9"/>', 14)}</button><button type="button" class="fm-b" title="Quitar" onclick="SpacesModule.cfgEstDel(${i})">${_SVGS('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', 14)}</button></div>`).join('');
+  }
+  function cfgEstSet(i, k, v) { if (_cfgEst[i]) _cfgEst[i][k] = v; }
+  function cfgEstMove(i, d) { const j = i + d; if (j < 0 || j >= _cfgEst.length) return; [_cfgEst[i], _cfgEst[j]] = [_cfgEst[j], _cfgEst[i]]; _cfgEstPaint(); }
+  function cfgEstDel(i) { if (_cfgEst.length <= 1) { showBanner('Deja al menos un estado', 'error'); return; } _cfgEst.splice(i, 1); _cfgEstPaint(); }
+  function cfgEstAdd() { _cfgEst.push({ k: 'e' + Date.now().toString(36), n: 'Nuevo estado', c: _OPC[_cfgEst.length % _OPC.length], t: 'en_progreso' }); _cfgEstPaint(); }
+  async function cfgEstSave(reset) {
+    const pid = _selProj; if (!pid) return;
+    if (!reset && !_cfgEst.some(e => e.t === 'completado')) { showBanner('Incluye al menos un estado de categoría «Completado»', 'error'); return; }
+    if (await _saveSchema(pid, { estados: reset ? null : _cfgEst })) { showBanner(reset ? 'Estados restablecidos' : 'Estados guardados', 'success'); if (reset) _cfgEst = _defSt.map(e => ({ ...e })); else _cfgEst = _pjOf(pid).estados.map(e => ({ ...e })); _cfgEstPaint(); _paintTree(); }
+  }
+  function _cfgFldPaint() {
+    const box = $q('cfg-fld'); if (!box) return; const fs = _fields(_selProj);
+    box.innerHTML = fs.length ? fs.map(f => `<div class="fm-r"><b>${esc(f.n)}</b><em>${esc(_FTN[f.t] || f.t)}${f.v === false ? ' · oculto' : ''}</em></div>`).join('') : '<p class="pcf-p">Sin campos propios todavía.</p>';
   }
 
   // ═══ Todos los proyectos (sustituye a la antigua sección «Proyectos») ═══
@@ -1057,6 +1221,7 @@ const SpacesModule = (() => {
       if (sr.ok) sum = await sr.json(); if (cr && cr.ok) _clients.l = await cr.json();
     } catch (e) { console.error('[spaces] cfg', e); }
     if (!(_cfg && _selProj === pid) || !$q('sp-body')) return;
+    _cfgEst = _custom(pid) ? p.estados.map(e => ({ ...e })) : _defSt.map(e => ({ ...e }));
     _cfgSum = sum; _cfgResp = [..._resp(p)]; _cfgRep = Array.isArray(p.reparto) ? p.reparto.map(r => ({ ...r })) : [];
     const money = 'valor_total' in p, t = sum.tiempo || { por_persona: [] }, tk = sum.tareas || {};
     const fld = (l, id, v, type, ph, hint) => `<label class="pcf-f"><span>${l}</span><input class="form-input" id="${id}" type="${type || 'text'}" value="${esc(v == null ? '' : v)}" placeholder="${ph || ''}"${type === 'number' ? ' step="any" min="0"' : ''}>${hint ? `<em>${hint}</em>` : ''}</label>`;
@@ -1091,6 +1256,16 @@ const SpacesModule = (() => {
         <div class="pcf-sub">Reparto entre el equipo <em id="cfg-rep-sum"></em></div><div id="cfg-rep"></div>
         <button type="button" class="pcf-add" onclick="SpacesModule.cfgRepAdd()">＋ Añadir persona al reparto</button>
       </section>` : ''}
+      <section class="pcf-c pcf-c--wide"><h4>Estados del proyecto</h4>
+        <p class="pcf-p">Los estados que usa este tipo de trabajo. Cada uno pertenece a una categoría: es lo que entiende el resto del sistema (Mi trabajo, Dashboard, cobros). ${_custom(pid) ? '' : '<b>Ahora usa los 5 estados de siempre.</b>'}</p>
+        <div id="cfg-est"></div>
+        <div class="pcf-btns"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgEstAdd()">＋ Añadir estado</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgEstSave(true)">Volver a los 5 de siempre</button><button class="btn btn--primary btn--sm" onclick="SpacesModule.cfgEstSave()">Guardar estados</button></div>
+      </section>
+      <section class="pcf-c"><h4>Campos personalizados</h4>
+        <p class="pcf-p">Columnas propias de este proyecto (texto, fecha, listas, etiquetas, dinero…). Elige cuáles se ven en la lista.</p>
+        <div id="cfg-fld"></div>
+        <div class="pcf-btns"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.fieldsOpen()">Administrar campos…</button></div>
+      </section>
       <section class="pcf-c"><h4>Equipo y acceso</h4>
         <p class="pcf-p">Quién puede ver y trabajar en este proyecto, aparte de quienes lo ven por su rol.</p>
         <button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgAct('share')">Uso compartido y permisos…</button>
@@ -1102,7 +1277,7 @@ const SpacesModule = (() => {
       <section class="pcf-c pcf-c--danger"><h4>Acciones del proyecto</h4>
         <div class="pcf-btns"><button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgAct('dup')">Duplicar</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgAct('link')">Copiar vínculo</button><button class="btn btn--ghost btn--sm" onclick="SpacesModule.cfgAct('arc')">Archivar</button><button class="btn btn--ghost btn--danger btn--sm" onclick="SpacesModule.cfgAct('del')">Eliminar</button></div>
       </section></div></div>`;
-    _cfgRepPaint();
+    _cfgRepPaint(); _cfgEstPaint(); _cfgFldPaint();
   }
   const _clients = { l: null };
   const _m = (v, p) => (p.moneda || 'USD') + ' ' + Number(v || 0).toLocaleString('es-ES', { maximumFractionDigits: 2 });
@@ -1146,7 +1321,7 @@ const SpacesModule = (() => {
 
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
-  return { showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+  return { fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
