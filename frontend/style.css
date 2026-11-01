@@ -19606,3 +19606,10 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .tc-dd { position: relative; } .tc-ddb { width: 100%; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border2); border-radius: 9px; padding: 10px 12px; background: #fff; font: inherit; font-size: .88rem; cursor: pointer; text-align: left; }
 .tc-ddl { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: #fff; border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 12px 32px rgba(16,24,20,.18); padding: 8px; } .tc-ddl input { width: 100%; box-sizing: border-box; border: 1.5px solid #A7C8F5; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: .84rem; outline: 0; } .tc-dds { font-size: .72rem; color: var(--muted); padding: 8px 6px 4px; } .tc-ddi { max-height: 220px; overflow-y: auto; } .tc-ddi button { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; background: none; font: inherit; font-size: .86rem; padding: 8px 10px; border-radius: 7px; cursor: pointer; text-align: left; } .tc-ddi button:hover, .tc-ddi button.on { background: #EEF4FE; } .tc-ddi small { color: var(--muted); font-size: .7rem; }
 .tc-uf { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; border-top: 1px solid var(--border); flex: none; } .tc-info { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; color: var(--muted); }
+
+/* Mi trabajo: el estado en su propia columna, centrado */
+.mw-fst { flex: none; width: 138px; display: inline-flex; justify-content: center; margin-right: 6px; }
+.mw-td-s { text-align: center; width: 140px; white-space: nowrap; } .mw-th-s { text-align: center; }
+.mw-kchips { padding: 0 12px; }
+#mywork-list .d3-task-row .d3-task-date { flex: none; width: 128px; text-align: right; white-space: nowrap; }
+#mywork-list .d3-task-row:not(:has(.d3-openproj-btn)) .d3-task-date { margin-right: 30px; }

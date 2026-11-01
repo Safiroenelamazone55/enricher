@@ -11989,7 +11989,7 @@ const MyWorkModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
-      <span class="mw-fch">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 3)}</span>
+      <span class="mw-fst">${SpacesModule.statusTag(t)}</span>${(() => { const c = SpacesModule.chipsFor(t, 3); return c ? `<span class="mw-fch">${c}</span>` : ''; })()}
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -12117,11 +12117,12 @@ const MyWorkModule = (() => {
     const ordered = [], seenP = new Set(), kids = new Map();
     items.forEach(t => { if (t.parent_task_id && byId.get(t.parent_task_id)) { if (!kids.has(t.parent_task_id)) kids.set(t.parent_task_id, []); kids.get(t.parent_task_id).push(t); } });
     items.forEach(t => { const pid = t.parent_task_id; if (pid && byId.get(pid)) { if (!seenP.has(pid)) { seenP.add(pid); ordered.push({ head: byId.get(pid) }); kids.get(pid).forEach(k => ordered.push({ t: k, sub: true })); } } else ordered.push({ t }); });
-    const rows = ordered.map(o => { if (o.head) { const h = o.head, hw = _wn(h); return `<tr class="mw-tr mw-tr--head"><td></td><td class="mw-td-t"><span class="mw-t">${esc(h.titulo)}</span><span class="mw-sub">Tarea · ${(kids.get(h.id) || []).length} subtarea${(kids.get(h.id) || []).length === 1 ? '' : 's'}</span></td><td>${esc(h.project_nombre || '—')}</td><td class="mw-td-c">${esc(h.client_nombre || '—')}</td><td></td><td></td><td class="mw-td-d">${hw.start ? _fmt(hw.start) : ''}</td><td class="mw-td-d">${hw.end ? _fmt(hw.end) : ''}</td><td></td></tr>`; }
+    const rows = ordered.map(o => { if (o.head) { const h = o.head, hw = _wn(h); return `<tr class="mw-tr mw-tr--head"><td></td><td class="mw-td-t"><span class="mw-t">${esc(h.titulo)}</span><span class="mw-sub">Tarea · ${(kids.get(h.id) || []).length} subtarea${(kids.get(h.id) || []).length === 1 ? '' : 's'}</span></td><td class="mw-td-s">${SpacesModule.statusTag(h)}</td><td>${esc(h.project_nombre || '—')}</td><td class="mw-td-c">${esc(h.client_nombre || '—')}</td><td></td><td></td><td class="mw-td-d">${hw.start ? _fmt(hw.start) : ''}</td><td class="mw-td-d">${hw.end ? _fmt(hw.end) : ''}</td><td></td></tr>`; }
       const t = o.t, w = _wn(t), done = !_open(t);
       return `<tr class="mw-tr${done ? ' is-done' : ''}${o.sub ? ' mw-tr--sub' : ''}" data-task-id="${t.id}">
         <td class="mw-td-st">${_statusBtn(t)}</td>
-        <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span><span class="mw-stg">${SpacesModule.statusTag(t)}</span></td>
+        <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span></td>
+        <td class="mw-td-s">${SpacesModule.statusTag(t)}</td>
         <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
         <td>${prio(t)}</td>
         <td class="mw-td-e"><input class="mw-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="—" onclick="event.stopPropagation()" onblur="saveEstimateG(${t.id},this,m=>{const x=MyWorkModule._byIdG(${t.id});if(x)x.duracion_est_min=m})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"></td>
@@ -12129,7 +12130,7 @@ const MyWorkModule = (() => {
         <td class="mw-td-d">${_dateBtn(t, w.end ? _fmt(w.end) : '')}</td>
         <td class="mw-td-a">${_playBtn(t)}</td>${_fieldCells(t)}</tr>`; }).join('');
     wrap.innerHTML = `<div class="mw-bar"><span class="mw-bar__n">${items.length} tarea${items.length === 1 ? '' : 's'}</span><label class="mw-chk"><input type="checkbox" ${_showDone ? 'checked' : ''} onchange="MyWorkModule.toggleDone()"> Mostrar completadas</label><button type="button" class="mw-fbtn" onclick="MyWorkModule.fieldsMenu(event)" title="Elige qué campos personalizados ver como columnas">Campos${_mwF.length ? ` · ${_mwF.length}` : ''}</button></div>
-      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th>${_fieldHeads()}</tr></thead><tbody>${rows}</tbody></table></div>`
+      ${items.length ? `<div class="mw-tbl-wrap"><table class="mw-tbl"><thead><tr>${th('estado', '', 'mw-th-st')}${th('titulo', 'Tarea')}<th class="mw-th-s">Estado</th>${th('proyecto', 'Proyecto')}${th('cliente', 'Cliente')}${th('prioridad', 'Prioridad')}<th>Estimado</th>${th('inicio', 'Inicio')}${th('vence', 'Vence')}<th></th>${_fieldHeads()}</tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="d3-empty">No tienes tareas asignadas.</div>`}`;
   }
 
