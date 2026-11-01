@@ -45,7 +45,7 @@ const SpacesModule = (() => {
     render();
   }
   function _fromTasks(arr) { if (arr && arr !== _tasks) _tasks = arr; if ($q('spaces-root') && $q('pane-mgmt-spaces')?.classList.contains('active')) _paintMain(); }
-  function _adopt() { try { TasksModule._adopt(_tasks); } catch (e) { console.error('[spaces] adopt', e); } }
+  function _adopt() { try { if (!_tasks.length && TasksModule._getTasks) _tasks = TasksModule._getTasks(); TasksModule._adopt(_tasks); } catch (e) { console.error('[spaces] adopt', e); } }
 
   // ── estructura ──
   const _projsOf = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado' && !p.archivado);

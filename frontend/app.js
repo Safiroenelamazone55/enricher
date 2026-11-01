@@ -451,7 +451,7 @@ async function initAuth() {
         try { SpacesModule.openProject(+projectParam); } catch (_) {}
         document.querySelector('.snav-item[data-tab="mgmt-spaces"]')?.click();
       } else if (taskParam) {
-        openTaskAnywhere(+taskParam);
+        openTaskAnywhere(+taskParam, true);
       }
       if (window.__novaBootDone) window.__novaBootDone();   // la sección ya está activa: se quita la pantalla de carga
       await FxRatesModule.load();
@@ -13099,7 +13099,7 @@ const AnalyticsModule = (() => {
 // =================================================================
 
 // Abrir el detalle de una tarea desde cualquier sección, y recordar las últimas abiertas (tarjeta «Recientes» del Dashboard).
-function openTaskAnywhere(id) { window.__allowTasksPane = true; document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
+function openTaskAnywhere(id, forceFull) { if (forceFull !== false && forceFull !== true && TasksModule.layoutMode && TasksModule.layoutMode() !== 'full') { TasksModule.openTaskOverlay(id); return; } window.__allowTasksPane = true; document.querySelector('[data-tab=mgmt-tasks]')?.click(); setTimeout(() => TasksModule.openTaskPage(id), 250); }
 function _pushRecentTask(id) { try { const a = JSON.parse(localStorage.getItem('nova_recent_tasks') || '[]').filter(x => x !== id); a.unshift(id); localStorage.setItem('nova_recent_tasks', JSON.stringify(a.slice(0, 12))); } catch (_) {} }
 
 function _parseEstG(v) {
@@ -13837,9 +13837,11 @@ const TasksModule = (() => {
   // (boton "Editar detalles") en vez de duplicar esos componentes aca.
 
   let _tdCommentPoll = null;
+  let _tdOv = false;   // la tarea está abierta como cuadro de diálogo / barra lateral (encima de la pantalla actual)
   let _tdCurrentId   = null;
 
   async function openTaskPage(id) {
+    if (_tdOv) closeTaskPage();
     _pushRecentTask(id);
     if (!_tasks.length || !_tasks.some(x => x.id === id)) await load();
     await _renderTaskDetail(id);
@@ -13852,6 +13854,7 @@ const TasksModule = (() => {
   }
 
   function closeTaskPage(goBack) {
+    if (_tdOv) { _tdPopClose(); if (_tdCommentPoll) { clearInterval(_tdCommentPoll); _tdCommentPoll = null; } _tdOv = false; _tdCurrentId = null; document.getElementById('tkx-ov')?.remove(); document.removeEventListener('keydown', _tdEsc); return; }
     if (_tdCommentPoll) { clearInterval(_tdCommentPoll); _tdCommentPoll = null; }
     if (_tdResizeBound) { window.removeEventListener('resize', _tdFitHeight); _tdResizeBound = false; }
     _tdCurrentId = null;
@@ -13867,17 +13870,18 @@ const TasksModule = (() => {
   const _TD_PRIOS   = [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta']];
 
   async function _renderTaskDetail(id) {
-    const dv = $('task-detail-page');
+    const dv = _tdOv ? _tdOvHost() : $('task-detail-page');
     if (!dv) return;
     const t = _tasks.find(x => x.id === id);
     if (!t) { showBanner('Tarea no encontrada.', 'error'); return; }
-    if (_tdCurrentId !== id) { _tdShowClosed = false; _tdFeed = { msgs: [], asgBy: new Map(), acts: [], id }; }
+    if (_tdCurrentId !== id) { _tdShowClosed = false; _tdFeed = { msgs: [], asgBy: new Map(), acts: [], id }; _tdRel = { links: [], relaciones: [] }; _tdColl = false; }
     _tdCurrentId = id;
-    try { _notifyMW(); } catch (_) {}
-
-    _hideAllViews();
-    const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
-    if (ph) ph.style.display = 'none';
+    if (!_tdOv) {
+      try { _notifyMW(); } catch (_) {}
+      _hideAllViews();
+      const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
+      if (ph) ph.style.display = 'none';
+    }
 
     const parent = t.parent_task_id ? _tasks.find(x => x.id === t.parent_task_id) : null;
     const subs   = _tasks.filter(x => x.parent_task_id === id);
@@ -13893,21 +13897,21 @@ const TasksModule = (() => {
     const openSubs = subs.filter(x => x.estado !== 'completado' && x.estado !== 'cancelado').length;
     dv.innerHTML = `
       <div class="tskd tkx">
-        <div class="tskd__crumb">
-          <button class="tskd__back" onclick="TasksModule.closeTaskPage(true)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            Espacios
-          </button>
-          ${t.project_nombre ? `<span class="tskd__crumb-sep">/</span><span class="tskd__crumb-txt">${esc(t.project_nombre)}</span>` : ''}
-          ${parent ? `<span class="tskd__crumb-sep">/</span><a class="tskd__crumb-link" href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${parent.id})">${esc(parent.titulo)}</a>` : ''}
-        </div>
-
         <div class="tkx__card">
+          <header class="tkx__hd">
+            <nav class="tkx__bc"><span class="tkx__bc0">${_tdOv ? 'Tarea' : 'Espacios'}</span>${t.project_nombre ? `<i>/</i><span>${esc(t.project_nombre)}</span>` : ''}${parent ? `<i>/</i><a href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${parent.id})">${esc(parent.titulo)}</a>` : ''}</nav>
+            <span class="tkx__sp"></span>
+            ${t.created_at ? `<span class="tkx__cr">Se creó el ${new Date(t.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}
+            <button type="button" class="tkx__ib" title="Cambiar diseño" onclick="TasksModule._tdLayoutMenu(event)">${_ic('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="14" y1="3" x2="14" y2="21"/>')}</button>
+            <button type="button" class="tkx__ib" title="${_tdOv ? 'Cerrar (Esc)' : 'Volver a Espacios'}" onclick="TasksModule.closeTaskPage(${_tdOv ? '' : 'true'})">${_ic('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')}</button>
+          </header>
+          <div class="tkx__body" id="tkx-body">
           <section class="tkx__main">
             <div class="tkx__top">
               <span class="tkx__chip">${_ic('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}${parent ? 'Subtarea' : 'Tarea'}</span>
               <button type="button" class="tkx__chip tkx__chip--b" title="Copiar ID" onclick="TasksModule._tdCopy(${id},'id')">#${id}</button>
               ${subs.length ? `<span class="tkx__chip" title="Subtareas">${_ic('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>')}${subs.length}</span>` : ''}
+              <span class="tkx__chip tkx__chip--w" id="tkx-depchip" hidden></span>
               <span class="tkx__sp"></span>
               <button type="button" class="tkx__ib" title="Copiar vínculo" onclick="TasksModule._tdCopy(${id},'link')">${_ic('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>')}</button>
               <button type="button" class="tkx__ib" title="Duplicar" onclick="TasksModule.duplicateTask(${id})">${_ic('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
@@ -13936,24 +13940,38 @@ const TasksModule = (() => {
               <div class="tkx__sb" id="tkx-subs"></div>
             </div>
 
+            <div class="tkx__sec tkx__sec--rel" id="tkx-rel-inline"></div>
+
             <div class="tkx__sec tkx__sec--ck" id="tskd-ck">${_tdCkHtml(t)}</div>
           </section>
 
-          <aside class="tkx__act">
-            <div class="tkx__ah"><b>Actividad</b></div>
-            <div class="tkx__feed" id="tskd-chat-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
-            <div class="tkx__comp">
-              <textarea id="tskd-chat-input" rows="2" placeholder="Escribe un comentario…"
-                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();TasksModule._tdSendComment(${id})}"></textarea>
-              <div class="tkx__ct">
-                <button type="button" class="tkx__ib" title="Mencionar a alguien" onclick="TasksModule._tdAt()">@</button>
-                <span class="tkx__sp"></span>
-                <button type="button" class="tkx__send" title="Enviar comentario" onclick="TasksModule._tdSendComment(${id})">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                </button>
+          <nav class="tkx__rail">
+            <button type="button" class="tkx__rb" title="Contraer o expandir el panel" onclick="TasksModule._tdCollapse()">${_ic('<polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>')}</button>
+            <button type="button" class="tkx__rb on" data-pn="act" title="Actividad y comentarios" onclick="TasksModule._tdPanel('act')">${_ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>')}</button>
+            <button type="button" class="tkx__rb" data-pn="rel" title="Relaciones y dependencias" onclick="TasksModule._tdPanel('rel')">${_ic('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>')}</button>
+            <button type="button" class="tkx__rb" data-pn="lnk" title="Enlaces" onclick="TasksModule._tdPanel('lnk')">${_ic('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>')}</button>
+          </nav>
+
+          <aside class="tkx__act" id="tkx-act" data-p="act">
+            <div class="tkx__ah"><b id="tkx-ah-t">Actividad</b></div>
+            <div class="tkx-pane tkx-pane--act">
+              <div class="tkx__feed" id="tskd-chat-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+              <div class="tkx__comp">
+                <textarea id="tskd-chat-input" rows="2" placeholder="Escribe un comentario…"
+                          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();TasksModule._tdSendComment(${id})}"></textarea>
+                <div class="tkx__ct">
+                  <button type="button" class="tkx__ib" title="Mencionar a alguien" onclick="TasksModule._tdAt()">@</button>
+                  <span class="tkx__sp"></span>
+                  <button type="button" class="tkx__send" title="Enviar comentario" onclick="TasksModule._tdSendComment(${id})">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  </button>
+                </div>
               </div>
             </div>
+            <div class="tkx-pane tkx-pane--rel" id="tkx-pane-rel"></div>
+            <div class="tkx-pane tkx-pane--lnk" id="tkx-pane-lnk"></div>
           </aside>
+          </div>
         </div>
       </div>`;
     dv.style.display = '';
@@ -13963,11 +13981,129 @@ const TasksModule = (() => {
     { const ti = dv.querySelector('.tkx__title'); if (ti) { ti.style.height = 'auto'; ti.style.height = ti.scrollHeight + 'px'; } }
     try { SpacesModule.ensure().then(() => { if (_tdCurrentId === id) { _tdPaintProps(id); _tdPaintSubs(id); } }); } catch (_) {}
     TimerModule.syncButtons();
-    _tdLoadComments(id); _tdLoadActivity(id);
+    _tdLoadComments(id); _tdLoadActivity(id); _tdLoadLinks(id);
     try { if (typeof SpacesModule !== 'undefined') SpacesModule.renderTaskFields(id, 'tskd-fields'); } catch (e) { console.error('[campos]', e); }
     if (_tdCommentPoll) clearInterval(_tdCommentPoll);
     _tdCommentPoll = setInterval(() => { if (_tdCurrentId === id) _tdLoadComments(id, true); }, 8000);
   }
+
+  // ── Diseño de la pantalla de tarea: cuadro de diálogo · pantalla completa · barra lateral ──
+  function layoutMode() { try { const v = localStorage.getItem('nova_task_layout'); return (v === 'full' || v === 'side' || v === 'dialog') ? v : 'dialog'; } catch (_) { return 'dialog'; } }
+  function _tdOvHost() {
+    let o = document.getElementById('tkx-ov');
+    if (!o) { o = document.createElement('div'); o.id = 'tkx-ov'; o.addEventListener('mousedown', e => { if (e.target === o) closeTaskPage(); }); document.body.appendChild(o); }
+    o.className = 'tkx-ov tkx-ov--' + layoutMode();
+    return o;
+  }
+  function _tdEsc(e) {
+    if (e.key !== 'Escape' || !_tdOv) return;
+    const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { a.blur(); return; }
+    if (document.querySelector('.tkx-pop, .sp-pop')) return;
+    closeTaskPage();
+  }
+  async function openTaskOverlay(id) {
+    _pushRecentTask(id);
+    if (!_tasks.length || !_tasks.some(x => x.id === id)) await load();
+    _tdOv = true; document.removeEventListener('keydown', _tdEsc); document.addEventListener('keydown', _tdEsc);
+    await _renderTaskDetail(id);
+  }
+  let _tdPopEl = null, _tdPopOff = null;
+  function _tdPopClose() { if (_tdPopEl) { _tdPopEl.remove(); _tdPopEl = null; } if (_tdPopOff) { document.removeEventListener('mousedown', _tdPopOff, true); _tdPopOff = null; } }
+  function _tdPopOpen(anchor, html, cls) {
+    _tdPopClose(); const p = document.createElement('div'); p.className = 'tkx-pop ' + (cls || ''); p.innerHTML = html; document.body.appendChild(p); _tdPopEl = p;
+    const r = anchor.getBoundingClientRect(); p.style.left = Math.max(8, Math.min(r.right - p.offsetWidth, innerWidth - p.offsetWidth - 8)) + 'px'; p.style.top = (r.bottom + 6) + 'px';
+    _tdPopOff = ev => { if (!p.contains(ev.target)) _tdPopClose(); }; setTimeout(() => document.addEventListener('mousedown', _tdPopOff, true), 0);
+  }
+  function _tdLayoutMenu(ev) {
+    ev.stopPropagation(); const cur = layoutMode();
+    const o = (k, l) => `<button type="button" class="tkx-lay__o${cur === k ? ' on' : ''}" onclick="TasksModule._tdSetLayout('${k}')"><span class="tkx-lay__d tkx-lay__d--${k}"><i></i></span><span>${l}</span></button>`;
+    _tdPopOpen(ev.currentTarget, `<div class="tkx-lay">${o('dialog', 'Cuadro de diálogo')}${o('full', 'Pantalla completa')}${o('side', 'Barra lateral')}</div>`);
+  }
+  function _tdSetLayout(m) {
+    _tdPopClose(); try { localStorage.setItem('nova_task_layout', m); } catch (_) {}
+    const id = _tdCurrentId; if (!id) return;
+    if (m === 'full') { if (_tdOv) closeTaskPage(); openTaskAnywhere(id, false); return; }
+    if (_tdOv) { _tdOvHost(); return; }
+    closeTaskPage(true); setTimeout(() => openTaskOverlay(id), 450);
+  }
+
+  // ── Panel derecho: Actividad · Relaciones y dependencias · Enlaces ──
+  let _tdPanelK = 'act', _tdColl = false, _tdRel = { links: [], relaciones: [] }, _tdRelModeV = 'relacion';
+  const _TD_REL_L = { relacion: 'Relacionada', espera: 'Esperando a', bloquea: 'Bloqueando a', custom: 'Personalizada' };
+  const _TD_PN_T = { act: 'Actividad', rel: 'Relaciones y dependencias', lnk: 'Enlaces' };
+  const _nrmT = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function _tdPanel(k) {
+    const aside = $('tkx-act'); if (!aside) return;
+    if (k === _tdPanelK && !_tdColl && k !== 'act') k = 'act';
+    _tdPanelK = k; _tdColl = false; $('tkx-body')?.classList.remove('is-coll'); aside.dataset.p = k;
+    const tt = $('tkx-ah-t'); if (tt) tt.textContent = _TD_PN_T[k];
+    document.querySelectorAll('.tkx__rail [data-pn]').forEach(b => b.classList.toggle('on', b.dataset.pn === k));
+    if (k !== 'act') { _tdPaintRel(_tdCurrentId); if (k === 'rel') _tdRelSearch(''); setTimeout(() => $(k === 'lnk' ? 'tkx-lurl' : 'tkx-rq')?.focus(), 30); }
+  }
+  function _tdCollapse() { _tdColl = !_tdColl; $('tkx-body')?.classList.toggle('is-coll', _tdColl); }
+  async function _tdLoadLinks(id) {
+    try { const r = await apiFetch(`${API}/mgmt/tasks/${id}/links`); const j = r.ok ? await r.json() : null; if (_tdCurrentId !== id) return; if (j) _tdRel = { links: j.links || [], relaciones: j.relaciones || [] }; } catch (_) {}
+    _tdPaintRel(id);
+  }
+  const _tdKind = r => r.tipo === 'bloquea' ? (r.dir === 'sale' ? 'bloquea' : 'espera') : r.tipo;
+  const _tdRelRow = r => { const o = r.other, k = _tdKind(r), done = o.estado === 'completado' || o.estado === 'cancelado';
+    return `<div class="tkx-rr"><span class="tkx-rr__k${k === 'espera' && !done ? ' is-w' : ''}">${_TD_REL_L[k]}${r.tipo === 'custom' && r.label ? ': ' + esc(r.label) : ''}</span><a href="javascript:void(0)" class="${done ? 'is-done' : ''}" onclick="TasksModule._tdOpenRel(${o.id})">${esc(o.titulo)}</a><em>${esc(o.project_nombre || '')}</em><button type="button" class="tkx-rr__x" title="Quitar" onclick="TasksModule._tdRelDel(${r.id})">×</button></div>`; };
+  const _tdLinkRow = l => { let host = ''; try { host = new URL(l.url).hostname.replace(/^www\./, ''); } catch (_) {}
+    return `<div class="tkx-rr tkx-lk"><span class="tkx-lk__i">${esc((host[0] || '#').toUpperCase())}</span><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.titulo || host)}</a><em>${esc(host)}</em><button type="button" class="tkx-rr__x" title="Quitar" onclick="TasksModule._tdLinkDel(${l.id})">×</button></div>`; };
+  function _tdPaintRel(id) {
+    if (id !== _tdCurrentId) return;
+    const R = _tdRel.relaciones || [], L = _tdRel.links || [], esperando = R.filter(r => _tdKind(r) === 'espera' && r.other.estado !== 'completado' && r.other.estado !== 'cancelado').length;
+    const chip = $('tkx-depchip'); if (chip) { chip.hidden = !esperando; chip.textContent = esperando ? `Esperando a ${esperando} tarea${esperando === 1 ? '' : 's'}` : ''; }
+    const inl = $('tkx-rel-inline');
+    if (inl) inl.innerHTML = (R.length ? `<div class="tkx-grp">Relaciones y dependencias</div>${R.map(_tdRelRow).join('')}` : '') + (L.length ? `<div class="tkx-grp">Enlaces</div>${L.map(_tdLinkRow).join('')}` : '')
+      + `<button type="button" class="tkx-ab" onclick="TasksModule._tdPanel('rel')">${_tdIc('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>')}Relacionar elementos o agregar dependencias</button><button type="button" class="tkx-ab" onclick="TasksModule._tdPanel('lnk')">${_tdIc('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>')}Agregar un enlace</button>`;
+    const pl = $('tkx-pane-lnk');
+    if (pl && !(document.activeElement && document.activeElement.id === 'tkx-lurl')) pl.innerHTML = `<label class="tkx-pn__l">Agregar un enlace</label>
+      <div class="tkx-pn__in">${_tdIc('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>')}<input id="tkx-lurl" type="text" autocomplete="off" placeholder="Pegar URL (documento, Figma, Drive, GitHub…)" onkeydown="if(event.key==='Enter')TasksModule._tdLinkAdd()"><button type="button" onclick="TasksModule._tdLinkAdd()">Agregar</button></div>
+      ${L.length ? `<div class="tkx-pn__s">Enlaces de esta tarea</div>${L.map(_tdLinkRow).join('')}` : ''}
+      <div class="tkx-pn__s">O relacionar elementos</div>
+      <button type="button" class="tkx-ab" onclick="TasksModule._tdRelModeSet('relacion');TasksModule._tdPanel('rel')">Tarea relacionada</button>
+      <button type="button" class="tkx-ab" onclick="TasksModule._tdRelModeSet('espera');TasksModule._tdPanel('rel')">Dependencias</button>
+      <button type="button" class="tkx-ab" onclick="TasksModule._tdRelModeSet('custom');TasksModule._tdPanel('rel')">Personalizada</button>`;
+    const pr = $('tkx-pane-rel');
+    if (pr && !(document.activeElement && (document.activeElement.id === 'tkx-rq' || document.activeElement.id === 'tkx-rlabel'))) {
+      const q = ($('tkx-rq') || {}).value || '';
+      pr.innerHTML = `<div class="tkx-chips">${['relacion', 'espera', 'bloquea', 'custom'].map(k => `<button type="button" class="tkx-chp${_tdRelModeV === k ? ' on' : ''}" onclick="TasksModule._tdRelModeSet('${k}')">${_TD_REL_L[k]}</button>`).join('')}</div>
+        ${_tdRelModeV === 'custom' ? '<input id="tkx-rlabel" class="tkx-pn__t" type="text" maxlength="60" placeholder="Nombre de la relación (ej. Mismo cliente)">' : ''}
+        <div class="tkx-pn__in">${_tdIc('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>')}<input id="tkx-rq" type="text" autocomplete="off" placeholder="Buscar tarea por nombre o #ID…" value="${esc(q)}" oninput="TasksModule._tdRelSearch(this.value)"></div>
+        <div id="tkx-rres" class="tkx-res"></div>
+        ${R.length ? `<div class="tkx-pn__s">Relaciones actuales</div>${R.map(_tdRelRow).join('')}` : ''}`;
+      _tdRelSearch(q);
+    }
+  }
+  function _tdRelModeSet(k) { _tdRelModeV = k; const pr = $('tkx-pane-rel'); if (pr) { const f = document.activeElement; if (f && f.blur) f.blur(); _tdPaintRel(_tdCurrentId); } }
+  function _tdRelSearch(q) {
+    const box = $('tkx-res') || $('tkx-rres'); if (!box) return; const id = _tdCurrentId, cur = _tasks.find(x => x.id === id); if (!cur) return;
+    const n = _nrmT(q).replace(/^#/, ''), linked = new Set((_tdRel.relaciones || []).filter(r => r.tipo === _tdRelTipo()).map(r => r.other.id));
+    let list = _tasks.filter(t => t.id !== id && !t.archivada && !linked.has(t.id));
+    list = n ? list.filter(t => _nrmT(t.titulo).includes(n) || String(t.id) === n) : list.filter(t => t.project_id === cur.project_id);
+    box.innerHTML = list.slice(0, 8).map(t => `<button type="button" class="tkx-res__i" onclick="TasksModule._tdRelAdd(${t.id})"><span>${esc(t.titulo)}</span><em>${esc(t.project_nombre || '')}</em></button>`).join('') || '<div class="tkx-pn__e">Sin resultados</div>';
+  }
+  const _tdRelTipo = () => _tdRelModeV === 'espera' ? 'bloquea' : _tdRelModeV;
+  async function _tdPostRel(id, body) {
+    const r = await apiFetch(`${API}/mgmt/tasks/${id}/relations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) { showBanner((await r.json().catch(() => ({}))).error || 'No se pudo relacionar', 'error'); return false; } return true;
+  }
+  async function _tdRelAdd(oid) {
+    const id = _tdCurrentId, label = ($('tkx-rlabel') || {}).value || '';
+    if (_tdRelModeV === 'custom' && !label.trim()) { showBanner('Ponle un nombre a la relación personalizada', 'error'); $('tkx-rlabel')?.focus(); return; }
+    const ok = _tdRelModeV === 'espera' ? await _tdPostRel(oid, { other_id: id, tipo: 'bloquea' }) : await _tdPostRel(id, { other_id: oid, tipo: _tdRelTipo(), label });
+    if (ok) { const q = $('tkx-rq'); if (q) { q.value = ''; q.blur(); } const lb = $('tkx-rlabel'); if (lb) lb.blur(); await _tdLoadLinks(id); }
+  }
+  async function _tdRelDel(rid) { await apiFetch(`${API}/mgmt/task-relations/${rid}`, { method: 'DELETE' }); await _tdLoadLinks(_tdCurrentId); }
+  async function _tdLinkAdd() {
+    const i = $('tkx-lurl'), v = (i && i.value || '').trim(), id = _tdCurrentId; if (!v) return;
+    const r = await apiFetch(`${API}/mgmt/tasks/${id}/links`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: v }) });
+    if (!r.ok) { showBanner((await r.json().catch(() => ({}))).error || 'No se pudo agregar el enlace', 'error'); return; }
+    if (i) { i.value = ''; i.blur(); } await _tdLoadLinks(id);
+  }
+  async function _tdLinkDel(lid) { await apiFetch(`${API}/mgmt/task-links/${lid}`, { method: 'DELETE' }); await _tdLoadLinks(_tdCurrentId); }
+  async function _tdOpenRel(oid) { if (!_tasks.some(x => x.id === oid)) await load(); if (_tasks.some(x => x.id === oid)) _renderTaskDetail(oid); else showBanner('No se encontró esa tarea', 'error'); }
 
   // ── Pantalla de tarea estilo ClickUp: propiedades, subtareas en tabla y feed de actividad ──
   let _tdShowClosed = false, _tdFeed = { msgs: [], asgBy: new Map(), acts: [], id: 0 };
@@ -14047,6 +14183,7 @@ const TasksModule = (() => {
   // por dentro si el contenido no entra.
   let _tdResizeBound = false;
   function _tdFitHeight() {
+    if (_tdOv) return;
     const dv = $('task-detail-page');
     const inner = dv ? dv.querySelector('.tskd') : null;
     if (!dv || !inner) return;
@@ -16190,7 +16327,7 @@ const TasksModule = (() => {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
-    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment, _tdPaintProps, _tdPaintSubs, _tdToggleClosed, _tdFold, _tdAt, _cmAssignMenu, _cmAssign, _cmResolve,
+    openTaskPage, openTaskPageNewTab, openTaskOverlay, layoutMode, _tdLayoutMenu, _tdSetLayout, _tdPanel, _tdCollapse, _tdLinkAdd, _tdLinkDel, _tdRelAdd, _tdRelDel, _tdRelModeSet, _tdRelSearch, _tdOpenRel, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment, _tdPaintProps, _tdPaintSubs, _tdToggleClosed, _tdFold, _tdAt, _cmAssignMenu, _cmAssign, _cmResolve,
     pjTab, pjSendNote, pjLinkAdd, pjLinkDel, _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,

@@ -345,6 +345,7 @@ function requireAuth(req, res, next) {
 const permsSvc = require('./services/permissions').mount(app, { pool, requireAuth });
 require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });
 require('./services/fieldsRoutes').mount(app, { pool, requireAuth });   // estados y campos personalizados por proyecto + plantilla «Adquisición comercial»
+require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // enlaces y relaciones/dependencias entre tareas
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
