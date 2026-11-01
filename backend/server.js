@@ -347,6 +347,7 @@ require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });
 require('./services/fieldsRoutes').mount(app, { pool, requireAuth });   // estados y campos personalizados por proyecto + plantilla «Adquisición comercial»
 require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // enlaces y relaciones/dependencias entre tareas
 require('./services/timesheetRoutes').mount(app, { pool, requireAuth });   // hojas de horas: cronograma de trabajo, equipo por semana, aprobaciones
+require('./services/agendaRoutes').mount(app, { pool, requireAuth });   // agenda del calendario: prioridades y tipo de bloque
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
@@ -3702,16 +3703,17 @@ app.get('/api/mgmt/meetings', requireAuth, async (req, res) => {
 
 // ── POST /api/mgmt/meetings ───────────────────────────────────────
 app.post('/api/mgmt/meetings', requireAuth, async (req, res) => {
-  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min } = req.body;
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min, tipo } = req.body;
+  const tipoOk = ['evento', 'concentracion', 'no_disponible'].includes(tipo) ? tipo : 'evento';
   try {
     const { rows } = await pool.query(
-      `INSERT INTO meetings (user_id, titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      `INSERT INTO meetings (user_id, titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min, tipo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [req.workspaceOwnerId, titulo||'', fecha,
        hora_inicio||null, hora_fin||null,
        descripcion||'', link||'',
        JSON.stringify(Array.isArray(attendees) ? attendees : []),
-       estado||'programada', recordatorio_min || null]
+       estado||'programada', recordatorio_min || null, tipoOk]
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -3719,20 +3721,21 @@ app.post('/api/mgmt/meetings', requireAuth, async (req, res) => {
 
 // ── PUT /api/mgmt/meetings/:id ────────────────────────────────────
 app.put('/api/mgmt/meetings/:id', requireAuth, async (req, res) => {
-  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min } = req.body;
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min, tipo } = req.body;
+  const tipoOk = ['evento', 'concentracion', 'no_disponible'].includes(tipo) ? tipo : null;   // sin tipo: conserva el que tenía
   try {
     const { rows } = await pool.query(
       `UPDATE meetings
        SET titulo=$1, fecha=$2, hora_inicio=$3, hora_fin=$4,
            descripcion=$5, link=$6, attendees=$7, estado=$8, recordatorio_min=$9,
-           recordatorio_enviado=FALSE
+           recordatorio_enviado=FALSE, tipo=COALESCE($12, tipo)
        WHERE id=$10 AND user_id=$11 RETURNING *`,
       [titulo||'', fecha,
        hora_inicio||null, hora_fin||null,
        descripcion||'', link||'',
        JSON.stringify(Array.isArray(attendees) ? attendees : []),
        estado||'programada', recordatorio_min || null,
-       req.params.id, req.workspaceOwnerId]
+       req.params.id, req.workspaceOwnerId, tipoOk]
     );
     if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
     res.json(rows[0]);

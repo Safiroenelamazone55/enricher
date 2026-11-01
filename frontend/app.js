@@ -16511,6 +16511,7 @@ const CalendarModule = (() => {
       // Solo sesiones del timer MANUAL en el calendario. El uso web/app de la extensión/agente
       // (cientos de micro-bloques "Sin tarea") se resume en Time Tracking → "Apps y websites usados", no aquí.
       if (ter.ok) _timeEntries = (await ter.json()).filter(e => (e.source || 'manual_timer') === 'manual_timer');
+      await _agLoadExtras();
       if (_calIsAdmin() && !_calTeam.length) {
         try { const r = await apiFetch(`${API}/mgmt/team`); if (r.ok) _calTeam = await r.json(); } catch (_) {}
       }
@@ -16588,6 +16589,7 @@ const CalendarModule = (() => {
       return _offForMember(o) && [...wDs].some(ds => ds >= s && ds <= e);
     });
 
+    const prevScroll = document.getElementById('cal-grid-scroll') ? document.getElementById('cal-grid-scroll').scrollTop : null;
     cont.innerHTML = `<div class="cal2 cal2--mac">
       ${_sideBar(todayDs)}
       <div class="cal2__main">
@@ -16596,6 +16598,7 @@ const CalendarModule = (() => {
         ${_view === 'month' ? _month(days, todayDs)
           : _view === 'day'  ? `<div class="cal2d"><div class="cal2d__main">${_grid(days, todayDs)}</div>${_dayAside(days[0])}</div>`
           : _grid(days, todayDs)}
+        ${_agCmdBar()}
       </div>
     </div>`;
 
@@ -16606,7 +16609,7 @@ const CalendarModule = (() => {
       if (!wrap) return;
       // Arranca a la altura de la hora actual, con algo de contexto por encima.
       const now = new Date();
-      wrap.scrollTop = Math.max(0, (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_H - HOUR_H * 1.5);
+      wrap.scrollTop = prevScroll != null ? prevScroll : Math.max(0, (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_H - HOUR_H * 1.5);
     });
   }
 
@@ -16666,15 +16669,16 @@ const CalendarModule = (() => {
         </button>
       </div>`;
     };
-    return `<aside class="cal2sb">
-      <div class="cal2sb__grp">Proyectos</div>
+    const calBody = `      <div class="cal2sb__grp">Proyectos</div>
       <div class="cal2sb__list">${lista.length ? lista.map(fila).join('') : '<div class="cal2sb__vacio">Sin proyectos con tareas.</div>'}</div>
       <div class="cal2sb__grp">Otros</div>
       <div class="cal2sb__list">
         <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#5856D6"></span><span class="cal2sb__name">Reuniones</span></div>
         <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#FF9500"></span><span class="cal2sb__name">Tiempo libre</span></div>
         ${_gcalConn ? `<div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#34C759"></span><span class="cal2sb__name">Google Calendar</span></div>` : ''}
-      </div>
+      </div>`;
+    if (_sbTab === 'agenda') return _agPanel(todayDs);
+    return `<aside class="cal2sb">${_agTabs()}${calBody}
       <div class="cal2sb__foot">${_miniMonth(new Date(_anchor), todayDs)}</div>
     </aside>`;
   }
@@ -17002,6 +17006,232 @@ const CalendarModule = (() => {
     $('cal-dp-chev-' + mid)?.classList.toggle('cal2-dpchev--collapsed');
   }
 
+  // ═════════ Agenda (estilo ClickUp): panel lateral · prioridades · crear al elegir una hora · arrastrar tareas al calendario ═════════
+  let _sbTab = (() => { try { return localStorage.getItem('cal_sb_tab') || 'agenda'; } catch (_) { return 'agenda'; } })();
+  let _prios = [], _agTeam = [], _wk = null, _agMeet = [], _agMore = {}, _draft = null, _agDragId = null, _agPopEl = null, _agPopOff = null, _agPickQ = '';
+  const _agI = (d, s) => `<svg width="${s || 14}" height="${s || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _AG = { flag: '<path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/>', sub: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>', search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-5-5.7"/>', video: '<rect x="2" y="6" width="14" height="12" rx="2"/><polygon points="22 8 16 12 22 16 22 8"/>', pin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>', text: '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/>', cmd: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>' };
+  const _agMe = () => _calMyName();
+  const _agMine = t => { const me = _agMe(), rs = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []); return rs.some(r => String(r).trim().toLowerCase() === me); };
+  const _agOpen = t => t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada;
+  const _agLeaf = t => !!t.parent_task_id || !_tasks.some(x => x.parent_task_id === t.id);
+  const _agNrm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const _h12 = min => { const h = Math.floor(min / 60) % 24, m = min % 60, n = h % 12 || 12; return `${n}${m ? ':' + _pad(m) : ''}`; };
+  const _ap = min => (Math.floor(min / 60) % 24) < 12 ? 'am' : 'pm';
+  const _hhmm = min => `${_pad(Math.floor(min / 60) % 24)}:${_pad(min % 60)}`;
+  const _toMin = v => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  async function _agLoadExtras() {
+    const [a, b, c] = await Promise.all([apiFetch(`${API}/agenda/prioridades`).catch(() => null), _agTeam.length ? null : apiFetch(`${API}/mgmt/team`).catch(() => null), _wk ? null : apiFetch(`${API}/timesheets/settings`).catch(() => null)]);
+    try { if (a && a.ok) _prios = await a.json(); } catch (_) {}
+    try { if (b && b.ok) _agTeam = await b.json(); } catch (_) {}
+    try { if (c && c.ok) _wk = await c.json(); } catch (_) {}
+  }
+  function agTab(t) { _sbTab = t; try { localStorage.setItem('cal_sb_tab', t); } catch (_) {} render(); }
+  const _agTabs = () => `<div class="ag-tabs"><button type="button" class="${_sbTab === 'agenda' ? 'on' : ''}" onclick="CalendarModule.agTab('agenda')">Agenda</button><button type="button" class="${_sbTab === 'cal' ? 'on' : ''}" onclick="CalendarModule.agTab('cal')">Calendarios</button></div>`;
+
+  // ── fila de tarea (arrastrable al calendario) ──
+  function _agRow(t, o) {
+    o = o || {};
+    const col = _ESTADO_COL[t.estado] || '#CFCAC3', prog = t.estado === 'en_progreso', isP = _prios.includes(t.id), today = _iso(new Date());
+    const ring = `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${prog ? '#4C7DF0' : col}" stroke-width="2.2" ${prog ? '' : 'stroke-dasharray="3 3"'}/>${prog ? '<circle cx="12" cy="12" r="4.2" fill="#4C7DF0"/>' : ''}</svg>`;
+    const dl = t.deadline ? String(t.deadline).split('T')[0] : '', od = dl && dl < today;
+    return `<div class="ag-t" draggable="true" ondragstart="CalendarModule.agDrag(event,${t.id})" ondragend="CalendarModule.agDragEnd()" onclick="openTaskAnywhere(${t.id})" title="${esc(t.titulo)}${t.project_nombre ? ' · ' + esc(t.project_nombre) : ''} — arrástrala al calendario para programarla">
+      ${o.n ? `<span class="ag-t__n0">${o.n}</span>` : ''}<span class="ag-t__r">${ring}</span>${t.parent_task_id ? `<span class="ag-t__s">${_agI(_AG.sub, 12)}</span>` : ''}<span class="ag-t__t">${escCap(t.titulo)}</span>${dl && o.date ? `<em class="ag-t__d${od ? ' is-od' : ''}">${_dlShort(dl)}</em>` : ''}
+      <button type="button" class="ag-t__p${isP ? ' on' : ''}" title="${isP ? 'Quitar de prioridades' : 'Marcar como prioridad'}" onclick="event.stopPropagation();CalendarModule.agPrioToggle(${t.id})">${_agI(_AG.flag, 13)}</button></div>`;
+  }
+  function _agList(key, list, o) {
+    const lim = 6, more = !!_agMore[key], shown = more ? list : list.slice(0, lim);
+    return shown.map(t => _agRow(t, o)).join('') + (list.length > lim ? `<button type="button" class="ag-more" onclick="CalendarModule.agMore('${key}')">${more ? 'Ver menos' : `Ver ${list.length - lim} más`}</button>` : '');
+  }
+  function agMore(k) { _agMore[k] = !_agMore[k]; render(); }
+  function _agPanel(todayDs) {
+    const mine = _tasks.filter(t => _agMine(t) && _agOpen(t) && _agLeaf(t));
+    const byDl = (a, z) => String(a.deadline || '9999').localeCompare(String(z.deadline || '9999'));
+    const asig = [...mine].sort(byDl), vencido = mine.filter(t => t.deadline && String(t.deadline).split('T')[0] <= todayDs).sort(byDl), pend = mine.filter(t => !t.prog_inicio).sort(byDl);
+    const pr = _prios.map(id => _tasks.find(t => t.id === id)).filter(Boolean);
+    const sec = (t, body) => `<div class="ag-sec"><div class="ag-h">${t}</div>${body}</div>`;
+    const empty = txt => `<div class="ag-empty">${txt}</div>`;
+    const meetChips = _agMeet.map((n, i) => `<span class="ag-chip" style="--c:${_PROJ_COLORS[(i + 2) % _PROJ_COLORS.length]}"><i></i>${esc(n)}<button type="button" onclick="CalendarModule.agMeetDel(${i})">${_agI(_AG.x, 11)}</button></span>`).join('');
+    return `<aside class="cal2sb cal2sb--ag">${_agTabs()}
+      <div class="ag-scroll">
+        ${sec('Prioridades', pr.length ? `<div class="ag-box">${pr.map((t, i) => _agRow(t, { n: i + 1, date: true })).join('')}</div>` : `<div class="ag-box ag-box--e">${_agI(_AG.flag, 18)}<span>Prioriza una tarea para verla aquí</span></div>`)}
+        <button type="button" class="ag-add" onclick="CalendarModule.agPrioOpen(event)">${_agI(_AG.plus, 14)}Agregar prioridad</button>
+        ${sec('Reunir con', `<label class="ag-search">${_agI(_AG.users, 14)}<input id="ag-meet-q" type="text" autocomplete="off" placeholder="Buscar personas…" oninput="CalendarModule.agMeetSearch(this.value)" onfocus="CalendarModule.agMeetSearch(this.value)"></label><div class="ag-meetres" id="ag-meet-res"></div>${meetChips ? `<div class="ag-chips">${meetChips}</div><div class="ag-hint">Sus horas ocupadas se ven rayadas en el calendario.</div>` : ''}`)}
+        ${sec('Asignados a mí', asig.length ? _agList('asig', asig, { date: true }) : empty('No tienes tareas abiertas asignadas'))}
+        ${sec('Hoy y vencido', vencido.length ? _agList('venc', vencido, { date: true }) : empty('Nada vence hoy ni está vencido'))}
+        ${sec('Tareas pendientes', pend.length ? _agList('pend', pend, { date: true }) : empty('No hay tareas que coincidan con estos filtros'))}
+      </div>
+    </aside>`;
+  }
+
+  // ── ventanitas propias de la Agenda ──
+  function _agPopClose() { if (_agPopEl) { _agPopEl.remove(); _agPopEl = null; } if (_agPopOff) { document.removeEventListener('mousedown', _agPopOff, true); _agPopOff = null; } }
+  function _agPopOpen(html, cls, place, onClose) {
+    _agPopClose(); const p = document.createElement('div'); p.className = 'ag-pop ' + (cls || ''); p.innerHTML = html; document.body.appendChild(p); _agPopEl = p;
+    place(p); _agPopOff = ev => { const tg = ev.target; if (!tg || !tg.closest || p.contains(tg) || tg.closest('.ag-add, .cal2-col__body, .cal2-draft')) return; _agPopClose(); if (onClose) onClose(); }; setTimeout(() => document.addEventListener('mousedown', _agPopOff, true), 0); return p;
+  }
+
+  // ── prioridades ──
+  async function _agPrioSave() { try { await apiFetch(`${API}/agenda/prioridades`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: _prios }) }); } catch (_) { showBanner('No se pudieron guardar las prioridades', 'error'); } }
+  function agPrioToggle(id) { const i = _prios.indexOf(id); if (i >= 0) _prios.splice(i, 1); else _prios.push(id); _agPrioSave(); render(); if ($('ag-pk-l')) agPickRender(); }
+  function agPrioOpen(ev) {
+    const a = ev.currentTarget; _agPickQ = '';
+    _agPopOpen(`<label class="ag-pk__s">${_agI(_AG.search, 15)}<input id="ag-pk-q" type="text" autocomplete="off" placeholder="Busca una tarea o subtarea…" oninput="CalendarModule.agPickSearch(this.value)"></label><div class="ag-pk__l" id="ag-pk-l"></div>`, 'ag-pop--pk', p => { const r = a.getBoundingClientRect(); p.style.left = Math.max(8, r.left) + 'px'; p.style.top = Math.min(r.bottom + 6, innerHeight - 380) + 'px'; });
+    agPickRender(); setTimeout(() => $('ag-pk-q')?.focus(), 30);
+  }
+  function agPickSearch(q) { _agPickQ = q; agPickRender(); }
+  function agPickRender() {
+    const box = $('ag-pk-l'); if (!box) return; const q = _agNrm(_agPickQ).trim(), td = _iso(new Date());
+    let l = _tasks.filter(t => _agOpen(t) && _agLeaf(t) && (!q || _agNrm(t.titulo).includes(q) || _agNrm(t.project_nombre).includes(q)));
+    l.sort((a, z) => (_agMine(z) - _agMine(a)) || (_prios.includes(z.id) - _prios.includes(a.id)) || String(a.deadline || '9999').localeCompare(String(z.deadline || '9999')));
+    box.innerHTML = l.slice(0, 40).map(t => { const on = _prios.includes(t.id), col = _ESTADO_COL[t.estado] || '#CFCAC3', prog = t.estado === 'en_progreso';
+      return `<button type="button" class="ag-pk__i${on ? ' on' : ''}" onclick="CalendarModule.agPrioToggle(${t.id})"><span class="ag-pk__r">${on ? `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#4C7DF0"/><polyline points="7.5 12.5 10.5 15.5 16.5 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${prog ? '#4C7DF0' : col}" stroke-width="2.2" ${prog ? '' : 'stroke-dasharray="3 3"'}/></svg>`}</span>${t.parent_task_id ? `<span class="ag-pk__s2">${_agI(_AG.sub, 12)}</span>` : ''}<span class="ag-pk__t">${esc(t.titulo)}</span><em>${esc(t.project_nombre || '')}</em></button>`; }).join('') || '<div class="ag-empty">Sin resultados</div>';
+  }
+
+  // ── Reunir con ──
+  function agMeetSearch(q) {
+    const box = $('ag-meet-res'); if (!box) return; const n = _agNrm(q).trim(), me = _agMe();
+    if (!n) { box.innerHTML = ''; return; }
+    const l = _agTeam.filter(m => String(m.nombre || '').trim().toLowerCase() !== me && !_agMeet.includes(m.nombre) && _agNrm(m.nombre).includes(n)).slice(0, 6);
+    box.innerHTML = l.map(m => `<button type="button" class="ag-mr" onclick="CalendarModule.agMeetAdd(this.dataset.n)" data-n="${esc(m.nombre)}"><span class="ag-mr__a">${esc(String(m.nombre || '?')[0].toUpperCase())}</span>${esc(m.nombre)}${m.cargo ? `<em>${esc(m.cargo)}</em>` : ''}</button>`).join('') || '<div class="ag-empty">Sin coincidencias</div>';
+  }
+  function agMeetAdd(n) { if (n && !_agMeet.includes(n)) _agMeet.push(n); render(); }
+  function agMeetDel(i) { _agMeet.splice(i, 1); render(); }
+  // horas ocupadas de las personas elegidas (tareas con hora y reuniones donde participan)
+  function _agBusy(ds) {
+    if (!_agMeet.length) return '';
+    const n = _agMeet.length;
+    return _agMeet.map((nom, i) => {
+      const low = nom.trim().toLowerCase(), left = i * 100 / n, w = 100 / n;
+      const items = [];
+      _tasks.forEach(t => { if (!t.prog_inicio || _taskDay(t) !== ds) return; const rs = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []); if (!rs.some(r => String(r).trim().toLowerCase() === low)) return; const s = _toMin(t.prog_inicio); items.push([s, s + (t.prog_min || 60)]); });
+      _meetings.forEach(m => { if (String(m.fecha).split('T')[0] !== ds || !m.hora_inicio || m.estado === 'cancelada') return; let at = []; try { at = JSON.parse(m.attendees || '[]'); } catch (_) {} if (!at.some(a => String(a).trim().toLowerCase() === low)) return; const s = _toMin(m.hora_inicio), e = _toMin(m.hora_fin); items.push([s, e && e > s ? e : s + 60]); });
+      return items.map(([s, e]) => `<div class="cal2-busy" style="top:${(s - GRID_S * 60) / 60 * HOUR_H}px;height:${Math.max(14, (e - s) / 60 * HOUR_H - 2)}px;left:calc(${left}% + 1px);width:calc(${w}% - 2px);--c:${_PROJ_COLORS[(i + 2) % _PROJ_COLORS.length]}" title="${esc(nom)} · ocupado ${_hhmm(s)}–${_hhmm(e)}"><span>${esc(nom.split(' ')[0])}</span></div>`).join('');
+    }).join('');
+  }
+
+  // ── horas fuera del horario de trabajo (viene de Time Tracking → Ajustes → Cronograma de trabajo) ──
+  function _agOff(ds, d) {
+    const w = _wk; if (!w) return '';
+    const full = (GRID_E - GRID_S) * HOUR_H, dow = (d.getDay() + 6) % 7 + 1;
+    if (!(w.dias_laborales || []).includes(dow) || (w.no_laborales || []).some(x => x.fecha === ds)) return `<div class="cal2-off" style="top:0;height:${full}px"></div>`;
+    const a = ((_toMin(w.hora_ini) || 0) - GRID_S * 60) / 60 * HOUR_H, b = ((_toMin(w.hora_fin) || 1440) - GRID_S * 60) / 60 * HOUR_H;
+    return `<div class="cal2-off" style="top:0;height:${Math.max(0, a)}px"></div><div class="cal2-off" style="top:${b}px;height:${Math.max(0, full - b)}px"></div>`;
+  }
+
+  // ── arrastrar una tarea del panel al calendario ──
+  function agDrag(ev, id) { _agDragId = id; try { ev.dataTransfer.setData('text/plain', 'nova-task:' + id); ev.dataTransfer.effectAllowed = 'move'; } catch (_) {} }
+  function agDragEnd() { _agDragId = null; document.querySelectorAll('.cal2-col__body--drop').forEach(e => e.classList.remove('cal2-col__body--drop')); }
+  function agOver(ev) { if (!_agDragId) return; ev.preventDefault(); ev.currentTarget.classList.add('cal2-col__body--drop'); }
+  function agLeave(ev) { ev.currentTarget.classList.remove('cal2-col__body--drop'); }
+  async function agDrop(ev, ds) {
+    ev.preventDefault(); ev.currentTarget.classList.remove('cal2-col__body--drop'); const id = _agDragId; _agDragId = null; if (!id) return;
+    const t = _tasks.find(x => x.id === id); if (!t) return; const r = ev.currentTarget.getBoundingClientRect();
+    const min = Math.max(GRID_S * 60, Math.min(GRID_E * 60 - 15, Math.floor(((ev.clientY - r.top) / HOUR_H * 60) / 15) * 15 + GRID_S * 60));
+    await _assignSchedule(id, ds, _hhmm(min), t.prog_min || 60);
+    showBanner(`✓ «${t.titulo}» programada el ${_dlShort(ds)} a las ${_fmtT(_hhmm(min))}`, 'success');
+  }
+
+  // ── crear al elegir una hora libre (Evento · Tarea · Tiempo de concentración · No disponible · Tiempo libre) ──
+  function agSlot(ev, ds) {
+    if (ev.target.closest('.cal2-tblock, .cal2-planblock, .cal2-event, .cal2-draft, .cal2-busy')) return;
+    const r = ev.currentTarget.getBoundingClientRect(), min = Math.floor(((ev.clientY - r.top) / HOUR_H * 60) / 30) * 30 + GRID_S * 60, s = Math.max(GRID_S * 60, Math.min(GRID_E * 60 - 30, min));
+    _draft = { ds, s, e: Math.min(GRID_E * 60, s + 60), tipo: 'evento', titulo: '', todo: false, link: '', ubic: '', desc: '', people: [..._agMeet], proj: 0 };
+    render(); requestAnimationFrame(_agCreatePop);
+  }
+  const _TIPOS = [['evento', 'Evento'], ['tarea', 'Tarea'], ['concentracion', 'Tiempo de concentración'], ['no_disponible', 'No disponible'], ['libre', 'Tiempo libre']];
+  function _agDraftClose() { _agPopClose(); if (_draft) { _draft = null; render(); } }
+  function _agCreatePop() {
+    const blk = document.querySelector('.cal2-draft'); if (!blk || !_draft) return;
+    _agPopOpen(`<div class="ag-cp"><div class="ag-cp__tabs">${_TIPOS.map(([k, l]) => `<button type="button" class="${_draft.tipo === k ? 'on' : ''}" onclick="CalendarModule.agTipo('${k}')">${l}</button>`).join('')}<button type="button" class="ag-cp__x" onclick="CalendarModule.agCancel()" title="Cerrar">${_agI(_AG.x, 14)}</button></div><div id="ag-cp-body"></div></div>`, 'ag-pop--cp',
+      p => { const r = blk.getBoundingClientRect(), W = 500; let left = r.right + 12; if (left + W > innerWidth - 12) left = Math.max(12, r.left - W - 12); p.style.width = W + 'px'; p.style.left = left + 'px'; p.style.top = Math.max(60, Math.min(r.top - 30, innerHeight - 480)) + 'px'; }, () => { if (_draft) { _draft = null; render(); } });
+    _agCpBody(); setTimeout(() => $('ag-t')?.focus(), 30);
+  }
+  function agTipo(k) { if (!_draft) return; _draft.tipo = k; if (k === 'concentracion' && !_draft.titulo) _draft.titulo = ''; document.querySelectorAll('.ag-cp__tabs button:not(.ag-cp__x)').forEach((b, i) => b.classList.toggle('on', _TIPOS[i][0] === k)); _agCpBody(); _agDraftPaint(); }
+  function _agCpBody() {
+    const d = _draft, box = $('ag-cp-body'); if (!box || !d) return;
+    const ph = { evento: 'Agregar título del evento', tarea: 'Nombre de la tarea', concentracion: 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
+    if (d.tipo === 'libre') { box.innerHTML = `<div class="ag-cp__b"><div class="ag-cp__note">Registra una ausencia: vacaciones, permiso o un día libre. Se verá en el calendario del equipo.</div></div><div class="ag-cp__f"><button type="button" class="ts-btn ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.agLibre()">Registrar ausencia…</button></div>`; return; }
+    const dur = d.e - d.s, durTxt = dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ' ' + dur % 60 + 'm' : ''}` : `${dur}m`;
+    const projs = _projects.filter(p => (p.estado || 'activo') === 'activo' && !p.archivado), last = +(localStorage.getItem('cal_last_proj') || 0);
+    const sel = d.proj || (projs.find(p => p.id === last) || projs[0] || {}).id || 0; d.proj = sel;
+    const evento = d.tipo === 'evento';
+    box.innerHTML = `<div class="ag-cp__b">
+        <input id="ag-t" class="ag-cp__title" type="text" autocomplete="off" placeholder="${ph}" value="${esc(d.titulo)}" oninput="CalendarModule.agSet('titulo',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();CalendarModule.agSave()}">
+        <div class="ag-cp__dt"><input type="date" value="${d.ds}" onchange="CalendarModule.agSet('ds',this.value)">${d.todo ? '' : `<input type="time" value="${_hhmm(d.s)}" onchange="CalendarModule.agSet('s',this.value)"><span>→</span><input type="time" value="${_hhmm(d.e)}" onchange="CalendarModule.agSet('e',this.value)"><em id="ag-dur">${durTxt}</em>`}</div>
+        ${d.tipo === 'tarea' ? `<label class="ag-cp__row">${_agI(_AG.sub, 15)}<select onchange="CalendarModule.agSet('proj',this.value)">${projs.map(p => `<option value="${p.id}"${p.id === sel ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></label>` : `<label class="ag-cp__chk"><input type="checkbox" ${d.todo ? 'checked' : ''} onchange="CalendarModule.agSet('todo',this.checked)"> Todo el día</label>`}
+        ${evento ? `<div class="ag-cp__rows">
+          <label class="ag-cp__row">${_agI(_AG.video, 15)}<input type="text" placeholder="Agregar videollamada (pega el enlace de Meet, Zoom…)" value="${esc(d.link)}" oninput="CalendarModule.agSet('link',this.value)"></label>
+          <div class="ag-cp__row ag-cp__row--p">${_agI(_AG.users, 15)}<div class="ag-cp__ppl">${(_agTeam || []).filter(m => String(m.nombre || '').trim().toLowerCase() !== _agMe()).map(m => `<label class="${d.people.includes(m.nombre) ? 'on' : ''}"><input type="checkbox" ${d.people.includes(m.nombre) ? 'checked' : ''} data-n="${esc(m.nombre)}" onchange="CalendarModule.agPeople(this.dataset.n,this.checked)">${esc(m.nombre)}</label>`).join('') || '<span class="ag-empty">Sin equipo</span>'}</div></div>
+          <label class="ag-cp__row">${_agI(_AG.pin, 15)}<input type="text" placeholder="Agregar ubicación o sala" value="${esc(d.ubic)}" oninput="CalendarModule.agSet('ubic',this.value)"></label>
+          <label class="ag-cp__row ag-cp__row--t">${_agI(_AG.text, 15)}<textarea rows="2" placeholder="Agregar descripción" oninput="CalendarModule.agSet('desc',this.value)">${esc(d.desc)}</textarea></label></div>` : ''}
+      </div>
+      <div class="ag-cp__f"><span class="ag-cp__st">${{ evento: 'Ocupado', tarea: 'Se programa en tu calendario', concentracion: 'Se marca como concentración', no_disponible: 'Se marca como no disponible' }[d.tipo]}</span><button type="button" class="ag-btn" onclick="CalendarModule.agCancel()">Cancelar</button><button type="button" class="ag-btn ag-btn--p" id="ag-save" onclick="CalendarModule.agSave()">Crear</button></div>`;
+  }
+  function agSet(k, v) {
+    const d = _draft; if (!d) return;
+    if (k === 's' || k === 'e') { const m = _toMin(v); if (m == null) return; d[k] = m; if (k === 's' && d.e <= d.s) d.e = Math.min(1440, d.s + 60); if (k === 'e' && d.e <= d.s) d.s = Math.max(0, d.e - 60); const i = document.querySelectorAll('.ag-cp__dt input[type=time]'); if (i[0]) i[0].value = _hhmm(d.s); if (i[1]) i[1].value = _hhmm(d.e); const dur = d.e - d.s, el = $('ag-dur'); if (el) el.textContent = dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ' ' + dur % 60 + 'm' : ''}` : `${dur}m`; _agDraftPaint(); return; }
+    if (k === 'proj') { d.proj = +v; try { localStorage.setItem('cal_last_proj', String(v)); } catch (_) {} return; }
+    if (k === 'todo') { d[k] = !!v; _agCpBody(); return; }
+    d[k] = v; if (k === 'titulo') _agDraftPaint();
+    if (k === 'ds') { render(); requestAnimationFrame(() => { const b = document.querySelector('.cal2-draft'); if (b) _agPopEl && (_agPopEl.style.display = ''); }); }
+  }
+  function agPeople(n, on) { const d = _draft; if (!d) return; d.people = on ? [...new Set([...d.people, n])] : d.people.filter(x => x !== n); document.querySelectorAll('.ag-cp__ppl label').forEach(l => { const i = l.querySelector('input'); l.classList.toggle('on', d.people.includes(i.dataset.n)); }); }
+  function _agDraftPaint() {
+    const b = document.querySelector('.cal2-draft'), d = _draft; if (!b || !d) return;
+    const lbl = { evento: 'Nuevo evento', tarea: 'Nueva tarea', concentracion: 'Concentración', no_disponible: 'No disponible' }[d.tipo] || 'Nuevo evento';
+    b.style.top = ((d.s - GRID_S * 60) / 60 * HOUR_H) + 'px'; b.style.height = Math.max(24, (d.e - d.s) / 60 * HOUR_H - 2) + 'px'; b.dataset.tipo = d.tipo;
+    b.innerHTML = `<b>${esc(d.titulo || lbl)}</b><span>${_h12(d.s)}${_ap(d.s) === _ap(d.e) ? '' : _ap(d.s)} - ${_h12(d.e)}${_ap(d.e)}</span>`;
+  }
+  function agCancel() { _agDraftClose(); }
+  function agLibre() { _agDraftClose(); try { TimeOffModule.openDrawer(); } catch (e) { showBanner('No se pudo abrir el registro de ausencias', 'error'); } }
+  async function agSave() {
+    const d = _draft; if (!d) return; const btn = $('ag-save'), titulo = (d.titulo || '').trim();
+    const def = { evento: '', tarea: '', concentracion: 'Tiempo de concentración', no_disponible: 'No disponible' }[d.tipo];
+    if (!titulo && !def) { showBanner('Escribe un título', 'info'); $('ag-t')?.focus(); return; }
+    if (!d.todo && d.e <= d.s) { showBanner('La hora de fin debe ser posterior a la de inicio', 'info'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      if (d.tipo === 'tarea') {
+        if (!d.proj) throw new Error('Elige el proyecto de la tarea');
+        const me = window._authUser?.memberNombre || '';
+        const r = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, project_id: d.proj, estado: 'pendiente', responsables: me ? [me] : [] }) });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la tarea');
+        const t = await r.json(); const pj = _projects.find(x => x.id === d.proj); if (pj) t.project_nombre = pj.nombre; _tasks.push(t);
+        const ds = d.ds, ini = _hhmm(d.s), min = d.e - d.s; _agPopClose(); _draft = null;
+        await _assignSchedule(t.id, ds, ini, min); showBanner(`✓ Tarea creada y programada el ${_dlShort(ds)} a las ${_fmtT(ini)}`, 'success'); return;
+      }
+      const body = { titulo: titulo || def, fecha: d.ds, hora_inicio: d.todo ? null : _hhmm(d.s), hora_fin: d.todo ? null : _hhmm(d.e), descripcion: ((d.ubic ? 'Ubicación: ' + d.ubic + '\n' : '') + (d.desc || '')).trim(), link: d.link || '', attendees: d.tipo === 'evento' ? d.people : [], tipo: d.tipo };
+      const r = await apiFetch(`${API}/mgmt/meetings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear');
+      _meetings.push(await r.json()); _agPopClose(); _draft = null; render(); showBanner(`✓ ${d.tipo === 'evento' ? 'Evento creado' : d.tipo === 'concentracion' ? 'Tiempo de concentración reservado' : 'Horario marcado como no disponible'}`, 'success');
+    } catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Crear'; } showBanner(e.message || 'No se pudo crear', 'error'); }
+  }
+
+  // ── barra de búsqueda y comandos (abajo del calendario) ──
+  function agCmd(q) {
+    const box = $('ag-cmd-r'); if (!box) return; const n = _agNrm(q).trim();
+    const cmds = [['hoy', 'Ir a hoy', 'goToday'], ['dia', 'Ver el día', "setView('day')"], ['semana', 'Ver la semana', "setView('week')"], ['mes', 'Ver el mes', "setView('month')"], ['reunion', 'Nueva reunión', 'newMeeting'], ['ausencia', 'Registrar ausencia', 'agLibre']];
+    const rows = [];
+    cmds.filter(c => !n || _agNrm(c[1]).includes(n)).slice(0, n ? 4 : 6).forEach(c => rows.push(`<button type="button" class="ag-cr" onclick="CalendarModule.agCmdGo('cmd','${c[0]}')"><span class="ag-cr__i">${_agI(_AG.cmd, 14)}</span>${c[1]}<em>comando</em></button>`));
+    if (n) {
+      _tasks.filter(t => _agOpen(t) && _agNrm(t.titulo).includes(n)).slice(0, 5).forEach(t => rows.push(`<button type="button" class="ag-cr" onclick="CalendarModule.agCmdGo('task',${t.id})"><span class="ag-cr__i">${_agI(_AG.sub, 14)}</span>${esc(t.titulo)}<em>${esc(t.project_nombre || 'tarea')}</em></button>`));
+      _meetings.filter(m => _agNrm(m.titulo).includes(n)).slice(0, 4).forEach(m => rows.push(`<button type="button" class="ag-cr" onclick="CalendarModule.agCmdGo('mtg',${m.id})"><span class="ag-cr__i">${_agI(_AG.video, 14)}</span>${esc(m.titulo)}<em>${_dlShort(String(m.fecha).split('T')[0])}</em></button>`));
+      _agTeam.filter(m => String(m.nombre || '').trim().toLowerCase() !== _agMe() && _agNrm(m.nombre).includes(n)).slice(0, 3).forEach(m => rows.push(`<button type="button" class="ag-cr" data-n="${esc(m.nombre)}" onclick="CalendarModule.agCmdGo('per',this.dataset.n)"><span class="ag-cr__i">${_agI(_AG.users, 14)}</span>Reunir con ${esc(m.nombre)}<em>persona</em></button>`));
+    }
+    box.innerHTML = rows.length ? rows.join('') : '<div class="ag-empty">Sin resultados</div>'; box.style.display = '';
+  }
+  function agCmdGo(kind, key) {
+    const box = $('ag-cmd-r'); if (box) box.style.display = 'none'; const i = $('ag-cmd-in'); if (i) { i.value = ''; i.blur(); }
+    if (kind === 'task') { openTaskAnywhere(+key); return; }
+    if (kind === 'mtg') { const m = _meetings.find(x => x.id === +key); if (m) { _anchor = new Date(String(m.fecha).split('T')[0] + 'T12:00:00'); _weekOf = _monday(_anchor); load().then(() => MeetingsModule.openDrawer(+key)); } return; }
+    if (kind === 'per') { agMeetAdd(key); return; }
+    if (key === 'hoy') goToday(); else if (key === 'dia') setView('day'); else if (key === 'semana') setView('week'); else if (key === 'mes') setView('month'); else if (key === 'reunion') MeetingsModule.openDrawer(); else if (key === 'ausencia') agLibre();
+  }
+  document.addEventListener('mousedown', e => { const r = document.getElementById('ag-cmd-r'); if (r && r.style.display !== 'none' && e.target && e.target.closest && !e.target.closest('.ag-cmd')) r.style.display = 'none'; });
+
+  const _agCmdBar = () => `<div class="ag-cmd"><div class="ag-cmd__r" id="ag-cmd-r" style="display:none"></div><div class="ag-cmd__in">${_agI(_AG.search, 16)}<input id="ag-cmd-in" type="text" autocomplete="off" placeholder="Busca eventos, tareas, colegas de equipo, comandos…" oninput="CalendarModule.agCmd(this.value)" onfocus="CalendarModule.agCmd(this.value)"></div></div>`;
+
   // Planes de trabajo recurrentes → bloques sugeridos en el grid.
   // plan_horas = META SEMANAL; se reparte por igual entre los días elegidos de una
   // semana COMPLETA (p. ej. 20h ÷ Lun-Vie = 4h/día). Una semana parcial (la tarea
@@ -17187,7 +17417,8 @@ const CalendarModule = (() => {
         const endMin = et ? (et.h - GRID_S) * 60 + et.m : (st.h - GRID_S) * 60 + st.m + 60;
         const stMin  = (st.h - GRID_S) * 60 + st.m;
         const hPx    = Math.max(26, (endMin - stMin) / 60 * HOUR_H - 2);
-        return `<div class="cal2-event" style="top:${topPx}px;height:${hPx}px;background:${bg}" onclick="MeetingsModule.openDrawer(${m.id})">
+        const tp = m.tipo || 'evento';
+        return `<div class="cal2-event${tp === 'concentracion' ? ' cal2-event--foco' : tp === 'no_disponible' ? ' cal2-event--nd' : ''}" style="top:${topPx}px;height:${hPx}px;${tp === 'evento' ? 'background:' + bg : ''}" onclick="MeetingsModule.openDrawer(${m.id})">
           <div class="cal2-event__title">${esc(m.titulo)}</div>
           <div class="cal2-event__time">${_fmtT(m.hora_inicio)}${m.hora_fin ? ' – ' + _fmtT(m.hora_fin) : ''}</div>
         </div>`;
@@ -17220,6 +17451,7 @@ const CalendarModule = (() => {
         </div>`;
       }).join('');
 
+      const draftBlk = (_draft && _draft.ds === ds && _view !== 'month') ? `<div class="cal2-draft" data-tipo="${_draft.tipo}" style="top:${(_draft.s - GRID_S * 60) / 60 * HOUR_H}px;height:${Math.max(24, (_draft.e - _draft.s) / 60 * HOUR_H - 2)}px"><b>${esc(_draft.titulo || { evento: 'Nuevo evento', tarea: 'Nueva tarea', concentracion: 'Concentración', no_disponible: 'No disponible' }[_draft.tipo] || 'Nuevo evento')}</b><span>${_h12(_draft.s)}${_ap(_draft.s) === _ap(_draft.e) ? '' : _ap(_draft.s)} - ${_h12(_draft.e)}${_ap(_draft.e)}</span></div>` : '';
       const nowLine = (isToday && _nowPx >= 0)
         ? `<div class="cal2-now-line" style="top:${_nowPx}px"></div>` : '';
 
@@ -17230,7 +17462,7 @@ const CalendarModule = (() => {
         </div>
         <div class="cal2-col__allday">${noTimeMtgs}${offChips}${gcalAllDay}</div>
         ${_todoHidden ? '' : `<div class="cal2-col__todo">${noHoraPill}</div>`}
-        <div class="cal2-col__body">${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
+        <div class="cal2-col__body" data-ds="${ds}" onclick="CalendarModule.agSlot(event,'${ds}')" ondragover="CalendarModule.agOver(event)" ondragleave="CalendarModule.agLeave(event)" ondrop="CalendarModule.agDrop(event,'${ds}')">${_agOff(ds, d)}${_agBusy(ds)}${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${draftBlk}${nowLine}</div>
       </div>`;
     }).join('');
 
@@ -17601,6 +17833,7 @@ const CalendarModule = (() => {
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
     openPlanPop, movePlan, startFromPlan, setView, openDay, selectItem, miniShift,
     toggleProj, openColorPick, setProjColor, toggleTodoBand,
+    agTab, agMore, agPrioToggle, agPrioOpen, agPickSearch, agMeetSearch, agMeetAdd, agMeetDel, agDrag, agDragEnd, agOver, agLeave, agDrop, agSlot, agTipo, agSet, agPeople, agCancel, agLibre, agSave, agCmd, agCmdGo,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 
