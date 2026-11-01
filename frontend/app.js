@@ -48155,7 +48155,7 @@ const TimerModule = (() => {
   }
 
   async function loadReport() {
-    if (window.TimesheetModule && TimesheetModule.handlesRefresh()) { TimesheetModule.refresh(); return; }   // las hojas de horas están abiertas: se refresca esa vista
+    if (typeof TimesheetModule !== 'undefined' && TimesheetModule.handlesRefresh()) { TimesheetModule.refresh(); return; }   // las hojas de horas están abiertas: se refresca esa vista
     const pane = $('tt-report-root');
     if (!pane) return;
     const range = _ttRange();
@@ -48971,7 +48971,7 @@ function initApp() {
     if (tabName === 'mgmt-wa')            { try { LeadManagerModule._waUnmount(); } catch (_) {} WaChatModule.load(); }
     else                                  WaChatModule.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
-    if (tabName === 'mgmt-timetracking')  { if (window.TimesheetModule) TimesheetModule.open(); else TimerModule.loadReport(); }
+    if (tabName === 'mgmt-timetracking')  { if (typeof TimesheetModule !== 'undefined') TimesheetModule.open(); else TimerModule.loadReport(); }
     if (tabName === 'mgmt-empresa')       WorkspaceModule.load();
   }
 

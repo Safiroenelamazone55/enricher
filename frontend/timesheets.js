@@ -40,7 +40,7 @@ const TimesheetModule = (() => {
   const dur = e => e.ended_at ? (e.duration_s || 0) : Math.max(e.duration_s || 0, Math.round((Date.now() - new Date(e.started_at)) / 1000));
   const countable = e => { const s = e.source || 'manual_timer'; return s !== 'browser_extension' && s !== 'desktop_agent'; };
   const billable = e => e.facturable != null ? !!e.facturable : (e.tipo_proyecto === 'horas' && +e.tarifa_hora > 0);
-  const tasksAll = () => (window.TasksModule && TasksModule._getTasks) ? TasksModule._getTasks() : [];
+  const tasksAll = () => (typeof TasksModule !== 'undefined' && TasksModule._getTasks) ? TasksModule._getTasks() : [];
 
   // ── configuración / capacidad ──
   const cfg = () => S.settings || { dias_laborales: [1, 2, 3, 4, 5], hora_ini: '09:00', hora_fin: '17:00', no_laborales: [], aprob_activas: false, limite_dia: 5, limite_hora: '17:00', rec_antes_h: 24, rec_despues_h: 8 };
@@ -197,7 +197,7 @@ const TimesheetModule = (() => {
   function drawHoja() {
     const g = $('ts-grid'); if (!g) return; const days = visDays(), rows = buildRows(S.entries), today = todayL(); S.rows = rows;
     const dayTot = {}; rows.forEach(r => Object.entries(r.days).forEach(([d, s]) => { dayTot[d] = (dayTot[d] || 0) + s; }));
-    const grand = rows.reduce((a, r) => a + r.total, 0), cols = `grid-template-columns:minmax(250px,1.8fr) repeat(${days.length},minmax(92px,1fr)) 104px`;
+    const grand = rows.reduce((a, r) => a + r.total, 0), cols = `grid-template-columns:minmax(250px,1.8fr) repeat(${days.length},minmax(92px,1fr)) 128px`;
     const th = days.map(d => { const cp = capDay(d), t = dayTot[d] || 0, pc = cp > 0 ? Math.min(100, t / cp * 100) : (t > 0 ? 100 : 0); return `<div class="tsh-d${d === today ? ' is-today' : ''}${cp === 0 ? ' is-off' : ''}"><span>${dHead(d)}</span><b>${fmtH(t)}</b><i class="tsh-bar"><u class="${t >= cp && cp > 0 ? 'ok' : ''}" style="width:${pc}%"></u></i></div>`; }).join('');
     const body = rows.map(r => `<div class="tsh-r" style="${cols}"><div class="tsh-t"><div class="tsh-t__n"><a href="javascript:void(0)" ${r.taskId ? `onclick="openTaskAnywhere(${r.taskId})"` : ''}>${esc(r.titulo)}</a>${r.archivada ? '<em>archivada</em>' : ''}</div><small>${esc(r.ctx)}</small></div>`
       + days.map(d => { const s = r.days[d] || 0; return `<button type="button" class="tsh-c${s ? ' has' : ''}${capDay(d) === 0 ? ' is-off' : ''}" onclick="TimesheetModule.cell(event,'${r.key}','${d}')">${s ? fmtH(s) : '<i>+</i>'}</button>`; }).join('')
@@ -298,7 +298,7 @@ const TimesheetModule = (() => {
   function drawTodas() {
     const b = $('ts-body'), t = S.team; if (!b || !t) return; const days = visDays(), today = todayL();
     let ps = t.personas || []; if (S.memberFilter !== 'all') ps = ps.filter(p => String(p.user_id) === String(S.memberFilter));
-    const cols = `grid-template-columns:minmax(260px,1.8fr) repeat(${days.length},minmax(84px,1fr)) 96px`;
+    const cols = `grid-template-columns:minmax(300px,1.8fr) repeat(${days.length},minmax(84px,1fr)) 96px`;
     const sel = (t.personas || []).find(p => String(p.user_id) === String(S.memberFilter));
     const memberBtn = `<button type="button" class="ts-btn ts-btn--sel" onclick="TimesheetModule.memberMenu(event)">${sel ? esc(sel.nombre) : 'Todos los miembros'}${ic(IC.down, 14)}</button>`;
     const rows = ps.map(p => `<div class="tsh-r tsh-r--p" style="${cols}"><div class="tsh-p"><span class="ts-av">${esc(ini(p.nombre))}</span><div><b>${esc(p.nombre)}</b><small>${fmtH(p.capacidad_s)}</small></div><span class="ts-st ts-st--${p.estado}">${p.estado === 'pendiente' ? '' : stLabel(p.estado)}</span><button type="button" class="ts-btn ts-btn--open" onclick="TimesheetModule.openMember(${p.user_id})">Abrir ${ic(IC.right, 13)}</button></div>`
