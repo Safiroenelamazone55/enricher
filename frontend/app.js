@@ -16524,8 +16524,8 @@ const CalendarModule = (() => {
     render();
   }
 
-  async function connectGcal() {
-    window.location.href = `${API}/gcal/connect`;
+  async function connectGcal(add) {
+    window.location.href = `${API}/gcal/connect${add === true ? '?add=1' : ''}`;
   }
 
   async function disconnectGcal() {
@@ -17171,10 +17171,43 @@ const CalendarModule = (() => {
   // ── Ajustes del calendario ──
   let _setSec = 'apariencia';
   function agSettings() {
-    _agPopClose(); document.getElementById('cal-set')?.remove();
+    _agPopClose(); document.getElementById('cal-set')?.remove(); if (_setSec === 'cuentas') { _gAcc = null; _gAccLoad(); }
     const m = document.createElement('div'); m.id = 'cal-set'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); }; document.body.appendChild(m); _agSetPaint();
   }
-  function agSetSec(k) { _setSec = k; _agSetPaint(); }
+  let _gAcc = null;   // cuentas de Google, calendarios y preferencias (se pide al abrir «Cuentas»)
+  async function _gAccLoad() {
+    try { const r = await apiFetch(`${API}/gcal/accounts`); if (r.ok) _gAcc = await r.json(); else _gAcc = { accounts: [], default: null, busy: null, zoom: false }; }
+    catch (_) { _gAcc = { accounts: [], default: null, busy: null, zoom: false }; }
+    if (_setSec === 'cuentas') _agSetPaint();
+  }
+  function agSetSec(k) { _setSec = k; if (k === 'cuentas') { _gAcc = null; _gAccLoad(); } _agSetPaint(); }
+  async function _gPrefSave() {
+    const A = _gAcc; if (!A) return;
+    try { await apiFetch(`${API}/gcal/prefs`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ default: A.default, busy: A.busy }) }); } catch (_) {}
+  }
+  function agGcalPref(kind, v, on) {
+    const A = _gAcc; if (!A) return;
+    const split = k => { const n = k.indexOf('|'); return { acc: +k.slice(0, n), cal: k.slice(n + 1) }; };
+    if (kind === 'def') { A.default = split(v); _gPrefSave(); return; }
+    const cur = (A.busy && A.busy.length ? A.busy : A.accounts.filter(a => a.main).flatMap(a => a.calendars.filter(c => c.primary).map(c => ({ acc: a.id, cal: c.id })))).slice();
+    const s = split(v), key = x => x.acc + '|' + x.cal, rest = cur.filter(x => key(x) !== key(s));
+    A.busy = on ? [...rest, s] : rest;
+    if (!A.busy.length) A.busy = [{ acc: -1, cal: 'none' }].slice(0, 0);
+    _gPrefSave().then(() => load());
+  }
+  function agAccMenu(ev, id) {
+    ev.stopPropagation(); const a = ev.currentTarget;
+    _agPopOpen(`<div class="ag-vm"><button type="button" class="ag-vm__i" onclick="CalendarModule.agAccDo(${id},'re')"><span>Volver a conectar</span></button><button type="button" class="ag-vm__i" onclick="CalendarModule.agAccDo(${id},'del')"><span>Desconectar</span></button></div>`, 'ag-pop--vm',
+      p => { const r = a.getBoundingClientRect(); p.style.top = (r.bottom + 4) + 'px'; p.style.left = Math.max(8, Math.min(r.right - 220, innerWidth - 232)) + 'px'; p.style.width = '220px'; p.style.zIndex = 100000; });
+  }
+  async function agAccDo(id, what) {
+    _agPopClose();
+    if (what === 're') { connectGcal(id !== 0); return; }
+    if (!confirm('¿Desconectar esta cuenta de Google?')) return;
+    if (id === 0) { await apiFetch(`${API}/gcal/disconnect`, { method: 'POST' }); _gcalConn = false; _gcalEvents = []; }
+    else await apiFetch(`${API}/gcal/accounts/${id}`, { method: 'DELETE' });
+    await _gAccLoad(); load();
+  }
   function _agSetPaint() {
     const m = document.getElementById('cal-set'); if (!m) return;
     const secs = [['apariencia', 'Apariencia'], ['cuentas', 'Cuentas'], ['barra', 'Barra lateral'], ['bloqueo', 'Bloqueo de tiempo']];
@@ -17187,9 +17220,27 @@ const CalendarModule = (() => {
       + row('Mostrar fines de semana', 'En las vistas de semana y de varios días', sw(_cp.showWk, "CalendarModule.agPref('showWk',this.checked)"))
       + row('En paralelo', 'Los eventos que coinciden se colocan lado a lado', sw(_cp.parallel, "CalendarModule.agPref('parallel',this.checked)"))
       + row('Formato de hora', 'Cómo se muestran las horas', `<select class="ag-sel" onchange="CalendarModule.agPref('h24',this.value==='24')">${opt('12', '12 horas (3:00 PM)', _cp.h24 ? '24' : '12')}${opt('24', '24 horas (15:00)', _cp.h24 ? '24' : '12')}</select>`);
-    else if (_setSec === 'cuentas') body = `<h3>Cuentas</h3><p>Conecta tu calendario externo para ver sus eventos aquí.</p>
-      <div class="ag-acc"><span class="ag-acc__i">G</span><div><b>Google Calendar</b><small>${_gcalConn ? 'Conectado · sus eventos aparecen en tu calendario' : 'No conectado'}</small></div>${_gcalConn ? `<button type="button" class="ag-btn" onclick="CalendarModule.disconnectGcal()">Desconectar</button>` : `<button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.connectGcal()">Conectar</button>`}</div>`
-      + row('Videollamadas', 'Al crear un evento, pega el enlace de Meet, Zoom o Teams en «Agregar videollamada».', '');
+    else if (_setSec === 'cuentas') {
+      const A = _gAcc, dots = '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>';
+      let h = `<h3>Cuentas</h3><p>Conecta tus calendarios de Google para ver sus eventos y saber cuándo estás ocupado.</p>`;
+      if (!A) h += `<div class="ag-sr"><small>Cargando cuentas…</small></div>`;
+      else {
+        h += A.accounts.map(a => `<div class="ag-acc"><span class="ag-acc__i">G</span><div><b>${esc(a.email || 'Cuenta de Google')}</b><small>${a.needsReconnect ? 'Hay que volver a conectarla para leer sus calendarios' : 'Conectada'}${a.main ? ' · principal' : ''}</small></div><button type="button" class="ag-acc__m" title="Opciones" onclick="CalendarModule.agAccMenu(event,${a.id})">${_agI(dots, 18)}</button></div>`).join('');
+        h += `<button type="button" class="ag-btn ag-btn--p" onclick="CalendarModule.connectGcal(${A.accounts.length ? 'true' : ''})">${A.accounts.length ? '+ Agregar cuenta' : 'Conectar Google Calendar'}</button>`;
+        const all = A.accounts.flatMap(a => a.calendars.map(c => ({ ...c, acc: a.id, email: a.email })));
+        if (all.length) {
+          const defK = A.default ? `${A.default.acc}|${A.default.cal}` : (all.find(c => c.acc === 0 && c.primary) ? `0|${all.find(c => c.acc === 0 && c.primary).id}` : '');
+          const busyK = new Set((A.busy && A.busy.length ? A.busy.map(b => `${b.acc}|${b.cal}`) : all.filter(c => c.acc === 0 && c.primary).map(c => `0|${c.id}`)));
+          h += `<div class="ag-sec2"><b>Calendario predeterminado</b><small>Aquí se crean los eventos nuevos (por ejemplo, las reuniones con Meet).</small>
+            <select class="ag-sel ag-sel--w" onchange="CalendarModule.agGcalPref('def',this.value)">${A.accounts.map(a => `<optgroup label="${esc(a.email || 'Cuenta')}">${a.calendars.filter(c => c.writable).map(c => opt(`${a.id}|${c.id}`, esc(c.name), defK)).join('')}</optgroup>`).join('')}</select></div>`;
+          h += `<div class="ag-sec2"><b>Calendarios ocupados</b><small>Los eventos de estos calendarios aparecen aquí y te marcan como ocupado al sugerir horarios libres.</small>${A.accounts.filter(a => a.calendars.length).map(a => `<div class="ag-bz"><em>${esc(a.email || 'Cuenta')}</em>${a.calendars.map(c => `<label><input type="checkbox" data-k="${esc(a.id + '|' + c.id)}" ${busyK.has(a.id + '|' + c.id) ? 'checked' : ''} onchange="CalendarModule.agGcalPref('busy',this.dataset.k,this.checked)"><i class="d" style="--c:${esc(c.color)}"></i><span>${esc(c.name)}</span></label>`).join('')}</div>`).join('')}</div>`;
+        }
+      }
+      h += `<div class="ag-sec2"><b>Conferencias</b><small>Cómo se agregan las videollamadas a tus reuniones.</small>
+        <div class="ag-acc"><span class="ag-acc__i ag-acc__i--m">M</span><div><b>Google Meet</b><small>${_gcalConn ? 'Disponible con tu cuenta de Google' : 'Conecta Google para usarlo'}</small></div></div>
+        <div class="ag-acc"><span class="ag-acc__i ag-acc__i--z">Z</span><div><b>Zoom</b><small>${A && A.zoom ? 'Integración en preparación' : 'Aún no disponible: falta registrar la app de Zoom en el servidor'}</small></div><button type="button" class="ag-btn" disabled>Conectar</button></div></div>`;
+      body = h;
+    }
     else if (_setSec === 'barra') { const S = _cp.side, L = [['prio', 'Prioridades'], ['meet', 'Reunir con'], ['asig', 'Asignados a mí'], ['venc', 'Hoy y vencido'], ['pend', 'Tareas pendientes']];
       body = `<h3>Barra lateral</h3><p>Elige qué secciones ver en el panel de la Agenda.</p>` + L.map(([k, l]) => row(l, '', sw(!!S[k], `CalendarModule.agPref('side.${k}',this.checked)`))).join('') + row('Tareas por sección', 'Cuántas se ven antes de «Ver más»', `<select class="ag-sel" onchange="CalendarModule.agPref('lim',this.value)">${[4, 6, 10, 15].map(n => opt(n, n, _cp.lim)).join('')}</select>`); }
     else body = `<h3>Bloqueo de tiempo</h3><p>Valores por defecto al crear bloques con un clic en el calendario.</p>`
@@ -17926,7 +17977,7 @@ const CalendarModule = (() => {
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
     openPlanPop, movePlan, startFromPlan, setView, openDay, selectItem, miniShift,
     toggleProj, openColorPick, setProjColor, toggleTodoBand,
-    agViewMenu, agSetView, agNDays, agToggle, agSettings, agSetSec, agPref,
+    agViewMenu, agSetView, agNDays, agToggle, agSettings, agSetSec, agPref, agGcalPref, agAccMenu, agAccDo,
     agTab, agMore, agPrioToggle, agPrioOpen, agPickSearch, agMeetSearch, agMeetAdd, agMeetDel, agDrag, agDragEnd, agOver, agLeave, agDrop, agSlot, agTipo, agSet, agPeople, agCancel, agLibre, agSave, agCmd, agCmdGo,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();

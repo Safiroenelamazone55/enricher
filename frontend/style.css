@@ -20056,3 +20056,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .ag-cp__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; margin: 6px 0 4px; } .ag-cp__f { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 6px; border-radius: 8px; color: var(--text-muted, #8B9690); } .ag-cp__f:hover { background: var(--surface-hover, #F1F3F0); } .ag-cp__f select, .ag-cp__f input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: .84rem; color: var(--text-primary, #14211B); cursor: pointer; } .ag-cp__f input { cursor: text; } .ag-cp__f--w { cursor: default; } .ag-cp__f--w:hover { background: none; }
 .cal2-draft[data-tipo="tarea"] { background: #EEF0F4; color: #2A3140; border: 1px solid #D5DAE3; box-shadow: none; }
 .ag-pop--cp { min-width: 560px; } .ag-cp__dt--2 { flex-wrap: nowrap; } .ag-cp__dt--2 input[type=date] { width: 132px; } .ag-cp__dt--2 input[type=time] { width: 112px; }
+
+/* Ajustes del calendario · Cuentas */
+.ag-acc__m { border: 0; background: none; width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary, #5F6B64); cursor: pointer; } .ag-acc__m:hover { background: var(--surface-hover, #F1F3F0); color: var(--text-primary, #14211B); }
+.ag-acc__i--m { background: #E6F6EC; color: #0F9D58; } .ag-acc__i--z { background: #E7F0FF; color: #0B5CFF; }
+.ag-sec2 { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border, #E2E7E3); } .ag-sec2 > b { display: block; font-size: .92rem; font-weight: 600; } .ag-sec2 > small { display: block; margin: 2px 0 10px; font-size: .78rem; color: var(--text-muted, #8B9690); max-width: 460px; }
+.ag-sel--w { width: 100%; max-width: 360px; }
+.ag-bz { padding: 6px 0; } .ag-bz em { display: block; font-style: normal; font-size: .78rem; color: var(--text-muted, #8B9690); margin-bottom: 2px; } .ag-bz label { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: .86rem; cursor: pointer; } .ag-bz input { accent-color: var(--primary, #007AFF); } .ag-bz i.d { width: 10px; height: 10px; border-radius: 3px; background: var(--c, #3367D6); flex: none; }
+.ag-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ag-set__c { max-height: 80vh; overflow-y: auto; }

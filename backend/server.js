@@ -12704,7 +12704,7 @@ app.get('/api/chat/pinned/:channel', requireAuth, async (req, res) => {
 // GOOGLE CALENDAR INTEGRATION
 // ═══════════════════════════════════════════════════════════════════
 
-const GCAL_SCOPES   = ['https://www.googleapis.com/auth/calendar.events'];
+const GCAL_SCOPES   = ['https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.readonly'];
 const GCAL_CALLBACK = (process.env.API_BASE_URL || 'https://api.kiwoc.com') + '/api/gcal/callback';
 // URL pública del frontend. Se toma de la env FRONTEND_URL; default = kiwoc (sin cambio hasta el
 // cutover a app.novacentrax.com — ahí solo se define la env, no se toca el código).
@@ -12756,19 +12756,33 @@ app.get('/api/gcal/connect', requireAuth, (req, res) => {
   const url  = auth.generateAuthUrl({
     access_type: 'offline',
     scope: GCAL_SCOPES,
-    prompt: 'consent',
+    prompt: req.query.add ? 'consent select_account' : 'consent',
     include_granted_scopes: true, // conserva scopes ya concedidos (ej. gmail.send)
-    state: String(req.user.id),
+    state: String(req.user.id) + (req.query.add ? ':add' : ''),
   });
   res.redirect(url);
 });
 
 app.get('/api/gcal/callback', async (req, res) => {
-  const { code, state: userId } = req.query;
+  const { code, state: rawState } = req.query;
+  const [userId, mode] = String(rawState || '').split(':');
   if (!code || !userId) return res.redirect(`${FRONTEND_URL}?gcal=error`);
   try {
     const auth = _gcalOAuth2();
     const { tokens } = await auth.getToken(code);
+    if (mode === 'add') {
+      const { google } = require('googleapis');
+      auth.setCredentials(tokens);
+      let email = '';
+      try { const l = await google.calendar({ version: 'v3', auth }).calendarList.list({ maxResults: 50 });
+        email = ((l.data.items || []).find(c => c.primary) || {}).id || ''; } catch (_) {}
+      const { rows: ex } = email ? await pool.query(`SELECT id FROM gcal_accounts WHERE user_id=$1 AND email=$2`, [userId, email]) : { rows: [] };
+      if (ex[0]) await pool.query(`UPDATE gcal_accounts SET access_token=$1, refresh_token=COALESCE($2,refresh_token), token_expiry=$3, scopes=$4 WHERE id=$5`,
+        [tokens.access_token, tokens.refresh_token || null, tokens.expiry_date ? new Date(tokens.expiry_date) : null, tokens.scope || '', ex[0].id]);
+      else await pool.query(`INSERT INTO gcal_accounts (user_id,email,access_token,refresh_token,token_expiry,scopes) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [userId, email, tokens.access_token, tokens.refresh_token, tokens.expiry_date ? new Date(tokens.expiry_date) : null, tokens.scope || '']);
+      return res.redirect(`${FRONTEND_URL}?gcal=ok`);
+    }
     await pool.query(
       `UPDATE users SET google_access_token=$1, google_refresh_token=$2, google_token_expiry=$3,
               google_scopes=$4 WHERE id=$5`,
@@ -12791,27 +12805,111 @@ app.post('/api/gcal/disconnect', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Cuentas de Google Calendar adicionales, calendario predeterminado y calendarios ocupados ──
+pool.query(`CREATE TABLE IF NOT EXISTS gcal_accounts (id SERIAL PRIMARY KEY, user_id INT NOT NULL, email TEXT,
+  access_token TEXT, refresh_token TEXT, token_expiry TIMESTAMPTZ, scopes TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`).catch(() => {});
+pool.query(`CREATE TABLE IF NOT EXISTS gcal_prefs (user_id INT PRIMARY KEY, default_cal JSONB, busy JSONB)`).catch(() => {});
+
+function _gcalFromRow(r) {
+  const { google } = require('googleapis');
+  const auth = _gcalOAuth2();
+  auth.setCredentials({ access_token: r.access_token, refresh_token: r.refresh_token,
+    expiry_date: r.token_expiry ? new Date(r.token_expiry).getTime() : null });
+  auth.on('tokens', async t => {
+    if (t.access_token) await pool.query(`UPDATE gcal_accounts SET access_token=$1, token_expiry=$2 WHERE id=$3`,
+      [t.access_token, t.expiry_date ? new Date(t.expiry_date) : null, r.id]).catch(() => {});
+  });
+  return google.calendar({ version: 'v3', auth });
+}
+// Cuenta principal (id 0, guardada en users) + las adicionales (gcal_accounts)
+async function _gcalAccts(userId) {
+  const out = [];
+  const main = await _gcalClient(userId);
+  if (main) out.push({ id: 0, cal: main, email: null });
+  const { rows } = await pool.query(`SELECT * FROM gcal_accounts WHERE user_id=$1 ORDER BY id`, [userId]);
+  rows.forEach(r => out.push({ id: r.id, cal: _gcalFromRow(r), email: r.email, scopes: r.scopes }));
+  return out;
+}
+// Donde se crean los eventos nuevos (Meet): el calendario predeterminado elegido, o el principal
+async function _gcalTarget(userId) {
+  const { rows: [pf] } = await pool.query(`SELECT default_cal FROM gcal_prefs WHERE user_id=$1`, [userId]);
+  const d = pf && pf.default_cal;
+  if (d && +d.acc > 0) {
+    const { rows: [r] } = await pool.query(`SELECT * FROM gcal_accounts WHERE id=$1 AND user_id=$2`, [d.acc, userId]);
+    if (r) return { cal: _gcalFromRow(r), calendarId: d.cal || 'primary' };
+  }
+  const cal = await _gcalClient(userId);
+  return cal ? { cal, calendarId: (d && +d.acc === 0 && d.cal) || 'primary' } : null;
+}
+
+app.get('/api/gcal/accounts', requireAuth, async (req, res) => {
+  try {
+    const accts = await _gcalAccts(req.user.id);
+    const list = await Promise.all(accts.map(async a => {
+      try {
+        const r = await a.cal.calendarList.list({ minAccessRole: 'reader', maxResults: 100 });
+        const cals = (r.data.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, primary: !!c.primary,
+          color: c.backgroundColor || '#3367D6', writable: ['owner', 'writer'].includes(c.accessRole) }));
+        const prim = cals.find(c => c.primary);
+        return { id: a.id, email: (prim && prim.id) || a.email || '', main: a.id === 0, calendars: cals };
+      } catch (e) {
+        return { id: a.id, email: a.email || '', main: a.id === 0, calendars: [], needsReconnect: true };
+      }
+    }));
+    const { rows: [pf] } = await pool.query(`SELECT default_cal, busy FROM gcal_prefs WHERE user_id=$1`, [req.user.id]);
+    res.json({ accounts: list, default: (pf && pf.default_cal) || null, busy: (pf && pf.busy) || null,
+      zoom: !!process.env.ZOOM_CLIENT_ID });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/gcal/prefs', requireAuth, async (req, res) => {
+  const d = req.body && req.body.default, b = req.body && req.body.busy;
+  const okRef = x => x && Number.isInteger(+x.acc) && typeof x.cal === 'string' && x.cal.length < 300;
+  if (d != null && !okRef(d)) return res.status(400).json({ error: 'Calendario inválido' });
+  if (b != null && !(Array.isArray(b) && b.length <= 60 && b.every(okRef))) return res.status(400).json({ error: 'Calendarios inválidos' });
+  await pool.query(`INSERT INTO gcal_prefs (user_id, default_cal, busy) VALUES ($1,$2,$3)
+    ON CONFLICT (user_id) DO UPDATE SET default_cal=EXCLUDED.default_cal, busy=EXCLUDED.busy`,
+    [req.user.id, d == null ? null : JSON.stringify({ acc: +d.acc, cal: d.cal }),
+     b == null ? null : JSON.stringify(b.map(x => ({ acc: +x.acc, cal: x.cal })))]);
+  res.json({ ok: true });
+});
+
+app.delete('/api/gcal/accounts/:id', requireAuth, async (req, res) => {
+  const id = +req.params.id;
+  if (!id) return res.status(400).json({ error: 'La cuenta principal se desconecta desde «Desconectar»' });
+  await pool.query(`DELETE FROM gcal_accounts WHERE id=$1 AND user_id=$2`, [id, req.user.id]);
+  const { rows: [pf] } = await pool.query(`SELECT default_cal, busy FROM gcal_prefs WHERE user_id=$1`, [req.user.id]);
+  if (pf) {
+    const busy = Array.isArray(pf.busy) ? pf.busy.filter(x => +x.acc !== id) : null;
+    const def = pf.default_cal && +pf.default_cal.acc === id ? null : pf.default_cal;
+    await pool.query(`UPDATE gcal_prefs SET busy=$1, default_cal=$2 WHERE user_id=$3`,
+      [busy ? JSON.stringify(busy) : null, def ? JSON.stringify(def) : null, req.user.id]);
+  }
+  res.json({ ok: true });
+});
+
 app.get('/api/gcal/events', requireAuth, async (req, res) => {
   try {
-    const cal = await _gcalClient(req.user.id);
-    if (!cal) return res.json({ connected: false, events: [] });
+    const accts = await _gcalAccts(req.user.id);
+    if (!accts.length) return res.json({ connected: false, events: [] });
     const { start, end } = req.query;
-    const response = await cal.events.list({
-      calendarId: 'primary',
-      timeMin: start || new Date().toISOString(),
-      timeMax: end   || new Date(Date.now() + 7 * 86400000).toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 100,
-    });
-    const events = (response.data.items || []).map(ev => ({
-      id:     ev.id,
-      title:  ev.summary || '(Sin título)',
-      start:  ev.start?.dateTime || ev.start?.date,
-      end:    ev.end?.dateTime   || ev.end?.date,
-      allDay: !ev.start?.dateTime,
-      link:   ev.hangoutLink || ev.htmlLink || null,
-    }));
+    const { rows: [pf] } = await pool.query(`SELECT busy FROM gcal_prefs WHERE user_id=$1`, [req.user.id]);
+    const busy = Array.isArray(pf && pf.busy) && pf.busy.length ? pf.busy : null;
+    const jobs = [];
+    for (const a of accts) {
+      const cals = busy ? busy.filter(b => +b.acc === a.id).map(b => b.cal) : (a.id === 0 ? ['primary'] : []);
+      for (const c of cals) jobs.push(a.cal.events.list({
+        calendarId: c, timeMin: start || new Date().toISOString(),
+        timeMax: end || new Date(Date.now() + 7 * 86400000).toISOString(),
+        singleEvents: true, orderBy: 'startTime', maxResults: 250,
+      }).then(r => (r.data.items || []).filter(ev => ev.status !== 'cancelled').map(ev => ({
+        id: ev.id, title: ev.summary || '(Sin título)',
+        start: ev.start?.dateTime || ev.start?.date, end: ev.end?.dateTime || ev.end?.date,
+        allDay: !ev.start?.dateTime, link: ev.hangoutLink || ev.htmlLink || null, acc: a.id, cal: c,
+      }))).catch(() => []));
+    }
+    const seen = new Set();
+    const events = (await Promise.all(jobs)).flat().filter(e => { const k = e.id + '|' + e.start; if (seen.has(k)) return false; seen.add(k); return true; });
     res.json({ connected: true, events });
   } catch (e) {
     console.error('[gcal] events error:', e.message);
@@ -14557,8 +14655,9 @@ app.post('/api/gcal/meet', requireAuth, async (req, res) => {
   const { meetingId } = req.body || {};
   if (!meetingId) return res.status(400).json({ error: 'Falta la reunión' });
   try {
-    const cal = await _gcalClient(req.user.id);
-    if (!cal) return res.status(409).json({ error: 'Conecta Google Calendar primero', connected: false });
+    const tgt = await _gcalTarget(req.user.id);
+    if (!tgt) return res.status(409).json({ error: 'Conecta Google Calendar primero', connected: false });
+    const cal = tgt.cal;
     const { rows: [m] } = await pool.query(
       `SELECT * FROM meetings WHERE id=$1 AND user_id=$2`, [meetingId, req.workspaceOwnerId]);
     if (!m) return res.status(404).json({ error: 'Reunión no encontrada' });
@@ -14574,7 +14673,7 @@ app.post('/api/gcal/meet', requireAuth, async (req, res) => {
       .filter(e => e.includes('@')).map(email => ({ email }));
 
     const { data } = await cal.events.insert({
-      calendarId: 'primary',
+      calendarId: tgt.calendarId,
       conferenceDataVersion: 1,                 // sin esto Google ignora la peticion de Meet
       requestBody: {
         summary: m.titulo || 'Reunión',
