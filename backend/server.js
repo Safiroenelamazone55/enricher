@@ -346,6 +346,7 @@ const permsSvc = require('./services/permissions').mount(app, { pool, requireAut
 require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });
 require('./services/fieldsRoutes').mount(app, { pool, requireAuth });   // estados y campos personalizados por proyecto + plantilla «Adquisición comercial»
 require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // enlaces y relaciones/dependencias entre tareas
+require('./services/timesheetRoutes').mount(app, { pool, requireAuth });   // hojas de horas: cronograma de trabajo, equipo por semana, aprobaciones
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
@@ -14861,8 +14862,8 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
     // para poder calcular horas → dinero en el reporte de facturación por horas.
     const sel = `SELECT te.id, te.user_id, te.task_id, te.task_titulo, te.project_nombre,
               te.started_at, te.ended_at, te.duration_s, te.active_s, te.idle_s, te.notes,
-              te.source, te.activity_type, te.metadata, te.approved, te.approved_at, te.approved_by,
-              t.project_id, t.parent_task_id, pt.titulo AS parent_titulo, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
+              te.source, te.activity_type, te.metadata, te.approved, te.approved_at, te.approved_by, te.facturable, te.etiquetas, te.created_at AS creada_at,
+              t.archivada AS task_archivada, t.project_id, t.parent_task_id, pt.titulo AS parent_titulo, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
               c.nombre AS client_nombre
        FROM time_entries te
        LEFT JOIN tasks t     ON t.id = te.task_id

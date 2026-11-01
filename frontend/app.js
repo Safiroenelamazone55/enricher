@@ -47842,7 +47842,7 @@ const TimerModule = (() => {
       ];
     } catch (_) { _tmTasks = []; }
   }
-  async function openManual() {
+  async function openManual(pre) {
     _tmSel = null; _tmRes = [];
     _tmEl('ttm-backdrop')?.remove();
     const L = _tmLima(), fin = _tmMin(L.hora), ini = Math.max(0, fin - 60);
@@ -47871,7 +47871,9 @@ const TimerModule = (() => {
     _tmDur();
     _tmEl('ttm-q')?.focus();
     await _tmLoadTasks();
-    if (_tmEl('ttm-q') && document.activeElement === _tmEl('ttm-q')) manualSearch(_tmEl('ttm-q').value);
+    if (pre && pre.fecha && _tmEl('ttm-fecha')) { _tmEl('ttm-fecha').value = pre.fecha; _tmDur(); }   // llamado desde las hojas de horas: fecha y tarea ya elegidas
+    if (pre && (pre.taskId || pre.titulo) && _tmEl('ttm-chosen')) { const f = pre.taskId ? _tmTasks.find(t => t.kind === 'proyecto' && t.id === pre.taskId) : null; _tmSel = f || { kind: pre.taskId ? 'proyecto' : 'libre', id: pre.taskId || null, titulo: pre.titulo || '', ctx: pre.ctx || '' }; _tmShowChosen(); }
+    else if (_tmEl('ttm-q') && document.activeElement === _tmEl('ttm-q')) manualSearch(_tmEl('ttm-q').value);
   }
   function closeManual() { _tmEl('ttm-backdrop')?.remove(); document.removeEventListener('keydown', _tmEsc); _tmSel = null; }
   // Resultados: sin escribir, las tareas vigentes. Al buscar, cada tarea sale agrupada bajo su CONTENEDOR (la semana / el periodo / la tarea madre),
@@ -48153,6 +48155,7 @@ const TimerModule = (() => {
   }
 
   async function loadReport() {
+    if (window.TimesheetModule && TimesheetModule.handlesRefresh()) { TimesheetModule.refresh(); return; }   // las hojas de horas están abiertas: se refresca esa vista
     const pane = $('tt-report-root');
     if (!pane) return;
     const range = _ttRange();
@@ -48818,7 +48821,7 @@ const TimerModule = (() => {
   }
 
   return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, subToggle, subCreate, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
-    openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
+    openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll, setEntries: es => { _ttLastEntries = Array.isArray(es) ? es : []; } };
 })();
 
 // =================================================================
@@ -48968,7 +48971,7 @@ function initApp() {
     if (tabName === 'mgmt-wa')            { try { LeadManagerModule._waUnmount(); } catch (_) {} WaChatModule.load(); }
     else                                  WaChatModule.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
-    if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();
+    if (tabName === 'mgmt-timetracking')  { if (window.TimesheetModule) TimesheetModule.open(); else TimerModule.loadReport(); }
     if (tabName === 'mgmt-empresa')       WorkspaceModule.load();
   }
 
