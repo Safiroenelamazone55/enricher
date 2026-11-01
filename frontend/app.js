@@ -48467,8 +48467,8 @@ const TimerModule = (() => {
     const sources = `<div class="ttd-card">
       <div class="ttd-card__hd"><span class="ttd-card__t">Fuentes de actividad</span></div>
       ${srcRow('Manual Timer', 'Registro manual desde Nova', 'on', srcBadge('on', running ? 'En curso' : 'Activo'))}
-      ${srcRow('Browser Extension', 'Webs y pestañas del navegador', hasExt ? 'on' : 'soon', hasExt ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimerModule.connectExtension()">Conectar</button>')}
-      ${srcRow('Desktop Agent', 'Apps de escritorio y todos los perfiles de Chrome', hasAgent ? 'on' : 'soon', hasAgent ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimerModule.connectExtension()">Conectar</button>')}
+      ${srcRow('Browser Extension', 'Webs y pestañas del navegador', hasExt ? 'on' : 'soon', hasExt ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimesheetModule.go(\'ajustes\',\'conexiones\')">Conectar</button>')}
+      ${srcRow('Desktop Agent', 'Apps de escritorio y todos los perfiles de Chrome', hasAgent ? 'on' : 'soon', hasAgent ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimesheetModule.go(\'ajustes\',\'conexiones\')">Conectar</button>')}
     </div>`;
 
     // ── Apps / Websites — datos REALES de fuentes externas (browser_extension / desktop_agent).
@@ -48502,7 +48502,7 @@ const TimerModule = (() => {
           <div class="ttd-empty__ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
           <p class="ttd-empty__t">Conecta Nova Extension o Desktop Agent</p>
           <p class="ttd-empty__s">Aquí verás las apps y websites en los que realmente trabajaste, fuera de Nova.</p>
-          <button class="hrm-lnk" type="button" onclick="window._novaSwitchTab && window._novaSwitchTab('herramientas')">Configuración → Herramientas ›</button>
+          <button class="hrm-lnk" type="button" onclick="typeof TimesheetModule!=='undefined'?TimesheetModule.go('ajustes','conexiones'):(window._novaSwitchTab && window._novaSwitchTab('herramientas'))">Configurar conexiones ›</button>
         </div>`;
     const _appsTotal = _appsList.reduce((a, x) => a + (x.dur || 0), 0);
     const appsCard = `<div class="ttd-card tt2-card">

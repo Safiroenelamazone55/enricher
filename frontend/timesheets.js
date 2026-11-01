@@ -34,6 +34,7 @@ const TimesheetModule = (() => {
     cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>', copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
   const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
+  try { const pf = JSON.parse(localStorage.getItem('ts_prefs') || '{}'); if (pf.view) S.view = pf.view; if (pf.hideWk) S.hideWk = true; if (pf.tab) S.tab = pf.tab; } catch (_) {}
   const api = async (u, o) => { const r = await apiFetch(API + u, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('Error ' + r.status)); return j; };
   const send = (u, m, b) => api(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
   const err = e => showBanner(e.message || String(e), 'error');
@@ -68,7 +69,7 @@ const TimesheetModule = (() => {
   }
 
   // ── esqueleto: pestañas + cuerpo ──
-  function active() { return S.tab !== 'reporte' && !!$('pane-mgmt-timetracking')?.classList.contains('active'); }
+  function active() { return S.tab !== 'informe' && !!$('pane-mgmt-timetracking')?.classList.contains('active'); }
   async function open() {
     if (!$('ts-root')) return;
     try { S.settings = await api('/timesheets/settings'); } catch (_) {}
@@ -77,14 +78,14 @@ const TimesheetModule = (() => {
   }
   function paint() {
     const root = $('ts-root'); if (!root) return;
-    const adm = isAdmin(), tab = (k, l) => `<button type="button" class="ts-tab${S.tab === k || (k === 'mi' && S.tab === 'detalle') ? ' on' : ''}" onclick="TimesheetModule.go('${k}')">${l}</button>`;
-    root.innerHTML = `<div class="ts-top"><span class="ts-ttl">${ic(IC.alarm, 17)}Hojas de horas</span><span class="ts-sep"></span>${tab('mi', 'Mi hoja de horas')}${adm ? tab('todas', 'Todas las hojas de horas') + tab('aprob', 'Aprobaciones') : ''}${tab('reporte', 'Reporte')}
+    const adm = isAdmin(), tab = (k, l) => `<button type="button" class="ts-tab${S.tab === k || (k === 'mi' && S.tab === 'detalle') || (k === 'dash' && S.tab === 'informe') ? ' on' : ''}" onclick="TimesheetModule.go('${k}')">${l}</button>`;
+    root.innerHTML = `<div class="ts-top"><span class="ts-ttl">${ic(IC.alarm, 17)}Hojas de horas</span><span class="ts-sep"></span>${tab('mi', 'Mi hoja de horas')}${adm ? tab('todas', 'Todas las hojas de horas') + tab('aprob', 'Aprobaciones') : ''}${tab('dash', 'Dashboard')}
       <span class="ts-sp"></span>${adm ? `<button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes')">${ic(IC.gear, 14)}Ajustes</button>` : ''}</div><div id="ts-body" class="ts-body"></div>`;
-    const wrap = $('tt-report-wrap'); if (wrap) wrap.style.display = S.tab === 'reporte' ? '' : 'none';
-    if (S.tab === 'reporte') { $('ts-body').innerHTML = ''; try { TimerModule.loadReport(); } catch (_) {} return; }
+    const wrap = $('tt-report-wrap'); if (wrap) wrap.style.display = S.tab === 'informe' ? '' : 'none';
+    if (S.tab === 'informe') { $('ts-body').innerHTML = `<div class="ts-back"><button type="button" class="ts-btn" onclick="TimesheetModule.go('dash')">${ic(IC.back, 14)}Volver al dashboard</button><span>Informe detallado: facturación, revisión de tiempo e impresión</span></div>`; try { TimerModule.loadReport(); } catch (_) {} return; }
     paintBody();
   }
-  function go(k) { popClose(); if (k === S.tab && k !== 'mi') return; if (k === 'mi') { S.member = null; S.memberId = null; S.fromTeam = false; } S.tab = k; paint(); }
+  function go(k, sec) { popClose(); if (k === 'ajustes' && sec) S.setSec = sec; if (k === S.tab && k !== 'mi' && !(k === 'ajustes' && sec)) return; if (k === 'mi') { S.member = null; S.memberId = null; S.fromTeam = false; } S.tab = k; paint(); }
   const refresh = () => { if (active()) paintBody(); };
   async function paintBody() {
     const b = $('ts-body'); if (!b) return;
@@ -92,6 +93,7 @@ const TimesheetModule = (() => {
       if (S.tab === 'mi' || S.tab === 'detalle') await bodyHoja();
       else if (S.tab === 'todas') await bodyTodas();
       else if (S.tab === 'aprob') await bodyAprob();
+      else if (S.tab === 'dash') await bodyDash();
       else if (S.tab === 'ajustes') bodyAjustes();
     } catch (e) { b.innerHTML = `<div class="ts-empty"><b>No se pudo cargar</b><span>${esc(e.message)}</span></div>`; }
   }
@@ -337,17 +339,8 @@ const TimesheetModule = (() => {
     const g = id => $(id).value; try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), { aprob_activas: true, limite_dia: +g('ts-ld'), limite_hora: g('ts-lh'), rec_antes_h: +g('ts-ra'), rec_despues_h: +g('ts-rd') }))); $('ts-modal')?.remove(); showBanner('✓ Aprobaciones configuradas', 'success'); paintBody(); } catch (e) { err(e); }
   }
 
-  // ── Ajustes · Cronograma de trabajo ──
-  function bodyAjustes() {
-    const b = $('ts-body'), c = cfg(), cap = hoursPerDay(), lunDom = [1, 2, 3, 4, 5, 6, 7], ab = ['lu', 'ma', 'mi', 'ju', 'vi', 'sá', 'do'];
-    const libres = (c.no_laborales || []).slice().sort((a, z) => a.fecha.localeCompare(z.fecha));
-    b.innerHTML = `<div class="ts-set"><div class="ts-set__hd"><button type="button" class="ts-ib" onclick="TimesheetModule.go('mi')" title="Volver">${ic(IC.back, 18)}</button><h2>Cronograma de trabajo</h2></div>
-      <p class="ts-set__p">Define el horario de trabajo de tu equipo para calcular la capacidad de las hojas de horas y anticipar el impacto de los días libres.</p>
-      <h3>Días laborables</h3><div class="ts-card"><span>Elige qué días trabaja tu equipo</span><div class="ts-days">${lunDom.map((d, i) => `<button type="button" class="ts-dchip${c.dias_laborales.includes(d) ? ' on' : ''}" onclick="TimesheetModule.toggleDia(${d})">${ab[i]}</button>`).join('')}</div></div>
-      <h3>Horas de trabajo</h3><div class="ts-card ts-card--col"><div class="ts-crow"><b>Horario</b><span>La misma hora todos los días</span></div><div class="ts-crow"><div><b>Horas diarias</b><small>Capacidad diaria: ${fmtH(cap * 3600)} • Capacidad semanal: ${fmtH(cap * 3600 * c.dias_laborales.length)}</small></div><div class="ts-hrs"><input type="time" id="ts-hi" value="${c.hora_ini}" onchange="TimesheetModule.saveHoras()"><span>a</span><input type="time" id="ts-hf" value="${c.hora_fin}" onchange="TimesheetModule.saveHoras()"></div></div></div>
-      <h3>Días no laborables</h3><div class="ts-card ts-card--col">${libres.length ? libres.map(x => `<div class="ts-crow"><div><b>${esc(x.nombre || 'Día libre')}</b><small>${dLong(x.fecha)} ${x.fecha.slice(0, 4)}</small></div><button type="button" class="ts-ib" title="Quitar" onclick="TimesheetModule.delLibre('${x.fecha}')">${ic(IC.x, 15)}</button></div>`).join('') : `<div class="ts-empty ts-empty--in"><div class="ts-empty__i">${ic(IC.cal, 34)}</div><b>Personaliza el horario de trabajo de tu equipo</b><span>Agrega días no laborables o excepciones para alinear la capacidad con la disponibilidad real.</span></div>`}<div class="ts-crow ts-crow--f"><button type="button" class="ts-btn" onclick="TimesheetModule.libreModal()">${ic(IC.plus, 14)}Añadir días libres</button></div></div></div>`;
-  }
-  async function saveCfg(patch) { try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), patch))); bodyAjustes(); } catch (e) { err(e); bodyAjustes(); } }
+  // ── Ajustes · Cronograma de trabajo: ver más abajo (menú lateral) ──
+  async function saveCfg(patch) { try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), patch))); drawSec(); } catch (e) { err(e); drawSec(); } }
   function toggleDia(d) { const cur = cfg().dias_laborales.slice(), i = cur.indexOf(d); if (i >= 0) { if (cur.length === 1) { showBanner('Debe haber al menos un día laborable', 'info'); return; } cur.splice(i, 1); } else cur.push(d); saveCfg({ dias_laborales: cur }); }
   // las horas se guardan sin repintar la página (si no, el campo pierde el foco a mitad de escribir) y con una pequeña espera
   let _hT = null;
@@ -373,6 +366,180 @@ const TimesheetModule = (() => {
     $('ts-modal')?.remove(); saveCfg({ no_laborales: out });
   }
 
-  return { open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
+  // ═════════ Dashboard (gráficas) ═════════
+  const PAL = ['#00804C', '#4C7DF0', '#F2A93B', '#8B5CF6', '#E5484D', '#17A6B7', '#D6409F', '#8B9690'];
+  const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const D = { period: 'week', anchor: todayL(), member: 'me', project: 'all' };
+  let _charts = [];
+  const killCharts = () => { _charts.forEach(c => { try { c.destroy(); } catch (_) {} }); _charts = []; };
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5) + 1;
+  function dashRange() {
+    const a = D.anchor;
+    if (D.period === 'week') { const s = monday(a), e = addD(s, 6); return { start: s, end: e, label: `${dShort(s)} - ${dShort(e)}` }; }
+    if (D.period === 'month') { const d = new Date(a + 'T12:00:00Z'), y = d.getUTCFullYear(), m = d.getUTCMonth(); return { start: new Date(Date.UTC(y, m, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(y, m + 1, 0, 12)).toISOString().slice(0, 10), label: `${cap1(MESL[m])} ${y}` }; }
+    const e = todayL(); return { start: addD(e, -29), end: e, label: 'Últimos 30 días' };
+  }
+  const prevRange = r => { const n = daysBetween(r.start, r.end); return { start: addD(r.start, -n), end: addD(r.start, -1) }; };
+  function dashNav(n) {
+    if (D.period === 'week') D.anchor = addD(D.anchor, 7 * n);
+    else if (D.period === 'month') { const d = new Date(D.anchor + 'T12:00:00Z'); D.anchor = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 15, 12)).toISOString().slice(0, 10); }
+    else return;
+    bodyDash();
+  }
+  function dashSet(k, v) { D[k] = v; if (k === 'period') D.anchor = todayL(); (k === 'member' || k === 'period') ? bodyDash() : drawDash(); }
+  async function bodyDash() {
+    const b = $('ts-body'); killCharts(); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
+    const r = dashRange(), p = prevRange(r), t0 = p.start < addD(r.end, -55) ? p.start : addD(r.end, -55), mq = D.member === 'me' ? '' : `&member=${encodeURIComponent(D.member)}`;
+    const [ents, team] = await Promise.all([api(`/timer/entries?start=${encodeURIComponent(t0 + 'T00:00:00-05:00')}&end=${encodeURIComponent(r.end + 'T23:59:59.999-05:00')}${mq}`), isAdmin() ? api('/timesheets/team?week_start=' + monday(todayL())).catch(() => null) : Promise.resolve(null)]);
+    S.dashEntries = Array.isArray(ents) ? ents : []; S.dashTeam = team; drawDash();
+  }
+  function heatGrid(list) {
+    const g = Array.from({ length: 7 }, () => Array(24).fill(0)), OFF = -5 * 3600e3;
+    list.forEach(e => { let t = new Date(e.started_at).getTime() + OFF; const t1 = (e.ended_at ? new Date(e.ended_at).getTime() : Date.now()) + OFF; let n = 0;
+      while (t < t1 && n++ < 48) { const d = new Date(t), nx = Math.min(t1, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours() + 1)); g[(d.getUTCDay() + 6) % 7][d.getUTCHours()] += (nx - t) / 1000; t = nx; } });
+    return g;
+  }
+  function drawDash() {
+    const b = $('ts-body'); if (!b || S.tab !== 'dash') return; killCharts();
+    const r = dashRange(), pr = prevRange(r), all = (S.dashEntries || []).filter(countable), adm = isAdmin();
+    const projOf = e => e.proj_nombre || e.project_nombre || 'Sin proyecto', projs = [...new Set(all.map(projOf))].sort();
+    if (D.project !== 'all' && !projs.includes(D.project)) D.project = 'all';
+    const sel = e => D.project === 'all' || projOf(e) === D.project, inR = (e, a, z) => { const d = limaDay(e.started_at); return d >= a && d <= z; };
+    const cur = all.filter(e => sel(e) && inR(e, r.start, r.end)), prv = all.filter(e => sel(e) && inR(e, pr.start, pr.end)), sum = l => l.reduce((a, e) => a + dur(e), 0);
+    const tot = sum(cur), totP = sum(prv), fact = sum(cur.filter(billable)), team = S.dashTeam, nP = D.member === 'all' ? Math.max(1, (team && team.personas.length) || 1) : 1;
+    let cap = 0; for (let d = r.start, n = 0; d <= r.end && n < 400; d = addD(d, 1), n++) cap += capDay(d); cap *= nP;
+    const tareas = new Set(cur.filter(e => e.task_id).map(e => e.task_id)).size, diasReg = new Set(cur.map(e => limaDay(e.started_at))).size;
+    const dlt = totP > 0 ? Math.round((tot - totP) / totP * 100) : null;
+    const kpi = (l, v, s, cls) => `<div class="tsd-k"><span>${l}</span><b>${v}</b><small class="${cls || ''}">${s}</small></div>`;
+    const kpis = kpi('Horas registradas', fmtH(tot), dlt == null ? 'Sin periodo anterior para comparar' : `${dlt >= 0 ? '▲ +' : '▼ '}${dlt}% vs. periodo anterior`, dlt == null ? '' : dlt >= 0 ? 'up' : 'dn')
+      + kpi('Capacidad usada', cap ? Math.round(tot / cap * 100) + '%' : '—', `de ${fmtH(cap)} disponibles`) + kpi('Facturables', fmtH(fact), `${tot ? Math.round(fact / tot * 100) : 0}% del total`)
+      + kpi('Tareas trabajadas', tareas, `${diasReg} día${diasReg === 1 ? '' : 's'} con registro`) + kpi('Promedio diario', fmtH(diasReg ? tot / diasReg : 0), 'por día con registro');
+    const top = (list, keyF, n) => { const m = new Map(); list.forEach(e => { const k = keyF(e); m.set(k, (m.get(k) || 0) + dur(e)); }); return [...m.entries()].sort((a, z) => z[1] - a[1]).slice(0, n); };
+    let byProj = top(cur, projOf, 99); if (byProj.length > 7) { const rest = byProj.slice(7).reduce((a, x) => a + x[1], 0); byProj = byProj.slice(0, 7).concat([['Otros', rest]]); }
+    const byTask = top(cur, e => e.task_titulo || 'Sin tarea', 8), byClient = top(cur, e => e.client_nombre || 'Sin cliente', 8);
+    const names = {}; if (team) team.personas.forEach(p => { names[p.user_id] = p.nombre; });
+    const byPers = D.member === 'all' ? top(cur, e => names[e.user_id] || ('Usuario ' + e.user_id), 10) : [];
+    const days = []; for (let d = r.start, n = 0; d <= r.end && n < 62; d = addD(d, 1), n++) days.push(d);
+    const dayF = {}, dayN = {}; cur.forEach(e => { const d = limaDay(e.started_at), h = dur(e) / 3600, o = billable(e) ? dayF : dayN; o[d] = (o[d] || 0) + h; });
+    const mw = monday(r.end), weeks = Array.from({ length: 8 }, (_, i) => addD(mw, -7 * (7 - i)));
+    const wTot = weeks.map(w => sum(all.filter(e => sel(e) && inR(e, w, addD(w, 6)))) / 3600), wCap = weeks.map(w => Array.from({ length: 7 }, (_, i) => capDay(addD(w, i))).reduce((a, x) => a + x, 0) / 3600 * nP);
+    const hg = heatGrid(cur), hmax = Math.max(1, ...hg.flat());
+    const ext = {}; (S.dashEntries || []).filter(e => !countable(e) && inR(e, r.start, r.end)).forEach(e => { let m = e.metadata; if (typeof m === 'string') { try { m = JSON.parse(m); } catch (_) { m = {}; } } m = m || {}; const web = e.source === 'browser_extension', nm = (web ? m.websiteDomain : m.appName) || ''; if (!nm) return; const k = (web ? 'w' : 'a') + nm; (ext[k] = ext[k] || { nm, web, s: 0 }).s += dur(e); });
+    const extL = Object.values(ext).sort((a, z) => z.s - a.s).slice(0, 6), extMax = extL.length ? extL[0].s : 1;
+    const seg = (k, l) => `<button type="button" class="${D.period === k ? 'on' : ''}" onclick="TimesheetModule.dashSet('period','${k}')">${l}</button>`;
+    const memSel = adm && team ? `<select class="ts-sel" onchange="TimesheetModule.dashSet('member',this.value)"><option value="me"${D.member === 'me' ? ' selected' : ''}>Mi tiempo</option><option value="all"${D.member === 'all' ? ' selected' : ''}>Todo el equipo</option>${team.personas.map(p => `<option value="${esc(p.nombre)}"${D.member === p.nombre ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>` : '';
+    const prSel = `<select class="ts-sel" onchange="TimesheetModule.dashSet('project',this.value)"><option value="all">Todos los proyectos</option>${projs.map(p => `<option value="${esc(p)}"${D.project === p ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>`;
+    const card = (cls, t, body, sub) => `<div class="tsd-card ${cls}"><div class="tsd-ch0"><h4>${t}</h4>${sub ? `<span>${sub}</span>` : ''}</div>${body}</div>`;
+    const legend = byProj.map((x, i) => `<div class="tsd-lg"><i style="background:${PAL[i % PAL.length]}"></i><span>${esc(x[0])}</span><b>${fmtH(x[1])}</b><em>${tot ? Math.round(x[1] / tot * 100) : 0}%</em></div>`).join('');
+    const hours = Array.from({ length: 24 }, (_, h) => h), DS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const heat = `<div class="tsd-heat"><div class="tsd-heat__h"><span></span>${hours.map(h => `<em>${h % 3 === 0 ? h : ''}</em>`).join('')}</div>${hg.map((row, di) => `<div class="tsd-heat__r"><span>${DS[di]}</span>${row.map((v, h) => `<i title="${DS[di]} ${h}:00 · ${fmtH(v)}" style="--a:${v ? (0.14 + 0.86 * v / hmax).toFixed(2) : 0}"></i>`).join('')}</div>`).join('')}</div>`;
+    const apps = extL.length ? `<div class="tsd-apps">${extL.map(x => `<div class="tsd-app"><span class="tsd-app__n">${ic(x.web ? '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/>' : '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>', 15)}${esc(x.nm)}</span><i><u style="width:${Math.round(x.s / extMax * 100)}%"></u></i><b>${fmtH(x.s)}</b></div>`).join('')}</div>`
+      : `<div class="ts-empty ts-empty--in tsd-emp"><span>Conecta la extensión del navegador o el agente de escritorio para ver aquí las apps y sitios donde realmente trabajaste.</span><button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes','conexiones')">${ic(IC.gear, 14)}Configurar conexiones</button></div>`;
+    const none = !cur.length;
+    const empty = '<div class="tsd-none">Sin registros en este periodo</div>';
+    b.innerHTML = `<div class="tsd-top"><div class="ts-seg">${seg('week', 'Semana')}${seg('month', 'Mes')}${seg('30d', 'Últimos 30 días')}</div>
+        ${D.period === '30d' ? `<b class="tsd-lbl">${r.label}</b>` : `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(1)">${ic(IC.right, 17)}</button><b class="tsd-lbl">${r.label}</b></div>`}
+        <span class="ts-sp"></span>${memSel}${prSel}<button type="button" class="ts-btn" onclick="TimesheetModule.go('informe')">${ic(IC.list, 14)}Informe detallado</button></div>
+      <div class="tsd-kpis">${kpis}</div>
+      <div class="tsd-grid">
+        ${card('tsd-c8', 'Horas por día', none ? empty : '<div class="tsd-ch"><canvas id="tsd-a"></canvas></div>', 'facturable y no facturable frente a la capacidad')}
+        ${card('tsd-c4', 'Por proyecto', none ? empty : `<div class="tsd-ch tsd-ch--d"><canvas id="tsd-b"></canvas><div class="tsd-dc"><b>${fmtH(tot)}</b><span>total</span></div></div><div class="tsd-lgs">${legend}</div>`)}
+        ${card('tsd-c6', 'Tendencia de 8 semanas', '<div class="tsd-ch"><canvas id="tsd-c"></canvas></div>', 'horas por semana')}
+        ${card('tsd-c6', 'Tareas con más horas', none ? empty : '<div class="tsd-ch"><canvas id="tsd-d"></canvas></div>')}
+        ${card('tsd-c8', 'Cuándo trabajas', none ? empty : heat, 'intensidad por día y hora (hora de Lima)')}
+        ${card('tsd-c4', D.member === 'all' ? 'Por persona' : 'Por cliente', none ? empty : '<div class="tsd-ch"><canvas id="tsd-f"></canvas></div>')}
+        ${card('tsd-c12', 'Apps y sitios usados', apps, 'registrados por la extensión o el agente')}
+      </div>`;
+    if (typeof Chart === 'undefined') return;
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; Chart.defaults.color = '#5F6B64';
+    const hh = v => v + 'h', grid = { color: '#EEF0EE' }, tipH = c => `${c.dataset.label ? c.dataset.label + ': ' : ''}${fmtH((c.parsed.y != null && c.chart.options.indexAxis !== 'y' ? c.parsed.y : c.parsed.x) * 3600)}`;
+    const mk = (id, cfg) => { const el = $(id); if (el) _charts.push(new Chart(el, cfg)); };
+    const base = { responsive: true, maintainAspectRatio: false };
+    if (!none) {
+      mk('tsd-a', { type: 'bar', data: { labels: days.map(d => D.period === 'week' ? `${DOW[dowIdx(d)].slice(0, 3)} ${+d.slice(8)}` : String(+d.slice(8))), datasets: [
+        { label: 'Facturable', data: days.map(d => +(dayF[d] || 0).toFixed(2)), backgroundColor: '#00804C', borderRadius: 4, stack: 'h', maxBarThickness: 34 },
+        { label: 'No facturable', data: days.map(d => +(dayN[d] || 0).toFixed(2)), backgroundColor: '#B9D8C9', borderRadius: 4, stack: 'h', maxBarThickness: 34 },
+        { type: 'line', label: 'Capacidad', data: days.map(d => capDay(d) / 3600 * nP), borderColor: '#8B9690', borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, stepped: true }] },
+        options: Object.assign({}, base, { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: tipH } } }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { callback: hh }, grid } } }) });
+      mk('tsd-b', { type: 'doughnut', data: { labels: byProj.map(x => x[0]), datasets: [{ data: byProj.map(x => +(x[1] / 3600).toFixed(2)), backgroundColor: byProj.map((_, i) => PAL[i % PAL.length]), borderWidth: 0 }] }, options: Object.assign({}, base, { cutout: '70%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label}: ${fmtH(c.parsed * 3600)}` } } } }) });
+      mk('tsd-d', { type: 'bar', data: { labels: byTask.map(x => x[0].length > 36 ? x[0].slice(0, 35) + '…' : x[0]), datasets: [{ data: byTask.map(x => +(x[1] / 3600).toFixed(2)), backgroundColor: '#00804C', borderRadius: 4, maxBarThickness: 18 }] }, options: Object.assign({}, base, { indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: tipH } } }, scales: { x: { beginAtZero: true, ticks: { callback: hh }, grid }, y: { grid: { display: false } } } }) });
+      const pl = D.member === 'all' ? byPers : byClient;
+      mk('tsd-f', { type: 'bar', data: { labels: pl.map(x => x[0].length > 26 ? x[0].slice(0, 25) + '…' : x[0]), datasets: [{ data: pl.map(x => +(x[1] / 3600).toFixed(2)), backgroundColor: '#4C7DF0', borderRadius: 4, maxBarThickness: 18 }] }, options: Object.assign({}, base, { indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: tipH } } }, scales: { x: { beginAtZero: true, ticks: { callback: hh }, grid }, y: { grid: { display: false } } } }) });
+    }
+    mk('tsd-c', { type: 'line', data: { labels: weeks.map(w => dShort(w)), datasets: [
+      { label: 'Horas', data: wTot.map(v => +v.toFixed(2)), borderColor: '#00804C', backgroundColor: 'rgba(0,128,76,.10)', fill: true, tension: .15, pointRadius: 3, pointBackgroundColor: '#00804C', borderWidth: 2 },
+      { label: 'Capacidad', data: wCap, borderColor: '#8B9690', borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 }] },
+      options: Object.assign({}, base, { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: tipH } } }, scales: { x: { grid: { display: false } }, y: { min: 0, beginAtZero: true, ticks: { callback: hh }, grid } } }) });
+  }
+
+  // ═════════ Ajustes (menú lateral estilo «Todos los ajustes») ═════════
+  const SECS = [['h', 'Hojas de horas'], ['cronograma', 'Cronograma de trabajo'], ['capacidad', 'Capacidad por persona'], ['aprob', 'Aprobaciones'], ['etiquetas', 'Etiquetas de tiempo'], ['h', 'Conexiones'], ['conexiones', 'Extensión y agente'], ['h', 'Mis ajustes'], ['prefs', 'Preferencias'], ['h', 'Administrador'], ['registro', 'Registro de actividad']];
+  function bodyAjustes() {
+    const b = $('ts-body'); if (!b) return; S.setSec = S.setSec || 'cronograma';
+    b.innerHTML = `<div class="ts-sl"><nav class="ts-sn"><div class="ts-sn__t"><button type="button" class="ts-ib" onclick="TimesheetModule.go('mi')" title="Volver">${ic(IC.back, 18)}</button>Ajustes</div>${SECS.map(([k, l]) => k === 'h' ? `<div class="ts-sn__h">${l}</div>` : `<button type="button" class="ts-sn__i${S.setSec === k ? ' on' : ''}" onclick="TimesheetModule.setSec('${k}')">${l}</button>`).join('')}</nav><div class="ts-sc" id="ts-sc"></div></div>`;
+    drawSec();
+  }
+  function setSec(k) { S.setSec = k; bodyAjustes(); }
+  function drawSec() { const f = { cronograma: secCronograma, capacidad: secCapacidad, aprob: secAprob, etiquetas: secEtiquetas, conexiones: secConexiones, prefs: secPrefs, registro: secRegistro }[S.setSec] || secCronograma; f(); }
+  const secHd = (t, p) => `<div class="ts-set__hd"><h2>${t}</h2></div><p class="ts-set__p ts-set__p--0">${p}</p>`;
+  function secCronograma() {
+    const c = cfg(), cap = hoursPerDay(), ab = ['lu', 'ma', 'mi', 'ju', 'vi', 'sá', 'do'], libres = (c.no_laborales || []).slice().sort((a, z) => a.fecha.localeCompare(z.fecha));
+    $('ts-sc').innerHTML = `${secHd('Cronograma de trabajo', 'Define el horario de trabajo de tu equipo para calcular la capacidad de las hojas de horas y anticipar el impacto de los días libres.')}
+      <h3>Días laborables</h3><div class="ts-card"><span>Elige qué días trabaja tu equipo</span><div class="ts-days">${[1, 2, 3, 4, 5, 6, 7].map((d, i) => `<button type="button" class="ts-dchip${c.dias_laborales.includes(d) ? ' on' : ''}" onclick="TimesheetModule.toggleDia(${d})">${ab[i]}</button>`).join('')}</div></div>
+      <h3>Horas de trabajo</h3><div class="ts-card ts-card--col"><div class="ts-crow"><b>Horario</b><span>La misma hora todos los días</span></div><div class="ts-crow"><div><b>Horas diarias</b><small>Capacidad diaria: ${fmtH(cap * 3600)} • Capacidad semanal: ${fmtH(cap * 3600 * c.dias_laborales.length)}</small></div><div class="ts-hrs"><input type="time" id="ts-hi" value="${c.hora_ini}" onchange="TimesheetModule.saveHoras()"><span>a</span><input type="time" id="ts-hf" value="${c.hora_fin}" onchange="TimesheetModule.saveHoras()"></div></div></div>
+      <h3>Días no laborables</h3><div class="ts-card ts-card--col">${libres.length ? libres.map(x => `<div class="ts-crow"><div><b>${esc(x.nombre || 'Día libre')}</b><small>${dLong(x.fecha)} ${x.fecha.slice(0, 4)}</small></div><button type="button" class="ts-ib" title="Quitar" onclick="TimesheetModule.delLibre('${x.fecha}')">${ic(IC.x, 15)}</button></div>`).join('') : `<div class="ts-empty ts-empty--in"><div class="ts-empty__i">${ic(IC.cal, 34)}</div><b>Personaliza el horario de trabajo de tu equipo</b><span>Agrega días no laborables o excepciones para alinear la capacidad con la disponibilidad real.</span></div>`}<div class="ts-crow ts-crow--f"><button type="button" class="ts-btn" onclick="TimesheetModule.libreModal()">${ic(IC.plus, 14)}Añadir días libres</button></div></div>`;
+  }
+  async function secCapacidad() {
+    const sc = $('ts-sc'); sc.innerHTML = secHd('Capacidad por persona', 'Por defecto cada persona tiene la capacidad del cronograma de trabajo. Cambia aquí las horas semanales de quien trabaja a medio tiempo o con otro horario.') + '<div class="ts-loading">Cargando…</div>';
+    const t = await api('/timesheets/team?week_start=' + monday(todayL())); if (S.tab !== 'ajustes' || S.setSec !== 'capacidad') return; const def = fmtH(t.capacidad_s);
+    sc.innerHTML = secHd('Capacidad por persona', 'Por defecto cada persona tiene la capacidad del cronograma de trabajo. Cambia aquí las horas semanales de quien trabaja a medio tiempo o con otro horario.')
+      + `<div class="ts-card ts-card--col">${(t.personas || []).map(p => `<div class="ts-crow"><div class="ts-pp"><span class="ts-av">${esc(ini(p.nombre))}</span><div><b>${esc(p.nombre)}</b><small>${p.capacidad_h_override != null ? 'Capacidad personalizada' : 'Usa la capacidad general (' + def + ')'}</small></div></div><div class="ts-hrs"><input type="number" min="0" max="168" step="0.5" class="ts-num" value="${p.capacidad_h_override != null ? p.capacidad_h_override : ''}" placeholder="${(t.capacidad_s / 3600).toFixed(1).replace('.0', '')}" onchange="TimesheetModule.saveCap(${p.user_id},this.value)"><span>h / semana</span>${p.capacidad_h_override != null ? `<button type="button" class="ts-btn" onclick="TimesheetModule.saveCap(${p.user_id},'')">Restablecer</button>` : ''}</div></div>`).join('')}</div>`;
+  }
+  async function saveCap(uid, v) {
+    const m = Object.assign({}, cfg().cap_personas || {}); if (v === '' || v == null) delete m[uid]; else m[uid] = Number(v);
+    try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), { cap_personas: m }))); showBanner('✓ Capacidad actualizada', 'success'); secCapacidad(); } catch (e) { err(e); secCapacidad(); }
+  }
+  function secAprob() {
+    const c = cfg(), lim = `${DIAS[c.limite_dia - 1]} ${hm('2000-01-01T' + c.limite_hora + ':00-05:00')}`;
+    $('ts-sc').innerHTML = `${secHd('Aprobaciones', 'Cada persona envía su hoja de la semana y un administrador la aprueba o la devuelve. Al aprobarla, sus entradas quedan bloqueadas.')}
+      <div class="ts-card"><div><b>Aprobaciones de hojas de horas</b><small class="ts-sm">${c.aprob_activas ? 'Activadas: cada semana se envía una hoja por persona.' : 'Desactivadas: las hojas no necesitan aprobación.'}</small></div><label class="ts-sw"><input type="checkbox" ${c.aprob_activas ? 'checked' : ''} onchange="TimesheetModule.toggleAprob(this.checked)"><i></i></label></div>
+      ${c.aprob_activas ? `<h3>Plazo y recordatorios</h3><div class="ts-card ts-card--col"><div class="ts-crow"><span>Fecha límite de entrega</span><b>${lim}</b></div><div class="ts-crow"><span>Recordar antes de la fecha límite</span><b>${c.rec_antes_h ? c.rec_antes_h + ' h antes' : 'Nunca'}</b></div><div class="ts-crow"><span>Recordar después de la fecha límite</span><b>${c.rec_despues_h ? c.rec_despues_h + ' h después' : 'Nunca'}</b></div><div class="ts-crow ts-crow--f"><button type="button" class="ts-btn" onclick="TimesheetModule.deadlineModal()">${ic(IC.clock, 14)}Editar fecha límite y recordatorios</button></div></div>` : ''}`;
+  }
+  async function toggleAprob(v) { if (v && !cfg().aprob_activas) { deadlineModal(); drawSec(); return; } try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), { aprob_activas: !!v }))); drawSec(); } catch (e) { err(e); drawSec(); } }
+  async function secEtiquetas() {
+    const sc = $('ts-sc'), hd = secHd('Etiquetas de tiempo', 'Las etiquetas que tu equipo pone a las entradas de tiempo. Renombra una para corregirla, o dale el nombre de otra para unirlas.');
+    sc.innerHTML = hd + '<div class="ts-loading">Cargando…</div>'; const l = await api('/timesheets/tags'); if (S.tab !== 'ajustes' || S.setSec !== 'etiquetas') return;
+    sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><span class="ts-tg">${esc(x.tag)}</span><small class="ts-sm">${x.n} entrada${x.n === 1 ? '' : 's'}</small></div><div class="ts-hrs"><button type="button" class="ts-btn" data-t="${esc(x.tag)}" onclick="TimesheetModule.tagRename(this.dataset.t)">Renombrar</button><button type="button" class="ts-btn" data-t="${esc(x.tag)}" onclick="TimesheetModule.tagRemove(this.dataset.t)">Quitar</button></div></div>`).join('')}</div>` : `<div class="ts-empty"><div class="ts-empty__i">${ic(IC.tag, 34)}</div><b>Aún no hay etiquetas</b><span>Se crean desde la vista «Entradas de tiempo», con el icono de etiqueta de cada entrada.</span></div>`);
+  }
+  async function tagRename(t) { const to = prompt(`Nuevo nombre para «${t}» (si ya existe, se unen):`, t); if (to == null || !to.trim() || to.trim() === t) return; try { const j = await send('/timesheets/tags/rename', 'POST', { from: t, to: to.trim() }); showBanner(`✓ ${j.entradas} entrada(s) actualizada(s)`, 'success'); secEtiquetas(); } catch (e) { err(e); } }
+  async function tagRemove(t) { if (!confirm(`¿Quitar la etiqueta «${t}» de todas las entradas?`)) return; try { const j = await send('/timesheets/tags/rename', 'POST', { from: t, to: '' }); showBanner(`✓ Etiqueta quitada de ${j.entradas} entrada(s)`, 'success'); secEtiquetas(); } catch (e) { err(e); } }
+  const ago = d => { if (!d) return 'nunca'; const s = Math.max(0, (Date.now() - new Date(d).getTime()) / 1000); return s < 3600 ? 'hace ' + Math.max(1, Math.floor(s / 60)) + ' min' : s < 86400 ? 'hace ' + Math.floor(s / 3600) + ' h' : 'hace ' + Math.floor(s / 86400) + ' d'; };
+  async function secConexiones() {
+    const sc = $('ts-sc'), hd = secHd('Extensión y agente', 'Conecta la extensión del navegador o el agente de escritorio para registrar en qué webs y apps trabajas fuera de Nova. Esas horas confirman tu actividad; no se suman dos veces.');
+    sc.innerHTML = hd + '<div class="ts-loading">Cargando…</div>'; const c = await api('/timesheets/connections'); if (S.tab !== 'ajustes' || S.setSec !== 'conexiones') return;
+    const f = c.fuentes || {}, src = (k, t, d, icon) => { const x = f[k]; return `<div class="ts-card ts-cx"><span class="ts-cx__i">${ic(icon, 22)}</span><div><b>${t}</b><small class="ts-sm">${d}</small></div><span class="ts-st ${x ? 'ts-st--aprobada' : ''}">${x ? `Activo · ${x.n} registros (30 d) · ${ago(x.ultimo)}` : 'Sin conexión'}</span></div>`; };
+    sc.innerHTML = hd + src('browser_extension', 'Extensión del navegador', 'Webs y pestañas del navegador', '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/>')
+      + src('desktop_agent', 'Agente de escritorio', 'Apps de escritorio y todos los perfiles de Chrome', '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>')
+      + `<h3>Token de conexión</h3><div class="ts-card"><div><b>Generar un token</b><small class="ts-sm">Un mismo token conecta el agente y la extensión. Se muestra una sola vez: cópialo y pégalo en el instalador o en la extensión.</small></div><button type="button" class="ts-btn ts-btn--p" onclick="TimerModule.connectExtension()">${ic(IC.plus, 14)}Generar token</button></div>`
+      + (c.tokens.length ? `<h3>Tokens activos</h3><div class="ts-card ts-card--col">${c.tokens.map(t => `<div class="ts-crow"><div><b>${esc(t.label || 'Token')}</b><small class="ts-sm">Creado ${ago(t.created_at)} · último uso ${ago(t.last_used_at)}</small></div><button type="button" class="ts-btn" onclick="TimesheetModule.revokeToken(${t.id})">Revocar</button></div>`).join('')}</div>` : '');
+  }
+  async function revokeToken(id) { if (!confirm('¿Revocar este token? El agente o la extensión que lo use dejará de registrar.')) return; try { await api('/timesheets/tokens/' + id, { method: 'DELETE' }); showBanner('Token revocado', 'success'); secConexiones(); } catch (e) { err(e); } }
+  const prefs = () => { try { return JSON.parse(localStorage.getItem('ts_prefs') || '{}'); } catch (_) { return {}; } };
+  function setPref(k, v) { const p = prefs(); p[k] = v; try { localStorage.setItem('ts_prefs', JSON.stringify(p)); } catch (_) {} if (k === 'view') S.view = v; if (k === 'hideWk') S.hideWk = !!v; showBanner('✓ Preferencia guardada', 'success'); }
+  function secPrefs() {
+    const p = prefs(), opt = (v, l, cur) => `<option value="${v}"${cur === v ? ' selected' : ''}>${l}</option>`;
+    $('ts-sc').innerHTML = `${secHd('Preferencias', 'Cómo quieres ver las hojas de horas. Se guardan solo en este navegador.')}
+      <div class="ts-card ts-card--col"><div class="ts-crow"><b>Pestaña inicial</b><select class="ts-sel" onchange="TimesheetModule.setPref('tab',this.value)">${opt('mi', 'Mi hoja de horas', p.tab || 'mi')}${opt('dash', 'Dashboard', p.tab || 'mi')}</select></div>
+        <div class="ts-crow"><b>Vista de la hoja</b><select class="ts-sel" onchange="TimesheetModule.setPref('view',this.value)">${opt('hoja', 'Hoja de horas', p.view || 'hoja')}${opt('entradas', 'Entradas de tiempo', p.view || 'hoja')}</select></div>
+        <div class="ts-crow"><b>Ocultar fines de semana</b><label class="ts-sw"><input type="checkbox" ${p.hideWk ? 'checked' : ''} onchange="TimesheetModule.setPref('hideWk',this.checked)"><i></i></label></div></div>`;
+  }
+  const ACC = { ajustes: 'Ajustes', enviar: 'Hoja enviada', aprobar: 'Hoja aprobada', rechazar: 'Hoja rechazada', reabrir: 'Hoja reabierta', etiquetas: 'Etiquetas', token: 'Token' };
+  async function secRegistro() {
+    const sc = $('ts-sc'), hd = secHd('Registro de actividad', 'Cambios de configuración, envíos y aprobaciones de las hojas de horas (los últimos 100).');
+    sc.innerHTML = hd + '<div class="ts-loading">Cargando…</div>'; const l = await api('/timesheets/audit'); if (S.tab !== 'ajustes' || S.setSec !== 'registro') return;
+    sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><b>${esc(ACC[x.accion] || x.accion)}</b><small class="ts-sm">${esc(x.actor_name || 'Alguien')} · ${esc(x.detalle)}</small></div><small class="ts-sm">${new Date(x.created_at).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')}</div>` : `<div class="ts-empty"><b>Todavía no hay actividad registrada</b><span>Aquí aparecerán los cambios y aprobaciones desde ahora.</span></div>`);
+  }
+
+  return { dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
     submit, review, memberMenu, setMember, openMember, deadlineModal, saveDeadline, toggleDia, saveHoras, delLibre, libreModal, saveLibre };
 })();

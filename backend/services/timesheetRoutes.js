@@ -20,6 +20,9 @@ function mount(app, { pool, requireAuth }) {
       await pool.query(`CREATE TABLE IF NOT EXISTS ts_submissions (
         id SERIAL PRIMARY KEY, workspace_id INTEGER NOT NULL, user_id INTEGER NOT NULL, week_start DATE NOT NULL, status TEXT NOT NULL DEFAULT 'enviada',
         submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), reviewed_by INTEGER, reviewed_at TIMESTAMPTZ, nota TEXT NOT NULL DEFAULT '', UNIQUE (user_id, week_start))`);
+      await pool.query(`ALTER TABLE ts_settings ADD COLUMN IF NOT EXISTS cap_personas JSONB NOT NULL DEFAULT '{}'::jsonb`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS ts_audit (id SERIAL PRIMARY KEY, workspace_id INTEGER NOT NULL, actor_id INTEGER, actor_name TEXT NOT NULL DEFAULT '', accion TEXT NOT NULL, detalle TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS ts_audit_ws ON ts_audit(workspace_id, id DESC)`);
       await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS facturable BOOLEAN`);
       await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS etiquetas JSONB NOT NULL DEFAULT '[]'::jsonb`);
     } catch (e) { console.warn('[timesheets] init', e.message); }
@@ -30,10 +33,11 @@ function mount(app, { pool, requireAuth }) {
     const rr = await pool.query(`SELECT rol FROM team_members WHERE user_id=$1 AND email=(SELECT email FROM users WHERE id=$2)`, [wid, uid]);
     return ['admin', 'manager'].includes(rr.rows[0] && rr.rows[0].rol || '');
   };
+  const audit = (req, accion, detalle) => pool.query(`INSERT INTO ts_audit (workspace_id, actor_id, actor_name, accion, detalle) VALUES ($1,$2,$3,$4,$5)`, [req.workspaceOwnerId, req.user.id, (req.user && req.user.name) || '', accion, String(detalle || '').slice(0, 300)]).catch(() => {});
   const getSettings = async wid => {
     const { rows: [r] } = await pool.query(`SELECT * FROM ts_settings WHERE user_id=$1`, [wid]);
-    const s = r || { dias_laborales: [1, 2, 3, 4, 5], hora_ini: '09:00', hora_fin: '17:00', no_laborales: [], aprob_activas: false, limite_dia: 5, limite_hora: '17:00', rec_antes_h: 24, rec_despues_h: 8 };
-    return { dias_laborales: s.dias_laborales, hora_ini: s.hora_ini, hora_fin: s.hora_fin, no_laborales: s.no_laborales || [], aprob_activas: !!s.aprob_activas, limite_dia: s.limite_dia, limite_hora: s.limite_hora, rec_antes_h: s.rec_antes_h, rec_despues_h: s.rec_despues_h };
+    const s = r || { dias_laborales: [1, 2, 3, 4, 5], hora_ini: '09:00', hora_fin: '17:00', no_laborales: [], aprob_activas: false, limite_dia: 5, limite_hora: '17:00', rec_antes_h: 24, rec_despues_h: 8, cap_personas: {} };
+    return { cap_personas: s.cap_personas || {}, dias_laborales: s.dias_laborales, hora_ini: s.hora_ini, hora_fin: s.hora_fin, no_laborales: s.no_laborales || [], aprob_activas: !!s.aprob_activas, limite_dia: s.limite_dia, limite_hora: s.limite_hora, rec_antes_h: s.rec_antes_h, rec_despues_h: s.rec_despues_h };
   };
   // capacidad (segundos) de una semana que empieza el lunes ws
   const capacidad = (s, ws) => {
@@ -56,13 +60,16 @@ function mount(app, { pool, requireAuth }) {
       const hi = isoT(b.hora_ini) || cur.hora_ini, hf = isoT(b.hora_fin) || cur.hora_fin;
       if (hrs(hi, hf) <= 0) return res.status(400).json({ error: 'La hora de fin debe ser posterior a la de inicio' });
       const libres = Array.isArray(b.no_laborales) ? b.no_laborales.map(x => ({ fecha: isoD(x && x.fecha), nombre: String(x && x.nombre || '').trim().slice(0, 60) })).filter(x => x.fecha).slice(0, 200) : cur.no_laborales;
+      let capP = cur.cap_personas || {};
+      if (b.cap_personas && typeof b.cap_personas === 'object') { capP = {}; for (const [k, v] of Object.entries(b.cap_personas)) { const id = parseInt(k, 10), h = Number(v); if (id && Number.isFinite(h) && h >= 0 && h <= 168) capP[id] = Math.round(h * 100) / 100; } }
       const lim = b.limite_dia != null ? Math.min(7, Math.max(1, parseInt(b.limite_dia, 10) || cur.limite_dia)) : cur.limite_dia;
       const rec = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 && n <= 168 ? n : d; };
-      await pool.query(`INSERT INTO ts_settings (user_id, dias_laborales, hora_ini, hora_fin, no_laborales, aprob_activas, limite_dia, limite_hora, rec_antes_h, rec_despues_h, updated_at)
-        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,NOW())
+      await pool.query(`INSERT INTO ts_settings (user_id, dias_laborales, hora_ini, hora_fin, no_laborales, aprob_activas, limite_dia, limite_hora, rec_antes_h, rec_despues_h, cap_personas, updated_at)
+        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11::jsonb,NOW())
         ON CONFLICT (user_id) DO UPDATE SET dias_laborales=EXCLUDED.dias_laborales, hora_ini=EXCLUDED.hora_ini, hora_fin=EXCLUDED.hora_fin, no_laborales=EXCLUDED.no_laborales, aprob_activas=EXCLUDED.aprob_activas,
-          limite_dia=EXCLUDED.limite_dia, limite_hora=EXCLUDED.limite_hora, rec_antes_h=EXCLUDED.rec_antes_h, rec_despues_h=EXCLUDED.rec_despues_h, updated_at=NOW()`,
-        [wid, dias, hi, hf, JSON.stringify(libres), b.aprob_activas != null ? !!b.aprob_activas : cur.aprob_activas, lim, isoT(b.limite_hora) || cur.limite_hora, rec(b.rec_antes_h, cur.rec_antes_h), rec(b.rec_despues_h, cur.rec_despues_h)]);
+          limite_dia=EXCLUDED.limite_dia, limite_hora=EXCLUDED.limite_hora, rec_antes_h=EXCLUDED.rec_antes_h, rec_despues_h=EXCLUDED.rec_despues_h, cap_personas=EXCLUDED.cap_personas, updated_at=NOW()`,
+        [wid, dias, hi, hf, JSON.stringify(libres), b.aprob_activas != null ? !!b.aprob_activas : cur.aprob_activas, lim, isoT(b.limite_hora) || cur.limite_hora, rec(b.rec_antes_h, cur.rec_antes_h), rec(b.rec_despues_h, cur.rec_despues_h), JSON.stringify(capP)]);
+      audit(req, 'ajustes', b.cap_personas ? 'Capacidad por persona actualizada' : b.aprob_activas != null && b.aprob_activas !== cur.aprob_activas ? (b.aprob_activas ? 'Aprobaciones activadas' : 'Aprobaciones desactivadas') : 'Cronograma o plazos de la hoja de horas actualizados');
       res.json(await getSettings(wid));
     } catch (e) { console.error('[timesheets] settings', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
   });
@@ -91,8 +98,8 @@ function mount(app, { pool, requireAuth }) {
       const p = people.get(r.user_id);
       if (r.dia) { p.dias[r.dia] = r.seg; p.total += r.seg; p.facturable += r.fact; p.aprobadas += Number(r.aprobadas); p.entradas += Number(r.total); }
     }
-    const cap = capacidad(s, ws);
-    return { week_start: ws, capacidad_s: cap, personas: [...people.values()].map(p => { const sb = subBy.get(p.user_id); return { ...p, capacidad_s: cap, excede_s: Math.max(0, p.total - cap), estado: sb ? sb.status : 'pendiente', nota: sb ? sb.nota : '', enviada_at: sb ? sb.submitted_at : null }; }), settings: s };
+    const cap = capacidad(s, ws), base = (s.dias_laborales.length * hrs(s.hora_ini, s.hora_fin) * 3600) || 1, capOf = id => { const o = (s.cap_personas || {})[id]; return o == null ? cap : Math.round(o * 3600 * (cap / base)); };
+    return { week_start: ws, capacidad_s: cap, personas: [...people.values()].map(p => { const sb = subBy.get(p.user_id), cp = capOf(p.user_id); return { ...p, capacidad_s: cp, capacidad_h_override: (s.cap_personas || {})[p.user_id] != null ? s.cap_personas[p.user_id] : null, excede_s: Math.max(0, p.total - cp), estado: sb ? sb.status : 'pendiente', nota: sb ? sb.nota : '', enviada_at: sb ? sb.submitted_at : null }; }), settings: s };
   };
 
   app.get('/api/timesheets/team', requireAuth, async (req, res) => {
@@ -121,6 +128,7 @@ function mount(app, { pool, requireAuth }) {
       if (cur && cur.status === 'aprobada') return res.status(400).json({ error: 'Esta hoja ya fue aprobada' });
       await pool.query(`INSERT INTO ts_submissions (workspace_id, user_id, week_start, status) VALUES ($1,$2,$3,'enviada')
         ON CONFLICT (user_id, week_start) DO UPDATE SET status='enviada', submitted_at=NOW(), reviewed_by=NULL, reviewed_at=NULL, nota=''`, [wid, req.user.id, ws]);
+      audit(req, 'enviar', 'Hoja de la semana del ' + ws + ' enviada');
       res.json({ ok: true, estado: 'enviada' });
     } catch (e) { res.status(500).json({ error: 'No se pudo enviar la hoja' }); }
   });
@@ -142,6 +150,7 @@ function mount(app, { pool, requireAuth }) {
          WHERE user_id=$4 AND COALESCE(source,'manual_timer') NOT IN ('browser_extension','desktop_agent') AND ended_at IS NOT NULL
            AND started_at >= ($5::date)::timestamp AT TIME ZONE $7 AND started_at < (($6::date + 1)::timestamp) AT TIME ZONE $7`,
         [aprob, aprob ? new Date().toISOString() : null, aprob ? req.user.id : null, uid, ws, we, TZ]);
+      audit(req, accion, 'Hoja de usuario ' + uid + ' · semana del ' + ws + (nota ? ' · ' + nota : ''));
       res.json({ ok: true, estado: status, entradas: r.rowCount });
     } catch (e) { console.error('[timesheets] review', e.message); res.status(500).json({ error: 'No se pudo guardar la revisión' }); }
   });
@@ -161,6 +170,49 @@ function mount(app, { pool, requireAuth }) {
       const { rows: [r] } = await pool.query(`UPDATE time_entries SET notes=$2, facturable=$3, etiquetas=$4::jsonb WHERE id=$1 RETURNING id, notes, facturable, etiquetas`, [id, notes, fact, JSON.stringify(etq)]);
       res.json(r);
     } catch (e) { console.error('[timesheets] meta', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+  });
+  // ── etiquetas de tiempo: lista con uso, renombrar / unir / quitar (solo admin) ──
+  const wsUsers = `SELECT id FROM users WHERE workspace_id=$1 OR id=$1`;
+  app.get('/api/timesheets/tags', requireAuth, async (req, res) => {
+    try {
+      const wid = req.workspaceOwnerId; if (!(await isAdmin(req.user.id, wid))) return res.status(403).json({ error: 'Solo admin' });
+      const { rows } = await pool.query(`SELECT t AS tag, COUNT(*)::int AS n FROM time_entries te, jsonb_array_elements_text(te.etiquetas) t WHERE te.user_id IN (${wsUsers}) GROUP BY t ORDER BY n DESC, t`, [wid]);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: 'No se pudieron cargar las etiquetas' }); }
+  });
+  app.post('/api/timesheets/tags/rename', requireAuth, async (req, res) => {
+    try {
+      const wid = req.workspaceOwnerId; if (!(await isAdmin(req.user.id, wid))) return res.status(403).json({ error: 'Solo admin' });
+      const from = String((req.body || {}).from || '').trim().slice(0, 30), to = String((req.body || {}).to || '').trim().slice(0, 30);
+      if (!from) return res.status(400).json({ error: 'Etiqueta no válida' });
+      const r = await pool.query(`UPDATE time_entries SET etiquetas = COALESCE((SELECT jsonb_agg(DISTINCT x) FROM (SELECT CASE WHEN t=$2 THEN $3 ELSE t END AS x FROM jsonb_array_elements_text(etiquetas) t) q WHERE x <> ''), '[]'::jsonb)
+         WHERE user_id IN (${wsUsers}) AND etiquetas ? $2`, [wid, from, to]);
+      audit(req, 'etiquetas', to ? `«${from}» → «${to}» (${r.rowCount} entradas)` : `«${from}» eliminada (${r.rowCount} entradas)`);
+      res.json({ ok: true, entradas: r.rowCount });
+    } catch (e) { console.error('[timesheets] tags', e.message); res.status(500).json({ error: 'No se pudo actualizar la etiqueta' }); }
+  });
+
+  // ── conexiones: tokens de extensión / agente y fuentes que ya reportan ──
+  app.get('/api/timesheets/connections', requireAuth, async (req, res) => {
+    try {
+      const uid = req.user.id;
+      const { rows: tokens } = await pool.query(`SELECT id, label, created_at, last_used_at FROM ext_tokens WHERE user_id=$1 AND revoked=false ORDER BY id DESC`, [uid]);
+      const { rows: src } = await pool.query(`SELECT source, COUNT(*)::int AS n, MAX(started_at) AS ultimo FROM time_entries WHERE user_id=$1 AND source IN ('browser_extension','desktop_agent') AND started_at > NOW() - INTERVAL '30 days' GROUP BY source`, [uid]);
+      res.json({ tokens, fuentes: Object.fromEntries(src.map(r => [r.source, { n: r.n, ultimo: r.ultimo }])) });
+    } catch (e) { res.status(500).json({ error: 'No se pudieron cargar las conexiones' }); }
+  });
+  app.delete('/api/timesheets/tokens/:id', requireAuth, async (req, res) => {
+    try { const r = await pool.query(`UPDATE ext_tokens SET revoked=true WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.user.id]); audit(req, 'token', 'Token de extensión o agente revocado'); res.json({ ok: true, n: r.rowCount }); }
+    catch (e) { res.status(500).json({ error: 'No se pudo revocar' }); }
+  });
+
+  // ── registro de actividad de las hojas de horas ──
+  app.get('/api/timesheets/audit', requireAuth, async (req, res) => {
+    try {
+      const wid = req.workspaceOwnerId; if (!(await isAdmin(req.user.id, wid))) return res.status(403).json({ error: 'Solo admin' });
+      const { rows } = await pool.query(`SELECT id, actor_name, accion, detalle, created_at FROM ts_audit WHERE workspace_id=$1 ORDER BY id DESC LIMIT 100`, [wid]);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: 'No se pudo cargar el registro' }); }
   });
 }
 module.exports = { mount };
