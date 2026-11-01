@@ -1116,7 +1116,7 @@ const SpacesModule = (() => {
     if (!r.ok) { showBanner(await _err(r, 'No se pudo guardar el campo'), 'error'); return false; }
     const j = await r.json(); if (t) t.campos = j.campos || {}; return true;
   }
-  function _refreshFields(tid) { try { const mw = document.getElementById('pane-mgmt-mywork'); if (mw && mw.classList.contains('active') && window.MyWorkModule) MyWorkModule._fromTasks(); } catch (_) {} if ($q('sp-body') && !(_selProj && _cfg) && _mode === 'tasks') _paintBody(); if ($q('tskd-fields')) renderTaskFields(tid, 'tskd-fields'); }
+  function _refreshFields(tid) { try { const mw = document.getElementById('pane-mgmt-mywork'); if (mw && mw.classList.contains('active') && window.MyWorkModule) MyWorkModule._fromTasks(); } catch (_) {} if ($q('sp-body') && !(_selProj && _cfg) && _mode === 'tasks') _paintBody(); if ($q('tskd-fields')) renderTaskFields(tid, 'tskd-fields'); if ($q('tkx-props')) { try { TasksModule._tdPaintProps(tid); TasksModule._tdPaintSubs(tid); } catch (_) {} } }
   async function fSet(tid, fid, val, keep) { await _fSave(tid, fid, val); if (!keep) _closePop(); _refreshFields(tid); }
   async function fTog(tid, fid, key, on) { const t = _tk(tid), cur = (((t && t.campos) || {})[fid] || []).slice(), i = cur.indexOf(key); if (on && i < 0) cur.push(key); if (!on && i >= 0) cur.splice(i, 1); await _fSave(tid, fid, cur); _refreshFields(tid); }
   function fEdit(ev, tid, fid) {
@@ -1141,10 +1141,21 @@ const SpacesModule = (() => {
     const box = $q(cid); if (!box) return;
     if (!_projects.length) { try { const [pr, tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok && !_tasks.length) _tasks = await tr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
     const t = _tk(tid); if (!t || !t.project_id || !_pjOf(t.project_id)) { box.innerHTML = ''; return; }
-    const fs = _fields(t.project_id), cust = _custom(t.project_id); if (!fs.length && !cust) { box.innerHTML = ''; return; }
-    const st = _taskSt(t);
-    box.innerHTML = (cust ? `<div class="tskd__field"><div class="tskd__lbl">Estado del proyecto</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.estMenu(event,${tid})"><span class="sp-tag" style="--c:${st.c}">${esc(st.n)}</span></button></div>` : '')
-      + fs.map(f => `<div class="tskd__field"><div class="tskd__lbl">${esc(f.n)}</div><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.fEdit(event,${tid},'${f.id}')">${_fview(t, f)}</button></div>`).join('');
+    const fs = _fields(t.project_id), cust = _custom(t.project_id); if (!fs.length && !cust && !t.project_id) { box.innerHTML = ''; return; }
+    const rows = fs.map(f => { const v = (t.campos || {})[f.id]; return { f, empty: v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) }; });
+    const nEmpty = rows.filter(r => r.empty).length, vis = _tkHideEmpty ? rows.filter(r => !r.empty) : rows;
+    box.innerHTML = vis.map(({ f }) => `<div class="tkx-fr"><span class="tkx-fr__l">${esc(f.n)}</span><button type="button" class="sp-fv sp-fv--lg" onclick="SpacesModule.fEdit(event,${tid},'${f.id}')">${_fview(t, f)}</button></div>`).join('')
+      + (nEmpty ? `<button type="button" class="tkx-fr__t" onclick="SpacesModule.tkToggleEmpty(${tid})">${_tkHideEmpty ? 'Mostrar' : 'Ocultar'} campos vacíos ${nEmpty}</button>` : '')
+      + (!fs.length ? '<div class="tkx-fr__e">Este proyecto aún no tiene campos. Usa «+» para agregarlos.</div>' : '');
+  }
+  let _tkHideEmpty = false;
+  function tkToggleEmpty(tid) { _tkHideEmpty = !_tkHideEmpty; renderTaskFields(tid, 'tskd-fields'); }
+  function fieldsOpenFor(pid) { _closePop(); document.getElementById('sp-modal')?.remove(); _fmPid = pid || 0; _fmMode = 'list'; _fmTab = 'exist'; _fmQ = ''; _fmPaint(true); }
+  // marcar / reabrir como completada (usa la categoría «completado» de los estados del proyecto)
+  function toggleDone(id) {
+    _adopt(); const t = _tk(id); if (!t) return; const l = _stList(t.project_id), cat = e => e.t || e.k;
+    const done = l.find(e => cat(e) === 'completado'), open = l.find(e => cat(e) === 'pendiente') || l[0];
+    const k = t.estado === 'completado' ? (open && open.k) : (done && done.k); if (k) setEstado(id, k);
   }
   // Para Mi trabajo y otras pantallas: estados propios y campos de cada tarea según SU proyecto
   async function ensure() { if (_projects.length) return; try { const [pr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
@@ -1563,7 +1574,7 @@ const SpacesModule = (() => {
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
   return { tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
-    treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
+    tkToggleEmpty, fieldsOpenFor, toggleDone, treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
 })();

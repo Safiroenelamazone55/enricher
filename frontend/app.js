@@ -13396,6 +13396,7 @@ const TasksModule = (() => {
   let _dndInit    = false;
 
   function _rerender() {
+    if (_tdCurrentId && document.getElementById('tkx-props')) { _tdPaintProps(_tdCurrentId); _tdPaintSubs(_tdCurrentId); return; }
     if (_currentView === 'kanban') _renderKanban();
     else render();
   }
@@ -13870,7 +13871,9 @@ const TasksModule = (() => {
     if (!dv) return;
     const t = _tasks.find(x => x.id === id);
     if (!t) { showBanner('Tarea no encontrada.', 'error'); return; }
+    if (_tdCurrentId !== id) { _tdShowClosed = false; _tdFeed = { msgs: [], asgBy: new Map(), acts: [], id }; }
     _tdCurrentId = id;
+    try { _notifyMW(); } catch (_) {}
 
     _hideAllViews();
     const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
@@ -13886,8 +13889,10 @@ const TasksModule = (() => {
     const fechasTxt = (ini || fin) ? `${ini || '—'} → ${fin || '—'}` : 'Sin fechas';
     const resps = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
 
+    const _ic = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const openSubs = subs.filter(x => x.estado !== 'completado' && x.estado !== 'cancelado').length;
     dv.innerHTML = `
-      <div class="tskd">
+      <div class="tskd tkx">
         <div class="tskd__crumb">
           <button class="tskd__back" onclick="TasksModule.closeTaskPage(true)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -13897,122 +13902,142 @@ const TasksModule = (() => {
           ${parent ? `<span class="tskd__crumb-sep">/</span><a class="tskd__crumb-link" href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${parent.id})">${esc(parent.titulo)}</a>` : ''}
         </div>
 
-        <div class="tskd__layout">
-          <div class="tskd__main">
-            <input class="tskd__title" value="${esc(t.titulo)}" placeholder="Título de la tarea"
-                   onblur="TasksModule._tdSaveField(${id},'titulo',this.value)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
-
-            <div class="tskd__block">
-              <div class="tskd__lbl">Descripción</div>
-              <textarea class="tskd__textarea" rows="2" placeholder="Qué hay que hacer exactamente…"
-                        onblur="TasksModule._tdSaveField(${id},'descripcion',this.value)">${esc(t.descripcion || '')}</textarea>
+        <div class="tkx__card">
+          <section class="tkx__main">
+            <div class="tkx__top">
+              <span class="tkx__chip">${_ic('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}${parent ? 'Subtarea' : 'Tarea'}</span>
+              <button type="button" class="tkx__chip tkx__chip--b" title="Copiar ID" onclick="TasksModule._tdCopy(${id},'id')">#${id}</button>
+              ${subs.length ? `<span class="tkx__chip" title="Subtareas">${_ic('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>')}${subs.length}</span>` : ''}
+              <span class="tkx__sp"></span>
+              <button type="button" class="tkx__ib" title="Copiar vínculo" onclick="TasksModule._tdCopy(${id},'link')">${_ic('<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>')}</button>
+              <button type="button" class="tkx__ib" title="Duplicar" onclick="TasksModule.duplicateTask(${id})">${_ic('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
+              <button type="button" class="tkx__ib" title="Editar todos los detalles" onclick="TasksModule.openDrawer(${id})">${_ic('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>')}</button>
             </div>
 
-            <div class="tskd__block">
-              <div class="tskd__lbl">Notas / bloqueos</div>
-              <textarea class="tskd__textarea" rows="2" placeholder="Dependencias, bloqueos, contexto adicional…"
-                        onblur="TasksModule._tdSaveField(${id},'notas',this.value)">${esc(t.notas || '')}</textarea>
+            <textarea class="tkx__title" rows="1" placeholder="Título de la tarea" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+                      onblur="TasksModule._tdSaveField(${id},'titulo',this.value.trim()||this.defaultValue)"
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(t.titulo)}</textarea>
+
+            <div class="tkx__props" id="tkx-props"></div>
+
+            <textarea class="tskd__textarea tkx__ta" rows="2" placeholder="Añade una descripción…"
+                      onblur="TasksModule._tdSaveField(${id},'descripcion',this.value)">${esc(t.descripcion || '')}</textarea>
+            <textarea class="tskd__textarea tkx__ta tkx__ta--n" rows="1" placeholder="Notas y bloqueos: dependencias, contexto adicional…"
+                      onblur="TasksModule._tdSaveField(${id},'notas',this.value)">${esc(t.notas || '')}</textarea>
+
+            ${t.project_id ? `<div class="tkx__sec" id="tkx-sec-f">
+              <div class="tkx__sh"><button type="button" class="tkx__fold" onclick="TasksModule._tdFold('f')"><i></i>Campos</button>
+                <span class="tkx__sa"><button type="button" class="tkx__ib" title="Agregar o administrar campos" onclick="SpacesModule.fieldsOpenFor(${t.project_id})">${_ic('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>')}</button></span></div>
+              <div class="tkx__sb" id="tskd-fields"></div>
+            </div>` : '<div id="tskd-fields"></div>'}
+
+            <div class="tkx__sec" id="tkx-sec-s">
+              <div class="tkx__sh"><button type="button" class="tkx__fold" onclick="TasksModule._tdFold('s')"><i></i>Subtareas</button><span class="tkx__cnt" id="tkx-subcnt"></span></div>
+              <div class="tkx__sb" id="tkx-subs"></div>
             </div>
 
-            <div class="tskd__block" id="tskd-ck">${_tdCkHtml(t)}</div>
+            <div class="tkx__sec tkx__sec--ck" id="tskd-ck">${_tdCkHtml(t)}</div>
+          </section>
 
-            <div class="tskd__block"><div class="tskd__lbl-row"><span class="tskd__lbl">Actividad</span></div><div class="act" id="tskd-act"><div class="act__e">Cargando…</div></div></div>
-
-            <div class="tskd__block">
-              <div class="tskd__lbl-row">
-                <span class="tskd__lbl">Subtareas</span>
-                <span class="tskd__subs-count">${subsDone}/${subs.length}</span>
-              </div>
-              ${subs.length ? `<div class="tskd__subs-bar"><div class="tskd__subs-fill" style="width:${subsPct}%"></div></div>` : ''}
-              <div class="tskd__subs-list">
-                ${subs.map(s => `
-                  <div class="tskd__sub${s.estado === 'completado' ? ' tskd__sub--done' : ''}">
-                    <span class="tskd__sub-chk" onclick="TasksModule.toggleSubtaskStatus(${s.id},${id})">
-                      ${s.estado === 'completado'
-                        ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#22C55E"/><polyline points="4,7 6.2,9.2 10,4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-                        : '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.3" stroke="#CFCAC3" stroke-width="1.4"/></svg>'}
-                    </span>
-                    <span class="tskd__sub-txt" onclick="TasksModule._renderTaskDetail(${s.id})">${esc(s.titulo)}</span>
-                    <span class="tskd__sub-timer"><span class="task-elapsed" data-timer-display="${s.id}" hidden></span>${_timerBtn(s.id)}</span>
-                  </div>`).join('')}
-              </div>
-              <button class="tskd__add-sub" onclick="TasksModule.openDrawer(null,${t.project_id || 'null'},${id})">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Agregar subtarea
-              </button>
-            </div>
-          </div>
-
-          <div class="tskd__side">
-            <div class="tskd__meta">
-              <div class="tskd__field">
-                <div class="tskd__lbl">Estado</div>
-                <select class="tskd__select" onchange="TasksModule._tdSaveField(${id},'estado',this.value)">
-                  ${_TD_ESTADOS.map(([v, l]) => `<option value="${v}"${t.estado === v ? ' selected' : ''}>${l}</option>`).join('')}
-                </select>
-              </div>
-              <div class="tskd__field">
-                <div class="tskd__lbl">Prioridad</div>
-                <select class="tskd__select" onchange="TasksModule._tdSaveField(${id},'prioridad',this.value)">
-                  ${_TD_PRIOS.map(([v, l]) => `<option value="${v}"${t.prioridad === v ? ' selected' : ''}>${l}</option>`).join('')}
-                </select>
-              </div>
-              <div class="tskd__field tskd__field--full">
-                <div class="tskd__lbl">Fechas</div>
-                <div class="tskd__field-val">${fechasTxt}</div>
-              </div>
-              <div class="tskd__field tskd__field--full">
-                <div class="tskd__lbl">Asignados</div>
-                <div class="tskd__field-val">${resps.length ? esc(resps.join(', ')) : 'Sin asignar'}</div>
-              </div>
-              <div class="tskd__field">
-                <div class="tskd__lbl">Tiempo</div>
-                <div class="tskd__field-val tskd__timer">
-                  <span class="task-elapsed" data-timer-display="${id}" hidden></span>
-                  ${_timerBtn(id)}
-                </div>
-              </div>
-              <div class="tskd__field">
-                <div class="tskd__lbl">Duración estimada</div>
-                <input class="tskd__est" id="tskd-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="ej. 2h 30m"
-                       onblur="TasksModule._tdEst(${id},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
-              </div>
-              <div class="tskd__field">
-                <div class="tskd__lbl">Etiquetas</div>
-                <div id="tskd-tags">${_tdTagsHtml(t)}</div>
-              </div>
-              <div id="tskd-fields"></div>
-              <div class="tskd__tools">
-                <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'link')">Copiar vínculo</button>
-                <button type="button" class="tskd__tool" onclick="TasksModule._tdCopy(${id},'id')">Copiar ID</button>
-                <button type="button" class="tskd__tool" onclick="TasksModule.duplicateTask(${id})">Duplicar</button>
-              </div>
-              <button class="btn btn--ghost btn--sm tskd__edit-btn" onclick="TasksModule.openDrawer(${id})">Editar detalles</button>
-            </div>
-
-            <div class="tskd__chat">
-              <div class="tskd__lbl">Comentarios</div>
-              <div class="tskd__chat-msgs" id="tskd-chat-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
-              <div class="tskd__chat-input-wrap">
-                <input type="text" id="tskd-chat-input" placeholder="Escribe un comentario…"
-                       onkeydown="if(event.key==='Enter'){TasksModule._tdSendComment(${id})}">
-                <button class="tskd__chat-send" onclick="TasksModule._tdSendComment(${id})">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <aside class="tkx__act">
+            <div class="tkx__ah"><b>Actividad</b></div>
+            <div class="tkx__feed" id="tskd-chat-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+            <div class="tkx__comp">
+              <textarea id="tskd-chat-input" rows="2" placeholder="Escribe un comentario…"
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();TasksModule._tdSendComment(${id})}"></textarea>
+              <div class="tkx__ct">
+                <button type="button" class="tkx__ib" title="Mencionar a alguien" onclick="TasksModule._tdAt()">@</button>
+                <span class="tkx__sp"></span>
+                <button type="button" class="tkx__send" title="Enviar comentario" onclick="TasksModule._tdSendComment(${id})">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
               </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>`;
     dv.style.display = '';
     _tdFitHeight();
     if (!_tdResizeBound) { window.addEventListener('resize', _tdFitHeight); _tdResizeBound = true; }
+    _tdPaintProps(id); _tdPaintSubs(id);
+    { const ti = dv.querySelector('.tkx__title'); if (ti) { ti.style.height = 'auto'; ti.style.height = ti.scrollHeight + 'px'; } }
+    try { SpacesModule.ensure().then(() => { if (_tdCurrentId === id) { _tdPaintProps(id); _tdPaintSubs(id); } }); } catch (_) {}
     TimerModule.syncButtons();
     _tdLoadComments(id); _tdLoadActivity(id);
     try { if (typeof SpacesModule !== 'undefined') SpacesModule.renderTaskFields(id, 'tskd-fields'); } catch (e) { console.error('[campos]', e); }
     if (_tdCommentPoll) clearInterval(_tdCommentPoll);
     _tdCommentPoll = setInterval(() => { if (_tdCurrentId === id) _tdLoadComments(id, true); }, 8000);
+  }
+
+  // ── Pantalla de tarea estilo ClickUp: propiedades, subtareas en tabla y feed de actividad ──
+  let _tdShowClosed = false, _tdFeed = { msgs: [], asgBy: new Map(), acts: [], id: 0 };
+  const _TD_PRIO_C = { baja: '#B4AFA8', media: '#D97706', alta: '#EF4444', urgente: '#7C3AED' };
+  const _tdIc = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _tdWho = rs => rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(String(n).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '';
+  function _tdPaintProps(id) {
+    const box = $('tkx-props'), t = _tasks.find(x => x.id === id); if (!box || !t) return;
+    const fmtS = d => d ? new Date(String(d).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '';
+    const n = new Date(), today = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    const done = t.estado === 'completado', od = t.deadline && String(t.deadline).split('T')[0] < today && !done && t.estado !== 'cancelado';
+    const rs = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const pr = _TD_PRIO_C[t.prioridad] ? t.prioridad : 'media', prl = { baja: 'Baja', media: 'Media', alta: 'Alta', urgente: 'Urgente' }[pr];
+    const row = (ic, lbl, inner) => `<div class="tkx-p"><span class="tkx-p__l">${_tdIc(ic)}${lbl}</span><div class="tkx-p__v">${inner}</div></div>`;
+    const empty = '<em class="tkx-empty">Vacío</em>', ini = fmtS(t.fecha_inicio), fin = fmtS(t.deadline);
+    box.innerHTML = `<div class="tkx-pc">
+      ${row('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>', 'Estado', `<button type="button" class="tkx-st" onclick="SpacesModule.estMenu(event,${id})">${SpacesModule.statusTag(t)}</button><button type="button" class="tkx-done${done ? ' on' : ''}" title="${done ? 'Reabrir' : 'Marcar como completada'}" onclick="SpacesModule.toggleDone(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>`)}
+      ${row('<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>', 'Fechas', `<button type="button" class="tkx-v" onclick="TasksModule.openKcDatePopover(event,${id})">${(ini || fin) ? `${ini ? `<span>${ini}</span><i class="tkx-arr">→</i>` : ''}<span class="${od ? 'is-od' : ''}">${fin || '—'}</span>` : empty}</button>`)}
+      ${row('<path d="M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4"/>', 'Duración estimada', `<input class="tkx-est" id="tskd-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="Vacío" onblur="TasksModule._tdEst(${id},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">`)}
+      ${row('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', 'Tiempo', `<span class="task-elapsed" data-timer-display="${id}" hidden></span>${_timerBtn(id)}`)}
+    </div><div class="tkx-pc">
+      ${row('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>', 'Personas asignadas', `<button type="button" class="tkx-v" onclick="TasksModule.openKcRespPopover(event,${id})">${rs.length ? `${_tdWho(rs)}<span class="tkx-nm">${esc(rs.map(x => String(x).split(' ')[0]).join(', '))}</span>` : empty}</button>`)}
+      ${row('<path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/>', 'Prioridad', `<button type="button" class="tkx-v" onclick="TasksModule.openKcPrioPopover(event,${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="${_TD_PRIO_C[pr]}" stroke="${_TD_PRIO_C[pr]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5z"/></svg><span>${prl}</span></button>`)}
+      ${row('<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/>', 'Etiquetas', `<div id="tskd-tags">${_tdTagsHtml(t)}</div>`)}
+    </div>`;
+    try { TimerModule.syncButtons(); } catch (_) {}
+  }
+  function _tdPaintSubs(id) {
+    const box = $('tkx-subs'); if (!box) return;
+    const all = _tasks.filter(x => x.parent_task_id === id), isClosed = s => s.estado === 'completado' || s.estado === 'cancelado';
+    const closed = all.filter(isClosed), open = all.filter(s => !isClosed(s)), list = _tdShowClosed ? all : open;
+    const cnt = $('tkx-subcnt'); if (cnt) cnt.innerHTML = all.length ? `${open.length} elemento${open.length === 1 ? '' : 's'} abierto${open.length === 1 ? '' : 's'}<span class="tkx__bar"><i style="width:${Math.round(closed.length / all.length * 100)}%"></i></span>` : '';
+    const pid = (_tasks.find(x => x.id === id) || {}).project_id;
+    box.innerHTML = `<div class="tkx-sub tkx-sub--h"><span>Nombre</span><span>Persona asignada</span><span>Prioridad</span><span></span></div>`
+      + list.map(s => {
+        const rs = (s.responsables && s.responsables.length) ? s.responsables : (s.responsable ? [s.responsable] : []), pr = _TD_PRIO_C[s.prioridad] ? s.prioridad : 'media', dn = s.estado === 'completado';
+        return `<div class="tkx-sub${isClosed(s) ? ' is-done' : ''}">
+          <span class="tkx-sub__n"><button type="button" class="tkx-ring${dn ? ' on' : ''}" onclick="TasksModule.toggleSubtaskStatus(${s.id},${id})">${dn ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button><a href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${s.id})">${esc(s.titulo)}</a></span>
+          <button type="button" class="tkx-sub__b" onclick="TasksModule.openKcRespPopover(event,${s.id})">${rs.length ? _tdWho(rs) : _tdIc('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>')}</button>
+          <button type="button" class="tkx-sub__b" onclick="TasksModule.openKcPrioPopover(event,${s.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="${s.prioridad && _TD_PRIO_C[s.prioridad] ? _TD_PRIO_C[pr] : 'none'}" stroke="${s.prioridad && _TD_PRIO_C[s.prioridad] ? _TD_PRIO_C[pr] : 'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5z"/></svg></button>
+          <span class="tkx-sub__t"><span class="task-elapsed" data-timer-display="${s.id}" hidden></span>${_timerBtn(s.id)}</span>
+        </div>`;
+      }).join('')
+      + `<button type="button" class="tkx-add" onclick="TasksModule.openDrawer(null,${pid || 'null'},${id})">+ Agregar tarea</button>`
+      + (closed.length ? `<button type="button" class="tkx-more" onclick="TasksModule._tdToggleClosed(${id})">${_tdShowClosed ? 'Ocultar' : 'Mostrar'} ${closed.length} subtarea${closed.length === 1 ? '' : 's'} cerrada${closed.length === 1 ? '' : 's'}</button>` : '');
+    try { TimerModule.syncButtons(); } catch (_) {}
+  }
+  function _tdToggleClosed(id) { _tdShowClosed = !_tdShowClosed; _tdPaintSubs(id); }
+  function _tdFold(k) { const el = document.getElementById('tkx-sec-' + k); if (el) el.classList.toggle('is-folded'); }
+  function _tdAt() { const i = $('tskd-chat-input'); if (!i) return; i.focus(); const p = i.selectionStart || i.value.length; i.setRangeText('@', p, p, 'end'); i.dispatchEvent(new Event('input', { bubbles: true })); }
+  // feed único: cambios de la tarea + comentarios, en orden cronológico
+  function _tdPaintFeed() {
+    const box = $('tskd-chat-msgs'); if (!box) return;
+    const id = _tdFeed.id, atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    const fmt = d => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const flag = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>';
+    const items = [..._tdFeed.acts.map(a => ({ k: 'a', t: +new Date(a.created_at), a })), ..._tdFeed.msgs.map(m => ({ k: 'm', t: +new Date(m.created_at), m }))].sort((x, y) => x.t - y.t);
+    box.innerHTML = items.length ? items.map(it => {
+      if (it.k === 'a') return `<div class="tkx-ev"><i></i><div><b>${esc(it.a.user_name || 'Alguien')}</b> ${esc(it.a.texto)}<time>${fmt(it.a.created_at)}</time></div></div>`;
+      const m = it.m, ini = (m.sender_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+      return `<div class="tskd-cm">
+        <div class="tskd-cm__av">${ini}</div>
+        <div class="tskd-cm__body">
+          <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${m.created_at ? fmt(m.created_at) : ''}</span><button class="tskd-cm__as" title="Asignar este comentario a alguien: le queda pendiente en su Inicio hasta que lo resuelva" onclick="TasksModule._cmAssignMenu(event,${m.id},${id})">${flag} Asignar</button></div>
+          <div class="tskd-cm__txt">${MentionPicker.highlight(esc(m.content))}</div>
+          ${(_tdFeed.asgBy.get(m.id) || []).map(a => `<div class="tskd-asg${a.resolved ? ' is-done' : ''}">${flag} Asignado a <b>${esc(a.assigned_to_name)}</b>${a.resolved ? ` · resuelto${a.resolved_by_name ? ' por ' + esc(a.resolved_by_name) : ''} <button onclick="TasksModule._cmResolve(${a.id},${id},true)">Reabrir</button>` : ` <button onclick="TasksModule._cmResolve(${a.id},${id})">Marcar como resuelto</button>`}</div>`).join('')}
+        </div>
+      </div>`;
+    }).join('') : '<div class="chat-ch-empty">Sin actividad todavía. Escribe el primer comentario.</div>';
+    if (_tdFeed.first || atBottom) { box.scrollTop = box.scrollHeight; _tdFeed.first = false; }
   }
 
   // Cabe en una sola pantalla, sin scrollear la pagina: el alto de .tskd se
@@ -14116,12 +14141,11 @@ const TasksModule = (() => {
   function _tdCkItemDel(id, ci, ii) { const t = _taskOf(id); if (!t) return; const c = _ckClone(t); c[ci].items.splice(ii, 1); _tdExtra(id, { checklists: c }); }
 
   async function _tdLoadActivity(id) {
-    const box = $('tskd-act'); if (!box) return;
     try {
-      const r = await apiFetch(`${API}/mgmt/tasks/${id}/activity`); const a = r.ok ? await r.json() : [];
-      const fmt = d => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      box.innerHTML = a.length ? a.map(x => `<div class="act__i"><b>${esc(x.user_name || 'Alguien')}</b> ${esc(x.texto)}<time>${fmt(x.created_at)}</time></div>`).join('') : '<div class="act__e">Aún no hay cambios registrados. Desde ahora se anotan aquí.</div>';
-    } catch (_) { box.innerHTML = '<div class="act__e">No se pudo cargar la actividad.</div>'; }
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/activity`); const acts = r.ok ? await r.json() : [];
+      if (_tdCurrentId !== id) return;
+      _tdFeed.id = id; _tdFeed.acts = Array.isArray(acts) ? acts : []; _tdFeed.first = true; _tdPaintFeed();
+    } catch (_) {}
   }
   async function _tdCopy(id, what) {
     const txt = what === 'id' ? '#' + id : location.origin + '/?task=' + id;
@@ -14136,29 +14160,13 @@ const TasksModule = (() => {
       await MentionPicker.ready();
       const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('task:' + id)}`);
       const msgs = await r.json();
-      if (!Array.isArray(msgs)) return;
-      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-      if (!msgs.length) {
-        box.innerHTML = '<div class="chat-ch-empty">Sin comentarios aún. Sé el primero.</div>';
-        return;
-      }
+      if (!Array.isArray(msgs) || _tdCurrentId !== id) return;
       // comentarios asignados a alguien (bandeja «Para ti» del Inicio) y marca de «visto»
-      let asg = []; try { const ra = await apiFetch(`${API}/home/assignments?task=${id}`); asg = ra.ok ? await ra.json() : []; } catch (_) {}
+      let asg = []; if (msgs.length) { try { const ra = await apiFetch(`${API}/home/assignments?task=${id}`); asg = ra.ok ? await ra.json() : []; } catch (_) {} }
       const asgBy = new Map(); asg.forEach(a => { if (!asgBy.has(a.message_id)) asgBy.set(a.message_id, []); asgBy.get(a.message_id).push(a); });
-      apiFetch(`${API}/home/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id }) }).catch(() => {});
-      box.innerHTML = msgs.map(m => {
-        const time = m.created_at ? new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-        const ini = (m.sender_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-        return `<div class="tskd-cm">
-          <div class="tskd-cm__av">${ini}</div>
-          <div class="tskd-cm__body">
-            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span><button class="tskd-cm__as" title="Asignar este comentario a alguien: le queda pendiente en su Inicio hasta que lo resuelva" onclick="TasksModule._cmAssignMenu(event,${m.id},${id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg> Asignar</button></div>
-            <div class="tskd-cm__txt">${MentionPicker.highlight(esc(m.content))}</div>
-            ${(asgBy.get(m.id) || []).map(a => `<div class="tskd-asg${a.resolved ? ' is-done' : ''}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M5 22V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg> Asignado a <b>${esc(a.assigned_to_name)}</b>${a.resolved ? ` · resuelto${a.resolved_by_name ? ' por ' + esc(a.resolved_by_name) : ''} <button onclick="TasksModule._cmResolve(${a.id},${id},true)">Reabrir</button>` : ` <button onclick="TasksModule._cmResolve(${a.id},${id})">Marcar como resuelto</button>`}</div>`).join('')}
-          </div>
-        </div>`;
-      }).join('');
-      if (!silent || atBottom) box.scrollTop = box.scrollHeight;
+      if (msgs.length) apiFetch(`${API}/home/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id }) }).catch(() => {});
+      _tdFeed.id = id; _tdFeed.msgs = msgs; _tdFeed.asgBy = asgBy; if (!silent) _tdFeed.first = true;
+      _tdPaintFeed();
     } catch (_) {}
   }
 
@@ -16182,7 +16190,7 @@ const TasksModule = (() => {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render, _adopt, _getTasks,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
-    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment, _cmAssignMenu, _cmAssign, _cmResolve,
+    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment, _tdPaintProps, _tdPaintSubs, _tdToggleClosed, _tdFold, _tdAt, _cmAssignMenu, _cmAssign, _cmResolve,
     pjTab, pjSendNote, pjLinkAdd, pjLinkDel, _tdLoadActivity, _tdCopy, _tdTagAdd, _tdTagDel, _tdEst, _tdCkNew, _tdCkDel, _tdCkTitle, _tdCkItemAdd, _tdCkToggle, _tdCkItemDel,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
