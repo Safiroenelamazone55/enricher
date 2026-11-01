@@ -8386,7 +8386,10 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
-  return { renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  // Filtro de cliente de Outreach (barra «Viendo sólo …»): también acota esta pantalla
+  let _extC = false;
+  function setExtClient(id) { if (id) { _bdFiltro.cliente = String(id); _extC = true; } else if (_extC) { _bdFiltro.cliente = ''; _extC = false; } }
+  return { setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
@@ -9218,7 +9221,9 @@ const CanteraMesaModule = (() => {
       ${_pagerHtml()}`;
   }
 
-  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
+  let _extC = false;   // filtro de cliente de Outreach
+  function setExtClient(id) { if (id) { _filtro.cliente = String(id); _extC = true; } else if (_extC) { _filtro.cliente = ''; _extC = false; } }
+  return { setExtClient, render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
     toggleIndustriaFiltro, toggleArchivoFiltro, toggleTierExclFiltro, toggleIndustriaExclFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
@@ -9367,6 +9372,7 @@ const CanteraGlobalModule = (() => {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
     _restoreState();
+    if (_extN) { _filtros.cliente = [_extN]; _extC = true; } else if (_extC) { _filtros.cliente = []; _extC = false; }   // filtro de cliente de Outreach (después de restaurar lo guardado)
     if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
     await _search(); el.innerHTML = _html();
   }
@@ -9765,7 +9771,10 @@ const CanteraGlobalModule = (() => {
       await editValidacion(d.company_id, d.batch_id);
     } catch (e) { showBanner('Error al preparar la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setVista, setVistaFiltros, clearAll, setPageSize, goPage, toggleCollapse, toggleTaField, toggleSavedOpen, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  let _extC = false;   // filtro de cliente de Outreach (esta pantalla filtra por nombre)
+  let _extN = '';
+  function setExtClient(name) { _extN = name || ''; }
+  return { setExtClient, render, setQ, setOrigen, setVista, setVistaFiltros, clearAll, setPageSize, goPage, toggleCollapse, toggleTaField, toggleSavedOpen, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
@@ -9870,9 +9879,11 @@ const CanteraConfigModule = (() => {
   }
   function _keysTableHtml() {
     if (!_keys.length) return '<div class="cp-empty2" style="padding:14px 0">Sin claves configuradas todavía.</div>';
+    const _ks = _extName ? _keys.filter(k => String(k.cliente_nombre || '').toLowerCase() === _extName.toLowerCase()) : _keys;
+    if (!_ks.length) return '<div class="cp-empty2" style="padding:14px 0">Este cliente no tiene claves propias.</div>';
     return `<div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
       <thead><tr><th>Cliente</th><th>Proveedor</th><th>Modelo</th><th>Clave</th><th>Límite USD</th><th>Gasto acumulado</th><th></th></tr></thead>
-      <tbody>${_keys.map(k => `<tr>
+      <tbody>${_ks.map(k => `<tr>
         <td>${esc(k.cliente_nombre)}</td>
         <td>${esc(PROVEEDORES[k.provider] || k.provider)}</td>
         <td>${k.modelo ? esc(k.modelo) : '<span class="cant-hint" style="margin:0">por defecto</span>'}</td>
@@ -9951,7 +9962,9 @@ const CanteraConfigModule = (() => {
       await render('cantera-config-body');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { render, openKeyModal, onProviderChange, saveKey, resetGasto, deleteKey };
+  let _extName = '';   // filtro de cliente de Outreach: solo sus claves
+  function setExtClient(name) { _extName = name || ''; }
+  return { setExtClient, render, openKeyModal, onProviderChange, saveKey, resetGasto, deleteKey };
 })();
 
 // =================================================================
@@ -38035,7 +38048,9 @@ ${foot}
     return isCo ? (r.nombre || `#${id}`) : ([r.nombre, r.apellido].filter(Boolean).join(' ') || `#${id}`);
   }
   // «Tabla de datos» dentro de Outreach: se dibuja con lo ya cargado (renderDataGrid vuelve a llamar a load(), y eso repintaba Outreach en bucle)
+  let _dgExt = false;
   function dgEmbed(containerId) {
+    if (_gcli) { _dgCliente = String(_gcli); _dgExt = true; } else if (_dgExt) { _dgCliente = ''; _dgExt = false; }
     _dgContainerId = containerId;
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = _dgShellHtml(); _dgRenderRows();
@@ -38574,7 +38589,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { dgEmbed, setEmbed, callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { gcClient: () => ({ id: _gcli, name: gcName() }), dgEmbed, setEmbed, callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
@@ -48730,12 +48745,13 @@ function initApp() {
   window._novaEmbedLoad = function (tabName) {
     if (tabName === 'batch') { _checkPersistedJob(); _loadBatchHistory(); }
     if (tabName === 'verifications' && !_verifLoaded) { _verifLoaded = true; loadTagSuggestions(); loadVerifications(); }
+    const gc = (typeof LeadManagerModule.gcClient === 'function') ? LeadManagerModule.gcClient() : { id: null, name: '' };   // cliente elegido en «Viendo sólo …»
     if (tabName === 'datos') LeadManagerModule.dgEmbed('dg-body');
-    if (tabName === 'cantera') CanteraModule.render('cantera-body');
-    if (tabName === 'cantera-mesa') CanteraMesaModule.render('cantera-mesa-body');
-    if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
+    if (tabName === 'cantera') { CanteraModule.setExtClient(gc.id); CanteraModule.render('cantera-body'); }
+    if (tabName === 'cantera-mesa') { CanteraMesaModule.setExtClient(gc.id); CanteraMesaModule.render('cantera-mesa-body'); }
+    if (tabName === 'cantera-global') { CanteraGlobalModule.setExtClient(gc.name); CanteraGlobalModule.render('cantera-global-body'); }
     if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
-    if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
+    if (tabName === 'cantera-config') { CanteraConfigModule.setExtClient(gc.name); CanteraConfigModule.render('cantera-config-body'); }
   };
   function _switchTab(tabName, opts = {}) {
     // Proyectos y Tareas se retiraron: todo ese trabajo vive ahora en Espacios (el detalle de una tarea sí usa el pane de Tareas)

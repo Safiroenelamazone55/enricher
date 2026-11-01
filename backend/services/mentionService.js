@@ -53,7 +53,7 @@ async function _sendMail({ to, byName, byEmail, subject, html, text }) {
 const KIND_LBL = { task_comment: 'un comentario', task_note: 'las notas', task_desc: 'la descripción', project_comment: 'un comentario del proyecto' };
 
 // kind: task_comment | task_note | task_desc | project_comment. Devuelve cuántas personas se etiquetaron.
-async function process(pool, { wid, user, kind, taskId, projectId, text, appUrl }) {
+async function processMentions(pool, { wid, user, kind, taskId, projectId, text, appUrl }) {
   await ensureTable(pool);
   // team_members.user_id es el dueño del workspace; la cuenta de cada miembro se enlaza por correo.
   const { rows: team } = await pool.query(
@@ -101,4 +101,4 @@ async function process(pool, { wid, user, kind, taskId, projectId, text, appUrl 
   return n;
 }
 
-module.exports = { ensureTable, findMentioned, process };
+module.exports = { ensureTable, findMentioned, process: processMentions };
