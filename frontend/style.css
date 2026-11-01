@@ -19873,3 +19873,51 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .tsd-cr { display: inline-flex; align-items: center; gap: 6px; } .tsd-cr input { height: 32px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; padding: 0 8px; font: inherit; font-size: .82rem; background: #fff; } .tsd-cr span { color: var(--text-muted, #8B9690); }
 .ts-ml { min-width: 240px; max-height: 320px; overflow-y: auto; }
 .ts-clear { border: 0; background: none; color: var(--primary, #00804C); font: 600 .8rem inherit; cursor: pointer; padding: 0 6px; } .ts-clear:hover { text-decoration: underline; }
+
+/* ═══ Operaciones · Dashboard en el estilo de bordes de Time Tracking (tarjetas redondeadas, borde fino, sin sombra) ═══ */
+#pane-mgmt-dashboard .d3-card, #pane-mgmt-dashboard .d3-revcard, #pane-mgmt-dashboard .d3-actcard, #pane-mgmt-dashboard .hm-card { background: var(--surface, #fff); border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; overflow: hidden; }
+#pane-mgmt-dashboard .d3-card-header { border-bottom: 1px solid var(--border, #E2E7E3); }
+#pane-mgmt-dashboard .d3-card-title { font-size: .95rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); }
+#pane-mgmt-dashboard .d3-card-count { background: var(--primary-soft, #E6F4EE); color: var(--primary, #00804C); border-radius: 99px; padding: 1px 8px; font-weight: 600; }
+#pane-mgmt-dashboard .d3-card-link, #pane-mgmt-dashboard .hm-lnk { color: var(--primary, #00804C); font-weight: 500; }
+/* selectores segmentados (Semana / Mes, Todo / Respuestas…) */
+#pane-mgmt-dashboard .rc-tabs, #pane-mgmt-dashboard .hm-tabs, #pane-mgmt-dashboard .d3-ov-tabs { background: var(--surface-hover, #EEF0EE); border: 0; border-radius: 10px; padding: 3px; gap: 2px; }
+#pane-mgmt-dashboard .rc-tab, #pane-mgmt-dashboard .hm-tab, #pane-mgmt-dashboard .d3-ov-tab { border-radius: 8px; box-shadow: none; color: var(--text-secondary, #5F6B64); font-weight: 500; }
+#pane-mgmt-dashboard .rc-tab--on, #pane-mgmt-dashboard .hm-tab.on, #pane-mgmt-dashboard .d3-ov-tab.on { background: #fff; color: var(--text-primary, #14211B); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,20,.08); }
+/* etiquetas pequeñas: sin mayúsculas, color suave */
+#pane-mgmt-dashboard .d3-hrs-metric__l, #pane-mgmt-dashboard .rc-label { text-transform: none; letter-spacing: 0; font-size: .74rem; font-weight: 500; color: var(--text-muted, #8B9690); }
+#pane-mgmt-dashboard .d3-section-label { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; }
+#pane-mgmt-dashboard .rc-val, #pane-mgmt-dashboard .d3-hrs-total { letter-spacing: -.02em; font-weight: 600; color: var(--text-primary, #14211B); }
+#pane-mgmt-dashboard .rc-empty, #pane-mgmt-dashboard .rc-foot, #pane-mgmt-dashboard .hm-e { color: var(--text-muted, #8B9690); }
+/* botón principal del cronómetro: una sola acción verde por bloque */
+#pane-mgmt-dashboard .d3-hrs-btn { background: var(--primary, #00804C); border-color: var(--primary, #00804C); border-radius: 8px; box-shadow: none; color: #fff; font-weight: 600; }
+#pane-mgmt-dashboard .d3-hrs-btn:hover { background: var(--primary-hover, #006B3F); border-color: var(--primary-hover, #006B3F); }
+/* filas de listas */
+#pane-mgmt-dashboard .d3-task-row, #pane-mgmt-dashboard .hm-row { border-bottom: 1px solid var(--border, #E2E7E3); }
+#pane-mgmt-dashboard .d3-task-row:hover, #pane-mgmt-dashboard .hm-row:hover { background: var(--surface-secondary, #F7F8F6); }
+#pane-mgmt-dashboard .d3-task-name { font-weight: 600; color: var(--text-primary, #14211B); } #pane-mgmt-dashboard .d3-task-meta { color: var(--text-muted, #8B9690); }
+#pane-mgmt-dashboard .d3-task-group__hd { border-radius: 8px; }
+#pane-mgmt-dashboard .hm-n { border-radius: 99px; }
+
+/* Tipografía igual a la de Time Tracking (Inter; títulos 15px/600, cifras 27px/600, etiquetas 12–13px/400, pie 12px) */
+#pane-mgmt-dashboard .d3-card-title, #pane-mgmt-dashboard .hm-hd b { font-size: .95rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); }
+#pane-mgmt-dashboard .rc-label { font-size: .78rem; font-weight: 400; color: var(--text-secondary, #5F6B64); }
+#pane-mgmt-dashboard .rc-val { font-size: 1.7rem; font-weight: 600; line-height: 1.15; letter-spacing: -.02em; }
+#pane-mgmt-dashboard .d3-hrs-total { font-size: 1.4rem; font-weight: 600; letter-spacing: -.02em; }
+#pane-mgmt-dashboard .d3-hrs-metric__v { font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; }
+#pane-mgmt-dashboard .d3-hrs-metric__l, #pane-mgmt-dashboard .d3-act-today__lbl, #pane-mgmt-dashboard .d3-act-today__meta { font-size: .74rem; font-weight: 400; color: var(--text-muted, #8B9690); }
+#pane-mgmt-dashboard .d3-hrs-pct { font-size: .74rem; font-weight: 600; }
+#pane-mgmt-dashboard .rc-tab, #pane-mgmt-dashboard .hm-tab, #pane-mgmt-dashboard .d3-ov-tab { font-size: .84rem; font-weight: 500; padding: 7px 13px; }
+#pane-mgmt-dashboard .rc-tab--on, #pane-mgmt-dashboard .hm-tab.on, #pane-mgmt-dashboard .d3-ov-tab.on { font-weight: 600; }
+#pane-mgmt-dashboard .d3-card-link, #pane-mgmt-dashboard .hm-lnk { font-size: .8rem; font-weight: 500; letter-spacing: 0; }
+#pane-mgmt-dashboard .d3-section-label { font-size: .78rem; font-weight: 600; }
+#pane-mgmt-dashboard .d3-task-name { font-size: .88rem; font-weight: 600; letter-spacing: 0; color: var(--text-primary, #14211B); }
+#pane-mgmt-dashboard .d3-task-meta { font-size: .76rem; }
+#pane-mgmt-dashboard .d3-task-date { font-size: .78rem; font-weight: 500; }
+#pane-mgmt-dashboard .hm-row__t { font-size: .86rem; font-weight: 600; } #pane-mgmt-dashboard .hm-sub, #pane-mgmt-dashboard .hm-e { font-size: .78rem; font-weight: 400; }
+#pane-mgmt-dashboard .d3-hrs-btn { font-size: .84rem; font-weight: 600; }
+#pane-mgmt-dashboard .rc-foot, #pane-mgmt-dashboard .rc-empty { font-size: .76rem; }
+#pane-mgmt-dashboard .d3-card-title { text-transform: none; }
+#pane-mgmt-dashboard .d3-hrs-btn { background: var(--primary, #00804C) !important; background-image: none !important; border-color: var(--primary, #00804C) !important; }
+#pane-mgmt-dashboard .d3-hrs-btn:hover { background: var(--primary-hover, #006B3F) !important; }
+#pane-mgmt-dashboard .hm-tabs { flex-wrap: wrap; } #pane-mgmt-dashboard .hm-tab { padding: 6px 10px; font-size: .8rem; white-space: nowrap; }
