@@ -28,12 +28,13 @@ const TimesheetModule = (() => {
     box: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><line x1="10" y1="13" x2="14" y2="13"/>', up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
     grid: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="21"/>', list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    spaces: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     play: '<polygon points="6 4 20 12 6 20 6 4"/>', plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', left: '<polyline points="15 18 9 12 15 6"/>', right: '<polyline points="9 18 15 12 9 6"/>', down: '<polyline points="6 9 12 15 18 9"/>',
     lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', dots: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>', back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
     users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-5-5.7"/>', check: '<polyline points="20 6 9 17 4 12"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>', copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
-  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), range: null, hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
+  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), range: null, fCli: '', fProj: '', fSpace: '', meta: null, hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
   try { const pf = JSON.parse(localStorage.getItem('ts_prefs') || '{}'); if (pf.view) S.view = pf.view; if (pf.hideWk) S.hideWk = true; if (pf.tab) S.tab = pf.tab; } catch (_) {}
   const api = async (u, o) => { const r = await apiFetch(API + u, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('Error ' + r.status)); return j; };
   const send = (u, m, b) => api(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
@@ -79,6 +80,7 @@ const TimesheetModule = (() => {
   async function open() {
     if (!$('ts-root')) return;
     try { S.settings = await api('/timesheets/settings'); } catch (_) {}
+    await loadMeta();
     if (!isAdmin() && (S.tab === 'todas' || S.tab === 'aprob' || S.tab === 'ajustes')) S.tab = 'mi';
     paint();
   }
@@ -135,14 +137,29 @@ const TimesheetModule = (() => {
     popClose(); S.range = { kind: 'custom', start: a, end: z }; paintBody();
   }
 
+  // ── cliente / proyecto / espacio de trabajo de cada entrada ──
+  async function loadMeta() {
+    if (S.meta) return S.meta;
+    try { const [pr, sp] = await Promise.all([api('/mgmt/projects'), api('/mgmt/spaces')]); S.meta = { proj: new Map((Array.isArray(pr) ? pr : []).map(p => [p.id, p])), spaces: new Map([[0, 'Principal'], ...(Array.isArray(sp) ? sp : []).map(x => [x.id, x.nombre])]) }; }
+    catch (_) { S.meta = { proj: new Map(), spaces: new Map([[0, 'Principal']]) }; }
+    return S.meta;
+  }
+  const spaceOf = e => { const p = S.meta && e.project_id != null ? S.meta.proj.get(e.project_id) : null; return p ? (p.space_id || 0) : null; };
+  const cliOf = e => e.client_nombre || 'Sin cliente';
+  const projOfE = e => e.proj_nombre || e.project_nombre || 'Sin proyecto';
+  const okF = (e, skip) => (skip === 'cli' || !S.fCli || cliOf(e) === S.fCli) && (skip === 'proj' || !S.fProj || projOfE(e) === S.fProj) && (skip === 'space' || S.fSpace === '' || String(spaceOf(e)) === S.fSpace);
+  const anyF = () => !!(S.fCli || S.fProj || S.fSpace || S.fTag || S.fFact !== 'all' || S.fArch !== 'hide' || S.fTime !== 'all');
+  const spaceName = v => (S.meta && S.meta.spaces.get(+v)) || ('Espacio ' + v);
+
   // ── filtros ──
   function chip(kind, icon, label, on) { return `<button type="button" class="ts-chip${on ? ' on' : ''}" onclick="TimesheetModule.fMenu(event,'${kind}')">${ic(icon, 14)}${label}</button>`; }
   const hideSw = () => `<label class="ts-sw"><input type="checkbox" ${S.hideWk ? 'checked' : ''} onchange="TimesheetModule.setHideWk(this.checked)"><i></i>Ocultar fines de semana</label>`;
   function setHideWk(v) { S.hideWk = !!v; paintBody(); }
+  const fl = (base, v) => v ? `${base}: ${esc(String(v).length > 22 ? String(v).slice(0, 21) + '…' : v)}` : base;
   function filterBar(opts) {
     opts = opts || {};
-    return `<div class="ts-filters">${chip('fact', IC.dollar, 'Estado facturable', S.fFact !== 'all')}${chip('tag', IC.tag, 'Etiqueta', !!S.fTag)}${opts.time ? chip('time', IC.clock, 'Tiempo registrado', S.fTime !== 'all') : ''}${chip('arch', IC.box, 'Tareas archivadas', S.fArch !== 'hide')}${opts.sort ? chip('sort', IC.up, 'Fecha agregada', S.fSort !== 'new') : ''}
-      <span class="ts-sp"></span>${hideSw()}${opts.right || ''}</div>`;
+    return `<div class="ts-filters">${chip('fact', IC.dollar, 'Estado facturable', S.fFact !== 'all')}${chip('cli', IC.users, fl('Cliente', S.fCli), !!S.fCli)}${chip('proj', IC.list, fl('Proyecto', S.fProj), !!S.fProj)}${chip('space', IC.spaces, fl('Espacio', S.fSpace !== '' ? spaceName(S.fSpace) : ''), S.fSpace !== '')}${chip('tag', IC.tag, 'Etiqueta', !!S.fTag)}${opts.time ? chip('time', IC.clock, 'Tiempo registrado', S.fTime !== 'all') : ''}${chip('arch', IC.box, 'Tareas archivadas', S.fArch !== 'hide')}${opts.sort ? chip('sort', IC.up, 'Fecha agregada', S.fSort !== 'new') : ''}
+      ${anyF() ? `<button type="button" class="ts-clear" onclick="TimesheetModule.clearF()">Limpiar filtros</button>` : ''}<span class="ts-sp"></span>${hideSw()}${opts.right || ''}</div>`;
   }
   function fMenu(ev, kind) {
     const it = (cur, v, l) => `<button type="button" class="ts-mi${cur === v ? ' on' : ''}" onclick="TimesheetModule.fSet('${kind}','${String(v).replace(/'/g, '')}')"><span>${l}</span>${cur === v ? ic(IC.check, 14) : ''}</button>`;
@@ -152,20 +169,30 @@ const TimesheetModule = (() => {
     else if (kind === 'arch') h = it(S.fArch, 'hide', 'Ocultar archivadas') + it(S.fArch, 'show', 'Incluir archivadas') + it(S.fArch, 'only', 'Solo archivadas');
     else if (kind === 'sort') h = it(S.fSort, 'new', 'Más recientes primero') + it(S.fSort, 'old', 'Más antiguas primero');
     else if (kind === 'tag') { const tags = [...new Set((S.entries || []).flatMap(e => e.etiquetas || []))].sort(); h = it(S.fTag, '', 'Todas') + (tags.map(t => it(S.fTag, t, esc(t))).join('') || '<div class="ts-mn">Aún no hay etiquetas en esta semana.</div>'); }
+    else if (kind === 'cli' || kind === 'proj' || kind === 'space') {
+      const base = (S.entries || []).filter(e => countable(e) && okF(e, kind)), m = S.meta || { spaces: new Map([[0, 'Principal']]) };
+      const vals = kind === 'cli' ? [...new Set(base.map(cliOf))].sort().map(x => ({ v: x, l: x })) : kind === 'proj' ? [...new Set(base.map(projOfE))].sort().map(x => ({ v: x, l: x })) : [...new Set(base.map(spaceOf).filter(x => x != null))].map(id => ({ v: String(id), l: m.spaces.get(id) || 'Espacio ' + id }));
+      const cur = kind === 'cli' ? S.fCli : kind === 'proj' ? S.fProj : S.fSpace; window.__tsO = vals;
+      const row = (i, l, on) => `<button type="button" class="ts-mi${on ? ' on' : ''}" onclick="TimesheetModule.fPick('${kind}',${i})"><span>${l}</span>${on ? ic(IC.check, 14) : ''}</button>`;
+      h = `<div class="ts-ml">${row(-1, kind === 'cli' ? 'Todos los clientes' : kind === 'proj' ? 'Todos los proyectos' : 'Todos los espacios', cur === '')}${vals.map((o, i) => row(i, esc(o.l), cur === o.v)).join('') || '<div class="ts-mn">Sin datos en este periodo.</div>'}</div>`;
+    }
     popOpen(ev.currentTarget, h);
   }
+  function fPick(kind, i) { popClose(); const v = i < 0 ? '' : ((window.__tsO || [])[i] || {}).v || ''; if (kind === 'cli') { S.fCli = v; S.fProj = ''; } else if (kind === 'proj') S.fProj = v; else { S.fSpace = v; S.fCli = ''; S.fProj = ''; } paintBody(); }
+  function clearF() { S.fCli = ''; S.fProj = ''; S.fSpace = ''; S.fTag = ''; S.fFact = 'all'; S.fArch = 'hide'; S.fTime = 'all'; paintBody(); }
   function fSet(kind, v) { popClose(); ({ fact: () => S.fFact = v, time: () => S.fTime = v, arch: () => S.fArch = v, sort: () => S.fSort = v, tag: () => S.fTag = v })[kind](); paintBody(); }
   const passEntry = e => {
     if (S.fFact !== 'all' && billable(e) !== (S.fFact === 'yes')) return false;
     if (S.fTag && !(e.etiquetas || []).includes(S.fTag)) return false;
     if (S.fArch === 'hide' && e.task_archivada) return false;
     if (S.fArch === 'only' && !e.task_archivada) return false;
+    if (!okF(e)) return false;
     return true;
   };
 
   // ── datos de entradas de la semana (propias o de un miembro) ──
-  async function loadEntries() {
-    const start = `${rStart()}T00:00:00-05:00`, end = `${rEnd()}T23:59:59.999-05:00`, mq = S.member ? `&member=${encodeURIComponent(S.member)}` : '';
+  async function loadEntries(allMembers) {
+    const start = `${rStart()}T00:00:00-05:00`, end = `${rEnd()}T23:59:59.999-05:00`, mq = allMembers ? '&member=all' : (S.member ? `&member=${encodeURIComponent(S.member)}` : '');
     const list = await api(`/timer/entries?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${mq}`);
     S.entries = Array.isArray(list) ? list : []; try { TimerModule.setEntries(S.entries); } catch (_) {}
     return S.entries;
@@ -321,17 +348,18 @@ const TimesheetModule = (() => {
   // ── Todas las hojas de horas (equipo) ──
   async function bodyTodas() {
     const b = $('ts-body'); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
-    S.team = await api(teamUrl());
+    const [team] = await Promise.all([api(teamUrl()), loadEntries(true)]); S.team = team;
     drawTodas();
   }
   function drawTodas() {
     const b = $('ts-body'), t = S.team; if (!b || !t) return; const days = visDays(), today = todayL();
     let ps = t.personas || []; if (S.memberFilter !== 'all') ps = ps.filter(p => String(p.user_id) === String(S.memberFilter));
+    const agg = {}; (S.entries || []).filter(e => countable(e) && passEntry(e)).forEach(e => { const a = agg[e.user_id] = agg[e.user_id] || { dias: {}, total: 0 }, d = limaDay(e.started_at), x = dur(e); a.dias[d] = (a.dias[d] || 0) + x; a.total += x; });
     const cols = days.length > 9 ? `grid-template-columns:300px repeat(${days.length},84px) 96px` : `grid-template-columns:minmax(300px,1.8fr) repeat(${days.length},minmax(84px,1fr)) 96px`;
     const sel = (t.personas || []).find(p => String(p.user_id) === String(S.memberFilter));
     const memberBtn = `<button type="button" class="ts-btn ts-btn--sel" onclick="TimesheetModule.memberMenu(event)">${sel ? esc(sel.nombre) : 'Todos los miembros'}${ic(IC.down, 14)}</button>`;
     const rows = ps.map(p => `<div class="tsh-r tsh-r--p" style="${cols}"><div class="tsh-p"><span class="ts-av">${esc(ini(p.nombre))}</span><div><b>${esc(p.nombre)}</b><small>${fmtH(p.capacidad_s)}</small></div><span class="ts-st ts-st--${p.estado}">${p.estado === 'pendiente' ? '' : stLabel(p.estado)}</span><button type="button" class="ts-btn ts-btn--open" onclick="TimesheetModule.openMember(${p.user_id})">Abrir ${ic(IC.right, 13)}</button></div>`
-      + days.map(d => `<div class="tsh-pc${capDay(d) === 0 ? ' is-off' : ''}${d === today ? ' is-today' : ''}">${fmtH(p.dias[d] || 0)}</div>`).join('') + `<div class="tsh-pc tsh-pc--t">${fmtH(p.total)}</div></div>`).join('');
+      + days.map(d => `<div class="tsh-pc${capDay(d) === 0 ? ' is-off' : ''}${d === today ? ' is-today' : ''}">${fmtH(((agg[p.user_id] || {}).dias || {})[d] || 0)}</div>`).join('') + `<div class="tsh-pc tsh-pc--t">${fmtH((agg[p.user_id] || {}).total || 0)}</div></div>`).join('');
     b.innerHTML = `<div class="ts-row1">${weekNav()}<span class="ts-sp"></span>${memberBtn}</div>${filterBar({ right: '' })}
       <div class="tsh"><div class="tsh-h" style="${cols}"><div class="tsh-h0">Personas (${ps.length})</div>${days.map(d => `<div class="tsh-d${d === today ? ' is-today' : ''}"><span>${dHead(d)}</span></div>`).join('')}<div class="tsh-d tsh-d--t"><span>Total</span></div></div>${rows || '<div class="ts-empty ts-empty--in"><b>Sin personas</b></div>'}</div>`;
   }
@@ -397,7 +425,7 @@ const TimesheetModule = (() => {
   // ═════════ Dashboard (gráficas) ═════════
   const PAL = ['#00804C', '#4C7DF0', '#F2A93B', '#8B5CF6', '#E5484D', '#17A6B7', '#D6409F', '#8B9690'];
   const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const D = { period: 'week', anchor: todayL(), member: 'me', project: 'all', from: addD(todayL(), -29), to: todayL() };
+  const D = { period: 'week', anchor: todayL(), member: 'me', project: 'all', client: '', space: '', from: addD(todayL(), -29), to: todayL() };
   let _charts = [];
   const killCharts = () => { _charts.forEach(c => { try { c.destroy(); } catch (_) {} }); _charts = []; };
   const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5) + 1;
@@ -417,7 +445,7 @@ const TimesheetModule = (() => {
   }
   function dashSet(k, v) { D[k] = v; if (k === 'period') D.anchor = todayL(); (k === 'member' || k === 'period' || k === 'from' || k === 'to') ? bodyDash() : drawDash(); }
   async function bodyDash() {
-    const b = $('ts-body'); killCharts(); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
+    const b = $('ts-body'); killCharts(); b.innerHTML = '<div class="ts-loading">Cargando…</div>'; await loadMeta();
     const r = dashRange(), p = prevRange(r), t0 = p.start < addD(r.end, -55) ? p.start : addD(r.end, -55), mq = D.member === 'me' ? '' : `&member=${encodeURIComponent(D.member)}`;
     const [ents, team] = await Promise.all([api(`/timer/entries?start=${encodeURIComponent(t0 + 'T00:00:00-05:00')}&end=${encodeURIComponent(r.end + 'T23:59:59.999-05:00')}${mq}`), isAdmin() ? api('/timesheets/team?week_start=' + monday(todayL())).catch(() => null) : Promise.resolve(null)]);
     S.dashEntries = Array.isArray(ents) ? ents : []; S.dashTeam = team; drawDash();
@@ -433,7 +461,7 @@ const TimesheetModule = (() => {
     const r = dashRange(), pr = prevRange(r), all = (S.dashEntries || []).filter(countable), adm = isAdmin();
     const projOf = e => e.proj_nombre || e.project_nombre || 'Sin proyecto', projs = [...new Set(all.map(projOf))].sort();
     if (D.project !== 'all' && !projs.includes(D.project)) D.project = 'all';
-    const sel = e => D.project === 'all' || projOf(e) === D.project, inR = (e, a, z) => { const d = limaDay(e.started_at); return d >= a && d <= z; };
+    const sel = e => (D.project === 'all' || projOf(e) === D.project) && (!D.client || cliOf(e) === D.client) && (D.space === '' || String(spaceOf(e)) === D.space), inR = (e, a, z) => { const d = limaDay(e.started_at); return d >= a && d <= z; };
     const cur = all.filter(e => sel(e) && inR(e, r.start, r.end)), prv = all.filter(e => sel(e) && inR(e, pr.start, pr.end)), sum = l => l.reduce((a, e) => a + dur(e), 0);
     const tot = sum(cur), totP = sum(prv), fact = sum(cur.filter(billable)), team = S.dashTeam, nP = D.member === 'all' ? Math.max(1, (team && team.personas.length) || 1) : 1;
     let cap = 0; for (let d = r.start, n = 0; d <= r.end && n < 400; d = addD(d, 1), n++) cap += capDay(d); cap *= nP;
@@ -458,6 +486,9 @@ const TimesheetModule = (() => {
     const seg = (k, l) => `<button type="button" class="${D.period === k ? 'on' : ''}" onclick="TimesheetModule.dashSet('period','${k}')">${l}</button>`;
     const memSel = adm && team ? `<select class="ts-sel" onchange="TimesheetModule.dashSet('member',this.value)"><option value="me"${D.member === 'me' ? ' selected' : ''}>Mi tiempo</option><option value="all"${D.member === 'all' ? ' selected' : ''}>Todo el equipo</option>${team.personas.map(p => `<option value="${esc(p.nombre)}"${D.member === p.nombre ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>` : '';
     const prSel = `<select class="ts-sel" onchange="TimesheetModule.dashSet('project',this.value)"><option value="all">Todos los proyectos</option>${projs.map(p => `<option value="${esc(p)}"${D.project === p ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>`;
+    const cliOpts = [...new Set(all.map(cliOf))].sort(), spIds = [...new Set(all.map(spaceOf).filter(x => x != null))];
+    const cliSel = `<select class="ts-sel" onchange="TimesheetModule.dashSet('client',this.value)"><option value="">Todos los clientes</option>${cliOpts.map(x => `<option value="${esc(x)}"${D.client === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+    const spSel = `<select class="ts-sel" onchange="TimesheetModule.dashSet('space',this.value)"><option value="">Todos los espacios</option>${spIds.map(id => `<option value="${id}"${D.space === String(id) ? ' selected' : ''}>${esc(spaceName(id))}</option>`).join('')}</select>`;
     const card = (cls, t, body, sub) => `<div class="tsd-card ${cls}"><div class="tsd-ch0"><h4>${t}</h4>${sub ? `<span>${sub}</span>` : ''}</div>${body}</div>`;
     const legend = byProj.map((x, i) => `<div class="tsd-lg"><i style="background:${PAL[i % PAL.length]}"></i><span>${esc(x[0])}</span><b>${fmtH(x[1])}</b><em>${tot ? Math.round(x[1] / tot * 100) : 0}%</em></div>`).join('');
     const hours = Array.from({ length: 24 }, (_, h) => h), DS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -468,7 +499,7 @@ const TimesheetModule = (() => {
     const empty = '<div class="tsd-none">Sin registros en este periodo</div>';
     b.innerHTML = `<div class="tsd-top"><div class="ts-seg">${seg('week', 'Semana')}${seg('month', 'Mes')}${seg('15d', '15 días')}${seg('30d', '30 días')}${seg('custom', 'Personalizado')}</div>
         ${D.period !== 'week' && D.period !== 'month' ? `${D.period === 'custom' ? `<span class="tsd-cr"><input type="date" value="${esc(D.from)}" onchange="TimesheetModule.dashSet('from',this.value)"><span>–</span><input type="date" value="${esc(D.to)}" onchange="TimesheetModule.dashSet('to',this.value)"></span>` : ''}<b class="tsd-lbl">${r.label}</b>` : `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(1)">${ic(IC.right, 17)}</button><b class="tsd-lbl">${r.label}</b></div>`}
-        <span class="ts-sp"></span>${memSel}${prSel}<button type="button" class="ts-btn" onclick="TimesheetModule.go('informe')">${ic(IC.list, 14)}Informe detallado</button></div>
+        <span class="ts-sp"></span>${memSel}${spSel}${cliSel}${prSel}<button type="button" class="ts-btn" onclick="TimesheetModule.go('informe')">${ic(IC.list, 14)}Informe detallado</button></div>
       <div class="tsd-kpis">${kpis}</div>
       <div class="tsd-grid">
         ${card('tsd-c8', 'Horas por día', none ? empty : '<div class="tsd-ch"><canvas id="tsd-a"></canvas></div>', 'facturable y no facturable frente a la capacidad')}
@@ -569,6 +600,6 @@ const TimesheetModule = (() => {
     sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><b>${esc(ACC[x.accion] || x.accion)}</b><small class="ts-sm">${esc(x.actor_name || 'Alguien')} · ${esc(x.detalle)}</small></div><small class="ts-sm">${new Date(x.created_at).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')}</div>` : `<div class="ts-empty"><b>Todavía no hay actividad registrada</b><span>Aquí aparecerán los cambios y aprobaciones desde ahora.</span></div>`);
   }
 
-  return { setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
+  return { fPick, clearF, setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
     submit, review, memberMenu, setMember, openMember, deadlineModal, saveDeadline, toggleDia, saveHoras, delLibre, libreModal, saveLibre };
 })();
