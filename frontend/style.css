@@ -20087,3 +20087,36 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .npd__sw { flex: none; width: 34px; height: 20px; border-radius: 99px; background: #CFD6D1; position: relative; } .npd__sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; } .npd__sw.on { background: var(--primary, #007AFF); } .npd__sw.on::after { transform: translateX(14px); }
 .npd__ov { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; background: rgba(20,33,27,.28); padding: 16px; } .npd__tf { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #fff; border-radius: 12px; box-shadow: 0 10px 28px rgba(20,33,27,.2); } .npd__tf b { font-size: .92rem; font-weight: 600; } .npd__tf input, .npd__tf select { height: 36px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; padding: 0 10px; font: inherit; font-size: .86rem; background: #fff; } .npd__tfb { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .npd__b { height: 34px; padding: 0 14px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; background: #fff; font: inherit; font-size: .86rem; cursor: pointer; } .npd__b--p { background: var(--primary, #007AFF); border-color: var(--primary, #007AFF); color: #fff; font-weight: 600; }
+
+/* ═══ Clientes · mismos bordes, radios y tipografía que Time Tracking, Mi trabajo y el Dashboard ═══ */
+#pane-mgmt-clients .pane-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary, #14211B); }
+#pane-mgmt-clients #clients-new-btn { height: 34px; padding: 0 14px; border-radius: 8px; font-size: .84rem; font-weight: 600; box-shadow: none; }
+/* pestañas Contactos / Empresas */
+#pane-mgmt-clients .cl-view-tab { font-size: .88rem; font-weight: 500; color: var(--text-secondary, #5F6B64); padding: 8px 12px; } #pane-mgmt-clients .cl-view-tab.active { color: var(--primary, #007AFF); font-weight: 600; }
+/* barra: buscador y filtros en una fila, estilo píldora */
+#pane-mgmt-clients .pv-toolbar { gap: 10px; align-items: center; }
+#pane-mgmt-clients .clients-search-wrap { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #fff; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 99px; box-shadow: none; } #pane-mgmt-clients .clients-search-wrap:focus-within { border-color: var(--primary, #007AFF); }
+#pane-mgmt-clients #clients-search { font-size: .84rem; }
+#pane-mgmt-clients .clients-filters { background: var(--surface-hover, #EEF0EE); border: 0; border-radius: 10px; padding: 3px; gap: 2px; box-shadow: none; }
+#pane-mgmt-clients .filter-pill { border-radius: 8px; padding: 6px 12px; font-size: .84rem; font-weight: 500; color: var(--text-secondary, #5F6B64); box-shadow: none; }
+#pane-mgmt-clients .filter-pill.active { background: #fff; color: var(--text-primary, #14211B); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,20,.08); }
+#pane-mgmt-clients .pv-views { border: 1px solid var(--border, #E2E7E3); border-radius: 10px; background: #fff; padding: 2px; gap: 2px; box-shadow: none; } #pane-mgmt-clients .pv-view { border-radius: 8px; } #pane-mgmt-clients .pv-view--active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); }
+/* tabla dentro de una tarjeta */
+#pane-mgmt-clients .cl-table-wrap { background: var(--surface, #fff); border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; overflow: hidden; }
+#pane-mgmt-clients .cl-grid-header { background: var(--surface-secondary, #F7F8F6); border-bottom: 1px solid var(--border, #E2E7E3); }
+#pane-mgmt-clients .cl-th { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; color: var(--text-secondary, #5F6B64); } #pane-mgmt-clients .cl-th--active { color: var(--primary, #007AFF); } #pane-mgmt-clients .cl-th-count { font-size: .78rem; font-weight: 500; color: var(--text-muted, #8B9690); }
+#pane-mgmt-clients .cl-row { border-bottom: 1px solid var(--border, #E2E7E3); background: transparent; } #pane-mgmt-clients .cl-row:last-child { border-bottom: 0; } #pane-mgmt-clients .cl-row:hover { background: var(--surface-secondary, #F7F8F6); }
+#pane-mgmt-clients .client-nombre { font-size: .88rem; font-weight: 600; letter-spacing: 0; color: var(--text-primary, #14211B); }
+#pane-mgmt-clients .client-meta, #pane-mgmt-clients .client-col--country { font-size: .84rem; color: var(--text-secondary, #5F6B64); } #pane-mgmt-clients .muted { color: var(--text-muted, #8B9690); }
+#pane-mgmt-clients .client-avatar { border: 1px solid var(--border, #E2E7E3); border-radius: 50%; background: #fff; }
+#pane-mgmt-clients .client-badge { font-size: .76rem; font-weight: 600; letter-spacing: 0; text-transform: none; border-radius: 99px; padding: 3px 10px; }
+/* tablero por estado + columna Estado de Empresas */
+#pane-mgmt-clients .cl-bcol { background: var(--surface-secondary, #F7F8F6); border: 1px solid var(--border, #E2E7E3); border-radius: 12px; }
+#pane-mgmt-clients .cl-bcol__h { text-transform: none; letter-spacing: 0; font-size: .84rem; font-weight: 600; color: var(--text-primary, #14211B); }
+#pane-mgmt-clients .cl-bcol__n { font-size: .76rem; font-weight: 600; color: var(--text-secondary, #5F6B64); background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 99px; padding: 1px 8px; }
+#pane-mgmt-clients .cl-bcol__e { font-size: .8rem; color: var(--text-muted, #8B9690); }
+#pane-mgmt-clients .cl-bcard { background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 10px; box-shadow: none; } #pane-mgmt-clients .cl-bcard:hover { border-color: var(--border-strong, #D5DDD7); box-shadow: 0 2px 8px rgba(16,24,20,.07); }
+#pane-mgmt-clients .cl-bcard__t { font-size: .88rem; font-weight: 600; color: var(--text-primary, #14211B); } #pane-mgmt-clients .cl-bcard__s { font-size: .78rem; color: var(--text-secondary, #5F6B64); }
+#pane-mgmt-clients .cl-grid--empresa .client-col--status { overflow: visible; white-space: nowrap; }
+#pane-mgmt-clients .client-badge { white-space: nowrap; }
+#pane-mgmt-clients .cl-grid > div:has(> .client-badge) { overflow: visible; min-width: 0; }
