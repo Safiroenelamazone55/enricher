@@ -6,7 +6,7 @@ const SpacesModule = (() => {
   const LS = 'nova_spaces_ui';
   let _spaces = [], _projects = [], _tasks = [], _team = [], _loaded = false, _views = [], _viewSel = {}, _calRef = null, _ganttScale = 'semana';
   let _selSpace = null, _selProj = null;             // null/null = Todas las tareas
-  let _view = 'lista', _group = 'estado', _showClosed = false, _expandSubs = true, _q = '', _me = false, _fEstado = [], _fPrio = [], _fPers = [];
+  let _view = 'lista', _group = 'estado', _showClosed = true, _expandSubs = true, _q = '', _me = false, _fEstado = [], _fPrio = [], _fPers = [];
   let _cols = ['prioridad'];                           // columnas extra visibles (además de Nombre · Estado · Fecha límite · Persona)
   const _collapsedG = new Set(), _collapsedT = new Set(), _openSp = new Set(['p0']);
   let _pop = null, _popOff = null, _addingSpace = false;
@@ -931,7 +931,14 @@ const SpacesModule = (() => {
   }
 
   // ── lista ──
+  // Completado y Cancelado se ven siempre como grupo (con su contador); la primera vez salen plegados para no estorbar. El botón ✓ de la barra los oculta del todo.
+  const _closedSeen = new Set();
   function _groups(mains) {
+    const gs = _groups0(mains), cust = _selProj && _custom(_selProj);
+    gs.forEach(g => { if (!g.est) return; const cat = cust ? ((_stList(_selProj).find(e => e.k === g.est) || {}).t) : g.est; if ((cat === 'completado' || cat === 'cancelado') && !_closedSeen.has(g.key)) { _closedSeen.add(g.key); _collapsedG.add(g.key); } });
+    return gs;
+  }
+  function _groups0(mains) {
     const g = _view === 'tabla' ? 'ninguno' : _group;
     if (g === 'ninguno') return [{ key: 'all', label: '', color: '', tasks: mains, flat: true }];
     if (g === 'estado' && _selProj && _custom(_selProj)) return _stList(_selProj).filter(e => _showClosed || (e.t !== 'completado' && e.t !== 'cancelado')).map(e => ({ key: e.k, label: e.n, color: e.c, tasks: mains.filter(t => _taskSt(t).k === e.k), est: e.k }));
