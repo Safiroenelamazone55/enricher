@@ -349,7 +349,19 @@ const TimesheetModule = (() => {
   }
   async function saveCfg(patch) { try { S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), patch))); bodyAjustes(); } catch (e) { err(e); bodyAjustes(); } }
   function toggleDia(d) { const cur = cfg().dias_laborales.slice(), i = cur.indexOf(d); if (i >= 0) { if (cur.length === 1) { showBanner('Debe haber al menos un día laborable', 'info'); return; } cur.splice(i, 1); } else cur.push(d); saveCfg({ dias_laborales: cur }); }
-  function saveHoras() { saveCfg({ hora_ini: $('ts-hi').value, hora_fin: $('ts-hf').value }); }
+  // las horas se guardan sin repintar la página (si no, el campo pierde el foco a mitad de escribir) y con una pequeña espera
+  let _hT = null;
+  function saveHoras() {
+    clearTimeout(_hT);
+    _hT = setTimeout(async () => {
+      const hi = $('ts-hi') && $('ts-hi').value, hf = $('ts-hf') && $('ts-hf').value; if (!hi || !hf) return;
+      try {
+        S.settings = Object.assign(cfg(), await send('/timesheets/settings', 'PUT', Object.assign({}, cfg(), { hora_ini: hi, hora_fin: hf })));
+        const h = hoursPerDay(), sm = document.querySelector('.ts-crow small'); if (sm) sm.textContent = `Capacidad diaria: ${fmtH(h * 3600)} • Capacidad semanal: ${fmtH(h * 3600 * cfg().dias_laborales.length)}`;
+        showBanner('✓ Horario guardado', 'success');
+      } catch (e) { err(e); bodyAjustes(); }
+    }, 600);
+  }
   function delLibre(f) { saveCfg({ no_laborales: (cfg().no_laborales || []).filter(x => x.fecha !== f) }); }
   function libreModal() {
     modal('Añadir días libres', `<label class="ts-fl ts-fl--c"><span>Nombre</span><input type="text" id="ts-ln" maxlength="60" placeholder="Ej. Feriado, vacaciones del equipo"></label><label class="ts-fl ts-fl--c"><span>Desde</span><input type="date" id="ts-l1"></label><label class="ts-fl ts-fl--c"><span>Hasta (opcional)</span><input type="date" id="ts-l2"></label>`,
