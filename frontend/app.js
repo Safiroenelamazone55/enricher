@@ -41329,7 +41329,80 @@ const SlackChat = (() => {
     _miniRiel();
   }
 
-  return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
+  // ── Canal del proyecto: chat de un canal de Slack incrustado (pestaña «Canal» de Espacios).
+  //    Estado propio (_E), aparte del chat completo y del panel lateral, para no pisarlos. ──
+  const _E = { ws: null, canal: null, users: {}, avatars: {}, miId: '', timer: null, sig: '', nombre: '', draft: '', draftCanal: '' };
+  function embedStop() { if (_E.timer) { clearInterval(_E.timer); _E.timer = null; } }
+  function embedDraft(v) { _E.draft = v; _E.draftCanal = String(_E.canal); }
+  async function embed(boxId, wsId, canalId, nombre) {
+    embedStop(); const box = $$(boxId); if (!box) return;
+    const igual = String(_E.draftCanal) === String(canalId);
+    Object.assign(_E, { ws: wsId, canal: canalId, users: {}, avatars: {}, miId: '', sig: '', nombre: nombre || 'Canal', draft: igual ? _E.draft : '' });
+    box.innerHTML = `<div class="slk-emb">
+      <div class="slk-emb__hd"><span class="slk-emb__h">#</span><b>${escNom(_E.nombre)}</b><span class="slk-emb__sp"></span><button type="button" class="slk-emb__open" onclick="SlackChat.embedAbrir()">Abrir en Slack</button></div>
+      <div class="slk-emb__msgs" id="slk-emb-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+      <div class="slk-emb__comp"><textarea id="slk-emb-in" rows="1" placeholder="Escribe en ${esc(_E.nombre)}… (Enter envía, Shift+Enter baja de línea)" oninput="SlackChat.embedDraft(this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();SlackChat.embedEnviar()}">${esc(_E.draft)}</textarea>
+        <button type="button" class="slk-emb__send" title="Enviar" onclick="SlackChat.embedEnviar()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div></div>`;
+    try {
+      const [rm, rw] = await Promise.all([apiFetch(`${API}/slack/workspaces/${wsId}/miembros`), apiFetch(`${API}/slack/workspaces`)]);
+      const dm = await rm.json(), lw = rw.ok ? await rw.json() : [];
+      _E.users = { ...(dm.indice || {}) }; (dm.miembros || []).forEach(u => { _E.users[u.id] = u.nombre || u.usuario; if (u.avatar) _E.avatars[u.id] = u.avatar; });
+      const w = (Array.isArray(lw) ? lw : []).find(x => String(x.id) === String(wsId)); _E.miId = (w && w.slack_user_id) || '';
+    } catch (_) {}
+    await _embedRefrescar(true);
+    _E.timer = setInterval(() => _embedRefrescar(false), 8000);
+  }
+  async function _embedRefrescar(primera) {
+    const box = $$('slk-emb-msgs'); if (!box) { embedStop(); return; }
+    if (!primera && box.offsetParent === null) return;   // pestaña oculta: no consultar
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_E.ws}/canales/${_E.canal}/mensajes?limit=50`);
+      const d = await r.json(); if (!r.ok || d.error) throw new Error(d.error || 'No se pudo cargar el canal');
+      const msgs = d.mensajes || [], sig = msgs.length + '|' + (msgs[0] ? msgs[0].ts : '') + '|' + msgs.reduce((n, m) => n + (+m.reply_count || 0) + (m.reactions || []).length, 0);
+      if (!primera && sig === _E.sig) return; _E.sig = sig;
+      _embedPinta(msgs, !primera);
+    } catch (e) {
+      if (!primera) return; embedStop();
+      const sinWs = /Workspace no encontrado/i.test(e.message), sinCanal = /channel_not_found|not_in_channel|is_archived/i.test(e.message);
+      box.innerHTML = `<div class="slk-emb__err"><b>${sinWs ? 'El Slack de este canal ya no está conectado' : sinCanal ? 'No se puede abrir el canal' : 'No se pudo cargar el canal'}</b><span>${sinWs ? 'Este proyecto se vinculó a un Slack que ya no está en Integraciones. Vuelve a conectarlo para ver aquí la conversación.' : sinCanal ? 'El canal fue archivado o ya no tienes acceso a él en Slack.' : esc(e.message)}</span></div>`;
+    }
+  }
+  function _embedPinta(msgs, conservar) {
+    const box = $$('slk-emb-msgs'); if (!box) return;
+    const orden = [...msgs].reverse(); if (!orden.length) { box.innerHTML = '<div class="chat-ch-empty">Aún no hay mensajes en este canal. Escribe el primero.</div>'; return; }
+    let dia = '', html = '', prevU = null, prevF = null;
+    orden.forEach(m => {
+      const f = new Date(+m.ts * 1000), d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' }), cambio = d2 !== dia;
+      if (cambio) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const agr = !cambio && prevU === m.user && prevF && (f - prevF) < 5 * 60 * 1000; prevU = m.user; prevF = f;
+      const quien = _E.users[m.user] || m.username || 'Slack', hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      const av = (m.user && _E.avatars[m.user]) || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(quien || m.user || 'user')}`;
+      const files = (m.files || []).map(fl => _archivoHtml(fl, _E.ws)).join('');
+      const reacs = (m.reactions || []).map(r => `<span class="slk-reac${_E.miId && (r.users || []).includes(_E.miId) ? ' mine' : ''}">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`).join('');
+      const nResp = +m.reply_count || 0, pill = nResp ? `<button type="button" class="slk-hilo-pill" onclick="SlackChat.embedAbrir()">${NI('responder', 12)} ${nResp} ${nResp === 1 ? 'respuesta' : 'respuestas'}</button>` : '';
+      html += `<div class="chat-msg${agr ? ' chat-msg--grouped' : ''}" data-ts="${m.ts}"><img class="chat-msg__av" src="${av}" alt="">
+        <div class="chat-msg__body"><div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div><span class="chat-msg__t chat-msg__t--grouped">${hora}</span>
+        <div class="chat-msg__txt">${_fmt(m.text, _E.users)}</div>${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${pill}</div></div>`;
+    });
+    const prev = box.scrollTop, abajo = box.scrollHeight - prev - box.clientHeight < 80;
+    box.innerHTML = html; _flushDocPreviews();
+    box.scrollTop = (conservar && !abajo) ? prev : box.scrollHeight;
+  }
+  async function embedEnviar() {
+    const i = $$('slk-emb-in'); const texto = (i && i.value || '').trim(); if (!texto) return;
+    i.value = ''; embedDraft('');
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_E.ws}/canales/${_E.canal}/mensajes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      _E.sig = ''; await _embedRefrescar(false);
+    } catch (e) { if (i) { i.value = texto; embedDraft(texto); } showBanner('No se envió: ' + e.message, 'error'); }
+  }
+  function embedAbrir() {
+    document.querySelector('.snav-item[data-tab="mgmt-chat"]')?.click();
+    setTimeout(async () => { try { await load(); await irA(_E.ws); await abrir(_E.canal); } catch (_) {} }, 450);
+  }
+
+  return { embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,

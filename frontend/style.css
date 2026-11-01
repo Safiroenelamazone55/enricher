@@ -19921,3 +19921,51 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 #pane-mgmt-dashboard .d3-hrs-btn { background: var(--primary, #00804C) !important; background-image: none !important; border-color: var(--primary, #00804C) !important; }
 #pane-mgmt-dashboard .d3-hrs-btn:hover { background: var(--primary-hover, #006B3F) !important; }
 #pane-mgmt-dashboard .hm-tabs { flex-wrap: wrap; } #pane-mgmt-dashboard .hm-tab { padding: 6px 10px; font-size: .8rem; white-space: nowrap; }
+/* ═══ Pestaña «Canal» del proyecto (Slack incrustado) ═══ */
+.sp-tab--canal { gap: 6px !important; padding-right: 14px !important; } .sp-tab__t { font-size: .84rem; font-weight: 500; color: var(--text-secondary, #5F6B64); } .sp-tab--canal.on .sp-tab__t { color: var(--text-primary, #14211B); font-weight: 600; }
+.sp-canal { height: calc(100vh - 250px); min-height: 400px; }
+.slk-emb { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; background: #fff; overflow: hidden; }
+.slk-emb__hd { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border, #E2E7E3); } .slk-emb__h { color: #4A154B; font-weight: 700; } .slk-emb__hd b { font-size: .95rem; font-weight: 600; } .slk-emb__sp { flex: 1; }
+.slk-emb__open { border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; background: #fff; padding: 5px 11px; font: 500 .8rem inherit; color: var(--text-primary, #14211B); cursor: pointer; } .slk-emb__open:hover { background: var(--surface-hover, #F1F3F0); }
+.slk-emb__msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px; }
+.slk-emb__comp { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--border, #E2E7E3); }
+.slk-emb__comp textarea { flex: 1; resize: none; max-height: 140px; min-height: 38px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: .88rem; outline: 0; } .slk-emb__comp textarea:focus { border-color: var(--primary, #007AFF); }
+.slk-emb__send { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 0; border-radius: 10px; background: var(--primary, #007AFF); color: #fff; cursor: pointer; } .slk-emb__send:hover { background: var(--primary-hover, #0066D6); }
+.sp-canal-e { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 64px 20px; text-align: center; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; background: #fff; } .sp-canal-e__i { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 14px; background: #F3EAF4; color: #4A154B; font-size: 1.6rem; font-weight: 700; } .sp-canal-e b { font-size: 1rem; } .sp-canal-e span { color: var(--text-secondary, #5F6B64); font-size: .88rem; max-width: 420px; }
+/* mensajes del canal incrustado (copia de los del chat lateral) */
+#slk-emb-msgs .chat-msg { display: flex; gap: 8px; align-items: flex-start; padding: 6px 2px; position: relative; }
+#slk-emb-msgs .chat-msg__av { width: 32px !important; height: 32px !important; flex: 0 0 32px !important; border-radius: 8px; background: #F1EFEB; object-fit: cover; }
+#slk-emb-msgs .chat-msg__body { flex: 1; min-width: 0; }
+#slk-emb-msgs .chat-msg__hd { display: flex; align-items: baseline; gap: 6px; }
+#slk-emb-msgs .chat-msg__who { font-size: 12.5px; font-weight: 600; color: #1F1D1B; }
+#slk-emb-msgs .chat-msg__t { font-size: 10.5px; color: #B4AFA8; }
+#slk-emb-msgs .chat-msg--grouped { padding-top: 1px; padding-bottom: 1px; }
+#slk-emb-msgs .chat-msg--grouped .chat-msg__av { visibility: hidden; }
+#slk-emb-msgs .chat-msg--grouped .chat-msg__hd { display: none; }
+#slk-emb-msgs .chat-msg__t--grouped {
+  display: none; position: absolute; left: 2px; width: 32px; text-align: center;
+  font-size: 9.5px; color: #B4AFA8; line-height: 1;
+}
+#slk-emb-msgs .chat-msg--grouped:hover .chat-msg__t--grouped { display: block; }
+#slk-emb-msgs .chat-msg:not(.chat-msg--grouped) .chat-msg__t--grouped { display: none !important; }
+#slk-emb-msgs .chat-msg__txt { font-size: 12.8px; line-height: 1.4; color: #262626; margin-top: 1px; overflow-wrap: anywhere; }
+#slk-emb-msgs .chat-msg__txt img { max-width: 100%; height: auto; }
+#slk-emb-msgs .chat-msg__txt code { background: #F1EFEB; border-radius: 8px; padding: 1px 4px; font-size: 11.5px; }
+#slk-emb-msgs .chat-daysep { display: flex; align-items: center; gap: 8px; margin: 10px 2px 6px; }
+#slk-emb-msgs .chat-daysep::before, #rchat-messages .chat-daysep::after { content: ''; flex: 1; height: 1px; background: #E7E3DD; }
+#slk-emb-msgs .chat-daysep span { font-size: 10.5px; font-weight: 600; color: #918C85; }
+#slk-emb-msgs .slk-file-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; object-fit: cover; border: 1px solid #E7E3DD; cursor: zoom-in; }
+#slk-emb-msgs .slk-file-video { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; background: #000; }
+#slk-emb-msgs .slk-file-audio audio { width: 100%; height: 30px; margin-top: 3px; }
+#slk-emb-msgs .slk-file-audio__nm { font-size: 10.5px; font-weight: 600; color: #6C6862; }
+#slk-emb-msgs .slk-doc { max-width: 100%; }
+#slk-emb-msgs .slk-doc__body { max-height: 130px; font-size: 10.5px; }
+#slk-emb-msgs .slk-doc-table td { padding: 2px 5px; }
+#slk-emb-msgs .chat-msg:not(.chat-msg--grouped) { margin-top: 8px; }
+#slk-emb-msgs .chat-msg { gap: 7px; }
+#slk-emb-msgs .chat-msg__avatar-init { width: 24px; height: 24px; }
+#slk-emb-msgs .chat-msg__bubble { line-height: 1.3; }
+#slk-emb-msgs .slk-unread-sep { margin: 10px 8px; }
+
+#slk-emb-msgs { overflow-x: hidden; } #slk-emb-msgs .chat-msg { display: flex; gap: 10px; padding: 5px 0; } #slk-emb-msgs .chat-msg__txt { font-size: .88rem; line-height: 1.5; } #slk-emb-msgs .chat-msg__who { font-size: .86rem; } #slk-emb-msgs .chat-msg__t { font-size: .7rem; }
+.slk-emb__err { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 56px 24px; text-align: center; } .slk-emb__err b { font-size: .95rem; } .slk-emb__err span { max-width: 420px; color: var(--text-secondary, #5F6B64); font-size: .86rem; }
