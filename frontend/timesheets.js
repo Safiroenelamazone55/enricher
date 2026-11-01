@@ -33,7 +33,7 @@ const TimesheetModule = (() => {
     users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-5-5.7"/>', check: '<polyline points="20 6 9 17 4 12"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>', copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
-  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
+  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), range: null, hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
   try { const pf = JSON.parse(localStorage.getItem('ts_prefs') || '{}'); if (pf.view) S.view = pf.view; if (pf.hideWk) S.hideWk = true; if (pf.tab) S.tab = pf.tab; } catch (_) {}
   const api = async (u, o) => { const r = await apiFetch(API + u, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('Error ' + r.status)); return j; };
   const send = (u, m, b) => api(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
@@ -47,10 +47,16 @@ const TimesheetModule = (() => {
   const cfg = () => S.settings || { dias_laborales: [1, 2, 3, 4, 5], hora_ini: '09:00', hora_fin: '17:00', no_laborales: [], aprob_activas: false, limite_dia: 5, limite_hora: '17:00', rec_antes_h: 24, rec_despues_h: 8 };
   const hoursPerDay = () => { const c = cfg(), a = c.hora_ini.split(':'), b = c.hora_fin.split(':'); return Math.max(0, ((+b[0] * 60 + +b[1]) - (+a[0] * 60 + +a[1])) / 60); };
   const capDay = d => { const c = cfg(); return c.dias_laborales.includes(dowIdx(d) + 1) && !(c.no_laborales || []).some(x => x.fecha === d) ? hoursPerDay() * 3600 : 0; };
-  const weekDays = () => Array.from({ length: 7 }, (_, i) => addD(S.week, i));
+  // Periodo visible: una semana (por defecto) o un rango libre (15 días, 30 días, mes, personalizado)
+  const rStart = () => S.range ? S.range.start : S.week;
+  const rEnd = () => S.range ? S.range.end : addD(S.week, 6);
+  const nDays = (a, z) => Math.round((new Date(z + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5) + 1;
+  const weekDays = () => { const out = []; for (let d = rStart(), n = 0; d <= rEnd() && n < 125; d = addD(d, 1), n++) out.push(d); return out; };
   const visDays = () => weekDays().filter(d => !S.hideWk || dowIdx(d) < 5);
   const weekCap = () => weekDays().reduce((a, d) => a + capDay(d), 0);
-  const weekLabel = () => `${dShort(S.week)} - ${dShort(addD(S.week, 6))}`;
+  const weekLabel = () => { const a = rStart(), z = rEnd(); return S.range && a.slice(0, 4) !== z.slice(0, 4) ? `${dShort(a)} ${a.slice(0, 4)} - ${dShort(z)} ${z.slice(0, 4)}` : `${dShort(a)} - ${dShort(z)}`; };
+  const teamUrl = () => S.range ? `/timesheets/team?week_start=${rStart()}&to=${rEnd()}` : '/timesheets/team?week_start=' + S.week;
+  const monthRange = d => { const y = d.getUTCFullYear(), m = d.getUTCMonth(); return { kind: 'mes', start: new Date(Date.UTC(y, m, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(y, m + 1, 0, 12)).toISOString().slice(0, 10) }; };
 
   // ── ventanitas ──
   let _pop = null, _popOff = null;
@@ -99,14 +105,35 @@ const TimesheetModule = (() => {
   }
 
   // ── navegación de semana ──
-  const weekNav = (extra) => `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.nav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.nav(1)">${ic(IC.right, 17)}</button>
-    <button type="button" class="ts-wk__l" onclick="TimesheetModule.weekMenu(event)">${weekLabel()}${ic(IC.down, 15)}</button>${extra || ''}</div>`;
-  function nav(n) { S.week = addD(S.week, 7 * n); paintBody(); }
-  function weekMenu(ev) {
-    const cur = monday(todayL()), o = (l, w) => `<button type="button" class="ts-mi${S.week === w ? ' on' : ''}" onclick="TimesheetModule.setWeek('${w}')">${l}</button>`;
-    popOpen(ev.currentTarget, `${o('Esta semana', cur)}${o('Semana pasada', addD(cur, -7))}<div class="ts-ms"></div><label class="ts-mi ts-mi--d">Elegir fecha<input type="date" onchange="TimesheetModule.setWeek(this.value)"></label>`);
+  const weekNav = (extra, weekOnly) => `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.nav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.nav(1)">${ic(IC.right, 17)}</button>
+    <button type="button" class="ts-wk__l" onclick="TimesheetModule.weekMenu(event${weekOnly ? ',true' : ''})">${weekLabel()}${ic(IC.down, 15)}</button>${extra || ''}</div>`;
+  function nav(n) {
+    if (!S.range) S.week = addD(S.week, 7 * n);
+    else if (S.range.kind === 'mes') { const d = new Date(S.range.start + 'T12:00:00Z'); S.range = monthRange(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1, 12))); }
+    else { const len = nDays(S.range.start, S.range.end); S.range = { kind: S.range.kind, start: addD(S.range.start, len * n), end: addD(S.range.end, len * n) }; }
+    paintBody();
   }
-  function setWeek(d) { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return; popClose(); S.week = monday(d); paintBody(); }
+  function weekMenu(ev, weekOnly) {
+    const cur = monday(todayL()), t = todayL(), k = x => S.range && S.range.kind === x, w = x => !S.range && S.week === x;
+    const o = (l, on, fn) => `<button type="button" class="ts-mi${on ? ' on' : ''}" onclick="${fn}"><span>${l}</span>${on ? ic(IC.check, 14) : ''}</button>`;
+    const rng = weekOnly ? '' : o('Últimos 15 días', k('15d'), "TimesheetModule.setRange('15d')") + o('Últimos 30 días', k('30d'), "TimesheetModule.setRange('30d')") + o('Este mes', k('mes') && S.range.start === monthRange(new Date(t + 'T12:00:00Z')).start, "TimesheetModule.setRange('mes')") + o('Mes pasado', false, "TimesheetModule.setRange('mesp')")
+      + `<div class="ts-ms"></div><div class="ts-rg"><b>Rango personalizado</b><div class="ts-rg__r"><label>Desde<input type="date" id="ts-rg1" value="${rStart()}"></label><label>Hasta<input type="date" id="ts-rg2" value="${rEnd()}"></label></div><button type="button" class="ts-btn ts-btn--p" onclick="TimesheetModule.applyRange()">Aplicar</button></div>`;
+    popOpen(ev.currentTarget, `${o('Esta semana', w(cur), `TimesheetModule.setWeek('${cur}')`)}${o('Semana pasada', w(addD(cur, -7)), `TimesheetModule.setWeek('${addD(cur, -7)}')`)}${rng}<div class="ts-ms"></div><label class="ts-mi ts-mi--d">Ir a la semana de…<input type="date" onchange="TimesheetModule.setWeek(this.value)"></label>`, 'ts-pop--w');
+  }
+  function setWeek(d) { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return; popClose(); S.range = null; S.week = monday(d); paintBody(); }
+  function setRange(kind) {
+    popClose(); const t = todayL();
+    if (kind === '15d') S.range = { kind, start: addD(t, -14), end: t };
+    else if (kind === '30d') S.range = { kind, start: addD(t, -29), end: t };
+    else if (kind === 'mes') S.range = monthRange(new Date(t + 'T12:00:00Z'));
+    else { const d = new Date(t + 'T12:00:00Z'); S.range = monthRange(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1, 12))); }
+    paintBody();
+  }
+  function applyRange() {
+    const a = $('ts-rg1') && $('ts-rg1').value, z = $('ts-rg2') && $('ts-rg2').value;
+    if (!a || !z) { showBanner('Elige las dos fechas', 'info'); return; } if (z < a) { showBanner('La fecha final debe ser posterior a la inicial', 'info'); return; } if (nDays(a, z) > 92) { showBanner('El rango máximo es de 92 días', 'info'); return; }
+    popClose(); S.range = { kind: 'custom', start: a, end: z }; paintBody();
+  }
 
   // ── filtros ──
   function chip(kind, icon, label, on) { return `<button type="button" class="ts-chip${on ? ' on' : ''}" onclick="TimesheetModule.fMenu(event,'${kind}')">${ic(icon, 14)}${label}</button>`; }
@@ -138,12 +165,12 @@ const TimesheetModule = (() => {
 
   // ── datos de entradas de la semana (propias o de un miembro) ──
   async function loadEntries() {
-    const start = `${S.week}T00:00:00-05:00`, end = `${addD(S.week, 6)}T23:59:59.999-05:00`, mq = S.member ? `&member=${encodeURIComponent(S.member)}` : '';
+    const start = `${rStart()}T00:00:00-05:00`, end = `${rEnd()}T23:59:59.999-05:00`, mq = S.member ? `&member=${encodeURIComponent(S.member)}` : '';
     const list = await api(`/timer/entries?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${mq}`);
     S.entries = Array.isArray(list) ? list : []; try { TimerModule.setEntries(S.entries); } catch (_) {}
     return S.entries;
   }
-  const pinKey = () => 'ts_pins_' + S.week;
+  const pinKey = () => 'ts_pins_' + (S.range ? S.range.start + '_' + S.range.end : S.week);
   const pins = () => { if (S.member) return []; try { return JSON.parse(localStorage.getItem(pinKey()) || '[]'); } catch (_) { return []; } };
   const setPins = a => { try { localStorage.setItem(pinKey(), JSON.stringify([...new Set(a)].slice(0, 80))); } catch (_) {} };
   function buildRows(entries) {
@@ -167,7 +194,7 @@ const TimesheetModule = (() => {
   async function bodyHoja() {
     const b = $('ts-body'); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
     await loadEntries();
-    if (!S.member) { try { S.mine = await api('/timesheets/mine?week_start=' + S.week); } catch (_) { S.mine = null; } } else S.mine = null;
+    if (!S.member && !S.range) { try { S.mine = await api('/timesheets/mine?week_start=' + S.week); } catch (_) { S.mine = null; } } else S.mine = null;
     const adm = isAdmin();
     let head = '';
     if (S.member) head = `<div class="ts-who"><button type="button" class="ts-ib" onclick="TimesheetModule.go('todas')" title="Volver">${ic(IC.back, 18)}</button><span class="ts-av">${esc(ini(S.member))}</span><b>${esc(S.member)}</b><span class="ts-sp"></span><span class="ts-tz">${ic('<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>', 14)}Zona horaria: -05 (UTC-5)</span></div>`;
@@ -178,7 +205,7 @@ const TimesheetModule = (() => {
     S.view === 'hoja' ? drawHoja() : drawEntradas();
   }
   function submissionBar() {
-    const c = cfg(); if (!c.aprob_activas) return '';
+    const c = cfg(); if (!c.aprob_activas || S.range) return '';   // el envío y la aprobación son por semana
     const lim = `${DIAS[c.limite_dia - 1]} ${hm('2000-01-01T' + c.limite_hora + ':00-05:00')}`;
     if (S.member) { // un admin revisando a otra persona
       const p = S.team && (S.team.personas || []).find(x => x.nombre === S.member); const st = p ? p.estado : 'pendiente', uid = p ? p.user_id : S.memberId;
@@ -199,14 +226,14 @@ const TimesheetModule = (() => {
   function drawHoja() {
     const g = $('ts-grid'); if (!g) return; const days = visDays(), rows = buildRows(S.entries), today = todayL(); S.rows = rows;
     const dayTot = {}; rows.forEach(r => Object.entries(r.days).forEach(([d, s]) => { dayTot[d] = (dayTot[d] || 0) + s; }));
-    const grand = rows.reduce((a, r) => a + r.total, 0), cols = `grid-template-columns:minmax(250px,1.8fr) repeat(${days.length},minmax(92px,1fr)) 128px`;
+    const grand = rows.reduce((a, r) => a + r.total, 0), cols = days.length > 9 ? `grid-template-columns:260px repeat(${days.length},84px) 128px` : `grid-template-columns:minmax(250px,1.8fr) repeat(${days.length},minmax(92px,1fr)) 128px`;
     const th = days.map(d => { const cp = capDay(d), t = dayTot[d] || 0, pc = cp > 0 ? Math.min(100, t / cp * 100) : (t > 0 ? 100 : 0); return `<div class="tsh-d${d === today ? ' is-today' : ''}${cp === 0 ? ' is-off' : ''}"><span>${dHead(d)}</span><b>${fmtH(t)}</b><i class="tsh-bar"><u class="${t >= cp && cp > 0 ? 'ok' : ''}" style="width:${pc}%"></u></i></div>`; }).join('');
     const body = rows.map(r => `<div class="tsh-r" style="${cols}"><div class="tsh-t"><div class="tsh-t__n"><a href="javascript:void(0)" ${r.taskId ? `onclick="openTaskAnywhere(${r.taskId})"` : ''}>${esc(r.titulo)}</a>${r.archivada ? '<em>archivada</em>' : ''}</div><small>${esc(r.ctx)}</small></div>`
       + days.map(d => { const s = r.days[d] || 0; return `<button type="button" class="tsh-c${s ? ' has' : ''}${capDay(d) === 0 ? ' is-off' : ''}" onclick="TimesheetModule.cell(event,'${r.key}','${d}')">${s ? fmtH(s) : '<i>+</i>'}</button>`; }).join('')
       + `<div class="tsh-tot">${r.total ? fmtH(r.total) : '—'}${r.taskId && !S.member ? `<button type="button" class="tsh-play" title="Iniciar cronómetro" onclick="TimerModule.toggleTask(${r.taskId})">${ic(IC.play, 12)}</button>` : ''}</div></div>`).join('');
     const empty = !rows.length ? emptyCards() : '';
     g.innerHTML = `<div class="tsh"><div class="tsh-h" style="${cols}"><div class="tsh-h0">Tarea / Ubicación</div>${th}<div class="tsh-d tsh-d--t"><span>Total</span><b>${fmtH(grand)}</b><i class="tsh-bar"><u class="${weekCap() && grand >= weekCap() ? 'ok' : ''}" style="width:${weekCap() ? Math.min(100, grand / weekCap() * 100) : 0}%"></u></i></div></div>${body}${empty}</div>
-      <div class="ts-foot"><button type="button" class="ts-btn ts-btn--p" onclick="TimesheetModule.addTask(event)">${ic(IC.plus, 15)}Agregar tarea</button><span class="ts-capn">Capacidad semanal: ${fmtH(weekCap())}</span></div>`;
+      <div class="ts-foot"><button type="button" class="ts-btn ts-btn--p" onclick="TimesheetModule.addTask(event)">${ic(IC.plus, 15)}Agregar tarea</button><span class="ts-capn">Capacidad ${S.range ? 'del periodo' : 'semanal'}: ${fmtH(weekCap())}</span></div>`;
   }
   function emptyCards() {
     const c = (k, i, l) => `<button type="button" class="ts-ec" onclick="TimesheetModule.empty('${k}',event)">${ic(i, 20)}<span>${l}</span></button>`;
@@ -221,11 +248,11 @@ const TimesheetModule = (() => {
       if (!ids.length) { showBanner('No tienes tareas abiertas asignadas', 'info'); return; } setPins([...pins(), ...ids]); drawHoja(); return;
     }
     if (k === 'prev') {
-      try { const s0 = addD(S.week, -7), l = await api(`/timer/entries?start=${encodeURIComponent(s0 + 'T00:00:00-05:00')}&end=${encodeURIComponent(addD(s0, 6) + 'T23:59:59.999-05:00')}`);
-        const ids = [...new Set((l || []).filter(e => e.task_id).map(e => e.task_id))]; if (!ids.length) { showBanner('La semana pasada no tiene tareas con tiempo', 'info'); return; } setPins([...pins(), ...ids]); drawHoja(); } catch (e) { err(e); }
+      try { const len = weekDays().length, s0 = addD(rStart(), -len), l = await api(`/timer/entries?start=${encodeURIComponent(s0 + 'T00:00:00-05:00')}&end=${encodeURIComponent(addD(s0, len - 1) + 'T23:59:59.999-05:00')}`);
+        const ids = [...new Set((l || []).filter(e => e.task_id).map(e => e.task_id))]; if (!ids.length) { showBanner('El periodo anterior no tiene tareas con tiempo', 'info'); return; } setPins([...pins(), ...ids]); drawHoja(); } catch (e) { err(e); }
     }
   }
-  function manual(pre) { popClose(); try { TimerModule.openManual(pre || { fecha: weekDays().includes(todayL()) ? todayL() : S.week }); } catch (e) { err(e); } }
+  function manual(pre) { popClose(); try { TimerModule.openManual(pre || { fecha: weekDays().includes(todayL()) ? todayL() : rStart() }); } catch (e) { err(e); } }
   function addTask(ev) {
     const anchor = ev && ev.currentTarget || $('ts-grid');
     const p = popOpen(anchor, `<input class="ts-pq" id="ts-pq" placeholder="Buscar tarea…" autocomplete="off" oninput="TimesheetModule.pickSearch(this.value)"><div class="ts-pl" id="ts-pl"></div>`, 'ts-pop--w');
@@ -240,7 +267,7 @@ const TimesheetModule = (() => {
   function pick(i) {
     const id = (window.__tsPick || [])[i]; if (!id) return; const t = tasksAll().find(x => x.id === id); popClose(); if (!t) return;
     if (!S.member) setPins([...pins(), id]);
-    manual({ fecha: weekDays().includes(todayL()) ? todayL() : S.week, taskId: id, titulo: t.titulo, ctx: t.project_nombre || '' });
+    manual({ fecha: weekDays().includes(todayL()) ? todayL() : rStart(), taskId: id, titulo: t.titulo, ctx: t.project_nombre || '' });
   }
   function cell(ev, key, day) {
     const r = S.rows.find(x => x.key === key); if (!r) return; const es = r.entries.filter(e => limaDay(e.started_at) === day).sort((a, z) => new Date(a.started_at) - new Date(z.started_at)), adm = isAdmin();
@@ -294,13 +321,13 @@ const TimesheetModule = (() => {
   // ── Todas las hojas de horas (equipo) ──
   async function bodyTodas() {
     const b = $('ts-body'); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
-    S.team = await api('/timesheets/team?week_start=' + S.week);
+    S.team = await api(teamUrl());
     drawTodas();
   }
   function drawTodas() {
     const b = $('ts-body'), t = S.team; if (!b || !t) return; const days = visDays(), today = todayL();
     let ps = t.personas || []; if (S.memberFilter !== 'all') ps = ps.filter(p => String(p.user_id) === String(S.memberFilter));
-    const cols = `grid-template-columns:minmax(300px,1.8fr) repeat(${days.length},minmax(84px,1fr)) 96px`;
+    const cols = days.length > 9 ? `grid-template-columns:300px repeat(${days.length},84px) 96px` : `grid-template-columns:minmax(300px,1.8fr) repeat(${days.length},minmax(84px,1fr)) 96px`;
     const sel = (t.personas || []).find(p => String(p.user_id) === String(S.memberFilter));
     const memberBtn = `<button type="button" class="ts-btn ts-btn--sel" onclick="TimesheetModule.memberMenu(event)">${sel ? esc(sel.nombre) : 'Todos los miembros'}${ic(IC.down, 14)}</button>`;
     const rows = ps.map(p => `<div class="tsh-r tsh-r--p" style="${cols}"><div class="tsh-p"><span class="ts-av">${esc(ini(p.nombre))}</span><div><b>${esc(p.nombre)}</b><small>${fmtH(p.capacidad_s)}</small></div><span class="ts-st ts-st--${p.estado}">${p.estado === 'pendiente' ? '' : stLabel(p.estado)}</span><button type="button" class="ts-btn ts-btn--open" onclick="TimesheetModule.openMember(${p.user_id})">Abrir ${ic(IC.right, 13)}</button></div>`
@@ -316,11 +343,12 @@ const TimesheetModule = (() => {
   async function bodyAprob() {
     const b = $('ts-body'), c = cfg();
     if (!c.aprob_activas) { b.innerHTML = `<div class="ts-aph"><h2>Aprobaciones de hojas de horas</h2></div><div class="ts-empty"><div class="ts-empty__i">${ic(IC.check, 38)}</div><b>Aprueba las hojas de horas de tu equipo</b><span>Cada persona envía su semana y tú la apruebas o la devuelves. Al aprobarla, sus entradas quedan bloqueadas.</span><button type="button" class="ts-btn ts-btn--p" onclick="TimesheetModule.deadlineModal()">Configurar aprobaciones</button></div>`; return; }
+    if (S.range) { S.week = monday(rEnd()); S.range = null; }   // las aprobaciones son por semana
     b.innerHTML = '<div class="ts-loading">Cargando…</div>'; S.team = await api('/timesheets/team?week_start=' + S.week);
     const lim = `${DIAS[c.limite_dia - 1]} ${hm('2000-01-01T' + c.limite_hora + ':00-05:00')}`, ps = S.team.personas || [];
     const rows = ps.map(p => `<div class="tsa-r"><div class="tsa-n"><span class="ts-av">${esc(ini(p.nombre))}</span><div><b>${esc(p.nombre)}</b><span class="ts-st ts-st--${p.estado}">${stLabel(p.estado)}</span></div></div><div>${fmtH(p.total)}</div><div>${fmtH(p.capacidad_s)}</div><div>${fmtH(p.facturable)}</div><div class="${p.excede_s ? 'is-bad' : ''}">${p.excede_s ? fmtH(p.excede_s) : '—'}</div><div class="tsa-a">${reviewBtns(p.user_id, p.estado)}<button type="button" class="ts-btn" onclick="TimesheetModule.openMember(${p.user_id})">Abrir</button></div></div>`).join('');
     b.innerHTML = `<div class="ts-aph"><h2>Aprobaciones de hojas de horas</h2><span class="ts-sp"></span><span class="ts-dl">Fecha límite: ${lim} · Recordatorio ${c.rec_antes_h ? c.rec_antes_h + ' h antes' : 'desactivado'}</span><button type="button" class="ts-btn" onclick="TimesheetModule.deadlineModal()">${ic(IC.clock, 14)}Fecha límite y recordatorios</button></div>
-      <div class="ts-row1">${weekNav()}</div><div class="tsa"><div class="tsa-r tsa-r--h"><div>Detalles</div><div>Registrado</div><div>Capacidad</div><div>Facturable</div><div>Excede la capacidad</div><div>Revisión</div></div>${rows}</div>`;
+      <div class="ts-row1">${weekNav('', true)}</div><div class="tsa"><div class="tsa-r tsa-r--h"><div>Detalles</div><div>Registrado</div><div>Capacidad</div><div>Facturable</div><div>Excede la capacidad</div><div>Revisión</div></div>${rows}</div>`;
   }
   function deadlineModal() {
     const c = cfg(), opt = (v, l, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${l}</option>`;
@@ -369,7 +397,7 @@ const TimesheetModule = (() => {
   // ═════════ Dashboard (gráficas) ═════════
   const PAL = ['#00804C', '#4C7DF0', '#F2A93B', '#8B5CF6', '#E5484D', '#17A6B7', '#D6409F', '#8B9690'];
   const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const D = { period: 'week', anchor: todayL(), member: 'me', project: 'all' };
+  const D = { period: 'week', anchor: todayL(), member: 'me', project: 'all', from: addD(todayL(), -29), to: todayL() };
   let _charts = [];
   const killCharts = () => { _charts.forEach(c => { try { c.destroy(); } catch (_) {} }); _charts = []; };
   const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5) + 1;
@@ -377,7 +405,8 @@ const TimesheetModule = (() => {
     const a = D.anchor;
     if (D.period === 'week') { const s = monday(a), e = addD(s, 6); return { start: s, end: e, label: `${dShort(s)} - ${dShort(e)}` }; }
     if (D.period === 'month') { const d = new Date(a + 'T12:00:00Z'), y = d.getUTCFullYear(), m = d.getUTCMonth(); return { start: new Date(Date.UTC(y, m, 1, 12)).toISOString().slice(0, 10), end: new Date(Date.UTC(y, m + 1, 0, 12)).toISOString().slice(0, 10), label: `${cap1(MESL[m])} ${y}` }; }
-    const e = todayL(); return { start: addD(e, -29), end: e, label: 'Últimos 30 días' };
+    if (D.period === 'custom') { let a = D.from || addD(todayL(), -29), z = D.to || todayL(); if (a > z) [a, z] = [z, a]; if (daysBetween(a, z) > 120) a = addD(z, -119); return { start: a, end: z, label: `${dShort(a)}${a.slice(0, 4) !== z.slice(0, 4) ? ' ' + a.slice(0, 4) : ''} - ${dShort(z)} ${z.slice(0, 4)}` }; }
+    const e = todayL(), n = D.period === '15d' ? 15 : 30; return { start: addD(e, -(n - 1)), end: e, label: `Últimos ${n} días` };
   }
   const prevRange = r => { const n = daysBetween(r.start, r.end); return { start: addD(r.start, -n), end: addD(r.start, -1) }; };
   function dashNav(n) {
@@ -386,7 +415,7 @@ const TimesheetModule = (() => {
     else return;
     bodyDash();
   }
-  function dashSet(k, v) { D[k] = v; if (k === 'period') D.anchor = todayL(); (k === 'member' || k === 'period') ? bodyDash() : drawDash(); }
+  function dashSet(k, v) { D[k] = v; if (k === 'period') D.anchor = todayL(); (k === 'member' || k === 'period' || k === 'from' || k === 'to') ? bodyDash() : drawDash(); }
   async function bodyDash() {
     const b = $('ts-body'); killCharts(); b.innerHTML = '<div class="ts-loading">Cargando…</div>';
     const r = dashRange(), p = prevRange(r), t0 = p.start < addD(r.end, -55) ? p.start : addD(r.end, -55), mq = D.member === 'me' ? '' : `&member=${encodeURIComponent(D.member)}`;
@@ -419,7 +448,7 @@ const TimesheetModule = (() => {
     const byTask = top(cur, e => e.task_titulo || 'Sin tarea', 8), byClient = top(cur, e => e.client_nombre || 'Sin cliente', 8);
     const names = {}; if (team) team.personas.forEach(p => { names[p.user_id] = p.nombre; });
     const byPers = D.member === 'all' ? top(cur, e => names[e.user_id] || ('Usuario ' + e.user_id), 10) : [];
-    const days = []; for (let d = r.start, n = 0; d <= r.end && n < 62; d = addD(d, 1), n++) days.push(d);
+    const days = []; for (let d = r.start, n = 0; d <= r.end && n < 125; d = addD(d, 1), n++) days.push(d);
     const dayF = {}, dayN = {}; cur.forEach(e => { const d = limaDay(e.started_at), h = dur(e) / 3600, o = billable(e) ? dayF : dayN; o[d] = (o[d] || 0) + h; });
     const mw = monday(r.end), weeks = Array.from({ length: 8 }, (_, i) => addD(mw, -7 * (7 - i)));
     const wTot = weeks.map(w => sum(all.filter(e => sel(e) && inR(e, w, addD(w, 6)))) / 3600), wCap = weeks.map(w => Array.from({ length: 7 }, (_, i) => capDay(addD(w, i))).reduce((a, x) => a + x, 0) / 3600 * nP);
@@ -437,8 +466,8 @@ const TimesheetModule = (() => {
       : `<div class="ts-empty ts-empty--in tsd-emp"><span>Conecta la extensión del navegador o el agente de escritorio para ver aquí las apps y sitios donde realmente trabajaste.</span><button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes','conexiones')">${ic(IC.gear, 14)}Configurar conexiones</button></div>`;
     const none = !cur.length;
     const empty = '<div class="tsd-none">Sin registros en este periodo</div>';
-    b.innerHTML = `<div class="tsd-top"><div class="ts-seg">${seg('week', 'Semana')}${seg('month', 'Mes')}${seg('30d', 'Últimos 30 días')}</div>
-        ${D.period === '30d' ? `<b class="tsd-lbl">${r.label}</b>` : `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(1)">${ic(IC.right, 17)}</button><b class="tsd-lbl">${r.label}</b></div>`}
+    b.innerHTML = `<div class="tsd-top"><div class="ts-seg">${seg('week', 'Semana')}${seg('month', 'Mes')}${seg('15d', '15 días')}${seg('30d', '30 días')}${seg('custom', 'Personalizado')}</div>
+        ${D.period !== 'week' && D.period !== 'month' ? `${D.period === 'custom' ? `<span class="tsd-cr"><input type="date" value="${esc(D.from)}" onchange="TimesheetModule.dashSet('from',this.value)"><span>–</span><input type="date" value="${esc(D.to)}" onchange="TimesheetModule.dashSet('to',this.value)"></span>` : ''}<b class="tsd-lbl">${r.label}</b>` : `<div class="ts-wk"><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(-1)">${ic(IC.left, 17)}</button><button type="button" class="ts-ib" onclick="TimesheetModule.dashNav(1)">${ic(IC.right, 17)}</button><b class="tsd-lbl">${r.label}</b></div>`}
         <span class="ts-sp"></span>${memSel}${prSel}<button type="button" class="ts-btn" onclick="TimesheetModule.go('informe')">${ic(IC.list, 14)}Informe detallado</button></div>
       <div class="tsd-kpis">${kpis}</div>
       <div class="tsd-grid">
@@ -540,6 +569,6 @@ const TimesheetModule = (() => {
     sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><b>${esc(ACC[x.accion] || x.accion)}</b><small class="ts-sm">${esc(x.actor_name || 'Alguien')} · ${esc(x.detalle)}</small></div><small class="ts-sm">${new Date(x.created_at).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')}</div>` : `<div class="ts-empty"><b>Todavía no hay actividad registrada</b><span>Aquí aparecerán los cambios y aprobaciones desde ahora.</span></div>`);
   }
 
-  return { dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
+  return { setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
     submit, review, memberMenu, setMember, openMember, deadlineModal, saveDeadline, toggleDia, saveHoras, delLibre, libreModal, saveLibre };
 })();

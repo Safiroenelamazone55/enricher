@@ -40,9 +40,9 @@ function mount(app, { pool, requireAuth }) {
     return { cap_personas: s.cap_personas || {}, dias_laborales: s.dias_laborales, hora_ini: s.hora_ini, hora_fin: s.hora_fin, no_laborales: s.no_laborales || [], aprob_activas: !!s.aprob_activas, limite_dia: s.limite_dia, limite_hora: s.limite_hora, rec_antes_h: s.rec_antes_h, rec_despues_h: s.rec_despues_h };
   };
   // capacidad (segundos) de una semana que empieza el lunes ws
-  const capacidad = (s, ws) => {
+  const capacidad = (s, ws, n) => {
     const libres = new Set((s.no_laborales || []).map(x => x.fecha)), h = hrs(s.hora_ini, s.hora_fin); let tot = 0;
-    for (let i = 0; i < 7; i++) { const d = addDays(ws, i), dow = ((new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7) + 1; if (s.dias_laborales.includes(dow) && !libres.has(d)) tot += h * 3600; }
+    for (let i = 0; i < (n || 7); i++) { const d = addDays(ws, i), dow = ((new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7) + 1; if (s.dias_laborales.includes(dow) && !libres.has(d)) tot += h * 3600; }
     return tot;
   };
 
@@ -75,8 +75,8 @@ function mount(app, { pool, requireAuth }) {
   });
 
   // horas por persona y día (lunes a domingo, hora de Lima) + estado de su hoja
-  const weekData = async (wid, ws) => {
-    const we = addDays(ws, 6), s = await getSettings(wid);
+  const weekData = async (wid, ws, to) => {
+    const we = to || addDays(ws, 6), esSemana = !to, nDias = Math.round((new Date(we + 'T12:00:00Z') - new Date(ws + 'T12:00:00Z')) / 864e5) + 1, s = await getSettings(wid);
     const { rows } = await pool.query(
       `SELECT u.id AS user_id, COALESCE(tm.nombre, u.name, u.email) AS nombre,
               to_char(te.started_at AT TIME ZONE $4, 'YYYY-MM-DD') AS dia,
@@ -91,14 +91,14 @@ function mount(app, { pool, requireAuth }) {
          LEFT JOIN tasks t ON t.id=te.task_id LEFT JOIN projects p ON p.id=t.project_id
         WHERE u.workspace_id=$1 OR u.id=$1
         GROUP BY u.id, tm.nombre, u.name, u.email, dia ORDER BY nombre`, [wid, ws, we, TZ]);
-    const { rows: subs } = await pool.query(`SELECT user_id, status, nota, submitted_at, reviewed_at FROM ts_submissions WHERE workspace_id=$1 AND week_start=$2`, [wid, ws]);
+    const { rows: subs } = esSemana ? await pool.query(`SELECT user_id, status, nota, submitted_at, reviewed_at FROM ts_submissions WHERE workspace_id=$1 AND week_start=$2`, [wid, ws]) : { rows: [] };
     const subBy = new Map(subs.map(r => [r.user_id, r])), people = new Map();
     for (const r of rows) {
       if (!people.has(r.user_id)) people.set(r.user_id, { user_id: r.user_id, nombre: r.nombre, dias: {}, total: 0, facturable: 0, aprobadas: 0, entradas: 0 });
       const p = people.get(r.user_id);
       if (r.dia) { p.dias[r.dia] = r.seg; p.total += r.seg; p.facturable += r.fact; p.aprobadas += Number(r.aprobadas); p.entradas += Number(r.total); }
     }
-    const cap = capacidad(s, ws), base = (s.dias_laborales.length * hrs(s.hora_ini, s.hora_fin) * 3600) || 1, capOf = id => { const o = (s.cap_personas || {})[id]; return o == null ? cap : Math.round(o * 3600 * (cap / base)); };
+    const cap = capacidad(s, ws, nDias), base = (s.dias_laborales.length * hrs(s.hora_ini, s.hora_fin) * 3600) || 1, capOf = id => { const o = (s.cap_personas || {})[id]; return o == null ? cap : Math.round(o * 3600 * (cap / base)); };
     return { week_start: ws, capacidad_s: cap, personas: [...people.values()].map(p => { const sb = subBy.get(p.user_id), cp = capOf(p.user_id); return { ...p, capacidad_s: cp, capacidad_h_override: (s.cap_personas || {})[p.user_id] != null ? s.cap_personas[p.user_id] : null, excede_s: Math.max(0, p.total - cp), estado: sb ? sb.status : 'pendiente', nota: sb ? sb.nota : '', enviada_at: sb ? sb.submitted_at : null }; }), settings: s };
   };
 
@@ -106,6 +106,8 @@ function mount(app, { pool, requireAuth }) {
     try {
       const wid = req.workspaceOwnerId; if (!(await isAdmin(req.user.id, wid))) return res.status(403).json({ error: 'Solo admin' });
       const ws = isoD(req.query.week_start); if (!ws) return res.status(400).json({ error: 'week_start requerido' });
+      const to = isoD(req.query.to);   // rango libre (15 días, 30 días, mes, personalizado): sin estado de envío
+      if (to) { if (to < ws || (new Date(to + 'T12:00:00Z') - new Date(ws + 'T12:00:00Z')) / 864e5 > 120) return res.status(400).json({ error: 'Rango no válido (máximo 120 días)' }); return res.json(await weekData(wid, ws, to)); }
       res.json(await weekData(wid, mondayOf(ws)));
     } catch (e) { console.error('[timesheets] team', e.message); res.status(500).json({ error: 'No se pudo cargar el equipo' }); }
   });
