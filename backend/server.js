@@ -1979,6 +1979,7 @@ app.post('/api/mgmt/project-templates/:id/apply', requireAuth, async (req, res) 
       if (pr.task_defaults && Object.keys(pr.task_defaults).length) { vals.push(JSON.stringify(pr.task_defaults)); sets.push(`task_defaults=$${vals.length}::jsonb`); }
       if (sets.length) { vals.push(pid); await cl.query(`UPDATE projects SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$${vals.length}`, vals); }
     }
+    if (pr.duracion_dias > 0 && base) await cl.query(`UPDATE projects SET fecha_fin=COALESCE(fecha_fin, $2::date + $3::int) WHERE id=$1`, [pid, base, Math.min(+pr.duracion_dias, 3650)]);   // duración fija de la plantilla (ej. 1 mes)
     if (applyCampos && (Array.isArray(pr.estados) || (pr.campos && pr.campos.length))) {   // estados propios y columnas de la plantilla
       const { rows: [cur] } = await cl.query(`SELECT campos FROM projects WHERE id=$1`, [pid]);
       const merged = [...(cur.campos || [])]; (pr.campos || []).forEach(f => { if (!merged.some(m => m.id === f.id)) merged.push(f); });

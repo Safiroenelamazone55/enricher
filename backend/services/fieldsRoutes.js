@@ -85,14 +85,17 @@ function tplAdquisicion() {
     T(25, 24, 'Conectar el buzón del cliente y la firma', 'alta', D(7), D(8), 45), T(26, 24, 'Crear la secuencia y sus pasos', 'alta', D(8), D(9), 90),
     T(27, 24, 'Ventana de envío y límite diario', 'media', D(8), D(9), 30), T(28, 24, 'Prueba de envío interna', 'alta', D(9), D(9), 30),
     T(29, null, 'Lanzar la campaña', 'alta', D(9), D(10), 60, 'por_iniciar', { etapa: 'lanzamiento', tipo: 'seguimiento', canal: ['email', 'linkedin'] }),
-    T(30, null, 'Primeros envíos y control de rebotes', 'alta', D(10), D(14), 120, 'por_iniciar', { etapa: 'lanzamiento', tipo: 'seguimiento', canal: ['email'] }),
-    T(31, null, 'Revisar Inbox y respuestas pendientes', 'media', D(10), D(30), 60, 'por_iniciar', { etapa: 'seguimiento', tipo: 'seguimiento', canal: ['email', 'linkedin', 'whatsapp'] }),
-    T(32, null, 'Trabajar tareas y cola de empresas', 'media', D(10), D(30), 120, 'por_iniciar', { etapa: 'seguimiento', tipo: 'seguimiento', canal: ['linkedin', 'llamada'] }),
-    T(33, null, 'Seguimiento a interesados y agendar reuniones', 'alta', D(12), D(30), 90, 'por_iniciar', { etapa: 'seguimiento', tipo: 'seguimiento', canal: ['email', 'llamada', 'reunion'] }),
-    T(34, null, 'Revisar métricas de secuencias y ajustar', 'media', D(14), D(30), 60, 'por_iniciar', { etapa: 'seguimiento', tipo: 'reporte' }),
-    T(35, null, 'Reporte semanal al cliente', 'media', D(14), D(30), 45, 'por_iniciar', { etapa: 'seguimiento', tipo: 'reporte', canal: ['email'] }),
-    T(36, null, 'Informe final y siguientes pasos', 'media', D(28), D(30), 90, 'por_iniciar', { etapa: 'cierre', tipo: 'reporte' }),
+    T(30, null, 'Primeros envíos y control de rebotes', 'alta', D(10), D(13), 120, 'por_iniciar', { etapa: 'lanzamiento', tipo: 'seguimiento', canal: ['email'] }),
   ];
+  // Desde el primer envío (semana 2) entra la rutina semanal; el proyecto dura siempre 1 mes (30 días).
+  let ref = 31;
+  [['Semana 2 (desde el primer envío)', 10, 13], ['Semana 3', 14, 20], ['Semana 4', 21, 27]].forEach(([nom, a, z]) => {
+    const pa = ref++;
+    tareas.push(T(pa, null, 'Rutina de seguimiento · ' + nom, 'media', D(a), D(z), null, 'por_iniciar', { etapa: 'seguimiento', tipo: 'seguimiento', canal: ['email', 'linkedin'] }));
+    [['Revisar Inbox y respuestas pendientes', 'media', 60], ['Trabajar tareas y cola de empresas', 'media', 120], ['Seguimiento a interesados y agendar reuniones', 'alta', 90], ['Revisar métricas de secuencias y ajustar', 'media', 60], ['Reporte semanal al cliente', 'media', 45]]
+      .forEach(([t, pr, m]) => tareas.push(T(ref++, pa, t, pr, D(a), D(z), m)));
+  });
+  tareas.push(T(ref++, null, 'Informe final y siguientes pasos', 'media', D(27), D(30), 90, 'por_iniciar', { etapa: 'cierre', tipo: 'reporte' }));
   const B = (t, html) => ({ id: 'b' + Math.random().toString(36).slice(2, 9), t, html });
   const doc = { rev: 0, blocks: [
     B('h1', 'Brief de adquisición comercial'), B('call-info', 'Completa este documento con el cliente en el kickoff. Todo el equipo lo usa como fuente de verdad de la campaña.'),
@@ -110,7 +113,7 @@ function tplAdquisicion() {
     { tipo: 'calendario', nombre: 'Calendario', orden: 4, config: {} }, { tipo: 'gantt', nombre: 'Cronograma', orden: 5, config: {} },
     { tipo: 'documento', nombre: 'Brief y ICP', orden: 6, config: doc }, { tipo: 'pizarra', nombre: 'Estrategia', orden: 7, config: wb },
   ];
-  return { proyecto: { descripcion: 'Campaña de adquisición comercial outbound: de definir el ICP a lanzar, dar seguimiento y reportar al cliente.', prioridad: 'media', task_defaults: {}, estados, campos }, tareas, vistas, fuente: 'Plantilla del sistema' };
+  return { proyecto: { descripcion: 'Campaña de adquisición comercial outbound: de definir el ICP a lanzar, dar seguimiento y reportar al cliente. Dura 1 mes: preparación y lanzamiento en las semanas 1–2; desde el primer envío, rutina semanal.', prioridad: 'media', task_defaults: {}, duracion_dias: 30, estados, campos }, tareas, vistas, fuente: 'Plantilla del sistema' };
 }
 
 function mount(app, { pool, requireAuth }) {
@@ -129,6 +132,13 @@ function mount(app, { pool, requireAuth }) {
         const data = tplAdquisicion();
         await pool.query(`INSERT INTO project_templates (user_id, nombre, descripcion, data, created_by) VALUES ($1,$2,$3,$4::jsonb,'Nova')`, [o.id, 'Adquisición comercial', 'Campaña outbound completa: ICP, listas, verificación, mensajes, lanzamiento, seguimiento y reporte. Con estados propios, columnas, documento de brief y pizarra de estrategia.', JSON.stringify(data)]);
         await pool.query(`INSERT INTO migraciones_una_vez (nombre) VALUES ($1) ON CONFLICT DO NOTHING`, [nom]);
+      }
+      // v2: semanas 1–2 de arranque + rutina semanal desde el primer envío + duración de 1 mes (solo la plantilla de sistema sin editar nombre)
+      for (const o of owners) {
+        const nom2 = 'tpl_adquisicion_v2_' + o.id;
+        const { rowCount: yaV2 } = await pool.query(`SELECT 1 FROM migraciones_una_vez WHERE nombre=$1`, [nom2]); if (yaV2) continue;
+        await pool.query(`UPDATE project_templates SET data=$2::jsonb, descripcion=$3, updated_at=NOW() WHERE user_id=$1 AND nombre='Adquisición comercial' AND created_by='Nova'`, [o.id, JSON.stringify(tplAdquisicion()), 'Campaña outbound de 1 mes: semanas 1–2 de preparación y lanzamiento (ICP, listas, verificación, mensajes, campaña) y, desde el primer envío, rutina semanal de seguimiento, métricas y reporte. Con estados propios, columnas, brief y pizarra de estrategia.']);
+        await pool.query(`INSERT INTO migraciones_una_vez (nombre) VALUES ($1) ON CONFLICT DO NOTHING`, [nom2]);
       }
     } catch (e) { console.warn('[fields] init', e.message); }
   })();
