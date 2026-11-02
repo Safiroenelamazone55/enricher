@@ -24260,7 +24260,7 @@ body{font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif;color
 /* ── Secciones: título a la izquierda, contenido a la derecha ── */
 .sec{margin:0 56px;padding:30px 0 28px;border-top:1px solid var(--ink);display:flow-root}
 .sec>h2{float:left;clear:left;width:176px;font-size:19px;line-height:1.22;font-weight:600;letter-spacing:-.02em;color:var(--ink);margin:0 0 10px;display:block;break-after:avoid}
-.sec>h2:before{counter-increment:sec;content:counter(sec,decimal-leading-zero);display:block;font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.14em;color:var(--acc);margin-bottom:10px}
+.sec>h2:before{counter-increment:sec;content:counter(sec,decimal-leading-zero);display:block;font-size:34px;font-weight:300;letter-spacing:-.035em;line-height:1;color:var(--acc);margin-bottom:12px}
 .sec>.rp-sub{float:left;clear:left;width:176px;font-size:12px;color:var(--ink2);margin:0;line-height:1.5}
 .sec>*:not(h2):not(.rp-sub){margin-left:214px}
 .sec>table{width:calc(100% - 214px)}
@@ -24394,6 +24394,9 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 .toc a{display:grid;grid-template-columns:72px 1fr;align-items:baseline;padding:20px 0;color:var(--ink);text-decoration:none}
 .toc-n{font-size:30px;font-weight:300;letter-spacing:-.03em;color:var(--acc);line-height:1}
 .toc-l b{display:block;font-size:18px;font-weight:500;letter-spacing:-.015em;color:var(--ink)}
+.toc--tight a{padding:13px 0}
+.toc--tight .toc-t{margin-bottom:24px}
+.toc{break-inside:avoid}
 .toc-l em{display:block;font-style:normal;font-size:12px;color:var(--mute);margin-top:4px;line-height:1.45;max-width:520px}
 .rhead{display:none}
 .dv-lb{margin-top:10px;font-size:10px;font-weight:600;color:var(--ink2);letter-spacing:.14em;text-transform:uppercase}
@@ -24434,7 +24437,15 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
     { const items = []; let n = 0;
       bodyX = bodyX.replace(/<div class="sec([^"]*)">(\s*)<h2>([\s\S]*?)<\/h2>(<p class="rp-sub">([\s\S]*?)<\/p>)?/g, (m, cls, ws, t, sub, d) => { n++; items.push([n, t, d || '']); return `<div class="sec${cls}" id="sec-${n}">${ws}<h2>${t}</h2>${sub || ''}`; });
       const TL = { es: 'Contenido', en: 'Contents', pt: 'Conteúdo' }[lang] || 'Contenido';
-      if (items.length >= 3) toc = `<div class="toc"><div class="toc-t">${TL}</div><ol>${items.map(([i, t, d]) => `<li><a href="#sec-${i}"><span class="toc-n">${String(i).padStart(2, '0')}</span><span class="toc-l"><b>${t}</b>${d ? `<em>${d}</em>` : ''}</span></a></li>`).join('')}</ol></div>`;
+      const L2x = _RPT2[lang] || _RPT2.es, DD = ({
+        es: { context: 'Mercado, perfil del cliente ideal y notas del segmento.', results: 'Avance real: contactados, respuestas y reuniones.', config: 'Cadencia, días de envío, límites y zonas horarias.', cadence: 'Cada paso con su día, canal, hora y modo.', angles: 'Qué mensaje recibe cada segmento en cada paso.', audience: 'Cómo se reparte la lista por segmento y estado.', seqs: 'Una ficha por secuencia con su avance.' },
+        en: { context: 'Market, ideal customer profile and segment notes.', results: 'Actual progress: contacted, replies and meetings.', config: 'Cadence, sending days, limits and time zones.', cadence: 'Each step with its day, channel, time and mode.', angles: 'Which message each segment receives at each step.', audience: 'How the list splits by segment and status.', seqs: 'One card per sequence with its progress.' },
+        pt: { context: 'Mercado, perfil do cliente ideal e notas do segmento.', results: 'Andamento real: contatados, respostas e reuniões.', config: 'Cadência, dias de envio, limites e fusos horários.', cadence: 'Cada passo com seu dia, canal, horário e modo.', angles: 'Qual mensagem cada segmento recebe em cada passo.', audience: 'Como a lista se divide por segmento e status.', seqs: 'Uma ficha por sequência com seu andamento.' },
+      }[lang] || {});
+      const byTitle = { [esc(L.context)]: DD.context, [esc(L.results)]: DD.results, [esc(L.config)]: DD.config, [esc(L.cadence)]: DD.cadence, [esc(L.anglesByStep)]: DD.angles, [esc(L.audience)]: DD.audience, [esc(L.cmpSeqs)]: DD.seqs };
+      items.forEach(it => { if (!it[2]) it[2] = byTitle[it[1]] || ''; });
+      if (!items.every(it => it[2])) items.forEach(it => { it[2] = ''; });   // o todas las filas llevan descripción, o ninguna
+      if (items.length >= 3) toc = `<div class="toc${items.length > 9 ? ' toc--tight' : ''}"><div class="toc-t">${TL}</div><ol>${items.map(([i, t, d]) => `<li><a href="#sec-${i}"><span class="toc-n">${String(i).padStart(2, '0')}</span><span class="toc-l"><b>${t}</b>${d ? `<em>${d}</em>` : ''}</span></a></li>`).join('')}</ol></div>`;
       const k = bodyX.indexOf('<div class="sec'); if (toc && k > -1) bodyX = bodyX.slice(0, k) + toc + bodyX.slice(k); }
     const rhead = `<div class="rhead"><span class="rh-l">NovaCentrax</span><span class="rh-r">${esc(subject)}</span></div>`;
     const foot = `<div class="foot"><span class="foot-l"><a href="https://novacentrax.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">novacentrax.com</a></span><span class="foot-r">${esc(subject)}</span></div>`;
