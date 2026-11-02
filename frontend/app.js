@@ -24228,130 +24228,155 @@ const LeadManagerModule = (() => {
   }
   function _rptCss() {
     return `*{box-sizing:border-box;margin:0;padding:0}
-/* Tipografía de informe (editorial): serif de documento (Constantia) para
-   títulos y cuerpo; sans limpia solo en micro-etiquetas en mayúsculas. Todas
-   estas fuentes están en Windows/Office → se incrustan en el PDF. */
-body{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;color:#1F1D1B;background:#F1EFEB;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.kicker,.fact .k,.fact .v,.kpi span,.ctx-h,.tbl thead th,.h3,.mk span,.pill,.chip,.dchip,.dchips,.foot{font-family:"Segoe UI",Calibri,-apple-system,system-ui,sans-serif}
-.bar{position:sticky;top:0;z-index:5;background:#0f2b3d;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
-.bar button{background:#007AFF;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
-.doc{max-width:860px;margin:26px auto;background:#fff;box-shadow:0 10px 44px rgba(15,43,61,.16)}
-.cover{position:relative;background:linear-gradient(132deg,#0f2b3d 0%,#123a52 55%,#0d4141 100%);color:#fff;padding:42px 52px 34px;overflow:hidden}
-.cover:before{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(181,233,81,.18),transparent 68%)}
-.cover:after{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:linear-gradient(90deg,#007AFF 0%,#B5E951 100%)}
-.rpt-logo{height:30px;width:auto;display:block;margin-bottom:16px;position:relative;z-index:1}
-.kicker{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:#b5e951;font-weight:700}
-.cover h1{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;font-size:32px;font-weight:700;margin:8px 0 10px;line-height:1.18;position:relative}
-.pill{display:inline-block;border-radius:999px;font-size:11px;font-weight:800;padding:3px 12px;vertical-align:4px;letter-spacing:.02em}
-.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;margin-top:22px;border-top:1px solid rgba(255,255,255,.18);padding-top:16px;position:relative}
-.fact .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8fb0be;font-weight:800}
-.fact .v{font-size:13px;font-weight:600;color:#fff;margin-top:2px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:#EAE7E2;border-bottom:1px solid #EAE7E2}
-.kpi{background:#fff;padding:18px 12px;text-align:center}
-.kpi b{display:block;font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:28px;color:#0f2b3d;font-weight:700}
-.kpi.hero b{color:#007AFF}
-.kpi span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#918C85;font-weight:700;margin-top:3px;display:block}
-.sec{padding:20px 52px}
-.sec+.sec{border-top:1px solid #F1EFEB}
-.sec h2{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:16px;color:#0f2b3d;margin-bottom:12px;display:flex;align-items:center;gap:10px;break-after:avoid}
-.sec h2:before{content:"";width:20px;height:5px;border-radius:3px;background:linear-gradient(90deg,#007AFF,#B5E951);flex:none}
-/* ── Contexto (texto pegado, compacto y estructurado) ── */
-.ctx{margin:0 0 12px}
+:root{--ink:#14211B;--ink2:#4B5852;--mute:#8A948E;--line:#E6E2D9;--hair:#EFEBE3;--paper:#F7F5F0;--sand:#F1EDE5;--acc:#0B6B4F;--acc2:#E3F0EA;--mint:#9AD6BC}
+body{font-family:Inter,"Segoe UI",Calibri,system-ui,sans-serif;color:var(--ink);background:#E8E5DE;line-height:1.55;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-font-smoothing:antialiased}
+.ser,h1,h2,.kpi b,.mk b,.fnum,.seqblk__nm{font-family:Fraunces,Georgia,Cambria,"Times New Roman",serif;font-optical-sizing:auto;font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1}
+.bar{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:11px 22px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:500}
+.bar button{background:var(--mint);color:var(--ink);border:0;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.doc{max-width:860px;margin:28px auto;background:#fff;box-shadow:0 18px 60px rgba(20,33,27,.14);counter-reset:sec}
+
+/* ── Portada ── */
+.cover{position:relative;background:var(--ink);color:var(--paper);padding:46px 56px 40px;min-height:392px;overflow:hidden;display:flex;flex-direction:column}
+.cover:before{content:"";position:absolute;right:-84px;top:-84px;width:250px;height:250px;border-radius:50%;border:1px solid rgba(154,214,188,.28);box-shadow:0 0 0 44px rgba(255,255,255,.03),0 0 0 88px rgba(255,255,255,.022),0 0 0 132px rgba(255,255,255,.015)}
+.cover:after{content:"";position:absolute;left:56px;top:0;width:64px;height:4px;background:var(--mint)}
+.rpt-logo{height:24px;width:auto;display:block;margin-bottom:auto;position:relative;z-index:1;opacity:.95}
+.kicker{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--mint);font-weight:600;margin-top:46px;position:relative}
+.cover h1{font-size:40px;font-weight:600;line-height:1.1;margin:14px 0 0;letter-spacing:-.015em;max-width:660px;position:relative;color:#fff}
+.pill{display:inline-block;border-radius:999px;font-size:10.5px;font-weight:600;padding:3px 11px;vertical-align:middle;letter-spacing:.04em;margin-left:6px;font-family:Inter,"Segoe UI",sans-serif}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 28px;margin-top:38px;border-top:1px solid rgba(247,245,240,.18);padding-top:18px;position:relative}
+.fact .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#86A196;font-weight:600}
+.fact .v{font-size:13.5px;font-weight:500;color:var(--paper);margin-top:3px}
+
+/* ── Cifras clave ── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));background:var(--paper);border-bottom:1px solid var(--line)}
+.kpi{padding:22px 14px 18px 22px;border-right:1px solid var(--line)}
+.kpi:last-child{border-right:0}
+.kpi b{display:block;font-size:34px;line-height:1;font-weight:600;color:var(--ink);letter-spacing:-.02em}
+.kpi.hero b{color:var(--acc)}
+.kpi span{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-top:8px;display:block}
+
+/* ── Secciones ── */
+.sec{padding:32px 56px}
+.sec+.sec{border-top:1px solid var(--hair)}
+.sec h2{font-size:22px;font-weight:600;color:var(--ink);margin-bottom:14px;display:flex;align-items:baseline;gap:14px;break-after:avoid;letter-spacing:-.01em}
+.sec h2:before{counter-increment:sec;content:counter(sec,decimal-leading-zero);font-family:Inter,"Segoe UI",sans-serif;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--acc);flex:none}
+.sec h2:after{content:"";flex:1;height:1px;background:var(--line);align-self:center;transform:translateY(2px)}
+.rp-sub{font-size:12.5px;color:var(--ink2);margin:-4px 0 16px;max-width:620px}
+
+/* ── Contexto ── */
+.ctx{margin:0 0 14px}
 .ctx:last-child{margin-bottom:0}
-.ctx-h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#007AFF;font-weight:800;margin-bottom:5px;break-after:avoid}
-.ctx-h .src{color:#B4AFA8;font-weight:600;text-transform:none;letter-spacing:0}
-.ctx--split .ctx-b{columns:2;column-gap:30px}
-.ctx--note{border-left:3px solid #007AFF;background:#F1EFEB;padding:10px 14px;border-radius:0 8px 8px 0}
-.ctx--note2{border-left-color:#0f2b3d;background:#F1EFEB}
-.ctx--note .ctx-h{color:#0f2b3d}
-.rt-p{font-size:12px;color:#1F1D1B;margin:0 0 5px;break-inside:avoid;line-height:1.42}
+.ctx-h{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--acc);font-weight:700;margin-bottom:6px;break-after:avoid}
+.ctx-h .src{color:var(--mute);font-weight:500;text-transform:none;letter-spacing:0}
+.ctx--split .ctx-b{columns:2;column-gap:32px}
+.ctx--note{border-left:3px solid var(--acc);background:var(--paper);padding:11px 16px;border-radius:0 8px 8px 0}
+.ctx--note2{border-left-color:var(--ink)}
+.ctx--note .ctx-h{color:var(--ink)}
+.rt-p{font-size:12.5px;color:var(--ink);margin:0 0 6px;break-inside:avoid;line-height:1.5}
 .rt-p:last-child{margin-bottom:0}
-.rt-h{font-size:12px;font-weight:700;color:#0f2b3d;margin:7px 0 3px;break-after:avoid;break-inside:avoid}
-.rt-ul{margin:2px 0 6px;padding-left:15px;font-size:12px;color:#1F1D1B}
-.rt-ul li{margin:1px 0;break-inside:avoid;line-height:1.35}
-.rt-ul--2{columns:2;column-gap:22px}
+.rt-h{font-size:12.5px;font-weight:700;color:var(--ink);margin:8px 0 3px;break-after:avoid;break-inside:avoid}
+.rt-ul{margin:2px 0 7px;padding-left:16px;font-size:12.5px;color:var(--ink)}
+.rt-ul li{margin:1px 0;break-inside:avoid;line-height:1.45}
+.rt-ul--2{columns:2;column-gap:24px}
 .ctx-b>*:first-child{margin-top:0}
-table{width:100%;border-collapse:collapse;font-size:13px}
-.kvt th{text-align:left;color:#918C85;font-weight:600;width:44%;padding:7px 0;vertical-align:top;font-size:12.5px}
-.kvt td{padding:7px 0;color:#1F1D1B;font-weight:500}
-.kvt tr+tr th,.kvt tr+tr td{border-top:1px solid #F1EFEB}
-.tbl thead th{background:#FAF8F5;text-align:left;padding:9px 10px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#918C85;border-bottom:2px solid #EAE7E2}
-.tbl td{padding:9px 10px;border-bottom:1px solid #F1EFEB;vertical-align:top}
-.tbl td.c{text-align:center;white-space:nowrap}
-.chip{display:inline-block;background:#F1EFEB;color:#007AFF;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+
+/* ── Tablas ── */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+.kvt th{text-align:left;color:var(--mute);font-weight:500;width:44%;padding:8px 0;vertical-align:top;font-size:12px}
+.kvt td{padding:8px 0;color:var(--ink);font-weight:500}
+.kvt tr+tr th,.kvt tr+tr td{border-top:1px solid var(--hair)}
+.tbl thead th{text-align:left;padding:9px 10px;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:700;border-bottom:1px solid var(--ink)}
+.tbl td{padding:10px;border-bottom:1px solid var(--hair);vertical-align:top;color:var(--ink)}
+.tbl td.c,.tbl th.c{text-align:center;white-space:nowrap}
+.chip{display:inline-block;border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:600;padding:1px 9px;border-radius:999px;background:#fff}
 .dchips{white-space:nowrap}
-.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;background:#F1EFEB;color:#B4AFA8;font-size:10.5px;font-weight:800;margin-right:3px}
-.dchip.on{background:#0f2b3d;color:#fff}
-.funnel{margin-top:4px}
-.frow{display:grid;grid-template-columns:150px 1fr 54px;gap:12px;align-items:center;margin:8px 0;font-size:12.5px;color:#3D3A36;font-weight:600}
-.fbar{height:15px;border-radius:4px;background:#F1EFEB;overflow:hidden}
-.fbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#007AFF,#1aa66e)}
-.frow.alt .fbar i{background:#0f2b3d}
-.fnum{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-weight:700;color:#0f2b3d;text-align:right;font-size:15px}
+.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:5px;background:var(--sand);color:#B8BDB9;font-size:10px;font-weight:700;margin-right:3px}
+.dchip.on{background:var(--ink);color:#fff}
+.h3{font-size:9.5px;color:var(--mute);margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:700}
+.muted{color:#A9B0AC;font-style:italic}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:28px}
 .segline{margin:2px 0 8px}.segline:last-child{margin-bottom:0}
-.segmsg{font-size:11.5px;color:#6C6862;font-style:italic;margin-top:2px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.h3{font-size:11px;color:#918C85;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
-.muted{color:#B4AFA8;font-style:italic}
-.seqblk{border:1px solid #EAE7E2;border-radius:12px;margin:0 0 14px;overflow:hidden}
+.segmsg{font-size:11.5px;color:var(--ink2);font-style:italic;margin-top:2px}
+
+/* ── Embudo ── */
+.funnel{margin-top:4px}
+.frow{display:grid;grid-template-columns:150px 1fr 54px;gap:14px;align-items:center;margin:10px 0;font-size:12.5px;color:var(--ink2);font-weight:500}
+.fbar{height:7px;border-radius:4px;background:var(--sand);overflow:hidden}
+.fbar i{display:block;height:100%;border-radius:4px;background:var(--acc)}
+.frow.alt .fbar i{background:var(--ink)}
+.fnum{font-weight:600;color:var(--ink);text-align:right;font-size:17px}
+
+/* ── Campaña: bloque por secuencia ── */
+.seqblk{border:1px solid var(--line);border-radius:12px;margin:0 0 16px;overflow:hidden}
 .seqblk:last-child{margin-bottom:0}
-.seqblk__hd{background:#FAF8F5;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #EAE7E2;break-inside:avoid;break-after:avoid}
-.seqblk__nm{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:15.5px;color:#0f2b3d;font-weight:700}
-.seqblk__bd{padding:14px 18px}
-.cfgline{font-size:12px;color:#6C6862;margin-bottom:4px}
-.cfgline b{color:#1F1D1B}
-.minik{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:10px 0 4px}
-.mk{background:#FAF8F5;border:1px solid #F1EFEB;border-radius:8px;text-align:center;padding:8px 6px}
-.mk b{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:18px;color:#0f2b3d;display:block}
-.mk.hero b{color:#007AFF}
-.mk span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#918C85;font-weight:800}
-.steps-line{font-size:12px;color:#3D3A36;margin-top:8px;line-height:2}
-.steps-line .sday{display:inline-block;background:#0f2b3d;color:#fff;border-radius:6px;font-size:10.5px;font-weight:800;padding:1px 7px;margin-right:4px}
-.steps-line .sarrow{color:#CFCAC3;margin:0 7px}
-.foot{padding:14px 52px;background:#0f2b3d;color:#8fa6b2;font-size:11px;display:flex;justify-content:space-between;align-items:center}
-.foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-.foot-logo{height:14px;width:auto;opacity:.92}
-.foot-r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;margin-left:16px}
-/* ── Secuencia planteada, mensajes y dispositivos ── */
-.rp-sub{font-size:12px;color:#6C6862;margin:-4px 0 12px;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
-.tls{border-left:2px solid #EAE7E2;margin-left:44px}
-.tl{display:flex;align-items:center;gap:10px;padding:6px 0;position:relative;font-size:12.5px;font-family:"Segoe UI",Calibri,system-ui,sans-serif;break-inside:avoid}
-.tl-d{position:absolute;left:-48px;width:40px;text-align:right;font-size:10.5px;font-weight:800;color:#0f2b3d;text-transform:uppercase;letter-spacing:.04em}
-.tl-dot{flex:none;width:10px;height:10px;border-radius:50%;margin-left:-6px;border:2px solid #fff;box-shadow:0 0 0 1px #EAE7E2}
-.tl-b{color:#3D3A36}
-.mcard{border:1px solid #EAE7E2;border-radius:12px;margin:0 0 12px;overflow:hidden;break-inside:avoid;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
-.mc-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#FAF8F5;padding:8px 14px;border-bottom:1px solid #EAE7E2;font-size:11.5px}
-.mc-day{background:#0f2b3d;color:#fff;border-radius:6px;font-weight:800;font-size:10.5px;padding:1px 8px}
-.mc-ch{font-weight:800}
-.mc-acc{color:#6C6862}
-.mc-tag{background:#F1EFEB;color:#6C6862;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700}
-.mc-tag--lang{background:#E8F1FF;color:#1B5FD1}
-.mc-mail,.mc-li,.mc-wa{padding:12px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#222}
-.mc-mrow{display:flex;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px solid #F1EFEB;color:#555}
-.mc-mrow b{flex:none;width:52px;color:#918C85;font-weight:700}
+.seqblk__hd{background:var(--paper);padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line);break-inside:avoid;break-after:avoid}
+.seqblk__nm{font-size:16px;color:var(--ink);font-weight:600}
+.seqblk__bd{padding:16px 20px}
+.cfgline{font-size:12px;color:var(--ink2);margin-bottom:5px}
+.cfgline b{color:var(--ink)}
+.minik{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:0;margin:12px 0 6px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mk{text-align:left;padding:10px 14px;border-right:1px solid var(--line)}
+.mk:last-child{border-right:0}
+.mk b{font-size:21px;color:var(--ink);display:block;font-weight:600;line-height:1.1}
+.mk.hero b{color:var(--acc)}
+.mk span{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--mute);font-weight:700}
+.steps-line{font-size:12px;color:var(--ink2);margin-top:10px;line-height:2}
+.steps-line .sday{display:inline-block;background:var(--ink);color:#fff;border-radius:5px;font-size:10px;font-weight:700;padding:1px 7px;margin-right:5px}
+.steps-line .sarrow{color:#C9CDC9;margin:0 8px}
+.cmp-msgs{margin-top:16px}
+
+/* ── Secuencia planteada (línea de tiempo horizontal) ── */
+.tls{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));margin-top:8px}
+.tl{position:relative;padding:0 10px 0 0;break-inside:avoid}
+.tl-d{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);margin-bottom:10px}
+.tl-line{position:relative;height:12px;margin-bottom:12px}
+.tl-line:before{content:"";position:absolute;left:0;right:0;top:5px;height:1px;background:var(--line)}
+.tl-dot{position:absolute;left:0;top:0;width:11px;height:11px;border-radius:50%;background:var(--c,#999);box-shadow:0 0 0 4px #fff}
+.tl-b b{display:block;font-size:12.5px;font-weight:700;color:var(--c,#333);margin-bottom:2px}
+.tl-b span{display:block;font-size:11.5px;color:var(--ink2);line-height:1.4}
+.tl-b .tl-h{color:var(--mute);margin-top:2px;font-size:11px}
+
+/* ── Mensajes ── */
+.mcard{border:1px solid var(--line);border-radius:12px;margin:0 0 14px;overflow:hidden;break-inside:avoid;background:#fff}
+.mc-h{display:flex;flex-wrap:wrap;align-items:center;gap:9px;background:var(--paper);padding:9px 16px;border-bottom:1px solid var(--line);font-size:11.5px}
+.mc-day{background:var(--ink);color:#fff;border-radius:5px;font-weight:700;font-size:10px;padding:1px 8px;letter-spacing:.04em}
+.mc-ch{font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.mc-ch:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.mc-acc{color:var(--ink2)}
+.mc-tag{background:var(--sand);color:var(--ink2);border-radius:999px;padding:1px 10px;font-size:10.5px;font-weight:600}
+.mc-tag--lang{background:var(--acc2);color:var(--acc)}
+.mc-mail,.mc-li,.mc-wa{padding:14px 18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.58;color:#222}
+.mc-mrow{display:flex;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--hair);color:#5A5F5C}
+.mc-mrow b{flex:none;width:54px;color:var(--mute);font-weight:600}
 .mc-mrow--s span{color:#111;font-weight:700}
-.mc-mbody{padding:12px 0 6px;color:#222}
-.mc-sig{margin-top:6px;padding-top:10px;border-top:1px solid #F1EFEB}
-.mc-bub{background:#F1F4F9;border-radius:12px;padding:10px 14px;color:#222}
-.mc-bub--wa{background:#DCF8C6}
-.mc-cnt{text-align:right;font-size:11px;color:#918C85;margin-top:4px}
-.m-var{background:#E3EEFF;color:#1B5FD1;border-radius:4px;padding:0 3px}
-.cmp-msgs{margin-top:14px}
-.dv-row{display:flex;justify-content:center;align-items:flex-start;gap:26px;margin:0 0 18px;break-inside:avoid}
+.mc-mbody{padding:14px 0 6px;color:#222}
+.mc-sig{margin-top:8px;padding-top:12px;border-top:1px solid var(--hair)}
+.mc-bub{background:#F2F4F2;border-radius:12px;padding:11px 15px;color:#222}
+.mc-bub--wa{background:#DDF3D0}
+.mc-cnt{text-align:right;font-size:11px;color:var(--mute);margin-top:5px}
+.m-var{background:var(--acc2);color:var(--acc);border-radius:4px;padding:0 3px}
+
+/* ── Dispositivos ── */
+.dv-stage{background:var(--sand);border-radius:16px;padding:30px 20px 24px}
+.dv-row{display:flex;justify-content:center;align-items:flex-start;gap:30px;margin:0 0 22px;break-inside:avoid;flex-wrap:wrap}
+.dv-row:last-child{margin-bottom:0}
 .dv{display:flex;flex-direction:column;align-items:center}
-.dv-fr{background:#fff;border:6px solid #1F2933;overflow:hidden;box-shadow:0 6px 18px rgba(15,43,61,.18)}
-.dv--phone .dv-fr{border-radius:26px;border-width:7px}
-.dv--tablet .dv-fr{border-radius:16px}
-.dv--laptop .dv-fr{border-radius:10px 10px 0 0;border-bottom-width:9px}
+.dv-fr{background:#fff;border:6px solid #1B2823;overflow:hidden;box-shadow:0 14px 30px rgba(20,33,27,.22)}
+.dv--phone .dv-fr{border-radius:28px;border-width:8px}
+.dv--tablet .dv-fr{border-radius:18px;border-width:9px}
+.dv--laptop .dv-fr{border-radius:12px 12px 0 0;border-bottom-width:10px}
 .dv-sc{background:#fff;overflow:hidden}
-.dv--phone .dv-mail{padding:14px 14px}
-.dv--tablet .dv-mail{padding:22px 26px}
-.dv-win{background:#F1F4F9;padding:22px 0}
-.dv-win .dv-mail{max-width:640px;margin:0 auto;background:#fff;border:1px solid #E3E7EC;border-radius:8px;padding:20px 26px}
-.dv-lb{margin-top:8px;font-size:11px;font-weight:700;color:#6C6862;letter-spacing:.04em;text-transform:uppercase;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
-/* Contenedor de impresión en <table>: el <tfoot> se repite en cada página y
-   RESERVA su alto por página (vía layout de tabla), así el contenido nunca queda
-   debajo del pie — sin depender del margen del diálogo de impresión. */
+.dv--phone .dv-mail{padding:15px 14px}
+.dv--tablet .dv-mail{padding:24px 28px}
+.dv-win{background:#EEF0EE;padding:24px 0}
+.dv-win .dv-mail{max-width:640px;margin:0 auto;background:#fff;border:1px solid #E3E6E3;border-radius:8px;padding:22px 28px}
+.dv-lb{margin-top:10px;font-size:10px;font-weight:700;color:var(--ink2);letter-spacing:.14em;text-transform:uppercase}
+
+/* ── Pie ── */
+.foot{padding:12px 56px;background:#fff;color:var(--mute);font-size:10.5px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line)}
+.foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;letter-spacing:.04em}
+.foot-r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;margin-left:16px}
+/* Contenedor de impresión en <table>: el <tfoot> se repite en cada página y RESERVA su alto por página, así el contenido nunca queda debajo del pie. */
 .sheet{width:100%;border-collapse:collapse}
 .sheet>thead>tr>td,.sheet>tbody>tr>td,.sheet>tfoot>tr>td{padding:0}
 .head-sp{height:0}
@@ -24360,30 +24385,29 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   body{background:#fff}
   .bar{display:none}
   .doc{box-shadow:none;margin:0;max-width:none}
-  .sec{padding:16px 30px}
-  .cover{padding:28px 30px 22px}
-  /* Sin márgenes de página: así Chrome NO imprime su propio encabezado (fecha/
-     hora) ni pie. El aire superior de cada página lo da el espaciador del thead
-     y el inferior el del tfoot (layout de tabla, se repiten por página). */
+  .sec{padding:20px 30px}
+  .cover{padding:34px 30px 30px;min-height:300px}
+  .cover:after{left:30px}
+  .foot{padding:0 30px}
   @page{margin:0}
   .head-sp{height:11mm}
-  /* El espaciador del tfoot reserva 15mm al fondo de CADA página; el pie va fijo
-     al borde inferior (queda clavado también en la última página, sin flotar). */
   .foot-sp{height:15mm}
-  .foot{position:fixed;left:0;right:0;bottom:0;height:13mm;padding:0 30px}
+  .foot{position:fixed;left:0;right:0;bottom:0;height:13mm;background:#fff}
+  .dv-stage{padding:20px 14px 16px}
 }`;
   }
   const _RPT_LOGO = 'data:image/png;base64,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';
   function _rptShell(lang, L, docTitle, subject, body) {
     const foot = `<div class="foot"><span class="foot-l"><a href="https://novacentrax.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">novacentrax.com</a></span><span class="foot-r">${esc(subject)}</span></div>`;
     return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(docTitle)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <style>${_rptCss()}</style></head><body>
 <div class="bar"><span>${esc(docTitle)}</span><button onclick="window.print()">${esc(L.print)}</button></div>
 <table class="sheet"><thead><tr><td><div class="head-sp"></div></td></tr></thead><tfoot><tr><td><div class="foot-sp"></div></td></tr></tfoot><tbody><tr><td>
 <div class="doc">${body}</div>
 </td></tr></tbody></table>
 ${foot}
-<script>window.addEventListener('load',function(){setTimeout(function(){try{window.print()}catch(e){}},400)})<\/script>
+<script>window.addEventListener('load',function(){var go=function(){setTimeout(function(){try{window.print()}catch(e){}},350)};var f=(document.fonts&&document.fonts.ready)?Promise.race([document.fonts.ready,new Promise(function(r){setTimeout(r,3500)})]):Promise.resolve();f.then(go)})<\/script>
 </body></html>`;
   }
   // ════════════ INFORME: secuencia planteada · mensajes con vista previa · vista en 3 dispositivos ════════════
@@ -24458,7 +24482,7 @@ ${foot}
       ${sig.trim() ? `<div class="mc-sig">${_sigResponsive(sig)}</div>` : ''}`;
   }
   function _rptCard(id, st, v, lang, sigs, steps) {
-    const L2 = _RPT2[lang] || _RPT2.es, tc = _TOUCH[st.canal] || [st.canal, '#555'];
+    const L2 = _RPT2[lang] || _RPT2.es, tc = [st.canal, _rptChc(st.canal)];
     const acc = _accionLabel(st.canal, st.accion);
     const target = (v && Array.isArray(v.targets) && v.targets.length) ? v.targets.join(', ') : '';
     const body = String((v && v.cuerpo) || '').trim();
@@ -24480,14 +24504,16 @@ ${foot}
     const lbl = st.canal === 'linkedin' && st.accion === 'invite_nota' ? L2.inv : acc;
     return `<div class="mcard"><div class="mc-h"><span class="mc-day">${esc(L2.day)} ${st.dia || 1}</span><span class="mc-ch" style="color:${tc[1]}">${esc(_rptChan(st.canal, lang))}</span>${lbl ? `<span class="mc-acc">${esc(lbl)}</span>` : ''}${target ? `<span class="mc-tag mc-tag--lang">${esc(L2.lang)}: ${esc(target)}</span>` : ''}${thread}</div>${inner}</div>`;
   }
+  const _RPT_CHC = { email: '#9A5A12', linkedin: '#1F5FA6', whatsapp: '#1C7A4D', call: '#6B4FA0', task: '#667085' };
+  const _rptChc = canal => _RPT_CHC[canal] || '#475467';
   function _rptPlanSec(id, lang) {
     const L2 = _RPT2[lang] || _RPT2.es, steps = _seqSteps(id);
     if (!steps.length) return '';
-    const rows = steps.map((st, i) => {
-      const tc = _TOUCH[st.canal] || [st.canal, '#555'], acc = _accionLabel(st.canal, st.accion);
-      return `<div class="tl"><span class="tl-d">${esc(L2.day)} ${st.dia || 1}</span><span class="tl-dot" style="background:${tc[1]}"></span><span class="tl-b"><b style="color:${tc[1]}">${esc(_rptChan(st.canal, lang))}</b>${acc ? ` · ${esc(acc)}` : ''}${st.titulo ? ` <span class="muted">· ${esc(st.titulo)}</span>` : ''}${st.hora ? ` <span class="muted">· ${esc(L2.at)} ${esc(st.hora)}</span>` : ''}</span></div>`;
+    const cols = steps.map(st => {
+      const col = _rptChc(st.canal), acc = _accionLabel(st.canal, st.accion);
+      return `<div class="tl" style="--c:${col}"><div class="tl-d">${esc(L2.day)} ${st.dia || 1}</div><div class="tl-line"><i class="tl-dot"></i></div><div class="tl-b"><b>${esc(_rptChan(st.canal, lang))}</b>${acc ? `<span>${esc(acc)}</span>` : ''}${st.titulo ? `<span class="tl-h">${esc(st.titulo)}</span>` : ''}${st.hora ? `<span class="tl-h">${esc(L2.at)} ${esc(st.hora)}</span>` : ''}</div></div>`;
     }).join('');
-    return `<div class="sec"><h2>${esc(L2.plan)}</h2><p class="rp-sub">${esc(L2.planSub)}</p><div class="tls">${rows}</div></div>`;
+    return `<div class="sec"><h2>${esc(L2.plan)}</h2><p class="rp-sub">${esc(L2.planSub)}</p><div class="tls">${cols}</div></div>`;
   }
   function _rptMsgCards(id, lang, sigs) {
     const steps = _seqSteps(id);
@@ -24511,8 +24537,8 @@ ${foot}
     const dev = (cls, w, z, label, extra) => `<div class="dv dv--${cls}"><div class="dv-fr"><div class="dv-sc" style="width:${w}px;zoom:${z}">${extra ? `<div class="dv-win">${mail}</div>` : mail}</div></div><div class="dv-lb">${esc(label)} · ${w} px</div></div>`;
     const tgt = (Array.isArray(v.targets) && v.targets[0]) ? ` (${v.targets[0]})` : '';
     return `<div class="sec dv-sec"><h2>${esc(L2.devs)}</h2><p class="rp-sub">${esc(L2.devsSub)}${esc((st.titulo || _accionLabel(st.canal, st.accion) || 'Email') + tgt)}.</p>
-      <div class="dv-row">${dev('phone', 375, 0.62, L2.phone)}${dev('tablet', 768, 0.5, L2.tablet)}</div>
-      <div class="dv-row dv-row--one">${dev('laptop', 1000, 0.62, L2.laptop, true)}</div></div>`;
+      <div class="dv-stage"><div class="dv-row">${dev('phone', 375, 0.62, L2.phone)}${dev('tablet', 768, 0.5, L2.tablet)}</div>
+      <div class="dv-row dv-row--one">${dev('laptop', 1000, 0.62, L2.laptop, true)}</div></div></div>`;
   }
   function _rptCompaniesN(enrolled) { return new Set((enrolled || []).map(c => c.company_id != null ? 'i' + c.company_id : 'n' + String(c.company_nombre || '').toLowerCase())).size; }
   function _seqReportHtml(id, lang, met, extra) {
