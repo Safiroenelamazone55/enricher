@@ -248,6 +248,13 @@ function _netStart() { _netInflight++; if (_netInflight === 1) _netBarT = setTim
 function _netEnd() { _netInflight = Math.max(0, _netInflight - 1); if (!_netInflight) { clearTimeout(_netBarT); _netBarT = null; document.getElementById('nova-topbar')?.classList.remove('on'); } }
 function apiFetch(url, opts = {}) {
   _netStart();
+  // Un cuerpo de texto (JSON.stringify) sin tipo de contenido salía como «text/plain» y el servidor lo rechazaba (400): cambios de estado que «se regresaban».
+  // Si el cuerpo es texto y nadie indicó el tipo, se envía como JSON.
+  if (typeof opts.body === 'string') {
+    const h = opts.headers;
+    const tiene = h && (typeof h.get === 'function' ? h.get('Content-Type') : (h['Content-Type'] || h['content-type']));
+    if (!tiene) opts = { ...opts, headers: { ...(h && typeof h.get !== 'function' ? h : {}), 'Content-Type': 'application/json' } };
+  }
   const p = fetch(url, { credentials: 'include', ...opts }).finally(_netEnd);
   // Un mensaje enviado (WhatsApp o correo) avisa a la app: Prioridad se pone al día al instante, sin recargar.
   if (String(opts.method || '').toUpperCase() === 'POST' && /\/chats\/[^/]+\/mensajes(\/imagen)?$|\/lm\/inbox\/reply$/.test(String(url).split('?')[0])) {
@@ -14988,13 +14995,20 @@ const TasksModule = (() => {
     task.estado = estado;
     _renderKanban();
     try {
-      await apiFetch(`${API}/mgmt/tasks/${taskId}/status`, {
-        method: 'PATCH', body: JSON.stringify({ estado })
+      const r = await apiFetch(`${API}/mgmt/tasks/${taskId}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado })
       });
-    } catch {
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo guardar');
+      // el servidor ajusta la tarea madre cuando cambian sus subtareas: se refleja aquí también
+      const d = await r.json().catch(() => ({}));
+      if (d && d.parent_id && d.parent_estado) { const par = _tasks.find(t => t.id === d.parent_id); if (par) par.estado = d.parent_estado; _renderKanban(); }
+    } catch (e) {
       task.estado = prev;
       _renderKanban();
+      try { showBanner('No se pudo cambiar el estado: ' + e.message, 'error'); } catch (_) {}
+      return false;
     }
+    return true;
   }
 
   function openKanbanMenu(e, tid) {

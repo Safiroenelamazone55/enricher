@@ -1130,8 +1130,8 @@ const SpacesModule = (() => {
     _closePop(); _adopt(); const t = _tk(id); if (!t) return;
     const st = _stList(t.project_id).find(e => e.k === key);
     if (_custom(t.project_id) && st) {
-      try { if ((t.estado || 'pendiente') !== st.t) await TasksModule.moveTaskToStatus(id, st.t); const r = await _post(`/mgmt/tasks/${id}/status-key`, { key }, 'PATCH'); if (r.ok) { t.status_key = key; t.estado = st.t; } } catch (_) {}
-    } else { try { await TasksModule.moveTaskToStatus(id, key); } catch (_) {} t.estado = key; }
+      try { if ((t.estado || 'pendiente') !== st.t) { const ok = await TasksModule.moveTaskToStatus(id, st.t); if (ok === false) { _paintMain(); _paintTree(); return; } } const r = await _post(`/mgmt/tasks/${id}/status-key`, { key }, 'PATCH'); if (r.ok) { t.status_key = key; t.estado = st.t; } else showBanner('No se pudo guardar el estado', 'error'); } catch (_) {}
+    } else { let ok = true; try { ok = await TasksModule.moveTaskToStatus(id, key); } catch (_) { ok = false; } if (ok !== false) t.estado = key; }
     _paintMain(); _paintTree(); _refreshFields(id);
   }
   function prio(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openKcPrioPopover(ev, id); }
