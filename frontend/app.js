@@ -24511,7 +24511,7 @@ ${foot}
     const dev = (cls, w, z, label, extra) => `<div class="dv dv--${cls}"><div class="dv-fr"><div class="dv-sc" style="width:${w}px;zoom:${z}">${extra ? `<div class="dv-win">${mail}</div>` : mail}</div></div><div class="dv-lb">${esc(label)} · ${w} px</div></div>`;
     const tgt = (Array.isArray(v.targets) && v.targets[0]) ? ` (${v.targets[0]})` : '';
     return `<div class="sec dv-sec"><h2>${esc(L2.devs)}</h2><p class="rp-sub">${esc(L2.devsSub)}${esc((st.titulo || _accionLabel(st.canal, st.accion) || 'Email') + tgt)}.</p>
-      <div class="dv-row">${dev('phone', 375, 0.62, L2.phone)}${dev('tablet', 768, 0.4, L2.tablet)}</div>
+      <div class="dv-row">${dev('phone', 375, 0.62, L2.phone)}${dev('tablet', 768, 0.5, L2.tablet)}</div>
       <div class="dv-row dv-row--one">${dev('laptop', 1000, 0.62, L2.laptop, true)}</div></div>`;
   }
   function _rptCompaniesN(enrolled) { return new Set((enrolled || []).map(c => c.company_id != null ? 'i' + c.company_id : 'n' + String(c.company_nombre || '').toLowerCase())).size; }
