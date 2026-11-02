@@ -22863,15 +22863,14 @@ const LeadManagerModule = (() => {
     { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
     { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
     { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
-    { k: 'x-cantera-criterios',  l: 'Criterios guardados',  g: 'Prospección', x: 1 },
-    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
-    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
-    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
-    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
     { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
+    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
+    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
+    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
+    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
@@ -22934,10 +22933,18 @@ const LeadManagerModule = (() => {
       g.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
       g.onclick = () => LeadManagerModule.openCanteraSettings(tab);
       // el título se pinta (y se repinta) de forma asíncrona: un observador vuelve a poner el engranaje a su lado cuando hace falta
+      const pill = document.createElement('button'); pill.type = 'button'; pill.className = 'lm2-pill'; pill.title = 'Plantillas de ICP, tiers y puestos guardadas desde un borrador';
+      pill.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg><span>Criterios guardados</span>';
+      pill.onclick = () => LeadManagerModule.openCriterios();
+      const back = document.createElement('button'); back.type = 'button'; back.className = 'lm-back';
+      back.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> Volver a Borradores';
+      back.onclick = () => LeadManagerModule.criteriosBack();
       const put = () => {
-        if (!pane.classList.contains('pane--embedded') || pane.querySelector('.lm2-gear')) return;
-        const h = pane.querySelector('.lm-sec-title, .pane-title, h1, h2');
-        if (h) { g.classList.add('lm2-gear--inline'); h.appendChild(g); }
+        if (!pane.classList.contains('pane--embedded')) return;
+        const h = pane.querySelector('.lm-sec-title, .pane-title, h1, h2'); if (!h) return;
+        if (!pane.querySelector('.lm2-gear')) { g.classList.add('lm2-gear--inline'); h.appendChild(g); }
+        if (tab === 'cantera' && !pane.querySelector('.lm2-pill')) h.appendChild(pill);
+        if (tab === 'cantera-criterios' && !pane.querySelector('.lm-back')) h.insertAdjacentElement('beforebegin', back);
       };
       put();
       if (pane._gearObs) pane._gearObs.disconnect();
@@ -22948,6 +22955,8 @@ const LeadManagerModule = (() => {
   // Desde una ventana de Cantera → Configuración del módulo (sección de motores y claves), con vuelta atrás
   let _cfgBack = null;
   function openCanteraSettings(fromTab) { _cfgBack = fromTab ? 'x-' + fromTab : null; go('settings'); setTimeout(() => { const el = $('lm-set-cantera'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 450); }
+  function openCriterios() { go('x-cantera-criterios'); }
+  function criteriosBack() { go('x-cantera'); }
   function settingsBack() { const b = _cfgBack || 'x-cantera'; _cfgBack = null; go(b); }
   function _mountCanteraCfg() { try { if ($('lm-set-cantera-body')) { const gc = (typeof gcName === 'function') ? gcName() : ''; CanteraConfigModule.setExtClient(gc); CanteraConfigModule.render('lm-set-cantera-body'); } } catch (e) { console.error('[outreach] cfg cantera', e); } }
   function setEmbed(sec) { _section = sec; _activeClient = null; try { localStorage.setItem('lm_last_section', sec); } catch (_) {} }
@@ -39195,7 +39204,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { openCanteraSettings, settingsBack, gcClient: () => ({ id: _gcli, name: gcName() }), dgEmbed, setEmbed, callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
+  return { openCriterios, criteriosBack, openCanteraSettings, settingsBack, gcClient: () => ({ id: _gcli, name: gcName() }), dgEmbed, setEmbed, callsTab, callsSearch, telClick, telCall, telConfigOpen, telSaveCfg, telAddLine, telRefreshLine, telDelLine, telCopyHook, telMute, telHang, telPickRes, telResolve, telSaveRes, ibDestSuggest, ibDestPick, rcpInput, rcpKey, rcpBlur, rcpPaste, rcpDel, waContactBadge, waResolveMenu, waResolveDo, _cmpCcSuggest, _cmpCcPick, _cmpCcKey, _cmpCcTidy, tiMore, tiDone, tiDealDone, fuQuick, _waUnmount, _coBack, gcSet, gcOpen, gcLeave, exFilter, exClearFilters, exDeleteFiltered, exSet, exFile, exSave, exDelete, exMap, exClearFile, exTextCommit, exToggle, exToggleAll, exDeleteSel, exDeleteAll, load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, kbDragStart, kbDrop, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
