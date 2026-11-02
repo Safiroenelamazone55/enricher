@@ -2714,7 +2714,8 @@ app.post('/api/mgmt/tasks/bulk', requireAuth, async (req, res) => {
   try {
     let rows;
     if (b.accion === 'fecha') {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha || ''))) return res.status(400).json({ error: 'Fecha no válida' });
+      const fch = String(b.fecha || ''), dv = new Date(fch + 'T12:00:00Z');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fch) || isNaN(dv) || dv.toISOString().slice(0, 10) !== fch) return res.status(400).json({ error: 'Fecha no válida' });
       rows = (await pool.query(
         `UPDATE tasks SET deadline=$3::date, fecha_inicio = CASE WHEN fecha_inicio IS NOT NULL AND fecha_inicio > $3::date THEN $3::date ELSE fecha_inicio END, updated_at=NOW()
           WHERE id = ANY($1::int[]) AND user_id=$2 RETURNING id, parent_task_id`, [ids, wid, b.fecha])).rows;
