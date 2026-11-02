@@ -20510,3 +20510,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cgd__x{width:34px;text-align:center}
 .cgd__del{border:0;background:none;color:#9AA39E;cursor:pointer;padding:5px;border-radius:7px;display:inline-flex}
 .cgd__del:hover{background:#FDECEC;color:#D12F34}
+.cfi__x.cfi__lay{right:50px;top:14px;font-size:1rem;width:28px;height:28px;border-radius:7px}.cfi__x.cfi__lay:hover{background:#EEF1EF;color:#14211B}
+.cfi__fi{display:flex;align-items:stretch;gap:6px}.cfi__fi input{flex:1;min-width:0}
+.cfi__go{flex:none;width:36px;border:1px solid #E4E0D9;background:#fff;color:#5F6B64;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.cfi__go:hover{background:#EEF4FF;border-color:#A7C8F5;color:#007AFF}

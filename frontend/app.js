@@ -6651,7 +6651,7 @@ const CanteraModule = (() => {
     const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
     const nm = [k.nombre, k.apellido].filter(Boolean).join(' ') || '(sin nombre)', ini = (((k.nombre || '?')[0]) + ((k.apellido || '')[0] || '')).toUpperCase();
     const inCrm = !!k.promoted_contact_id, web = fx(k.website || k.dominio);
-    const fld = (key, label, ph, wide) => `<label class="cfi__f${wide ? ' cfi__f--w' : ''}"><span>${label}</span><input id="cfi-${key}" value="${esc(k[key] || '')}" placeholder="${ph || ''}" autocomplete="off"></label>`;
+    const fld = (key, label, ph, wide) => `<label class="cfi__f${wide ? ' cfi__f--w' : ''}"><span>${label}</span><span class="cfi__fi"><input id="cfi-${key}" value="${esc(k[key] || '')}" placeholder="${ph || ''}" autocomplete="off">${/^linkedin/.test(key) ? `<button type="button" class="cfi__go" title="Abrir en una ventana nueva" aria-label="Abrir enlace" onclick="CanteraModule.openUrl('cfi-${key}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>` : ''}</span></label>`;
     m.querySelector('.cfi__box').innerHTML = `
       <div class="cfi__band cfi__band--${inCrm ? 'crm' : 'cant'}">${inCrm ? '✓ Este contacto ya está en el CRM · lo que cambies aquí se actualiza también allá' : '◔ Contacto en CANTERA · todavía no se ha enviado al CRM'}<span>Borrador: ${esc(k.borrador || '')}</span></div>
       <div class="cfi__hd"><div class="cfi__av">${esc(ini.trim() || '?')}</div><div class="cfi__id"><div class="cfi__name">${esc(nm)}</div><div class="cfi__sub">${esc(k.cargo || 'Sin cargo')}${k.empresa ? ' · ' + (web ? `<a href="${esc(web)}" target="_blank" rel="noopener">${esc(k.empresa)}</a>` : esc(k.empresa)) : ''}</div></div>
@@ -6677,6 +6677,11 @@ const CanteraModule = (() => {
       if (_orphans) _orphans = _orphans.filter(c => c.id !== id);
       _cargoRepaint(); _orphRepaint(); _orphRefreshQuiet();
     } catch (e) { showBanner('No se pudo eliminar: ' + e.message, 'error'); }
+  }
+  function openUrl(inputId) {
+    const v = String((document.getElementById(inputId) || {}).value || '').trim();
+    if (!v) { showBanner('Aún no hay un enlace en este campo', 'info'); return; }
+    window.open(/^https?:\/\//i.test(v) ? v : 'https://' + v.replace(/^\/+/, ''), '_blank', 'noopener');
   }
   async function cargoDelContact(id) {
     let x = null; Object.values(_cargoCt).forEach(l => (l || []).forEach(y => { if (y.id === id) x = y; }));
@@ -8537,7 +8542,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, deleteFicha, cargoDelContact, fichaLayoutMenu, fichaLayout, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, deleteFicha, cargoDelContact, openUrl, fichaLayoutMenu, fichaLayout, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
