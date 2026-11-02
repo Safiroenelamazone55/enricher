@@ -10812,6 +10812,19 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
   if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
   if (!sequenceId) return res.status(400).json({ error: 'Elige una secuencia' });
 
+  // Revisión previa (sin tocar nada): cuántas de las empresas elegidas no tienen NINGÚN contacto con prioridad asignada
+  if (b.dry) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT c.id, COUNT(k.id)::int AS n, COUNT(k.id) FILTER (WHERE k.prioridad > 0)::int AS np
+           FROM cantera_companies c LEFT JOIN cantera_contacts k ON k.company_id = c.id
+          WHERE c.id = ANY($1::int[]) AND c.batch_id=$2 AND c.user_id=$3 GROUP BY c.id`, [companyIds, batchId, uid]);
+      const sp = rows.filter(r => r.np === 0 && r.n > 0);
+      return res.json({ dry: true, empresas: rows.length, empresasSinPrioridad: sp.length, contactosSinPrioridad: sp.reduce((t, r) => t + r.n, 0), empresasSinContactos: rows.filter(r => r.n === 0).length });
+    } catch (e) { console.error('[cantera] send-to-sequence dry', e.message); return res.status(500).json({ error: 'No se pudo revisar la selección' }); }
+  }
+  const todosSinPrio = b.sin_prioridad === 'todos';   // empresas sin ninguna prioridad: ir con todos sus contactos (sin orden)
+
   const cl = await pool.connect();
   let lmContactIds = [];
   try {
@@ -10853,10 +10866,9 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
       // a propósito (confirmado 2026-09-06: sí se puede tierear/priorizar un
       // contacto aunque su empresa haya quedado descartada en la validación).
       const { rows: contactos } = await cl.query(
-        prioridades.length
-          ? `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND prioridad = ANY($3::int[])`
-          : `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND prioridad > 0`,
-        prioridades.length ? [co.id, uid, prioridades] : [co.id, uid]);
+        `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND (${prioridades.length ? 'prioridad = ANY($3::int[])' : 'prioridad > 0'}
+           OR ($4::boolean AND NOT EXISTS (SELECT 1 FROM cantera_contacts z WHERE z.company_id=$1 AND z.prioridad > 0)))`,
+        [co.id, uid, prioridades, todosSinPrio]);
       for (const k of contactos) {
         const email = (k.email || '').toLowerCase();
         // Mismo dedup en 3 niveles que /promote (ver comentario ahí) —

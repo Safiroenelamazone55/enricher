@@ -8363,6 +8363,26 @@ const CanteraModule = (() => {
       return /^no verificado\b/i.test(String(v)) ? `<span class="cant-nota-cell cant-de-miss cant-de-miss--soft" title="${esc(v)}: no se encontró evidencia">⚠ ${esc(v)}</span>` : `<span class="cant-nota-cell" title="${esc(v)}">${esc(v)}</span>`;
     },
   };
+  // Aviso antes de enviar a secuencia cuando hay empresas sin ninguna prioridad de contacto. Devuelve 'todos' | 'empresas' | null (cancelar)
+  window._cantAskSinPrio = info => new Promise(resolve => {
+    document.getElementById('cant-sp-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-sp-modal'; m.className = 'fin-pi-backdrop'; m.style.zIndex = 9950;
+    const done = v => { m.remove(); resolve(v); };
+    m.onclick = e => { if (e.target === m) done(null); };
+    const n = info.empresasSinPrioridad, k = info.contactosSinPrioridad;
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:480px">
+      <div class="fin-pi-box__hd"><h3>No has asignado prioridad</h3><button class="fin-pi-x" id="cant-sp-x">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
+        <p class="cant-hint" style="margin:0"><b>${n} empresa(s)</b> no tienen ningún contacto con prioridad (suman ${k} contacto(s)). Sin prioridad no se sabe a quién escribir primero. ¿Qué quieres hacer con ellas?</p>
+        <button type="button" class="cant-sp-o" id="cant-sp-emp"><b>Cargar solo las empresas, sin contactos</b><span>Las empresas pasan al CRM y no se inscribe a nadie de ellas en la secuencia.</span></button>
+        <button type="button" class="cant-sp-o" id="cant-sp-all"><b>Enviar las empresas con todos sus contactos, sin orden de prioridad</b><span>Se inscriben los ${k} contacto(s) a la vez; tú decides después a quién escribir primero.</span></button>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" id="cant-sp-no">Cancelar</button></div></div></div>`;
+    document.body.appendChild(m);
+    document.getElementById('cant-sp-x').onclick = document.getElementById('cant-sp-no').onclick = () => done(null);
+    document.getElementById('cant-sp-emp').onclick = () => done('empresas');
+    document.getElementById('cant-sp-all').onclick = () => done('todos');
+  });
   window._cantCascade = window._cantCascade || {
     data: {},
     init(p, d) { this.data[p] = d; this.change(p, 'init'); },
@@ -8517,10 +8537,19 @@ const CanteraModule = (() => {
     // Mismo bloqueo anti-doble-clic que "Mover al CRM" — ver comentario ahí.
     const btn = document.getElementById('cant-sq-go');
     if (btn) { if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Enviando…'; }
+    let sinPrio = '';
+    try {
+      const rv = await apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dry: true, company_ids: [..._coSel], outbound_client_id: clientId, sequence_id: sequenceId }) });
+      const iv = rv.ok ? await rv.json() : null;
+      if (iv && iv.empresasSinPrioridad > 0) {
+        sinPrio = await window._cantAskSinPrio(iv);
+        if (!sinPrio) { if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } return; }
+      }
+    } catch (_) { /* si la revisión falla, se envía como siempre */ }
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_ids: [..._coSel], outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades }),
+        body: JSON.stringify({ company_ids: [..._coSel], outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades, sin_prioridad: sinPrio }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
@@ -9155,9 +9184,17 @@ const CanteraMesaModule = (() => {
     const prioridades = [...document.querySelectorAll('.mesa-seq-prio:checked')].map(el => parseInt(el.value));
     const groups = _groupByBatch([..._coSel]);
     let companiesPromoted = 0, contactsPromoted = 0, enrolled = 0; const _gt = { companiesExcluded: 0, contactsAlreadyContacted: 0, enrollBlocked: 0 };
+    let sinPrio = '';
+    try {
+      const tot = { empresasSinPrioridad: 0, contactosSinPrioridad: 0 };
+      for (const [batchId, ids] of Object.entries(groups)) {
+        try { const rv = await apiFetch(`${API}/cantera/batches/${batchId}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dry: true, company_ids: ids, outbound_client_id: clientId, sequence_id: sequenceId }) }); if (rv.ok) { const iv = await rv.json(); tot.empresasSinPrioridad += iv.empresasSinPrioridad || 0; tot.contactosSinPrioridad += iv.contactosSinPrioridad || 0; } } catch (_) {}
+      }
+      if (tot.empresasSinPrioridad > 0) { sinPrio = await window._cantAskSinPrio(tot); if (!sinPrio) return; }
+    } catch (_) {}
     try {
       for (const [batchId, ids] of Object.entries(groups)) {
-        const res = await apiFetch(`${API}/cantera/batches/${batchId}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: ids, outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades }) });
+        const res = await apiFetch(`${API}/cantera/batches/${batchId}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: ids, outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades, sin_prioridad: sinPrio }) });
         const d = await res.json();
         if (!res.ok) continue;
         companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0; enrolled += d.enrolled || 0; _gateAdd(_gt, d);

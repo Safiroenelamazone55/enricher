@@ -20514,3 +20514,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cfi__fi{display:flex;align-items:stretch;gap:6px}.cfi__fi input{flex:1;min-width:0}
 .cfi__go{flex:none;width:36px;border:1px solid #E4E0D9;background:#fff;color:#5F6B64;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .cfi__go:hover{background:#EEF4FF;border-color:#A7C8F5;color:#007AFF}
+.cant-sp-o{display:flex;flex-direction:column;gap:3px;text-align:left;padding:11px 14px;border:1px solid #E3E7E4;border-radius:10px;background:#fff;cursor:pointer;font:inherit}
+.cant-sp-o b{font-size:13.5px;font-weight:600;color:#14211B}.cant-sp-o span{font-size:12.5px;color:#5F6B64;line-height:1.4}
+.cant-sp-o:hover{border-color:#A7C8F5;background:#F5F9FF}
