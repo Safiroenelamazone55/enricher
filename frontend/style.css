@@ -20151,3 +20151,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .opp-kc__f { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: .76rem; color: var(--text-muted, #8B9690); } .opp-kc__r { display: inline-flex; align-items: center; gap: 5px; min-width: 0; } .opp-kc__r span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opp-board { grid-auto-columns: minmax(188px, 1fr); } #pane-mgmt-opportunities .clients-body { padding-left: 0; padding-right: 0; }
 .opp-kc__dt { white-space: nowrap; flex: none; }
+/* mismo ancho del panel lateral en Agenda y en Calendarios */
+.cal2sb, .cal2sb--ag { width: 284px; flex: none; background: #fff; padding-top: 0; }

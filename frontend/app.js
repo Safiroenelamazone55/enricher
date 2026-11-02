@@ -16378,15 +16378,18 @@ const CalendarModule = (() => {
   // Paleta de macOS Calendar.
   // Paleta de macOS Calendar. El orden importa: los primeros proyectos se llevan
   // los tonos amables (azul, verde, morado) y no el rosa fuerte.
-  const _PROJ_COLORS = ['#007AFF','#34C759','#AF52DE','#FF9500','#5AC8FA','#FF3B30',
+  // Tonos pastel. Los colores que ya estaban guardados con la paleta anterior se muestran en su pastel equivalente.
+  const _PROJ_OLD    = ['#007AFF','#34C759','#AF52DE','#FF9500','#5AC8FA','#FF3B30',
                         '#5856D6','#FFCC00','#30B0C7','#A2845E','#FF2D55','#918C85'];
+  const _PROJ_COLORS = ['#8DBDF7','#92D8A4','#CBA6EA','#F6C282','#92D9F2','#F5A39D',
+                        '#A9A7EA','#F3DE84','#8AD0DA','#CBB49F','#F5A3BD','#C2BEB7'];
   let _projects = [];                       // para la barra lateral y sus colores
   let _projHidden = new Set(JSON.parse(localStorage.getItem('cal_proj_off') || '[]').map(Number));
   let _todoHidden = localStorage.getItem('cal_todo_off') === '1';   // banda "Por programar" ocultable
   function _projColor(pid) {
-    if (pid == null) return '#918C85';
+    if (pid == null) return '#C2BEB7';
     const p = _projects.find(x => x.id === pid);
-    if (p && p.color) return p.color;        // color elegido por la usuaria
+    if (p && p.color) { const k = _PROJ_OLD.indexOf(String(p.color).toUpperCase()); return k >= 0 ? _PROJ_COLORS[k] : p.color; }   // color elegido por la usuaria
     let n = 0; const s = String(pid);
     for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
     return _PROJ_COLORS[n % _PROJ_COLORS.length];
@@ -16680,8 +16683,8 @@ const CalendarModule = (() => {
       <div class="cal2sb__list">${lista.length ? lista.map(fila).join('') : '<div class="cal2sb__vacio">Sin proyectos con tareas.</div>'}</div>
       <div class="cal2sb__grp">Otros</div>
       <div class="cal2sb__list">
-        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#5856D6"></span><span class="cal2sb__name">Reuniones</span></div>
-        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#FF9500"></span><span class="cal2sb__name">Tiempo libre</span></div>
+        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#A9A7EA"></span><span class="cal2sb__name">Reuniones</span></div>
+        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#F6C282"></span><span class="cal2sb__name">Tiempo libre</span></div>
         ${_gcalConn ? `<div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#34C759"></span><span class="cal2sb__name">Google Calendar</span></div>` : ''}
       </div>`;
     if (_sbTab === 'agenda') return _agPanel(todayDs);
