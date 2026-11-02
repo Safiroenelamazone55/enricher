@@ -20245,3 +20245,16 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 
 #sidebar .snav-item:not(.snav-item--sm) .snav-item__icon svg, .sidebar--collapsed .snav-item:not(.snav-item--sm) .snav-item__icon svg { width: 22px; height: 22px; }
 .sidebar--collapsed .snav-item__icon { width: 34px; height: 34px; }
+
+/* Outreach · barra lateral con los mismos iconos grandes y botones uniformes que Operaciones */
+.lm2-nav.lm2-nav--collapsed .lm2-nav__item { width: 42px; height: 42px; min-height: 0; padding: 0; margin: 2px auto; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+#pane-lead-manager .lm2-nav .lm2-nav__item svg, .lm2-nav.lm2-nav--collapsed .lm2-nav__item svg { width: 22px; height: 22px; }
+.lm2-nav.lm2-nav--collapsed .lm2-nav__item:hover { background: var(--surface-hover, #EEF0EE); }
+.lm2-nav.lm2-nav--collapsed .lm2-nav__item.active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); }
+
+/* Outreach · menú expandido: iconos y filas al mismo estilo */
+.lm2-nav .lm2-nav__item svg { width: 22px !important; height: 22px !important; flex: none; }
+.lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item { height: 40px; margin: 1px 8px; padding: 0 10px; border-radius: 10px; gap: 12px; font-size: .9rem; }
+.lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item:hover { background: var(--surface-hover, #EEF0EE); }
+.lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item.active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); font-weight: 600; }
+.lm2-nav .lm2-nav__grp { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; color: var(--text-muted, #8B9690); padding: 14px 18px 4px; }
