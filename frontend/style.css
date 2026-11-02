@@ -20208,3 +20208,27 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 #chat-composer-group .chat-tool-btn--plus { color: var(--text-secondary, #5F6B64); }
 #chat-composer-group .chat-composer__send { margin-left: 4px; }
 .slk-vmenu--act { width: 220px; } .slk-vmenu__b { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: .86rem; color: var(--text-primary, #14211B); text-align: left; cursor: pointer; } .slk-vmenu__b:hover { background: var(--surface-hover, #F1F3F0); } .slk-vmenu__b > :first-child { width: 22px; text-align: center; color: var(--text-secondary, #5F6B64); }
+
+/* ═══ WhatsApp · mismo sistema visual + cuadro de mensaje que crece ═══ */
+.wa-shell .wa-sidebar { background: var(--surface-secondary, #F7F8F6); border-right: 1px solid var(--border, #E2E7E3); }
+.wa-sidebar__title { font-size: 1rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); }
+.wa-sidebar__numero { font-size: .78rem; color: var(--text-muted, #8B9690); }
+.wa-tab { font-size: .84rem; font-weight: 500; color: var(--text-secondary, #5F6B64); } .wa-tab.active { color: var(--primary, #007AFF); font-weight: 600; }
+.wa-arch-row { font-size: .86rem; font-weight: 600; color: var(--text-secondary, #5F6B64); }
+.wa-chat-item { margin: 2px 8px; border-radius: 10px; border: 0; } .wa-chat-item:hover { background: var(--surface-hover, #EEF0EE); } .wa-chat-item.active, .wa-chat-item.on, .wa-chat-item.sel { background: var(--primary-soft, #E6F0FF); }
+.wa-chat-item__name { font-size: .9rem; font-weight: 600; letter-spacing: 0; color: var(--text-primary, #14211B); }
+.wa-chat-item__preview { font-size: .82rem; color: var(--text-secondary, #5F6B64); } .wa-chat-item__preview.unread { font-weight: 600; color: var(--text-primary, #14211B); }
+.wa-chat-item__time { font-size: .74rem; color: var(--text-muted, #8B9690); }
+.wa-chat-item__badge { border-radius: 99px; font-size: .7rem; font-weight: 600; min-width: 20px; text-align: center; padding: 1px 7px; }
+.wa-tag-pill { border-radius: 99px; font-weight: 600; }
+.wa-main__header { height: 56px; border-bottom: 1px solid var(--border, #E2E7E3); background: #fff; }
+.wa-main__ch-name { font-size: 1rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); }
+.wa-main__msgs { padding: 16px 24px; }
+/* cuadro de mensaje: tarjeta redondeada, texto arriba y herramientas abajo */
+.wa-main__composer { flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 16px 14px; padding: 0 10px 8px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(16,24,20,.04); transition: border-color .15s, box-shadow .15s; }
+.wa-main__composer:focus-within { border-color: var(--primary, #007AFF); box-shadow: 0 0 0 3px rgba(0,122,255,.10); }
+.wa-main__composer #wa-input { order: -1; flex: 0 0 100%; min-height: 52px; max-height: min(50vh, 420px); padding: 16px 8px 6px; font-size: .92rem; line-height: 1.6; color: var(--text-primary, #14211B); border: 0; outline: 0; background: transparent; }
+.wa-main__composer .wa-clock { width: 32px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--text-muted, #8B9690); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; } .wa-main__composer .wa-clock:hover { background: var(--surface-hover, #F1F3F0); color: var(--text-primary, #14211B); }
+.wa-main__composer .wa-clock[title="Respuestas rápidas"] { margin-left: auto; }
+.wa-main__composer .chat-composer__send { width: 34px; height: 34px; border-radius: 10px; background: var(--primary, #007AFF); color: #fff; box-shadow: none; margin-left: 4px; } .wa-main__composer .chat-composer__send:hover { background: #0062CC; transform: none; }
+.wa-sidebar__hdr { display: flex; align-items: center; gap: 2px; padding: 10px 10px 6px 14px; } .wa-sidebar__hdr-info { flex: 1; min-width: 0; } .wa-sidebar__hdr-info > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .wa-sidebar__hdr .chat-hdr-btn, .wa-sidebar__hdr .chat-ws-compose-btn { flex: none; width: 28px; height: 28px; margin: 0; }
