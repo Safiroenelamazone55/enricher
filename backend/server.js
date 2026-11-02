@@ -14953,6 +14953,17 @@ app.post('/api/timer/manual', requireAuth, async (req, res) => {
     const dur = Math.round((fin - ini) / 1000);
     if (dur > 16 * 3600) return res.status(400).json({ error: 'Un registro no puede pasar de 16 horas' });
     if (fin.getTime() > Date.now() + 60000) return res.status(400).json({ error: 'No se puede registrar tiempo en el futuro' });
+    // El mismo miembro no puede tener dos registros en el mismo horario (antes se apilaban y las horas se contaban dos veces)
+    {
+      const ov = await pool.query(`SELECT task_titulo, started_at, ended_at FROM time_entries
+         WHERE user_id=$1 AND source NOT IN ('browser_extension','desktop_agent') AND started_at < $3 AND COALESCE(ended_at, NOW()) > $2
+         ORDER BY started_at LIMIT 1`, [uid, ini.toISOString(), fin.toISOString()]);
+      if (ov.rows.length) {
+        const hm = d => new Date(d).toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false });
+        const o = ov.rows[0];
+        return res.status(409).json({ error: `Ese horario se cruza con otro registro tuyo: «${String(o.task_titulo || '').slice(0, 60)}» de ${hm(o.started_at)} a ${o.ended_at ? hm(o.ended_at) : 'ahora'}. Elige otra hora o corrige ese registro.` });
+      }
+    }
     let taskTitulo = String(b.task_titulo || '').trim(), projectNombre = String(b.project_nombre || '').trim();
     let validTaskId = parseInt(b.task_id) || null;
     if (validTaskId) {
