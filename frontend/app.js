@@ -49581,7 +49581,7 @@ const TimerModule = (() => {
       let totalSec = 0, billSec = 0, totalTasks = 0;
       for (const e of sumEntries) {
         const dur = _ttdDur(e, now); totalSec += dur;
-        const hourly = e.tipo_proyecto === 'horas' && _bnum(e.tarifa_hora) > 0;
+        const hourly = _bnum(e.tarifa_hora) > 0;   // basta con que el proyecto tenga tarifa por hora (también los de cobro semanal o precio fijo que la definen)
         const cur = e.moneda || 'USD', tarifa = _bnum(e.tarifa_hora);
         const pid = e.project_id != null ? 'p' + e.project_id : ('n:' + (e.proj_nombre || e.project_nombre || 'Sin proyecto'));
         if (!projs.has(pid)) projs.set(pid, { nombre: e.proj_nombre || e.project_nombre || 'Sin proyecto', moneda: cur, tarifa, hourly, sec: 0, weeks: new Map(), taskIds: new Set() });
