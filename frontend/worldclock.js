@@ -217,6 +217,7 @@ const WorldClockModule = (() => {
   }
   function open() {
     if (_panel) return;
+    if (window._novaCloseTopPanels) window._novaCloseTopPanels('reloj');
     const bar = document.getElementById('global-topbar');
     const top = bar ? Math.round(bar.getBoundingClientRect().bottom) : 56;
     _panel = document.createElement('div'); _panel.className = 'wcl-panel'; _panel.style.top = top + 'px';
@@ -251,5 +252,5 @@ const WorldClockModule = (() => {
   function search(v) { _q = v || ''; _paint(); }
   function filter(f) { _f = (_f === f && f !== 'all') ? 'all' : f; _paint(); }
   function toggleRow(k) { if (_exp.has(k)) _exp.delete(k); else _exp.add(k); _paint(); }
-  return { toggle, open, close, search, toggleRow, filter, cvToggle, cvSet, cvSwap };
+  return { isOpen: () => !!_panel, toggle, open, close, search, toggleRow, filter, cvToggle, cvSet, cvSwap };
 })();

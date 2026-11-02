@@ -47038,6 +47038,7 @@ const RChatPanel = (() => {
     const panel = $('rchat');
     if (!panel) return;
     if (_open && _view === view) { close(); return; }
+    if (window._novaCloseTopPanels) window._novaCloseTopPanels('chat');
     _view = view;
     _open = true;
     panel.classList.remove('rchat--collapsed');
@@ -47176,7 +47177,7 @@ const RChatPanel = (() => {
     close();
   });
 
-  return { open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat, openFullWa, closeFullWa };
+  return { isOpen: () => _open, open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat, openFullWa, closeFullWa };
 })();
 
 // =================================================================

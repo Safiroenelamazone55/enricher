@@ -1,4 +1,9 @@
 'use strict';
+// Paneles de la barra superior (Bloc de notas, Horario de prospección, Slack/WhatsApp/alertas): solo uno abierto a la vez.
+window._novaCloseTopPanels = window._novaCloseTopPanels || function (except) {
+  const P = { notas: () => (typeof NotepadModule !== 'undefined' ? NotepadModule : null), reloj: () => (typeof WorldClockModule !== 'undefined' ? WorldClockModule : null), chat: () => (typeof RChatPanel !== 'undefined' ? RChatPanel : null) };
+  Object.keys(P).forEach(k => { if (k === except) return; try { const m = P[k](); if (m && m.isOpen && m.isOpen()) m.close(); } catch (_) {} });
+};
 // Bloc de notas (barra superior): panel flotante con notas personales. Lista con búsqueda, acciones al pasar el mouse
 // (editar · crear tarea · descargar · archivar · eliminar) y editor con autoguardado.
 const NotepadModule = (() => {
@@ -51,7 +56,8 @@ const NotepadModule = (() => {
     document.addEventListener('mousedown', e => { if (menu && e.target && e.target.closest && !e.target.closest('.npd__menu,[data-npd-menu]')) { menu = ''; paint(); } });
     return d;
   }
-  function open() { ensure().classList.remove('hidden'); document.getElementById('npd-btn')?.classList.add('on'); if (!loaded) { paint(); load(); } else paint(); }
+  function isOpen() { const d = $('npd'); return !!d && !d.classList.contains('hidden'); }
+  function open() { if (window._novaCloseTopPanels) window._novaCloseTopPanels('notas'); ensure().classList.remove('hidden'); document.getElementById('npd-btn')?.classList.add('on'); if (!loaded) { paint(); load(); } else paint(); }
   function close() { saveNow(); $('npd')?.classList.add('hidden'); document.getElementById('npd-btn')?.classList.remove('on'); }
   function toggle() { const d = $('npd'); if (d && !d.classList.contains('hidden')) close(); else open(); }
 
@@ -174,5 +180,5 @@ const NotepadModule = (() => {
     } catch (_) { toast('No se pudo crear la tarea', 'error'); }
   }
 
-  return { toggle, open, close, load, searchOn, searchOff, search, menuToggle, toggleArch, toggleRecent, wideToggle, create, edit, back, typing, archive, remove, copy, download, print, taskForm, taskCancel, taskSave };
+  return { isOpen, toggle, open, close, load, searchOn, searchOff, search, menuToggle, toggleArch, toggleRecent, wideToggle, create, edit, back, typing, archive, remove, copy, download, print, taskForm, taskCancel, taskSave };
 })();
