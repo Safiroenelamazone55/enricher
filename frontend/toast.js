@@ -54,3 +54,14 @@ const NovaToast = (() => {
   const t = setInterval(() => { if (window._authUser) { clearInterval(t); connect(); } }, 1500);
   return { show, connect };
 })();
+
+// Texto cortado con «…»: al pasar el cursor se muestra completo (tooltip nativo), en cualquier lista, tabla o tarjeta.
+document.addEventListener('mouseover', e => {
+  let el = e.target;
+  for (let i = 0; i < 4 && el && el !== document.body; i++, el = el.parentElement) {
+    if (el.title || el.nodeType !== 1 || !el.textContent || el.children.length > 3) continue;
+    const cs = getComputedStyle(el);
+    const cut = (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1) || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none' && el.scrollHeight > el.clientHeight + 1);
+    if (cut) { el.title = el.textContent.replace(/\s+/g, ' ').trim(); return; }
+  }
+}, true);
