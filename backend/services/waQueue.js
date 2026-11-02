@@ -299,6 +299,8 @@ async function _marcarEnviado(pool, m, msgId) {
 async function _manejarFallo(pool, connId, m, intentos, e) {
   const tipo = (e && e.code) || 'otro';
   const msg = String((e && e.message) || 'Error al enviar').slice(0, 300);
+  // «Timed Out» con la línea abierta = el problema es de ESTE mensaje/número (p. ej. teléfono sin código de país), no de la línea: cuenta como fallo normal y no se reintenta para siempre
+  if (tipo === 'sin_conexion' && waSvc.estadoSock(connId).abierto && /timed out/i.test(msg) && !(e && e.code === 'sin_conexion' && /no está conectado/i.test(msg))) tipo = 'otro';
   if (tipo === 'sin_conexion') {
     // La línea no estaba lista: no es culpa del mensaje, no gasta intentos.
     await pool.query(`UPDATE wa_messages SET estado='programado', intentos=GREATEST(intentos-1,0), proximo_intento_at=NOW() + INTERVAL '60 seconds', ultimo_error=$2 WHERE id=$1`, [m.id, 'La línea estaba desconectada: se reintenta al reconectar']);
@@ -347,6 +349,12 @@ async function procesarLinea(pool, connId) {
       if (!enVentana(ahora, ventanaMsg(S, m))) { bloqueadoPorVentana = true; continue; }   // fuera de horario/día de su secuencia (o del contacto): espera su próxima jornada
       if (S.proximo_envio_at && new Date(S.proximo_envio_at) > ahora) continue; // aún no pasó el intervalo desde el anterior
       if (await enviadosHoy(pool, connId, S, ahora) >= topeEfectivo(S, ahora)) { bloqueadoPorVentana = true; continue; }   // tope del día alcanzado
+    }
+    // Un número que empieza en 0 es local (sin código de país): WhatsApp no lo resuelve y la comprobación se queda en «Timed Out». No se envía: se avisa para corregir el teléfono.
+    if (/^0\d{6,}@s\.whatsapp\.net$/.test(m.chat_jid || '')) {
+      await pool.query(`UPDATE wa_messages SET estado='error_programado', ultimo_error=$2 WHERE id=$1 AND estado='programado'`, [m.id, 'El número ' + m.chat_jid.split('@')[0] + ' no tiene código de país. Corrígelo en el contacto (p. ej. Egipto: 20…) y reprograma el mensaje.']);
+      if (m.via_cola) await replanificar(pool, connId);
+      continue;
     }
     if (!waSvc.estadoSock(connId).abierto) {
       // Línea no lista: no gasta intentos, se vuelve a mirar en 1 min y se pide la reconexión (no bloquea).
