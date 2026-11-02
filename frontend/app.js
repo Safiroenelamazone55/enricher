@@ -915,40 +915,33 @@ function renderHome() {
   }
 }
 function _renderHomeInner(grid) {
-  const cards = HOME_MODULES.map(m => {
+  // Saludo y fecha (la pantalla de inicio de los módulos: sobria, sin adornos)
+  try {
+    const u = window._authUser || {}, h = new Date().getHours();
+    const nom = String(u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
+    const hi = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+    const fecha = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const hero = document.getElementById('home-hero');
+    if (hero) hero.innerHTML = `<h1 class="home-hero__t">${hi}${nom ? ', ' + nom.replace(/[<>&"]/g, '') : ''}</h1><p class="home-hero__s">${fecha.charAt(0).toUpperCase() + fecha.slice(1)} · ¿Qué quieres abrir?</p>`;
+  } catch (_) {}
+  const ARROW = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>';
+  const card = m => {
     const act = m.action || `selectModule('${m.id}')`;
-    return `
-    <div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
-      <div class="home-card__top">
-        <div class="home-card__body">
-          <div class="home-card__title">${m.name}</div>
-          <div class="home-card__desc">${m.desc}</div>
-        </div>
-        <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
-      </div>
-      <div class="home-card__foot">
-        <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
-        <button class="home-card__kebab" onclick="event.stopPropagation();${act}" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
-      </div>
-    </div>
-  `;
-  });
-  // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
-  // no son módulos reales, solo mantienen la grilla 3×3 llena mientras se agregan más.
-  for (let i = HOME_MODULES.length; i < HOME_MODULES.length; i++) {   // sin tarjetas «Próximamente»
-    cards.push(`<div class="home-card home-card--placeholder" aria-hidden="true">
-      <div class="home-card__top">
-        <div class="home-card__body">
-          <div class="home-card__title" style="color:#B4AFA8">Próximamente</div>
-          <div class="home-card__desc">Nuevo módulo</div>
-        </div>
-      </div>
-      <div class="home-card__foot">
-        <span class="home-card__chip home-card__chip--soon"><span class="home-card__chip-dot home-card__chip-dot--soon"></span>Pronto</span>
-      </div>
-    </div>`);
-  }
-  grid.innerHTML = cards.join('');
+    return `<div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
+      <div class="home-card__icon">${m.icon}</div>
+      <div class="home-card__body"><div class="home-card__title">${m.name}</div><div class="home-card__desc">${m.desc}</div></div>
+      <span class="home-card__go" aria-hidden="true">${ARROW}</span>
+    </div>`;
+  };
+  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 2], ['Utilidades', ['herramientas', 'plantillas', 'empresa'], 3]];
+  const used = new Set();
+  let html = GROUPS.map(([t, ids, cols]) => {
+    const ms = ids.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean); ms.forEach(m => used.add(m.id));
+    return ms.length ? `<section class="home-sec"><h2 class="home-sec__t">${t}</h2><div class="home-sec__g home-sec__g--${cols}">${ms.map(card).join('')}</div></section>` : '';
+  }).join('');
+  const rest = HOME_MODULES.filter(m => !used.has(m.id));   // cualquier módulo nuevo sin grupo aparece igualmente
+  if (rest.length) html += `<section class="home-sec"><h2 class="home-sec__t">Más</h2><div class="home-sec__g home-sec__g--3">${rest.map(card).join('')}</div></section>`;
+  grid.innerHTML = html;
 }
 // ── Barra superior global: avatar + workspace + menú (Configuración / Salir) ──
 function _paintGlobalTopbar() {
