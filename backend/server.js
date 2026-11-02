@@ -12918,6 +12918,29 @@ app.get('/api/gcal/events', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/gcal/instant ─────────────────────────────────────────
+// Llamada al instante: crea un evento de 1 h desde ahora con enlace de Meet en el calendario predeterminado
+// y devuelve el enlace para pegarlo en la conversación de Slack.
+app.post('/api/gcal/instant', requireAuth, async (req, res) => {
+  try {
+    const tgt = await _gcalTarget(req.user.id);
+    if (!tgt) return res.status(409).json({ error: 'Conecta Google Calendar primero (Calendario → Ajustes → Cuentas)', connected: false });
+    const titulo = String((req.body && req.body.titulo) || 'Llamada').slice(0, 120);
+    const ini = new Date(), fin = new Date(ini.getTime() + 3600000);
+    const { data } = await tgt.cal.events.insert({
+      calendarId: tgt.calendarId, conferenceDataVersion: 1,
+      requestBody: { summary: titulo, start: { dateTime: ini.toISOString() }, end: { dateTime: fin.toISOString() },
+        conferenceData: { createRequest: { requestId: `nova-i-${req.user.id}-${Date.now()}`, conferenceSolutionKey: { type: 'hangoutsMeet' } } } },
+    });
+    const link = data.hangoutLink || (data.conferenceData?.entryPoints || []).find(e => e.entryPointType === 'video')?.uri || '';
+    if (!link) return res.status(502).json({ error: 'Google no devolvió enlace de Meet' });
+    res.json({ ok: true, link, eventId: data.id });
+  } catch (e) {
+    console.error('[gcal] instant error:', e.message);
+    res.status(500).json({ error: /invalid_grant/i.test(e.message) ? 'Google Calendar perdió la autorización — reconéctalo' : e.message });
+  }
+});
+
 app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
   const { taskId } = req.body;
   if (!taskId) return res.status(400).json({ error: 'taskId required' });

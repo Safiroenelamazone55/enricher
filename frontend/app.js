@@ -40422,13 +40422,110 @@ const SlackChat = (() => {
     } catch (_) {}
   }
 
+  // ── Vistas por conversación: Chat · Calendario · Tareas · + Vista ──
+  let _vista = 'chat', _dataV = null;
+  const _VDEF = { calendario: 'Calendario', tareas: 'Tareas', fijados: 'Fijados' };
+  let _vOn = (() => { try { const a = JSON.parse(localStorage.getItem('slk_vistas')); if (Array.isArray(a)) return a.filter(k => _VDEF[k]); } catch (_) {} return ['calendario', 'tareas']; })();
+  function _pintaVistas() {
+    const el = $$('chat-vtabs'); if (!el) return;
+    el.innerHTML = [['chat', 'Chat'], ..._vOn.map(k => [k, _VDEF[k]])].map(([k, l]) => `<button type="button" class="chat-vtab${_vista === k ? ' on' : ''}" onclick="SlackChat.setVista('${k}')">${l}</button>`).join('')
+      + `<button type="button" class="chat-vtab chat-vtab--add" onclick="SlackChat.vistaMenu(event)">+ Vista</button>`;
+  }
+  function setVista(k) {
+    if (k === 'fijados') { ChatModule.togglePinnedPanel(); return; }
+    _vista = k;
+    const msgs = $$('chat-messages'), grupo = $$('chat-composer-group'), panel = $$('chat-vpanel');
+    const chat = k === 'chat';
+    if (msgs) msgs.style.display = chat ? '' : 'none';
+    if (grupo) grupo.style.display = chat ? '' : 'none';
+    if (panel) panel.style.display = chat ? 'none' : '';
+    _pintaVistas();
+    if (!chat) _pintaPanelV();
+  }
+  function vistaMenu(ev) {
+    ev.stopPropagation(); document.getElementById('slk-vmenu')?.remove();
+    const a = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'slk-vmenu'; m.className = 'slk-vmenu';
+    m.innerHTML = `<div class="slk-vmenu__t">Vistas de esta conversación</div>` + Object.keys(_VDEF).map(k => `<label class="slk-vmenu__i"><input type="checkbox" ${_vOn.includes(k) ? 'checked' : ''} onchange="SlackChat.vistaToggle('${k}',this.checked)"><span>${_VDEF[k]}</span></label>`).join('');
+    m.style.top = (a.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(a.left, innerWidth - 240)) + 'px';
+    document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
+  function vistaToggle(k, on) {
+    _vOn = on ? [..._vOn.filter(x => x !== k), k] : _vOn.filter(x => x !== k);
+    try { localStorage.setItem('slk_vistas', JSON.stringify(_vOn)); } catch (_) {}
+    if (!on && _vista === k) setVista('chat'); else _pintaVistas();
+  }
+  function mas(ev) {
+    ev.stopPropagation(); document.getElementById('slk-vmenu')?.remove();
+    const a = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'slk-vmenu'; m.className = 'slk-vmenu slk-vmenu--act';
+    const it = (l, fn) => `<button type="button" class="slk-vmenu__b" onclick="document.getElementById('slk-vmenu')?.remove();${fn}">${l}</button>`;
+    m.innerHTML = `<div class="slk-vmenu__t">Formato</div>` + it('<b>B</b><span>Negrita</span>', "SlackChat.fmt('bold')") + it('<i>I</i><span>Cursiva</span>', "SlackChat.fmt('italic')") + it('<code>&lt;/&gt;</code><span>Código</span>', "SlackChat.fmt('code')")
+      + `<div class="slk-vmenu__t">Acciones</div>` + it('<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Iniciar llamada (Meet)</span>', 'SlackChat.iniciarLlamada()');
+    m.style.left = Math.max(8, a.left) + 'px'; m.style.bottom = (innerHeight - a.top + 8) + 'px';
+    document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
+  // Los iconos del encabezado (llamar, buscar, favorito, fijados, miembros) pasan a una columna a la derecha
+  function _riel() {
+    const main = document.querySelector('.chat-main'), acts = document.querySelector('.chat-main__header-actions');
+    if (!main || !acts || acts.parentElement === main) return;
+    acts.classList.add('chat-rail'); main.appendChild(acts);
+    const call = $$('chat-hdr-call-btn'); if (call) acts.insertBefore(call, acts.firstChild);
+  }
+  async function _datosV() {
+    if (_dataV && Date.now() - _dataV.at < 60000) return _dataV;
+    const get = u => apiFetch(`${API}${u}`).then(r => (r.ok ? r.json() : [])).catch(() => []);
+    const [t, m, p] = await Promise.all([get('/mgmt/tasks'), get('/mgmt/meetings'), get('/mgmt/projects')]);
+    _dataV = { t, m, p, at: Date.now() }; return _dataV;
+  }
+  async function _pintaPanelV() {
+    const el = $$('chat-vpanel'); if (!el || !_canal) return;
+    const k = _vista, id = _canal.id;
+    el.innerHTML = '<div class="chat-ch-empty">Cargando…</div>';
+    const D = await _datosV(); if (_vista !== k || !_canal || _canal.id !== id) return;
+    const nm = String(_canal.name || '').toLowerCase().replace(/\(yo\)/, '').trim(), first = nm.split(/\s+/)[0] || '';
+    const proj = !_canal.is_im ? D.p.find(x => x.slack_channel_id === _canal.id) : null;
+    const quien = proj ? `el proyecto ${proj.nombre}` : esc(_canal.name);
+    const fmtD = s => { try { return new Date(String(s).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); } catch (_) { return ''; } };
+    if (k === 'tareas') {
+      const open = D.t.filter(t => !['completado', 'cancelado'].includes(t.estado));
+      const mine = proj ? open.filter(t => t.project_id === proj.id)
+        : (_canal.is_im && first.length >= 3 ? open.filter(t => [].concat(t.responsables || [], t.responsable || []).some(r => String(r).toLowerCase().includes(first))) : []);
+      const rows = mine.slice(0, 60).map(t => `<div class="slk-vrow" onclick="TasksModule.openDrawer(${t.id})"><div class="slk-vrow__t"><b>${esc(t.titulo)}</b><small>${esc((D.p.find(p => p.id === t.project_id) || {}).nombre || 'Sin proyecto')}</small></div><span class="slk-vrow__s">${esc(String(t.estado || '').replace(/_/g, ' '))}</span><span class="slk-vrow__d">${t.deadline ? esc(fmtD(t.deadline)) : ''}</span></div>`).join('');
+      el.innerHTML = `<div class="slk-vh"><b>Tareas de ${quien}</b><span>${mine.length} abiertas</span></div>` + (rows || `<div class="slk-vempty">${proj ? 'No hay tareas abiertas en este proyecto.' : _canal.is_im ? 'No hay tareas abiertas asignadas a esta persona.' : 'Este canal no está vinculado a un proyecto, así que no hay tareas que mostrar.'}</div>`);
+    } else {
+      const hoy = new Date().toISOString().slice(0, 10), clave = proj ? String(proj.nombre).toLowerCase() : (first.length >= 3 ? first : '');
+      const ms = D.m.filter(m => String(m.fecha).slice(0, 10) >= hoy && m.estado !== 'cancelada' && clave && (m.titulo + ' ' + m.descripcion + ' ' + m.attendees).toLowerCase().includes(clave)).slice(0, 40);
+      const rows = ms.map(m => `<div class="slk-vrow" onclick="MeetingsModule.openDrawer(${m.id})"><div class="slk-vrow__t"><b>${esc(m.titulo || 'Reunión')}</b><small>${esc(fmtD(m.fecha))}${m.hora_inicio ? ' · ' + esc(String(m.hora_inicio).slice(0, 5)) : ''}</small></div>${m.link ? `<a class="slk-vrow__j" href="${esc(m.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Unirse</a>` : ''}</div>`).join('');
+      el.innerHTML = `<div class="slk-vh"><b>Calendario con ${quien}</b><span class="slk-vh__a"><button type="button" class="slk-vbtn" onclick="SlackChat.iniciarLlamada()">Iniciar llamada</button><button type="button" class="slk-vbtn slk-vbtn--p" onclick="SlackChat.programarReunion()">Programar reunión</button></span></div>` + (rows || `<div class="slk-vempty">${proj || _canal.is_im ? 'No hay reuniones próximas con ' + quien + '.' : 'Este canal no está vinculado a un proyecto, así que no hay reuniones que mostrar.'}</div>`);
+    }
+  }
+  // Llamada al instante: crea un Meet y manda el enlace a la conversación
+  async function iniciarLlamada() {
+    if (!_canal) return;
+    const btn = $$('chat-hdr-call-btn'); if (btn) btn.disabled = true;
+    try {
+      const titulo = _canal.is_im ? `Llamada con ${_canal.name}` : `Llamada en #${_canal.name}`;
+      const r = await apiFetch(`${API}/gcal/instant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo crear la llamada');
+      const w = window.open(d.link, '_blank', 'noopener');
+      const pr = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: `Te invito a una llamada en Google Meet: ${d.link}` }) });
+      if (!pr.ok) showBanner('Llamada creada, pero no se pudo enviar el enlace a Slack. Cópialo: ' + d.link, 'error');
+      else { showBanner('Llamada creada y enlace enviado', 'success'); if (_vista === 'chat') { await _refrescarCanal(); } }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    finally { if (btn) btn.disabled = false; }
+  }
+
   async function abrir(canalId) {
     const c = _canales.find(x => x.id === canalId);
     if (!c) return;
     if (window.MobileNav) MobileNav.show('chat');
     if (_canal && _canal.id !== canalId) cancelAttach();   // no arrastrar un adjunto sin enviar a otro canal
-    _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
+    _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '', is_im: !!c.is_im, user: c.user || null };
     _hilo = null;
+    if (_vista !== 'chat') setVista('chat'); else _pintaVistas();
+    _riel();
     // Un hilo es de UN canal — al saltar a otro se cierra el panel (mismo motivo
     // por el que _hilo se limpia arriba) y el composer vuelve a su lugar normal.
     $$('chat-thread')?.classList.add('hidden');
@@ -41824,7 +41921,7 @@ const SlackChat = (() => {
     setTimeout(async () => { try { await load(); await irA(_E.ws); await abrir(_E.canal); } catch (_) {} }, 450);
   }
 
-  return { embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
+  return { mas, setVista, vistaMenu, vistaToggle, iniciarLlamada, embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
