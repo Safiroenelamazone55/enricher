@@ -41885,6 +41885,86 @@ const SlackChat = (() => {
   const _E = { ws: null, canal: null, users: {}, avatars: {}, miId: '', timer: null, sig: '', nombre: '', draft: '', draftCanal: '' };
   function embedStop() { if (_E.timer) { clearInterval(_E.timer); _E.timer = null; } }
   function embedDraft(v) { _E.draft = v; _E.draftCanal = String(_E.canal); }
+  // ── Barra del cuadro de mensaje del canal incrustado (mismas opciones que el chat de Slack) ──
+  const _ico = d => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const _EI = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    clip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    at: '<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>',
+    smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>',
+    send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  };
+  function _embedBarra() {
+    const b = (t, fn, d, id) => `<button type="button" class="chat-tool-btn"${id ? ` id="${id}"` : ''} title="${t}" onclick="${fn}">${_ico(d)}</button>`;
+    return `<div class="chat-composer__toolbar">${b('Formato y más', 'SlackChat.embedMas(event)', _EI.plus)}${b('Adjuntar documento', 'SlackChat.embedAdjuntar()', _EI.clip)}${b('Mencionar a alguien', 'SlackChat.embedMencion(event)', _EI.at)}${b('Emoji', 'SlackChat.embedEmoji(event)', _EI.smile)}${b('Programar reunión', 'SlackChat.embedReunion()', _EI.cal)}<span class="chat-composer__sp"></span>${b('Grabar nota de voz', 'SlackChat.embedMic()', _EI.mic, 'slk-emb-rec')}<button type="button" class="chat-composer__send" title="Enviar (Enter)" onclick="SlackChat.embedEnviar()">${_ico(_EI.send)}</button></div>`;
+  }
+  function _embedIns(txt, envolver) {
+    const i = $$('slk-emb-in'); if (!i) return;
+    const a = i.selectionStart, z = i.selectionEnd, sel = i.value.slice(a, z);
+    const nuevo = envolver ? envolver[0] + (sel || 'texto') + envolver[1] : txt;
+    i.value = i.value.slice(0, a) + nuevo + i.value.slice(z);
+    const pos = a + (envolver ? envolver[0].length + (sel || 'texto').length : nuevo.length);
+    i.focus(); i.setSelectionRange(envolver && !sel ? a + envolver[0].length : pos, pos);
+    embedDraft(i.value); ChatModule.autoResize(i);
+  }
+  function embedMas(ev) {
+    ev.stopPropagation(); document.getElementById('slk-vmenu')?.remove();
+    const a = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'slk-vmenu'; m.className = 'slk-vmenu slk-vmenu--act';
+    const it = (l, fn) => `<button type="button" class="slk-vmenu__b" onclick="document.getElementById('slk-vmenu')?.remove();${fn}">${l}</button>`;
+    m.innerHTML = `<div class="slk-vmenu__t">Formato</div>` + it('<b>B</b><span>Negrita</span>', "SlackChat.embedFmt('bold')") + it('<i>I</i><span>Cursiva</span>', "SlackChat.embedFmt('italic')") + it('<code>&lt;/&gt;</code><span>Código</span>', "SlackChat.embedFmt('code')");
+    m.style.left = Math.max(8, a.left) + 'px'; m.style.bottom = (innerHeight - a.top + 8) + 'px';
+    document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
+  function embedFmt(t) { const e = { bold: ['*', '*'], italic: ['_', '_'], code: ['`', '`'] }[t]; if (e) _embedIns('', e); }
+  function embedEmoji(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+    const pop = document.createElement('div'); pop.className = 'slk-emoji-pop';
+    pop.innerHTML = EMOJIS_RAPIDOS.map(e => `<button type="button" onclick="SlackChat._embedIns('${e}');document.querySelectorAll('.slk-emoji-pop').forEach(x=>x.remove())">${_emojiImg(e)}</button>`).join('');
+    const r = ev.currentTarget.getBoundingClientRect(); document.body.appendChild(pop);
+    pop.style.cssText += ';position:fixed;z-index:10050;bottom:' + (innerHeight - r.top + 6) + 'px;left:' + Math.min(r.left, innerWidth - 240) + 'px';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function embedMencion(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    const lista = Object.keys(_E.users || {}).map(id => ({ id, nombre: _E.users[id] })).filter(u => u.nombre && !/^\s*$/.test(u.nombre)).slice(0, 40);
+    const pop = document.createElement('div'); pop.className = 'slk-men-pop';
+    pop.innerHTML = lista.length ? lista.map(u => `<button type="button" class="slk-men-it" data-id="${esc(u.id)}" data-nm="${esc(String(u.nombre).replace(/"/g, ''))}"><span>${escNom(u.nombre)}</span></button>`).join('') : '<div class="slk-men-empty">Sin personas para mencionar</div>';
+    pop.querySelectorAll('.slk-men-it').forEach(b => b.onclick = () => { const t = '@' + b.dataset.nm; (_E.men = _E.men || []).push({ token: t, id: b.dataset.id }); pop.remove(); _embedIns(t + ' '); });
+    pop.style.cssText = 'position:fixed;z-index:10050;width:250px;overflow-y:auto';
+    const r = ev.currentTarget.getBoundingClientRect(); document.body.appendChild(pop);
+    pop.style.bottom = Math.max(8, innerHeight - r.top + 6) + 'px'; pop.style.maxHeight = Math.max(120, r.top - 16) + 'px'; pop.style.left = Math.min(r.left, innerWidth - 260) + 'px';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function embedReunion() { MeetingsModule.openDrawer(null, _E.nombre ? `Reunión — ${_E.nombre}` : ''); }
+  function _embedArchivoPon(f) {
+    _E.file = f || null;
+    const box = $$('slk-emb-att'); if (!box) return;
+    box.innerHTML = f ? `<div class="slk-emb__file"><span class="slk-emb__fn">${esc(f.name)}</span><small>${_fmtBytes(f.size)}</small><button type="button" title="Quitar adjunto" onclick="SlackChat.embedQuitarArchivo()">×</button></div>` : '';
+  }
+  function embedQuitarArchivo() { _embedArchivoPon(null); }
+  function embedAdjuntar() {
+    let inp = document.getElementById('slk-emb-file');
+    if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.id = 'slk-emb-file'; inp.style.display = 'none'; inp.onchange = () => { if (inp.files[0]) { _embedArchivoPon(inp.files[0]); $$('slk-emb-in')?.focus(); } inp.value = ''; }; document.body.appendChild(inp); }
+    inp.click();
+  }
+  function embedPaste(ev) {
+    const items = ev.clipboardData && ev.clipboardData.items; if (!items) return;
+    for (const it of items) if (it.kind === 'file' && it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { ev.preventDefault(); _embedArchivoPon(new File([f], 'captura-' + Date.now() + '.png', { type: f.type })); } break; }
+  }
+  let _eRec = null, _eTrozos = [];
+  async function embedMic() {
+    if (_eRec && _eRec.state === 'recording') { _eRec.stop(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _eRec = new MediaRecorder(stream); _eTrozos = [];
+      _eRec.ondataavailable = e => _eTrozos.push(e.data);
+      _eRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); const marca = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'); _embedArchivoPon(new File([new Blob(_eTrozos, { type: 'audio/webm' })], 'nota-de-voz-' + marca + '.webm', { type: 'audio/webm' })); $$('slk-emb-rec')?.classList.remove('grabando'); };
+      _eRec.start(); $$('slk-emb-rec')?.classList.add('grabando'); showBanner('Grabando... pulsa de nuevo para detener', 'info');
+    } catch (_) { showBanner('No se pudo acceder al micrófono', 'error'); }
+  }
   async function embed(boxId, wsId, canalId, nombre) {
     embedStop(); const box = $$(boxId); if (!box) return;
     const igual = String(_E.draftCanal) === String(canalId);
@@ -41892,14 +41972,14 @@ const SlackChat = (() => {
     box.innerHTML = `<div class="slk-emb">
       <div class="slk-emb__hd"><span class="slk-emb__h">#</span><b>${escNom(_E.nombre)}</b><span class="slk-emb__sp"></span><button type="button" class="slk-emb__open" onclick="SlackChat.embedAbrir()">Abrir en Slack</button></div>
       <div class="slk-emb__msgs" id="slk-emb-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
-      <div class="slk-emb__comp"><textarea id="slk-emb-in" rows="1" placeholder="Escribe en ${esc(_E.nombre)}… (Enter envía, Shift+Enter baja de línea)" oninput="SlackChat.embedDraft(this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();SlackChat.embedEnviar()}">${esc(_E.draft)}</textarea>
-        <button type="button" class="slk-emb__send" title="Enviar" onclick="SlackChat.embedEnviar()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div></div>`;
+      <div class="slk-emb__comp slk-emb__comp--v2"><div id="slk-emb-att"></div><div class="chat-composer"><textarea id="slk-emb-in" class="chat-composer__field" rows="1" placeholder="Escribe en ${esc(_E.nombre)}… (Enter envía, Shift+Enter baja de línea)" oninput="SlackChat.embedDraft(this.value);ChatModule.autoResize(this)" onpaste="SlackChat.embedPaste(event)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();SlackChat.embedEnviar()}">${esc(_E.draft)}</textarea>${_embedBarra()}</div></div></div>`;
     try {
       const [rm, rw] = await Promise.all([apiFetch(`${API}/slack/workspaces/${wsId}/miembros`), apiFetch(`${API}/slack/workspaces`)]);
       const dm = await rm.json(), lw = rw.ok ? await rw.json() : [];
       _E.users = { ...(dm.indice || {}) }; (dm.miembros || []).forEach(u => { _E.users[u.id] = u.nombre || u.usuario; if (u.avatar) _E.avatars[u.id] = u.avatar; });
       const w = (Array.isArray(lw) ? lw : []).find(x => String(x.id) === String(wsId)); _E.miId = (w && w.slack_user_id) || '';
     } catch (_) {}
+    { const ti = $$('slk-emb-in'); if (ti && ti.value) ChatModule.autoResize(ti); }
     await _embedRefrescar(true);
     _E.timer = setInterval(() => _embedRefrescar(false), 8000);
   }
@@ -41940,20 +42020,31 @@ const SlackChat = (() => {
     box.scrollTop = (conservar && !abajo) ? prev : box.scrollHeight;
   }
   async function embedEnviar() {
-    const i = $$('slk-emb-in'); const texto = (i && i.value || '').trim(); if (!texto) return;
-    i.value = ''; embedDraft('');
+    const i = $$('slk-emb-in'); let texto = (i && i.value || '').trim(); const file = _E.file;
+    if (!texto && !file) return;
+    for (const m of (_E.men || [])) texto = texto.split(m.token).join(`<@${m.id}>`);
+    const bak = i ? i.value : ''; _E.men = [];
+    if (i) { i.value = ''; i.style.height = 'auto'; } embedDraft('');
     try {
-      const r = await apiFetch(`${API}/slack/workspaces/${_E.ws}/canales/${_E.canal}/mensajes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+      let r;
+      if (file) {
+        const fd = new FormData(); fd.append('file', file); if (texto) fd.append('comentario', texto);
+        showBanner('Subiendo ' + file.name + '...', 'info');
+        r = await apiFetch(`${API}/slack/workspaces/${_E.ws}/canales/${_E.canal}/archivo`, { method: 'POST', body: fd });
+      } else {
+        r = await apiFetch(`${API}/slack/workspaces/${_E.ws}/canales/${_E.canal}/mensajes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+      }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      _embedArchivoPon(null);
       _E.sig = ''; await _embedRefrescar(false);
-    } catch (e) { if (i) { i.value = texto; embedDraft(texto); } showBanner('No se envió: ' + e.message, 'error'); }
+    } catch (e) { if (i) { i.value = bak; embedDraft(bak); ChatModule.autoResize(i); } showBanner('No se envió: ' + e.message, 'error'); }
   }
   function embedAbrir() {
     document.querySelector('.snav-item[data-tab="mgmt-chat"]')?.click();
     setTimeout(async () => { try { await load(); await irA(_E.ws); await abrir(_E.canal); } catch (_) {} }, 450);
   }
 
-  return { mas, setVista, vistaMenu, vistaToggle, iniciarLlamada, embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
+  return { embedMas, embedFmt, embedEmoji, embedMencion, embedReunion, embedAdjuntar, embedPaste, embedMic, embedQuitarArchivo, _embedIns, mas, setVista, vistaMenu, vistaToggle, iniciarLlamada, embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,

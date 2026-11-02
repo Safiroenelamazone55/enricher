@@ -20289,3 +20289,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm2-nav.lm2-nav--collapsed .lm2-nav__item { margin-left: 12px; }
 .lm2-nav.lm2-nav--collapsed .lm2-nav__list { padding-top: 0; }
 .lm2-nav.lm2-nav--collapsed .snav-back { display: none !important; } .lm2-nav.lm2-nav--collapsed .lm2-nav__list { padding-top: 8px; }
+
+/* Canal incrustado (Espacios): cuadro de mensaje igual que el chat de Slack */
+.slk-emb__comp--v2 { display: block; padding: 10px 14px 14px; }
+.slk-emb__comp--v2 .chat-composer { display: flex; flex-direction: column; }
+.slk-emb__comp--v2 .chat-composer .chat-composer__field { flex: 0 0 auto; width: 100%; border: 0; border-radius: 0; background: transparent; min-height: 52px; max-height: min(50vh, 420px); padding: 16px 18px 6px; box-sizing: border-box; }
+.slk-emb__comp--v2 .chat-composer__toolbar { display: flex; align-items: center; width: 100%; box-sizing: border-box; }
+.slk-emb__comp--v2 .chat-tool-btn svg { width: 18px; height: 18px; }
+.slk-emb__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin: 0 0 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--border, #E2E7E3); border-radius: 10px; background: var(--surface-secondary, #F7F8F6); font-size: .82rem; } .slk-emb__fn { font-weight: 600; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .slk-emb__file small { color: var(--text-muted, #8B9690); } .slk-emb__file button { width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; font-size: 1rem; line-height: 1; color: var(--text-secondary, #5F6B64); cursor: pointer; } .slk-emb__file button:hover { background: var(--surface-hover, #EEF0EE); }
+#slk-emb-rec.grabando { color: #D92D20; }
