@@ -8379,7 +8379,7 @@ const CanteraModule = (() => {
   // Aviso antes de enviar a secuencia cuando hay empresas sin ninguna prioridad de contacto. Devuelve 'todos' | 'empresas' | null (cancelar)
   window._cantAskSinPrio = info => new Promise(resolve => {
     document.getElementById('cant-sp-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'cant-sp-modal'; m.className = 'fin-pi-backdrop'; m.style.zIndex = 9950;
+    const m = document.createElement('div'); m.id = 'cant-sp-modal'; m.className = 'fin-pi-backdrop'; m.style.zIndex = 10050;
     const done = v => { m.remove(); resolve(v); };
     m.onclick = e => { if (e.target === m) done(null); };
     const n = info.empresasSinPrioridad, k = info.contactosSinPrioridad;
