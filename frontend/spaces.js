@@ -8,6 +8,7 @@ const SpacesModule = (() => {
   let _selSpace = null, _selProj = null;             // null/null = Todas las tareas
   let _view = 'lista', _group = 'estado', _showClosed = true, _expandSubs = true, _q = '', _me = false, _fEstado = [], _fPrio = [], _fPers = [];
   let _cols = ['prioridad'];                           // columnas extra visibles (además de Nombre · Estado · Fecha límite · Persona)
+  let _archOpen = false;
   const _collapsedG = new Set(), _collapsedT = new Set(), _openSp = new Set(['p0']);
   let _pop = null, _popOff = null, _addingSpace = false;
   let _onlyOver = false; const _sel = new Set();   // «solo vencidas» y selección para acciones en grupo
@@ -54,6 +55,11 @@ const SpacesModule = (() => {
   const _scope = () => {
     let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.filter(p => !p.archivado).map(p => p.id));
     return _tasks.filter(t => !t.archivada && ps.includes(t.project_id));
+  };
+  // Tareas archivadas (a mano o por el archivado automático de semanales/recurrentes) del mismo alcance: se muestran en su propio grupo «Archivada»
+  const _scopeArch = () => {
+    let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.filter(p => !p.archivado).map(p => p.id));
+    return _tasks.filter(t => t.archivada && ps.includes(t.project_id));
   };
   const _title = () => { const p = _projects.find(x => x.id === _selProj); const sp = _selSpace != null ? (_selSpace === 0 ? { nombre: 'Principal' } : _spaces.find(s => s.id === _selSpace)) : null; return { sp, p }; };
 
@@ -999,7 +1005,7 @@ const SpacesModule = (() => {
     return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.2" ${t.estado === 'pendiente' || !t.estado ? 'stroke-dasharray="3 3"' : ''}/></svg>`;
   }
   function _row(t, depth, kids, cols, trail, last) {
-    const st = _taskSt(t), e = [t.estado, st.n, st.c], d = _d10(t.deadline), od = d && d < _today() && _isOpen(t), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
+    const st = _taskSt(t), e = [t.estado, st.n, st.c], d = _d10(t.deadline), od = d && d < _today() && _isOpen(t) && !t.archivada, rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
     const cell = {
       prioridad: `<div class="sp-c sp-c--m"><button class="sp-cb" onclick="SpacesModule.prio(event,${t.id})">${TasksModule.prioBadge(t.prioridad || 'media')}</button></div>`,
       inicio: `<div class="sp-c sp-c--m sp-dim">${_fmtD(_d10(t.fecha_inicio)) || '—'}</div>`,
@@ -1031,6 +1037,17 @@ const SpacesModule = (() => {
     all.forEach(t => { if (t.parent_task_id && ids.has(t.parent_task_id)) { if (!byParent.has(t.parent_task_id)) byParent.set(t.parent_task_id, []); byParent.get(t.parent_task_id).push(t); } });
     const mains = all.filter(t => !(t.parent_task_id && ids.has(t.parent_task_id)));
     const sorter = (a, c) => (_d10(a.deadline) || '9999').localeCompare(_d10(c.deadline) || '9999') || a.id - c.id;
+    // Grupo «Archivada»: las tareas archivadas (ya no se esconden); cerrado de inicio, se abre con la flecha
+    const archAll = _onlyOver ? [] : _scopeArch().filter(_passes);
+    let archHtml = '';
+    if (archAll.length) {
+      const aIds = new Set(archAll.map(t => t.id)), aBy = new Map();
+      archAll.forEach(t => { if (t.parent_task_id && aIds.has(t.parent_task_id)) { if (!aBy.has(t.parent_task_id)) aBy.set(t.parent_task_id, []); aBy.get(t.parent_task_id).push(t); } });
+      const aMains = archAll.filter(t => !(t.parent_task_id && aIds.has(t.parent_task_id))).sort((x, y) => (_d10(y.deadline) || '').localeCompare(_d10(x.deadline) || '') || y.id - x.id);
+      const aRows = []; if (_archOpen) aMains.forEach(t => _tree(t, aBy, 0, cols, aRows));
+      archHtml = `<div class="sp-g sp-g--arch"><div class="sp-g__h"><button class="sp-car" onclick="SpacesModule.toggleArch()">${_archOpen ? '▾' : '▸'}</button><span class="sp-tag" style="--c:#8A8F98">Archivada</span><span class="sp-gn">${aMains.length}</span><span class="sp-arch-h">Tareas semanales o recurrentes ya cerradas y las que archivaste</span></div>${_archOpen ? _head(cols) + aRows.join('') : ''}</div>`;
+    }
+    if (!mains.length && archHtml) { b.innerHTML = `<div class="sp-scroll"><div class="sp-e sp-e--c" style="padding:18px 0">No hay tareas abiertas aquí.</div>${archHtml}</div>`; return; }
     if (!mains.length) { b.innerHTML = `<div class="sp-e sp-e--c">No hay tareas que mostrar aquí.${_selProj ? '<br><button class="btn btn--primary btn--sm" onclick="SpacesModule.newTask()">＋ Crear la primera tarea</button>' : ''}</div>`; return; }
     const gs = _groups(mains.slice().sort(sorter));
     b.innerHTML = `<div class="sp-scroll">` + gs.filter(g => g.tasks.length || g.est).map(g => {
@@ -1038,7 +1055,7 @@ const SpacesModule = (() => {
       if (open) g.tasks.forEach(t => _tree(t, byParent, 0, cols, rows));
       return `<div class="sp-g">${g.flat ? '' : `<div class="sp-g__h"><button class="sp-car" onclick="SpacesModule.toggleG('${esc(g.key).replace(/'/g, '&#39;')}')">${open ? '▾' : '▸'}</button><span class="sp-tag" style="--c:${g.color}">${esc(g.label)}</span><span class="sp-gn">${g.tasks.length}</span>${g.est ? `<button class="sp-gp" title="Agregar tarea" onclick="SpacesModule.newTask('${g.est}',this)">＋</button>` : ''}</div>`}
         ${open ? _head(cols) + rows.join('') + `<div class="sp-add-r"><button type="button" onclick="SpacesModule.newTask('${g.est || 'pendiente'}',this)">＋ Agregar Tarea</button></div>` : ''}</div>`;
-    }).join('') + `</div>`;
+    }).join('') + archHtml + `</div>`;
   }
   // ── Vencidas: filtro, aviso del proyecto y acciones en grupo ──
   const _overdue = t => { const d = _d10(t.deadline); return !!d && d < _today() && _isOpen(t) && !t.archivada; };
@@ -1118,6 +1135,7 @@ const SpacesModule = (() => {
     if (!r.ok) { showBanner(await _err(r, 'No se pudo completar el proyecto'), 'error'); return; }
     showBanner('Proyecto completado', 'success'); await _reload();
   }
+  function toggleArch() { _archOpen = !_archOpen; _paintBody(); }
   function toggleG(k) { if (_collapsedG.has(k)) _collapsedG.delete(k); else _collapsedG.add(k); _paintBody(); }
   function toggleT(id) { if (_collapsedT.has(id)) _collapsedT.delete(id); else _collapsedT.add(id); _paintBody(); }
 
@@ -1697,5 +1715,5 @@ const SpacesModule = (() => {
   return { toggleOver, selTask, selAll, bulkDate, bulkDo, stripHide, stripDate, stripSave, stripDone, tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     canalCrear, tkToggleEmpty, fieldsOpenFor, toggleDone, treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
-    toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
+    toggleG, toggleArch, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
 })();

@@ -20520,3 +20520,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cn-ed{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden}.cn-ed *{max-width:100%}
 .cant-sq-warn{padding:10px 12px;border:1px solid #F1D58A;background:#FFF8E6;border-radius:10px;font-size:12.5px;line-height:1.45;color:#5C4A12}.cant-sq-warn b{color:#3F3209}
 .rpt-opt{display:flex;gap:8px;align-items:center;font-size:.86rem;margin:2px 0}.rpt-opt input{width:auto}
+.sp-g--arch{margin-top:6px;border-top:1px dashed #D5DAD7;padding-top:6px}
+.sp-g--arch .sp-r:not(.sp-r--h){opacity:.74}
+.sp-arch-h{margin-left:10px;font-size:12px;color:#8A948E}
