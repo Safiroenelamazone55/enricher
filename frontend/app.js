@@ -925,10 +925,21 @@ function _renderHomeInner(grid) {
     if (hero) hero.innerHTML = `<h1 class="home-hero__t">${hi}${nom ? ', ' + nom.replace(/[<>&"]/g, '') : ''}</h1><p class="home-hero__s">${fecha.charAt(0).toUpperCase() + fecha.slice(1)} · ¿Qué quieres abrir?</p>`;
   } catch (_) {}
   const ARROW = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>';
+  // Iconos propios (duotono: trazo + relleno suave) y un color por módulo
+  const sv = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const SKIN = {
+    management: { c: '#5B5BD6', s: '#EEEEFD', i: sv('<rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="currentColor" fill-opacity=".18"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2" fill="currentColor" fill-opacity=".18"/>') },
+    leadmanagement: { c: '#E5484D', s: '#FDECEC', i: sv('<path d="M3.5 11.5l16-7.5-4.5 16-3.4-6.1z" fill="currentColor" fill-opacity=".18"/><path d="M11.6 13.9L19.5 4"/>') },
+    contenido: { c: '#E58A00', s: '#FFF3DF', i: sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="currentColor" fill-opacity=".18"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/>') },
+    finance: { c: '#1F9D55', s: '#E6F6EC', i: sv('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 10l6-6 6 9" stroke-opacity=".0"/><rect x="2.5" y="10" width="3" height="10" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="8.5" y="4" width="3" height="16" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="14.5" y="13" width="3" height="7" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/>') },
+    herramientas: { c: '#0E9AA7', s: '#E1F5F6', i: sv('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3.5 17.2a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.1-.5-.5-2.1z" fill="currentColor" fill-opacity=".18"/>') },
+    plantillas: { c: '#8E4EC6', s: '#F3E9FA', i: sv('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="currentColor" fill-opacity=".18"/><path d="M14 3v5h5M9 13h6M9 17h4"/>') },
+    empresa: { c: '#5F6B64', s: '#EEF0EE', i: sv('<rect x="4.5" y="3" width="15" height="18" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 7.5h1.5M13.5 7.5H15M9 11.5h1.5M13.5 11.5H15M10 21v-4h4v4"/>') },
+  };
   const card = m => {
-    const act = m.action || `selectModule('${m.id}')`;
-    return `<div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
-      <div class="home-card__icon">${m.icon}</div>
+    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { c: '#5F6B64', s: '#EEF0EE', i: m.icon };
+    return `<div class="home-card" role="button" tabindex="0" style="--acc:${k.c};--acc-soft:${k.s}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
+      <div class="home-card__icon">${k.i}</div>
       <div class="home-card__body"><div class="home-card__title">${m.name}</div><div class="home-card__desc">${m.desc}</div></div>
       <span class="home-card__go" aria-hidden="true">${ARROW}</span>
     </div>`;
@@ -22861,10 +22872,6 @@ const LeadManagerModule = (() => {
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
-    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
-    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
-    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
-    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
@@ -22874,6 +22881,10 @@ const LeadManagerModule = (() => {
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
+    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
+    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
+    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
+    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
