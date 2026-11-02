@@ -20317,3 +20317,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .global-topbar .rchat__strip-btn .rtt__ico { width: 18px; height: 18px; }
 .global-topbar__av { width: 34px; height: 34px; }
 .ts-btn--ico { width: 36px; padding: 0; justify-content: center; margin-right: 6px; }
+/* contadores del encabezado: más abajo, para que no queden cortados por el borde */
+.global-topbar .rchat__strip-btn .rchat__strip-badge, .global-topbar .rchat__strip-badge { top: 4px !important; right: 0 !important; }
