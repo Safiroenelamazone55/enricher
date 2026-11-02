@@ -20461,3 +20461,8 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .nt__c{flex:none;border:0;background:none;color:#8A948E;font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
 @keyframes ntIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 @media(max-width:720px){#nt-host{top:56px;right:8px;left:8px;width:auto;max-width:none}}
+.sp-tree{min-width:240px}
+.sp-rz{flex:none;width:7px;margin:0 -4px 0 -3px;cursor:col-resize;position:relative;z-index:5;background:transparent}
+.sp-rz::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;border-radius:2px;background:transparent;transition:background .15s}
+.sp-rz:hover::after,.sp-rz.on::after{background:#007AFF}
+@media(max-width:860px){.sp-rz{display:none}.sp-tree{min-width:0}}

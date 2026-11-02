@@ -60,8 +60,22 @@ const SpacesModule = (() => {
   // ── esqueleto ──
   function render() {
     const root = $q('spaces-root'); if (!root) return;
-    root.innerHTML = `<div class="spw"><aside class="sp-tree" id="sp-tree"></aside><section class="sp-main" id="sp-main"></section></div>`;
-    _paintTree(); _paintMain();
+    root.innerHTML = `<div class="spw"><aside class="sp-tree" id="sp-tree"></aside><div class="sp-rz" id="sp-rz" title="Arrastra para cambiar el ancho"></div><section class="sp-main" id="sp-main"></section></div>`;
+    _paintTree(); _paintMain(); _initRz();
+  }
+  // Ancho de la barra lateral: se puede ensanchar o volver al mínimo (240), nunca menos; se recuerda
+  const _RZ_MIN = 240, _RZ_MAX = 560;
+  function _initRz() {
+    const t = $q('sp-tree'), h = $q('sp-rz'); if (!t || !h) return;
+    let w = 0; try { w = +localStorage.getItem('sp-tree-w') || 0; } catch (_) {}
+    if (w) t.style.width = Math.min(_RZ_MAX, Math.max(_RZ_MIN, w)) + 'px';
+    h.onmousedown = e => {
+      e.preventDefault(); const x0 = e.clientX, w0 = t.getBoundingClientRect().width; h.classList.add('on'); document.body.style.userSelect = 'none';
+      const mv = ev => { t.style.width = Math.min(_RZ_MAX, Math.max(_RZ_MIN, w0 + ev.clientX - x0)) + 'px'; };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); h.classList.remove('on'); document.body.style.userSelect = ''; try { localStorage.setItem('sp-tree-w', Math.round(t.getBoundingClientRect().width)); } catch (_) {} };
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    };
+    h.ondblclick = () => { t.style.width = ''; try { localStorage.removeItem('sp-tree-w'); } catch (_) {} };
   }
   const _treeProjs = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado' && (_showArch || !p.archivado));
   function _paintTree() {
@@ -69,7 +83,7 @@ const SpacesModule = (() => {
     const q = _nrm(_tq.trim());
     const spRow = (id, nombre, color, openBase) => {
       let ps = _treeProjs(id); const nm = q && _nrm(nombre).includes(q);
-      if (q && !nm) ps = ps.filter(p => _nrm(p.nombre).includes(q));
+      if (q && !nm) ps = ps.filter(p => _nrm([p.nombre, p.client_nombre, p.client_empresa].join(' ')).includes(q));
       if (q ? !(nm || ps.length) : (!_showAll && !ps.length && _selSpace !== id)) return '';
       const open = q ? true : openBase;
       return `<div class="sp-sp${_mode === 'tasks' && _selSpace === id && !_selProj ? ' on' : ''}">
