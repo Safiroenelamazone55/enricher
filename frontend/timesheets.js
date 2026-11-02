@@ -510,7 +510,7 @@ const TimesheetModule = (() => {
   function drawDash() {
     const b = $('ts-body'); if (!b || S.tab !== 'dash') return; killCharts();
     const r = dashRange(), pr = prevRange(r), all = (S.dashEntries || []).filter(countable), adm = isAdmin();
-    const projOf = e => e.proj_nombre || e.project_nombre || 'Sin proyecto', projs = [...new Set(all.map(projOf))].sort();
+    const projOf = e => e.proj_nombre || e.project_nombre || 'Sin proyecto', projs = [...new Set(all.filter(e => (!D.client || cliOf(e) === D.client) && (D.space === '' || String(spaceOf(e)) === D.space)).map(projOf))].sort();   // con un cliente (o espacio) elegido, solo sus proyectos
     if (D.project !== 'all' && !projs.includes(D.project)) D.project = 'all';
     const sel = e => (D.project === 'all' || projOf(e) === D.project) && (!D.client || cliOf(e) === D.client) && (D.space === '' || String(spaceOf(e)) === D.space), inR = (e, a, z) => { const d = limaDay(e.started_at); return d >= a && d <= z; };
     const cur = all.filter(e => sel(e) && inR(e, r.start, r.end)), prv = all.filter(e => sel(e) && inR(e, pr.start, pr.end)), sum = l => l.reduce((a, e) => a + dur(e), 0);
