@@ -20232,3 +20232,13 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .wa-main__composer .wa-clock[title="Respuestas rápidas"] { margin-left: auto; }
 .wa-main__composer .chat-composer__send { width: 34px; height: 34px; border-radius: 10px; background: var(--primary, #007AFF); color: #fff; box-shadow: none; margin-left: 4px; } .wa-main__composer .chat-composer__send:hover { background: #0062CC; transform: none; }
 .wa-sidebar__hdr { display: flex; align-items: center; gap: 2px; padding: 10px 10px 6px 14px; } .wa-sidebar__hdr-info { flex: 1; min-width: 0; } .wa-sidebar__hdr-info > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .wa-sidebar__hdr .chat-hdr-btn, .wa-sidebar__hdr .chat-ws-compose-btn { flex: none; width: 28px; height: 28px; margin: 0; }
+
+/* Barra lateral de módulos (colapsada): iconos más grandes y botones uniformes */
+.sidebar--collapsed .sidebar__nav { padding: 8px 6px; }
+.sidebar--collapsed .snav-item { width: 42px; height: 42px; min-height: 0; padding: 0; margin: 2px auto; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.sidebar--collapsed .snav-item__icon { display: inline-flex; align-items: center; justify-content: center; }
+.sidebar--collapsed .snav-item__icon svg { width: 21px; height: 21px; }
+.sidebar--collapsed .snav-item:hover { background: var(--surface-hover, #EEF0EE); }
+.sidebar--collapsed .snav-item.active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); }
+.sidebar--collapsed .snav-back, .sidebar--collapsed .sidebar__toggle { width: 36px; height: 36px; margin: 2px auto; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.sidebar--collapsed .snav-back svg, .sidebar--collapsed .sidebar__toggle svg { width: 18px; height: 18px; }
