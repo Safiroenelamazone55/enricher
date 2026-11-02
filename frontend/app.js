@@ -24387,13 +24387,14 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 .dv-sc{position:relative}
 .dv-sc:after{content:"";position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(255,255,255,0),#fff)}
 .dv--laptop .dv-sc:after{background:linear-gradient(rgba(237,238,236,0),#EDEEEC)}
-.toc{margin:0 56px;padding:30px 0 26px;border-top:1px solid var(--ink);display:flow-root}
-.toc-t{float:left;width:176px;font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.22}
-.toc ol{list-style:none;margin:0 0 0 214px}
-.toc li{border-bottom:1px solid var(--hair)}
-.toc li:last-child{border-bottom:0}
-.toc a{display:flex;gap:16px;align-items:baseline;padding:8px 0;color:var(--ink);text-decoration:none;font-size:13px;font-weight:500}
-.toc-n{flex:none;width:24px;font-size:10.5px;font-weight:600;letter-spacing:.14em;color:var(--acc)}
+.toc{margin:0 56px;padding:34px 0 30px;border-top:1px solid var(--ink);break-after:page}
+.toc-t{font-size:40px;font-weight:500;letter-spacing:-.03em;line-height:1.1;margin:0 0 36px;color:var(--ink)}
+.toc ol{list-style:none;margin:0;border-top:1px solid var(--ink)}
+.toc li{border-bottom:1px solid var(--line)}
+.toc a{display:grid;grid-template-columns:72px 1fr;align-items:baseline;padding:20px 0;color:var(--ink);text-decoration:none}
+.toc-n{font-size:30px;font-weight:300;letter-spacing:-.03em;color:var(--acc);line-height:1}
+.toc-l b{display:block;font-size:18px;font-weight:500;letter-spacing:-.015em;color:var(--ink)}
+.toc-l em{display:block;font-style:normal;font-size:12px;color:var(--mute);margin-top:4px;line-height:1.45;max-width:520px}
 .rhead{display:none}
 .dv-lb{margin-top:10px;font-size:10px;font-weight:600;color:var(--ink2);letter-spacing:.14em;text-transform:uppercase}
 
@@ -24419,7 +24420,7 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
   .rhead{display:flex;position:fixed;top:0;left:0;right:0;height:14mm;padding:0 30px 3mm;justify-content:space-between;align-items:flex-end;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--mute);background:#fff;z-index:1}
   .rhead:after{content:"";position:absolute;left:30px;right:30px;bottom:0;height:1px;background:var(--line)}
   .rh-r{max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .toc{margin:0 30px;padding:22px 0 18px}
+  .toc{margin:0 30px;padding:20px 0 0;min-height:246mm}
   .dv-sec{break-before:page;break-after:page;break-inside:avoid}
   .foot-sp{height:15mm}
   .foot{position:fixed;left:0;right:0;bottom:0;height:13mm;background:#fff}
@@ -24431,9 +24432,9 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
     // Índice: se arma con los títulos de las secciones, en el mismo orden y numeración que el documento (enlaces internos)
     let bodyX = body, toc = '';
     { const items = []; let n = 0;
-      bodyX = bodyX.replace(/<div class="sec([^"]*)">(\s*)<h2>([\s\S]*?)<\/h2>/g, (m, cls, ws, t) => { n++; items.push([n, t]); return `<div class="sec${cls}" id="sec-${n}">${ws}<h2>${t}</h2>`; });
+      bodyX = bodyX.replace(/<div class="sec([^"]*)">(\s*)<h2>([\s\S]*?)<\/h2>(<p class="rp-sub">([\s\S]*?)<\/p>)?/g, (m, cls, ws, t, sub, d) => { n++; items.push([n, t, d || '']); return `<div class="sec${cls}" id="sec-${n}">${ws}<h2>${t}</h2>${sub || ''}`; });
       const TL = { es: 'Contenido', en: 'Contents', pt: 'Conteúdo' }[lang] || 'Contenido';
-      if (items.length >= 3) toc = `<div class="toc"><div class="toc-t">${TL}</div><ol>${items.map(([i, t]) => `<li><a href="#sec-${i}"><span class="toc-n">${String(i).padStart(2, '0')}</span><span class="toc-l">${t}</span></a></li>`).join('')}</ol></div>`;
+      if (items.length >= 3) toc = `<div class="toc"><div class="toc-t">${TL}</div><ol>${items.map(([i, t, d]) => `<li><a href="#sec-${i}"><span class="toc-n">${String(i).padStart(2, '0')}</span><span class="toc-l"><b>${t}</b>${d ? `<em>${d}</em>` : ''}</span></a></li>`).join('')}</ol></div>`;
       const k = bodyX.indexOf('<div class="sec'); if (toc && k > -1) bodyX = bodyX.slice(0, k) + toc + bodyX.slice(k); }
     const rhead = `<div class="rhead"><span class="rh-l">NovaCentrax</span><span class="rh-r">${esc(subject)}</span></div>`;
     const foot = `<div class="foot"><span class="foot-l"><a href="https://novacentrax.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">novacentrax.com</a></span><span class="foot-r">${esc(subject)}</span></div>`;
