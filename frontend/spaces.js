@@ -10,6 +10,7 @@ const SpacesModule = (() => {
   let _cols = ['prioridad'];                           // columnas extra visibles (además de Nombre · Estado · Fecha límite · Persona)
   const _collapsedG = new Set(), _collapsedT = new Set(), _openSp = new Set(['p0']);
   let _pop = null, _popOff = null, _addingSpace = false;
+  let _onlyOver = false; const _sel = new Set();   // «solo vencidas» y selección para acciones en grupo
   let _tq = '', _tqOpen = false, _showArch = false, _showAll = true;   // barra lateral: búsqueda, mostrar archivados, mostrar todos los espacios (incl. vacíos)
   try { const u = JSON.parse(localStorage.getItem('nova_sp_tree') || '{}'); _showArch = !!u.arch; _showAll = u.all !== false; } catch (_) {}
   const _saveT = () => { try { localStorage.setItem('nova_sp_tree', JSON.stringify({ arch: _showArch, all: _showAll })); } catch (_) {} };
@@ -480,9 +481,11 @@ const SpacesModule = (() => {
     const meOn = _me, persOn = _fPers.length;
     m.innerHTML = `<div class="sp-top"><div class="sp-crumb">${sp ? `<span class="sp-sq sp-sq--s" style="background:${sp.color || '#007AFF'}">${_nrm(sp.nombre).slice(0, 1).toUpperCase()}</span><span class="sp-crumb__a">${esc(sp.nombre)}</span><span class="sp-crumb__s">/</span>` : ''}<b>${p ? esc(p.nombre) : (sp ? 'Todas las listas' : 'Todas las tareas')}</b>${p && p.client_nombre ? `<span class="sp-crumb__c">${esc(p.client_nombre)}</span>` : ''}</div>
 </div>
+      ${_strip(p)}
       <div class="sp-tabs">${canalTab}${_viewsOf(_sk()).map(v => `<span class="sp-tab sp-tab--v${cv.id === v.id && !_cfg && !canalOn ? ' on' : ''}" title="${esc(v.nombre || (_VT[v.tipo] || [''])[0])}" onclick="SpacesModule.selView('${v.id}')"><i class="sp-tab__i" style="color:${(_VT[v.tipo] || _VT.lista)[2]}">${_ico((_VT[v.tipo] || _VT.lista)[3])}</i><b class="sp-tab__x" title="Renombrar o quitar" onclick="SpacesModule.viewOpts(event,'${v.id}')">⋯</b></span>`).join('')}<button type="button" class="sp-tab sp-tab--add" title="Añadir vista" onclick="SpacesModule.viewMenu(event)">＋</button>${p ? `<span class="sp-tabs__gap"></span><button type="button" class="sp-tab sp-tab--cfg${_cfg ? ' on' : ''}" title="Configuración del proyecto: datos, tiempo, costos, equipo y plantillas" onclick="SpacesModule.cfgOpen()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><b>Configuración</b></button>` : ''}</div>
       ${noBar ? '' : `<div class="sp-bar"><div class="sp-bar__l">
           ${listish ? `<button type="button" class="sp-chip" onclick="SpacesModule.groupMenu(event)">${ico('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>')} ${{ estado: 'Estado', prioridad: 'Prioridad', persona: 'Persona', fecha: 'Fecha límite', ninguno: 'Sin agrupar' }[_group] || 'Campo'}</button>
+          ${overChip()}
           <button type="button" class="sp-chip${_expandSubs ? ' on' : ''}" onclick="SpacesModule.toggleSubs()">${ico('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>')} ${_expandSubs ? 'Expandidos' : 'Contraídos'}</button>
           <button type="button" class="sp-ibtn" title="Columnas" onclick="SpacesModule.colsMenu(event)">${ico('<rect x="3" y="4" width="18" height="16"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/>')}</button>` : ''}</div>
         <div class="sp-bar__r">
@@ -492,7 +495,7 @@ const SpacesModule = (() => {
           <button type="button" class="sp-me${meOn ? ' on' : ''}" title="Sólo mis tareas" onclick="SpacesModule.toggleMe()">${esc(_ini(window._authUser?.memberNombre || window._authUser?.name || 'Yo'))}</button>
           <label class="sp-search">${ico('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/>')}<input value="${esc(_q)}" placeholder="Buscar…" oninput="SpacesModule.setQ(this.value)"></label>
           <button type="button" class="btn btn--primary btn--sm sp-newt" onclick="SpacesModule.newTask()">＋ Tarea</button></div></div>`}
-      <div class="sp-body" id="sp-body"></div>`;
+      ${_bulkHtml()}<div class="sp-body" id="sp-body"></div>`;
     _paintBody();
   }
   // ── pestaña «Canal»: el canal de Slack del proyecto, dentro del proyecto ──
@@ -517,6 +520,7 @@ const SpacesModule = (() => {
     if (_view === 'documento') { _paintDoc(b); return; }
     if (_view === 'pizarra') { _paintWb(b); return; }
     let all = _scope().filter(_passes);
+    if (_onlyOver) all = all.filter(_overdue);
     if (_view === 'panel') { _paintPanel(b, all); return; }
     if (!_showClosed) all = all.filter(t => _isOpen(t) || all.some(c => c.parent_task_id === t.id && _isOpen(c)));
     if (_view === 'tablero') { _paintBoard(b, all); try { TimerModule.syncButtons(); } catch (_) {} return; }
@@ -990,11 +994,12 @@ const SpacesModule = (() => {
       horas: `<div class="sp-c sp-c--m sp-dim">${(+t.horas_track || 0) ? (+t.horas_track) + 'h' : '—'}</div>`,
       proyecto: `<div class="sp-c sp-c--l sp-dim">${esc(t.project_nombre || '')}</div>`,
     };
+    const ovk = kids ? _tasks.filter(x => x.parent_task_id === t.id && !x.archivada && _overdue(x)).length : 0;
     return `<div class="sp-r${depth ? ' sp-r--sub' : ''}" data-id="${t.id}" style="--d:${depth}" oncontextmenu="SpacesModule.ctx(event,${t.id})">
-      <div class="sp-c sp-c--n">${Array.from({ length: depth }, (_, i) => `<span class="sp-gd${i === depth - 1 ? (last ? ' sp-gd--end' : ' sp-gd--mid') : (trail && trail[i + 1] ? ' sp-gd--line' : '')}"></span>`).join('')}${kids ? `<button class="sp-car" onclick="SpacesModule.toggleT(${t.id})">${open ? '▾' : '▸'}</button>` : (depth ? '' : '<span class="sp-car"></span>')}<button class="sp-ring" title="Cambiar estado" onclick="SpacesModule.estMenu(event,${t.id})">${_statusRing(t)}</button>
-        <span class="sp-tt" onclick="openTaskAnywhere(${t.id})">${esc(t.titulo)}</span>${kids ? `<span class="sp-sb" title="${kids} subtarea(s)">⑂ ${kids}</span>` : ''}${depth < 2 ? `<button class="sp-addsub" title="Agregar subtarea" onclick="SpacesModule.addSub(event,${t.id})">＋ subtarea</button>` : ''}</div>
+      <div class="sp-c sp-c--n">${_onlyOver ? `<input type="checkbox" class="sp-selcb" ${_sel.has(t.id) ? 'checked' : ''} onclick="event.stopPropagation();SpacesModule.selTask(${t.id},this.checked)">` : ''}${Array.from({ length: depth }, (_, i) => `<span class="sp-gd${i === depth - 1 ? (last ? ' sp-gd--end' : ' sp-gd--mid') : (trail && trail[i + 1] ? ' sp-gd--line' : '')}"></span>`).join('')}${kids ? `<button class="sp-car" onclick="SpacesModule.toggleT(${t.id})">${open ? '▾' : '▸'}</button>` : (depth ? '' : '<span class="sp-car"></span>')}<button class="sp-ring" title="Cambiar estado" onclick="SpacesModule.estMenu(event,${t.id})">${_statusRing(t)}</button>
+        <span class="sp-tt" onclick="openTaskAnywhere(${t.id})">${esc(t.titulo)}</span>${kids ? `<span class="sp-sb" title="${kids} subtarea(s)">⑂ ${kids}</span>` : ''}${ovk ? `<span class="sp-sb sp-sb--over" title="${ovk} de ${kids} subtareas vencidas">${ovk}/${kids} vencidas</span>` : ''}${depth < 2 ? `<button class="sp-addsub" title="Agregar subtarea" onclick="SpacesModule.addSub(event,${t.id})">＋ subtarea</button>` : ''}</div>
       <div class="sp-c sp-c--e"><button class="sp-cb" onclick="SpacesModule.estMenu(event,${t.id})"><span class="sp-tag" style="--c:${e[2]}">${esc(e[1])}</span></button></div>
-      <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button></div>
+      <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button>${od ? `<small class="sp-ago">hace ${_agoDias(d)} d</small>` : ''}</div>
       <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '<span class="tl-who tl-who--add">＋</span>'}</button></div>
       ${cols.map(c => cell[c]).join('')}${_fcols().map(f => _fcell(t, f)).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
@@ -1020,6 +1025,84 @@ const SpacesModule = (() => {
       return `<div class="sp-g">${g.flat ? '' : `<div class="sp-g__h"><button class="sp-car" onclick="SpacesModule.toggleG('${esc(g.key).replace(/'/g, '&#39;')}')">${open ? '▾' : '▸'}</button><span class="sp-tag" style="--c:${g.color}">${esc(g.label)}</span><span class="sp-gn">${g.tasks.length}</span>${g.est ? `<button class="sp-gp" title="Agregar tarea" onclick="SpacesModule.newTask('${g.est}',this)">＋</button>` : ''}</div>`}
         ${open ? _head(cols) + rows.join('') + `<div class="sp-add-r"><button type="button" onclick="SpacesModule.newTask('${g.est || 'pendiente'}',this)">＋ Agregar Tarea</button></div>` : ''}</div>`;
     }).join('') + `</div>`;
+  }
+  // ── Vencidas: filtro, aviso del proyecto y acciones en grupo ──
+  const _overdue = t => { const d = _d10(t.deadline); return !!d && d < _today() && _isOpen(t) && !t.archivada; };
+  const _agoDias = d => Math.max(1, Math.round((new Date(_today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 864e5));
+  function overChip() {
+    const n = _scope().filter(_passes).filter(_overdue).length;
+    if (!n && !_onlyOver) return '';
+    return `<button type="button" class="sp-chip sp-chip--over${_onlyOver ? ' on' : ''}" title="${_onlyOver ? 'Volver a ver todas' : 'Ver solo las tareas vencidas'}" onclick="SpacesModule.toggleOver()"><i class="sp-over-dot"></i>${n} vencida${n === 1 ? '' : 's'}</button>`;
+  }
+  function toggleOver() { _onlyOver = !_onlyOver; _sel.clear(); _paintMain(); }
+  function selTask(id, on) { if (on) _sel.add(id); else _sel.delete(id); _paintBulkOnly(); }
+  function selAll() { const ids = _scope().filter(_passes).filter(_overdue).map(t => t.id); const todos = ids.every(i => _sel.has(i)); ids.forEach(i => todos ? _sel.delete(i) : _sel.add(i)); _paintBody(); _paintBulkOnly(); }
+  function _bulkHtml() {
+    if (!_onlyOver) return '';
+    const n = _sel.size;
+    return `<div class="sp-bulk" id="sp-bulk"><label class="sp-bulk__all"><input type="checkbox" onclick="SpacesModule.selAll()" ${n && _scope().filter(_passes).filter(_overdue).every(t => _sel.has(t.id)) ? 'checked' : ''}> ${n ? n + ' seleccionada' + (n === 1 ? '' : 's') : 'Seleccionar todas'}</label>
+      <span class="sp-bulk__sp"></span>
+      <button type="button" class="sp-bulk__b" ${n ? '' : 'disabled'} onclick="SpacesModule.bulkDate(event)">Reprogramar</button>
+      <button type="button" class="sp-bulk__b" ${n ? '' : 'disabled'} onclick="SpacesModule.bulkDo('completar')">Completar</button>
+      <button type="button" class="sp-bulk__b" ${n ? '' : 'disabled'} title="Las oculta de las listas; no se borra nada" onclick="SpacesModule.bulkDo('archivar')">Archivar</button></div>`;
+  }
+  function _paintBulkOnly() { const el = document.getElementById('sp-bulk'); if (el) el.outerHTML = _bulkHtml(); }
+  function bulkDate(ev) {
+    ev.stopPropagation(); document.getElementById('sp-bulkmenu')?.remove();
+    const add = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const lun = (() => { const d = new Date(); d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    const o = [['Hoy', add(0)], ['Mañana', add(1)], ['En 3 días', add(3)], ['Próximo lunes', lun], ['En 7 días', add(7)]];
+    const r = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'sp-bulkmenu'; m.className = 'sp-bulkmenu';
+    m.innerHTML = `<div class="sp-bulkmenu__t">Nueva fecha límite</div>` + o.map(([l, d]) => `<button type="button" onclick="SpacesModule.bulkDo('fecha','${d}')">${l}</button>`).join('') + `<div class="sp-bulkmenu__c"><input type="date" id="sp-bulkdate" min="${add(0)}"><button type="button" onclick="var v=document.getElementById('sp-bulkdate').value; if(v) SpacesModule.bulkDo('fecha', v)">Aplicar</button></div>`;
+    m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left, innerWidth - 250)) + 'px'; document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
+  async function bulkDo(accion, fecha) {
+    document.getElementById('sp-bulkmenu')?.remove();
+    const ids = [..._sel]; if (!ids.length) return;
+    const verbo = { fecha: 'Reprogramar', completar: 'Completar', archivar: 'Archivar' }[accion];
+    if (accion !== 'fecha' && !confirm(`¿${verbo} ${ids.length} tarea${ids.length === 1 ? '' : 's'}?${accion === 'archivar' ? '\n\nSe ocultan de las listas, pero no se borra nada.' : ''}`)) return;
+    const body = accion === 'fecha' ? { accion: 'fecha', ids, fecha } : accion === 'completar' ? { accion: 'estado', ids, estado: 'completado' } : { accion: 'archivar', ids };
+    try {
+      const r = await _post('/mgmt/tasks/bulk', body);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo');
+      showBanner(`${ids.length} tarea${ids.length === 1 ? '' : 's'} ${accion === 'fecha' ? 'reprogramada' : accion === 'completar' ? 'completada' : 'archivada'}${ids.length === 1 ? '' : 's'}`, 'success');
+      _sel.clear(); await _reload();
+      if (!_scope().filter(_passes).some(_overdue)) _onlyOver = false;
+      _paintMain();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Una sola línea bajo el título cuando el PROYECTO ya pasó su fecha de fin (no un banner por tarea)
+  function _strip(p) {
+    if (!p || (p.estado || 'activo') !== 'activo' || p.archivado) return '';
+    const f = _d10(p.fecha_fin); if (!f || f >= _today()) return '';
+    try { if (localStorage.getItem('sp_strip_' + p.id) === f) return ''; } catch (_) {}
+    return `<div class="sp-strip" id="sp-strip"><span class="sp-strip__t">Venció el ${esc(_fmtD(f))} · ${_agoDias(f)} d de atraso</span><span class="sp-strip__sp"></span>
+      <button type="button" class="sp-strip__b" onclick="SpacesModule.stripDate(event,${p.id})">Ampliar plazo</button>
+      <button type="button" class="sp-strip__b" onclick="SpacesModule.stripDone(${p.id})">Completar proyecto</button>
+      <button type="button" class="sp-strip__x" title="Ocultar este aviso" onclick="SpacesModule.stripHide(${p.id},'${f}')">×</button></div>`;
+  }
+  function stripHide(id, f) { try { localStorage.setItem('sp_strip_' + id, f); } catch (_) {} document.getElementById('sp-strip')?.remove(); }
+  function stripDate(ev, id) {
+    ev.stopPropagation(); document.getElementById('sp-bulkmenu')?.remove();
+    const r = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'sp-bulkmenu'; m.className = 'sp-bulkmenu';
+    const d = new Date(); d.setDate(d.getDate() + 14); const def = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    m.innerHTML = `<div class="sp-bulkmenu__t">Nueva fecha de fin del proyecto</div><div class="sp-bulkmenu__c"><input type="date" id="sp-stripdate" value="${def}" min="${_today()}"><button type="button" onclick="SpacesModule.stripSave(${id})">Guardar</button></div>`;
+    m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.left, innerWidth - 250)) + 'px'; document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
+  async function stripSave(id) {
+    const v = (document.getElementById('sp-stripdate') || {}).value; if (!v) return;
+    const r = await _post(`/mgmt/projects/${id}/fechas`, { fecha_fin: v }, 'PATCH');
+    document.getElementById('sp-bulkmenu')?.remove();
+    if (!r.ok) { showBanner('No se pudo ampliar el plazo', 'error'); return; }
+    showBanner('Plazo ampliado', 'success'); await _reload(); _paintMain();
+  }
+  async function stripDone(id) {
+    const p = _pjOf(id); if (!confirm(`¿Completar «${_plain(p.nombre)}»?\n\nSi tiene canal de Slack, se archiva; si es el último proyecto activo del cliente, el cliente pasa a inactivo.`)) return;
+    const r = await _post(`/mgmt/projects/${id}/estado`, { estado: 'completado' }, 'PATCH');
+    if (!r.ok) { showBanner(await _err(r, 'No se pudo completar el proyecto'), 'error'); return; }
+    showBanner('Proyecto completado', 'success'); await _reload();
   }
   function toggleG(k) { if (_collapsedG.has(k)) _collapsedG.delete(k); else _collapsedG.add(k); _paintBody(); }
   function toggleT(id) { if (_collapsedT.has(id)) _collapsedT.delete(id); else _collapsedT.add(id); _paintBody(); }
@@ -1597,7 +1680,7 @@ const SpacesModule = (() => {
 
   function showProjectsGo() { showProjects(); _paintTree(); _paintMain(); }
 
-  return { tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
+  return { toggleOver, selTask, selAll, bulkDate, bulkDo, stripHide, stripDate, stripSave, stripDone, tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     canalCrear, tkToggleEmpty, fieldsOpenFor, toggleDone, treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
     toggleG, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };

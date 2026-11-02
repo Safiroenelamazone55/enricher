@@ -47425,6 +47425,8 @@ const RNotifPanel = (() => {
   let _lastTasks      = [];   // tareas del último load (para el picker "+ Subtarea" por proyecto)
   let _lastProjects   = [];   // proyectos del último load (para los textos de confirmación)
   let _dismissed      = new Set(); // "kind:id" descartados a mano por esta persona
+  let _lastData = null;              // último contenido pintado (para replegar/desplegar sin volver a pedirlo)
+  const _openCats = new Set();       // categorías de pendientes desplegadas
 
   // ── Avisos de CIERRE (calculados en el frontend, sin tocar el backend) ──
   // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
@@ -47486,7 +47488,7 @@ const RNotifPanel = (() => {
         const _past = ds => { if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d < hoy; };
         const listaIds  = new Set(tListas.map(t => t.id));
         const pListoIds = new Set(pListos.map(p => p.id));
-        const tVenc = tasks.filter(t => t.estado !== 'completado' && _past(t.deadline) && !listaIds.has(t.id) && _esMio(t, me));
+        const tVenc = tasks.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada && _past(t.deadline) && !listaIds.has(t.id) && _esMio(t, me));
         const pVenc = projects.filter(p => { const st = p.estado || 'activo'; return st !== 'completado' && st !== 'cancelado' && _past(p.fecha_fin) && !pListoIds.has(p.id) && _esMio(p, me); });
         if (tListas.length) { data.tareas_completas   = tListas; data.total = (data.total || 0) + tListas.length; }
         if (pListos.length) { data.proyectos_completos = pListos; data.total = (data.total || 0) + pListos.length; }
@@ -47513,7 +47515,7 @@ const RNotifPanel = (() => {
         if (mens.length) { data.menciones = mens; data.total = (data.total || 0) + mens.length; }
       } catch (_) {}
       _render(data);
-      _updateBadge(data.total || 0);
+      _updateBadge(_eventosDe(data));
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:44px 0">Error al cargar.</div>`;
     }
@@ -47574,6 +47576,12 @@ const RNotifPanel = (() => {
     } catch (e) { alert('No se pudo completar el proyecto: ' + e.message); }
   }
 
+  // Avisos = cosas que ocurren (menciones, sistema, listas para cerrar). Pendientes = lo atrasado o por ordenar (vencidas, sin responsable, sin fecha…).
+  // La campana cuenta solo avisos: el atraso no debe llenarla de notificaciones.
+  const _eventosDe = d => ['menciones', 'agentes', 'tareas_completas', 'proyectos_completos'].reduce((a, k) => a + ((d && d[k]) || []).length, 0);
+  const _pendientesDe = d => ['tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas'].reduce((a, k) => a + ((d && d[k]) || []).length, 0);
+  function toggleCat(k) { if (_openCats.has(k)) _openCats.delete(k); else _openCats.add(k); if (_lastData) _render(_lastData); }
+  function goVencidas() { try { RChatPanel.close(); } catch (_) {} document.querySelector('#sidebar .snav-item[data-tab="mgmt-mywork"]')?.click(); }
   function _updateBadge(total) {
     for (const id of ['rchat-notif-badge', 'rchat-notif-dot']) {
       const el = $(id);
@@ -47585,12 +47593,12 @@ const RNotifPanel = (() => {
 
   // Footer del panel (cuenta + actualizar). No hay "leídas/eliminar" porque las alertas
   // de integridad son en vivo: se limpian al resolver el dato (fijar fecha, asignar, etc.).
-  function _setFooter(total) {
+  function _setFooter(ev, back) {
     const f = $('rnotif-footer');
     if (!f) return;
-    if (!total) { f.classList.add('hidden'); f.innerHTML = ''; return; }
+    if (!ev && !back) { f.classList.add('hidden'); f.innerHTML = ''; return; }
     f.classList.remove('hidden');
-    f.innerHTML = `<span class="rnf-footer__cnt">${total} pendiente${total !== 1 ? 's' : ''}</span>
+    f.innerHTML = `<span class="rnf-footer__cnt">${ev} aviso${ev !== 1 ? 's' : ''} · ${back} por ordenar</span>
       <button class="rnf-footer__btn" onclick="RNotifPanel.load()">Actualizar</button>`;
   }
 
@@ -47598,8 +47606,9 @@ const RNotifPanel = (() => {
     const el = $('rnotif-content');
     if (!el) return;
 
-    const total = data.total || 0;
-    _setFooter(total);
+    _lastData = data;
+    const evN = _eventosDe(data), backN = _pendientesDe(data), total = evN + backN;
+    _setFooter(evN, backN);
     if (!total) {
       el.innerHTML = `<div class="rnotif__ok">
         <div class="rnotif__ok-icon">
@@ -47667,9 +47676,21 @@ const RNotifPanel = (() => {
     // a TODAS las tarjetas, sea cual sea su tipo. El primer clic solo arma el botón
     // (cambia texto/color); el segundo, dentro de los 4s, sí descarta.
     const discardBtn = (key, id) => `<button class="rnf-act rnf-act--discard" data-discard="${key}:${id}" onclick="event.stopPropagation();RNotifPanel.dismiss(event,'${key}',${id})">Descartar</button>`;
+    // Lo atrasado o por ordenar se muestra como UNA fila-resumen por tipo (se despliega al tocarla); los avisos nuevos van como tarjetas.
+    const SUM = {
+      tareas_vencidas: ['tareas vencidas', 'tarea vencida', 'calendar', 'red', 'Abrir', 'RNotifPanel.goVencidas()'],
+      proyectos_vencidos: ['proyectos vencidos', 'proyecto vencido', 'calendar', 'red', '', ''],
+      tareas_sin_responsable: ['tareas sin responsable', 'tarea sin responsable', 'member', 'orange', '', ''],
+      tareas_sin_deadline: ['tareas sin fecha límite', 'tarea sin fecha límite', 'calendar', 'amber', '', ''],
+      proyectos_sin_tareas: ['proyectos sin tareas', 'proyecto sin tareas', 'folder', 'violet', '', ''],
+    };
     for (const cat of cats) {
       const items = data[cat.key] || [];
-      const shown = items.slice(0, 6);
+      if (!items.length) continue;
+      const sm = SUM[cat.key], isAcc = !!sm, open = _openCats.has(cat.key);
+      if (isAcc) html += `<div class="rnf-sumh${open ? ' open' : ''}" role="button" tabindex="0" onclick="RNotifPanel.toggleCat('${cat.key}')"><span class="rnf-ico rnf-ico--${sm[3]}">${ICO[sm[2]]}</span><div class="rnf-sumt"><b>${items.length} ${items.length === 1 ? sm[1] : sm[0]}</b><small>${open ? 'Toca para ocultar' : 'Toca para revisar'}</small></div>${sm[4] ? `<button type="button" class="rnf-sumgo" title="Ver en Mi trabajo" onclick="event.stopPropagation();${sm[5]}">${sm[4]}</button>` : ''}<i class="rnf-chev"></i></div>`;
+      if (isAcc && !open) continue;
+      const shown = items.slice(0, isAcc ? 8 : 5);
       hidden += items.length - shown.length;
       for (const t of shown) {
         const name = esc(t[cat.nameKey] || '');
@@ -47709,7 +47730,7 @@ const RNotifPanel = (() => {
         </div>`;
       }
     }
-    if (hidden > 0) html += `<div class="rnf-more">+${hidden} alertas más</div>`;
+    if (hidden > 0) html += `<div class="rnf-more">+${hidden} más sin mostrar</div>`;
     el.innerHTML = html;
 
     // Inject floating date popover (once)
@@ -47812,9 +47833,16 @@ const RNotifPanel = (() => {
       setTimeout(() => {
         row.style.maxHeight = '0'; row.style.margin = '0'; row.style.padding = '0'; row.style.overflow = 'hidden'; row.style.border = 'none';
         setTimeout(() => {
+          const nid = row.getAttribute('data-notif-id') || '';
           row.remove();
+          if (_lastData && nid) {
+            const k = nid.split(':')[0], id = nid.slice(k.length + 1);
+            if (Array.isArray(_lastData[k])) _lastData[k] = _lastData[k].filter(x => String(x.id) !== id);
+            _render(_lastData); _updateBadge(_eventosDe(_lastData));
+            return;
+          }
           const left = document.querySelectorAll('#rnotif-content [data-notif-id]').length;
-          _setFooter(left);
+          _setFooter(left, 0);
           _updateBadge(left);
           if (!left) _render({ total: 0 });
         }, 220);
@@ -47983,7 +48011,7 @@ const RNotifPanel = (() => {
   }
 
   return {
-    load, updateBadge: _updateBadge,
+    load, updateBadge: _updateBadge, toggleCat, goVencidas,
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
     completeTask, goToProject, completeProject, pickProjFecha, addSubToProject,

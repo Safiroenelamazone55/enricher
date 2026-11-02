@@ -2706,6 +2706,48 @@ app.patch('/api/mgmt/tasks/:id/estado-financiero', requireAuth, async (req, res)
 });
 
 // ── PATCH /api/mgmt/tasks/:id/deadline ───────────────────────────
+// ── POST /api/mgmt/tasks/bulk — acciones en grupo sobre tareas (reprogramar, cambiar estado, archivar) ──
+app.post('/api/mgmt/tasks/bulk', requireAuth, async (req, res) => {
+  const b = req.body || {}, wid = req.workspaceOwnerId;
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(x => parseInt(x, 10)).filter(Boolean))].slice(0, 300);
+  if (!ids.length) return res.status(400).json({ error: 'No hay tareas seleccionadas' });
+  try {
+    let rows;
+    if (b.accion === 'fecha') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha || ''))) return res.status(400).json({ error: 'Fecha no válida' });
+      rows = (await pool.query(
+        `UPDATE tasks SET deadline=$3::date, fecha_inicio = CASE WHEN fecha_inicio IS NOT NULL AND fecha_inicio > $3::date THEN $3::date ELSE fecha_inicio END, updated_at=NOW()
+          WHERE id = ANY($1::int[]) AND user_id=$2 RETURNING id, parent_task_id`, [ids, wid, b.fecha])).rows;
+    } else if (b.accion === 'estado') {
+      if (!['pendiente', 'en_progreso', 'bloqueado', 'completado', 'cancelado'].includes(b.estado)) return res.status(400).json({ error: 'Estado inválido' });
+      rows = (await pool.query(`UPDATE tasks SET estado=$3, updated_at=NOW() WHERE id = ANY($1::int[]) AND user_id=$2 RETURNING id, parent_task_id`, [ids, wid, b.estado])).rows;
+      for (const pid of [...new Set(rows.map(r => r.parent_task_id).filter(Boolean))]) await _syncParentEstado(wid, pid).catch(() => {});
+    } else if (b.accion === 'archivar') {
+      rows = (await pool.query(`UPDATE tasks SET archivada=TRUE, updated_at=NOW() WHERE id = ANY($1::int[]) AND user_id=$2 RETURNING id, parent_task_id`, [ids, wid])).rows;
+    } else return res.status(400).json({ error: 'Acción no válida' });
+    res.json({ ok: true, n: rows.length });
+  } catch (e) { console.error('[tasks/bulk]', e.message); res.status(500).json({ error: 'No se pudo aplicar la acción' }); }
+});
+
+// Tareas repetitivas (la semanal de cada proyecto y las subtareas de plantilla): si pasó más de una semana sin cerrarse, sin horas registradas y sin cobro pendiente,
+// se marcan como «omitidas» (estado cancelado + nota) en vez de acumularse como vencidas. Pedido de Jenny 2026-11-02.
+async function _omitirRepetitivas() {
+  try {
+    const r = await pool.query(
+      `UPDATE tasks t SET estado='cancelado', updated_at=NOW(),
+              notas = TRIM(BOTH E'\n' FROM COALESCE(t.notas,'') || E'\nOmitida automáticamente: no se cerró dentro de su semana.')
+        WHERE (t.semana_week IS NOT NULL OR t.recur_template_id IS NOT NULL)
+          AND t.estado IN ('pendiente','bloqueado','en_progreso') AND NOT COALESCE(t.archivada,false)
+          AND COALESCE(t.deadline, t.semana_week + 6, t.recur_anchor) < CURRENT_DATE - 7
+          AND NOT EXISTS (SELECT 1 FROM time_entries te WHERE te.task_id = t.id)
+          AND NOT (COALESCE(t.monto,0) > 0 AND NOT t.cobrado)
+        RETURNING t.id`);
+    if (r.rowCount) console.log('[tareas] ' + r.rowCount + ' tarea(s) repetitiva(s) omitida(s) automáticamente');
+  } catch (e) { console.warn('[tareas] omitir repetitivas:', e.message); }
+}
+setTimeout(_omitirRepetitivas, 90 * 1000).unref();
+setInterval(_omitirRepetitivas, 6 * 3600 * 1000).unref();
+
 app.patch('/api/mgmt/tasks/:id/deadline', requireAuth, async (req, res) => {
   const { deadline } = req.body;
   try {
@@ -12362,7 +12404,7 @@ app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
         `SELECT p.id, p.nombre, c.nombre AS client_nombre
          FROM projects p
          LEFT JOIN clients c ON p.client_id = c.id
-         WHERE p.user_id = $1 AND p.estado = 'activo'
+         WHERE p.user_id = $1 AND p.estado = 'activo' AND NOT COALESCE(p.archivado, false)
          AND NOT EXISTS (
            SELECT 1 FROM tasks t
            WHERE t.project_id = p.id AND t.user_id = $1
@@ -12374,9 +12416,10 @@ app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
         `SELECT t.id, t.titulo, t.responsable,
                 p.nombre AS project_nombre, c.nombre AS client_nombre
          FROM tasks t
-         LEFT JOIN projects p ON t.project_id = p.id
+         JOIN projects p ON t.project_id = p.id
          LEFT JOIN clients  c ON p.client_id  = c.id
          WHERE t.user_id = $1
+         AND NOT COALESCE(t.archivada, false) AND NOT COALESCE(p.archivado, false) AND COALESCE(p.estado, 'activo') <> 'cancelado'
          AND t.estado NOT IN ('completado','cancelado')
          AND t.deadline IS NULL
          ORDER BY t.created_at DESC`,
@@ -12385,7 +12428,9 @@ app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
       pool.query(
         `SELECT t.id, t.titulo, t.deadline
          FROM tasks t
+         JOIN projects p ON t.project_id = p.id
          WHERE t.user_id = $1
+         AND NOT COALESCE(t.archivada, false) AND NOT COALESCE(p.archivado, false) AND COALESCE(p.estado, 'activo') <> 'cancelado'
          AND t.estado NOT IN ('completado','cancelado')
          AND (t.responsable IS NULL OR t.responsable = '')
          AND (t.responsables IS NULL OR array_length(t.responsables, 1) IS NULL)
