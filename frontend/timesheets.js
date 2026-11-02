@@ -86,7 +86,8 @@ const TimesheetModule = (() => {
     paint();
   }
   // Descarga (CSV, abre bien en Excel) las entradas de tiempo de lo que se está viendo: el rango y los filtros del Dashboard, o la semana/rango de «Mi hoja».
-  async function exportar() {
+  async function exportarCsv() {
+    $('ts-modal')?.remove();
     try {
       let list, desde, hasta;
       if (S.tab === 'dash') {
@@ -104,11 +105,41 @@ const TimesheetModule = (() => {
       a.download = `horas_${desde}_a_${hasta}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     } catch (e) { try { showBanner('No se pudo descargar: ' + e.message, 'error'); } catch (_) {} }
   }
+  // Botón de descarga: elegir cliente y/o proyecto y el periodo; genera el MISMO informe (PDF / impresión) de «Informe detallado», con tareas y subtareas.
+  function exportar() {
+    popClose();
+    const dash = S.tab === 'dash', r = dash ? dashRange() : { start: rStart(), end: rEnd() };
+    const src = (dash ? S.dashEntries : S.entries) || [], list = src.filter(countable);
+    const pOf = e => e.proj_nombre || e.project_nombre || '';
+    S._exp = { list, pOf };
+    const clients = [...new Set(list.map(e => e.client_nombre).filter(Boolean))].sort();
+    const inp = 'class="ts-inp" style="width:100%"';
+    modal('Descargar informe', `<p class="ts-sm" style="margin:0 0 12px">Se genera el informe detallado (con tareas y subtareas) en PDF. Elige de qué cliente o proyecto.</p>
+      <label class="ts-fl">Cliente<select id="ts-ex-c" ${inp} onchange="TimesheetModule.expFill()"><option value="">Todos los clientes</option>${clients.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
+      <label class="ts-fl">Proyecto<select id="ts-ex-p" ${inp}></select></label>
+      <div class="ts-fl2"><label class="ts-fl">Desde<input type="date" id="ts-ex-a" ${inp} value="${r.start}"></label><label class="ts-fl">Hasta<input type="date" id="ts-ex-z" ${inp} value="${r.end}"></label></div>`,
+      `<button type="button" class="ts-btn" onclick="TimesheetModule.exportarCsv()">Solo CSV</button><span class="ts-sp"></span><button type="button" class="ts-btn" onclick="document.getElementById('ts-modal').remove()">Cancelar</button><button type="button" class="ts-btn ts-btn--p" onclick="TimesheetModule.expGo()">Generar informe</button>`, 460);
+    expFill();
+  }
+  function expFill() {
+    const c = $('ts-ex-c') && $('ts-ex-c').value, ex = S._exp || { list: [], pOf: () => '' };
+    const ps = [...new Set(ex.list.filter(e => !c || e.client_nombre === c).map(ex.pOf).filter(Boolean))].sort();
+    const sel = $('ts-ex-p'); if (sel) sel.innerHTML = '<option value="">Todos los proyectos</option>' + ps.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  }
+  async function expGo() {
+    const c = $('ts-ex-c').value, pr = $('ts-ex-p').value; let a = $('ts-ex-a').value, z = $('ts-ex-z').value;
+    if (!a || !z) { try { showBanner('Elige las fechas del informe', 'info'); } catch (_) {} return; }
+    if (a > z) [a, z] = [z, a];
+    $('ts-modal')?.remove(); go('informe');
+    await new Promise(r => setTimeout(r, 700));
+    try { await TimerModule.configureReport({ client: c || 'all', project: pr || 'all', start: a, end: z }); TimerModule.printReport(); }
+    catch (e) { try { showBanner('No se pudo preparar el informe: ' + e.message, 'error'); } catch (_) {} }
+  }
   function paint() {
     const root = $('ts-root'); if (!root) return;
     const adm = isAdmin(), tab = (k, l) => `<button type="button" class="ts-tab${S.tab === k || (k === 'mi' && S.tab === 'detalle') || (k === 'dash' && S.tab === 'informe') ? ' on' : ''}" onclick="TimesheetModule.go('${k}')">${l}</button>`;
     root.innerHTML = `<div class="ts-top"><span class="ts-ttl">${ic(IC.alarm, 17)}Hojas de horas</span><span class="ts-sep"></span>${tab('mi', 'Mi hoja de horas')}${adm ? tab('todas', 'Todas las hojas de horas') + tab('aprob', 'Aprobaciones') : ''}${tab('dash', 'Dashboard')}
-      <span class="ts-sp"></span>${['dash', 'mi', 'detalle'].includes(S.tab) ? `<button type="button" class="ts-btn ts-btn--ico" id="ts-dl" title="Descargar las entradas de tiempo (CSV)" aria-label="Descargar" onclick="TimesheetModule.exportar()">${ic(IC.dl, 16)}</button>` : ''}${adm ? `<button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes')">${ic(IC.gear, 14)}Ajustes</button>` : ''}</div><div id="ts-body" class="ts-body"></div>`;
+      <span class="ts-sp"></span>${['dash', 'mi', 'detalle'].includes(S.tab) ? `<button type="button" class="ts-btn ts-btn--ico" id="ts-dl" title="Descargar informe (PDF) con tareas y subtareas" aria-label="Descargar" onclick="TimesheetModule.exportar()">${ic(IC.dl, 16)}</button>` : ''}${adm ? `<button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes')">${ic(IC.gear, 14)}Ajustes</button>` : ''}</div><div id="ts-body" class="ts-body"></div>`;
     const wrap = $('tt-report-wrap'); if (wrap) wrap.style.display = S.tab === 'informe' ? '' : 'none';
     if (S.tab === 'informe') { $('ts-body').innerHTML = `<div class="ts-back"><button type="button" class="ts-btn" onclick="TimesheetModule.go('dash')">${ic(IC.back, 14)}Volver al dashboard</button><span>Informe detallado: facturación, revisión de tiempo e impresión</span></div>`; try { TimerModule.loadReport(); } catch (_) {} return; }
     paintBody();
@@ -620,6 +651,6 @@ const TimesheetModule = (() => {
     sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><b>${esc(ACC[x.accion] || x.accion)}</b><small class="ts-sm">${esc(x.actor_name || 'Alguien')} · ${esc(x.detalle)}</small></div><small class="ts-sm">${new Date(x.created_at).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')}</div>` : `<div class="ts-empty"><b>Todavía no hay actividad registrada</b><span>Aquí aparecerán los cambios y aprobaciones desde ahora.</span></div>`);
   }
 
-  return { exportar, fPick, clearF, setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
+  return { exportar, exportarCsv, expFill, expGo, fPick, clearF, setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
     submit, review, memberMenu, setMember, openMember, deadlineModal, saveDeadline, toggleDia, saveHoras, delLibre, libreModal, saveLibre };
 })();

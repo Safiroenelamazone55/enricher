@@ -48457,6 +48457,13 @@ const TimerModule = (() => {
     loadReport();
   }
 
+  // Deja el informe listo con un cliente, un proyecto y un rango de fechas (lo usa el botón de descarga de Hojas de horas); luego se llama a printReport().
+  async function configureReport(o) {
+    _ttClient = (o && o.client) || 'all'; _ttProject = (o && o.project) || 'all';
+    _ttPeriod = 'custom';
+    _ttCustom = { start: _startOfDay(new Date(o.start + 'T12:00:00')), end: _endOfDay(new Date(o.end + 'T12:00:00')) };
+    await loadReport();
+  }
   function setTtMember(v) { _ttMember = v || 'me'; loadReport(); }
   function setTtClient(v) { _ttClient = v || 'all'; _ttProject = 'all'; loadReport(); }   // cambiar cliente resetea el proyecto
   function setTtProject(v) { _ttProject = v || 'all'; loadReport(); }
@@ -49551,7 +49558,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, subToggle, subCreate, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, openManual, closeManual, manualSearch, manualPick, manualFree, manualClear, manualDur, saveManual, editSearch, editPick, editClear, subToggle, subCreate, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, configureReport, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll, setEntries: es => { _ttLastEntries = Array.isArray(es) ? es : []; } };
 })();
 
