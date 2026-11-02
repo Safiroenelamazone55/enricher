@@ -20288,3 +20288,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm2-nav.lm2-nav--collapsed .lm2-nav__list { padding-top: 10px; }
 .lm2-nav.lm2-nav--collapsed .lm2-nav__item { margin-left: 12px; }
 .lm2-nav.lm2-nav--collapsed .lm2-nav__list { padding-top: 0; }
+.lm2-nav.lm2-nav--collapsed .snav-back { display: none !important; } .lm2-nav.lm2-nav--collapsed .lm2-nav__list { padding-top: 8px; }
