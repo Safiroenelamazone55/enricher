@@ -35,7 +35,7 @@ const TimesheetModule = (() => {
     users: '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-2-5-5-5.7"/>', check: '<polyline points="20 6 9 17 4 12"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>', copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
-  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), range: null, fCli: '', fProj: '', fSpace: '', meta: null, hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'hide', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
+  const S = { tab: 'mi', view: 'hoja', week: monday(todayL()), range: null, fCli: '', fProj: '', fSpace: '', meta: null, hideWk: false, fFact: 'all', fTag: '', fTime: 'all', fArch: 'show', fSort: 'new', member: null, memberId: null, fromTeam: false, settings: null, entries: [], rows: [], team: null, mine: null, foldDays: {}, memberFilter: 'all' };
   try { const pf = JSON.parse(localStorage.getItem('ts_prefs') || '{}'); if (pf.view) S.view = pf.view; if (pf.hideWk) S.hideWk = true; if (pf.tab) S.tab = pf.tab; } catch (_) {}
   const api = async (u, o) => { const r = await apiFetch(API + u, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('Error ' + r.status)); return j; };
   const send = (u, m, b) => api(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
@@ -186,7 +186,7 @@ const TimesheetModule = (() => {
   const cliOf = e => e.client_nombre || 'Sin cliente';
   const projOfE = e => e.proj_nombre || e.project_nombre || 'Sin proyecto';
   const okF = (e, skip) => (skip === 'cli' || !S.fCli || cliOf(e) === S.fCli) && (skip === 'proj' || !S.fProj || projOfE(e) === S.fProj) && (skip === 'space' || S.fSpace === '' || String(spaceOf(e)) === S.fSpace);
-  const anyF = () => !!(S.fCli || S.fProj || S.fSpace || S.fTag || S.fFact !== 'all' || S.fArch !== 'hide' || S.fTime !== 'all');
+  const anyF = () => !!(S.fCli || S.fProj || S.fSpace || S.fTag || S.fFact !== 'all' || S.fArch !== 'show' || S.fTime !== 'all');
   const spaceName = v => (S.meta && S.meta.spaces.get(+v)) || ('Espacio ' + v);
 
   // ── filtros ──
@@ -196,7 +196,7 @@ const TimesheetModule = (() => {
   const fl = (base, v) => v ? `${base}: ${esc(String(v).length > 22 ? String(v).slice(0, 21) + '…' : v)}` : base;
   function filterBar(opts) {
     opts = opts || {};
-    return `<div class="ts-filters">${chip('fact', IC.dollar, 'Estado facturable', S.fFact !== 'all')}${chip('cli', IC.users, fl('Cliente', S.fCli), !!S.fCli)}${chip('proj', IC.list, fl('Proyecto', S.fProj), !!S.fProj)}${chip('space', IC.spaces, fl('Espacio', S.fSpace !== '' ? spaceName(S.fSpace) : ''), S.fSpace !== '')}${chip('tag', IC.tag, 'Etiqueta', !!S.fTag)}${opts.time ? chip('time', IC.clock, 'Tiempo registrado', S.fTime !== 'all') : ''}${chip('arch', IC.box, 'Tareas archivadas', S.fArch !== 'hide')}${opts.sort ? chip('sort', IC.up, 'Fecha agregada', S.fSort !== 'new') : ''}
+    return `<div class="ts-filters">${chip('fact', IC.dollar, 'Estado facturable', S.fFact !== 'all')}${chip('cli', IC.users, fl('Cliente', S.fCli), !!S.fCli)}${chip('proj', IC.list, fl('Proyecto', S.fProj), !!S.fProj)}${chip('space', IC.spaces, fl('Espacio', S.fSpace !== '' ? spaceName(S.fSpace) : ''), S.fSpace !== '')}${chip('tag', IC.tag, 'Etiqueta', !!S.fTag)}${opts.time ? chip('time', IC.clock, 'Tiempo registrado', S.fTime !== 'all') : ''}${chip('arch', IC.box, 'Tareas archivadas', S.fArch !== 'show')}${opts.sort ? chip('sort', IC.up, 'Fecha agregada', S.fSort !== 'new') : ''}
       ${anyF() ? `<button type="button" class="ts-clear" onclick="TimesheetModule.clearF()">Limpiar filtros</button>` : ''}<span class="ts-sp"></span>${hideSw()}${opts.right || ''}</div>`;
   }
   function fMenu(ev, kind) {
@@ -217,7 +217,7 @@ const TimesheetModule = (() => {
     popOpen(ev.currentTarget, h);
   }
   function fPick(kind, i) { popClose(); const v = i < 0 ? '' : ((window.__tsO || [])[i] || {}).v || ''; if (kind === 'cli') { S.fCli = v; S.fProj = ''; } else if (kind === 'proj') S.fProj = v; else { S.fSpace = v; S.fCli = ''; S.fProj = ''; } paintBody(); }
-  function clearF() { S.fCli = ''; S.fProj = ''; S.fSpace = ''; S.fTag = ''; S.fFact = 'all'; S.fArch = 'hide'; S.fTime = 'all'; paintBody(); }
+  function clearF() { S.fCli = ''; S.fProj = ''; S.fSpace = ''; S.fTag = ''; S.fFact = 'all'; S.fArch = 'show'; S.fTime = 'all'; paintBody(); }
   function fSet(kind, v) { popClose(); ({ fact: () => S.fFact = v, time: () => S.fTime = v, arch: () => S.fArch = v, sort: () => S.fSort = v, tag: () => S.fTag = v })[kind](); paintBody(); }
   const passEntry = e => {
     if (S.fFact !== 'all' && billable(e) !== (S.fFact === 'yes')) return false;
