@@ -6963,7 +6963,7 @@ const CanteraModule = (() => {
     return `<div class="cn-wrap">
       <section class="cn-card cn-doc"><div class="cn-card__h"><b>Documento</b><span class="cn-hint" id="cn-save">${_nt.doc.updated_at ? 'Guardado · ' + esc(_nt.doc.updated_by || '') + ' ' + _ntAgo(_nt.doc.updated_at) : 'Información importante de este borrador'}</span></div>
         <div class="cn-bar">${tb('bold', '<b>B</b>', 'Negrita')}${tb('italic', '<i>I</i>', 'Cursiva')}${tb('h3', 'T', 'Título')}${tb('ul', '•', 'Lista')}${tb('ol', '1.', 'Lista numerada')}${tb('link', '↗', 'Enlace')}</div>
-        <div id="cn-doc" class="cn-ed" contenteditable="true" data-ph="Escribe aquí lo importante: contexto del cliente, criterios acordados, advertencias…" oninput="CanteraModule.ntDocInput()">${_ntClean(_nt.doc.html)}</div></section>
+        <div id="cn-doc" class="cn-ed" contenteditable="true" data-ph="Escribe aquí lo importante: contexto del cliente, criterios acordados, advertencias…" oninput="CanteraModule.ntDocInput()" onpaste="CanteraModule.ntPaste(event)">${_ntClean(_nt.doc.html)}</div></section>
       <section class="cn-card cn-feed"><div class="cn-card__h"><b>Actividad</b><span class="cn-hint">${nAb ? nAb + ' bloqueo(s) sin resolver' : 'Sin bloqueos abiertos'}</span></div>
         <div class="cn-comp">
           <div class="cn-types">${Object.entries(_NT_T).map(([k, v]) => `<button type="button" class="cn-typ${_ntTipo === k ? ' on' : ''}" style="--c:${v[1]};--cs:${v[2]}" onclick="CanteraModule.ntTipo('${k}')">${v[0]}</button>`).join('')}</div>
@@ -6981,6 +6981,19 @@ const CanteraModule = (() => {
     else if (cmd === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
     else document.execCommand(cmd);
     ntDocInput();
+  }
+  // Pegar: texto con formato básico (negrita, listas, enlaces) o, si viene de una tabla / página compleja, texto plano con sus saltos de línea. Nunca se pega HTML crudo.
+  function ntPaste(e) {
+    const cd = e.clipboardData || window.clipboardData; if (!cd) return;
+    const html = cd.getData('text/html'), txt = cd.getData('text/plain');
+    if (!html && !txt) { if (cd.files && cd.files.length) { e.preventDefault(); showBanner('Las imágenes y archivos todavía no se pueden pegar aquí: pega el texto', 'info'); } return; }
+    e.preventDefault();
+    const plain = () => document.execCommand('insertHTML', false, esc(txt).replace(/\r?\n/g, '<br>').replace(/\t/g, '&emsp;'));
+    if (html && !/<(table|img|pre|style|script|iframe)\b/i.test(html)) {
+      const clean = _ntClean(html.replace(/<!--[\s\S]*?-->/g, '')).replace(/<(div|p)>\s*(<br>)?\s*<\/\1>/g, '');
+      if (clean.trim()) { document.execCommand('insertHTML', false, clean); ntDocInput(); return; }
+    }
+    plain(); ntDocInput();
   }
   function ntDocInput() {
     const lb = document.getElementById('cn-save'); if (lb) lb.textContent = 'Guardando…';
@@ -8563,7 +8576,7 @@ const CanteraModule = (() => {
   // Filtro de cliente de Outreach (barra «Viendo sólo …»): también acota esta pantalla
   let _extC = false;
   function setExtClient(id) { if (id) { _bdFiltro.cliente = String(id); _extC = true; } else if (_extC) { _bdFiltro.cliente = ''; _extC = false; } }
-  return { ntFmt, ntDocInput, ntTipo, ntFiltro, ntTagAdd, ntTagDel, ntSend, ntPatch, ntDel, setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  return { ntPaste, ntFmt, ntDocInput, ntTipo, ntFiltro, ntTagAdd, ntTagDel, ntSend, ntPatch, ntDel, setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,

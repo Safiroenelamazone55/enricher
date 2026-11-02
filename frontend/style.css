@@ -20517,3 +20517,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cant-sp-o{display:flex;flex-direction:column;gap:3px;text-align:left;padding:11px 14px;border:1px solid #E3E7E4;border-radius:10px;background:#fff;cursor:pointer;font:inherit}
 .cant-sp-o b{font-size:13.5px;font-weight:600;color:#14211B}.cant-sp-o span{font-size:12.5px;color:#5F6B64;line-height:1.4}
 .cant-sp-o:hover{border-color:#A7C8F5;background:#F5F9FF}
+.cn-ed{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden}.cn-ed *{max-width:100%}
