@@ -24419,7 +24419,7 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
   .cover:before{content:"";position:absolute;left:0;right:0;top:-14mm;height:14mm;background:#fff}
   .foot{padding:0 30px}
   @page{size:A4;margin:0}
-  .head-sp{height:14mm}
+  .head-sp{height:20mm}
   .rhead{display:flex;position:fixed;top:0;left:0;right:0;height:14mm;padding:0 30px 3mm;justify-content:space-between;align-items:flex-end;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--mute);background:#fff;z-index:1}
   .rhead:after{content:"";position:absolute;left:30px;right:30px;bottom:0;height:1px;background:var(--line)}
   .rh-r{max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -24588,8 +24588,8 @@ ${rhead}${foot}
     const dev = (cls, w, h, z, label, extra) => `<div class="dv dv--${cls}"><div class="dv-fr" style="width:${Math.round(w * z)}px;height:${Math.round(h * z)}px"><div class="dv-sc" style="width:${w}px;height:${h}px;zoom:${z}">${extra ? `<div class="dv-win">${mail}</div>` : mail}</div></div><div class="dv-lb">${esc(label)} · ${w} px</div></div>`;
     const tgt = (Array.isArray(v.targets) && v.targets[0]) ? ` (${v.targets[0]})` : '';
     return `<div class="sec dv-sec sec--wide"><h2>${esc(L2.devs)}</h2><p class="rp-sub">${esc(L2.devsSub)}${esc((st.titulo || _accionLabel(st.canal, st.accion) || 'Email') + tgt)}.</p>
-      <div class="dv-stage"><div class="dv-row">${dev('phone', 375, 620, 0.6, L2.phone)}${dev('tablet', 768, 560, 0.5, L2.tablet)}</div>
-      <div class="dv-row dv-row--one">${dev('laptop', 1000, 520, 0.62, L2.laptop, true)}</div></div></div>`;
+      <div class="dv-stage"><div class="dv-row">${dev('phone', 375, 540, 0.6, L2.phone)}${dev('tablet', 768, 480, 0.5, L2.tablet)}</div>
+      <div class="dv-row dv-row--one">${dev('laptop', 1000, 440, 0.62, L2.laptop, true)}</div></div></div>`;
   }
   function _rptCompaniesN(enrolled) { return new Set((enrolled || []).map(c => c.company_id != null ? 'i' + c.company_id : 'n' + String(c.company_nombre || '').toLowerCase())).size; }
   function _seqReportHtml(id, lang, met, extra) {
