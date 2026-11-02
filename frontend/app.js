@@ -48452,7 +48452,7 @@ const TimerModule = (() => {
 
   // Deja el informe listo con un cliente, un proyecto y un rango de fechas (lo usa el botón de descarga de Hojas de horas); luego se llama a printReport().
   async function configureReport(o) {
-    _ttClient = (o && o.client) || 'all'; _ttProject = (o && o.project) || 'all';
+    _ttClient = (o && o.client) || 'all'; _ttProject = (o && o.project) || 'all'; _ttMember = (o && o.member) || 'me';
     _ttPeriod = 'custom';
     _ttCustom = { start: _startOfDay(new Date(o.start + 'T12:00:00')), end: _endOfDay(new Date(o.end + 'T12:00:00')) };
     await loadReport();
@@ -48724,60 +48724,53 @@ const TimerModule = (() => {
   function printReport() {
     const existing = document.getElementById('tt-print-lang');
     if (existing) existing.remove();
-    let last = 'es';
-    try { last = localStorage.getItem('kw_printLang') || 'es'; } catch (_) {}
-    // Contenido del reporte: «tarifa» = horas + tarifa por hora + monto; «tiempo» = solo tiempo de trabajo (sin montos). Sin proyectos con tarifa solo hay «tiempo».
+    let lang = 'es';
+    try { lang = localStorage.getItem('kw_printLang') || 'es'; } catch (_) {}
+    // Contenido: «tarifa» = horas + tarifa por hora + monto; «tiempo» = solo tiempo de trabajo (sin montos). Sin proyectos con tarifa solo hay «tiempo».
     const hasTarifa = !!(_ttSummary && _ttSummary.hasBilling);
     let mode = 'tarifa'; try { mode = localStorage.getItem('kw_printMode') || 'tarifa'; } catch (_) {}
     if (!hasTarifa) mode = 'tiempo';
-    const opt = (lang, flag, name, native) =>
-      `<button class="ttpl-opt${lang === last ? ' ttpl-opt--last' : ''}" data-lang="${lang}" type="button">
-        <span class="ttpl-flag">${flag}</span>
-        <span class="ttpl-ltext"><span class="ttpl-lname">${name}</span><span class="ttpl-lnative">${native}</span></span>
-        ${lang === last ? '<span class="ttpl-lastbadge">último</span>' : '<span class="ttpl-go">↵</span>'}
-      </button>`;
+    // Resumen de lo que se va a imprimir (los filtros que ya estaban en la vista)
+    let resumen = [];
+    try {
+      const rg = _ttRange(); resumen.push(_localizedPeriodLabel(rg, 'es-PE', PRINT_I18N.es));
+      if (_ttMember === 'all') resumen.push('Todo el equipo'); else if (_ttMember && _ttMember !== 'me') resumen.push(_ttMember);
+      if (_ttClient !== 'all') resumen.push(_ttClient);
+      if (_ttProject !== 'all') resumen.push(_ttProject);
+    } catch (_) {}
+    const chips = resumen.map(x => `<span class="pd-chip">${esc(x)}</span>`).join('');
+    const ico = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></svg>';
+    const LANGS = [['es', 'Español'], ['en', 'English'], ['de', 'Deutsch']];
     const ov = document.createElement('div');
     ov.id = 'tt-print-lang';
-    ov.className = 'ttpl-overlay';
+    ov.className = 'pd-overlay';
     ov.innerHTML = `
-      <div class="ttpl-modal" role="dialog" aria-modal="true" aria-label="Idioma del reporte">
-        <div class="ttpl-head">
-          <div class="ttpl-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
-          <div><div class="ttpl-title">Idioma del reporte</div><div class="ttpl-sub">¿En qué idioma quieres el PDF / la impresión?</div></div>
+      <div class="pd-modal" role="dialog" aria-modal="true" aria-label="Descargar informe">
+        <div class="pd-head"><span class="pd-ico">${ico}</span><div><div class="pd-title">Descargar informe</div><div class="pd-sub">PDF con tareas y subtareas, tal como lo ves ahora.</div></div></div>
+        ${chips ? `<div class="pd-chips">${chips}</div>` : ''}
+        <div class="pd-sec">Contenido</div>
+        <div class="pd-cards">
+          <button type="button" class="pd-card${mode === 'tarifa' ? ' is-on' : ''}" data-mode="tarifa" ${hasTarifa ? '' : 'disabled title="No hay proyectos con tarifa por hora en este período"'}><b>Tiempo y facturación</b><span>Horas, tarifa por hora y monto</span></button>
+          <button type="button" class="pd-card${mode === 'tiempo' ? ' is-on' : ''}" data-mode="tiempo"><b>Solo tiempo</b><span>Horas por proyecto y tarea, sin montos</span></button>
         </div>
-        <div class="ttpl-mode">
-          <div class="ttpl-mode__l">Contenido del reporte</div>
-          <div class="ttpl-seg">
-            <button type="button" class="ttpl-seg__b${mode === 'tarifa' ? ' is-on' : ''}" data-mode="tarifa" ${hasTarifa ? '' : 'disabled title="No hay proyectos con tarifa por hora en este período"'}><b>Tiempo y tarifa por hora</b><span>Horas, tarifa y monto por proyecto</span></button>
-            <button type="button" class="ttpl-seg__b${mode === 'tiempo' ? ' is-on' : ''}" data-mode="tiempo"><b>Solo tiempo de trabajo</b><span>Horas por proyecto y tarea, sin montos</span></button>
-          </div>
-        </div>
-        <div class="ttpl-opts">
-          ${opt('es', 'ES', 'Español', 'Español')}
-          ${opt('en', 'EN', 'Inglés', 'English')}
-          ${opt('de', 'DE', 'Alemán', 'Deutsch')}
-        </div>
-        <button class="ttpl-cancel" type="button">Cancelar</button>
+        <div class="pd-sec">Idioma</div>
+        <div class="pd-langs">${LANGS.map(([k, n]) => `<button type="button" class="pd-lang${k === lang ? ' is-on' : ''}" data-lang="${k}">${n}</button>`).join('')}</div>
+        <div class="pd-foot"><button type="button" class="pd-btn pd-cancel">Cancelar</button><button type="button" class="pd-btn pd-btn--p pd-go">Generar PDF</button></div>
       </div>`;
     document.body.appendChild(ov);
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
-    function close() { ov.remove(); document.removeEventListener('keydown', onKey); }
-    ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
-    ov.querySelector('.ttpl-cancel').addEventListener('click', close);
-    ov.querySelectorAll('.ttpl-seg__b').forEach(b => b.addEventListener('click', () => {
-      if (b.disabled) return;
-      mode = b.getAttribute('data-mode') || 'tarifa';
-      ov.querySelectorAll('.ttpl-seg__b').forEach(x => x.classList.toggle('is-on', x === b));
-    }));
-    ov.querySelectorAll('.ttpl-opt').forEach(b => b.addEventListener('click', () => {
-      const lang = b.getAttribute('data-lang') || 'es';
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const go = () => {
       try { localStorage.setItem('kw_printLang', lang); if (hasTarifa) localStorage.setItem('kw_printMode', mode); } catch (_) {}
-      close();
-      _doPrintReport(lang, mode);
-    }));
+      close(); _doPrintReport(lang, mode);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(); else if (e.key === 'Enter') go(); };
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
+    ov.querySelector('.pd-cancel').addEventListener('click', close);
+    ov.querySelector('.pd-go').addEventListener('click', go);
+    ov.querySelectorAll('.pd-card').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; mode = b.getAttribute('data-mode') || 'tarifa'; ov.querySelectorAll('.pd-card').forEach(x => x.classList.toggle('is-on', x === b)); }));
+    ov.querySelectorAll('.pd-lang').forEach(b => b.addEventListener('click', () => { lang = b.getAttribute('data-lang') || 'es'; ov.querySelectorAll('.pd-lang').forEach(x => x.classList.toggle('is-on', x === b)); }));
     document.addEventListener('keydown', onKey);
-    const focusTarget = ov.querySelector(`.ttpl-opt[data-lang="${last}"]`) || ov.querySelector('.ttpl-opt');
-    if (focusTarget) focusTarget.focus();
+    const f = ov.querySelector('.pd-go'); if (f) f.focus();
   }
 
   // Semana (lunes–domingo) de una fecha, como 'AAAA-MM-DD' del lunes, en hora local.
