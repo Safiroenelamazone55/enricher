@@ -15694,6 +15694,7 @@ async function start() {
     // Fall back to long-polling if WebSocket upgrade is blocked by nginx
     transports: ['polling', 'websocket'],
   });
+  require('./services/notify').setIO(io);
   app.set('io', io);   // para avisar en tiempo real desde las rutas (Inicio / «Para ti»)
 
   // Auth middleware: parse session cookie → look up user

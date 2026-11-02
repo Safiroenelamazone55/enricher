@@ -357,6 +357,7 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
       `UPDATE wa_chat_meta SET estado_conv='abierto', updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2 AND estado_conv='resuelto'`,
       [connId, jid]).catch(() => {});
     _autoRespondioPorWa(pool, connId, jid, texto).catch(e => console.warn('[wa] autoRespondio:', e.message));
+    if (!jid.endsWith('@g.us') && !jid.endsWith('@broadcast')) pool.query('SELECT user_id FROM wa_connections WHERE id=$1', [connId]).then(r => { if (r.rows[0]) require('./notify').push(r.rows[0].user_id, { kind: 'whatsapp', para: r.rows[0].user_id, titulo: m.pushName || jid.split('@')[0], texto: String(texto || '').slice(0, 120) || '(archivo)', chat: jid, conn: connId }); }).catch(() => {});
   }
 }
 

@@ -80,6 +80,7 @@ async function processMentions(pool, { wid, user, kind, taskId, projectId, text,
       [wid, m.login_id || null, m.id, user.id, user.name || '', kind, taskId || null, proj, excerpt]);
     if (!ins.rows[0]) continue;      // ya se le avisó de esta nota
     n++;
+    if (m.login_id) require('./notify').push(wid, { kind: 'mencion', para: m.login_id, titulo: (user.name || 'Alguien') + ' te mencionó', texto: (title ? title + ': ' : '') + excerpt.slice(0, 120), task_id: taskId || null });
     if (!m.email) continue;
     const what = KIND_LBL[kind] || 'un mensaje';
     const subject = `${user.name || 'Alguien'} te etiquetó en «${title || 'Nova'}»`;

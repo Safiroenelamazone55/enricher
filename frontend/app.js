@@ -46415,7 +46415,7 @@ const ChatModule = (() => {
     _socket.on('new_message', msg => _appendMessage(msg));
     _socket.on('meeting_reminder', m => _showMeetingReminder(m));
     // Aviso de un agente de vigilancia (Configuración → Agentes): llega al instante aunque no estés mirando la campana.
-    _socket.on('system_alert', a => { try { showBanner((a.name ? a.name + ': ' : '') + a.message, a.severity === 'ok' ? 'success' : 'error'); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load(); } catch (_) {} });
+    _socket.on('system_alert', a => { try { if (typeof NovaToast !== 'undefined') NovaToast.show({ kind: a.severity === 'ok' ? 'ok' : 'error', titulo: a.name || 'Aviso', texto: a.message }); else showBanner((a.name ? a.name + ': ' : '') + a.message, a.severity === 'ok' ? 'success' : 'error'); if (typeof RNotifPanel !== 'undefined') RNotifPanel.load(); } catch (_) {} });
   }
 
   // Aviso de recordatorio de reunión — llega por socket (siempre conectado
