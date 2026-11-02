@@ -20523,3 +20523,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sp-g--arch{margin-top:6px;border-top:1px dashed #D5DAD7;padding-top:6px}
 .sp-g--arch .sp-r:not(.sp-r--h){opacity:.74}
 .sp-arch-h{margin-left:10px;font-size:12px;color:#8A948E}
+.sp-hrs{border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:2px 8px;border-radius:6px}
+.sp-hrs:hover{background:#EEF4FF;color:#007AFF}
+.sp-rowb--t{color:#8A948E}.sp-rowb--t:hover{color:#007AFF}

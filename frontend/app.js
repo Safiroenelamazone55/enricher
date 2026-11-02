@@ -49205,6 +49205,7 @@ const TimerModule = (() => {
       closeManual();
       showBanner('✓ Tiempo registrado: ' + (_fmtDur(j.duration_s) || '0m') + ' en «' + sel.titulo + '»', 'success');
       loadReport();
+      try { window.dispatchEvent(new Event('nova:time-added')); } catch (_) {}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Guardar tiempo'; } }
   }
   function printReport() {

@@ -50,16 +50,24 @@ const SpacesModule = (() => {
   function _adopt() { try { if (!_tasks.length && TasksModule._getTasks) _tasks = TasksModule._getTasks(); TasksModule._adopt(_tasks); } catch (e) { console.error('[spaces] adopt', e); } }
 
   // ── estructura ──
+  // Ids archivados: las tareas archivadas y TODO lo que cuelga de ellas (una subtarea nueva de una semana archivada también va a «Archivada», dentro de su tarea)
+  let _aM = null;
+  const _archIds = () => {
+    if (_aM && _aM.ref === _tasks && _aM.n === _tasks.length) return _aM.set;
+    const set = new Set(_tasks.filter(t => t.archivada).map(t => t.id)); let ch = true, g = 0;
+    while (ch && g++ < 6) { ch = false; _tasks.forEach(t => { if (t.parent_task_id && set.has(t.parent_task_id) && !set.has(t.id)) { set.add(t.id); ch = true; } }); }
+    _aM = { ref: _tasks, n: _tasks.length, set }; return set;
+  };
   const _projsOf = sid => _projects.filter(p => (p.space_id || 0) === (sid || 0) && (p.estado || 'activo') !== 'cancelado' && !p.archivado);
   const _cnt = pid => _tasks.filter(t => t.project_id === pid && !t.archivada && !t.parent_task_id && _isOpen(t)).length;
   const _scope = () => {
     let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.filter(p => !p.archivado).map(p => p.id));
-    return _tasks.filter(t => !t.archivada && ps.includes(t.project_id));
+    const A = _archIds(); return _tasks.filter(t => !A.has(t.id) && ps.includes(t.project_id));
   };
   // Tareas archivadas (a mano o por el archivado automático de semanales/recurrentes) del mismo alcance: se muestran en su propio grupo «Archivada»
   const _scopeArch = () => {
     let ps = _selProj ? [_selProj] : (_selSpace != null ? _projsOf(_selSpace).map(p => p.id) : _projects.filter(p => !p.archivado).map(p => p.id));
-    return _tasks.filter(t => t.archivada && ps.includes(t.project_id));
+    const A = _archIds(); return _tasks.filter(t => A.has(t.id) && ps.includes(t.project_id));
   };
   const _title = () => { const p = _projects.find(x => x.id === _selProj); const sp = _selSpace != null ? (_selSpace === 0 ? { nombre: 'Principal' } : _spaces.find(s => s.id === _selSpace)) : null; return { sp, p }; };
 
@@ -532,7 +540,7 @@ const SpacesModule = (() => {
     await _reload(); showBanner('✓ Canal de Slack creado', 'success');
   }
   function _paintBody() {
-    const b = $q('sp-body'); if (!b) return; _fcc = null;
+    const b = $q('sp-body'); if (!b) return; _fcc = null; _aM = null;
     if (_selProj && _cfg) { _colStop(); _paintCfg(); return; }
     _colStop();
     if (_selProj && _viewSel['p' + _selProj] === 'canal') { _paintCanal(b); return; }
@@ -1005,13 +1013,13 @@ const SpacesModule = (() => {
     return `<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="${e[2]}" stroke-width="2.2" ${t.estado === 'pendiente' || !t.estado ? 'stroke-dasharray="3 3"' : ''}/></svg>`;
   }
   function _row(t, depth, kids, cols, trail, last) {
-    const st = _taskSt(t), e = [t.estado, st.n, st.c], d = _d10(t.deadline), od = d && d < _today() && _isOpen(t) && !t.archivada, rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
+    const st = _taskSt(t), e = [t.estado, st.n, st.c], d = _d10(t.deadline), od = d && d < _today() && _isOpen(t) && !_archIds().has(t.id), rs = _resp(t), open = !_collapsedT.has(t.id), p = _PRIO[t.prioridad || 'media'];
     const cell = {
       prioridad: `<div class="sp-c sp-c--m"><button class="sp-cb" onclick="SpacesModule.prio(event,${t.id})">${TasksModule.prioBadge(t.prioridad || 'media')}</button></div>`,
       inicio: `<div class="sp-c sp-c--m sp-dim">${_fmtD(_d10(t.fecha_inicio)) || '—'}</div>`,
       estimado: `<div class="sp-c sp-c--m sp-dim">${t.duracion_est_min ? _fmtEst(t.duracion_est_min) : '—'}</div>`,
       etiquetas: `<div class="sp-c sp-c--l">${(t.etiquetas || []).slice(0, 3).map(_tagChip).join('') || '<span class="sp-dim">—</span>'}</div>`,
-      horas: `<div class="sp-c sp-c--m sp-dim">${(+t.horas_track || 0) ? (+t.horas_track) + 'h' : '—'}</div>`,
+      horas: `<div class="sp-c sp-c--m sp-dim"><button type="button" class="sp-hrs" title="Agregar tiempo a esta tarea" onclick="SpacesModule.addTime(event,${t.id})">${(+t.horas_track || 0) ? (+t.horas_track) + 'h' : '＋'}</button></div>`,
       proyecto: `<div class="sp-c sp-c--l sp-dim">${esc(t.project_nombre || '')}</div>`,
     };
     const ovk = kids ? _tasks.filter(x => x.parent_task_id === t.id && !x.archivada && _overdue(x)).length : 0;
@@ -1021,7 +1029,7 @@ const SpacesModule = (() => {
       <div class="sp-c sp-c--e"><button class="sp-cb" onclick="SpacesModule.estMenu(event,${t.id})"><span class="sp-tag" style="--c:${e[2]}">${esc(e[1])}</span></button></div>
       <div class="sp-c sp-c--d"><button class="sp-cb" onclick="SpacesModule.date(event,${t.id})">${d ? TasksModule.dueCell(t.deadline, t.estado, t.fecha_inicio) : '<span class="tl-due tl-due--none">＋</span>'}</button>${od ? `<small class="sp-ago">hace ${_agoDias(d)} d</small>` : ''}</div>
       <div class="sp-c sp-c--p"><button class="sp-as" onclick="SpacesModule.resp(event,${t.id})">${rs.length ? `<span class="tl-who-wrap">${rs.slice(0, 3).map(n => `<span class="tl-who" title="${esc(n)}">${esc(_ini(n))}</span>`).join('')}${rs.length > 3 ? `<span class="tl-who tl-who--more">+${rs.length - 3}</span>` : ''}</span>` : '<span class="tl-who tl-who--add">＋</span>'}</button></div>
-      ${cols.map(c => cell[c]).join('')}${_fcols().map(f => _fcell(t, f)).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
+      ${cols.map(c => cell[c]).join('')}${_fcols().map(f => _fcell(t, f)).join('')}<div class="sp-c sp-c--x"><span class="sp-el task-elapsed" data-timer-display="${t.id}" hidden></span>${TasksModule.timerBtn(t.id, 'sp-play')}<button class="sp-rowb sp-rowb--t" title="Agregar tiempo (Time Tracking)" onclick="SpacesModule.addTime(event,${t.id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button><button class="sp-rowb" title="Opciones" onclick="SpacesModule.menu(event,${t.id})">⋯</button></div></div>`;
   }
   function _head(cols) { return `<div class="sp-r sp-r--h"><div class="sp-c sp-c--n">Nombre</div><div class="sp-c sp-c--e">Estado</div><div class="sp-c sp-c--d">Fecha límite</div><div class="sp-c sp-c--p">Persona asignada</div>${cols.map(c => `<div class="sp-c ${c === 'etiquetas' || c === 'proyecto' ? 'sp-c--l' : 'sp-c--m'}">${_COLS[c]}</div>`).join('')}${_fcols().map(f => `<div class="sp-c sp-c--f" title="${esc(f.n)}">${esc(f.n)}</div>`).join('')}<div class="sp-c sp-c--x"><button class="sp-plus" title="Columnas y campos" onclick="SpacesModule.fieldsOpen()">＋</button></div></div>`; }
   // trail[d] = si el antepasado de nivel d tiene hermanos después (para dibujar las líneas guía en «L»); last = si esta fila es la última de su grupo
@@ -1058,7 +1066,7 @@ const SpacesModule = (() => {
     }).join('') + archHtml + `</div>`;
   }
   // ── Vencidas: filtro, aviso del proyecto y acciones en grupo ──
-  const _overdue = t => { const d = _d10(t.deadline); return !!d && d < _today() && _isOpen(t) && !t.archivada; };
+  const _overdue = t => { const d = _d10(t.deadline); return !!d && d < _today() && _isOpen(t) && !_archIds().has(t.id); };
   const _agoDias = d => Math.max(1, Math.round((new Date(_today() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 864e5));
   function overChip() {
     const n = _scope().filter(_passes).filter(_overdue).length;
@@ -1707,6 +1715,13 @@ const SpacesModule = (() => {
 
   // ═══ Tareas y subtareas: mismo menú, cronómetro y tarjetas que tenía Tareas ═══
   function ctx(ev, id) { ev.preventDefault(); ev.stopPropagation(); _adopt(); TasksModule.openKanbanMenu(ev, id); }
+  // Registrar tiempo sin cronómetro (el mismo cuadro de Time Tracking), con la tarea ya elegida; para tareas de semanas pasadas propone su fecha
+  function addTime(ev, id) {
+    ev.stopPropagation(); const t = _tasks.find(x => x.id === id); if (!t) return;
+    const d = _d10(t.deadline);
+    try { TimerModule.openManual({ fecha: d && d < _today() ? d : _today(), taskId: id, titulo: t.titulo, ctx: t.project_nombre || '' }); } catch (e) { showBanner('No se pudo abrir el registro de tiempo', 'error'); }
+  }
+  window.addEventListener('nova:time-added', () => { if ($q('spaces-root')) _reload(); });
   function addSub(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openDrawer(null, null, id); }
   function menu(ev, id) { ev.stopPropagation(); _adopt(); TasksModule.openKanbanMenu(ev, id); }
 
@@ -1715,5 +1730,5 @@ const SpacesModule = (() => {
   return { toggleOver, selTask, selAll, bulkDate, bulkDo, stripHide, stripDate, stripSave, stripDone, tplCenter, tcClose, tcQ, tcFilter, tcOpen, tcBack, tcSlide, tcAcc, tcUse, tcDD, tcDDQ, tcDDPick, tcSet, tcSeg, tcEl, tcGo, fdClose, fdTab, fdQ, fdFold, fmCol, fmAggVis, isCustom: pid => _custom(pid), ensure, statusTag, chipsFor, fieldKeys, fcellFor, fEdit, fSet, fTog, renderTaskFields, fieldsOpen, fmBack, fmNew, fmEdit, fmVis, fmVisPop, fmDel, fmAdd, fmSave, cfgEstSet, cfgEstMove, cfgEstDel, cfgEstAdd, cfgEstSave, showProjects, showTasks, showProjectsGo, openProject, pjF, pjEst, pjSetEst, cfgOpen, cfgSave, cfgResp, cfgRepAdd, cfgRepSet, cfgRepDel, cfgAct, ctx, addSub, menu, load, render, _fromTasks, toggleSp, pick, newSpace, cancelSpace, saveSpace, spaceMenu, spaceOpts, newProject, moveProj, renameSpace, delSpace,
     canalCrear, tkToggleEmpty, fieldsOpenFor, toggleDone, treeSearch, treeQ, treeClear, treeMenu, treeAct, mgOpen, mgAct, projMenu, pmShare, shareSpace, pmBack, pmSub, pmFav, pmRename, pmLink, pmNewTask, pmAddView, pmMove, pmStyle, pmArch, pmDel, pmInfo, pmDup, pmDupGo, tplSaveOpen, tplSaveGo, tplRefreshOpen, tplRefreshGo, tplApplyOpen, tplApplyGo, tplCreateOpen, tplCreateGo, tplManage, tplRename, tplDelete, tdOpen, tdSave, tdClear, impOpen, impRead, impGo,
     docCmd, wbAdd, wbDel, setView, selView, viewMenu, addView, viewOpts, renameView, delView, calNav, ganttScale, formSend, setGroup, toggleSubs, toggleClosed, toggleMe, setQ, groupMenu, filterMenu, persMenu, fEstado, fPrio, fPers, clearFilters, colsMenu, toggleCol,
-    toggleG, toggleArch, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
+    toggleG, toggleArch, addTime, toggleT, drop, estMenu, setEstado, prio, resp, date, newTask, slashPick, slashHover, docColor, docColorSet, docTitle };
 })();
