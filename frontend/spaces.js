@@ -34,7 +34,7 @@ const SpacesModule = (() => {
     const root = $q('spaces-root'); if (!root) return;
     if (!_loaded) root.innerHTML = '<div class="sp-load">Cargando espacios…</div>';
     try {
-      const [sr, pr, tr, mr, vr] = await Promise.all([apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`), apiFetch(`${API}/mgmt/space-views`)]);
+      const [sr, pr, tr, mr, vr] = await Promise.all([apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks?incluir_archivados=1`), apiFetch(`${API}/mgmt/team`), apiFetch(`${API}/mgmt/space-views`)]);
       _views = vr.ok ? await vr.json() : [];
       _spaces = sr.ok ? await sr.json() : []; _projects = pr.ok ? await pr.json() : []; _tasks = tr.ok ? await tr.json() : []; _team = mr.ok ? await mr.json() : [];
     } catch (e) { console.error('[spaces] load', e); }
@@ -278,7 +278,7 @@ const SpacesModule = (() => {
     pop.innerHTML = h;
   }
   async function _reload() {
-    try { const [pr, tr, sr, vr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/space-views`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok) _tasks = await tr.json(); if (sr.ok) _spaces = await sr.json(); if (vr.ok) _views = await vr.json(); } catch (_) {}
+    try { const [pr, tr, sr, vr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks?incluir_archivados=1`), apiFetch(`${API}/mgmt/spaces`), apiFetch(`${API}/mgmt/space-views`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok) _tasks = await tr.json(); if (sr.ok) _spaces = await sr.json(); if (vr.ok) _views = await vr.json(); } catch (_) {}
     if (_selProj && !_projects.some(p => p.id === _selProj && (!p.archivado || _showArch))) _selProj = null;
     _paintTree(); _paintMain();
   }
@@ -1163,7 +1163,7 @@ const SpacesModule = (() => {
   // campos y estados en el panel de la tarea (página de detalle)
   async function renderTaskFields(tid, cid) {
     const box = $q(cid); if (!box) return;
-    if (!_projects.length) { try { const [pr, tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok && !_tasks.length) _tasks = await tr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
+    if (!_projects.length) { try { const [pr, tr, mr] = await Promise.all([apiFetch(`${API}/mgmt/projects`), apiFetch(`${API}/mgmt/tasks?incluir_archivados=1`), apiFetch(`${API}/mgmt/team`)]); if (pr.ok) _projects = await pr.json(); if (tr.ok && !_tasks.length) _tasks = await tr.json(); if (mr.ok && !_team.length) _team = await mr.json(); } catch (_) {} }
     const t = _tk(tid); if (!t || !t.project_id || !_pjOf(t.project_id)) { box.innerHTML = ''; return; }
     const fs = _fields(t.project_id), cust = _custom(t.project_id); if (!fs.length && !cust && !t.project_id) { box.innerHTML = ''; return; }
     const rows = fs.map(f => { const v = (t.campos || {})[f.id]; return { f, empty: v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) }; });

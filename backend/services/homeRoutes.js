@@ -118,7 +118,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       const { rows } = await pool.query(`
         SELECT t.id, t.titulo, t.monto::float AS monto, t.estado, t.deadline, t.billing_week, p.nombre AS project_nombre, COALESCE(p.moneda,'USD') AS moneda
           FROM tasks t JOIN projects p ON p.id=t.project_id
-         WHERE t.user_id=$1 AND NOT COALESCE(t.archivada,false) AND COALESCE(t.monto,0) > 0 AND NOT t.cobrado AND t.estado <> 'cancelado'
+         WHERE t.user_id=$1 AND NOT COALESCE(t.archivada,false) AND COALESCE(t.monto,0) > 0 AND NOT t.cobrado AND t.estado <> 'cancelado' AND NOT COALESCE(p.archivado,false) AND COALESCE(p.estado,'activo') <> 'cancelado'
            AND ($2 = ANY(COALESCE(p.responsables,'{}')) OR p.responsable=$2)
          ORDER BY COALESCE(t.billing_week, t.deadline) ASC NULLS LAST, t.id`, [me.owner, me.name]);
       const hechas = rows.filter(r => r.estado === 'completado');

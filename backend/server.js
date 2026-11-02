@@ -2318,6 +2318,10 @@ app.patch('/api/mgmt/projects/:id/links', requireAuth, async (req, res) => {
 // ── DELETE /api/mgmt/projects/:id ─────────────────────────────────
 app.delete('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
   try {
+    // Eliminar el proyecto elimina sus tareas (el aviso de la pantalla lo promete); las horas ya registradas se conservan sin tarea.
+    const own = await pool.query(`SELECT 1 FROM projects WHERE id = $1 AND user_id = $2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rowCount) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    await pool.query(`DELETE FROM tasks WHERE project_id = $1 AND user_id = $2`, [req.params.id, req.workspaceOwnerId]);
     const { rowCount } = await pool.query(
       `DELETE FROM projects WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.workspaceOwnerId]
@@ -2438,6 +2442,9 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
          LEFT JOIN projects p ON t.project_id = p.id
          LEFT JOIN clients  c ON p.client_id  = c.id
         WHERE t.user_id = $1
+          -- Las tareas de un proyecto archivado, cancelado o eliminado (sin proyecto) no se listan en ninguna pantalla,
+          -- salvo que quien pregunta pida verlas (Espacios con «Mostrar archivados»).
+          AND ($2::boolean OR (t.project_id IS NOT NULL AND NOT COALESCE(p.archivado, false) AND COALESCE(p.estado, 'activo') <> 'cancelado'))
         ORDER BY
           CASE t.estado
             WHEN 'bloqueado'   THEN 1
@@ -2448,7 +2455,7 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
           END,
           t.deadline ASC NULLS LAST,
           t.created_at DESC`,
-      [req.workspaceOwnerId]
+      [req.workspaceOwnerId, req.query.incluir_archivados === '1']
     );
     res.json(await permsSvc.filterTasks(req, rows));
   } catch (err) {

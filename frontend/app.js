@@ -13357,7 +13357,7 @@ const TasksModule = (() => {
     _hideAllViews();
     try {
       const [tasksRes, teamRes] = await Promise.all([
-        apiFetch(`${API}/mgmt/tasks`),
+        apiFetch(`${API}/mgmt/tasks?incluir_archivados=1`),
         apiFetch(`${API}/mgmt/team`),
       ]);
       if (tasksRes.status === 401) { novaSessionExpired(); return; }
