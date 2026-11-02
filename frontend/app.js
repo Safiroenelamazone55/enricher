@@ -21231,6 +21231,7 @@ const ProjectsModule = (() => {
 
 const OpportunitiesModule = (() => {
   let _opps   = [];
+  let _layout = (() => { try { return localStorage.getItem('opp_layout') || 'kanban'; } catch (_) { return 'kanban'; } })();
   let _filter = '';
   let _editId = null;
   let _menuClose = null;
@@ -21356,7 +21357,7 @@ const OpportunitiesModule = (() => {
   }
 
   function render() {
-    _renderTabs();
+    _renderTabs(); _syncLay();
     const cards = $('opp-cards'), empty = $('opp-empty');
     if (!cards) return;
     const list = _filtered();
@@ -21370,7 +21371,7 @@ const OpportunitiesModule = (() => {
       return;
     }
     if (empty) empty.style.display = 'none';
-    cards.innerHTML = _tableHtml(list);
+    cards.innerHTML = _layout === 'lista' ? _tableHtml(list) : _boardHtml(list);
   }
 
   function _tableHtml(list) {
@@ -21395,6 +21396,46 @@ const OpportunitiesModule = (() => {
         </table>
       </div>`;
   }
+
+  // ── Tablero (kanban) por etapa: vista predeterminada ──
+  const KB_DOT = { aplicacion: '#6B7CFF', preseleccion: '#3B9BFF', entrevista: '#8B5CF6', contrato: '#F59E0B', ganada: '#22C55E', perdida: '#EF4444', archivada: '#B4AFA8' };
+  let _dragId = null;
+  const _kbCols = () => _filter === 'archivada' ? [['archivada', 'Archivadas']] : [...OPP_STAGES.map(([k, l]) => [k, l]), ['ganada', 'Ganadas'], ['perdida', 'Perdidas']];
+  const _colOf = o => { const e = _normEstado(o.estado); return e === 'activa' ? _normStage(o.etapa_actual) : e; };
+  const _ICO_DOTS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+  function _boardHtml(list) {
+    return `<div class="opp-board">${_kbCols().map(([k, l]) => {
+      const items = list.filter(o => _colOf(o) === k);
+      return `<div class="opp-kcol" data-col="${k}" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="OpportunitiesModule.dropTo(event,'${k}')">
+        <div class="opp-kcol__h"><span class="opp-kcol__d" style="background:${KB_DOT[k] || '#B4AFA8'}"></span><b>${esc(l)}</b><span class="opp-kcol__n">${items.length}</span></div>
+        <div class="opp-kcol__b">${items.length ? items.map(_kCardHtml).join('') : '<div class="opp-kcol__e">Sin oportunidades</div>'}</div></div>`;
+    }).join('')}</div>`;
+  }
+  function _kCardHtml(o) {
+    const cli = o.cliente || o.client_nombre || '';
+    const fecha = o.fecha_aplicacion ? new Date(String(o.fecha_aplicacion).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+    const sub = [cli, o.canal].filter(Boolean).map(esc).join(' · ');
+    return `<div class="opp-kc" draggable="true" ondragstart="OpportunitiesModule.dragStart(event,${o.id})" ondragend="OpportunitiesModule.dragEnd()" onclick="OpportunitiesModule.openDetail(${o.id})">
+      <div class="opp-kc__top"><span class="opp-kc__t" title="${esc(o.titulo)}">${esc(o.titulo)}</span><button class="opp-kc__m" title="Opciones" onclick="event.stopPropagation();OpportunitiesModule.openMenu(event,${o.id})">${_ICO_DOTS}</button></div>
+      ${sub ? `<div class="opp-kc__s">${sub}</div>` : ''}
+      <div class="opp-kc__f"><span class="opp-kc__r">${_ICO_PERSON}<span>${esc(o.responsable || 'Sin responsable')}</span></span><span class="opp-kc__dt">${fecha ? esc(fecha) : ''}</span></div></div>`;
+  }
+  function dragStart(ev, id) { _dragId = id; try { ev.dataTransfer.setData('text/plain', String(id)); ev.dataTransfer.effectAllowed = 'move'; } catch (_) {} setTimeout(() => ev.target.classList && ev.target.classList.add('drag'), 0); }
+  function dragEnd() { _dragId = null; document.querySelectorAll('.opp-kc.drag').forEach(e => e.classList.remove('drag')); document.querySelectorAll('.opp-kcol.over').forEach(e => e.classList.remove('over')); }
+  async function dropTo(ev, col) {
+    ev.preventDefault(); const id = _dragId; dragEnd(); if (!id) return;
+    const o = _opps.find(x => x.id === id); if (!o || _colOf(o) === col) return;
+    if (col === 'ganada' || col === 'perdida') return setEstado(id, col);
+    if (col === 'archivada') return;
+    if (_normEstado(o.estado) !== 'activa') await setEstado(id, 'activa');
+    const prevEtapa = o.etapa_actual; o.etapa_actual = col; render();
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities/${id}/etapa`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etapa_actual: col }) });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) { o.etapa_actual = prevEtapa; render(); console.error('[opportunities] dropTo:', e); }
+  }
+  function setLayout(l) { _layout = l; try { localStorage.setItem('opp_layout', l); } catch (_) {} render(); }
+  function _syncLay() { ['kanban', 'lista'].forEach(k => $('opp-lay-' + k)?.classList.toggle('on', _layout === k)); }
 
   function _stageMini(o) {
     const est = _normEstado(o.estado);
@@ -22161,7 +22202,7 @@ const OpportunitiesModule = (() => {
     _detail.links.splice(i, 1); _saveDetail(); _renderDetailBody();
   }
 
-  return { load, render, filter, setFilter, openModal, closeModal, _onClientSel, save, advanceStage, setEstado, openMenu, closeMenu, openStatusMenu, confirmDelete,
+  return { setLayout, dragStart, dragEnd, dropTo, load, render, filter, setFilter, openModal, closeModal, _onClientSel, save, advanceStage, setEstado, openMenu, closeMenu, openStatusMenu, confirmDelete,
     openDetail, closeDetail, setDetailTab, selectStage, setStageEstado, setStageFecha, setStageNotas,
     completarEtapa, moverSiguiente, setDetailEstado, openTaskForm, saveOppTask, setDetailTaskStatus, deleteOppTask,
     abrirProyecto, nuevaTareaDesdeLista,
