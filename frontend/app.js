@@ -17147,6 +17147,7 @@ const CalendarModule = (() => {
   const _cpSave = () => { try { localStorage.setItem('cal_prefs2', JSON.stringify(_cp)); } catch (_) {} };
   let _nDays = (() => { try { return +localStorage.getItem('cal_ndays') || 3; } catch (_) { return 3; } })();
   _view = _cp.view || 'week';
+  try { if (window.matchMedia('(max-width: 720px)').matches && _view === 'week' && !sessionStorage.getItem('cal_mview')) _view = 'day'; } catch (_) {}
 
   // ── vistas: Día · Semana laboral · Semana · Mes · Número de días (+ fines de semana y «en paralelo») ──
   const _VLBL = { day: 'Día', workweek: 'Semana laboral', week: 'Semana', month: 'Mes' };
@@ -17160,7 +17161,7 @@ const CalendarModule = (() => {
       <label class="ag-vm__t"><span>En paralelo</span><input type="checkbox" ${_cp.parallel ? 'checked' : ''} onchange="CalendarModule.agToggle('parallel',this.checked)"><i></i></label></div>`, 'ag-pop--vm',
       p => { const r = a.getBoundingClientRect(); p.style.top = (r.bottom + 6) + 'px'; p.style.left = Math.max(8, Math.min(r.left, innerWidth - 268)) + 'px'; });
   }
-  function agSetView(v) { _agPopClose(); setView(v); }
+  function agSetView(v) { _agPopClose(); try { sessionStorage.setItem('cal_mview', '1'); } catch (_) {} setView(v); }
   function agNDays(n) { _nDays = n; try { localStorage.setItem('cal_ndays', String(n)); } catch (_) {} _agPopClose(); setView('ndays'); }
   function agToggle(k, v) { _cp[k] = !!v; _cpSave(); render(); }
   // eventos que coinciden en el tiempo: lado a lado en vez de encimados

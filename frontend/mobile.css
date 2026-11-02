@@ -211,3 +211,133 @@
   #appShell.home-mode:not(.standalone-users) .app-main { overflow-y: auto !important; padding: 14px 0 28px !important; -webkit-overflow-scrolling: touch; }
   #appShell.home-mode #pane-home, #appShell.home-mode .content-wrap { height: auto !important; min-height: 0 !important; overflow: visible !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Móvil y tablet · segunda pasada (Mi trabajo, Clientes, Oportunidades, Calendario,
+   Time Tracking, Espacios, Chat, paneles flotantes). Idea: en el teléfono cada pantalla
+   muestra LO ESENCIAL en una columna y lo demás se desplaza de lado o va detrás de un toque.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+  /* Mi trabajo: selector de vistas en una sola fila desplazable; filas de tarea que no se salen */
+  #pane-mgmt-mywork *:has(> .mw-views) { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+  #pane-mgmt-mywork .mw-views { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; align-self: stretch; }
+  #pane-mgmt-mywork .mw-views::-webkit-scrollbar { display: none; }
+  #pane-mgmt-mywork .mw-view { flex: none; white-space: nowrap; padding: 8px 12px; }
+  #pane-mgmt-mywork .d3-task-row { flex-wrap: wrap; row-gap: 4px; padding-right: 12px; }
+  #pane-mgmt-mywork .d3-task-body { flex: 1 1 0; min-width: 0; }
+  #pane-mgmt-mywork .d3-task-name { white-space: normal; }
+  #pane-mgmt-mywork .mw-fst, #pane-mgmt-mywork .d3-task-date { order: 6; font-size: .74rem; }
+  #pane-mgmt-mywork .d3-task-date { margin-left: auto; }
+  #pane-mgmt-mywork .d3-openproj-btn, #pane-mgmt-mywork .task-elapsed { display: none; }
+  #pane-mgmt-mywork .mw-fchips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+
+  /* Clientes: contacto + estado; el resto se ve al abrir la ficha */
+  #pane-mgmt-clients .cl-grid { display: flex !important; align-items: center; gap: 10px; }
+  #pane-mgmt-clients .cl-grid > :first-child { flex: 1; min-width: 0; }
+  #pane-mgmt-clients .cl-grid:not(.cl-grid--empresa) > :nth-child(n+2):nth-child(-n+4) { display: none !important; }
+  #pane-mgmt-clients .cl-grid--empresa > :nth-child(n+2):nth-child(-n+3) { display: none !important; }
+  #pane-mgmt-clients .clients-filters { display: flex; flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  #pane-mgmt-clients .filter-pill { flex: none; white-space: nowrap; }
+  #pane-mgmt-clients .pv-toolbar { flex-wrap: wrap; }
+  #pane-mgmt-clients .clients-search-wrap { max-width: 100% !important; flex: 1 1 100% !important; }
+  #pane-mgmt-clients .cl-bcol, #pane-mgmt-clients .cl-board { min-width: 0; }
+
+  /* Oportunidades: título compacto, tablero con columnas a casi todo el ancho y «imán» al desplazar */
+  #pane-mgmt-opportunities .pane-sub { display: none; }
+  #pane-mgmt-opportunities .pane-header__row { align-items: center; }
+  #pane-mgmt-opportunities .opp-tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+  #pane-mgmt-opportunities .opp-tab { flex: none; white-space: nowrap; }
+  .opp-board { grid-auto-columns: 84%; scroll-snap-type: x mandatory; gap: 10px; padding-bottom: 12px; -webkit-overflow-scrolling: touch; }
+  .opp-kcol { scroll-snap-align: start; }
+  .opp-kc__m { opacity: 1; }
+  #pane-mgmt-opportunities .opp-table th:nth-child(2), #pane-mgmt-opportunities .opp-table td:nth-child(2),
+  #pane-mgmt-opportunities .opp-table th:nth-child(3), #pane-mgmt-opportunities .opp-table td:nth-child(3),
+  #pane-mgmt-opportunities .opp-table th:nth-child(5), #pane-mgmt-opportunities .opp-table td:nth-child(5),
+  #pane-mgmt-opportunities .opp-table th:nth-child(7), #pane-mgmt-opportunities .opp-table td:nth-child(7) { display: none; }
+  #pane-mgmt-opportunities .opp-table-wrap { overflow-x: auto; }
+
+  /* Calendario: ajustes y cuadros de creación a todo el ancho */
+  .ag-set { grid-template-columns: 1fr !important; width: 100vw !important; max-width: 100vw !important; min-height: 0 !important; max-height: 92dvh; overflow-y: auto; border-radius: 14px 14px 0 0 !important; }
+  .ag-set__n { flex-direction: row !important; overflow-x: auto; border-right: 0 !important; border-bottom: 1px solid var(--border, #E2E7E3); padding: 10px !important; gap: 4px !important; }
+  .ag-set__t { display: none !important; } .ag-set__i { flex: none; white-space: nowrap; }
+  .ag-set__c { padding: 16px !important; }
+  .ag-sr { flex-direction: column; align-items: stretch !important; gap: 8px !important; } .ag-sel, .ag-inp { width: 100%; min-width: 0 !important; }
+  .ag-pop, .ag-pop--cp, .ag-pop--vm { left: 3vw !important; right: 3vw !important; width: 94vw !important; min-width: 0 !important; max-width: none !important; }
+  .ag-cp__grid { grid-template-columns: 1fr !important; }
+  .ag-cp__dt--2 { flex-wrap: wrap !important; } .ag-cp__dt--2 input[type=date], .ag-cp__dt--2 input[type=time] { width: auto !important; flex: 1 1 110px; }
+
+  /* Time Tracking: pestañas y filtros en una fila que se desplaza */
+  #pane-mgmt-timetracking *:has(> .ts-tab) { display: flex; flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  #pane-mgmt-timetracking .ts-tab { flex: none; white-space: nowrap; }
+  #pane-mgmt-timetracking .ts-filters { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+  #pane-mgmt-timetracking .ts-chip { flex: none; white-space: nowrap; }
+  #pane-mgmt-timetracking .tsh-bar { flex-wrap: wrap; gap: 8px; }
+
+  /* Espacios: el árbol es una barra compacta que se despliega con un toque (no ocupa media pantalla) */
+  #pane-mgmt-spaces .sp-tree { width: 100% !important; max-width: none !important; max-height: 56px; overflow: hidden; border-right: 0 !important; border-bottom: 1px solid var(--border, #E2E7E3); transition: max-height .2s; }
+  #pane-mgmt-spaces .sp-tree.is-open { max-height: 62dvh; overflow-y: auto; box-shadow: 0 10px 24px rgba(16,24,20,.12); position: relative; z-index: 20; background: #fff; }
+  #pane-mgmt-spaces .sp-tree__h { cursor: pointer; }
+  #pane-mgmt-spaces .sp-tree__h::after { content: ''; width: 8px; height: 8px; margin-left: 8px; border-right: 2px solid var(--text-muted, #8B9690); border-bottom: 2px solid var(--text-muted, #8B9690); transform: rotate(45deg); flex: none; transition: transform .2s; }
+  #pane-mgmt-spaces .sp-tree.is-open .sp-tree__h::after { transform: rotate(-135deg); }
+  #pane-mgmt-spaces .sp-main { width: 100% !important; min-width: 0; }
+
+  /* Chat: acciones del encabezado en una fila arriba a la derecha; cuadro de mensaje y vistas a todo el ancho */
+  .chat-actrail { top: 8px; right: 8px; flex-direction: row; padding: 2px; background: transparent; border: 0; box-shadow: none; }
+  .chat-actrail .chat-hdr-btn { width: 36px; height: 36px; }
+  .chat-actrail .chat-hdr-btn--count { flex-direction: row; min-height: 36px; width: auto; padding: 0 8px; gap: 4px; }
+  #chat-messages, .chat-vpanel { padding-right: 14px; }
+  .chat-vtabs { overflow-x: auto; scrollbar-width: none; padding: 0 8px; } .chat-vtab { flex: none; }
+  .slk-vh { flex-wrap: wrap; } .slk-vh__a { margin-left: 0; width: 100%; } .slk-vrow__s { display: none; }
+  .slk-emb__comp--v2 { padding: 8px 8px 12px; }
+
+  /* Paneles flotantes de la barra superior: a lo ancho de la pantalla */
+  .npd { left: 8px !important; right: 8px !important; width: auto !important; top: 56px !important; height: min(72dvh, 560px); max-height: calc(100dvh - 70px); }
+  .npd--wide { height: calc(100dvh - 70px); }
+  .npd__acts { display: inline-flex !important; } .npd__row:hover .npd__acts { display: inline-flex; } .npd__acts button { width: 30px; height: 30px; }
+  .wcl-panel { left: 0 !important; right: 0 !important; width: 100vw !important; max-width: 100vw !important; }
+
+  /* Outreach: engranaje y botón de criterios no tapan el título */
+  .lm2-pill span { display: none; } .lm2-pill { padding: 0 9px; }
+  .lm-back { margin-bottom: 6px; }
+}
+
+/* Tablet (721–1024): menos columnas fijas, más aire en lo que ya cabe */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .cal2sb, .cal2sb--ag { width: 240px !important; }
+  .chat-sidebar { width: 250px; }
+  .chat-actrail { right: 8px; }
+  .npd { width: 380px; }
+  .opp-board { grid-auto-columns: minmax(220px, 1fr); }
+  #pane-mgmt-clients .cl-grid:not(.cl-grid--empresa) > .client-col--phone, #pane-mgmt-clients #clients-thead > :nth-child(3) { display: none; }
+  .ag-set { width: 94vw; }
+}
+
+@media (max-width: 720px) {
+  #pane-mgmt-clients .cl-grid > * { padding-left: 8px !important; padding-right: 8px !important; }
+  #pane-mgmt-clients .client-col--actions, #pane-mgmt-clients .cl-cell-actions { display: none !important; }
+  #pane-mgmt-clients .client-nombre { white-space: normal; }
+  #pane-mgmt-clients .client-col--status { flex: none; }
+  #pane-mgmt-mywork .d3-task-body { flex: 1 0 calc(100% - 112px); }
+  #pane-mgmt-mywork .mw-fst { margin-left: 40px; }
+}
+
+/* Calendario (móvil): cabecera compacta y la vista Día usa todo el ancho (el detalle vacío no ocupa lugar) */
+@media (max-width: 720px) {
+  .cal2m__bar { flex-wrap: wrap !important; gap: 6px 8px !important; padding: 10px 12px !important; align-items: center; }
+  .cal2m__title b { font-size: 1.15rem !important; } .cal2m__dow { display: none !important; }
+  .cal2m__seg--v { margin: 0 0 0 auto !important; }
+  .cal2m__right { width: 100%; flex-wrap: nowrap !important; justify-content: space-between; gap: 6px !important; overflow-x: auto; scrollbar-width: none; }
+  .cal2m__sel { max-width: 130px; min-width: 0; } .cal2m__gc { flex: none; padding: 0 8px; }
+  .cal2d { flex-direction: column !important; }
+  .cal2d__side { width: 100% !important; max-width: none !important; order: 2; border-left: 0 !important; border-top: 1px solid var(--border, #E2E7E3); }
+  .cal2d__side:has(.cal2det--empty) { display: none; }
+  .cal2d > :first-child { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 720px) {
+  .ts-top { flex-wrap: nowrap !important; align-items: center; } .ts-ttl, .ts-btn { white-space: nowrap; flex: none; } .ts-sep { display: none; }
+}
+
+@media (max-width: 720px) {
+  .npd__acts button:nth-child(1), .npd__acts button:nth-child(3) { display: none; }
+}

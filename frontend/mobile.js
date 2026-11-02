@@ -59,3 +59,11 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+// Espacios (móvil): el árbol de espacios es una barra compacta; un toque en su cabecera lo despliega y elegir algo lo vuelve a plegar.
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('.sp-tree'); if (!t || !window.matchMedia('(max-width: 720px)').matches) return;
+  if (e.target.closest('.sp-hb, .sp-add, button, input')) { if (e.target.closest('.sp-add, .sp-hb')) t.classList.add('is-open'); return; }
+  if (e.target.closest('.sp-tree__h')) { t.classList.toggle('is-open'); return; }
+  if (e.target.closest('.sp-all, .sp-pj')) setTimeout(() => t.classList.remove('is-open'), 60);
+}, true);
