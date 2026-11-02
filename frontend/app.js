@@ -8383,7 +8383,7 @@ const CanteraModule = (() => {
     const done = v => { m.remove(); resolve(v); };
     m.onclick = e => { if (e.target === m) done(null); };
     const n = info.empresasSinPrioridad, k = info.contactosSinPrioridad;
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:480px">
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>No has asignado prioridad</h3><button class="fin-pi-x" id="cant-sp-x">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
         <p class="cant-hint" style="margin:0"><b>${n} empresa(s)</b> no tienen ningún contacto con prioridad (suman ${k} contacto(s)). Sin prioridad no se sabe a quién escribir primero. ¿Qué quieres hacer con ellas?</p>
@@ -8520,7 +8520,7 @@ const CanteraModule = (() => {
     const m = document.createElement('div'); m.id = 'cant-seq-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeSendSeq(); };
     const prioChk = (n) => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="cant-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeSendSeq()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez en la secuencia.</p>
@@ -8536,14 +8536,6 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" id="cant-sq-go" onclick="CanteraModule.doSendSeq()">Enviar</button>
       </div></div></div>`;
     document.body.appendChild(m);
-    // Aviso en la propia ventana: cuántas de las empresas marcadas no tienen ningún contacto con prioridad
-    apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dry: true, company_ids: [..._coSel] }) })
-      .then(r => r.ok ? r.json() : null).then(iv => {
-        const body = m.querySelector('.flt-body'); if (!iv || !body || !iv.empresasSinPrioridad) return;
-        const w = document.createElement('div'); w.id = 'cant-sq-warn'; w.className = 'cant-sq-warn';
-        w.innerHTML = `<b>${iv.empresasSinPrioridad} de ${iv.empresas} empresa(s) no tienen ningún contacto con prioridad</b> (${iv.contactosSinPrioridad} contacto(s)). Al pulsar Enviar te preguntaré si las cargo solo como empresas o con todos sus contactos, sin orden.`;
-        body.appendChild(w);
-      }).catch(() => {});
     document.getElementById('cant-sq-client').innerHTML = '<option value="">— elegir —</option>' + clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
     _cantCascade.init('cant-sq', { campanas, secuencias, camp: _current.campaign_id, seq: _current.sequence_id, campPh: 'Sin campaña', seqPh: '— elegir —' });
   }
@@ -9180,7 +9172,7 @@ const CanteraMesaModule = (() => {
     const m = document.createElement('div'); m.id = 'mesa-seq-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
     const prioChk = n => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="mesa-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-seq-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez.</p>
