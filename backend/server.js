@@ -10809,8 +10809,8 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
   const campaignId = b.campaign_id ? parseInt(b.campaign_id) : null;
   const prioridades = Array.isArray(b.prioridades) ? b.prioridades.map(Number).filter(n => n > 0) : [];
   if (!companyIds.length) return res.status(400).json({ error: 'Selecciona al menos una empresa' });
-  if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
-  if (!sequenceId) return res.status(400).json({ error: 'Elige una secuencia' });
+  if (!b.dry && !outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
+  if (!b.dry && !sequenceId) return res.status(400).json({ error: 'Elige una secuencia' });
 
   // Revisión previa (sin tocar nada): cuántas de las empresas elegidas no tienen NINGÚN contacto con prioridad asignada
   if (b.dry) {

@@ -8536,6 +8536,14 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" id="cant-sq-go" onclick="CanteraModule.doSendSeq()">Enviar</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    // Aviso en la propia ventana: cuántas de las empresas marcadas no tienen ningún contacto con prioridad
+    apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dry: true, company_ids: [..._coSel] }) })
+      .then(r => r.ok ? r.json() : null).then(iv => {
+        const body = m.querySelector('.flt-body'); if (!iv || !body || !iv.empresasSinPrioridad) return;
+        const w = document.createElement('div'); w.id = 'cant-sq-warn'; w.className = 'cant-sq-warn';
+        w.innerHTML = `<b>${iv.empresasSinPrioridad} de ${iv.empresas} empresa(s) no tienen ningún contacto con prioridad</b> (${iv.contactosSinPrioridad} contacto(s)). Al pulsar Enviar te preguntaré si las cargo solo como empresas o con todos sus contactos, sin orden.`;
+        body.appendChild(w);
+      }).catch(() => {});
     document.getElementById('cant-sq-client').innerHTML = '<option value="">— elegir —</option>' + clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
     _cantCascade.init('cant-sq', { campanas, secuencias, camp: _current.campaign_id, seq: _current.sequence_id, campPh: 'Sin campaña', seqPh: '— elegir —' });
   }
