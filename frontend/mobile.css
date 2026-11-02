@@ -381,3 +381,56 @@
   .opp-kc__t { font-size: .95rem !important; -webkit-line-clamp: 3; }
 }
 @media (max-width: 720px) { .opp-board { align-items: stretch !important; } .opp-kcol { width: 100% !important; min-width: 0 !important; flex: none; } .opp-kc { width: 100%; box-sizing: border-box; } }
+
+/* ═══ Teléfono · tercera pasada (recorrido sección por sección a 360 px): nada se sale del ancho ═══ */
+@media (max-width: 720px) {
+  /* Dashboard de Operaciones: una sola columna que de verdad cabe */
+  #pane-mgmt-dashboard .d3-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+  #pane-mgmt-dashboard .d3-grid > *, #pane-mgmt-dashboard .d3-hero, #pane-mgmt-dashboard .d3-revcard, #pane-mgmt-dashboard .d3-actcard, #pane-mgmt-dashboard .d3-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  #pane-mgmt-dashboard .d3-act-timer, #pane-mgmt-dashboard .d3-act-statsrow { min-width: 0; }
+  #pane-mgmt-dashboard .d3-hrs-metrics, #pane-mgmt-dashboard .d3-act-statsrow { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px 12px !important; }
+  #pane-mgmt-dashboard .d3-hrs-metric__v { font-size: 1.05rem; white-space: normal; }
+  #pane-mgmt-dashboard .d3-hrs-btn { width: 100%; box-sizing: border-box; }
+  #pane-mgmt-dashboard .d3-card-header { flex-wrap: wrap; gap: 6px 10px; }
+  #pane-mgmt-dashboard .d3-card-title { white-space: normal; flex: 1 1 auto; min-width: 0; }
+  #pane-mgmt-dashboard .d3-task-row { flex-wrap: wrap; row-gap: 4px; }
+  #pane-mgmt-dashboard .d3-task-body { flex: 1 0 calc(100% - 112px); min-width: 0; }
+  #pane-mgmt-dashboard .d3-task-name { white-space: normal; }
+  #pane-mgmt-dashboard .d3-task-date { order: 6; margin-left: 40px; font-size: .74rem; }
+  #pane-mgmt-dashboard .d3-openproj-btn, #pane-mgmt-dashboard .task-elapsed { display: none; }
+  #pane-mgmt-dashboard .d3-tasks-scroll { max-height: none; }
+
+  /* Espacios: barra de la vista */
+  #pane-mgmt-spaces .sp-bar { flex-wrap: wrap; gap: 8px; } #pane-mgmt-spaces .sp-bar__r { flex-wrap: wrap; width: 100%; }
+
+  /* Oportunidades: título y botón caben en una fila */
+  #pane-mgmt-opportunities .pane-title { font-size: 1.25rem; } #pane-mgmt-opportunities .pane-header__row .btn { padding: 0 10px; white-space: nowrap; }
+
+  /* Outreach: paneles que no se pasan del ancho */
+  #lm2-body, #lm2-body > * { max-width: 100%; min-width: 0; }
+  #lm2-body .cp-card { max-width: 100%; min-width: 0; overflow-x: auto; }
+  #lm2-body .rep-kpis, #lm2-body [class*="kpis"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #lm2-body .form-input, #lm2-body textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+  #lm2-body .lm-wa-host { max-width: 100%; overflow: hidden; }
+  /* Tableros por estado (Clientes, Outreach): secciones apiladas en vez de columnas laterales */
+  .cl-board { display: flex !important; flex-direction: column !important; overflow: visible !important; gap: 12px !important; }
+  .cl-bcol { width: 100% !important; min-width: 0 !important; max-width: 100% !important; flex: none; }
+}
+
+@media (max-width: 720px) {
+  #pane-mgmt-dashboard .d3-actcard { min-height: 0 !important; height: auto !important; }
+  #pane-mgmt-dashboard .d3-act-timer { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 14px !important; border-left: 0 !important; padding-left: 0 !important; }
+  #pane-mgmt-dashboard .d3-act-statsrow { width: 100%; }
+  #pane-mgmt-dashboard .d3-hrs-metric__l { white-space: normal; font-size: .76rem; }
+  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: nowrap; font-size: 1.1rem; }
+}
+
+@media (max-width: 720px) {
+  /* Kanban (Mi trabajo, Espacios): secciones apiladas por estado, no columnas laterales */
+  .kanban-board { display: flex !important; flex-direction: column !important; overflow: visible !important; gap: 12px !important; height: auto !important; }
+  .kanban-col { width: 100% !important; min-width: 0 !important; max-width: 100% !important; flex: none !important; height: auto !important; max-height: none !important; }
+  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: normal; font-size: 1rem; }
+  #pane-mgmt-dashboard .d3-actcard > * { flex: none; }
+  #pane-mgmt-dashboard .d3-act-timer ~ * { margin-top: 0; }
+}
+@media (max-width: 720px) { .kanban-col:has(.kanban-empty) { display: none !important; } .kanban-cards { min-height: 0 !important; } }
