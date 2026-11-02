@@ -46588,7 +46588,7 @@ const ChatModule = (() => {
 
   function autoResize(el) {
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.5), 420) + 'px';
   }
 
   function onInputChange(el) {
