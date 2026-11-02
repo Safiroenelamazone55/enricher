@@ -40497,11 +40497,25 @@ const SlackChat = (() => {
     document.body.appendChild(m);
     setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
   }
+  // Selector de espacios de Slack sobre el nombre del espacio activo
+  function wsMenu(ev) {
+    ev.stopPropagation(); document.getElementById('slk-wsmenu')?.remove();
+    const a = ev.currentTarget.getBoundingClientRect(), m = document.createElement('div'); m.id = 'slk-wsmenu'; m.className = 'slk-vmenu slk-wsmenu';
+    const ini = t => (String(t || '?').trim()[0] || '?').toUpperCase();
+    m.innerHTML = `<div class="slk-vmenu__t">Espacios de Slack</div>` + (_ws.length ? _ws.map(w => {
+      const nm = w.etiqueta || w.team_name || 'Slack', act = String(_wsAct) === String(w.id), n = _nlPorWs[w.id] || 0;
+      return `<button type="button" class="slk-vmenu__b slk-wsmenu__i${act ? ' on' : ''}" onclick="document.getElementById('slk-wsmenu')?.remove();SlackChat.irA(${w.id})">${w.icon_url ? `<img class="slk-wsmenu__ico" src="${esc(w.icon_url)}" alt="">` : `<span class="slk-wsmenu__ico slk-wsmenu__ico--t">${esc(ini(nm))}</span>`}<span class="slk-wsmenu__n">${esc(nm)}</span>${n ? `<span class="slk-wsmenu__b">${n > 99 ? '99+' : n}</span>` : ''}${act ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
+    }).join('') : '<div class="slk-vmenu__t">No hay espacios conectados</div>')
+      + `<div class="slk-vmenu__s"></div><button type="button" class="slk-vmenu__b" onclick="document.getElementById('slk-wsmenu')?.remove();WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('integraciones'),60)"><span class="slk-wsmenu__ico slk-wsmenu__ico--t">+</span><span class="slk-wsmenu__n">Conectar otro Slack</span></button>`;
+    m.style.top = (a.bottom + 6) + 'px'; m.style.left = Math.max(8, a.left) + 'px';
+    document.body.appendChild(m);
+    setTimeout(() => document.addEventListener('mousedown', function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', h); } }), 0);
+  }
   // Los iconos del encabezado (llamar, buscar, favorito, fijados, miembros) pasan a una columna a la derecha
-  function _riel() {
+  function _rielAcc() {
     const main = document.querySelector('.chat-main'), acts = document.querySelector('.chat-main__header-actions');
     if (!main || !acts || acts.parentElement === main) return;
-    acts.classList.add('chat-rail'); main.appendChild(acts);
+    acts.classList.add('chat-actrail'); main.appendChild(acts);
     const call = $$('chat-hdr-call-btn'); if (call) acts.insertBefore(call, acts.firstChild);
   }
   async function _datosV() {
@@ -40557,7 +40571,7 @@ const SlackChat = (() => {
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '', is_im: !!c.is_im, user: c.user || null };
     _hilo = null;
     if (_vista !== 'chat') setVista('chat'); else _pintaVistas();
-    _riel();
+    _rielAcc();
     // Un hilo es de UN canal — al saltar a otro se cierra el panel (mismo motivo
     // por el que _hilo se limpia arriba) y el composer vuelve a su lugar normal.
     $$('chat-thread')?.classList.add('hidden');
@@ -42044,7 +42058,7 @@ const SlackChat = (() => {
     setTimeout(async () => { try { await load(); await irA(_E.ws); await abrir(_E.canal); } catch (_) {} }, 450);
   }
 
-  return { embedMas, embedFmt, embedEmoji, embedMencion, embedReunion, embedAdjuntar, embedPaste, embedMic, embedQuitarArchivo, _embedIns, mas, setVista, vistaMenu, vistaToggle, iniciarLlamada, embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
+  return { wsMenu, embedMas, embedFmt, embedEmoji, embedMencion, embedReunion, embedAdjuntar, embedPaste, embedMic, embedQuitarArchivo, _embedIns, mas, setVista, vistaMenu, vistaToggle, iniciarLlamada, embed, embedStop, embedDraft, embedEnviar, embedAbrir, load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,

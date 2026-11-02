@@ -20198,9 +20198,9 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 
 /* Chat · columna lateral de acciones y barra del cuadro de mensaje estilo ClickUp */
 .chat-main { position: relative; }
-.chat-rail { position: absolute; top: 112px; right: 14px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: 0 1px 3px rgba(16,24,20,.06); }
-.chat-rail .chat-hdr-btn { width: 32px; height: 32px; margin: 0; flex-direction: column; }
-.chat-rail .chat-hdr-btn--count { height: auto; min-height: 32px; padding: 6px 0 4px; font-size: .68rem; gap: 1px; }
+.chat-actrail { position: absolute; top: 112px; right: 14px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: 0 1px 3px rgba(16,24,20,.06); }
+.chat-actrail .chat-hdr-btn { width: 32px; height: 32px; margin: 0; flex-direction: column; }
+.chat-actrail .chat-hdr-btn--count { height: auto; min-height: 32px; padding: 6px 0 4px; font-size: .68rem; gap: 1px; }
 #chat-messages, .chat-vpanel { padding-right: 64px; box-sizing: border-box; }
 #chat-composer-group .chat-composer__toolbar, .slk-emb .chat-composer__toolbar { gap: 4px; padding: 4px 12px 10px; }
 .chat-composer__sp { flex: 1; }
@@ -20298,3 +20298,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .slk-emb__comp--v2 .chat-tool-btn svg { width: 18px; height: 18px; }
 .slk-emb__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin: 0 0 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--border, #E2E7E3); border-radius: 10px; background: var(--surface-secondary, #F7F8F6); font-size: .82rem; } .slk-emb__fn { font-weight: 600; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .slk-emb__file small { color: var(--text-muted, #8B9690); } .slk-emb__file button { width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; font-size: 1rem; line-height: 1; color: var(--text-secondary, #5F6B64); cursor: pointer; } .slk-emb__file button:hover { background: var(--surface-hover, #EEF0EE); }
 #slk-emb-rec.grabando { color: #D92D20; }
+
+/* Chat · selector de espacios de Slack en el nombre */
+.chat-ws-name--btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 8px 4px 0; margin: -4px 0; border-radius: 8px; cursor: pointer; font: inherit; font-size: .95rem; font-weight: 600; color: var(--text-primary, #14211B); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-ws-name--btn::after { content: ''; flex: none; width: 7px; height: 7px; margin-left: 2px; border-right: 1.6px solid var(--text-muted, #8B9690); border-bottom: 1.6px solid var(--text-muted, #8B9690); transform: rotate(45deg) translateY(-2px); }
+.chat-ws-name--btn:hover { color: var(--primary, #007AFF); }
+.slk-wsmenu { width: 250px; z-index: 100000; } .slk-vmenu__s { height: 1px; margin: 6px 4px; background: var(--border, #E2E7E3); }
+.slk-wsmenu__i.on { background: var(--primary-soft, #E6F0FF); font-weight: 600; } .slk-wsmenu__n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slk-wsmenu__ico { flex: none; width: 24px; height: 24px; border-radius: 6px; object-fit: cover; } .slk-wsmenu__ico--t { display: inline-flex; align-items: center; justify-content: center; background: var(--surface-hover, #EEF0EE); color: var(--text-secondary, #5F6B64); font-size: .78rem; font-weight: 700; }
+.slk-wsmenu__b { flex: none; min-width: 20px; padding: 1px 7px; border-radius: 99px; background: #E5372B; color: #fff; font-size: .7rem; font-weight: 600; text-align: center; }
