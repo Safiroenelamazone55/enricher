@@ -6638,7 +6638,7 @@ const CanteraModule = (() => {
   let _fk = null;
   async function openFicha(id) {
     closeFicha();
-    const m = document.createElement('div'); m.id = 'cant-ficha'; m.className = 'cfi'; m.onclick = ev => { if (ev.target === m) closeFicha(); };
+    const m = document.createElement('div'); m.id = 'cant-ficha'; m.className = 'cfi cfi--' + _fLay(); m.onclick = ev => { if (ev.target === m) closeFicha(); };
     m.innerHTML = '<div class="cfi__box"><div class="cfi__load">Cargando ficha…</div></div>'; document.body.appendChild(m);
     try {
       const r = await apiFetch(`${API}/cantera/contacts/${id}`); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
@@ -6656,6 +6656,7 @@ const CanteraModule = (() => {
       <div class="cfi__band cfi__band--${inCrm ? 'crm' : 'cant'}">${inCrm ? '✓ Este contacto ya está en el CRM · lo que cambies aquí se actualiza también allá' : '◔ Contacto en CANTERA · todavía no se ha enviado al CRM'}<span>Borrador: ${esc(k.borrador || '')}</span></div>
       <div class="cfi__hd"><div class="cfi__av">${esc(ini.trim() || '?')}</div><div class="cfi__id"><div class="cfi__name">${esc(nm)}</div><div class="cfi__sub">${esc(k.cargo || 'Sin cargo')}${k.empresa ? ' · ' + (web ? `<a href="${esc(web)}" target="_blank" rel="noopener">${esc(k.empresa)}</a>` : esc(k.empresa)) : ''}</div></div>
         <div class="cfi__lk">${fx(k.linkedin) ? `<a href="${esc(fx(k.linkedin))}" target="_blank" rel="noopener" title="Abrir LinkedIn">LinkedIn ↗</a>` : ''}${fx(k.linkedin_sales_nav) ? `<a href="${esc(fx(k.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir Sales Navigator">Sales Navigator ↗</a>` : ''}</div>
+        <button class="cfi__x cfi__lay" onclick="CanteraModule.fichaLayoutMenu(event)" title="Cambiar cómo se ve esta ventana"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
         <button class="cfi__x" onclick="CanteraModule.closeFicha()" title="Cerrar">×</button></div>
       <div class="cfi__bd"><h4>Datos del contacto <small>edítalos aquí: se guardan en Cantera${inCrm ? ' y en el CRM' : ' y viajarán al CRM cuando lo muevas'}</small></h4>
         <div class="cfi__g">${fld('nombre', 'Nombre')}${fld('apellido', 'Apellido')}${fld('cargo', 'Cargo', '', true)}${fld('email', 'Email')}${fld('idioma', 'Idioma', 'es, en, it…')}${fld('ciudad', 'Ciudad')}${fld('pais', 'País')}${fld('linkedin', 'LinkedIn (URL)', '', true)}${fld('linkedin_sales_nav', 'Sales Navigator (URL)', '', true)}</div>
@@ -6676,6 +6677,34 @@ const CanteraModule = (() => {
       if (_orphans) _orphans = _orphans.filter(c => c.id !== id);
       _cargoRepaint(); _orphRepaint(); _orphRefreshQuiet();
     } catch (e) { showBanner('No se pudo eliminar: ' + e.message, 'error'); }
+  }
+  async function cargoDelContact(id) {
+    let x = null; Object.values(_cargoCt).forEach(l => (l || []).forEach(y => { if (y.id === id) x = y; }));
+    const nom = x ? ([x.nombre, x.apellido].filter(Boolean).join(' ') || 'este contacto') : 'este contacto';
+    if (!confirm(`¿Eliminar a ${nom} del borrador? No se puede deshacer.`)) return;
+    try {
+      const r = await apiFetch(`${API}/cantera/contacts/${id}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner('✓ Contacto eliminado', 'success');
+      Object.keys(_cargoCt).forEach(k => { _cargoCt[k] = (_cargoCt[k] || []).filter(y => y.id !== id); });
+      if (_orphans) _orphans = _orphans.filter(y => y.id !== id);
+      _cargoRepaint(); _orphRepaint(); _orphRefreshQuiet();
+    } catch (e) { showBanner('No se pudo eliminar: ' + e.message, 'error'); }
+  }
+  // Ficha del contacto: se muestra como barra lateral, cuadro de diálogo o pantalla completa (igual que la tarea); la elección se recuerda
+  const _fLay = () => { try { const v = localStorage.getItem('nova_ficha_layout'); return (v === 'full' || v === 'dialog' || v === 'side') ? v : 'side'; } catch (_) { return 'side'; } };
+  function fichaLayoutMenu(ev) {
+    ev.stopPropagation(); const old = document.getElementById('cfi-lay'); if (old) { old.remove(); return; }
+    const cur = _fLay(), o = (k, l) => `<button type="button" class="tkx-lay__o${cur === k ? ' on' : ''}" onclick="CanteraModule.fichaLayout('${k}')"><span class="tkx-lay__d tkx-lay__d--${k}"><i></i></span><span>${l}</span></button>`;
+    const p = document.createElement('div'); p.id = 'cfi-lay'; p.className = 'tkx-pop'; p.innerHTML = `<div class="tkx-lay">${o('dialog', 'Cuadro de diálogo')}${o('full', 'Pantalla completa')}${o('side', 'Barra lateral')}</div>`;
+    document.body.appendChild(p); p.style.zIndex = 9900;
+    const r = ev.currentTarget.getBoundingClientRect(); p.style.left = Math.max(8, Math.min(r.right - p.offsetWidth, innerWidth - p.offsetWidth - 8)) + 'px'; p.style.top = (r.bottom + 6) + 'px';
+    const off = e2 => { if (!p.contains(e2.target)) { p.remove(); document.removeEventListener('mousedown', off, true); } }; setTimeout(() => document.addEventListener('mousedown', off, true), 0);
+  }
+  function fichaLayout(k) {
+    try { localStorage.setItem('nova_ficha_layout', k); } catch (_) {}
+    const p = document.getElementById('cfi-lay'); if (p) p.remove();
+    const m = document.getElementById('cant-ficha'); if (m) m.className = 'cfi cfi--' + k;
   }
   async function saveFicha() {
     if (!_fk) return; const body = {}, cargoAntes = _fk.cargo || '';
@@ -6740,11 +6769,12 @@ const CanteraModule = (() => {
       const L2 = _cargoCt[c.key]; if (!L2) return '<div class="cgd"><div class="cant-hint" style="margin:6px 0">Cargando contactos…</div></div>';
       const lnk = (u, txt, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(t)}">${txt}</a>` : txt;
       return `<div class="cgd"><div class="cgd__bar"><span>${L2.length} contacto(s) · toca un nombre, empresa, web o icono para abrirlo</span></div>
-        <div class="cgd__w"><table class="cgd__t"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th></tr></thead><tbody>
+        <div class="cgd__w"><table class="cgd__t"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cargo</th><th>Web</th><th>LinkedIn</th><th></th></tr></thead><tbody>
         ${L2.map(x => { const li = fx(x.linkedin), sn = fx(x.linkedin_sales_nav), web = String(x.website || x.dominio || '').trim(), wu = fx(web), nm = esc([x.nombre, x.apellido].filter(Boolean).join(' ') || '—');
           return `<tr><td class="cgd__n"><button type="button" class="cgd__go" title="Abrir la ficha del contacto" onclick="CanteraModule.openFicha(${x.id})">→</button>${lnk(li || sn, nm, li ? 'Abrir LinkedIn' : 'Abrir Sales Navigator')}</td><td>${lnk(wu, esc(x.empresa || '—'), 'Abrir la web de la empresa')}</td><td>${esc(x.cargo || '—')}</td>
             <td>${web ? `<a href="${esc(wu)}" target="_blank" rel="noopener">${esc(web.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))}</a>` : '<span class="cgd__d">—</span>'}</td>
-            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td></tr>`; }).join('')}
+            <td class="cgd__l">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn">${IN}</a>` : ''}${sn ? `<a href="${esc(sn)}" target="_blank" rel="noopener" title="Abrir Sales Navigator">${SN}</a>` : ''}${!li && !sn ? '<span class="cgd__d">—</span>' : ''}</td>
+            <td class="cgd__x"><button type="button" class="cgd__del" title="Eliminar este contacto (no sirve)" aria-label="Eliminar contacto" onclick="CanteraModule.cargoDelContact(${x.id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14M10 11v6M14 11v6"/></svg></button></td></tr>`; }).join('')}
         </tbody></table></div></div>`;
     };
     const row = i => { const c = L[i], r = _cargoRanks[c.key] || '', open = _cargoOpen.has(c.key);
@@ -8507,7 +8537,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, deleteFicha, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, exportExcel, openFicha, closeFicha, saveFicha, deleteFicha, cargoDelContact, fichaLayoutMenu, fichaLayout, cargoSearch, cargoToggle, cargoSel, cargoSelAll, cargoCopy, cargoRank, cargoApply, cargoClear, orphSearch, orphPick, orphCreate, orphDel, impAliasSearch, impAliasPick, impAliasSug, impAliasClear, impAliasSave, impCrearFaltantes, impSetMode, impSetTipo, scopeCascade, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runCleanCargos, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,

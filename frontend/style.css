@@ -20501,3 +20501,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cn-men{color:#007AFF;background:#EEF4FF;border-radius:4px;padding:0 3px}
 .cn-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
 .cn-empty{padding:22px 8px;text-align:center;font-size:13px;color:#8A948E}
+/* Ficha del contacto de Cantera: tres formas de verla */
+.cfi--dialog{justify-content:center;align-items:center}
+.cfi--dialog .cfi__box{width:min(760px,94vw);height:auto;max-height:90vh;border-radius:14px;box-shadow:0 20px 60px rgba(20,33,27,.28)}
+.cfi--full{justify-content:stretch;align-items:stretch;background:#fff}.cfi--full .cfi__box{width:100vw;height:100vh;box-shadow:none}
+.cfi--full .cfi__bd,.cfi--full .cfi__hd{max-width:1100px;width:100%;margin-left:auto;margin-right:auto;box-sizing:border-box}
+.cfi__lay{display:inline-flex;align-items:center;justify-content:center}
+.cgd__x{width:34px;text-align:center}
+.cgd__del{border:0;background:none;color:#9AA39E;cursor:pointer;padding:5px;border-radius:7px;display:inline-flex}
+.cgd__del:hover{background:#FDECEC;color:#D12F34}
