@@ -345,6 +345,7 @@ function requireAuth(req, res, next) {
 const permsSvc = require('./services/permissions').mount(app, { pool, requireAuth });
 require('./services/homeRoutes').mount(app, { pool, requireAuth, permsSvc });
 require('./services/fieldsRoutes').mount(app, { pool, requireAuth });   // estados y campos personalizados por proyecto + plantilla «Adquisición comercial»
+require('./services/canteraNotas').mount(app, { pool, requireAuth });
 require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // enlaces y relaciones/dependencias entre tareas
 require('./services/timesheetRoutes').mount(app, { pool, requireAuth });   // hojas de horas: cronograma de trabajo, equipo por semana, aprobaciones
 require('./services/notepadRoutes').mount(app, { pool, requireAuth });   // bloc de notas personal (barra superior)

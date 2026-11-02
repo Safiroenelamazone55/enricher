@@ -6302,6 +6302,7 @@ const CanteraModule = (() => {
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
         <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
+        <button class="cant-step${_step === 8 ? ' on' : ''}" onclick="CanteraModule.setStep(8)">Notas${_nt && _nt.items && _nt.items.filter(x => x.tipo === 'bloqueo' && !x.resuelto).length ? ' <span class="cn-dot" title="Bloqueos sin resolver"></span>' : ''}</button>
         <button class="cant-step${_step === 7 ? ' on' : ''}" onclick="CanteraModule.setStep(7)">Configuración</button>
         ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
       </div>
@@ -6517,7 +6518,8 @@ const CanteraModule = (() => {
         ${_cantPagerHtml(filteredCompanies.length)}
       </div>` : ''}
       ${_step === 5 ? _infoHtml(calificadas) : ''}
-      ${_step === 7 ? _configHtml() : ''}`;
+      ${_step === 7 ? _configHtml() : ''}
+      ${_step === 8 ? _notasHtml() : ''}`;
   }
   // Paso 5 · Información — pedido explícito 2026-09-06: "quiero que agregues
   // algo que tenga que ver con información... si agregaron tantos prospectos,
@@ -6888,7 +6890,104 @@ const CanteraModule = (() => {
       ${nav(1, _cantPageIdx >= pages - 1, '›')}
     </div>`;
   }
-  function setStep(n) { _step = n; _paint(); }
+  function setStep(n) { _step = n; _paint(); if (n === 8) _ntLoad(); }
+
+  // ── Notas del borrador: documento libre + hilo de comentarios / notas / bloqueos con etiquetas ──
+  let _nt = null, _ntTipo = 'comentario', _ntTags = [], _ntFiltro = 'todo', _ntTimer = null, _ntFor = null;
+  const _NT_T = { comentario: ['Comentario', '#007AFF', '#EEF4FF'], nota: ['Nota', '#B88700', '#FFF6DB'], bloqueo: ['Bloqueo', '#D12F34', '#FDECEC'] };
+  const _ntAgo = iso => { const m = Math.max(0, (Date.now() - new Date(iso)) / 60000); return m < 1 ? 'ahora' : m < 60 ? 'hace ' + Math.floor(m) + ' min' : m < 1440 ? 'hace ' + Math.floor(m / 60) + ' h' : 'hace ' + Math.floor(m / 1440) + ' d'; };
+  function _ntClean(h) {
+    const ok = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'H3', 'UL', 'OL', 'LI', 'A', 'BR', 'DIV', 'P', 'SPAN']);
+    const d = new DOMParser().parseFromString('<body>' + String(h || '') + '</body>', 'text/html').body;
+    (function walk(n) { [...n.childNodes].forEach(ch => { if (ch.nodeType === 1) { if (!ok.has(ch.tagName)) { ch.replaceWith(document.createTextNode(ch.textContent)); return; } [...ch.attributes].forEach(a => { if (!(ch.tagName === 'A' && a.name === 'href' && /^https?:/i.test(a.value))) ch.removeAttribute(a.name); }); if (ch.tagName === 'A') { ch.target = '_blank'; ch.rel = 'noopener'; } walk(ch); } else if (ch.nodeType !== 3) ch.remove(); }); })(d);
+    return d.innerHTML;
+  }
+  async function _ntLoad() {
+    if (!_current) return; _ntFor = _current.id;
+    try {
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/notas`); if (!r.ok) throw new Error();
+      const d = await r.json(); if (_ntFor !== _current.id) return; _nt = d; if (_step === 8) _paint();
+    } catch (_) { showBanner('No se pudieron cargar las notas', 'error'); }
+  }
+  function _notasHtml() {
+    if (!_nt || _ntFor !== (_current && _current.id)) return '<div class="clients-loading"><div class="clients-spin"></div></div>';
+    const live = document.getElementById('cn-doc'); if (live) _nt.doc.html = live.innerHTML;   // lo que se está escribiendo no se pierde al repintar
+    const items = _nt.items.filter(x => _ntFiltro === 'todo' || (_ntFiltro === 'abiertos' ? x.tipo === 'bloqueo' && !x.resuelto : x.tipo === _ntFiltro));
+    const nAb = _nt.items.filter(x => x.tipo === 'bloqueo' && !x.resuelto).length;
+    const tb = (cmd, ic, tt) => `<button type="button" class="cn-tb" title="${tt}" onmousedown="event.preventDefault();CanteraModule.ntFmt('${cmd}')">${ic}</button>`;
+    const feed = items.map(x => {
+      const t = _NT_T[x.tipo] || _NT_T.comentario, mine = +x.autor_id === +_nt.yo;
+      return `<div class="cn-it${x.resuelto ? ' cn-it--ok' : ''}${x.fijado ? ' cn-it--pin' : ''}" style="--c:${t[1]};--cs:${t[2]}">
+        <div class="cn-it__h"><span class="cn-ty">${t[0]}${x.tipo === 'bloqueo' && x.resuelto ? ' · resuelto' : ''}</span><b>${esc(x.autor_nombre || 'Alguien')}</b><span class="cn-ago" title="${esc(new Date(x.created_at).toLocaleString())}">${_ntAgo(x.created_at)}</span><span class="cn-sp"></span>
+          ${x.tipo === 'bloqueo' ? `<button class="cn-ib" onclick="CanteraModule.ntPatch(${x.id},{resuelto:${!x.resuelto}})">${x.resuelto ? 'Reabrir' : 'Marcar resuelto'}</button>` : ''}
+          <button class="cn-ib" title="${x.fijado ? 'Quitar de fijados' : 'Fijar arriba'}" onclick="CanteraModule.ntPatch(${x.id},{fijado:${!x.fijado}})">${x.fijado ? 'Desfijar' : 'Fijar'}</button>
+          ${mine ? `<button class="cn-ib" onclick="CanteraModule.ntDel(${x.id})">Borrar</button>` : ''}</div>
+        <div class="cn-it__b">${esc(x.texto).replace(/@([\p{L}\d_.-]+)/gu, '<span class="cn-men">@$1</span>').replace(/\n/g, '<br>')}</div>
+        ${(x.etiquetas || []).length ? `<div class="cn-tags">${x.etiquetas.map(g => `<span class="cn-tag">${esc(g)}</span>`).join('')}</div>` : ''}</div>`;
+    }).join('') || '<div class="cn-empty">Aún no hay nada aquí. Deja un comentario, una nota o un bloqueo para que el equipo lo vea.</div>';
+    return `<div class="cn-wrap">
+      <section class="cn-card cn-doc"><div class="cn-card__h"><b>Documento</b><span class="cn-hint" id="cn-save">${_nt.doc.updated_at ? 'Guardado · ' + esc(_nt.doc.updated_by || '') + ' ' + _ntAgo(_nt.doc.updated_at) : 'Información importante de este borrador'}</span></div>
+        <div class="cn-bar">${tb('bold', '<b>B</b>', 'Negrita')}${tb('italic', '<i>I</i>', 'Cursiva')}${tb('h3', 'T', 'Título')}${tb('ul', '•', 'Lista')}${tb('ol', '1.', 'Lista numerada')}${tb('link', '↗', 'Enlace')}</div>
+        <div id="cn-doc" class="cn-ed" contenteditable="true" data-ph="Escribe aquí lo importante: contexto del cliente, criterios acordados, advertencias…" oninput="CanteraModule.ntDocInput()">${_ntClean(_nt.doc.html)}</div></section>
+      <section class="cn-card cn-feed"><div class="cn-card__h"><b>Actividad</b><span class="cn-hint">${nAb ? nAb + ' bloqueo(s) sin resolver' : 'Sin bloqueos abiertos'}</span></div>
+        <div class="cn-comp">
+          <div class="cn-types">${Object.entries(_NT_T).map(([k, v]) => `<button type="button" class="cn-typ${_ntTipo === k ? ' on' : ''}" style="--c:${v[1]};--cs:${v[2]}" onclick="CanteraModule.ntTipo('${k}')">${v[0]}</button>`).join('')}</div>
+          <textarea id="cn-txt" rows="3" placeholder="${_ntTipo === 'bloqueo' ? 'Describe qué impide avanzar…' : _ntTipo === 'nota' ? 'Escribe una nota…' : 'Escribe un comentario… usa @nombre para etiquetar a alguien'}" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')CanteraModule.ntSend()"></textarea>
+          <div class="cn-comp__f"><div class="cn-tagin">${_ntTags.map((g, i) => `<span class="cn-tag">${esc(g)}<button type="button" onclick="CanteraModule.ntTagDel(${i})">×</button></span>`).join('')}<input id="cn-tag" placeholder="+ etiqueta" maxlength="24" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();CanteraModule.ntTagAdd(this)}"></div>
+            <button class="btn btn--primary btn--sm" onclick="CanteraModule.ntSend()">Publicar</button></div></div>
+        <div class="cn-filt">${[['todo', 'Todo'], ['comentario', 'Comentarios'], ['nota', 'Notas'], ['bloqueo', 'Bloqueos'], ['abiertos', 'Sin resolver']].map(([k, l]) => `<button type="button" class="cn-f${_ntFiltro === k ? ' on' : ''}" onclick="CanteraModule.ntFiltro('${k}')">${l}</button>`).join('')}</div>
+        <div class="cn-list">${feed}</div></section></div>`;
+  }
+  function ntFmt(cmd) {
+    const ed = document.getElementById('cn-doc'); if (!ed) return; ed.focus();
+    if (cmd === 'h3') document.execCommand('formatBlock', false, 'h3');
+    else if (cmd === 'ul') document.execCommand('insertUnorderedList');
+    else if (cmd === 'ol') document.execCommand('insertOrderedList');
+    else if (cmd === 'link') { const u = prompt('Dirección del enlace (https://…)'); if (u && /^https?:\/\//i.test(u)) document.execCommand('createLink', false, u); }
+    else document.execCommand(cmd);
+    ntDocInput();
+  }
+  function ntDocInput() {
+    const lb = document.getElementById('cn-save'); if (lb) lb.textContent = 'Guardando…';
+    clearTimeout(_ntTimer); const id = _current && _current.id;
+    _ntTimer = setTimeout(async () => {
+      const ed = document.getElementById('cn-doc'); if (!ed || !id) return;
+      try {
+        const r = await apiFetch(`${API}/cantera/batches/${id}/doc`, { method: 'PUT', body: JSON.stringify({ html: _ntClean(ed.innerHTML) }) });
+        const l2 = document.getElementById('cn-save'); if (l2) l2.textContent = r.ok ? 'Guardado ahora' : 'No se pudo guardar';
+        if (r.ok && _nt) { _nt.doc.html = ed.innerHTML; _nt.doc.updated_at = new Date().toISOString(); _nt.doc.updated_by = (window._authUser && window._authUser.name) || ''; }
+      } catch (_) { const l2 = document.getElementById('cn-save'); if (l2) l2.textContent = 'No se pudo guardar'; }
+    }, 900);
+  }
+  function _ntKeep(fn) { const t = document.getElementById('cn-txt'), v = t ? t.value : ''; fn(); _paint(); const t2 = document.getElementById('cn-txt'); if (t2) { t2.value = v; } return t2; }
+  function ntTipo(k) { const t = _ntKeep(() => { _ntTipo = k; }); if (t) t.focus(); }
+  function ntFiltro(k) { _ntFiltro = k; _paint(); }
+  function ntTagAdd(inp) {
+    const v = String(inp.value || '').replace(/,/g, '').trim(); if (!v) return;
+    _ntKeep(() => { if (!_ntTags.includes(v) && _ntTags.length < 8) _ntTags.push(v); });
+    const n = document.getElementById('cn-tag'); if (n) n.focus();
+  }
+  function ntTagDel(i) { _ntKeep(() => { _ntTags.splice(i, 1); }); }
+  async function ntSend() {
+    const t = document.getElementById('cn-txt'), pend = document.getElementById('cn-tag');
+    if (pend && pend.value.trim()) { const v = pend.value.replace(/,/g, '').trim(); if (v && !_ntTags.includes(v)) _ntTags.push(v); }
+    const texto = (t && t.value || '').trim(); if (!texto) { showBanner('Escribe algo antes de publicar', 'info'); return; }
+    try {
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/notas`, { method: 'POST', body: JSON.stringify({ tipo: _ntTipo, texto, etiquetas: _ntTags }) });
+      if (!r.ok) throw new Error(); const it = await r.json(); _nt.items.unshift(it); _ntTags = []; _paint();
+    } catch (_) { showBanner('No se pudo publicar', 'error'); }
+  }
+  async function ntPatch(id, body) {
+    try {
+      const r = await apiFetch(`${API}/cantera/notas/${id}`, { method: 'PATCH', body: JSON.stringify(body) }); if (!r.ok) throw new Error();
+      const it = await r.json(); const i = _nt.items.findIndex(x => x.id === id); if (i >= 0) _nt.items[i] = it;
+      _nt.items.sort((a, b) => (b.fijado - a.fijado) || (new Date(b.created_at) - new Date(a.created_at))); _paint();
+    } catch (_) { showBanner('No se pudo actualizar', 'error'); }
+  }
+  async function ntDel(id) {
+    if (!confirm('¿Borrar esta entrada?')) return;
+    try { const r = await apiFetch(`${API}/cantera/notas/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error(); _nt.items = _nt.items.filter(x => x.id !== id); _paint(); } catch (_) { showBanner('No se pudo borrar', 'error'); }
+  }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
   // El check del encabezado debe marcar solo lo que el filtro activo está
   // mostrando, no TODO el borrador — reportado en vivo 2026-09-16: "si solo
@@ -8400,7 +8499,7 @@ const CanteraModule = (() => {
   // Filtro de cliente de Outreach (barra «Viendo sólo …»): también acota esta pantalla
   let _extC = false;
   function setExtClient(id) { if (id) { _bdFiltro.cliente = String(id); _extC = true; } else if (_extC) { _bdFiltro.cliente = ''; _extC = false; } }
-  return { setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  return { ntFmt, ntDocInput, ntTipo, ntFiltro, ntTagAdd, ntTagDel, ntSend, ntPatch, ntDel, setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
