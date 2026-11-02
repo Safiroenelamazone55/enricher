@@ -20258,3 +20258,9 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item:hover { background: var(--surface-hover, #EEF0EE); }
 .lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item.active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); font-weight: 600; }
 .lm2-nav .lm2-nav__grp { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; color: var(--text-muted, #8B9690); padding: 14px 18px 4px; }
+
+/* Outreach · engranaje hacia la configuración y botón volver */
+#lm2-body { position: relative; }
+.lm2-gear { position: absolute; top: 14px; right: 18px; z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid var(--border, #E2E7E3); border-radius: 10px; background: #fff; color: var(--text-secondary, #5F6B64); cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,20,.05); } .lm2-gear:hover { background: var(--surface-hover, #F1F3F0); color: var(--text-primary, #14211B); }
+.lm-back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 6px; margin-bottom: 8px; border: 1px solid var(--border, #E2E7E3); border-radius: 8px; background: #fff; font: inherit; font-size: .82rem; font-weight: 500; color: var(--text-secondary, #5F6B64); cursor: pointer; } .lm-back:hover { background: var(--surface-hover, #F1F3F0); color: var(--text-primary, #14211B); }
+.lm2-gear.lm2-gear--inline { position: static; width: 32px; height: 32px; margin-left: 10px; vertical-align: middle; display: inline-flex; box-shadow: none; }
