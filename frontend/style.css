@@ -20242,3 +20242,6 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .sidebar--collapsed .snav-item.active { background: var(--primary-soft, #E6F0FF); color: var(--primary, #007AFF); }
 .sidebar--collapsed .snav-back, .sidebar--collapsed .sidebar__toggle { width: 36px; height: 36px; margin: 2px auto; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .sidebar--collapsed .snav-back svg, .sidebar--collapsed .sidebar__toggle svg { width: 18px; height: 18px; }
+
+#sidebar .snav-item:not(.snav-item--sm) .snav-item__icon svg, .sidebar--collapsed .snav-item:not(.snav-item--sm) .snav-item__icon svg { width: 22px; height: 22px; }
+.sidebar--collapsed .snav-item__icon { width: 34px; height: 34px; }
