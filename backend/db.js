@@ -78,9 +78,9 @@ const pool = new Pool({
   password: DB_PASS,
   database: DB_NAME,
   ssl:      { rejectUnauthorized: false },  // required for Render managed Postgres
-  max:                      10,
+  max:                      12,          // el proveedor (Supabase, modo sesión) solo admite 15 conexiones en total: 12 deja margen para el reinicio del servidor y para scripts. Con 10 había picos con «timeout exceeded when trying to connect»
   idleTimeoutMillis:        30_000,
-  connectionTimeoutMillis:   5_000,
+  connectionTimeoutMillis:  10_000,
 });
 
 pool.on('error', err => {

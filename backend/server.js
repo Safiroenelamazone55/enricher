@@ -12903,7 +12903,7 @@ app.get('/api/gcal/events', requireAuth, async (req, res) => {
     const { start, end } = req.query;
     const { rows: [pf] } = await pool.query(`SELECT busy FROM gcal_prefs WHERE user_id=$1`, [req.user.id]);
     const busy = Array.isArray(pf && pf.busy) && pf.busy.length ? pf.busy : null;
-    const jobs = [];
+    const jobs = [], caducadas = new Set();
     for (const a of accts) {
       const cals = busy ? busy.filter(b => +b.acc === a.id).map(b => b.cal) : (a.id === 0 ? ['primary'] : []);
       for (const c of cals) jobs.push(a.cal.events.list({
@@ -12914,11 +12914,15 @@ app.get('/api/gcal/events', requireAuth, async (req, res) => {
         id: ev.id, title: ev.summary || '(Sin título)',
         start: ev.start?.dateTime || ev.start?.date, end: ev.end?.dateTime || ev.end?.date,
         allDay: !ev.start?.dateTime, link: ev.hangoutLink || ev.htmlLink || null, acc: a.id, cal: c,
-      }))).catch(() => []));
+      }))).catch(e => { if (/invalid_grant/i.test(String(e && e.message))) caducadas.add(a.id); return []; }));
     }
+    // Google revocó o caducó la autorización (en modo «prueba» caduca a los 7 días): se limpia el acceso y se pide reconectar, en vez de fallar en silencio cada vez
+    const _fin = await Promise.all(jobs);
+    if (caducadas.has(0)) await pool.query(`UPDATE users SET google_access_token=NULL, google_refresh_token=NULL, google_token_expiry=NULL WHERE id=$1`, [req.user.id]).catch(() => {});
+    for (const id of caducadas) if (id) await pool.query(`DELETE FROM gcal_accounts WHERE id=$1 AND user_id=$2`, [id, req.user.id]).catch(() => {});
     const seen = new Set();
-    const events = (await Promise.all(jobs)).flat().filter(e => { const k = e.id + '|' + e.start; if (seen.has(k)) return false; seen.add(k); return true; });
-    res.json({ connected: true, events });
+    const events = _fin.flat().filter(e => { const k = e.id + '|' + e.start; if (seen.has(k)) return false; seen.add(k); return true; });
+    res.json({ connected: caducadas.size === 0 || accts.some(x => !caducadas.has(x.id)), needsReconnect: caducadas.size > 0, events });
   } catch (e) {
     console.error('[gcal] events error:', e.message);
     res.json({ connected: true, events: [] });
@@ -15604,6 +15608,8 @@ app.put('/api/mgmt/exchange-rates', requireAuth, async (req, res) => {
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
+  // Si la respuesta ya salió (p. ej. la base tardó en responder a la sesión), no se vuelve a escribir: eso era el «Cannot set headers after they are sent»
+  if (res.headersSent) { console.warn('[http] error tras responder:', err && err.message); return; }
   if (err.message?.includes('Only .xlsx'))
     return res.status(400).json({ error: err.message });
   if (err.message?.includes('Solo se pueden enviar imágenes'))

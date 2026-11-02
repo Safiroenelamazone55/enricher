@@ -311,6 +311,8 @@ async function _checkMailbox(pool, mb) {
     host: mb.imap_host, port: mb.imap_port, secure: true,
     auth, logger: false, emitLogs: false,
   });
+  // sin este oyente, un cierre inesperado del servidor de correo se imprimía como error sin control («Connection not available»); el fallo ya se recoge abajo
+  client.on('error', () => {});
   await client.connect();
   try {
     const box = await client.mailboxOpen('INBOX');

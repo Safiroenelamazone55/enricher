@@ -23,6 +23,57 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const pino = require('pino');
 
+// ── Cifrado Signal: ruido y autoreparación ──
+// Cuando la sesión de cifrado con un dispositivo se desfasa (p. ej. tu propio celular, tras días sin conexión), WhatsApp reenvía una y otra vez mensajes que
+// ya no se pueden descifrar y la librería imprime una traza completa por cada uno (llegaron a ser ~300 000 líneas y GB de registro). Aquí:
+//  1) esas líneas se resumen en UNA por minuto, y
+//  2) si un mismo dispositivo/contacto acumula muchos fallos, se borra SOLO su sesión de cifrado para que se renegocie limpia (como ya hace «reparar chat»).
+const _sig = { n: 0, k: {} };
+const _consoleError = console.error.bind(console);
+console.error = function (...a) {
+  const s0 = typeof a[0] === 'string' ? a[0] : '';
+  if (s0.startsWith('Session error:') || s0.startsWith('Failed to decrypt message with any known session')) {
+    const k = /Over 2000/.test(s0) ? 'contador adelantado' : /Bad MAC/.test(s0) ? 'Bad MAC' : /Key used already/.test(s0) ? 'clave repetida' : s0.startsWith('Failed') ? 'sin sesión válida' : 'otro';
+    _sig.n++; _sig.k[k] = (_sig.k[k] || 0) + 1; return;
+  }
+  return _consoleError(...a);
+};
+// avisos informativos de la librería al renegociar una sesión (no son errores): se descartan
+for (const m of ['warn', 'info', 'log']) {
+  const orig = console[m].bind(console);
+  console[m] = function (...a) { const t = typeof a[0] === 'string' ? a[0] : ''; if (t.startsWith('Closing open session in favor') || t.startsWith('Removing old closed session') || t.startsWith('Closing session:') || t.startsWith('Opening session:') || t.startsWith('Migrating session')) return; return orig(...a); };
+}
+setInterval(() => {
+  if (!_sig.n) return;
+  console.log('[wa] cifrado: ' + _sig.n + ' mensaje(s) no descifrables en el último minuto (' + Object.entries(_sig.k).map(([k, v]) => k + ' ×' + v).join(', ') + '); se repara solo si persiste');
+  _sig.n = 0; _sig.k = {};
+}, 60000).unref();
+const _decFail = new Map();      // clave "conexión|destino" → { n, desde }
+const _decSanado = new Map();    // clave → última vez que se reparó
+async function _sanarCifrado(connId, jid) {
+  const sock = _socks.get(connId);
+  if (!sock || !sock.authState || !sock.authState.keys) return;
+  const base = x => String(x || '').split('@')[0].split(':')[0];
+  const users = new Set([base(sock.user && sock.user.id), base(sock.user && sock.user.lid), base(jid)].filter(Boolean));
+  const addrs = [];
+  try { const files = fs.readdirSync(_sessionDir(connId)); for (const u of users) files.filter(f => f.startsWith('session-' + u + '.') && f.endsWith('.json')).forEach(f => addrs.push(f.slice(8, -5))); } catch (_) {}
+  if (addrs.length) await sock.authState.keys.set({ session: Object.fromEntries(addrs.map(a => [a, null])) });
+  console.log('[wa] cifrado: sesiones reiniciadas en la conexión ' + connId + ' (' + addrs.length + ') por fallos repetidos de descifrado');
+}
+// Devuelve true si la línea era un aviso de descifrado (ya contado: no se imprime)
+function _contarFalloDescifrado(connId, line) {
+  if (!line || !line.includes('failed to decrypt message')) return false;
+  try {
+    const m = /"remoteJid":"([^"]+)"/.exec(line), jid = m ? m[1] : '';
+    if (!jid || jid.endsWith('@g.us') || jid.endsWith('@broadcast')) return true;   // grupos y estados: nunca se tocan
+    const key = connId + '|' + jid.split('@')[0], now = Date.now(), e = _decFail.get(key) || { n: 0, desde: now };
+    if (now - e.desde > 10 * 60 * 1000) { e.n = 0; e.desde = now; }
+    e.n++; _decFail.set(key, e);
+    if (e.n >= 25 && now - (_decSanado.get(key) || 0) > 6 * 3600 * 1000) { _decSanado.set(key, now); e.n = 0; _sanarCifrado(connId, jid).catch(() => {}); }
+  } catch (_) {}
+  return true;
+}
+
 const SESSIONS_DIR = path.join(__dirname, '..', 'data', 'wa-sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
@@ -448,7 +499,7 @@ async function _connectInner(pool, id) {
   };
   // Recomendado por Baileys para producción: claves de cifrado con caché (menos lecturas de disco y lecturas siempre coherentes), logger sin ruido
   // (antes volcaba miles de líneas «info» al log) y NO marcarse «en línea» al conectar (así el celular sigue recibiendo sus notificaciones).
-  const logger = pino({ level: process.env.WA_LOG_LEVEL || 'warn' });
+  const logger = pino({ level: process.env.WA_LOG_LEVEL || 'warn' }, { write: line => { if (!_contarFalloDescifrado(id, line)) process.stdout.write(line); } });
   const sock = makeWASocket({
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
     logger, syncFullHistory: true, keepAliveIntervalMs: 25000, markOnlineOnConnect: false, getMessage,
