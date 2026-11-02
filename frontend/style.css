@@ -20368,3 +20368,50 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pd-langs { display: flex; gap: 6px; padding: 3px; background: var(--surface-hover, #EEF0EE); border-radius: 10px; margin-bottom: 20px; } .pd-lang { flex: 1; height: 34px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: .86rem; font-weight: 500; color: var(--text-secondary, #5F6B64); cursor: pointer; } .pd-lang.is-on { background: #fff; color: var(--text-primary, #14211B); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,20,.1); }
 .pd-foot { display: flex; justify-content: flex-end; gap: 8px; } .pd-btn { height: 38px; padding: 0 16px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 10px; background: #fff; font: inherit; font-size: .88rem; font-weight: 500; cursor: pointer; } .pd-btn:hover { background: var(--surface-hover, #F1F3F0); } .pd-btn--p { background: var(--primary, #007AFF); border-color: var(--primary, #007AFF); color: #fff; font-weight: 600; } .pd-btn--p:hover { background: #0062CC; }
 @media (max-width: 520px) { .pd-overlay { align-items: flex-end; padding: 0; } .pd-modal { max-width: none; border-radius: 16px 16px 0 0; } .pd-cards { grid-template-columns: 1fr; } }
+
+/* ═══ Outreach · Dashboard (Hoy / Rendimiento): mismos bordes, radios y tipografía que Operaciones ═══ */
+#lm2-body .lm-sec-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary, #14211B); }
+/* Hoy / Rendimiento */
+#lm2-body .dash-tabs { background: var(--surface-hover, #EEF0EE); border: 0; border-radius: 10px; padding: 3px; gap: 2px; box-shadow: none; }
+#lm2-body .dash-tab { border: 0; border-radius: 8px; box-shadow: none; padding: 7px 14px; font-size: .86rem; font-weight: 500; color: var(--text-secondary, #5F6B64); }
+#lm2-body .dash-tab.on, #lm2-body .dash-tab.active, #lm2-body .dash-tab[aria-selected="true"] { background: #fff; color: var(--text-primary, #14211B); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,20,.08); }
+/* acciones de la cabecera */
+#lm2-body .lm-sec-actions .dash-btn { height: 36px; padding: 0 14px; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; background: #fff; box-shadow: none; font-size: .86rem; font-weight: 500; color: var(--text-primary, #14211B); }
+#lm2-body .lm-sec-actions .dash-btn:hover { background: var(--surface-hover, #F1F3F0); }
+#lm2-body .lm-sec-actions .dash-btn--p, #lm2-body .lm-sec-actions .dash-btn.primary, #lm2-body .lm-sec-actions .dash-btn:last-child { font-weight: 600; }
+/* filtros: cada uno es su propio control, con el mismo trazo que el resto de la app */
+#lm2-body .dash-filters { display: flex; flex-wrap: wrap; gap: 8px; border: 0; background: none; box-shadow: none; }
+#lm2-body .dash-f { height: 36px; min-width: 0; background: #fff; border: 1px solid var(--border-strong, #D5DDD7) !important; border-radius: 10px; box-shadow: none; font-size: .86rem; font-weight: 500; color: var(--text-primary, #14211B); }
+#lm2-body .dash-f:hover { background: var(--surface-secondary, #F7F8F6); } #lm2-body .dash-f:focus-within { border-color: var(--primary, #007AFF) !important; }
+#lm2-body .dash-f select, #lm2-body .dash-f input { font: inherit; border: 0; background: transparent; outline: 0; }
+#lm2-body .dash-f__i { color: var(--text-muted, #8B9690); }
+#lm2-body .kpi-cfg { height: 32px; border: 1px solid var(--border, #E2E7E3); border-radius: 8px; background: #fff; font-size: .8rem; font-weight: 500; color: var(--text-secondary, #5F6B64); box-shadow: none; } #lm2-body .kpi-cfg:hover { background: var(--surface-hover, #F1F3F0); }
+/* tarjetas de indicadores */
+#lm2-body .dash-kpis { gap: 12px; }
+#lm2-body .dash-kpi { background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; padding: 16px 18px; }
+#lm2-body .dash-kpi__l { font-size: .8rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-secondary, #5F6B64); }
+#lm2-body .dash-kpi__ic { color: var(--text-muted, #8B9690); }
+#lm2-body .dash-kpi__v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.02em; color: var(--text-primary, #14211B); }
+#lm2-body .dash-kpi__s { font-size: .78rem; color: var(--text-muted, #8B9690); }
+#lm2-body .dash-d { font-size: .78rem; font-weight: 600; }
+/* tarjetas de gráficos y listas */
+#lm2-body .dash-row .cp-card, #lm2-body .dash-scope .cp-card { background: #fff; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; box-shadow: none; }
+#lm2-body .dash-card-h { margin-bottom: 4px; } #lm2-body .dash-row .cp-card__t, #lm2-body .dash-scope .cp-card__t { font-size: .98rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); }
+#lm2-body .dash-info { color: var(--text-muted, #8B9690); }
+#lm2-body .dash-legend, #lm2-body .dash-lg, #lm2-body .dash-leg__t { font-size: .8rem; color: var(--text-secondary, #5F6B64); }
+/* embudo */
+#lm2-body .dash-fn { background: var(--surface-secondary, #F7F8F6); border-radius: 10px; }
+#lm2-body .dash-fn__l { font-size: .88rem; font-weight: 600; color: var(--text-primary, #14211B); } #lm2-body .dash-fn__n { font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; }
+#lm2-body .dash-fn__track { background: var(--border, #E2E7E3); border-radius: 99px; } #lm2-body .dash-fn__fill { border-radius: 99px; }
+#lm2-body .dash-fn__ic { color: var(--text-muted, #8B9690); }
+/* barras y tablas */
+#lm2-body .dash-bar__l, #lm2-body .dash-bar__v { font-size: .84rem; } #lm2-body .dash-bar__t { background: var(--surface-hover, #EEF0EE); border-radius: 99px; } #lm2-body .dash-bar__f { border-radius: 99px; }
+#lm2-body .dash-scope .clients-table-wrap { border: 1px solid var(--border, #E2E7E3); border-radius: 12px; overflow: hidden; box-shadow: none; }
+#lm2-body .dash-scope .clients-table th { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; color: var(--text-secondary, #5F6B64); background: var(--surface-secondary, #F7F8F6); }
+#lm2-body .dash-scope .clients-table td { font-size: .86rem; }
+/* «Hoy»: alertas y tarjetas */
+#lm2-body .hoy-al { border: 1px solid var(--border, #E2E7E3); border-radius: 10px; box-shadow: none; }
+#lm2-body .hoy-fit { border-radius: 12px; }
+
+#lm2-body .dash-kpis { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); overflow: visible !important; }
+#lm2-body .dash-filters .dash-f { flex: 1 1 150px; max-width: 230px; }
