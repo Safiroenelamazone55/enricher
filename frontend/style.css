@@ -20519,3 +20519,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cant-sp-o:hover{border-color:#A7C8F5;background:#F5F9FF}
 .cn-ed{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden}.cn-ed *{max-width:100%}
 .cant-sq-warn{padding:10px 12px;border:1px solid #F1D58A;background:#FFF8E6;border-radius:10px;font-size:12.5px;line-height:1.45;color:#5C4A12}.cant-sq-warn b{color:#3F3209}
+.rpt-opt{display:flex;gap:8px;align-items:center;font-size:.86rem;margin:2px 0}.rpt-opt input{width:auto}

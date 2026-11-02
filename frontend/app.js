@@ -24312,6 +24312,43 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .foot-logo{height:14px;width:auto;opacity:.92}
 .foot-r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;margin-left:16px}
+/* ── Secuencia planteada, mensajes y dispositivos ── */
+.rp-sub{font-size:12px;color:#6C6862;margin:-4px 0 12px;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
+.tls{border-left:2px solid #EAE7E2;margin-left:44px}
+.tl{display:flex;align-items:center;gap:10px;padding:6px 0;position:relative;font-size:12.5px;font-family:"Segoe UI",Calibri,system-ui,sans-serif;break-inside:avoid}
+.tl-d{position:absolute;left:-48px;width:40px;text-align:right;font-size:10.5px;font-weight:800;color:#0f2b3d;text-transform:uppercase;letter-spacing:.04em}
+.tl-dot{flex:none;width:10px;height:10px;border-radius:50%;margin-left:-6px;border:2px solid #fff;box-shadow:0 0 0 1px #EAE7E2}
+.tl-b{color:#3D3A36}
+.mcard{border:1px solid #EAE7E2;border-radius:12px;margin:0 0 12px;overflow:hidden;break-inside:avoid;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
+.mc-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#FAF8F5;padding:8px 14px;border-bottom:1px solid #EAE7E2;font-size:11.5px}
+.mc-day{background:#0f2b3d;color:#fff;border-radius:6px;font-weight:800;font-size:10.5px;padding:1px 8px}
+.mc-ch{font-weight:800}
+.mc-acc{color:#6C6862}
+.mc-tag{background:#F1EFEB;color:#6C6862;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700}
+.mc-tag--lang{background:#E8F1FF;color:#1B5FD1}
+.mc-mail,.mc-li,.mc-wa{padding:12px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#222}
+.mc-mrow{display:flex;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px solid #F1EFEB;color:#555}
+.mc-mrow b{flex:none;width:52px;color:#918C85;font-weight:700}
+.mc-mrow--s span{color:#111;font-weight:700}
+.mc-mbody{padding:12px 0 6px;color:#222}
+.mc-sig{margin-top:6px;padding-top:10px;border-top:1px solid #F1EFEB}
+.mc-bub{background:#F1F4F9;border-radius:12px;padding:10px 14px;color:#222}
+.mc-bub--wa{background:#DCF8C6}
+.mc-cnt{text-align:right;font-size:11px;color:#918C85;margin-top:4px}
+.m-var{background:#E3EEFF;color:#1B5FD1;border-radius:4px;padding:0 3px}
+.cmp-msgs{margin-top:14px}
+.dv-row{display:flex;justify-content:center;align-items:flex-start;gap:26px;margin:0 0 18px;break-inside:avoid}
+.dv{display:flex;flex-direction:column;align-items:center}
+.dv-fr{background:#fff;border:6px solid #1F2933;overflow:hidden;box-shadow:0 6px 18px rgba(15,43,61,.18)}
+.dv--phone .dv-fr{border-radius:26px;border-width:7px}
+.dv--tablet .dv-fr{border-radius:16px}
+.dv--laptop .dv-fr{border-radius:10px 10px 0 0;border-bottom-width:9px}
+.dv-sc{background:#fff;overflow:hidden}
+.dv--phone .dv-mail{padding:14px 14px}
+.dv--tablet .dv-mail{padding:22px 26px}
+.dv-win{background:#F1F4F9;padding:22px 0}
+.dv-win .dv-mail{max-width:640px;margin:0 auto;background:#fff;border:1px solid #E3E7EC;border-radius:8px;padding:20px 26px}
+.dv-lb{margin-top:8px;font-size:11px;font-weight:700;color:#6C6862;letter-spacing:.04em;text-transform:uppercase;font-family:"Segoe UI",Calibri,system-ui,sans-serif}
 /* Contenedor de impresión en <table>: el <tfoot> se repite en cada página y
    RESERVA su alto por página (vía layout de tabla), así el contenido nunca queda
    debajo del pie — sin depender del margen del diálogo de impresión. */
@@ -24349,7 +24386,136 @@ ${foot}
 <script>window.addEventListener('load',function(){setTimeout(function(){try{window.print()}catch(e){}},400)})<\/script>
 </body></html>`;
   }
-  function _seqReportHtml(id, lang, met) {
+  // ════════════ INFORME: secuencia planteada · mensajes con vista previa · vista en 3 dispositivos ════════════
+  const _RPT2 = {
+    es: { day: 'Día', plan: 'Secuencia planteada', planSub: 'Qué se envía, por qué canal y en qué día.', msgs: 'Mensajes que se enviarán', msgsSub: 'Así llegará cada mensaje al prospecto. Ejemplo con datos de muestra: las variables se completan con los datos reales de cada contacto.',
+      lang: 'Idioma', subject: 'Asunto', from: 'De', to: 'Para', thread: 'En el mismo hilo del primer email', inv: 'Invitación de conexión con nota', inmail: 'InMail', chars: 'caracteres', devs: 'Cómo se ve en cada dispositivo', devsSub: 'El mensaje y la firma se adaptan al tamaño de la pantalla. Ejemplo con el mensaje: ',
+      phone: 'Móvil', tablet: 'Tablet', laptop: 'Computadora', companies: 'Empresas', contacts: 'Contactos', noMsg: '(Sin texto todavía)', via: 'Canal', noSig: 'La firma del buzón se agregará aquí al enviar.', step: 'Paso', at: 'a las',
+      sample: { first_name: 'Alex', nombre: 'Alex', last_name: 'Morgan', apellido: 'Morgan', company: 'Northwind Insurance', empresa: 'Northwind Insurance', cargo: 'Directora de Marketing', ciudad: 'Miami', city: 'Miami' } },
+    en: { day: 'Day', plan: 'Proposed sequence', planSub: 'What is sent, through which channel and on which day.', msgs: 'Messages to be sent', msgsSub: 'This is how each message will reach the prospect. Example with sample data: variables are filled in with each contact’s real data.',
+      lang: 'Language', subject: 'Subject', from: 'From', to: 'To', thread: 'In the same thread as the first email', inv: 'Connection request with note', inmail: 'InMail', chars: 'characters', devs: 'How it looks on each device', devsSub: 'The message and signature adapt to the screen size. Example using the message: ',
+      phone: 'Phone', tablet: 'Tablet', laptop: 'Computer', companies: 'Companies', contacts: 'Contacts', noMsg: '(No text yet)', via: 'Channel', noSig: 'The mailbox signature will be added here when sent.', step: 'Step', at: 'at',
+      sample: { first_name: 'Alex', nombre: 'Alex', last_name: 'Morgan', apellido: 'Morgan', company: 'Northwind Insurance', empresa: 'Northwind Insurance', cargo: 'Marketing Director', ciudad: 'Miami', city: 'Miami' } },
+    pt: { day: 'Dia', plan: 'Sequência proposta', planSub: 'O que é enviado, por qual canal e em que dia.', msgs: 'Mensagens que serão enviadas', msgsSub: 'Assim cada mensagem chegará ao prospect. Exemplo com dados de amostra: as variáveis são preenchidas com os dados reais de cada contato.',
+      lang: 'Idioma', subject: 'Assunto', from: 'De', to: 'Para', thread: 'Na mesma conversa do primeiro email', inv: 'Convite de conexão com nota', inmail: 'InMail', chars: 'caracteres', devs: 'Como aparece em cada dispositivo', devsSub: 'A mensagem e a assinatura se adaptam ao tamanho da tela. Exemplo com a mensagem: ',
+      phone: 'Celular', tablet: 'Tablet', laptop: 'Computador', companies: 'Empresas', contacts: 'Contatos', noMsg: '(Sem texto ainda)', via: 'Canal', noSig: 'A assinatura da caixa será adicionada aqui ao enviar.', step: 'Passo', at: 'às',
+      sample: { first_name: 'Alex', nombre: 'Alex', last_name: 'Morgan', apellido: 'Morgan', company: 'Northwind Insurance', empresa: 'Northwind Insurance', cargo: 'Diretora de Marketing', ciudad: 'Miami', city: 'Miami' } },
+  };
+  const _rptNrm = x => String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  // Texto del paso con las variables ya completadas con datos de muestra (las que no se conocen quedan marcadas)
+  function _rptFill(text, lang) {
+    const S = (_RPT2[lang] || _RPT2.es).sample;
+    return esc(String(text || '')).replace(/\{\{\s*([^{}\n]*?)\s*\}\}/g, (m, k) => { const v = S[_rptNrm(k)]; return v != null ? esc(v) : `<span class="m-var">${m}</span>`; }).replace(/\n/g, '<br>');
+  }
+  // Firma del buzón del cliente: predeterminada + por idioma (misma regla que el envío real; si no hay buzón con firma, la global de Configuración)
+  async function _rptSigs(s) {
+    const out = { def: '', langs: {}, from: '', email: '' };
+    try {
+      const rm = await apiFetch(`${API}/lm/mailboxes`); const mbs = rm && rm.ok ? await rm.json() : [];
+      const list = (Array.isArray(mbs) ? mbs : []).filter(x => x.outbound_client_id === s.outbound_client_id && ['conectado', 'solo_envio'].includes(x.estado));
+      const mb = list.find(x => (x.signature_html || '').trim() || Object.keys(x.signatures || {}).length) || list[0];
+      if (mb) { out.def = String(mb.signature_html || ''); out.langs = Object.assign({}, mb.signatures || {}); out.from = mb.from_name || ''; out.email = mb.email || ''; }
+      if (!out.def.trim() && !Object.keys(out.langs).length) { const rs = await apiFetch(`${API}/lm/send-settings`); const cfg = rs && rs.ok ? await rs.json() : {}; out.def = String((cfg && cfg.firma) || ''); }
+    } catch (_) {}
+    const clean = h => String(h || '').replace(/<script[\s\S]*?<\/script>/gi, '');
+    out.def = clean(out.def); Object.keys(out.langs).forEach(k => { out.langs[k] = clean(out.langs[k]); });
+    return out;
+  }
+  function _rptSigFor(sigs, target) {
+    if (!sigs) return '';
+    const t = _rptNrm(target); const k = Object.keys(sigs.langs || {}).find(x => _rptNrm(x) === t && (sigs.langs[x] || '').trim());
+    return k ? sigs.langs[k] : (sigs.def || '');
+  }
+  // Asunto real de un email: el propio; si es respuesta en el mismo hilo (sin asunto), «Re: » + el del primer email
+  function _rptSubject(id, st, v, steps) {
+    let a = String((v && v.asunto) || st.asunto || '').trim();
+    if (a) return a;
+    if (st.reply_to_prev || st.canal === 'email') {
+      const t0 = (v && Array.isArray(v.targets) && v.targets[0]) || '';
+      for (const p of steps) {
+        if (p === st) break;
+        if (p.canal !== 'email') continue;
+        const pv = _stepVariants(p).find(x => t0 && Array.isArray(x.targets) && x.targets.some(y => _rptNrm(y) === _rptNrm(t0))) || _stepVariants(p)[0];
+        const pa = String((pv && pv.asunto) || p.asunto || '').trim();
+        if (pa) return /^re:/i.test(pa) ? pa : 'Re: ' + pa;
+      }
+    }
+    return '';
+  }
+  // Interior del correo (De / Para / Asunto / mensaje / firma), reutilizado en la tarjeta y en los dispositivos
+  function _rptMailInner(id, st, v, lang, sigs, steps) {
+    const L2 = _RPT2[lang] || _RPT2.es, S = L2.sample;
+    const s = _sequences.find(x => x.id === id) || {};
+    const fromName = (sigs && sigs.from) || _clientName(s.outbound_client_id) || '';
+    const fromAddr = (sigs && sigs.email) ? ` &lt;${esc(sigs.email)}&gt;` : '';
+    const target = (v && Array.isArray(v.targets) && v.targets.length) ? v.targets[0] : '';
+    const sig = _rptSigFor(sigs, target);
+    const subj = _rptSubject(id, st, v, steps);
+    return `<div class="mc-mrow"><b>${esc(L2.from)}</b><span>${esc(fromName)}${fromAddr}</span></div>
+      <div class="mc-mrow"><b>${esc(L2.to)}</b><span>${esc(S.first_name + ' ' + S.last_name)}</span></div>
+      <div class="mc-mrow mc-mrow--s"><b>${esc(L2.subject)}</b><span>${_rptFill(subj, lang)}</span></div>
+      <div class="mc-mbody">${_rptFill(v && v.cuerpo, lang) || `<span class="muted">${esc(L2.noMsg)}</span>`}</div>
+      ${sig.trim() ? `<div class="mc-sig">${_sigResponsive(sig)}</div>` : ''}`;
+  }
+  function _rptCard(id, st, v, lang, sigs, steps) {
+    const L2 = _RPT2[lang] || _RPT2.es, tc = _TOUCH[st.canal] || [st.canal, '#555'];
+    const acc = _accionLabel(st.canal, st.accion);
+    const target = (v && Array.isArray(v.targets) && v.targets.length) ? v.targets.join(', ') : '';
+    const body = String((v && v.cuerpo) || '').trim();
+    let inner;
+    if (st.canal === 'email') {
+      inner = `<div class="mc-mail">${_rptMailInner(id, st, v, lang, sigs, steps)}</div>`;
+    } else if (st.canal === 'linkedin' && st.accion === 'inmail') {
+      const subj = String((v && v.asunto) || st.asunto || '').trim();
+      inner = `<div class="mc-li">${subj ? `<div class="mc-mrow mc-mrow--s"><b>${esc(L2.subject)}</b><span>${_rptFill(subj, lang)}</span></div>` : ''}<div class="mc-bub">${_rptFill(body, lang) || `<span class="muted">${esc(L2.noMsg)}</span>`}</div></div>`;
+    } else if (st.canal === 'linkedin' && (st.accion === 'invite_nota' || st.accion === 'mensaje')) {
+      const plain = body.replace(/\{\{\s*([^{}\n]*?)\s*\}\}/g, (m, k) => (L2.sample[_rptNrm(k)] != null ? L2.sample[_rptNrm(k)] : m));
+      inner = `<div class="mc-li"><div class="mc-bub">${_rptFill(body, lang) || `<span class="muted">${esc(L2.noMsg)}</span>`}</div>${st.accion === 'invite_nota' ? `<div class="mc-cnt">${plain.length} / 300 ${esc(L2.chars)}</div>` : ''}</div>`;
+    } else if (st.canal === 'whatsapp') {
+      inner = `<div class="mc-wa"><div class="mc-bub mc-bub--wa">${_rptFill(body, lang) || `<span class="muted">${esc(L2.noMsg)}</span>`}</div></div>`;
+    } else {
+      inner = body ? `<div class="mc-li"><div class="mc-bub">${_rptFill(body, lang)}</div></div>` : '';
+    }
+    const thread = (st.canal === 'email' && st.reply_to_prev) ? `<span class="mc-tag">${esc(L2.thread)}</span>` : '';
+    const lbl = st.canal === 'linkedin' && st.accion === 'invite_nota' ? L2.inv : acc;
+    return `<div class="mcard"><div class="mc-h"><span class="mc-day">${esc(L2.day)} ${st.dia || 1}</span><span class="mc-ch" style="color:${tc[1]}">${esc(_rptChan(st.canal, lang))}</span>${lbl ? `<span class="mc-acc">${esc(lbl)}</span>` : ''}${target ? `<span class="mc-tag mc-tag--lang">${esc(L2.lang)}: ${esc(target)}</span>` : ''}${thread}</div>${inner}</div>`;
+  }
+  function _rptPlanSec(id, lang) {
+    const L2 = _RPT2[lang] || _RPT2.es, steps = _seqSteps(id);
+    if (!steps.length) return '';
+    const rows = steps.map((st, i) => {
+      const tc = _TOUCH[st.canal] || [st.canal, '#555'], acc = _accionLabel(st.canal, st.accion);
+      return `<div class="tl"><span class="tl-d">${esc(L2.day)} ${st.dia || 1}</span><span class="tl-dot" style="background:${tc[1]}"></span><span class="tl-b"><b style="color:${tc[1]}">${esc(_rptChan(st.canal, lang))}</b>${acc ? ` · ${esc(acc)}` : ''}${st.titulo ? ` <span class="muted">· ${esc(st.titulo)}</span>` : ''}${st.hora ? ` <span class="muted">· ${esc(L2.at)} ${esc(st.hora)}</span>` : ''}</span></div>`;
+    }).join('');
+    return `<div class="sec"><h2>${esc(L2.plan)}</h2><p class="rp-sub">${esc(L2.planSub)}</p><div class="tls">${rows}</div></div>`;
+  }
+  function _rptMsgCards(id, lang, sigs) {
+    const steps = _seqSteps(id);
+    return steps.map(st => {
+      const vs = _stepVariants(st).filter(v => (v.cuerpo || '').trim() || (v.asunto || '').trim());
+      return (vs.length ? vs : [{ nombre: 'A', cuerpo: '', targets: [] }]).map(v => _rptCard(id, st, v, lang, sigs, steps)).join('');
+    }).join('');
+  }
+  function _rptMsgSec(id, lang, sigs) {
+    const L2 = _RPT2[lang] || _RPT2.es;
+    if (!_seqSteps(id).length) return '';
+    return `<div class="sec"><h2>${esc(L2.msgs)}</h2><p class="rp-sub">${esc(L2.msgsSub)}</p>${_rptMsgCards(id, lang, sigs)}</div>`;
+  }
+  // Un mismo email en móvil, tablet y computadora: se ve que el mensaje y la firma están optimizados para los tres
+  function _rptDevices(id, lang, sigs) {
+    const L2 = _RPT2[lang] || _RPT2.es, steps = _seqSteps(id);
+    const st = steps.find(x => x.canal === 'email' && x.accion === 'inicial') || steps.find(x => x.canal === 'email');
+    if (!st) return '';
+    const v = _stepVariants(st).find(x => (x.cuerpo || '').trim()) || _stepVariants(st)[0];
+    const mail = `<div class="mc-mail dv-mail">${_rptMailInner(id, st, v, lang, sigs, steps)}</div>`;
+    const dev = (cls, w, z, label, extra) => `<div class="dv dv--${cls}"><div class="dv-fr"><div class="dv-sc" style="width:${w}px;zoom:${z}">${extra ? `<div class="dv-win">${mail}</div>` : mail}</div></div><div class="dv-lb">${esc(label)} · ${w} px</div></div>`;
+    const tgt = (Array.isArray(v.targets) && v.targets[0]) ? ` (${v.targets[0]})` : '';
+    return `<div class="sec dv-sec"><h2>${esc(L2.devs)}</h2><p class="rp-sub">${esc(L2.devsSub)}${esc((st.titulo || _accionLabel(st.canal, st.accion) || 'Email') + tgt)}.</p>
+      <div class="dv-row">${dev('phone', 375, 0.62, L2.phone)}${dev('tablet', 768, 0.4, L2.tablet)}</div>
+      <div class="dv-row dv-row--one">${dev('laptop', 1000, 0.62, L2.laptop, true)}</div></div>`;
+  }
+  function _rptCompaniesN(enrolled) { return new Set((enrolled || []).map(c => c.company_id != null ? 'i' + c.company_id : 'n' + String(c.company_nombre || '').toLowerCase())).size; }
+  function _seqReportHtml(id, lang, met, extra) {
     const L = _RPT_I18N[lang] || _RPT_I18N.es;
     const d = _seqReportData(id);
     const s = d.s;
@@ -24400,8 +24566,9 @@ ${foot}
     <h1>${esc(s.nombre || '')} &nbsp;${_rptPill(estKey, lang)}</h1>
     <div class="facts">${fact(L.client, cli)}${fact(L.campaign, cmp ? cmp.nombre : '')}${fact(L.launch, launch)}${fact(L.gen, nowStr)}</div>
   </div>
-  <div class="kpis">${kpi(d.touches, L.touches)}${kpi(M.enrolados, L.leads)}${kpi(M.contactados, L.contacted, true)}${kpi(M.respuestas, L.replies, true)}${kpi(M.reuniones, L.meetings, true)}${kpi(d.segCount, L.segments)}</div>
+  <div class="kpis">${kpi(d.touches, L.touches)}${kpi(_rptCompaniesN(d.enrolled), (_RPT2[lang] || _RPT2.es).companies)}${kpi(M.enrolados, (_RPT2[lang] || _RPT2.es).contacts)}${kpi(M.contactados, L.contacted, true)}${kpi(M.respuestas, L.replies, true)}${kpi(M.reuniones, L.meetings, true)}${kpi(d.segCount, L.segments)}</div>
   ${_rptContext(L, { mercado: s.mercado || '', icp: s.icp || '', objetivo: s.objetivo || '', notas: s.notas || '' }, cmp ? { mercado: cmp.mercado || '', icp: cmp.icp || '', notas: cmp.notas || '' } : null, L.campaign)}
+  ${_rptPlanSec(id, lang)}${extra && extra.mensajes ? _rptMsgSec(id, lang, extra.sigs) : ''}${extra && extra.dispositivos ? _rptDevices(id, lang, extra.sigs) : ''}
   <div class="sec"><h2>${esc(L.results)}</h2>${_rptFunnel(M, L)}</div>
   <div class="sec"><h2>${esc(L.config)}</h2><table class="kvt">
     ${kv(L.status, estLbl)}${kv(L.launch, launch)}${kvRaw(L.sendDays, _rptDays(mask, L))}${kv(L.drip, drip)}${kv(L.dailyLim, dlim)}${kv(L.tzOp, tzOp)}${kv(L.tzProsp, tzProsp)}${win ? kv(L.window, win) : ''}${kv(L.segField, d.segLabel)}
@@ -24416,7 +24583,7 @@ ${foot}
     return _rptShell(lang, L, `${L.title} — ${s.nombre || ''}`, s.nombre || '', body);
   }
   // ── Informe PDF de CAMPAÑA: portada + contexto + un bloque por secuencia ──
-  function _cmpReportHtml(id, lang, perSeq) {
+  function _cmpReportHtml(id, lang, perSeq, extra) {
     const L = _RPT_I18N[lang] || _RPT_I18N.es;
     const c = _campaigns.find(x => x.id === id) || {};
     const cli = _clientName(c.outbound_client_id) || L.none;
@@ -24444,9 +24611,10 @@ ${foot}
         <div class="seqblk__bd">
           <div class="cfgline">${cfg} &nbsp;·&nbsp; ${_rptDays(mask, L)}</div>
           ${seg ? `<div class="cfgline">${seg}</div>` : ''}
-          <div class="minik">${mk(M.enrolados, L.leads)}${mk(M.contactados, L.contacted, true)}${mk(M.respuestas, L.replies, true)}${mk(M.reuniones, L.meetings, true)}</div>
+          <div class="minik">${mk(_rptCompaniesN(d.enrolled), (_RPT2[lang] || _RPT2.es).companies)}${mk(M.enrolados, (_RPT2[lang] || _RPT2.es).contacts)}${mk(M.contactados, L.contacted, true)}${mk(M.respuestas, L.replies, true)}${mk(M.reuniones, L.meetings, true)}</div>
           <div class="steps-line">${stepsLine}</div>
           ${s.notas ? `<div class="ctx ctx--note" style="margin-top:10px"><div class="ctx-h">${esc(L.notes)}</div><div class="ctx-b">${_rtText(s.notas)}</div></div>` : ''}
+          ${extra && extra.mensajes ? `<div class="cmp-msgs"><div class="h3">${esc((_RPT2[lang] || _RPT2.es).msgs)}</div>${_rptMsgCards(s.id, lang, (extra.sigsBy || {})[s.outbound_client_id])}</div>` : ''}
         </div>
       </div>`;
     }).join('') : `<p class="muted">${esc(L.noSeqs)}</p>`;
@@ -24459,10 +24627,11 @@ ${foot}
   </div>
   <div class="kpis">${kpi(perSeq.length, L.seqs)}${kpi(agg.enrolados, L.leads)}${kpi(agg.contactados, L.contacted, true)}${kpi(agg.respuestas, L.replies, true)}${kpi(agg.reuniones, L.meetings, true)}</div>
   ${_rptContext(L, { mercado: c.mercado || '', icp: c.icp || '', objetivo: c.objetivo || '', notas: c.notas || '' }, null, '')}
-  <div class="sec"><h2>${esc(L.cmpSeqs)}</h2>${blocks}</div>`;
+  <div class="sec"><h2>${esc(L.cmpSeqs)}</h2>${blocks}</div>
+  ${extra && extra.dispositivos ? (() => { const x = perSeq.find(q => _seqSteps(q.s.id).some(t => t.canal === 'email')); return x ? _rptDevices(x.s.id, lang, (extra.sigsBy || {})[x.s.outbound_client_id]) : ''; })() : ''}`;
     return _rptShell(lang, L, `${L.cmpTitle} — ${c.nombre || ''}`, c.nombre || '', body);
   }
-  function _rptModal(title, genCall, hint) {
+  function _rptModal(title, genCall, hint, extraHtml) {
     document.getElementById('lm-rpt-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-rpt-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
@@ -24470,6 +24639,7 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>${title}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-rpt-modal').remove()">✕</button></div>
       <div class="fin-pi-form" style="grid-template-columns:1fr">
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Idioma del informe</span><select class="form-input" id="rpt-lang"><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select></label>
+        ${extraHtml || ''}
         <span class="seq-drip-hint">Se abre el informe con diseño propio en una pestaña nueva y se lanza el diálogo de impresión — elige <b>“Guardar como PDF”</b>. ${hint}</span>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
@@ -24574,11 +24744,11 @@ ${foot}
   }
   function seqReportOpen(id) {
     _rptModal('Informe PDF de la secuencia', `LeadManagerModule.seqReportGen(${id})`,
-      'Incluye mercado, ICP y notas del segmento, configuración (cadencia, contactos/día, límite diario), audiencia, ángulos y progreso real (contactados, respuestas, reuniones).');
+      'Incluye empresas y contactos, la secuencia planteada (días y canales), los mensajes con su vista previa, mercado, ICP, configuración, audiencia y progreso real.', `<label class="rpt-opt"><input type="checkbox" id="rpt-msgs" checked> Incluir los mensajes (con vista previa y firma)</label><label class="rpt-opt"><input type="checkbox" id="rpt-devs" checked> Incluir la vista en 3 dispositivos (móvil, tablet y computadora)</label>`);
   }
   function cmpReportOpen(id) {
     _rptModal('Informe PDF de la campaña', `LeadManagerModule.cmpReportGen(${id})`,
-      'Portada con mercado, ICP, objetivo y notas de la campaña + un bloque por cada secuencia con su segmento, configuración, cadencia y progreso (contactados, respuestas, reuniones).');
+      'Portada con mercado, ICP, objetivo y notas de la campaña + un bloque por cada secuencia con empresas, contactos, configuración, cadencia, mensajes y progreso.', `<label class="rpt-opt"><input type="checkbox" id="rpt-msgs" checked> Incluir los mensajes (con vista previa y firma)</label><label class="rpt-opt"><input type="checkbox" id="rpt-devs" checked> Incluir la vista en 3 dispositivos (móvil, tablet y computadora)</label>`);
   }
   // Desde el detalle del cliente: informe de la campaña / secuencia MÁS RECIENTE del cliente
   // (reutiliza el mismo flujo idioma+generar). Con varias, toma la última actualizada.
@@ -24602,23 +24772,27 @@ ${foot}
   }
   async function seqReportGen(id) {
     const lang = document.getElementById('rpt-lang')?.value || 'es';
+    const extra = { mensajes: !!document.getElementById('rpt-msgs')?.checked, dispositivos: !!document.getElementById('rpt-devs')?.checked };
     const w = _rptWin(); if (!w) return;
     let met = null;
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); met = (r && r.ok) ? await r.json() : null; } catch (_) {}
-    const html = _seqReportHtml(id, lang, met);
+    if (extra.mensajes || extra.dispositivos) extra.sigs = await _rptSigs(_sequences.find(x => x.id === id) || {});
+    const html = _seqReportHtml(id, lang, met, extra);
     w.document.open(); w.document.write(html); w.document.close();
     document.getElementById('lm-rpt-modal')?.remove();
   }
   async function cmpReportGen(id) {
     const lang = document.getElementById('rpt-lang')?.value || 'es';
+    const extra = { mensajes: !!document.getElementById('rpt-msgs')?.checked, dispositivos: !!document.getElementById('rpt-devs')?.checked, sigsBy: {} };
     const w = _rptWin(); if (!w) return;
     const seqs = _sortSeq(_sequences.filter(s => s.campaign_id === id));
+    if (extra.mensajes || extra.dispositivos) for (const cid of [...new Set(seqs.map(q => q.outbound_client_id))]) extra.sigsBy[cid] = await _rptSigs({ outbound_client_id: cid });
     const perSeq = await Promise.all(seqs.map(async s => {
       let met = null;
       try { const r = await apiFetch(`${API}/lm/sequences/${s.id}/metrics`); met = (r && r.ok) ? await r.json() : null; } catch (_) {}
       return { s, d: _seqReportData(s.id), met };
     }));
-    const html = _cmpReportHtml(id, lang, perSeq);
+    const html = _cmpReportHtml(id, lang, perSeq, extra);
     w.document.open(); w.document.write(html); w.document.close();
     document.getElementById('lm-rpt-modal')?.remove();
   }
