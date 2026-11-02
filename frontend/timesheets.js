@@ -23,6 +23,7 @@ const TimesheetModule = (() => {
   const ini = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const ic = (d, sz) => `<svg width="${sz || 15}" height="${sz || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const IC = {
+    dl: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/>',
     clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>', alarm: '<circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 14 15"/><path d="M5 3L2 6M22 6l-3-3"/>',
     dollar: '<line x1="12" y1="2" x2="12" y2="22"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', tag: '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',
     box: '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><line x1="10" y1="13" x2="14" y2="13"/>', up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
@@ -84,11 +85,30 @@ const TimesheetModule = (() => {
     if (!isAdmin() && (S.tab === 'todas' || S.tab === 'aprob' || S.tab === 'ajustes')) S.tab = 'mi';
     paint();
   }
+  // Descarga (CSV, abre bien en Excel) las entradas de tiempo de lo que se está viendo: el rango y los filtros del Dashboard, o la semana/rango de «Mi hoja».
+  async function exportar() {
+    try {
+      let list, desde, hasta;
+      if (S.tab === 'dash') {
+        const r = dashRange(), projOf = e => e.proj_nombre || e.project_nombre || 'Sin proyecto'; desde = r.start; hasta = r.end;
+        list = (S.dashEntries || []).filter(countable).filter(e => (D.project === 'all' || projOf(e) === D.project) && (!D.client || cliOf(e) === D.client) && (D.space === '' || String(spaceOf(e)) === D.space) && limaDay(e.started_at) >= r.start && limaDay(e.started_at) <= r.end);
+      } else { desde = rStart(); hasta = rEnd(); list = (S.entries || []).filter(countable); }
+      if (!list.length) { try { showBanner('No hay entradas de tiempo en este periodo', 'info'); } catch (_) {} return; }
+      const q = v => { v = v == null ? '' : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      const hm = d => new Date(d).toLocaleTimeString('es-PE', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+      const head = ['Fecha', 'Inicio', 'Fin', 'Horas', 'Tarea', 'Proyecto', 'Cliente', 'Facturable', 'Etiquetas', 'Notas'];
+      const rows = list.slice().sort((a, b) => new Date(a.started_at) - new Date(b.started_at)).map(e => [limaDay(e.started_at), hm(e.started_at), e.ended_at ? hm(e.ended_at) : 'en curso', (dur(e) / 3600).toFixed(2), e.task_titulo || 'Sin tarea', e.proj_nombre || e.project_nombre || 'Sin proyecto', cliOf(e), billable(e) ? 'Sí' : 'No', (e.etiquetas || []).join(' | '), e.notes || e.nota || ''].map(q).join(','));
+      const total = list.reduce((a, e) => a + dur(e), 0) / 3600;
+      const csv = '\ufeff' + [head.join(','), ...rows, ['', '', 'Total', total.toFixed(2)].join(',')].join('\r\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `horas_${desde}_a_${hasta}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { try { showBanner('No se pudo descargar: ' + e.message, 'error'); } catch (_) {} }
+  }
   function paint() {
     const root = $('ts-root'); if (!root) return;
     const adm = isAdmin(), tab = (k, l) => `<button type="button" class="ts-tab${S.tab === k || (k === 'mi' && S.tab === 'detalle') || (k === 'dash' && S.tab === 'informe') ? ' on' : ''}" onclick="TimesheetModule.go('${k}')">${l}</button>`;
     root.innerHTML = `<div class="ts-top"><span class="ts-ttl">${ic(IC.alarm, 17)}Hojas de horas</span><span class="ts-sep"></span>${tab('mi', 'Mi hoja de horas')}${adm ? tab('todas', 'Todas las hojas de horas') + tab('aprob', 'Aprobaciones') : ''}${tab('dash', 'Dashboard')}
-      <span class="ts-sp"></span>${adm ? `<button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes')">${ic(IC.gear, 14)}Ajustes</button>` : ''}</div><div id="ts-body" class="ts-body"></div>`;
+      <span class="ts-sp"></span>${['dash', 'mi', 'detalle'].includes(S.tab) ? `<button type="button" class="ts-btn ts-btn--ico" id="ts-dl" title="Descargar las entradas de tiempo (CSV)" aria-label="Descargar" onclick="TimesheetModule.exportar()">${ic(IC.dl, 16)}</button>` : ''}${adm ? `<button type="button" class="ts-btn" onclick="TimesheetModule.go('ajustes')">${ic(IC.gear, 14)}Ajustes</button>` : ''}</div><div id="ts-body" class="ts-body"></div>`;
     const wrap = $('tt-report-wrap'); if (wrap) wrap.style.display = S.tab === 'informe' ? '' : 'none';
     if (S.tab === 'informe') { $('ts-body').innerHTML = `<div class="ts-back"><button type="button" class="ts-btn" onclick="TimesheetModule.go('dash')">${ic(IC.back, 14)}Volver al dashboard</button><span>Informe detallado: facturación, revisión de tiempo e impresión</span></div>`; try { TimerModule.loadReport(); } catch (_) {} return; }
     paintBody();
@@ -600,6 +620,6 @@ const TimesheetModule = (() => {
     sc.innerHTML = hd + (l.length ? `<div class="ts-card ts-card--col">${l.map(x => `<div class="ts-crow"><div><b>${esc(ACC[x.accion] || x.accion)}</b><small class="ts-sm">${esc(x.actor_name || 'Alguien')} · ${esc(x.detalle)}</small></div><small class="ts-sm">${new Date(x.created_at).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')}</div>` : `<div class="ts-empty"><b>Todavía no hay actividad registrada</b><span>Aquí aparecerán los cambios y aprobaciones desde ahora.</span></div>`);
   }
 
-  return { fPick, clearF, setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
+  return { exportar, fPick, clearF, setRange, applyRange, dashNav, dashSet, setSec, saveCap, toggleAprob, tagRename, tagRemove, revokeToken, setPref, open, active, handlesRefresh: active, refresh, go, nav, weekMenu, setWeek, fMenu, fSet, setHideWk, setView, cell, addAt, edit, del, addTask, pickSearch, pick, empty, manual, fold, meta, tagMenu, tagAdd, tagDel, rowMenu, approve,
     submit, review, memberMenu, setMember, openMember, deadlineModal, saveDeadline, toggleDia, saveHoras, delLibre, libreModal, saveLibre };
 })();
