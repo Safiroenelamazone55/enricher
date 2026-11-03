@@ -28,7 +28,7 @@ function limpiarCargo(raw, empresa, opts) {
   const dash = s.split(/\s+[–—-]\s+/);
   if (dash.length > 1 && dash[0].trim().split(' ').length >= 2) {
     const rest = _n(dash.slice(1).join(' '));
-    if (/\b(u s a?|usa|us|uk|emea|latam|apac|north america|south america|europe|europa|asia|global|international|worldwide)\b/.test(rest) || (empT.length && empT.some(t => t.length >= 4 && rest.split(' ').includes(t)))) s = dash[0].trim();
+    if (/\b(u s a?|usa|us|uk|emea|latam|apac|north america|south america|europe|europa|asia)\b/.test(rest) || (empT.length && empT.some(t => t.length >= 4 && rest.split(' ').includes(t)))) s = dash[0].trim();
   }
   s = s.replace(/\s+for\s+m\/s\b.*$/i, '').replace(/^(?:a|an|the)\s+(?=\S+\s+\S+)/i, '').trim();   // «A Global Network Partner for M/s. X» → «Global Network Partner»
   // Nombre de la empresa dentro del cargo («CEO Bidfood Spain», «Director de Operaciones de Novacentrax»): solo se quita si aparece COMPLETO y seguido
