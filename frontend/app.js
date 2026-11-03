@@ -12186,7 +12186,7 @@ const MyWorkModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${_metaHtml([parent && parent.titulo, t.project_nombre, t.client_nombre])}</span>` : ''}
       </div>
-      ${(() => { const c = SpacesModule.chipsFor(t, 3, _mwF); return c ? `<span class="mw-fch">${c}</span>` : ''; })()}<span class="mw-fst">${SpacesModule.statusTag(t)}</span>
+      ${(() => { const c = SpacesModule.chipsFor(t, 3, _mwF); return c ? `<span class="mw-fch">${c}</span>` : ''; })()}<span class="mw-fst">${_stTag(t)}</span>
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
       ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -12278,6 +12278,8 @@ const MyWorkModule = (() => {
     _openPop(ev.currentTarget, `<div class="mw-pop__h">Campos visibles en Lista, Tabla y Kanban</div>${ks.length ? ks.map(f => `<label class="mw-pop__o"><input type="checkbox" data-k="${esc(f.k)}" ${_mwF.includes(f.k) ? 'checked' : ''} onchange="MyWorkModule.toggleField(this.dataset.k,this.checked)"><span>${esc(f.n)}</span></label>`).join('') : '<div class="mw-pop__o">Ningún proyecto tiene campos personalizados todavía.</div>'}`);
   }
   function toggleField(k, on) { _mwF = on ? [...new Set([..._mwF, k])] : _mwF.filter(x => x !== k); try { localStorage.setItem('nova_mw_fields', JSON.stringify(_mwF)); } catch (_) {} render(); }
+  // La etiqueta de estado es un botón: al pulsarla se abre el menú para cambiar el estado (lista, tabla y kanban)
+  const _stTag = t => `<button type="button" class="mw-sttag" title="Cambiar estado" onclick="event.stopPropagation();MyWorkModule.stMenu(event,${t.id})">${SpacesModule.statusTag(t)}</button>`;
   function stMenu(ev, id) { const t = _tasks.find(x => x.id === id); _adoptTT(); if (t && SpacesModule.isCustom(t.project_id)) { ev.stopPropagation(); SpacesModule.estMenu(ev, id); } else DashboardModule.openStatusMenu(ev, id); }
   function fEdit(ev, id, fid) { _adoptTT(); SpacesModule.fEdit(ev, id, fid); }
   function setView(v) { if (!_VIEWS.some(x => x[0] === v)) return; _view = v; try { localStorage.setItem('nova_mw_view', v); } catch (_) {} render(); }
@@ -12319,7 +12321,7 @@ const MyWorkModule = (() => {
       return `<tr class="mw-tr${done ? ' is-done' : ''}${o.sub ? ' mw-tr--sub' : ''}" data-task-id="${t.id}">
         <td class="mw-td-st">${_statusBtn(t)}</td>
         <td class="mw-td-t"><span class="mw-t">${o.sub ? '<i class="mw-ind">↳</i>' : ''}${esc(t.titulo)}</span></td>
-        <td class="mw-td-s">${SpacesModule.statusTag(t)}</td>
+        <td class="mw-td-s">${_stTag(t)}</td>
         <td>${esc(t.project_nombre || '—')}</td><td class="mw-td-c">${esc(t.client_nombre || '—')}</td>
         <td>${prio(t)}</td>
         <td class="mw-td-e"><input class="mw-est" value="${esc(_fmtEst(t.duracion_est_min))}" placeholder="—" onclick="event.stopPropagation()" onblur="saveEstimateG(${t.id},this,m=>{const x=MyWorkModule._byIdG(${t.id});if(x)x.duracion_est_min=m})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"></td>
@@ -12351,7 +12353,7 @@ const MyWorkModule = (() => {
           <button class="tt-task-play-btn tt-play--kc" data-timer-task="${t.id}" draggable="false" title="Iniciar seguimiento" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
           <button class="kc-menu-btn" title="Opciones" onclick="MyWorkModule.openCardMenu(event,${t.id})"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg></button></div></div>
       ${(ctx || t.client_nombre) ? `<div class="kc-meta">${ctx ? `<span class="kc-project" title="${esc(ctx)}">${esc(ctx)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
-      ${_taskBadgesHtml(t)}<div class="mw-kchips">${SpacesModule.statusTag(t)}${SpacesModule.chipsFor(t, 2, _mwF)}</div><div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
+      ${_taskBadgesHtml(t)}<div class="mw-kchips">${_stTag(t)}${SpacesModule.chipsFor(t, 2, _mwF)}</div><div class="kc-foot"><span class="kc-prio kc-prio--${prio}">${prioLabel}</span>${dlFmt ? `<span class="kc-dl${ov ? ' kc-dl--ov' : ''}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dlFmt}</span>` : ''}<div class="kc-who-wrap">${who}</div></div></div>`;
   }
   let _group = 'estado', _gcols = [];
   const _GROUPS = { estado: ['Estado', t => t.estado || 'pendiente'], prioridad: ['Prioridad', t => t.prioridad || 'media'], proyecto: ['Proyecto', t => t.project_nombre || 'Sin proyecto'], cliente: ['Cliente', t => t.client_nombre || 'Sin cliente'] };
