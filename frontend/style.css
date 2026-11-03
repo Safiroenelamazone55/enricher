@@ -20588,3 +20588,4 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-ref__f .pl-l:first-child{margin-top:0}
 .pl-ref__add{width:100%;justify-content:center}
 .pl-opt{font-weight:400;color:#8A948E;font-size:.9em}
+.pl-ck input{width:auto}

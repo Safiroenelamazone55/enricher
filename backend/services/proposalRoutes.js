@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { render, LANGS, logoOk, docName } = require('./proposalTemplate');
 const pay = require('./proposalPay');
+const deck = require('./presentationTemplate');
 
 const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
@@ -79,7 +80,8 @@ function cleanRefs(a) {
 function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
-    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias) };
+    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
+    simulador: !(p.simulador === false || p.simulador === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '' };
 }
 
 function payDefaults(d) {
@@ -184,7 +186,7 @@ function mount(app, { pool, requireAuth }) {
     if (!nombre) return { err: 'Ponle un nombre a la plantilla' };
     const { rows: [br] } = await pool.query('SELECT id FROM tpl_brands WHERE id=$1 AND user_id=$2', [parseInt(b.brand_id, 10) || 0, uid(req)]);
     if (!br) return { err: 'Elige una empresa (marca) para la plantilla' };
-    const tipo = b.tipo === 'pago' ? 'pago' : 'propuesta';
+    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : 'propuesta');
     let d;
     if (tipo === 'pago') d = payDefaults(b.defaults);
     else { d = cleanParams(b.defaults); delete d.empresa; delete d.contacto; delete d.correo; delete d.inicio; }
@@ -236,6 +238,7 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given });
+    if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };
   }
   app.post('/api/tpl/preview', A, wrap(async (req, res) => {
@@ -290,6 +293,8 @@ function mount(app, { pool, requireAuth }) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    // la presentación interactiva lleva su propio script (navegación, simulador); el resto de documentos siguen sin scripts
+    if (/<html[^>]*data-deck="1"/.test(html)) res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https:; base-uri 'none'; form-action 'none'");
     if (descarga) { const ascii = nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]|[\/:*?"<>|]/g, '_'); res.setHeader('Content-Disposition', `attachment; filename="${ascii}.html"; filename*=UTF-8''${encodeURIComponent(nombre)}.html`); }
     // Cloudflare reescribe los correos del HTML como «[email protected]» (se ve así al imprimir a PDF o al guardar el archivo).
     // Con la arroba como entidad (&#64;) no los detecta, y el navegador la muestra y enlaza como una arroba normal.

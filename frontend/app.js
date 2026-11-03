@@ -42624,7 +42624,7 @@ window.HerramientasModule = HerramientasModule;
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-  const TIPOS = { propuesta: 'Propuesta comercial', pago: 'Métodos de pago' };
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', pago: 'Métodos de pago' };
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
   let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
@@ -42697,7 +42697,7 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id) || { tipo: 'propuesta', nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
     const d = t.defaults || {};
     _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
-      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="pago">Métodos de pago</option></select>`}
+      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="pago">Métodos de pago</option></select>`}
       <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
       <label class="pl-l">Descripción (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué oferta o documento es">
       <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
@@ -42744,7 +42744,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: [] } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: [], simulador: true, fotoPortada: '' } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42757,7 +42757,7 @@ const PlantillasModule = (() => {
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
       const p = t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
-        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [] };
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotoPortada: pr.fotoPortada || '' };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
       _draw(); _preview();
     } catch (e) { showBanner(e.message, 'error'); }
@@ -42797,6 +42797,13 @@ const PlantillasModule = (() => {
     const refsBox = `<div class="pl-box"><div class="pl-box__t">Empresas con las que hemos trabajado <span class="pl-opt">(opcional)</span></div>${rs.map(refCard).join('')}
       <button type="button" class="btn btn-ghost pl-ref__add" onclick="PlantillasModule.refAdd()">＋ Agregar empresa</button>
       <p class="hrm-card__meta">Se muestran 3 por hoja; si agregas más, se crean hojas adicionales. Sin empresas, esa hoja no aparece en la propuesta.</p></div>`;
+    // Opciones de la presentación interactiva: simulador de inversión y foto de portada
+    const deckBox = `<div class="pl-box"><div class="pl-box__t">Presentación interactiva</div>
+      <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 12px"><input type="checkbox" ${p.simulador !== false ? 'checked' : ''} onchange="PlantillasModule.simSet(this.checked)"> Mostrar el simulador de inversión (el cliente mueve el plazo y ve el total)</label>
+      <label class="pl-l">Foto de portada <span class="pl-opt">(opcional)</span></label>
+      <div class="pl-ref__logo"><span class="pl-cs__box" style="background:#fff;width:120px;height:68px">${p.fotoPortada ? `<img src="${p.fotoPortada}" alt="" style="object-fit:cover;width:100%;height:100%">` : '<i>—</i>'}</span>
+        <span><label class="hrm-lnk">${p.fotoPortada ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="PlantillasModule.fotoPortada(this)"></label>${p.fotoPortada ? ' <button type="button" class="hrm-lnk" onclick="PlantillasModule.fotoPortada(null)">Quitar</button>' : ''}</span></div>
+      <p class="hrm-card__meta">Sin foto, la portada usa un gráfico animado con los colores de tu marca.</p></div>`;
     let campos;
     if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
@@ -42811,7 +42818,7 @@ const PlantillasModule = (() => {
           <div class="pl-row"><div>${f('modelo', 'Modelo de compensación', 'text', 'Fee fijo + comisiones')}</div><div>${f('nota', 'Nota de pago', 'text', 'Pago al inicio de cada periodo')}</div></div></div>
         ${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}
         <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>
-        ${refsBox}`;
+        ${refsBox}${g.t.tipo === 'presentacion' ? deckBox : ''}`;
     }
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
@@ -42841,6 +42848,27 @@ const PlantillasModule = (() => {
     const fm = document.querySelector('.pl-form'), st = fm ? fm.scrollTop : 0, wy = window.scrollY;
     _drawGen();
     const f2 = document.querySelector('.pl-form'); if (f2) f2.scrollTop = st; window.scrollTo(0, wy);
+  }
+  function simSet(on) { _gen.p.simulador = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
+  function fotoPortada(input) {
+    const g = _gen; if (!input) { g.p.fotoPortada = ''; _redrawKeep(); _preview(); return; }
+    const f = input.files && input.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const im = new Image();
+      im.onload = () => {   // se reduce a un tamaño de portada para que la presentación no pese
+        const k = Math.min(1, 1100 / im.width, 900 / im.height), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        let q = 0.82, u = cv.toDataURL('image/jpeg', q);
+        while (u.length > 440000 && q > 0.4) { q -= 0.1; u = cv.toDataURL('image/jpeg', q); }
+        if (u.length > 440000) { showBanner('La foto es muy pesada: usa una más pequeña', 'error'); return; }
+        g.p.fotoPortada = u; _redrawKeep(); _preview();
+      };
+      im.onerror = () => showBanner('No se pudo leer la imagen', 'error');
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
   }
   function refAdd() {
     const g = _gen; g.p.referencias = g.p.referencias || [];
@@ -42877,6 +42905,14 @@ const PlantillasModule = (() => {
   }
   function _fit() {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
+    if (_gen && _gen.t && _gen.t.tipo === 'presentacion') {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
+      const w = Math.max(320, box.clientWidth - 4), h = Math.round(w * 9 / 16);
+      fr.setAttribute('sandbox', 'allow-scripts allow-popups'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
+      fr.style.transform = 'none'; fr.style.width = w + 'px'; fr.style.height = h + 'px'; inn.style.width = w + 'px'; inn.style.height = h + 'px'; fr.onload = null;
+      if (_gen && _gen.html) fr.srcdoc = _gen.html;
+      return;
+    }
+    fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
     const s = Math.min(1, (box.clientWidth - 4) / 850);
     const size = () => { try { const h = fr.contentDocument.documentElement.scrollHeight + 20; fr.style.height = h + 'px'; inn.style.height = (h * s) + 'px'; } catch (_) {} };
     fr.style.width = '850px'; fr.style.height = '1200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
@@ -43074,7 +43110,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
