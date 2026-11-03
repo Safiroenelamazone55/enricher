@@ -23,16 +23,26 @@ function limpiarCargo(raw, empresa, opts) {
   s = s.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();       // (ES / PT), (Spain)…
   s = s.split(seguro ? /\s+[|@]\s+|\s+at\s+/i : /\s+[|@·•]\s+|\s+at\s+|\s+\/\s+|\s+[–—]\s+/i)[0];   // «Operations Manager | Empresa», «CEO at X», «CEO y fundadora / EMPRESA» → lo primero
   if (!seguro) s = s.split(/\s*,\s*/)[0];                              // «Responsable Logistica, encargado de camaras…» → lo primero (solo para agrupar)
-  // Nombre de la empresa dentro del cargo («CEO Bidfood Spain», «Director de Operaciones de Novacentrax»): se quita si aparece completo.
-  const emp = _n(empresa).split(' ').filter(t => t.length >= 3 && !_LEGAL.has(t));
+  // «Marketing Strategy Lead — U.S. Insurance Brand»: tras un guion largo, si lo que sigue es geografía o el nombre de la empresa, no es parte del cargo.
+  const empT = _n(empresa).split(' ').filter(t => t.length >= 3 && !_LEGAL.has(t));
+  const dash = s.split(/\s+[–—-]\s+/);
+  if (dash.length > 1 && dash[0].trim().split(' ').length >= 2) {
+    const rest = _n(dash.slice(1).join(' '));
+    if (/\b(u s a?|usa|us|uk|emea|latam|apac|north america|south america|europe|europa|asia|global|international|worldwide)\b/.test(rest) || (empT.length && empT.some(t => t.length >= 4 && rest.split(' ').includes(t)))) s = dash[0].trim();
+  }
+  s = s.replace(/\s+for\s+m\/s\b.*$/i, '').replace(/^(?:a|an|the)\s+(?=\S+\s+\S+)/i, '').trim();   // «A Global Network Partner for M/s. X» → «Global Network Partner»
+  // Nombre de la empresa dentro del cargo («CEO Bidfood Spain», «Director de Operaciones de Novacentrax»): solo se quita si aparece COMPLETO y seguido
+  // (todas las palabras del nombre, en orden). Antes se quitaba palabra por palabra y destrozaba cargos que comparten una palabra con la empresa.
+  const emp = empT;
   if (emp.length) {
-    const toks = s.split(' '), keep = [];
-    for (let i = 0; i < toks.length; i++) {
-      const t = _n(toks[i]);
-      if (t && emp.includes(t) && t.length >= 4) { while (keep.length && /^(de|del|di|da|en|at|of|in|para|for|-)$/i.test(keep[keep.length - 1])) keep.pop(); continue; }
-      keep.push(toks[i]);
+    const toks = s.split(' '), nt = toks.map(t => _n(t));
+    let at = -1;
+    for (let i = 0; i + emp.length <= nt.length && at < 0; i++) if (emp.every((e, k) => nt[i + k] === e)) at = i;
+    if (at >= 0 && (emp.length > 1 || emp[0].length >= 4)) {
+      const keep = toks.slice(0, at).concat(toks.slice(at + emp.length));
+      while (keep.length && /^(de|del|di|da|en|at|of|in|para|for|-)$/i.test(keep[keep.length - 1])) keep.pop();
+      if (keep.length) s = keep.join(' ');
     }
-    if (keep.length) s = keep.join(' ');
   }
   // Geografía y sector al final: «… Delegación Alicante», «… Portugal», «… Sector Alimentación».
   s = s.replace(/\s+(delegaci[oó]n|delegacion|sector|filial|sucursal)\s+.*$/i, '');
