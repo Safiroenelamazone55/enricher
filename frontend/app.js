@@ -42726,7 +42726,8 @@ const PlantillasModule = (() => {
   async function saveTpl(id) {
     const v = k => $('plt-' + k).value;
     const tipo = id ? (_tpls.find(x => x.id === id) || {}).tipo : v('tipo');
-    const defaults = tipo === 'pago' ? _payFromForm('plt') : { moneda: v('mon'), fee: v('fee'), plazo: v('plazo'), servicio: v('serv'), servicioEm: v('servem'), modelo: v('modelo'), nota: v('nota') };
+    const prev = ((_tpls.find(x => x.id === id) || {}).defaults) || {};   // conserva lo que el formulario no edita (empresas de referencia, simulador, fotos)
+    const defaults = tipo === 'pago' ? _payFromForm('plt') : { ...prev, moneda: v('mon'), fee: v('fee'), plazo: v('plazo'), servicio: v('serv'), servicioEm: v('servem'), modelo: v('modelo'), nota: v('nota') };
     try {
       await _j(id ? `/tpl/templates/${id}` : '/tpl/templates', _body({ method: id ? 'PUT' : 'POST', data: { tipo, nombre: v('nombre'), oferta: v('oferta'), brand_id: v('brand'), lang: v('lang'), defaults } }));
       _closeModal(); showBanner('Plantilla guardada', 'success'); render(_host.id);
@@ -42744,7 +42745,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: true, fotos: true, fotoPortada: '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '' } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42852,6 +42853,22 @@ const PlantillasModule = (() => {
     const f2 = document.querySelector('.pl-form'); if (f2) f2.scrollTop = st; window.scrollTo(0, wy);
   }
   function fotosSet(on) { _gen.p.fotos = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
+  window.addEventListener('message', e => {   // «Presentar» dentro de la vista previa: el marco pide pantalla completa y la página lo concede
+    const fr = $('pl-frame'); if (!fr || !e.data || !e.data.deckFs || e.source !== fr.contentWindow) return;
+    _deckFull(e.data.deckFs === 2 ? false : !(document.fullscreenElement === fr || fr.dataset.ov === '1'));
+  });
+  // Modo presentar de la vista previa: pantalla completa real si el navegador la concede; si no, el marco ocupa toda la ventana
+  function _deckFull(on) {
+    const fr = $('pl-frame'); if (!fr) return;
+    const ovOff = () => { if (fr.dataset.ov !== '1') return; fr.dataset.ov = ''; fr.style.cssText = fr.dataset.css || ''; };
+    if (!on) { if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) { /* nada */ } } ovOff(); return; }
+    const overlay = () => { if (fr.dataset.ov === '1') return; fr.dataset.css = fr.style.cssText; fr.dataset.ov = '1'; fr.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:100000;background:#000;border:0;transform:none'; };
+    try {
+      const rq = (fr.requestFullscreen || fr.webkitRequestFullscreen).call(fr);
+      if (rq && rq.catch) rq.catch(overlay);
+    } catch (e) { overlay(); }
+  }
+  document.addEventListener('fullscreenchange', () => { const fr = $('pl-frame'); if (fr && !document.fullscreenElement) fr.dataset.ov = fr.dataset.ov === '1' ? '1' : ''; });
   function simSet(on) { _gen.p.simulador = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
   function fotoPortada(input) {
     const g = _gen; if (!input) { g.p.fotoPortada = ''; _redrawKeep(); _preview(); return; }

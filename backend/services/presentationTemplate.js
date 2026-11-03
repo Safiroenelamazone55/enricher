@@ -239,8 +239,9 @@ const JS = `
     else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'){e.preventDefault();go(i-1);}
     else if(k==='Home'){go(0);}else if(k==='End'){go(n-1);}
     else if(k==='f'||k==='F'){fs();}});
-  function fs(){var d=document.documentElement;try{if(document.fullscreenElement){document.exitFullscreen();}else if(d.requestFullscreen){d.requestFullscreen();}}catch(e){}}
+  function fs(){var d=document.documentElement;function ask(){try{parent.postMessage({deckFs:1},'*');}catch(e){}}try{if(document.fullscreenElement){document.exitFullscreen();}else if(parent!==window){ask();}else if(d.requestFullscreen){var r=d.requestFullscreen();if(r&&r.catch)r.catch(function(){});}}catch(e){ask();}}
   var b=document.getElementById('fs');if(b)b.addEventListener('click',fs);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&parent!==window){try{parent.postMessage({deckFs:2},'*');}catch(x){}}});
   document.getElementById('prev').addEventListener('click',function(){go(i-1);});document.getElementById('next').addEventListener('click',function(){go(i+1);});
   dots.forEach(function(d,j){d.addEventListener('click',function(){go(j);});});
   var x0=null;document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX;},{passive:true});document.addEventListener('touchend',function(e){if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>50)go(i+(dx<0?1:-1));x0=null;},{passive:true});
