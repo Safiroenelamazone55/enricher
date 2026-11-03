@@ -109,7 +109,12 @@ function _nameBase(raw, keepInsideIfEmpty) {
   }
   return s;
 }
-const cleanFirstName = raw => _nameBase(raw, true);
+// «Pedro M.», «Chris R.», «Ian J.»: la inicial suelta del apellido que algunas fuentes pegan al nombre sobra en el campo Nombre.
+function cleanFirstName(raw) {
+  const s = _nameBase(raw, true);
+  const t = s.replace(/^(\S.*?\S)\s+[A-Za-zÁÉÍÓÚÑÜ]\.?$/, '$1').trim();
+  return t !== s && t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇçÃÕÀÈÌÒÙÂÊÎÔÛãõàèìòùâêîôû]/g, '').length >= 2 ? t : s;
+}
 const cleanLastName = raw => _nameBase(raw, false);
 
 function cleanEmployeeCount(raw) {
