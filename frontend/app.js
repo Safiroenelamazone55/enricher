@@ -27212,7 +27212,8 @@ ${rhead}${foot}
     const out = {};
     ['company', 'contact'].forEach(ent => (_lmCustomFields[ent] || []).forEach(f => {
       const slug = _slugVar(f.label); if (!slug) return;
-      const v = ent === 'company' ? (s || {})['company_' + f.field_key] : (s || {})[f.field_key];
+      let v = ent === 'company' ? (s || {})['company_' + f.field_key] : (s || {})[f.field_key];
+      if (v != null && (String(v).length > 240 || (String(v).length > 100 && String(v).includes('\n')))) v = '';   // dato absurdamente largo (p. ej. un prompt pegado por error): no entra al mensaje, se marca como falta
       out[slug] = v;
       _slugAliases(slug).forEach(a => { if (!(a in out)) out[a] = v; });
     }));

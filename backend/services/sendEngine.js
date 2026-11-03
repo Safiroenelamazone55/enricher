@@ -100,6 +100,9 @@ async function _cfLabels(pool, uid) {
   _cfLabelCache.set(uid, { t: Date.now(), rows });
   return rows;
 }
+// Un campo personalizado que se usa dentro de un mensaje es un dato corto (un nombre, una ciudad…). Si trae un texto larguísimo o con saltos de
+// línea (p. ej. un prompt de IA pegado por error en la celda), NO se inserta en el mensaje: se trata como vacío y el motor lo avisa en vez de enviarlo.
+const _saneVar = v => { const s = String(v == null ? '' : v); return !(s.length > 240 || (s.length > 100 && s.includes('\n'))); };
 // Deja en ctx._custom los valores de los campos personalizados (de la empresa y del contacto) por nombre-variable. Nunca rompe el envío.
 async function attachCustom(pool, ctx, uidFallback) {
   try {
@@ -124,7 +127,7 @@ async function attachCustom(pool, ctx, uidFallback) {
       const src = l.entity === 'company' ? co : k;
       const v = src[l.field_key];
       const slug = _slugVar(l.label);
-      if (slug && v) { out[slug] = v; _slugAliases(slug).forEach(a => { if (!(a in out)) out[a] = v; }); }
+      if (slug && v && _saneVar(v)) { out[slug] = v; _slugAliases(slug).forEach(a => { if (!(a in out)) out[a] = v; }); }
     }
     ctx._custom = out;
   } catch (err) { console.warn('[sendEngine] campos personalizados:', err.message); }
