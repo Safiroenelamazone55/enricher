@@ -65,10 +65,21 @@ const brandOut = b => ({ ...b, logos: { blanco: !!b.logo_white, negro: !!b.logo_
   logo_white: undefined, logo_black: undefined, logo_color: undefined,
   prev: { blanco: b.logo_white || null, negro: b.logo_black || null, color: b.logo_color || null } });
 
+// Empresas con las que se ha trabajado (opcional): nombre, link, descripción y logo; hasta 12 (3 por hoja)
+function cleanRefs(a) {
+  if (!Array.isArray(a)) return [];
+  return a.slice(0, 12).map(r => {
+    r = r || {};
+    let link = S(r.link, 200);
+    if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link.replace(/^\/+/, '');
+    if (!/^https?:\/\/[^\s"'<>]+$/i.test(link)) link = '';
+    return { nombre: S(r.nombre, 80), link, descripcion: S(r.descripcion, 420), logo: (logoOk(r.logo) && r.logo.length < 400000) ? r.logo : '' };
+  }).filter(r => r.nombre || r.logo);
+}
 function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
-    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente) };
+    plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias) };
 }
 
 function payDefaults(d) {

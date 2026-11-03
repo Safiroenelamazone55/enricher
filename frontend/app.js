@@ -42744,7 +42744,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: [] } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42757,7 +42757,7 @@ const PlantillasModule = (() => {
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
       const p = t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
-        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '' };
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [] };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
       _draw(); _preview();
     } catch (e) { showBanner(e.message, 'error'); }
@@ -42787,6 +42787,16 @@ const PlantillasModule = (() => {
         <span><label class="hrm-lnk">${lc[k] ? 'Cambiar' : 'Subir'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logoCliente('${k}',this)"></label>${lc[k] ? ' <button class="hrm-lnk" onclick="PlantillasModule.logoCliente(\'' + k + '\',null)">Quitar</button>' : ''}</span></div>`;
     const logoBox = `<label class="pl-l">Logo del cliente (opcional)</label><div class="pl-cls">${slotC('blanco', 'Blanco', '#0F172A')}${slotC('negro', 'Negro', '#F1F5F9')}${slotC('color', 'Color', '#fff')}</div>
       <p class="hrm-card__meta">Sube las versiones que tengas y marca cuál usar. En la portada oscura el blanco se ve directo; el negro o el color van sobre un recuadro blanco.</p>`;
+    // Empresas con las que hemos trabajado: se agregan a mano (logo, nombre, link opcional y descripción); 3 por hoja
+    const rs = Array.isArray(p.referencias) ? p.referencias : [];
+    const refCard = (r, i) => `<div class="pl-ref"><div class="pl-ref__h"><b>Empresa ${i + 1}</b><button type="button" class="hrm-lnk" onclick="PlantillasModule.refDel(${i})">Quitar</button></div>
+      <div class="pl-ref__g"><div class="pl-ref__logo"><span class="pl-cs__box" style="background:#fff">${r.logo ? `<img src="${r.logo}" alt="">` : '<i>—</i>'}</span><label class="hrm-lnk">${r.logo ? 'Cambiar logo' : 'Subir logo'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.refLogo(${i},this)"></label></div>
+      <div class="pl-ref__f"><label class="pl-l">Nombre de la empresa</label><input class="pl-in" value="${E(r.nombre)}" placeholder="Ej. Onezix" oninput="PlantillasModule.refSet(${i},'nombre',this.value)">
+        <label class="pl-l">Link <span class="pl-opt">(opcional)</span></label><input class="pl-in" value="${E(r.link)}" placeholder="https://empresa.com" oninput="PlantillasModule.refSet(${i},'link',this.value)">
+        <label class="pl-l">Descripción</label><textarea class="pl-in" rows="3" maxlength="420" placeholder="Qué hicimos con esta empresa y qué resultado tuvo" oninput="PlantillasModule.refSet(${i},'descripcion',this.value)">${E(r.descripcion)}</textarea></div></div></div>`;
+    const refsBox = `<div class="pl-box"><div class="pl-box__t">Empresas con las que hemos trabajado <span class="pl-opt">(opcional)</span></div>${rs.map(refCard).join('')}
+      <button type="button" class="btn btn-ghost pl-ref__add" onclick="PlantillasModule.refAdd()">＋ Agregar empresa</button>
+      <p class="hrm-card__meta">Se muestran 3 por hoja; si agregas más, se crean hojas adicionales. Sin empresas, esa hoja no aparece en la propuesta.</p></div>`;
     let campos;
     if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
@@ -42800,7 +42810,8 @@ const PlantillasModule = (() => {
           <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
           <div class="pl-row"><div>${f('modelo', 'Modelo de compensación', 'text', 'Fee fijo + comisiones')}</div><div>${f('nota', 'Nota de pago', 'text', 'Pago al inicio de cada periodo')}</div></div></div>
         ${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}
-        <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>`;
+        <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>
+        ${refsBox}`;
     }
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
@@ -42824,6 +42835,37 @@ const PlantillasModule = (() => {
     const f = input.files && input.files[0]; if (!f) return;
     if (f.size > 350000) { showBanner('El logo pesa demasiado (máx. ~350 KB): usa una versión más liviana', 'error'); return; }
     const r = new FileReader(); r.onload = () => { g.p.logoCliente[k] = r.result; if (!g.p.logoCliente.usar || !g.p.logoCliente[g.p.logoCliente.usar]) g.p.logoCliente.usar = k; _drawGen(); _preview(); }; r.readAsDataURL(f);
+  }
+  // ── Empresas con las que hemos trabajado ──
+  function _redrawKeep() {
+    const fm = document.querySelector('.pl-form'), st = fm ? fm.scrollTop : 0, wy = window.scrollY;
+    _drawGen();
+    const f2 = document.querySelector('.pl-form'); if (f2) f2.scrollTop = st; window.scrollTo(0, wy);
+  }
+  function refAdd() {
+    const g = _gen; g.p.referencias = g.p.referencias || [];
+    if (g.p.referencias.length >= 12) { showBanner('Máximo 12 empresas', 'info'); return; }
+    g.p.referencias.push({ nombre: '', link: '', descripcion: '', logo: '' }); _redrawKeep();
+  }
+  function refDel(i) { if (!_gen.p.referencias) return; _gen.p.referencias.splice(i, 1); _redrawKeep(); _preview(); }
+  function refSet(i, k, v) { const r = (_gen.p.referencias || [])[i]; if (!r) return; r[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  function refLogo(i, input) {
+    const f = input && input.files && input.files[0], r = (_gen.p.referencias || [])[i]; if (!f || !r) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      if (f.type === 'image/svg+xml') { if (String(rd.result).length > 250000) { showBanner('El logo SVG pesa demasiado: usa una versión más liviana', 'error'); return; } r.logo = rd.result; _redrawKeep(); _preview(); return; }
+      const im = new Image();
+      im.onload = () => {   // se reduce a un tamaño de logo (la hoja lo muestra pequeño) para que la propuesta no pese
+        const k = Math.min(1, 480 / im.width, 280 / im.height), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        let u = cv.toDataURL('image/webp', 0.92); if (!/^data:image\/webp/.test(u)) u = cv.toDataURL('image/png');
+        r.logo = u; _redrawKeep(); _preview();
+      };
+      im.onerror = () => showBanner('No se pudo leer la imagen', 'error');
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
   }
   function usarLogoCliente(k) { _gen.p.logoCliente.usar = k; _preview(); }
   function toggleMetodo(id, on) {
@@ -43032,7 +43074,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

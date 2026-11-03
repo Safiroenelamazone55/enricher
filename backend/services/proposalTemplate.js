@@ -84,7 +84,13 @@ function render(brand, p, lang) {
     [x('Alcance e inversión', 'Scope and investment', 'Umfang und Investition', 'Escopo e investimento'), x('Qué incluye el servicio, qué no, y la inversión mensual.', 'What the service includes, what it does not, and the monthly investment.', 'Was die Leistung umfasst, was nicht, und die monatliche Investition.', 'O que o serviço inclui, o que não inclui e o investimento mensal.')],
     [x('Próximo paso', 'Next step', 'Nächster Schritt', 'Próximo passo'), x('Cómo iniciamos.', 'How we get started.', 'So legen wir los.', 'Como iniciamos.')],
   ];
-  const idxHtml = idxItems.map((r, i) => `<div class="ir"><span class="n">0${i + 1}</span><div><h3>${r[0]}</h3><p>${r[1]}</p></div><span class="pg">0${i + 3}</span></div>`).join('\n');
+  // Empresas con las que hemos trabajado: página(s) opcionales (3 por hoja) antes de «Alcance e inversión»
+  const refs = Array.isArray(p.referencias) ? p.referencias.filter(r => r && (r.nombre || logoOk(r.logo))).slice(0, 12) : [];
+  const nRef = refs.length ? Math.ceil(refs.length / 3) : 0;
+  const pn = n => String(n).padStart(2, '0');
+  if (refs.length) idxItems.splice(4, 0, [x('Empresas con las que hemos trabajado', 'Companies we have worked with', 'Unternehmen, mit denen wir gearbeitet haben', 'Empresas com as quais trabalhamos'), x('Algunas de las empresas con las que hemos trabajado y lo que hicimos por ellas.', 'Some of the companies we have worked with and what we did for them.', 'Einige der Unternehmen, mit denen wir gearbeitet haben, und was wir für sie getan haben.', 'Algumas das empresas com as quais trabalhamos e o que fizemos por elas.')]);
+  const iScope = refs.length ? 5 : 4, nScope = 5 + (refs.length ? 1 : 0);
+  const idxHtml = idxItems.map((r, i) => `<div class="ir"><span class="n">${pn(i + 1)}</span><div><h3>${r[0]}</h3><p>${r[1]}</p></div><span class="pg">${pn(3 + i + (refs.length && i > 4 ? nRef - 1 : 0))}</span></div>`).join('\n');
 
   const rs = (n, h, pTxt, res) => `<div class="rs"><span class="n">${n}</span><div><h3>${h}</h3><p>${pTxt}</p></div><div class="out">${x('Resultado', 'Outcome', 'Ergebnis', 'Resultado')}<b>${res}</b></div></div>`;
   const phase = (w, t) => `<div class="ph"><b>${w}</b> ${t}</div>`;
@@ -206,9 +212,22 @@ ${dl('09', x('Playbook inicial y recomendaciones comerciales.', 'Initial playboo
     x('Comunicar el resultado de las conversaciones.', 'Report the outcome of the conversations.', 'Das Ergebnis der Gespräche zurückmelden.', 'Comunicar o resultado das conversas.')])}</ul></div>
 </div></div>${ft('06')}</section>`);
 
-  // 7 · alcance e inversión
-  pages.push(`<section class="page t7">${hd('05 · ' + idxItems[4][0])}
+  // 7 · empresas con las que hemos trabajado (solo si se cargaron): hasta 3 por hoja
+  if (refs.length) {
+    const hostOf = u => String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
+    const card = r => `<div class="ref"><div class="rl">${logoOk(r.logo) ? `<img alt="${esc(r.nombre)}" src="${r.logo}">` : `<span>${esc(String(r.nombre || '?').trim().charAt(0).toUpperCase())}</span>`}</div><div class="rt"><h3>${esc(r.nombre)}</h3>${r.link ? `<a class="rk" target="_blank" rel="noopener noreferrer" href="${esc(r.link)}">${esc(hostOf(r.link))} ↗</a>` : ''}${r.descripcion ? `<p>${esc(r.descripcion)}</p>` : ''}</div></div>`;
+    for (let k = 0; k < nRef; k++) {
+      pages.push(`<section class="page">${hd('05 · ' + idxItems[4][0])}
 <div class="body"><div class="eyebrow">${sec} 05</div>
+<h2>${x('Empresas con las que <em>hemos trabajado.</em>', 'Companies we have <em>worked with.</em>', 'Unternehmen, mit denen wir <em>gearbeitet haben.</em>', 'Empresas com as quais <em>trabalhamos.</em>')}</h2>
+${k === 0 ? `<p class="lead">${idxItems[4][1]}</p>` : ''}
+<div class="refs">${refs.slice(k * 3, k * 3 + 3).map(card).join('')}</div></div>${ft(pn(7 + k))}</section>`);
+    }
+  }
+
+  // 7 · alcance e inversión
+  pages.push(`<section class="page t7">${hd(pn(nScope) + ' · ' + idxItems[iScope][0])}
+<div class="body"><div class="eyebrow">${sec} ${pn(nScope)}</div>
 <h2>${x('Un alcance delimitado para <em>aprender con precisión.</em>', 'A defined scope to <em>learn with precision.</em>', 'Ein klar umrissener Umfang, um <em>präzise zu lernen.</em>', 'Um escopo delimitado para <em>aprender com precisão.</em>')}</h2>
 <div class="terms">
 <div><h3>${x('Incluye', 'Includes', 'Enthalten', 'Inclui')}</h3><ul class="l">${li_([
@@ -237,7 +256,7 @@ ${dl('09', x('Playbook inicial y recomendaciones comerciales.', 'Initial playboo
 <div><div class="k">${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</div><div class="big">${feeNum}</div><div class="sm">${notaPago}</div></div>
 <div><div class="k">${x('Plazo recomendado', 'Recommended term', 'Empfohlene Laufzeit', 'Prazo recomendado')}</div><div class="big">${mesesTxt}</div><div class="sm">${x('Ciclo completo: validar, activar y optimizar.', 'Full cycle: validate, activate and optimize.', 'Kompletter Zyklus: validieren, aktivieren und optimieren.', 'Ciclo completo: validar, ativar e otimizar.')}</div></div>
 <div class="full"><div class="k">${x('Modelo de compensación', 'Compensation model', 'Vergütungsmodell', 'Modelo de remuneração')}</div><div class="mid">${modeloTxt}</div>${p.modelo ? '' : `<div class="sm">${x('Las comisiones se aplican adicionalmente al fee mensual.', 'Commissions apply in addition to the monthly fee.', 'Provisionen fallen zusätzlich zur monatlichen Gebühr an.', 'As comissões são aplicadas adicionalmente ao fee mensal.')}</div>`}</div>
-</div></div>${ft('07')}</section>`);
+</div></div>${ft(pn(7 + nRef))}</section>`);
 
   // 8 · cierre
   pages.push(`<section class="page close"><div class="hd">${logoW}<span class="tag" style="color:rgba(255,255,255,.55)">${x('Próximo paso con ', 'Next step with ', 'Nächster Schritt mit ', 'Próximo passo com ')}<span style="color:#fff;font-weight:600">${esc(empresa.toUpperCase())}</span></span></div>
@@ -259,6 +278,7 @@ ${st('03', x('Preparar mensajes, cuentas objetivo e iniciar la ejecución.', 'Pr
   return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>${rootVars}\n${CSS}\n.wm{font-weight:700;font-size:18px;letter-spacing:-.02em;height:auto}
+.refs{margin-top:34px;border-top:1px solid var(--ink)}.ref{display:grid;grid-template-columns:180px 1fr;gap:30px;padding:26px 0;border-bottom:1px solid var(--line);align-items:center}.ref .rl{height:108px;background:var(--soft);border-radius:10px;display:flex;align-items:center;justify-content:center;padding:14px}.ref .rl img{max-width:100%;max-height:80px;object-fit:contain}.ref .rl span{font-size:36px;font-weight:600;color:var(--teal)}.ref h3{font-size:19px;font-weight:600;letter-spacing:-.025em;color:var(--ink)}.ref .rk{display:inline-block;margin-top:4px;font-size:11px;font-weight:600;color:var(--teal);text-decoration:none}.ref p{margin-top:9px;font-size:12px;line-height:1.65;color:var(--text);max-width:440px}
 @media print{.page{height:1054px}.page:last-of-type{break-after:auto;page-break-after:auto}}
 .logo{height:30px}.cover .logo{height:40px}.cover .for .cl{display:block;margin:6px 0 0 auto;max-height:46px;max-width:180px;object-fit:contain;background:#fff;padding:9px 14px;border-radius:6px}.cover .for .cl--w{background:none;padding:0;border-radius:0;max-height:52px}.pf .ch2 svg{height:168px}.dl div{min-height:66px;padding-top:14px;padding-bottom:14px}.two{margin-top:20px}.rp{padding:22px 24px}.t3 .road .rs{padding:6px 0}.t3 .lead{margin-top:12px}</style></head><body>\n${pages.join('\n')}\n</body></html>`;
 }

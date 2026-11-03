@@ -20579,3 +20579,12 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .mw-sttag{border:0;background:none;padding:0;margin:0;cursor:pointer;font:inherit;display:inline-flex;align-items:center;border-radius:6px}
 .mw-sttag:hover .sp-tag{filter:brightness(.95)}
 .mw-sttag:focus-visible{outline:2px solid #007AFF;outline-offset:2px}
+/* Plantillas · empresas con las que hemos trabajado */
+.pl-ref{border:1px solid #E3E7E4;border-radius:10px;padding:12px 12px 14px;margin:0 0 12px;background:#fff}
+.pl-ref__h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12.5px}
+.pl-ref__g{display:grid;grid-template-columns:1fr;gap:10px}
+.pl-ref__logo{display:flex;flex-direction:row;gap:12px;align-items:center}
+.pl-ref__logo .pl-cs__box{width:96px;height:64px}
+.pl-ref__f .pl-l:first-child{margin-top:0}
+.pl-ref__add{width:100%;justify-content:center}
+.pl-opt{font-weight:400;color:#8A948E;font-size:.9em}
