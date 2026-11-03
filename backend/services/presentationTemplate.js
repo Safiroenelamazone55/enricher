@@ -110,8 +110,28 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .hasband .dl{margin-top:30px;gap:14px}.hasband .dl div{min-height:92px;padding:16px 22px}
 .tl .st .bn{display:none;position:absolute;right:26px;top:34px;font-size:120px;font-weight:600;line-height:1;letter-spacing:-.06em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.2)}
 .cover h1{font-size:82px;line-height:1}
+/* portada (rediseño) */
+.cover .content{display:block}
+.cover .cl{position:absolute;left:0;top:0;bottom:142px;width:720px;display:flex;flex-direction:column;justify-content:center}
+.cover .eyebrow{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+.cover .eyebrow:before{content:"";width:44px;height:2px;background:var(--teal-l)}
+.cover h1{font-size:86px;line-height:.97;letter-spacing:-.05em;max-width:720px}
+.cover h1.long{font-size:72px}
+.cover .sub{margin-top:24px;font-size:18px;line-height:1.6;max-width:540px;color:rgba(255,255,255,.8)}
+.cover .ph3{position:absolute;right:0;top:34px;width:286px;display:grid;gap:12px}
+.cover .ph3>div{display:grid;grid-template-columns:54px 1fr;align-items:center;padding:16px 20px;background:rgba(10,16,30,.34);border:1px solid rgba(255,255,255,.2);border-radius:18px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.cover .ph3 i{font-style:normal;font-size:30px;font-weight:300;letter-spacing:-.04em;color:var(--teal-l)}
+.cover .ph3 b{display:block;font-size:19px;font-weight:600;letter-spacing:-.02em}
+.cover .ph3 small{display:block;margin-top:2px;font-size:12.5px;color:rgba(255,255,255,.7)}
+.cover .strip{position:absolute;left:0;right:0;bottom:4px;display:grid;grid-template-columns:1fr 1.15fr .95fr;background:rgba(8,13,24,.42);border:1px solid rgba(255,255,255,.18);border-radius:20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.cover .strip>div{padding:18px 28px;border-left:1px solid rgba(255,255,255,.14)}
+.cover .strip>div:first-child{border-left:0}
+.cover .strip small{display:block;margin-bottom:7px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.cover .strip b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.cover .strip b span{flex-basis:100%;margin-top:-1px;font-size:14px;font-weight:500;color:var(--teal-l)}
+.cover .strip b img{height:26px;max-width:110px;object-fit:contain;background:#fff;padding:4px 8px;border-radius:7px}
 /* portada */
-.cover .content{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
+
 .cover .for{position:absolute;right:0;top:-34px;text-align:right;font-size:12px;color:rgba(255,255,255,.65);letter-spacing:.06em;text-transform:uppercase}
 .cover .for b{display:block;margin-top:6px;font-size:15px;letter-spacing:.02em;text-transform:none;color:#fff;font-weight:600}
 .cover .for img{display:block;margin:8px 0 0 auto;max-height:44px;max-width:180px;object-fit:contain;background:#fff;padding:8px 12px;border-radius:8px}
@@ -125,6 +145,37 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .art .photo:after{content:"";position:absolute;inset:0;border-radius:28px;background:linear-gradient(160deg,rgba(var(--tl-rgb),.18),rgba(11,18,32,.45))}
 .chipf{position:absolute;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:14px;padding:12px 16px;font-size:13px;color:#fff;animation:float 9s ease-in-out infinite}
 .chipf b{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em}
+/* portada editorial */
+.cover.ed{background:#F1EEE7}
+.cover.ed .content{display:flex;flex-direction:column;justify-content:space-between;margin-right:470px;height:100%}
+.edph{position:absolute;right:0;top:0;bottom:0;width:470px;overflow:hidden;z-index:0;background:var(--navy)}
+.edph>i{position:absolute;inset:0;background-size:cover;background-position:62% center;transform:scale(1.1);transition:transform 10s ease-out}
+.slide.on .edph>i{transform:scale(1)}
+.edph:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--dk-rgb),.35) 0%,rgba(var(--dk-rgb),.05) 30%,rgba(var(--dk-rgb),.88) 100%),linear-gradient(135deg,rgba(var(--tl-rgb),.2),transparent 60%)}
+.edph .edsvg{position:absolute;inset:60px 40px}
+.edl{position:absolute;left:40px;right:40px;bottom:48px;z-index:2;list-style:none;display:grid;gap:0}
+.edl li{display:grid;grid-template-columns:44px 1fr auto;align-items:baseline;padding:11px 0;border-top:1px solid rgba(255,255,255,.28);color:#fff}
+.edl i{font-style:normal;font-size:13px;font-weight:600;letter-spacing:.08em;color:var(--teal-l)}
+.edl b{font-size:19px;font-weight:600;letter-spacing:-.02em}
+.edl span{font-size:12.5px;color:rgba(255,255,255,.72)}
+.edv{position:absolute;right:20px;top:50%;z-index:2;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl;font-size:10.5px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.cover.ed .badge{position:absolute;left:733px;bottom:156px;width:142px;height:142px;z-index:3;filter:drop-shadow(0 14px 30px rgba(var(--pr-rgb),.45))}
+.cover.ed .badge .spin{transform-origin:80px 80px;animation:spin 22s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.edt{display:flex;justify-content:space-between;padding-top:6px;border-top:1.5px solid var(--ink);font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ink)}
+.edt span{padding-top:10px}
+.edm{margin-top:-6px}
+.cover.ed h1{font-size:94px;line-height:.93;letter-spacing:-.05em;max-width:none;color:var(--ink)}
+.cover.ed h1.long{font-size:74px}
+.cover.ed h1 em{font-style:normal;color:var(--teal)}
+.cover.ed .sub{margin-top:26px;max-width:520px;font-size:17px;line-height:1.6;color:var(--text)}
+.edb{display:grid;grid-template-columns:1fr 1.15fr 1fr;border-top:1px solid var(--ink)}
+.edb>div{padding:16px 22px 0 0}
+.edb small{display:block;margin-bottom:6px;font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.edb b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:16.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.edb b span{flex-basis:100%;font-size:13.5px;font-weight:500;color:var(--teal)}
+.edb b img{height:24px;max-width:100px;object-fit:contain}
+.deck[data-cv="1"] .top .r{color:#fff}
 /* agenda */
 .ag{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:0 56px}
 .agi{display:grid;grid-template-columns:58px 1fr 22px;align-items:center;gap:6px;padding:22px 0;border-bottom:1px solid var(--ln);cursor:pointer;transition:padding .3s}
@@ -251,7 +302,8 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
   .top,.nav,.arr,.bar,.hint,.btn-fs{display:none!important}
   .rv{opacity:1!important;transform:none!important;animation:none!important}
   .blob,.chipf{animation:none!important}
-  .bgph,.pic i,.sph i,.hero i,.rp .rpph{transform:none!important;transition:none!important}
+  .bgph,.pic i,.sph i,.hero i,.rp .rpph,.edph>i{transform:none!important;transition:none!important}
+  .cover.ed .badge .spin{animation:none!important}
   .stp .d{display:none}
   .pane{display:none!important}.pane.on{display:block!important}
 }
@@ -263,7 +315,7 @@ const JS = `
   function fit(){var s=Math.min(innerWidth/1280,innerHeight/720);st.style.transform='scale('+s+')';}
   function count(el){var t=parseFloat(el.getAttribute('data-count')),suf=el.getAttribute('data-suf')||'',t0=null,dur=1100;function f(ts){if(t0===null)t0=ts;var k=Math.min(1,(ts-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=Math.round(t*e)+suf;if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
   function go(k,nohash){k=Math.max(0,Math.min(n-1,k));sl.forEach(function(s,j){s.classList.toggle('on',j===k);s.classList.toggle('before',j<k);});i=k;
-    deck.setAttribute('data-th',sl[k].getAttribute('data-th')||'dark');deck.setAttribute('data-tt',sl[k].getAttribute('data-tt')||sl[k].getAttribute('data-th')||'dark');
+    deck.setAttribute('data-th',sl[k].getAttribute('data-th')||'dark');deck.setAttribute('data-cv',sl[k].getAttribute('data-cv')||'');deck.setAttribute('data-tt',sl[k].getAttribute('data-tt')||sl[k].getAttribute('data-th')||'dark');
     bar.style.width=((k+1)/n*100)+'%';cur.textContent=('0'+(k+1)).slice(-2);dots.forEach(function(d,j){d.classList.toggle('on',j===k);});
     [].slice.call(sl[k].querySelectorAll('[data-count]')).forEach(count);
     if(!nohash){try{history.replaceState(null,'','#'+(k+1));}catch(e){}}}
@@ -382,17 +434,19 @@ function render(brand, p, lang) {
   const artSvg = `<svg viewBox="0 0 400 520" fill="none"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${prim}"/></linearGradient></defs>
 <g stroke="url(#g1)" stroke-width="1.4" opacity=".7"><path d="M60 120 L190 70 L330 140 L270 260 L120 240 Z"/><path d="M190 70 L270 260"/><path d="M60 120 L270 260"/><path d="M330 140 L120 240"/><path d="M120 240 L180 400 L300 360 L270 260"/><path d="M180 400 L90 450"/><path d="M300 360 L350 450"/></g>
 <g fill="url(#g1)"><circle cx="60" cy="120" r="9"/><circle cx="190" cy="70" r="12"/><circle cx="330" cy="140" r="9"/><circle cx="270" cy="260" r="14"/><circle cx="120" cy="240" r="10"/><circle cx="180" cy="400" r="12"/><circle cx="300" cy="360" r="9"/><circle cx="90" cy="450" r="7"/><circle cx="350" cy="450" r="7"/></g></svg>`;
-  const coverBg = foto ? bgPh(foto, ovL(.9, .15)) : bgFoto('1531819177115-428566ccfb50', ovL(.92, .12));
-  S.push(`<section class="slide cover s-dark" data-th="dark">${coverBg}<div class="content">
-<div><div class="eyebrow rv" style="--d:0">${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')}</div><h1 class="rv" style="--d:1">${titulo}</h1>
-<p class="sub rv" style="--d:2">${x('Investigación, prospección y ejecución multicanal para generar oportunidades comerciales de forma estructurada, medible y constante.', 'Research, prospecting and multichannel execution to generate sales opportunities in a structured, measurable and consistent way.', 'Recherche, Prospektion und Multichannel-Umsetzung, um Vertriebschancen strukturiert, messbar und kontinuierlich zu erzeugen.', 'Pesquisa, prospecção e execução multicanal para gerar oportunidades comerciais de forma estruturada, mensurável e constante.')}</p>
-<div class="meta rv" style="--d:3"><div><small>${x('Preparada para', 'Prepared for', 'Erstellt für', 'Preparada para')}</small><b>${esc(empresa)}</b></div>
-<div><small>${x('Contacto principal', 'Main contact', 'Hauptansprechpartner', 'Contato principal')}</small><b>${esc(contacto)}<br><span>${esc(p.correo || '')}</span></b></div>
-<div><small>${x('Inversión', 'Investment', 'Investition', 'Investimento')}</small><b>${feeMes}<br><span>${esc(p.inicio || x('Inicio por definir', 'Start date to be defined', 'Startdatum offen', 'Início a definir'))}</span></b></div></div></div>
-<div class="art rv${foto || fotos ? ' nophoto' : ''}" style="--d:2">${foto || fotos ? '' : artSvg}
-<div class="chipf" style="left:-16px;top:72px"><b>${x('Research', 'Research', 'Recherche', 'Pesquisa')}</b>${x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2')}</div>
-<div class="chipf" style="right:-10px;top:230px;animation-delay:-3s"><b>${x('Contacto', 'Outreach', 'Ansprache', 'Contato')}</b>${x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3')}</div>
-<div class="chipf" style="left:20px;bottom:56px;animation-delay:-6s"><b>${x('Optimización', 'Optimization', 'Optimierung', 'Otimização')}</b>${x('Desde la semana 4', 'From week 4', 'Ab Woche 4', 'A partir da semana 4')}</div></div></div></section>`);
+  const year = new Date().getFullYear();
+  const titLen = String(p.servicio || '').length + String(p.servicioEm || '').length;
+  const edPhoto = foto || (fotos ? U('1486406146926-c627a92ad1ab') : '');
+  const edPh = (n, h, w) => `<li><i>${n}</i><b>${h}</b><span>${w}</span></li>`;
+  const badge = `<svg class="badge rv" style="--d:6" viewBox="0 0 160 160"><defs><path id="cp" d="M80,80 m-57,0 a57,57 0 1,1 114,0 a57,57 0 1,1 -114,0"/></defs><circle cx="80" cy="80" r="79" fill="var(--teal)"/><g class="spin"><text font-size="12.5" font-weight="600" fill="#fff"><textPath href="#cp" textLength="352" lengthAdjust="spacing">${x('PROPUESTA · B2B · ', 'PROPOSAL · B2B · ', 'ANGEBOT · B2B · ', 'PROPOSTA · B2B · ')}${year} · ${x('NOVA · ', 'NOVA · ', 'NOVA · ', 'NOVA · ')}</textPath></text></g><path d="M58 102L102 58M102 58H72M102 58V88" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  S.push(`<section class="slide cover ed s-light" data-th="light" data-tt="light" data-cv="1"><div class="edph">${edPhoto ? `<i style="background-image:url('${edPhoto}')"></i>` : `<div class="edsvg">${artSvg}</div>`}<ul class="edl">${edPh('01', x('Research', 'Research', 'Recherche', 'Pesquisa'), x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2'))}${edPh('02', x('Contacto', 'Outreach', 'Ansprache', 'Contato'), x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3'))}${edPh('03', x('Optimización', 'Optimization', 'Optimierung', 'Otimização'), x('Desde la semana 4', 'From week 4', 'Ab Woche 4', 'A partir da semana 4'))}</ul><span class="edv">${esc(marca)} · ${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')} · ${year}</span></div>${badge}<div class="content">
+<div class="edt rv" style="--d:0"><span>N.º 01</span><span>${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')}</span><span>${year}</span></div>
+<div class="edm"><h1 class="rv${titLen > 38 ? ' long' : ''}" style="--d:1">${titulo}</h1>
+<p class="sub rv" style="--d:2">${x('Investigación, prospección y ejecución multicanal para generar oportunidades comerciales de forma estructurada, medible y constante.', 'Research, prospecting and multichannel execution to generate sales opportunities in a structured, measurable and consistent way.', 'Recherche, Prospektion und Multichannel-Umsetzung, um Vertriebschancen strukturiert, messbar und kontinuierlich zu erzeugen.', 'Pesquisa, prospecção e execução multicanal para gerar oportunidades comerciais de forma estruturada, mensurável e constante.')}</p></div>
+<div class="edb rv" style="--d:4"><div><small>${x('Preparada para', 'Prepared for', 'Erstellt für', 'Preparada para')}</small><b>${clLogo ? `<img alt="" src="${clLogo}">` : ''}${esc(empresa)}</b></div>
+<div><small>${x('Contacto', 'Contact', 'Kontakt', 'Contato')}</small><b>${esc(contacto)}<span>${esc(p.correo || '')}</span></b></div>
+<div><small>${x('Inversión', 'Investment', 'Investition', 'Investimento')}</small><b>${feeMes}<span>${esc(p.inicio || x('Inicio por definir', 'Start date to be defined', 'Startdatum offen', 'Início a definir'))}</span></b></div></div>
+</div></section>`);
 
   // 2 · agenda
   S.push(`<section class="slide s-light${fotos ? ' splitL' : ''}" data-th="light">${sph('1522071820081-009f0129c71c', x('Resumen', 'Overview', 'Überblick', 'Resumo'), x('Un plan claro, <br>paso a paso', 'A clear plan, <br>step by step', 'Ein klarer Plan, <br>Schritt für Schritt', 'Um plano claro, <br>passo a passo'))}<div class="content"><div class="eyebrow rv">${x('Contenido', 'Contents', 'Inhalt', 'Conteúdo')}</div>
