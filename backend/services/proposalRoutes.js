@@ -111,7 +111,7 @@ function mount(app, { pool, requireAuth }) {
   init(pool).catch(e => console.error('[tpl] init', e.message));
   const A = requireAuth;
   const wrap = fn => async (req, res) => { try { await fn(req, res); } catch (e) { console.error('[tpl]', e.message); res.status(500).json({ error: 'Error interno' }); } };
-  const uid = req => req.user.id;
+  const uid = req => req.workspaceOwnerId || req.user.workspace_id || req.user.id;   // plantillas, marcas y copias son del espacio de trabajo: las ven todos los miembros
 
   // ---- marcas
   app.get('/api/tpl/brands', A, wrap(async (req, res) => {

@@ -29,7 +29,7 @@ const ALL = mk(Object.fromEntries(MODULOS.map(m => [m.k, P(3)])));
 const DEFAULTS = {
   admin: ALL,
   manager: mk({ dashboard: P(1), mywork: P(2), oportunidades: P(2), clientes: P(2), proyectos: P(2), espacios: P(2), tareas: P(2), calendario: P(1), tiempo: P(1), equipo: P(1), slack: P(2), whatsapp: P(2), bloqueos: P(2), outreach: P(2), datos: P(2), contenido: P(2), plantillas: P(2) }),
-  miembro: mk({ dashboard: P(1, 'suyo'), mywork: P(2), clientes: P(1, 'suyo'), proyectos: P(2, 'suyo'), espacios: P(2, 'suyo'), tareas: P(2), calendario: P(1, 'suyo'), tiempo: P(2, 'suyo'), equipo: P(1), slack: P(2), whatsapp: P(1), bloqueos: P(2, 'suyo'), contenido: P(1), plantillas: P(1) }),
+  miembro: mk({ dashboard: P(1, 'suyo'), mywork: P(2), clientes: P(1, 'suyo'), proyectos: P(2, 'suyo'), espacios: P(2, 'suyo'), tareas: P(2), calendario: P(1, 'suyo'), tiempo: P(2, 'suyo'), equipo: P(1), slack: P(2), whatsapp: P(1), bloqueos: P(2, 'suyo'), contenido: P(1), plantillas: P(2) }),
   lector: mk({ dashboard: P(1, 'suyo'), mywork: P(1), proyectos: P(1, 'suyo'), espacios: P(1, 'suyo'), tareas: P(1), calendario: P(1, 'suyo'), equipo: P(1), plantillas: P(1) }),
 };
 const norm = (v, m) => { if (!v || typeof v !== 'object') return null; const n = Math.max(0, Math.min(3, parseInt(v.n, 10) || 0)); return { n, a: m.alc && v.a === 'suyo' ? 'suyo' : 'todo' }; };
