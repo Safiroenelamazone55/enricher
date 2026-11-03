@@ -42927,7 +42927,7 @@ const PlantillasModule = (() => {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
     if (_gen && _gen.t && _gen.t.tipo === 'presentacion') {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
       const w = Math.max(320, box.clientWidth - 4), h = Math.round(w * 9 / 16);
-      fr.setAttribute('sandbox', 'allow-scripts allow-popups'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
+      fr.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
       fr.style.transform = 'none'; fr.style.width = w + 'px'; fr.style.height = h + 'px'; inn.style.width = w + 'px'; inn.style.height = h + 'px'; fr.onload = null;
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
