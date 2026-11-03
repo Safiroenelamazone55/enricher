@@ -273,7 +273,9 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .sim .tot small{font-size:24px;letter-spacing:0;color:var(--tx);margin-left:10px;font-weight:400}
 .sim .eq{margin-top:12px;font-size:15px;color:var(--tx)}
 .sim input[type=range]{width:100%;margin-top:30px;accent-color:var(--teal-l);height:6px}
-.sim .scale{display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--tx)}
+.sim .scale{position:relative;height:18px;margin-top:8px;font-size:12px;color:var(--tx)}
+.sim .scale span{position:absolute;top:0;transform:translateX(-50%);left:calc(8px + (100% - 16px) * var(--f));white-space:nowrap}
+.sim .scale span:last-child{transform:translateX(-85%)}
 .sim .rec{margin-top:16px;font-size:13px;color:var(--teal-l)}
 .sim .cur{margin-top:10px;font-size:20px;font-weight:600}
 .facts{display:grid;gap:14px}
@@ -600,7 +602,7 @@ ${dl(9, x('Guía comercial inicial y recomendaciones.', 'Initial playbook and co
 <div class="tot" id="simTot">${esc(sym)}${money(fee * meses)}<small><span id="simN">${meses}</span> ${x('meses', 'months', 'Monate', 'meses')}</small></div>
 <div class="eq"><span id="simEq">${esc(sym)}${money(fee)} × ${meses}</span> · ${x('sin costos ocultos', 'no hidden costs', 'keine versteckten Kosten', 'sem custos ocultos')}</div>
 <input id="sim" type="range" min="1" max="12" step="1" value="${meses}" data-fee="${fee}" data-sym="${esc(sym)}" data-rec="${meses}">
-<div class="scale"><span>1</span><span>3</span><span>6</span><span>9</span><span>12 ${x('meses', 'months', 'Monate', 'meses')}</span></div>
+<div class="scale"><span style="--f:0">1</span><span style="--f:.1818">3</span><span style="--f:.4545">6</span><span style="--f:.7273">9</span><span style="--f:1">12 ${x('meses', 'months', 'Monate', 'meses')}</span></div>
 <div class="rec" id="simRec">★ ${x('Plazo recomendado', 'Recommended term', 'Empfohlene Laufzeit', 'Prazo recomendado')}</div></div>`
     : `<div class="sim rv" style="--d:2"><div class="k">${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</div><div class="tot">${esc(feeNum)}<small>${x('/ mes', '/ month', '/ Monat', '/ mês')}</small></div><div class="eq">${notaPago}</div></div>`;
   S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">${pn(nInv)} · ${xp(['Inversión', 'Investment', 'Investition', 'Investimento'], ['Inversión para {c}', 'Investment for {c}', 'Investition für {c}', 'Investimento para {c}'])}</div>
