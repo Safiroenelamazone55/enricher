@@ -81,7 +81,7 @@ function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
     plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
-    simulador: !(p.simulador === false || p.simulador === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '' };
+    simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '' };
 }
 
 function payDefaults(d) {

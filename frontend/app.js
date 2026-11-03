@@ -42744,7 +42744,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: true, fotoPortada: '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: true, fotos: true, fotoPortada: '' } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42757,7 +42757,7 @@ const PlantillasModule = (() => {
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
       const p = t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
-        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotoPortada: pr.fotoPortada || '' };
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '' };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
       _draw(); _preview();
     } catch (e) { showBanner(e.message, 'error'); }
@@ -42801,10 +42801,11 @@ const PlantillasModule = (() => {
     // Opciones de la presentación interactiva: simulador de inversión y foto de portada
     const deckBox = `<div class="pl-box"><div class="pl-box__t">Presentación interactiva</div>
       <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 12px"><input type="checkbox" ${p.simulador !== false ? 'checked' : ''} onchange="PlantillasModule.simSet(this.checked)"> Mostrar el simulador de inversión (el cliente mueve el plazo y ve el total)</label>
+      <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:0 0 12px"><input type="checkbox" ${p.fotos !== false ? 'checked' : ''} onchange="PlantillasModule.fotosSet(this.checked)"> Usar fotografías profesionales en las diapositivas (necesita internet al presentar)</label>
       <label class="pl-l">Foto de portada <span class="pl-opt">(opcional)</span></label>
       <div class="pl-ref__logo"><span class="pl-cs__box" style="background:#fff;width:120px;height:68px">${p.fotoPortada ? `<img src="${p.fotoPortada}" alt="" style="object-fit:cover;width:100%;height:100%">` : '<i>—</i>'}</span>
         <span><label class="hrm-lnk">${p.fotoPortada ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="PlantillasModule.fotoPortada(this)"></label>${p.fotoPortada ? ' <button type="button" class="hrm-lnk" onclick="PlantillasModule.fotoPortada(null)">Quitar</button>' : ''}</span></div>
-      <p class="hrm-card__meta">Sin foto, la portada usa un gráfico animado con los colores de tu marca.</p></div>`;
+      <p class="hrm-card__meta">Si subes una foto, reemplaza a la de stock en la portada.</p></div>`;
     let campos;
     if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
@@ -42850,6 +42851,7 @@ const PlantillasModule = (() => {
     _drawGen();
     const f2 = document.querySelector('.pl-form'); if (f2) f2.scrollTop = st; window.scrollTo(0, wy);
   }
+  function fotosSet(on) { _gen.p.fotos = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
   function simSet(on) { _gen.p.simulador = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
   function fotoPortada(input) {
     const g = _gen; if (!input) { g.p.fotoPortada = ''; _redrawKeep(); _preview(); return; }
@@ -43111,7 +43113,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

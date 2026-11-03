@@ -59,6 +59,23 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .rv{opacity:0;transform:translateY(22px)}
 .slide.on .rv{animation:rv .8s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--d,0)*90ms + 160ms)}
 @keyframes rv{to{opacity:1;transform:none}}
+/* fotos */
+.bgph{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;background-color:var(--navy);transform:scale(1.08);transition:transform 10s ease-out}
+.slide.on .bgph{transform:scale(1)}
+.bgph:after{content:"";position:absolute;inset:0;background:var(--ov)}
+.pic{position:absolute;right:92px;top:92px;width:330px;height:134px;border-radius:22px;overflow:hidden;box-shadow:0 26px 60px rgba(15,23,42,.24);z-index:1}
+.pic i{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.1);transition:transform 7s ease-out}
+.slide.on .pic i{transform:scale(1)}
+.pic:after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(var(--tl-rgb),.22),rgba(11,18,32,.5))}
+.pic em{position:absolute;left:16px;bottom:13px;z-index:2;font-style:normal;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#fff}
+.hasp h2{font-size:46px;max-width:740px}
+.rp.dk{position:relative;overflow:hidden}
+.rp.dk>*{position:relative;z-index:1}
+.rp .rpph{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;transform:scale(1.08);transition:transform 9s ease-out}
+.slide.on .rp .rpph{transform:scale(1)}
+.rp .rpph:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--dk-rgb),.78),rgba(var(--dk-rgb),.94))}
+.cover .art.nophoto{height:520px}
+.cover .for{display:none}
 /* portada */
 .cover .content{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
 .cover .for{position:absolute;right:0;top:-34px;text-align:right;font-size:12px;color:rgba(255,255,255,.65);letter-spacing:.06em;text-transform:uppercase}
@@ -200,6 +217,7 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
   .top,.nav,.arr,.bar,.hint,.btn-fs{display:none!important}
   .rv{opacity:1!important;transform:none!important;animation:none!important}
   .blob,.chipf{animation:none!important}
+  .bgph,.pic i,.rp .rpph{transform:none!important;transition:none!important}
   .stp .d{display:none}
   .pane{display:none!important}.pane.on{display:block!important}
 }
@@ -311,18 +329,29 @@ function render(brand, p, lang) {
 
   const S = [];   // diapositivas
   const bgDark = `<div class="bg"><div class="blob a"></div><div class="blob b"></div><div class="grid"></div></div>`;
+  // fotos de stock (Unsplash, licencia libre) con tratamiento de color de la marca; se apagan desde el generador
+  const fotos = p.fotos !== false;
+  const U = id => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=70`;
+  const dkr = rgb(dark);
+  const ovL = (a, b2) => `linear-gradient(90deg,rgba(${dkr},${a}) 0%,rgba(${dkr},${b2}) 100%)`;
+  const ovV = (a, b2) => `linear-gradient(180deg,rgba(${dkr},${a}) 0%,rgba(${dkr},${b2}) 100%)`;
+  const bgPh = (url, ov) => `<div class="bgph" style="background-image:url('${url}');--ov:${ov}"></div><div class="bg"><div class="blob a"></div></div>`;
+  const bgFoto = (id, ov) => (fotos ? bgPh(U(id), ov) : bgDark);
+  const pic = (id, cap) => (fotos ? `<div class="pic rv" style="--d:2"><i style="background-image:url('${U(id)}')"></i><em>${cap}</em></div>` : '');
+  const hp = fotos ? ' hasp' : '';
 
   // 1 · portada
   const artSvg = `<svg viewBox="0 0 400 520" fill="none"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${prim}"/></linearGradient></defs>
 <g stroke="url(#g1)" stroke-width="1.4" opacity=".7"><path d="M60 120 L190 70 L330 140 L270 260 L120 240 Z"/><path d="M190 70 L270 260"/><path d="M60 120 L270 260"/><path d="M330 140 L120 240"/><path d="M120 240 L180 400 L300 360 L270 260"/><path d="M180 400 L90 450"/><path d="M300 360 L350 450"/></g>
 <g fill="url(#g1)"><circle cx="60" cy="120" r="9"/><circle cx="190" cy="70" r="12"/><circle cx="330" cy="140" r="9"/><circle cx="270" cy="260" r="14"/><circle cx="120" cy="240" r="10"/><circle cx="180" cy="400" r="12"/><circle cx="300" cy="360" r="9"/><circle cx="90" cy="450" r="7"/><circle cx="350" cy="450" r="7"/></g></svg>`;
-  S.push(`<section class="slide cover s-dark" data-th="dark">${bgDark}<div class="content">
+  const coverBg = foto ? bgPh(foto, ovL(.9, .15)) : bgFoto('1531819177115-428566ccfb50', ovL(.92, .12));
+  S.push(`<section class="slide cover s-dark" data-th="dark">${coverBg}<div class="content">
 <div><div class="eyebrow rv" style="--d:0">${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')}</div><h1 class="rv" style="--d:1">${titulo}</h1>
 <p class="sub rv" style="--d:2">${x('Investigación, prospección y ejecución multicanal para generar oportunidades comerciales de forma estructurada, medible y constante.', 'Research, prospecting and multichannel execution to generate sales opportunities in a structured, measurable and consistent way.', 'Recherche, Prospektion und Multichannel-Umsetzung, um Vertriebschancen strukturiert, messbar und kontinuierlich zu erzeugen.', 'Pesquisa, prospecção e execução multicanal para gerar oportunidades comerciais de forma estruturada, mensurável e constante.')}</p>
 <div class="meta rv" style="--d:3"><div><small>${x('Preparada para', 'Prepared for', 'Erstellt für', 'Preparada para')}</small><b>${esc(empresa)}</b></div>
 <div><small>${x('Contacto principal', 'Main contact', 'Hauptansprechpartner', 'Contato principal')}</small><b>${esc(contacto)}<br><span>${esc(p.correo || '')}</span></b></div>
 <div><small>${x('Inversión', 'Investment', 'Investition', 'Investimento')}</small><b>${feeMes}<br><span>${esc(p.inicio || x('Inicio por definir', 'Start date to be defined', 'Startdatum offen', 'Início a definir'))}</span></b></div></div></div>
-<div class="art rv" style="--d:2">${foto ? `<div class="photo" style="background-image:url('${foto}')"></div>` : artSvg}
+<div class="art rv${foto || fotos ? ' nophoto' : ''}" style="--d:2">${foto || fotos ? '' : artSvg}
 <div class="chipf" style="left:-16px;top:72px"><b>${x('Research', 'Research', 'Recherche', 'Pesquisa')}</b>${x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2')}</div>
 <div class="chipf" style="right:-10px;top:230px;animation-delay:-3s"><b>${x('Contacto', 'Outreach', 'Ansprache', 'Contato')}</b>${x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3')}</div>
 <div class="chipf" style="left:20px;bottom:56px;animation-delay:-6s"><b>${x('Optimización', 'Optimization', 'Optimierung', 'Otimização')}</b>${x('Desde la semana 4', 'From week 4', 'Ab Woche 4', 'A partir da semana 4')}</div></div></div></section>`);
@@ -333,7 +362,7 @@ function render(brand, p, lang) {
 <div class="ag">${T.agenda.map((r, i) => `<div class="agi rv" style="--d:${i + 2}" data-go="${slideOf[i]}"><span class="n">${pn(i + 1)}</span><div><h3>${r[0]}</h3><p>${r[1]}</p></div><span class="go">→</span></div>`).join('')}</div></div></section>`);
 
   // 3 · lo primero que haremos
-  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">01 · ${T.agenda[0][0]}</div>
+  S.push(`<section class="slide s-soft${hp}" data-th="light">${pic('1460925895917-afdab827c52f', x('Research', 'Research', 'Recherche', 'Pesquisa'))}<div class="content"><div class="eyebrow rv">01 · ${T.agenda[0][0]}</div>
 <h2 class="rv" style="--d:1">${x('Lo primero que <em>haremos.</em>', 'What we will do <em>first.</em>', 'Das machen wir <em>zuerst.</em>', 'O que faremos <em>primeiro.</em>')}</h2>
 <span class="phase rv" style="--d:2">${x('Semanas 1–2 · Research comercial', 'Weeks 1–2 · Commercial research', 'Wochen 1–2 · Marktrecherche', 'Semanas 1–2 · Pesquisa comercial')}</span>
 <div class="cards c4" style="margin-top:28px">
@@ -344,7 +373,7 @@ ${rs(4, x('Investigamos cuentas y decisores', 'We research accounts and decision
 </div></div></section>`);
 
   // 4 · del primer mensaje a la optimización
-  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">02 · ${T.agenda[1][0]}</div>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.9, .72))}<div class="content"><div class="eyebrow rv">02 · ${T.agenda[1][0]}</div>
 <h2 class="rv" style="--d:1">${x('Del primer mensaje a la <em>optimización.</em>', 'From the first message to <em>optimization.</em>', 'Von der ersten Nachricht zur <em>Optimierung.</em>', 'Da primeira mensagem à <em>otimização.</em>')}</h2>
 <div class="tl">
 <div class="st rv" style="--d:2"><small>${x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2')}</small><h3>${x('Research comercial', 'Commercial research', 'Marktrecherche', 'Pesquisa comercial')}</h3><p>${x('Validamos la oferta, el mercado y las cuentas antes de contactar a nadie.', 'We validate the offer, the market and the accounts before contacting anyone.', 'Wir validieren Angebot, Markt und Accounts, bevor wir jemanden kontaktieren.', 'Validamos a oferta, o mercado e as contas antes de contatar alguém.')}</p></div>
@@ -406,7 +435,7 @@ ${rowp('Fabrikam Group', x('Respondió', 'Replied', 'Hat geantwortet', 'Responde
 
   // 8 · qué recibes
   const dl = (n, t) => `<div class="rv" style="--d:${n + 1}"><b>${pn(n)}</b><span>${t}</span></div>`;
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">05 · ${x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis')}</div>
+  S.push(`<section class="slide s-light${hp}" data-th="light">${pic('1554469384-e58fac16e23a', x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis'))}<div class="content"><div class="eyebrow rv">05 · ${x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis')}</div>
 <h2 class="rv" style="--d:1">${x('El servicio deja activos comerciales <em>reutilizables.</em>', 'The service leaves <em>reusable</em> commercial assets.', 'Die Leistung hinterlässt <em>wiederverwendbare</em> Vertriebsassets.', 'O serviço deixa ativos comerciais <em>reutilizáveis.</em>')}</h2>
 <div class="dl">
 ${dl(1, x('Oferta prioritaria evaluada e hipótesis comercial.', 'Evaluated priority offer and commercial hypothesis.', 'Bewertetes prioritäres Angebot und Vertriebshypothese.', 'Oferta prioritária avaliada e hipótese comercial.'))}
@@ -425,7 +454,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
   S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">05 · ${x('Responsabilidades', 'Responsibilities', 'Verantwortlichkeiten', 'Responsabilidades')}</div>
 <h2 class="rv" style="--d:1">${x('Quién hace <em>qué.</em>', 'Who does <em>what.</em>', 'Wer macht <em>was.</em>', 'Quem faz <em>o quê.</em>')}</h2>
 <div class="two">
-<div class="rp dk rv" style="--d:2"><div class="k">${x('Responsabilidad de ', 'Responsibility of ', 'Verantwortung von ', 'Responsabilidade da ')}${esc(marca)}</div><p>${x('Estrategia, investigación, mensajes, configuración de secuencia, ejecución multicanal, seguimientos, clasificación de respuestas, reportes mensuales y optimización continua.', 'Strategy, research, messaging, sequence setup, multichannel execution, follow-ups, reply classification, monthly reporting and continuous optimization.', 'Strategie, Recherche, Nachrichten, Sequenz-Einrichtung, Multichannel-Umsetzung, Nachfassen, Klassifizierung von Antworten, Monatsberichte und laufende Optimierung.', 'Estratégia, pesquisa, mensagens, configuração da sequência, execução multicanal, acompanhamentos, classificação de respostas, relatórios mensais e otimização contínua.')}</p></div>
+<div class="rp dk rv" style="--d:2">${fotos ? `<div class="rpph" style="background-image:url('${U('1572021335469-31706a17aaef')}')"></div>` : ''}<div class="k">${x('Responsabilidad de ', 'Responsibility of ', 'Verantwortung von ', 'Responsabilidade da ')}${esc(marca)}</div><p>${x('Estrategia, investigación, mensajes, configuración de secuencia, ejecución multicanal, seguimientos, clasificación de respuestas, reportes mensuales y optimización continua.', 'Strategy, research, messaging, sequence setup, multichannel execution, follow-ups, reply classification, monthly reporting and continuous optimization.', 'Strategie, Recherche, Nachrichten, Sequenz-Einrichtung, Multichannel-Umsetzung, Nachfassen, Klassifizierung von Antworten, Monatsberichte und laufende Optimierung.', 'Estratégia, pesquisa, mensagens, configuração da sequência, execução multicanal, acompanhamentos, classificação de respostas, relatórios mensais e otimização contínua.')}</p></div>
 <div class="rp lt rv" style="--d:3"><div class="k">${x('Responsabilidad del cliente', 'Client responsibility', 'Verantwortung des Kunden', 'Responsabilidade do cliente')}</div><ul>${li_([
     x('Proporcionar información sobre servicios y proyectos.', 'Provide information about services and projects.', 'Informationen zu Leistungen und Projekten bereitstellen.', 'Fornecer informações sobre serviços e projetos.'),
     x('Colaborar en la selección de la oferta.', 'Collaborate in selecting the offer.', 'Bei der Auswahl des Angebots mitwirken.', 'Colaborar na seleção da oferta.'),
@@ -481,7 +510,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 <div class="scale"><span>1</span><span>3</span><span>6</span><span>9</span><span>12 ${x('meses', 'months', 'Monate', 'meses')}</span></div>
 <div class="rec" id="simRec">★ ${x('Plazo recomendado', 'Recommended term', 'Empfohlene Laufzeit', 'Prazo recomendado')}</div></div>`
     : `<div class="sim rv" style="--d:2"><div class="k">${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</div><div class="tot">${esc(feeNum)}<small>${x('/ mes', '/ month', '/ Monat', '/ mês')}</small></div><div class="eq">${notaPago}</div></div>`;
-  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">${pn(nInv)} · ${x('Inversión', 'Investment', 'Investition', 'Investimento')}</div>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">${pn(nInv)} · ${x('Inversión', 'Investment', 'Investition', 'Investimento')}</div>
 <h2 class="rv" style="--d:1">${x('Una inversión <em>clara y mensual.</em>', 'A clear, <em>monthly investment.</em>', 'Eine klare, <em>monatliche Investition.</em>', 'Um investimento <em>claro e mensal.</em>')}</h2>
 <div class="inv">${simHtml}
 <div class="facts"><div class="rv" style="--d:3"><small>${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</small><b>${esc(feeNum)}</b><p>${notaPago}</p></div>
@@ -489,7 +518,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 <div class="rv" style="--d:5"><small>${x('Modelo de compensación', 'Compensation model', 'Vergütungsmodell', 'Modelo de remuneração')}</small><b style="font-size:21px">${modeloTxt}</b></div></div></div></div></section>`);
 
   // 13 · próximo paso
-  S.push(`<section class="slide close s-dark" data-th="dark">${bgDark}<div class="content">
+  S.push(`<section class="slide close s-dark" data-th="dark">${bgFoto('1521791136064-7986c2920216', ovL(.94, .62))}<div class="content">
 <div><div class="eyebrow rv">${x('Próximo paso con ', 'Next step with ', 'Nächster Schritt mit ', 'Próximo passo com ')}${esc(marca)}</div>
 <h2 class="rv" style="--d:1">${x('Comencemos a generar <em>oportunidades</em> comerciales.', 'Let’s start generating commercial <em>opportunities.</em>', 'Lassen Sie uns beginnen, Vertriebs<em>chancen</em> zu erzeugen.', 'Vamos começar a gerar <em>oportunidades</em> comerciais.')}</h2>
 <p class="lead rv" style="--d:2">${x('Confirma el inicio del servicio. A partir de ahí definiremos el perfil de cliente ideal y prepararemos el primer bloque de cuentas objetivo.', 'Confirm the start of the service. From there we will define the ideal customer profile and prepare the first block of target accounts.', 'Bestätigen Sie den Start der Leistung. Danach definieren wir das ideale Kundenprofil und bereiten den ersten Block von Ziel-Accounts vor.', 'Confirme o início do serviço. A partir daí definiremos o perfil de cliente ideal e prepararemos o primeiro bloco de contas-alvo.')}</p>
@@ -502,7 +531,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 
   const total = S.length;
   const dots = S.map((_, i) => `<button class="dot" aria-label="${i + 1}"></button>`).join('');
-  const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--pr-rgb:${rgb(prim)};--sans:'Inter','Segoe UI',system-ui,sans-serif}`;
+  const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--pr-rgb:${rgb(prim)};--dk-rgb:${rgb(dark)};--sans:'Inter','Segoe UI',system-ui,sans-serif}`;
   const title = `${empresa} · ${x('Presentación', 'Presentation', 'Präsentation', 'Apresentação')} ${marca}`;
   return `<!DOCTYPE html>\n<html lang="${lang}" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
