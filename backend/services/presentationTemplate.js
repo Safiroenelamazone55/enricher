@@ -148,14 +148,14 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .rp ul{list-style:none;margin-top:14px}.rp li{position:relative;padding:13px 0 13px 28px;font-size:18px;line-height:1.45;border-bottom:1px solid var(--ln)}
 .rp li:last-child{border-bottom:0}.rp li:before{content:"";position:absolute;left:2px;top:21px;width:9px;height:9px;border-radius:50%;background:var(--teal)}
 /* empresas */
-.refs{margin-top:26px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.ref{background:#fff;border:1px solid var(--line);border-radius:22px;padding:28px;display:flex;flex-direction:column;transition:all .35s}
+.refs{margin-top:26px;display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+.ref{background:#fff;border:1px solid var(--line);border-radius:24px;padding:26px 34px;display:flex;flex-direction:column;transition:all .35s}
 .ref:hover{transform:translateY(-8px);box-shadow:0 22px 50px rgba(15,23,42,.14);border-color:var(--teal)}
-.ref .rl{height:128px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;padding:14px}
+.ref .rl{height:112px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;padding:14px}
 .ref .rl img{max-width:100%;max-height:76px;object-fit:contain}.ref .rl span{font-size:42px;font-weight:600;color:var(--teal)}
-.ref h3{margin-top:22px;font-size:26px;font-weight:600;letter-spacing:-.025em}
-.ref .rk{margin-top:6px;font-size:14.5px;font-weight:600;color:var(--teal);text-decoration:none}
-.ref p{margin-top:14px;font-size:17px;line-height:1.6;color:var(--text)}
+.ref h3{margin-top:20px;font-size:30px;font-weight:600;letter-spacing:-.025em}
+.ref .rk{margin-top:7px;font-size:15.5px;font-weight:600;color:var(--teal);text-decoration:none}
+.ref p{margin-top:14px;font-size:18px;line-height:1.6;color:var(--text)}
 /* alcance */
 .terms{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
 .terms>div{border-radius:20px;padding:22px 30px}.terms .in{background:var(--navy);color:#fff}.terms .ex{background:#fff;border:1px solid var(--line)}
@@ -284,7 +284,7 @@ function render(brand, p, lang) {
   const mailto = mail ? `mailto:${encodeURIComponent(mail).replace(/%40/g, '@')}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}` : '#';
 
   const refs = Array.isArray(p.referencias) ? p.referencias.filter(r => r && (r.nombre || imgOk(r.logo))).slice(0, 12) : [];
-  const nRef = refs.length ? Math.ceil(refs.length / 3) : 0;
+  const nRef = refs.length ? Math.ceil(refs.length / 2) : 0;   // 2 empresas por diapositiva
 
   // ── textos ──
   const T = {
@@ -296,7 +296,7 @@ function render(brand, p, lang) {
       [x('Qué recibes y quién hace qué', 'What you receive and who does what', 'Was Sie erhalten und wer was tut', 'O que você recebe e quem faz o quê'), x('Entregables y responsabilidades de cada parte.', 'Deliverables and responsibilities of each party.', 'Ergebnisse und Verantwortlichkeiten jeder Partei.', 'Entregáveis e responsabilidades de cada parte.')],
     ],
   };
-  if (refs.length) T.agenda.push([x('Empresas con las que hemos trabajado', 'Companies we have worked with', 'Unternehmen, mit denen wir gearbeitet haben', 'Empresas com as quais trabalhamos'), x('Algunos casos y lo que hicimos por ellos.', 'Some cases and what we did for them.', 'Einige Fälle und was wir für sie getan haben.', 'Alguns casos e o que fizemos por eles.')]);
+  if (refs.length) T.agenda.push([x('Trabajos destacados', 'Featured work', 'Ausgewählte Projekte', 'Trabalhos em destaque'), x('Algunos de nuestros clientes y lo que logramos junto a ellos.', 'Some of our clients and what we achieved together.', 'Einige unserer Kunden und was wir gemeinsam erreicht haben.', 'Alguns dos nossos clientes e o que conquistamos juntos.')]);
   T.agenda.push([x('Alcance e inversión', 'Scope and investment', 'Umfang und Investition', 'Escopo e investimento'), x('Qué incluye, qué no, y cuánto cuesta.', 'What is included, what is not, and the cost.', 'Was enthalten ist, was nicht, und was es kostet.', 'O que inclui, o que não, e quanto custa.')]);
   T.agenda.push([x('Próximo paso', 'Next step', 'Nächster Schritt', 'Próximo passo'), x('Cómo iniciamos.', 'How we get started.', 'So legen wir los.', 'Como iniciamos.')]);
 
@@ -437,11 +437,12 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
   // 10 · empresas con las que hemos trabajado (3 por diapositiva)
   if (refs.length) {
     const hostOf = u => String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
-    const card = (r, i) => `<div class="ref rv" style="--d:${i + 2}"><div class="rl">${imgOk(r.logo) ? `<img alt="${esc(r.nombre)}" src="${r.logo}">` : `<span>${esc(String(r.nombre || '?').trim().charAt(0).toUpperCase())}</span>`}</div><h3>${esc(r.nombre)}</h3>${r.link ? `<a class="rk" target="_blank" rel="noopener noreferrer" href="${esc(r.link)}">${esc(hostOf(r.link))} ↗</a>` : ''}${r.descripcion ? `<p>${esc(r.descripcion)}</p>` : ''}</div>`;
+    const card = (r, i) => `<div class="ref rv" style="--d:${i + 3}"><div class="rl">${imgOk(r.logo) ? `<img alt="${esc(r.nombre)}" src="${r.logo}">` : `<span>${esc(String(r.nombre || '?').trim().charAt(0).toUpperCase())}</span>`}</div><h3>${esc(r.nombre)}</h3>${r.link ? `<a class="rk" target="_blank" rel="noopener noreferrer" href="${esc(r.link)}">${esc(hostOf(r.link))} ↗</a>` : ''}${r.descripcion ? `<p>${esc(r.descripcion)}</p>` : ''}</div>`;
     for (let k = 0; k < nRef; k++) {
-      S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">06 · ${T.agenda[5][0]}</div>
-<h2 class="rv" style="--d:1">${x('Empresas con las que <em>hemos trabajado.</em>', 'Companies we have <em>worked with.</em>', 'Unternehmen, mit denen wir <em>gearbeitet haben.</em>', 'Empresas com as quais <em>trabalhamos.</em>')}</h2>
-<div class="refs">${refs.slice(k * 3, k * 3 + 3).map(card).join('')}</div></div></section>`);
+      S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">06 · ${x('Clientes', 'Clients', 'Kunden', 'Clientes')}</div>
+<h2 class="rv" style="--d:1">${x('Trabajos <em>destacados.</em>', 'Featured <em>work.</em>', 'Ausgewählte <em>Projekte.</em>', 'Trabalhos <em>em destaque.</em>')}</h2>
+<p class="lead rv" style="--d:2">${x('Empresas con las que ya hemos trabajado.', 'Companies we have already worked with.', 'Unternehmen, mit denen wir bereits gearbeitet haben.', 'Empresas com as quais já trabalhamos.')}</p>
+<div class="refs">${refs.slice(k * 2, k * 2 + 2).map(card).join('')}</div></div></section>`);
     }
   }
 

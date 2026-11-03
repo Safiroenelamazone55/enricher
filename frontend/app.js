@@ -42744,7 +42744,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: [], simulador: true, fotoPortada: '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: true, fotoPortada: '' } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42794,9 +42794,10 @@ const PlantillasModule = (() => {
       <div class="pl-ref__f"><label class="pl-l">Nombre de la empresa</label><input class="pl-in" value="${E(r.nombre)}" placeholder="Ej. Onezix" oninput="PlantillasModule.refSet(${i},'nombre',this.value)">
         <label class="pl-l">Link <span class="pl-opt">(opcional)</span></label><input class="pl-in" value="${E(r.link)}" placeholder="https://empresa.com" oninput="PlantillasModule.refSet(${i},'link',this.value)">
         <label class="pl-l">Descripción</label><textarea class="pl-in" rows="3" maxlength="420" placeholder="Qué hicimos con esta empresa y qué resultado tuvo" oninput="PlantillasModule.refSet(${i},'descripcion',this.value)">${E(r.descripcion)}</textarea></div></div></div>`;
-    const refsBox = `<div class="pl-box"><div class="pl-box__t">Empresas con las que hemos trabajado <span class="pl-opt">(opcional)</span></div>${rs.map(refCard).join('')}
+    const deckTipo = g.t.tipo === 'presentacion';
+    const refsBox = `<div class="pl-box"><div class="pl-box__t">${deckTipo ? 'Trabajos destacados · clientes con los que hemos trabajado' : 'Empresas con las que hemos trabajado'} <span class="pl-opt">(opcional)</span></div>${rs.map(refCard).join('')}
       <button type="button" class="btn btn-ghost pl-ref__add" onclick="PlantillasModule.refAdd()">＋ Agregar empresa</button>
-      <p class="hrm-card__meta">Se muestran 3 por hoja; si agregas más, se crean hojas adicionales. Sin empresas, esa hoja no aparece en la propuesta.</p></div>`;
+      <p class="hrm-card__meta">${deckTipo ? 'Se muestran 2 por diapositiva; si agregas más, se crean más diapositivas. Los espacios que dejes vacíos no aparecen en la presentación.' : 'Se muestran 3 por hoja; si agregas más, se crean hojas adicionales. Sin empresas, esa hoja no aparece en la propuesta.'}</p></div>`;
     // Opciones de la presentación interactiva: simulador de inversión y foto de portada
     const deckBox = `<div class="pl-box"><div class="pl-box__t">Presentación interactiva</div>
       <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 12px"><input type="checkbox" ${p.simulador !== false ? 'checked' : ''} onchange="PlantillasModule.simSet(this.checked)"> Mostrar el simulador de inversión (el cliente mueve el plazo y ve el total)</label>
