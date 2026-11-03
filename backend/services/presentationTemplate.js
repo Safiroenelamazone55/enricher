@@ -38,8 +38,8 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .lead{margin-top:22px;font-size:22px;line-height:1.55;color:var(--tx);max-width:860px}
 /* arriba / abajo */
 .top{position:absolute;left:0;right:0;top:0;height:64px;z-index:6;display:flex;align-items:center;justify-content:space-between;padding:0 40px;color:#fff;transition:color .4s}
-.deck[data-th=light] .top{color:var(--ink)}
-.deck[data-th=light] .bw,.deck[data-th=dark] .bc{display:none}
+.deck[data-tt=light] .top{color:var(--ink)}
+.deck[data-tt=light] .bw,.deck[data-tt=dark] .bc{display:none}
 .top .brand img{height:26px;display:block}.top .brand .wm{font-weight:700;font-size:18px;letter-spacing:-.02em}
 .top .r{display:flex;align-items:center;gap:18px;font-size:13px;font-weight:500}
 .cnt b{font-weight:600}.cnt i{font-style:normal;opacity:.55}
@@ -76,6 +76,40 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .rp .rpph:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--dk-rgb),.78),rgba(var(--dk-rgb),.94))}
 .cover .art.nophoto{height:520px}
 .cover .for{display:none}
+/* banda de foto a sangre arriba */
+.hero{position:absolute;left:0;right:0;top:0;height:244px;z-index:0;overflow:hidden}
+.hero i{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.1);transition:transform 10s ease-out}
+.slide.on .hero i{transform:scale(1)}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(var(--dk-rgb),.94) 0%,rgba(var(--dk-rgb),.7) 55%,rgba(var(--dk-rgb),.38) 100%)}
+.hero b{position:absolute;right:70px;bottom:-34px;z-index:2;font-size:230px;font-weight:600;line-height:1;letter-spacing:-.06em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.34)}
+.hasband .bh{height:152px}
+.hasband .bh .eyebrow{color:var(--teal-l)}
+.hasband .bh h2{color:#fff;font-size:50px}
+.hasband .bh h2 em{color:var(--teal-l)}
+/* foto enmarcada alta, a un lado */
+.sph{position:absolute;top:92px;bottom:88px;width:380px;border-radius:26px;overflow:hidden;box-shadow:0 30px 70px rgba(15,23,42,.28);z-index:1}
+.splitL .sph{left:92px}.splitR .sph{right:92px}
+.sph i{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.1);transition:transform 9s ease-out}
+.slide.on .sph i{transform:scale(1)}
+.sph:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--dk-rgb),.05) 30%,rgba(var(--dk-rgb),.86) 100%)}
+.sph em{position:absolute;left:30px;right:30px;bottom:30px;z-index:2;font-style:normal;font-size:44px;font-weight:600;line-height:1.02;letter-spacing:-.04em;color:#fff}
+.sph em small{display:block;margin-bottom:12px;font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--teal-l)}
+.splitL .content{margin-left:430px}
+.splitR .content{margin-right:430px}
+.splitL .ag{grid-template-columns:1fr;gap:0;margin-top:12px}.splitL .eyebrow{margin-bottom:12px}
+.splitL .agi{padding:8px 0;grid-template-columns:50px 1fr 22px}.splitL .agi .n{font-size:22px}
+.splitL .agi h3{font-size:18px}.splitL .agi p{font-size:12.5px;margin-top:1px;line-height:1.3}
+.splitL h2,.splitR h2{font-size:46px}
+.splitR .lead{font-size:18px;max-width:none;margin-top:18px}
+.splitR .cards{gap:14px}.splitR .card{padding:20px 20px 18px}
+.splitR .card h3{font-size:20px;margin-top:12px}.splitR .card p{font-size:14.5px}
+.hasband .c4{gap:16px}.hasband .c4 .card{padding:20px 22px 18px}
+.hasband .c4 .card .n{font-size:32px}.hasband .c4 .card h3{margin-top:12px;font-size:20px}
+.hasband .c4 .card p{margin-top:9px;font-size:14.5px;line-height:1.5}
+.hasband .c4 .out{margin-top:12px;padding-top:10px}.hasband .c4 .out b{font-size:14px;line-height:1.3}
+.hasband .dl{margin-top:30px;gap:14px}.hasband .dl div{min-height:92px;padding:16px 22px}
+.tl .st .bn{display:none;position:absolute;right:26px;top:34px;font-size:120px;font-weight:600;line-height:1;letter-spacing:-.06em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.2)}
+.cover h1{font-size:82px;line-height:1}
 /* portada */
 .cover .content{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
 .cover .for{position:absolute;right:0;top:-34px;text-align:right;font-size:12px;color:rgba(255,255,255,.65);letter-spacing:.06em;text-transform:uppercase}
@@ -217,7 +251,7 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
   .top,.nav,.arr,.bar,.hint,.btn-fs{display:none!important}
   .rv{opacity:1!important;transform:none!important;animation:none!important}
   .blob,.chipf{animation:none!important}
-  .bgph,.pic i,.rp .rpph{transform:none!important;transition:none!important}
+  .bgph,.pic i,.sph i,.hero i,.rp .rpph{transform:none!important;transition:none!important}
   .stp .d{display:none}
   .pane{display:none!important}.pane.on{display:block!important}
 }
@@ -229,7 +263,7 @@ const JS = `
   function fit(){var s=Math.min(innerWidth/1280,innerHeight/720);st.style.transform='scale('+s+')';}
   function count(el){var t=parseFloat(el.getAttribute('data-count')),suf=el.getAttribute('data-suf')||'',t0=null,dur=1100;function f(ts){if(t0===null)t0=ts;var k=Math.min(1,(ts-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=Math.round(t*e)+suf;if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
   function go(k,nohash){k=Math.max(0,Math.min(n-1,k));sl.forEach(function(s,j){s.classList.toggle('on',j===k);s.classList.toggle('before',j<k);});i=k;
-    deck.setAttribute('data-th',sl[k].getAttribute('data-th')||'dark');
+    deck.setAttribute('data-th',sl[k].getAttribute('data-th')||'dark');deck.setAttribute('data-tt',sl[k].getAttribute('data-tt')||sl[k].getAttribute('data-th')||'dark');
     bar.style.width=((k+1)/n*100)+'%';cur.textContent=('0'+(k+1)).slice(-2);dots.forEach(function(d,j){d.classList.toggle('on',j===k);});
     [].slice.call(sl[k].querySelectorAll('[data-count]')).forEach(count);
     if(!nohash){try{history.replaceState(null,'','#'+(k+1));}catch(e){}}}
@@ -340,6 +374,9 @@ function render(brand, p, lang) {
   const bgFoto = (id, ov) => (fotos ? bgPh(U(id), ov) : bgDark);
   const pic = (id, cap) => (fotos ? `<div class="pic rv" style="--d:2"><i style="background-image:url('${U(id)}')"></i><em>${cap}</em></div>` : '');
   const hp = fotos ? ' hasp' : '';
+  const sph = (id, small, big) => (fotos ? `<div class="sph rv" style="--d:1"><i style="background-image:url('${U(id)}')"></i><em><small>${small}</small>${big}</em></div>` : '');
+  const hero = (id, n) => (fotos ? `<div class="hero"><i style="background-image:url('${U(id)}')"></i><b>${n}</b></div>` : '');
+  const ttAttr = fotos ? 'dark' : 'light';
 
   // 1 · portada
   const artSvg = `<svg viewBox="0 0 400 520" fill="none"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${prim}"/></linearGradient></defs>
@@ -358,15 +395,14 @@ function render(brand, p, lang) {
 <div class="chipf" style="left:20px;bottom:56px;animation-delay:-6s"><b>${x('Optimización', 'Optimization', 'Optimierung', 'Otimização')}</b>${x('Desde la semana 4', 'From week 4', 'Ab Woche 4', 'A partir da semana 4')}</div></div></div></section>`);
 
   // 2 · agenda
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">${x('Contenido', 'Contents', 'Inhalt', 'Conteúdo')}</div>
+  S.push(`<section class="slide s-light${fotos ? ' splitL' : ''}" data-th="light">${sph('1522071820081-009f0129c71c', x('Resumen', 'Overview', 'Überblick', 'Resumo'), x('Un plan claro, <br>paso a paso', 'A clear plan, <br>step by step', 'Ein klarer Plan, <br>Schritt für Schritt', 'Um plano claro, <br>passo a passo'))}<div class="content"><div class="eyebrow rv">${x('Contenido', 'Contents', 'Inhalt', 'Conteúdo')}</div>
 <h2 class="rv" style="--d:1">${x('Lo que vamos a <em>ver.</em>', 'What we are going to <em>cover.</em>', 'Was wir uns <em>ansehen.</em>', 'O que vamos <em>ver.</em>')}</h2>
 <div class="ag">${T.agenda.map((r, i) => `<div class="agi rv" style="--d:${i + 2}" data-go="${slideOf[i]}"><span class="n">${pn(i + 1)}</span><div><h3>${r[0]}</h3><p>${r[1]}</p></div><span class="go">→</span></div>`).join('')}</div></div></section>`);
 
   // 3 · lo primero que haremos
-  S.push(`<section class="slide s-soft${hp}" data-th="light">${pic('1460925895917-afdab827c52f', x('Research', 'Research', 'Recherche', 'Pesquisa'))}<div class="content"><div class="eyebrow rv">01 · ${T.agenda[0][0]}</div>
-<h2 class="rv" style="--d:1">${x('Lo primero que <em>haremos.</em>', 'What we will do <em>first.</em>', 'Das machen wir <em>zuerst.</em>', 'O que faremos <em>primeiro.</em>')}</h2>
-<span class="phase rv" style="--d:2">${x('Semanas 1–2 · Research comercial', 'Weeks 1–2 · Commercial research', 'Wochen 1–2 · Marktrecherche', 'Semanas 1–2 · Pesquisa comercial')}</span>
-<div class="cards c4" style="margin-top:28px">
+  S.push(`<section class="slide s-soft${fotos ? ' hasband' : ''}" data-th="light" data-tt="${ttAttr}">${hero('1551288049-bebda4e38f71', '01')}<div class="content"><div class="bh"><div class="eyebrow rv">01 · ${x('Semanas 1–2 · Research comercial', 'Weeks 1–2 · Commercial research', 'Wochen 1–2 · Marktrecherche', 'Semanas 1–2 · Pesquisa comercial')}</div>
+<h2 class="rv" style="--d:1">${x('Lo primero que <em>haremos.</em>', 'What we will do <em>first.</em>', 'Das machen wir <em>zuerst.</em>', 'O que faremos <em>primeiro.</em>')}</h2></div>
+<div class="cards c4" style="margin-top:${fotos ? 30 : 28}px">
 ${rs(1, x('Clarificamos la oferta', 'We clarify the offer', 'Wir schärfen das Angebot', 'Esclarecemos a oferta'), x('Qué servicio impulsar y qué problema resuelve. Si no está clara, te sugerimos por dónde comenzar.', 'Which service to push and what problem it solves. If it is not clear yet, we suggest where to start.', 'Welche Leistung wir vorantreiben und welches Problem sie löst. Ist sie noch unklar, schlagen wir einen Einstieg vor.', 'Qual serviço impulsionar e que problema resolve. Se ainda não estiver claro, sugerimos por onde começar.'), x('Oferta prioritaria e hipótesis comercial', 'Priority offer and commercial hypothesis', 'Prioritäres Angebot und Vertriebshypothese', 'Oferta prioritária e hipótese comercial'))}
 ${rs(2, x('Definimos a quién nos dirigimos', 'We define who we target', 'Wir definieren die Zielgruppe', 'Definimos a quem nos dirigimos'), x('Sector, tamaño, ubicación y señales de oportunidad, con criterios claros de inclusión y descarte.', 'Industry, size, location and opportunity signals, with clear inclusion and exclusion criteria.', 'Branche, Größe, Standort und Signale, mit klaren Ein- und Ausschlusskriterien.', 'Setor, tamanho, localização e sinais de oportunidade, com critérios claros de inclusão e descarte.'), x('Perfil de cliente ideal (ICP)', 'Ideal customer profile (ICP)', 'Ideales Kundenprofil (ICP)', 'Perfil de cliente ideal (ICP)'))}
 ${rs(3, x('Dimensionamos el mercado', 'We size the market', 'Wir vermessen den Markt', 'Dimensionamos o mercado'), x('Validamos el universo real con TAM, SAM y SOM: cuántas empresas existen, cuántas encajan y cuántas podemos alcanzar.', 'We validate the real universe with TAM, SAM and SOM: how many companies exist, fit and are reachable.', 'Wir validieren das reale Universum mit TAM, SAM und SOM: wie viele Unternehmen es gibt, passen und erreichbar sind.', 'Validamos o universo real com TAM, SAM e SOM: quantas empresas existem, se encaixam e podemos alcançar.'), x('Universo de mercado validado', 'Validated market universe', 'Validiertes Marktuniversum', 'Universo de mercado validado'))}
@@ -374,17 +410,17 @@ ${rs(4, x('Investigamos cuentas y decisores', 'We research accounts and decision
 </div></div></section>`);
 
   // 4 · del primer mensaje a la optimización
-  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.9, .72))}<div class="content"><div class="eyebrow rv">02 · ${T.agenda[1][0]}</div>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.88, .55))}<div class="content"><div class="eyebrow rv">02 · ${x('Cronograma', 'Timeline', 'Zeitplan', 'Cronograma')}</div>
 <h2 class="rv" style="--d:1">${x('Del primer mensaje a la <em>optimización.</em>', 'From the first message to <em>optimization.</em>', 'Von der ersten Nachricht zur <em>Optimierung.</em>', 'Da primeira mensagem à <em>otimização.</em>')}</h2>
 <div class="tl">
-<div class="st rv" style="--d:2"><small>${x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2')}</small><h3>${x('Research comercial', 'Commercial research', 'Marktrecherche', 'Pesquisa comercial')}</h3><p>${x('Validamos la oferta, el mercado y las cuentas antes de contactar a nadie.', 'We validate the offer, the market and the accounts before contacting anyone.', 'Wir validieren Angebot, Markt und Accounts, bevor wir jemanden kontaktieren.', 'Validamos a oferta, o mercado e as contas antes de contatar alguém.')}</p></div>
-<div class="st rv" style="--d:3"><small>${x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3')}</small><h3>${x('Inicio del contacto', 'Outreach start', 'Beginn der Ansprache', 'Início do contato')}</h3><p>${x('Lanzamos la secuencia de LinkedIn y correo de forma progresiva, con mensajes basados en lo que validamos.', 'We launch the LinkedIn and email sequence progressively, with messages based on what we validated.', 'Wir starten die LinkedIn- und E-Mail-Sequenz schrittweise, mit Nachrichten auf Basis des Validierten.', 'Lançamos a sequência de LinkedIn e e-mail de forma progressiva, com mensagens baseadas no que validamos.')}</p></div>
-<div class="st rv" style="--d:4"><small>${x('Semana 4 en adelante', 'Week 4 onward', 'Ab Woche 4', 'A partir da semana 4')}</small><h3>${x('Optimización', 'Optimization', 'Optimierung', 'Otimização')}</h3><p>${x('Mejoramos mensajes, segmentos y decisores según las respuestas reales, con evidencia del mercado.', 'We improve messages, segments and decision-makers based on real replies, with market evidence.', 'Wir verbessern Nachrichten, Segmente und Entscheider anhand echter Antworten, mit Marktevidenz.', 'Melhoramos mensagens, segmentos e decisores conforme as respostas reais, com evidência do mercado.')}</p></div></div>
+<div class="st rv" style="--d:2"><b class="bn">01</b><small>${x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2')}</small><h3>${x('Research comercial', 'Commercial research', 'Marktrecherche', 'Pesquisa comercial')}</h3><p>${x('Validamos la oferta, el mercado y las cuentas antes de contactar a nadie.', 'We validate the offer, the market and the accounts before contacting anyone.', 'Wir validieren Angebot, Markt und Accounts, bevor wir jemanden kontaktieren.', 'Validamos a oferta, o mercado e as contas antes de contatar alguém.')}</p></div>
+<div class="st rv" style="--d:3"><b class="bn">02</b><small>${x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3')}</small><h3>${x('Inicio del contacto', 'Outreach start', 'Beginn der Ansprache', 'Início do contato')}</h3><p>${x('Lanzamos la secuencia de LinkedIn y correo de forma progresiva, con mensajes basados en lo que validamos.', 'We launch the LinkedIn and email sequence progressively, with messages based on what we validated.', 'Wir starten die LinkedIn- und E-Mail-Sequenz schrittweise, mit Nachrichten auf Basis des Validierten.', 'Lançamos a sequência de LinkedIn e e-mail de forma progressiva, com mensagens baseadas no que validamos.')}</p></div>
+<div class="st rv" style="--d:4"><b class="bn">03</b><small>${x('Semana 4 en adelante', 'Week 4 onward', 'Ab Woche 4', 'A partir da semana 4')}</small><h3>${x('Optimización', 'Optimization', 'Optimierung', 'Otimização')}</h3><p>${x('Mejoramos mensajes, segmentos y decisores según las respuestas reales, con evidencia del mercado.', 'We improve messages, segments and decision-makers based on real replies, with market evidence.', 'Wir verbessern Nachrichten, Segmente und Entscheider anhand echter Antworten, mit Marktevidenz.', 'Melhoramos mensagens, segmentos e decisores conforme as respostas reais, com evidência do mercado.')}</p></div></div>
 <div class="chips rv" style="--d:5"><span class="chip">LinkedIn</span><span class="chip">${x('Correo electrónico', 'Email', 'E-Mail', 'E-mail')}</span><span class="chip">${x('Seguimiento automático', 'Automated follow-up', 'Automatisches Nachfassen', 'Acompanhamento automático')}</span><span class="chip">${x('Respuestas con contexto', 'Replies with context', 'Antworten mit Kontext', 'Respostas com contexto')}</span></div></div></section>`);
 
   // 5 · secuencia coordinada (pasos interactivos)
   const stp = (n, h, d) => `<div class="stp rv" style="--d:${n + 1}"><i>${pn(n)}</i><b>${h}</b><span class="d">${d}</span></div>`;
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${T.agenda[2][0]}</div>
+  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${x('Metodología', 'Method', 'Methodik', 'Metodologia')}</div>
 <h2 class="rv" style="--d:1">${x('Una secuencia coordinada, <em>no campañas sueltas.</em>', 'A coordinated sequence, <em>not isolated campaigns.</em>', 'Eine koordinierte Sequenz, <em>keine einzelnen Kampagnen.</em>', 'Uma sequência coordenada, <em>não campanhas soltas.</em>')}</h2>
 <p class="lead rv" style="--d:2">${x('Cada cuenta sigue un recorrido ordenado y medible. Toca un paso para ver qué pasa.', 'Each account follows an orderly, measurable journey. Tap a step to see what happens.', 'Jeder Account folgt einem geordneten, messbaren Weg. Tippen Sie auf einen Schritt.', 'Cada conta segue um percurso ordenado e mensurável. Toque num passo para ver o que acontece.')}</p>
 <div class="stps">
@@ -397,7 +433,7 @@ ${stp(6, x('Entrega', 'Handover', 'Übergabe', 'Entrega'), x('Oportunidades con 
 </div><div class="stdet rv" id="stdet" style="--d:8"></div></div></section>`);
 
   // 6 · optimización continua
-  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${x('Mejora permanente', 'Ongoing improvement', 'Ständige Verbesserung', 'Melhoria permanente')}</div>
+  S.push(`<section class="slide s-soft${fotos ? ' splitR' : ''}" data-th="light">${sph('1758518731706-be5d5230e5a5', x('Ciclo mensual', 'Monthly cycle', 'Monatszyklus', 'Ciclo mensal'), x('Cada mes, <br>mejor', 'Better <br>every month', 'Jeden Monat <br>besser', 'A cada mês, <br>melhor'))}<div class="content"><div class="eyebrow rv">03 · ${x('Mejora permanente', 'Ongoing improvement', 'Ständige Verbesserung', 'Melhoria permanente')}</div>
 <h2 class="rv" style="--d:1">${x('Optimización <em>continua.</em>', 'Continuous <em>optimization.</em>', 'Laufende <em>Optimierung.</em>', 'Otimização <em>contínua.</em>')}</h2>
 <p class="lead rv" style="--d:2">${x('Supervisamos la campaña de forma continua: calidad de empresas, precisión de decisores, aceptaciones de LinkedIn, entregabilidad, respuestas, objeciones y rendimiento de mensajes. Los cambios son progresivos y basados en evidencia.', 'We supervise the campaign continuously: company quality, decision-maker accuracy, LinkedIn acceptances, deliverability, replies, objections and message performance. Changes are progressive and evidence-based.', 'Wir überwachen die Kampagne laufend: Unternehmensqualität, Entscheiderpräzision, LinkedIn-Annahmen, Zustellbarkeit, Antworten, Einwände und Nachrichtenleistung. Änderungen erfolgen schrittweise und evidenzbasiert.', 'Supervisionamos a campanha continuamente: qualidade das empresas, precisão dos decisores, aceitações no LinkedIn, entregabilidade, respostas, objeções e desempenho das mensagens. As mudanças são progressivas e baseadas em evidência.')}</p>
 <div class="eyebrow rv" style="--d:3;margin-top:30px">${x('Revisión mensual', 'Monthly review', 'Monatliche Überprüfung', 'Revisão mensal')}</div>
@@ -410,7 +446,7 @@ ${stp(6, x('Entrega', 'Handover', 'Übergabe', 'Entrega'), x('Oportunidades con 
   const kp = (l, v, d, mute, suf) => `<div><small>${l}</small><b data-count="${v}" data-suf="${suf || ''}">${v}${suf || ''}</b><i${mute ? ' class="m"' : ''}>${d}</i></div>`;
   const est = x('estimada', 'estimated', 'geschätzt', 'estimada'), estp = x('estimado', 'estimated', 'geschätzt', 'estimado');
   const rowp = (a, b2, c) => `<div class="rowp"><b>${a}</b><span class="tg">${b2}</span><span>${c}</span></div>`;
-  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">04 · ${T.agenda[3][0]}</div>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">04 · ${x('Seguimiento', 'Tracking', 'Tracking', 'Acompanhamento')}</div>
 <h2 class="rv" style="--d:1">${x('Tu operación, <em>visible en vivo.</em>', 'Your operation, <em>visible live.</em>', 'Ihr Geschäft, <em>live sichtbar.</em>', 'Sua operação, <em>visível ao vivo.</em>')}</h2>
 <div class="portal rv" style="--d:2"><div class="tb"><span>${esc(marca)} · ${x('Portal de seguimiento', 'Tracking portal', 'Tracking-Portal', 'Portal de acompanhamento')}</span><span class="lv">${x('En vivo · actualizado hoy', 'Live · updated today', 'Live · heute aktualisiert', 'Ao vivo · atualizado hoje')}</span></div>
 <div class="tabs"><button class="tab on" data-t="a">${x('Resumen', 'Overview', 'Übersicht', 'Resumo')}</button><button class="tab" data-t="b">${x('Oportunidades', 'Opportunities', 'Opportunities', 'Oportunidades')}</button><button class="tab" data-t="c">${x('Empresas', 'Companies', 'Unternehmen', 'Empresas')}</button></div>
@@ -436,8 +472,8 @@ ${rowp('Fabrikam Group', x('Respondió', 'Replied', 'Hat geantwortet', 'Responde
 
   // 8 · qué recibes
   const dl = (n, t) => `<div class="rv" style="--d:${n + 1}"><b>${pn(n)}</b><span>${t}</span></div>`;
-  S.push(`<section class="slide s-light${hp}" data-th="light">${pic('1554469384-e58fac16e23a', x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis'))}<div class="content"><div class="eyebrow rv">05 · ${x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis')}</div>
-<h2 class="rv" style="--d:1">${x('El servicio deja activos comerciales <em>reutilizables.</em>', 'The service leaves <em>reusable</em> commercial assets.', 'Die Leistung hinterlässt <em>wiederverwendbare</em> Vertriebsassets.', 'O serviço deixa ativos comerciais <em>reutilizáveis.</em>')}</h2>
+  S.push(`<section class="slide s-light${fotos ? ' hasband' : ''}" data-th="light" data-tt="${ttAttr}">${hero('1554469384-e58fac16e23a', '05')}<div class="content"><div class="bh"><div class="eyebrow rv">05 · ${x('Entregables', 'Deliverables', 'Ergebnisse', 'Entregáveis')}</div>
+<h2 class="rv" style="--d:1">${x('El servicio deja activos comerciales <em>reutilizables.</em>', 'The service leaves <em>reusable</em> commercial assets.', 'Die Leistung hinterlässt <em>wiederverwendbare</em> Vertriebsassets.', 'O serviço deixa ativos comerciais <em>reutilizáveis.</em>')}</h2></div>
 <div class="dl">
 ${dl(1, x('Oferta prioritaria evaluada e hipótesis comercial.', 'Evaluated priority offer and commercial hypothesis.', 'Bewertetes prioritäres Angebot und Vertriebshypothese.', 'Oferta prioritária avaliada e hipótese comercial.'))}
 ${dl(2, x('ICP documentado y criterios de inclusión y descarte.', 'Documented ICP and inclusion and exclusion criteria.', 'Dokumentiertes ICP sowie Ein- und Ausschlusskriterien.', 'ICP documentado e critérios de inclusão e descarte.'))}
@@ -538,7 +574,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>${rootVars}${CSS}</style></head><body>
 <div class="hint">${x('Gira el teléfono para ver mejor la presentación', 'Rotate your phone for a better view', 'Drehen Sie Ihr Telefon für eine bessere Ansicht', 'Gire o telefone para ver melhor a apresentação')}</div>
-<div class="deck" id="deck" data-th="dark"><div class="stage" id="stage">
+<div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
 <div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ ${x('Presentar', 'Present', 'Präsentieren', 'Apresentar')}</button></div></div>
 ${S.join('\n')}
