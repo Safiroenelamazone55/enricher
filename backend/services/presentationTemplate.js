@@ -174,7 +174,7 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .edb small{display:block;margin-bottom:6px;font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
 .edb b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:16.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .edb b span{flex-basis:100%;font-size:13.5px;font-weight:500;color:var(--teal)}
-.edb b img{height:34px;max-width:170px;object-fit:contain}.edb b img.cl-blanco{background:var(--navy);padding:7px 14px;border-radius:9px;height:44px;box-sizing:border-box}
+.edb b img{height:54px;max-width:250px;object-fit:contain;object-position:left center;margin-top:-4px}.edb b img.cl-blanco{background:var(--navy);padding:9px 16px;border-radius:10px;height:56px;box-sizing:border-box;margin-top:0}
 .deck[data-cv="1"] .top .r{color:#fff}
 /* agenda */
 .ag{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:0 56px}
