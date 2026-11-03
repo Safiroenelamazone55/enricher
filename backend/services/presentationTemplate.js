@@ -174,7 +174,7 @@ h1 em,h2 em{font-style:normal;color:var(--teal-l)}
 .edb small{display:block;margin-bottom:6px;font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
 .edb b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:16.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .edb b span{flex-basis:100%;font-size:13.5px;font-weight:500;color:var(--teal)}
-.edb b img{height:24px;max-width:100px;object-fit:contain}
+.edb b img{height:34px;max-width:170px;object-fit:contain}.edb b img.cl-blanco{background:var(--navy);padding:7px 14px;border-radius:9px;height:44px;box-sizing:border-box}
 .deck[data-cv="1"] .top .r{color:#fff}
 /* agenda */
 .ag{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:0 56px}
@@ -356,6 +356,8 @@ function render(brand, p, lang) {
   const web = (b.web || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
   const mail = b.email || '';
   const empresa = p.empresa || 'Cliente';
+  const cn = p.empresa ? esc(String(p.empresa).trim().slice(0, 40)) : '';   // nombre del cliente, para personalizar la presentación
+  const xp = (g, e) => (cn ? x(...e.map(t => t.split('{c}').join(cn))) : x(...g));   // g: texto genérico, e: texto con {c} = cliente
   const contacto = p.contacto || '';
   const sym = p.moneda || 'US$';
   const fee = Math.max(0, parseInt(p.fee, 10) || 0);
@@ -440,16 +442,16 @@ function render(brand, p, lang) {
   const edPh = (n, h, w) => `<li><i>${n}</i><b>${h}</b><span>${w}</span></li>`;
   const badge = `<svg class="badge rv" style="--d:6" viewBox="0 0 160 160"><defs><path id="cp" d="M80,80 m-57,0 a57,57 0 1,1 114,0 a57,57 0 1,1 -114,0"/></defs><circle cx="80" cy="80" r="79" fill="var(--teal)"/><g class="spin"><text font-size="12.5" font-weight="600" fill="#fff"><textPath href="#cp" textLength="352" lengthAdjust="spacing">${x('PROPUESTA · B2B · ', 'PROPOSAL · B2B · ', 'ANGEBOT · B2B · ', 'PROPOSTA · B2B · ')}${year} · ${x('NOVA · ', 'NOVA · ', 'NOVA · ', 'NOVA · ')}</textPath></text></g><path d="M58 102L102 58M102 58H72M102 58V88" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   S.push(`<section class="slide cover ed s-light" data-th="light" data-tt="light" data-cv="1"><div class="edph">${edPhoto ? `<i style="background-image:url('${edPhoto}')"></i>` : `<div class="edsvg">${artSvg}</div>`}<ul class="edl">${edPh('01', x('Research', 'Research', 'Recherche', 'Pesquisa'), x('Semanas 1–2', 'Weeks 1–2', 'Wochen 1–2', 'Semanas 1–2'))}${edPh('02', x('Contacto', 'Outreach', 'Ansprache', 'Contato'), x('Semanas 2–3', 'Weeks 2–3', 'Wochen 2–3', 'Semanas 2–3'))}${edPh('03', x('Optimización', 'Optimization', 'Optimierung', 'Otimização'), x('Desde la semana 4', 'From week 4', 'Ab Woche 4', 'A partir da semana 4'))}</ul><span class="edv">${esc(marca)} · ${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')} · ${year}</span></div>${badge}<div class="content">
-<div class="edt rv" style="--d:0"><span>N.º 01</span><span>${x('Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial')}</span><span>${year}</span></div>
+<div class="edt rv" style="--d:0"><span>N.º 01</span><span>${xp(['Propuesta comercial', 'Commercial proposal', 'Geschäftsangebot', 'Proposta comercial'], ['Propuesta para {c}', 'Proposal for {c}', 'Angebot für {c}', 'Proposta para {c}'])}</span><span>${year}</span></div>
 <div class="edm"><h1 class="rv${titLen > 38 ? ' long' : ''}" style="--d:1">${titulo}</h1>
 <p class="sub rv" style="--d:2">${x('Investigación, prospección y ejecución multicanal para generar oportunidades comerciales de forma estructurada, medible y constante.', 'Research, prospecting and multichannel execution to generate sales opportunities in a structured, measurable and consistent way.', 'Recherche, Prospektion und Multichannel-Umsetzung, um Vertriebschancen strukturiert, messbar und kontinuierlich zu erzeugen.', 'Pesquisa, prospecção e execução multicanal para gerar oportunidades comerciais de forma estruturada, mensurável e constante.')}</p></div>
-<div class="edb rv" style="--d:4"><div><small>${x('Preparada para', 'Prepared for', 'Erstellt für', 'Preparada para')}</small><b>${clLogo ? `<img alt="" src="${clLogo}">` : ''}${esc(empresa)}</b></div>
-<div><small>${x('Contacto', 'Contact', 'Kontakt', 'Contato')}</small><b>${esc(contacto)}<span>${esc(p.correo || '')}</span></b></div>
+<div class="edb rv" style="--d:4"><div><small>${x('Preparada para', 'Prepared for', 'Erstellt für', 'Preparada para')}</small><b>${clLogo ? `<img class="cl-${esc(p.logoCliente.usar)}" alt="${esc(empresa)}" src="${clLogo}">` : esc(empresa)}</b></div>
+<div><small>${x('Contacto', 'Contact', 'Kontakt', 'Contato')}</small><b>${esc(contacto) || '—'}<span>${esc(p.correo || '')}</span></b></div>
 <div><small>${x('Inversión', 'Investment', 'Investition', 'Investimento')}</small><b>${feeMes}<span>${esc(p.inicio || x('Inicio por definir', 'Start date to be defined', 'Startdatum offen', 'Início a definir'))}</span></b></div></div>
 </div></section>`);
 
   // 2 · agenda
-  S.push(`<section class="slide s-light${fotos ? ' splitL' : ''}" data-th="light">${sph('1522071820081-009f0129c71c', x('Resumen', 'Overview', 'Überblick', 'Resumo'), x('Un plan claro, <br>paso a paso', 'A clear plan, <br>step by step', 'Ein klarer Plan, <br>Schritt für Schritt', 'Um plano claro, <br>passo a passo'))}<div class="content"><div class="eyebrow rv">${x('Contenido', 'Contents', 'Inhalt', 'Conteúdo')}</div>
+  S.push(`<section class="slide s-light${fotos ? ' splitL' : ''}" data-th="light">${sph('1522071820081-009f0129c71c', x('Resumen', 'Overview', 'Überblick', 'Resumo'), xp(['Un plan claro, <br>paso a paso', 'A clear plan, <br>step by step', 'Ein klarer Plan, <br>Schritt für Schritt', 'Um plano claro, <br>passo a passo'], ['Un plan a la medida de <br>{c}', 'A plan tailored to <br>{c}', 'Ein Plan, maßgeschneidert für <br>{c}', 'Um plano sob medida para <br>{c}']))}<div class="content"><div class="eyebrow rv">${x('Contenido', 'Contents', 'Inhalt', 'Conteúdo')}</div>
 <h2 class="rv" style="--d:1">${x('Lo que vamos a <em>ver.</em>', 'What we are going to <em>cover.</em>', 'Was wir uns <em>ansehen.</em>', 'O que vamos <em>ver.</em>')}</h2>
 <div class="ag">${T.agenda.map((r, i) => `<div class="agi rv" style="--d:${i + 2}" data-go="${slideOf[i]}"><span class="n">${pn(i + 1)}</span><div><h3>${r[0]}</h3><p>${r[1]}</p></div><span class="go">→</span></div>`).join('')}</div></div></section>`);
 
@@ -502,7 +504,7 @@ ${stp(6, x('Entrega', 'Handover', 'Übergabe', 'Entrega'), x('Oportunidades con 
   const rowp = (a, b2, c) => `<div class="rowp"><b>${a}</b><span class="tg">${b2}</span><span>${c}</span></div>`;
   S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">04 · ${x('Seguimiento', 'Tracking', 'Tracking', 'Acompanhamento')}</div>
 <h2 class="rv" style="--d:1">${x('Tu operación, <em>visible en vivo.</em>', 'Your operation, <em>visible live.</em>', 'Ihr Geschäft, <em>live sichtbar.</em>', 'Sua operação, <em>visível ao vivo.</em>')}</h2>
-<div class="portal rv" style="--d:2"><div class="tb"><span>${esc(marca)} · ${x('Portal de seguimiento', 'Tracking portal', 'Tracking-Portal', 'Portal de acompanhamento')}</span><span class="lv">${x('En vivo · actualizado hoy', 'Live · updated today', 'Live · heute aktualisiert', 'Ao vivo · atualizado hoje')}</span></div>
+<div class="portal rv" style="--d:2"><div class="tb"><span>${esc(marca)} · ${xp(['Portal de seguimiento', 'Tracking portal', 'Tracking-Portal', 'Portal de acompanhamento'], ['Portal de seguimiento · {c}', 'Tracking portal · {c}', 'Tracking-Portal · {c}', 'Portal de acompanhamento · {c}'])}</span><span class="lv">${x('En vivo · actualizado hoy', 'Live · updated today', 'Live · heute aktualisiert', 'Ao vivo · atualizado hoje')}</span></div>
 <div class="tabs"><button class="tab on" data-t="a">${x('Resumen', 'Overview', 'Übersicht', 'Resumo')}</button><button class="tab" data-t="b">${x('Oportunidades', 'Opportunities', 'Opportunities', 'Oportunidades')}</button><button class="tab" data-t="c">${x('Empresas', 'Companies', 'Unternehmen', 'Empresas')}</button></div>
 <div class="pane on" data-p="a"><div class="kp">
 ${kp(x('Contactos alcanzados', 'Contacts reached', 'Erreichte Kontakte', 'Contatos alcançados'), 240, '▲ +18%')}
@@ -546,7 +548,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 <h2 class="rv" style="--d:1">${x('Quién hace <em>qué.</em>', 'Who does <em>what.</em>', 'Wer macht <em>was.</em>', 'Quem faz <em>o quê.</em>')}</h2>
 <div class="two">
 <div class="rp dk rv" style="--d:2">${fotos ? `<div class="rpph" style="background-image:url('${U('1572021335469-31706a17aaef')}')"></div>` : ''}<div class="k">${x('Responsabilidad de ', 'Responsibility of ', 'Verantwortung von ', 'Responsabilidade da ')}${esc(marca)}</div><p>${x('Estrategia, investigación, mensajes, configuración de secuencia, ejecución multicanal, seguimientos, clasificación de respuestas, reportes mensuales y optimización continua.', 'Strategy, research, messaging, sequence setup, multichannel execution, follow-ups, reply classification, monthly reporting and continuous optimization.', 'Strategie, Recherche, Nachrichten, Sequenz-Einrichtung, Multichannel-Umsetzung, Nachfassen, Klassifizierung von Antworten, Monatsberichte und laufende Optimierung.', 'Estratégia, pesquisa, mensagens, configuração da sequência, execução multicanal, acompanhamentos, classificação de respostas, relatórios mensais e otimização contínua.')}</p></div>
-<div class="rp lt rv" style="--d:3"><div class="k">${x('Responsabilidad del cliente', 'Client responsibility', 'Verantwortung des Kunden', 'Responsabilidade do cliente')}</div><ul>${li_([
+<div class="rp lt rv" style="--d:3"><div class="k">${xp(['Responsabilidad del cliente', 'Client responsibility', 'Verantwortung des Kunden', 'Responsabilidade do cliente'], ['Responsabilidad de {c}', 'Responsibility of {c}', 'Verantwortung von {c}', 'Responsabilidade da {c}'])}</div><ul>${li_([
     x('Proporcionar información sobre servicios y proyectos.', 'Provide information about services and projects.', 'Informationen zu Leistungen und Projekten bereitstellen.', 'Fornecer informações sobre serviços e projetos.'),
     x('Colaborar en la selección de la oferta.', 'Collaborate in selecting the offer.', 'Bei der Auswahl des Angebots mitwirken.', 'Colaborar na seleção da oferta.'),
     x('Facilitar accesos y aprobar el enfoque inicial.', 'Provide access and approve the initial approach.', 'Zugänge bereitstellen und den ersten Ansatz freigeben.', 'Facilitar acessos e aprovar a abordagem inicial.'),
@@ -568,7 +570,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 
   // 11 · alcance
   const nScope = refs.length ? 7 : 6;
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">${pn(nScope)} · ${x('Alcance', 'Scope', 'Umfang', 'Escopo')}</div>
+  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">${pn(nScope)} · ${xp(['Alcance', 'Scope', 'Umfang', 'Escopo'], ['Alcance para {c}', 'Scope for {c}', 'Umfang für {c}', 'Escopo para {c}'])}</div>
 <h2 class="rv" style="--d:1">${x('Un alcance delimitado para <em>aprender con precisión.</em>', 'A defined scope to <em>learn with precision.</em>', 'Ein klar umrissener Umfang, um <em>präzise zu lernen.</em>', 'Um escopo delimitado para <em>aprender com precisão.</em>')}</h2>
 <div class="terms">
 <div class="in rv" style="--d:2"><h3>${x('Incluye', 'Includes', 'Enthalten', 'Inclui')}</h3><ul>${li_([
@@ -601,7 +603,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
 <div class="scale"><span>1</span><span>3</span><span>6</span><span>9</span><span>12 ${x('meses', 'months', 'Monate', 'meses')}</span></div>
 <div class="rec" id="simRec">★ ${x('Plazo recomendado', 'Recommended term', 'Empfohlene Laufzeit', 'Prazo recomendado')}</div></div>`
     : `<div class="sim rv" style="--d:2"><div class="k">${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</div><div class="tot">${esc(feeNum)}<small>${x('/ mes', '/ month', '/ Monat', '/ mês')}</small></div><div class="eq">${notaPago}</div></div>`;
-  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">${pn(nInv)} · ${x('Inversión', 'Investment', 'Investition', 'Investimento')}</div>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">${pn(nInv)} · ${xp(['Inversión', 'Investment', 'Investition', 'Investimento'], ['Inversión para {c}', 'Investment for {c}', 'Investition für {c}', 'Investimento para {c}'])}</div>
 <h2 class="rv" style="--d:1">${x('Una inversión <em>clara y mensual.</em>', 'A clear, <em>monthly investment.</em>', 'Eine klare, <em>monatliche Investition.</em>', 'Um investimento <em>claro e mensal.</em>')}</h2>
 <div class="inv">${simHtml}
 <div class="facts"><div class="rv" style="--d:3"><small>${x('Tarifa mensual', 'Monthly fee', 'Monatliche Gebühr', 'Tarifa mensal')}</small><b>${esc(feeNum)}</b><p>${notaPago}</p></div>
@@ -611,7 +613,7 @@ ${dl(9, x('Playbook inicial y recomendaciones comerciales.', 'Initial playbook a
   // 13 · próximo paso
   S.push(`<section class="slide close s-dark" data-th="dark">${bgFoto('1521791136064-7986c2920216', ovL(.94, .62))}<div class="content">
 <div><div class="eyebrow rv">${x('Próximo paso con ', 'Next step with ', 'Nächster Schritt mit ', 'Próximo passo com ')}${esc(marca)}</div>
-<h2 class="rv" style="--d:1">${x('Comencemos a generar <em>oportunidades</em> comerciales.', 'Let’s start generating commercial <em>opportunities.</em>', 'Lassen Sie uns beginnen, Vertriebs<em>chancen</em> zu erzeugen.', 'Vamos começar a gerar <em>oportunidades</em> comerciais.')}</h2>
+<h2 class="rv" style="--d:1">${xp(['Comencemos a generar <em>oportunidades</em> comerciales.', 'Let’s start generating commercial <em>opportunities.</em>', 'Lassen Sie uns beginnen, Vertriebs<em>chancen</em> zu erzeugen.', 'Vamos começar a gerar <em>oportunidades</em> comerciais.'], ['Comencemos a generar <em>oportunidades</em> para {c}.', 'Let’s start generating <em>opportunities</em> for {c}.', 'Lassen Sie uns beginnen, <em>Chancen</em> für {c} zu erzeugen.', 'Vamos começar a gerar <em>oportunidades</em> para {c}.'])}</h2>
 <p class="lead rv" style="--d:2">${x('Confirma el inicio del servicio. A partir de ahí definiremos el perfil de cliente ideal y prepararemos el primer bloque de cuentas objetivo.', 'Confirm the start of the service. From there we will define the ideal customer profile and prepare the first block of target accounts.', 'Bestätigen Sie den Start der Leistung. Danach definieren wir das ideale Kundenprofil und bereiten den ersten Block von Ziel-Accounts vor.', 'Confirme o início do serviço. A partir daí definiremos o perfil de cliente ideal e prepararemos o primeiro bloco de contas-alvo.')}</p>
 <a class="cta rv" style="--d:3" target="_blank" rel="noopener noreferrer" href="${esc(mailto)}">${x('Comenzar ahora', 'Get started', 'Jetzt starten', 'Começar agora')} <span>↗</span></a></div>
 <div class="steps">
