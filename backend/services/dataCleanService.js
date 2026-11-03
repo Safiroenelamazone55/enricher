@@ -99,6 +99,7 @@ function _nameBase(raw, keepInsideIfEmpty) {
   s = s.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s && keepInsideIfEmpty) s = inside.trim();
   s = s.replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/g, '').trim();
+  s = s.replace(/\s+\.(?=[A-Za-zÁ-ÿ])/g, ' ');
   s = s.replace(NAME_PREFIX_RE, '').replace(NAME_CRED_RE, '');
   s = s.replace(/^[\s,;:.\-–—|*_]+|[\s,;:\-–—|*_]+$/g, '').replace(/\s{2,}/g, ' ').trim();
   const letters = s.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇçÃÕÀÈÌÒÙÂÊÎÔÛãõàèìòùâêîôû]/g, '');
@@ -115,7 +116,15 @@ function cleanFirstName(raw) {
   const t = s.replace(/^(\S.*?\S)\s+[A-Za-zÁÉÍÓÚÑÜ]\.?$/, '$1').trim();
   return t !== s && t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñÜüÇçÃÕÀÈÌÒÙÂÊÎÔÛãõàèìòùâêîôû]/g, '').length >= 2 ? t : s;
 }
-const cleanLastName = raw => _nameBase(raw, false);
+// Títulos y credenciales que LinkedIn/Apollo pegan al apellido: «Norris, CIC», «Page AAI, ANFI», «MEng MBA BEng MSaRS Chartered Insurer ACII FIII».
+const CRED_WORDS = new Set(['chartered', 'insurer', 'certified', 'fellow', 'member', 'associate', 'licensed', 'registered', 'accredited']);
+const isCredToken = t => CRED_WORDS.has(t.toLowerCase().replace(/[.,]/g, '')) || (/^[A-Z]{2}[A-Za-z]{1,5}\.?$/.test(t.replace(/,$/, '')));
+function cleanLastName(raw) {
+  let s = _nameBase(raw, false).replace(/,.*$/, '').trim();      // tras una coma solo hay credenciales o sufijos
+  const toks = s.split(' ').filter(Boolean);
+  while (toks.length && isCredToken(toks[toks.length - 1])) toks.pop();
+  return toks.join(' ');
+}
 
 function cleanEmployeeCount(raw) {
   let s = String(raw == null ? '' : raw).trim();
