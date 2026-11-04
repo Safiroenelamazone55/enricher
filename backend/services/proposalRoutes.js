@@ -36,6 +36,7 @@ async function init(pool) {
     params JSONB DEFAULT '{}'::jsonb, html TEXT NOT NULL, token TEXT UNIQUE NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query('CREATE INDEX IF NOT EXISTS tpl_copies_user ON tpl_copies (user_id, created_at DESC)');
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''");
+  await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS firmantes JSONB DEFAULT '[]'::jsonb");
   await pool.query('ALTER TABLE tpl_copies ADD COLUMN IF NOT EXISTS archivo TEXT');
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_email TEXT DEFAULT ''");
   await pool.query("ALTER TABLE tpl_brands ADD COLUMN IF NOT EXISTS pago_telefono TEXT DEFAULT ''");
@@ -79,12 +80,16 @@ function cleanRefs(a) {
     return { nombre: S(r.nombre, 80), link, descripcion: S(r.descripcion, 420), logo: (logoOk(r.logo) && r.logo.length < 400000) ? r.logo : '' };
   }).filter(r => r.nombre || r.logo);
 }
+function cleanFirmantes(a) {
+  if (!Array.isArray(a)) return [];
+  return a.slice(0, 4).map((f, i) => { f = f || {}; return { id: S(f.id, 24) || ('f' + Date.now().toString(36) + i), nombre: S(f.nombre, 80), cargo: S(f.cargo, 60), especialidad: S(f.especialidad, 80), firma: (logoOk(f.firma) && f.firma.length < 300000) ? f.firma : '' }; }).filter(f => f.nombre);
+}
 function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
     plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
     simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '',
-    validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60),
+    validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60), oferta: S(p.oferta, 20), firmaIds: (Array.isArray(p.firmaIds) ? p.firmaIds : []).slice(0, 4).map(x => S(x, 24)).filter(Boolean),
     comision: Math.min(100, Math.max(0, Math.round((parseFloat(String(p.comision).replace(',', '.')) || 0) * 10) / 10)), comisionBase: S(p.comisionBase, 160) };
 }
 
@@ -132,6 +137,7 @@ function mount(app, { pool, requireAuth }) {
     const f = brandFields(req.body || {}); if (!f.nombre) return res.status(400).json({ error: 'Falta el nombre de la empresa' });
     const { rows: [r] } = await pool.query(`INSERT INTO tpl_brands (user_id,nombre,email,web,color_primary,color_light,color_dark,logo_oscuro,logo_claro,telefono,pago_email,pago_telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [uid(req), f.nombre, f.email, f.web, f.cp, f.cl, f.cd, f.lo, f.lc, f.telefono, f.pe, f.pt]);
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'firmantes')) { const { rows: [r2] } = await pool.query('UPDATE tpl_brands SET firmantes=$3::jsonb WHERE id=$1 AND user_id=$2 RETURNING *', [r.id, uid(req), JSON.stringify(cleanFirmantes(req.body.firmantes))]); return res.json(brandOut(r2)); }
     res.json(brandOut(r));
   }));
   app.put('/api/tpl/brands/:id', A, wrap(async (req, res) => {
@@ -145,6 +151,7 @@ function mount(app, { pool, requireAuth }) {
         vals.push(v); sets.push(`${col}=$${vals.length}`);
       }
     }
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'firmantes')) { vals.push(JSON.stringify(cleanFirmantes(req.body.firmantes))); sets.push(`firmantes=$${vals.length}::jsonb`); }
     const { rows: [r] } = await pool.query(`UPDATE tpl_brands SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING *`, vals);
     if (!r) return res.status(404).json({ error: 'No encontrada' });
     res.json(brandOut(r));

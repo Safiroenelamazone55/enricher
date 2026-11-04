@@ -42800,8 +42800,9 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '', validez: d.validez || 15, preaviso: d.preaviso || 15, jurisdiccion: d.jurisdiccion || '', firmante: d.firmante || '', firmanteCargo: d.firmanteCargo || '', clienteCargo: '', comision: d.comision == null ? 0 : d.comision, comisionBase: d.comisionBase || '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '', validez: d.validez || 15, preaviso: d.preaviso || 15, jurisdiccion: d.jurisdiccion || '', firmante: d.firmante || '', firmanteCargo: d.firmanteCargo || '', clienteCargo: '', comision: d.comision == null ? 0 : d.comision, comisionBase: d.comisionBase || '', oferta: d.oferta || '', firmaIds: Array.isArray(d.firmaIds) ? [...d.firmaIds] : [] } };
     _draw(); _preview();
+    if (t.tipo === 'acuerdo' && !_copies.length) _j('/tpl/copies').then(cs => { _copies = cs; if (_gen && _gen.t.tipo === 'acuerdo') _redrawKeep(); }).catch(() => {});
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
   async function editCopia(id) {
@@ -42813,7 +42814,7 @@ const PlantillasModule = (() => {
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
       const p = t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
-        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', validez: pr.validez || 15, preaviso: pr.preaviso || 15, jurisdiccion: pr.jurisdiccion || '', firmante: pr.firmante || '', firmanteCargo: pr.firmanteCargo || '', clienteCargo: pr.clienteCargo || '', comision: pr.comision == null ? 0 : pr.comision, comisionBase: pr.comisionBase || '' };
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', validez: pr.validez || 15, preaviso: pr.preaviso || 15, jurisdiccion: pr.jurisdiccion || '', firmante: pr.firmante || '', firmanteCargo: pr.firmanteCargo || '', clienteCargo: pr.clienteCargo || '', comision: pr.comision == null ? 0 : pr.comision, comisionBase: pr.comisionBase || '', oferta: pr.oferta || '', firmaIds: Array.isArray(pr.firmaIds) ? [...pr.firmaIds] : [] };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
       _draw(); _preview();
     } catch (e) { showBanner(e.message, 'error'); }
@@ -42867,7 +42868,17 @@ const PlantillasModule = (() => {
       <p class="hrm-card__meta">Documento de 5 hojas A4 con la presentación de la empresa, igual para todos los clientes.</p></div>`;
     let campos;
     if (g.t.tipo === 'acuerdo') {
-      campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}<div class="pl-row"><div>${f('contacto', 'Contacto que firma por el cliente', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo del contacto', 'text', 'Ej. CEO')}</div></div>${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
+      const OFS = [['', 'Adquisición comercial B2B (prospección de clientes)'], ['estudio', 'Estudio de mercado'], ['redes', 'Redes sociales'], ['publicidad', 'Publicidad online'], ['crm', 'CRM y ventas']];
+      const cls = []; const vistos = new Set(); (_copies || []).forEach(cp => { const k = (cp.cliente || '').trim().toLowerCase(); if (k && !vistos.has(k)) { vistos.add(k); cls.push(cp); } });
+      const brd = _brands.find(x => x.id === g.t.brand_id) || {}, fms = Array.isArray(brd.firmantes) ? brd.firmantes : [];
+      const sel = Array.isArray(p.firmaIds) ? p.firmaIds : [];
+      const firmaBox = fms.length
+        ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) || (!sel.length && fm.id === fms[0].id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"> ${E(fm.nombre)} <span class="pl-opt">· ${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></label>`).join('')}</div>`
+        : `<div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Co-founder')}</div></div><p class="hrm-card__meta">Carga las firmas de la agencia una sola vez en «Empresas y logos» y aparecerán aquí para elegirlas.</p>`;
+      campos = `<label class="pl-l">Oferta de la propuesta</label><select class="pl-in" onchange="PlantillasModule.set('oferta',this.value)">${OFS.map(([v, l]) => `<option value="${v}"${(p.oferta || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <label class="pl-l">Cargar los datos de un cliente ya generado</label><select class="pl-in" onchange="PlantillasModule.cargarCliente(this.value)"><option value="">${cls.length ? 'Elegir un cliente…' : (_copies && _copies.length ? 'No hay copias con cliente' : 'Cargando copias…')}</option>${cls.map(cp => `<option value="${cp.id}">${E(cp.cliente)} · ${E((cp.plantilla || '').slice(0, 34))}</option>`).join('')}</select>
+        <p class="hrm-card__meta">Trae empresa, logo, contacto, correo, tarifa, plazo e inicio de esa copia: no los vuelves a escribir.</p>
+        ${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}<div class="pl-row"><div>${f('contacto', 'Contacto que firma por el cliente', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo del contacto', 'text', 'Ej. CEO')}</div></div>${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
         <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
           <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
           <div class="pl-row"><div>${f('comision', 'Comisión por venta (%)', 'number', '0, 5, 10, 15, 20…')}</div><div>${f('nota', 'Forma y fecha de pago', 'text', 'Pago al inicio de cada periodo')}</div></div>
@@ -42875,7 +42886,7 @@ const PlantillasModule = (() => {
           <p class="hrm-card__meta">Con 0 el documento dice «sin comisión». Si pones un porcentaje, aparece en la inversión y en la hoja de firma.</p></div>
         ${f('inicio', 'Inicio del servicio (opcional)', 'text', 'Ej. 10 de noviembre')}
         <div class="pl-box"><div class="pl-box__t">Acuerdo y firma</div>
-          <div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Director')}</div></div>
+          ${firmaBox}
           <div class="pl-row3"><div>${f('validez', 'Validez (días)', 'number')}</div><div>${f('preaviso', 'Preaviso (días)', 'number')}</div><div>${f('jurisdiccion', 'Ley aplicable', 'text', 'Perú')}</div></div></div>`;
     } else if (g.t.tipo === 'overview') {
       campos = ovBox;
@@ -42922,6 +42933,27 @@ const PlantillasModule = (() => {
     const fm = document.querySelector('.pl-form'), st = fm ? fm.scrollTop : 0, wy = window.scrollY;
     _drawGen();
     const f2 = document.querySelector('.pl-form'); if (f2) f2.scrollTop = st; window.scrollTo(0, wy);
+  }
+  function firmaSet(id, on) {
+    const g = _gen; if (!g) return; const a = Array.isArray(g.p.firmaIds) ? g.p.firmaIds.slice() : [];
+    const i = a.indexOf(id); if (on && i < 0) a.push(id); if (!on && i >= 0) a.splice(i, 1);
+    g.p.firmaIds = a; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200);
+  }
+  // Trae a este documento los datos del cliente de una copia ya generada (presentación, propuesta…): no se vuelven a escribir ni a subir
+  async function cargarCliente(copyId) {
+    if (!copyId || !_gen) return;
+    try {
+      const cp = await _j(`/tpl/copies/${copyId}`), pr = cp.params || {};
+      const g = _gen, keep = ['empresa', 'contacto', 'correo', 'fee', 'plazo', 'moneda', 'inicio'];
+      keep.forEach(k => { if (pr[k] !== undefined && pr[k] !== null && pr[k] !== '') g.p[k] = pr[k]; });
+      if (pr.logoCliente && typeof pr.logoCliente === 'object') g.p.logoCliente = JSON.parse(JSON.stringify(pr.logoCliente));
+      _redrawKeep(); _preview(); showBanner('Datos del cliente cargados', 'success');
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  // Desde «Copias generadas»: abre el acuerdo con los datos de esa copia ya puestos, para solo elegir la oferta
+  async function crearAcuerdo(copyId) {
+    const t = _tpls.find(x => x.tipo === 'acuerdo'); if (!t) { showBanner('Primero crea una plantilla de tipo «Propuesta y acuerdo (firma)»', 'error'); return; }
+    _tab = 'plantillas'; _gen = null; generar(t.id); await cargarCliente(copyId);
   }
   function fotosSet(on) { _gen.p.fotos = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
   window.addEventListener('message', e => {   // «Presentar» dentro de la vista previa: el marco pide pantalla completa y la página lo concede
@@ -43075,7 +43107,7 @@ const PlantillasModule = (() => {
   // ── Copias ──
   function _viewCopias() {
     const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
+      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Abre el acuerdo con los datos de este cliente">Crear acuerdo</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
         <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
     return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
   }
@@ -43172,7 +43204,7 @@ const PlantillasModule = (() => {
   }
   function editBrand(id) {
     const b = _brands.find(x => x.id === id) || { nombre: '', email: '', telefono: '', web: '', color_primary: '#0F9F8F', color_light: '#2DD4BF', color_dark: '#0F172A', logo_oscuro: 'blanco', logo_claro: 'color', prev: {} };
-    _logoDraft = {};
+    _logoDraft = {}; _firm = JSON.parse(JSON.stringify(Array.isArray(b.firmantes) ? b.firmantes : []));
     const slot = (k, lbl, bg) => `<div class="pl-slot"><div class="pl-slot__box" style="background:${bg}" id="pls-${k}">${b.prev && b.prev[k] ? `<img src="${b.prev[k]}">` : '<i>Sin logo</i>'}</div>
       <div class="pl-slot__t">${lbl}</div><label class="hrm-lnk">Subir<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange="PlantillasModule.logo('${k}',this)"></label> <button class="hrm-lnk" onclick="PlantillasModule.quitarLogo('${k}')">Quitar</button></div>`;
     const sel = (idd, cur) => `<select class="pl-in" id="${idd}">${[['blanco', 'Blanco'], ['negro', 'Negro'], ['color', 'Color']].map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
@@ -43183,8 +43215,40 @@ const PlantillasModule = (() => {
       <div class="pl-row3"><div><label class="pl-l">Color principal</label><input type="color" class="pl-col" id="plb-cp" value="${E(b.color_primary)}"></div><div><label class="pl-l">Color claro</label><input type="color" class="pl-col" id="plb-cl" value="${E(b.color_light)}"></div><div><label class="pl-l">Color oscuro (fondos)</label><input type="color" class="pl-col" id="plb-cd" value="${E(b.color_dark)}"></div></div>
       <label class="pl-l">Logos</label><div class="pl-slots">${slot('blanco', 'Blanco', '#0F172A')}${slot('negro', 'Negro', '#F1F5F9')}${slot('color', 'Color', '#fff')}</div>
       <div class="pl-row"><div><label class="pl-l">Sobre fondo oscuro usar</label>${sel('plb-lo', b.logo_oscuro)}</div><div><label class="pl-l">Sobre fondo claro usar</label>${sel('plb-lc', b.logo_claro)}</div></div>
-      <p class="hrm-card__meta">Si el logo elegido no está cargado se usa otro disponible; sin logos se escribe el nombre. PNG, JPG, SVG o WebP, hasta ~1 MB.</p>`,
+      <p class="hrm-card__meta">Si el logo elegido no está cargado se usa otro disponible; sin logos se escribe el nombre. PNG, JPG, SVG o WebP, hasta ~1 MB.</p>
+      <label class="pl-l" style="margin-top:16px">Firmantes de la agencia (para el acuerdo comercial)</label><div id="plb-firm">${_firmDraw()}</div>
+      <button type="button" class="hrm-lnk" onclick="PlantillasModule.firmAdd()">＋ Agregar firmante</button>
+      <p class="hrm-card__meta">Nombre, cargo, especialidad (va debajo del cargo) y la imagen de la firma, de preferencia en PNG con fondo transparente.</p>`,
       [id ? `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.delBrand(${id})">Eliminar</button>` : '', `<button class="btn btn-primary" onclick="PlantillasModule.saveBrand(${id})">Guardar</button>`]);
+  }
+  let _firm = [];
+  function _firmDraw() {
+    return _firm.map((f, i) => `<div class="pl-box" style="margin-top:8px"><div class="pl-row"><div><label class="pl-l">Nombre</label><input class="pl-in" value="${E(f.nombre)}" oninput="PlantillasModule.firmSet(${i},'nombre',this.value)"></div><div><label class="pl-l">Cargo</label><input class="pl-in" value="${E(f.cargo)}" placeholder="Co-founder" oninput="PlantillasModule.firmSet(${i},'cargo',this.value)"></div></div>
+      <label class="pl-l">Especialidad (debajo del cargo)</label><input class="pl-in" value="${E(f.especialidad)}" placeholder="Especialista en adquisición comercial B2B" oninput="PlantillasModule.firmSet(${i},'especialidad',this.value)">
+      <div class="pl-ref__logo" style="margin-top:8px"><span class="pl-cs__box" style="background:#fff;width:150px;height:56px">${f.firma ? `<img src="${f.firma}" alt="" style="max-width:100%;max-height:100%">` : '<i>Sin firma</i>'}</span>
+        <span><label class="hrm-lnk">${f.firma ? 'Cambiar firma' : 'Subir firma'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="PlantillasModule.firmImg(${i},this)"></label> <button type="button" class="hrm-lnk" onclick="PlantillasModule.firmDel(${i})">Quitar firmante</button></span></div></div>`).join('');
+  }
+  function _firmRedraw() { const el = $('plb-firm'); if (el) el.innerHTML = _firmDraw(); }
+  function firmAdd() { if (_firm.length >= 4) return; _firm.push({ id: 'f' + Date.now().toString(36), nombre: '', cargo: 'Co-founder', especialidad: '', firma: '' }); _firmRedraw(); }
+  function firmDel(i) { _firm.splice(i, 1); _firmRedraw(); }
+  function firmSet(i, k, v) { if (_firm[i]) _firm[i][k] = v; }
+  function firmImg(i, input) {
+    const f = input.files && input.files[0]; if (!f || !_firm[i]) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const im = new Image();
+      im.onload = () => {   // se reduce a un ancho de firma para que el documento no pese; se conserva la transparencia
+        const k = Math.min(1, 560 / im.width), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        const u = cv.toDataURL('image/png');
+        if (u.length > 290000) { showBanner('La firma pesa mucho: usa una imagen más simple o más pequeña', 'error'); return; }
+        _firm[i].firma = u; _firmRedraw();
+      };
+      im.onerror = () => showBanner('No se pudo leer la imagen', 'error');
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
   }
   function logo(k, input) {
     const f = input.files && input.files[0]; if (!f) return;
@@ -43195,6 +43259,7 @@ const PlantillasModule = (() => {
   async function saveBrand(id) {
     const v = k => $('plb-' + k).value;
     const data = { nombre: v('nombre'), email: v('email'), telefono: v('tel'), pago_email: v('pemail'), pago_telefono: v('ptel'), web: v('web'), color_primary: v('cp'), color_light: v('cl'), color_dark: v('cd'), logo_oscuro: v('lo'), logo_claro: v('lc') };
+    data.firmantes = _firm.filter(f => (f.nombre || '').trim());
     for (const k of ['blanco', 'negro', 'color']) if (k in _logoDraft) data['logo_' + (k === 'blanco' ? 'white' : k === 'negro' ? 'black' : 'color')] = _logoDraft[k];
     try { await _j(id ? `/tpl/brands/${id}` : '/tpl/brands', _body({ method: id ? 'PUT' : 'POST', data })); _closeModal(); showBanner('Empresa guardada', 'success'); render(_host.id); }
     catch (e) { showBanner(e.message, 'error'); }
@@ -43213,7 +43278,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, verComo, fijar, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
