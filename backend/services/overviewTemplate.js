@@ -141,8 +141,9 @@ function render(brand, p, lang) {
 <div class="pic">${bgPh('1557804506-669a67965ba0', `linear-gradient(180deg,rgba(${dkr},.05) 25%,rgba(${dkr},.85) 100%)`)}<div class="cap"><small>${t('Nuestro enfoque', 'Our approach')}</small>${t('Operamos como parte de tu equipo.', 'We operate as part of your team.')}</div></div>
 <div class="facts">
 <div><b>2022</b><p>${t('Agencia de crecimiento B2B con base en Perú, desde 2022.', 'B2B growth agency based in Peru, since 2022.')}</p></div>
-<div><b>10–50</b><p>${t('Equipos de 10 a 50 personas, de cualquier sector B2B.', 'Teams of 10 to 50 people, in any B2B sector.')}</p></div>
-<div><b>${t('1 meta', '1 goal')}</b><p>${t('Que tu empresa consiga clientes de forma ordenada.', 'For your company to win customers in an orderly way.')}</p></div>
+<div><b>5</b><p>${t('Servicios conectados: mercado, prospección, redes, publicidad y CRM.', 'Connected services: market, prospecting, social, advertising and CRM.')}</p></div>
+<div><b>${t('Mensual', 'Monthly')}</b><p>${t('Medimos y reportamos cada mes: contactos, respuestas y reuniones.', 'We measure and report every month: contacts, replies and meetings.')}</p></div>
+</div>
 </div></div>${foot(2)}</section>`;
 
   // ── 3 · qué hacemos
