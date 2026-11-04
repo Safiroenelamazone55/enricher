@@ -64,7 +64,7 @@ body{background:#E7EBF1;padding:24px 0}
 .hd img{height:26px;display:block}.hd .wm{font-weight:700;font-size:16px;letter-spacing:-.02em}
 .hd span.r{font-size:10px;letter-spacing:.06em;color:var(--mute)}
 .ft{position:absolute;left:64px;right:64px;bottom:34px;display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid var(--line);font-size:10px;color:var(--mute)}
-.body{position:absolute;left:64px;right:64px;top:104px;bottom:84px;display:flex;flex-direction:column;justify-content:space-between}
+.body{position:absolute;left:64px;right:64px;top:104px;bottom:84px;display:flex;flex-direction:column;justify-content:flex-start;gap:28px}
 h2{font-size:19px;font-weight:700;letter-spacing:-.02em;color:var(--ink);display:flex;gap:10px;align-items:baseline}
 h2 i{font-style:normal;color:var(--teal);font-weight:600}
 .cl{margin-top:0}
@@ -94,7 +94,7 @@ h2 i{font-style:normal;color:var(--teal);font-weight:600}
 .dl{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:0 26px}
 .dl>div{display:grid;grid-template-columns:24px 1fr;padding:10px 0;border-bottom:1px solid var(--line);font-size:12.2px;line-height:1.45;color:var(--text)}
 .dl i{font-style:normal;font-weight:600;color:var(--teal);font-size:10.5px;padding-top:1px}
-.note{margin-top:12px;font-size:11px;line-height:1.55;color:var(--mute)}
+.note{margin-top:2px;font-size:11px;line-height:1.55;color:var(--mute)}
 /* portada */
 .cv{position:absolute;left:64px;right:64px;top:210px}
 .cv .k{font-size:10.5px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:var(--teal)}
@@ -107,18 +107,23 @@ h2 i{font-style:normal;color:var(--teal);font-weight:600}
 .meta b{font-weight:600;color:var(--mute);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding-top:2px}
 .meta span{color:var(--ink);font-weight:500}.meta img{height:34px;max-width:170px;object-fit:contain}.meta img.cl-blanco{background:var(--navy);padding:6px 12px;border-radius:6px;height:42px}
 /* firma */
-.sum{margin-top:14px;padding:16px 18px;background:var(--soft);border-left:3px solid var(--teal)}
+.sum{padding:14px 18px;background:var(--soft);border-left:3px solid var(--teal)}
+.sumg{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px}
+.sumg small{display:block;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.sumg b{display:block;margin-top:3px;font-size:12.4px;font-weight:600;color:var(--ink);line-height:1.4}
 .sum .tb{margin-top:0;border-top:0}.sum .tb>div{padding:7px 0;grid-template-columns:170px 1fr}
-.sig{margin-top:26px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.sig{margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
 .sig h3{font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--teal)}
 .sig .who{margin-top:6px;font-size:14px;font-weight:700;letter-spacing:-.02em}
-.sig .row{margin-top:20px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.sig .row{margin-top:0;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
 .sig .row b{display:block;margin-top:5px;min-height:20px;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink);border-bottom:1px solid var(--ink);padding-bottom:3px}
-.sig .row.firma b{min-height:70px;position:relative}
+.sig .row.firma b{min-height:78px;position:relative}
+.sig .row.cargo b{min-height:44px}
 .sig .fi{position:absolute;left:4px;bottom:3px;max-height:64px;max-width:200px;object-fit:contain}
 .sig .esp{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);font-weight:500}
 .sig .fgs{display:grid;gap:22px}
-.sig .fg .row:first-child{margin-top:20px}
+.sig .fg .row:first-child{margin-top:14px}
+.sig .row{margin-top:14px}
 @page{size:210mm 297mm;margin:0}
 @media print{body{background:#fff;padding:0}.page{width:210mm;height:296.6mm;margin:0;box-shadow:none}}
 `;
@@ -175,22 +180,24 @@ ${row(t('Presentada por', 'Presented by'), esc(marca))}</div></section>`;
   // ── 2 · objeto y alcance
   const incl = off ? off.incl.map(pk) : [t('Una oferta prioritaria', 'One priority offer'), t('Un ICP principal y un mercado inicial', 'One main ICP and one initial market'), t('Hasta dos cargos decisores', 'Up to two decision-maker roles'), t('LinkedIn y correo electrónico', 'LinkedIn and email'), t('Hasta dos enfoques relacionados', 'Up to two related approaches'), t('Estrategia, investigación, validación y mensajes', 'Strategy, research, validation and messaging'), t('Ejecución, seguimiento, CRM e informes', 'Execution, follow-up, CRM and reports'), t('Acceso al portal en vivo', 'Access to the live portal')];
   const excl = off ? off.excl.map(pk) : [t('Varias ofertas, mercados o ICP simultáneos', 'Several simultaneous offers, markets or ICPs'), t('Publicidad pagada o gestión de redes sociales', 'Paid advertising or social media management'), t('Producción de contenido', 'Content production'), t('Reuniones comerciales o demostraciones', 'Sales meetings or demos'), t('Presupuestos, negociación o cierre', 'Quotes, negotiation or closing'), t('Gestión posterior a la venta', 'Post-sale management'), t('Garantía de respuestas, reuniones o ventas', 'Guarantee of replies, meetings or sales'), t('Licencias, dominios o buzones externos específicos', 'Specific external licenses, domains or mailboxes')];
-  const p2 = `<section class="page">${hdr}<div class="body">
-<div class="cl"><h2><i>1.</i>${t('Objeto de la propuesta', 'Purpose of the proposal')}</h2>
-<p>${off ? t(`${esc(marca)} prestará a ${esc(empresa)} ${pk(off.objeto)}. Esta propuesta describe el alcance, el método, las responsabilidades de cada parte y las condiciones económicas; al ser firmada por ambas partes se convierte en el acuerdo comercial que rige el servicio.`, `${esc(marca)} will provide ${esc(empresa)} with ${pk(off.objeto)}. This proposal describes the scope, the method, each party’s responsibilities and the economic terms; once signed by both parties it becomes the commercial agreement governing the service.`) : t(`${esc(marca)} prestará a ${esc(empresa)} un servicio de adquisición comercial B2B: investigación del mercado, definición del cliente ideal, prospección multicanal y gestión de las respuestas, con seguimiento y optimización mensual. Esta propuesta describe el alcance, el método, las responsabilidades de cada parte y las condiciones económicas; al ser firmada por ambas partes se convierte en el acuerdo comercial que rige el servicio.`, `${esc(marca)} will provide ${esc(empresa)} with a B2B commercial acquisition service: market research, ideal customer definition, multichannel prospecting and reply management, with monthly follow-up and optimization. This proposal describes the scope, the method, each party’s responsibilities and the economic terms; once signed by both parties it becomes the commercial agreement governing the service.`)}</p></div>
-<div class="cl"><h2><i>2.</i>${t('Alcance del servicio', 'Scope of the service')}</h2>
+  // ── Bloques del documento (el orden numérico es fijo; cómo se reparten en hojas depende de la oferta)
+  const B_obj = `<div class="cl"><h2><i>1.</i>${t('Objeto de la propuesta', 'Purpose of the proposal')}</h2>
+<p>${off ? t(`${esc(marca)} prestará a ${esc(empresa)} ${pk(off.objeto)}. Esta propuesta describe el alcance, el método, las responsabilidades de cada parte y las condiciones económicas; al ser firmada por ambas partes se convierte en el acuerdo comercial que rige el servicio.`, `${esc(marca)} will provide ${esc(empresa)} with ${pk(off.objeto)}. This proposal describes the scope, the method, each party’s responsibilities and the economic terms; once signed by both parties it becomes the commercial agreement governing the service.`) : t(`${esc(marca)} prestará a ${esc(empresa)} un servicio de adquisición comercial B2B: investigación del mercado, definición del cliente ideal, prospección multicanal y gestión de las respuestas, con seguimiento y optimización mensual. Esta propuesta describe el alcance, el método, las responsabilidades de cada parte y las condiciones económicas; al ser firmada por ambas partes se convierte en el acuerdo comercial que rige el servicio.`, `${esc(marca)} will provide ${esc(empresa)} with a B2B commercial acquisition service: market research, ideal customer definition, multichannel prospecting and reply management, with monthly follow-up and optimization. This proposal describes the scope, the method, each party’s responsibilities and the economic terms; once signed by both parties it becomes the commercial agreement governing the service.`)}</p></div>`;
+  const B_alc = `<div class="cl"><h2><i>2.</i>${t('Alcance del servicio', 'Scope of the service')}</h2>
 <div class="two"><div><div class="sub" style="margin-top:0">${t('Incluye', 'Includes')}</div><ul>${li(incl)}</ul></div><div><div class="sub" style="margin-top:0">${t('No incluye', 'Does not include')}</div><ul>${li(excl)}</ul></div></div>
-<p class="note">${t('Los resultados dependerán también de la claridad de la propuesta de valor, la respuesta del mercado y la capacidad del cliente para atender las conversaciones.', 'Results will also depend on the clarity of the value proposition, the market response and the client’s ability to handle the conversations.')}</p></div>
-<div class="cl"><h2><i>3.</i>${t('Responsabilidades de cada parte', 'Responsibilities of each party')}</h2>
+<p class="note">${t('Los resultados dependerán también de la claridad de la propuesta de valor, la respuesta del mercado y la capacidad del cliente para atender las conversaciones.', 'Results will also depend on the clarity of the value proposition, the market response and the client’s ability to handle the conversations.')}</p></div>`;
+  const B_res = `<div class="cl"><h2><i>3.</i>${t('Responsabilidades de cada parte', 'Responsibilities of each party')}</h2>
 <div class="two"><div><div class="sub" style="margin-top:0">${esc(marca)}</div><p style="margin-top:6px">${off ? t('Estrategia, ejecución de las actividades incluidas en el alcance, seguimiento, reportes mensuales y mejora continua del servicio.', 'Strategy, execution of the activities included in the scope, follow-up, monthly reports and continuous improvement of the service.') : t('Estrategia, investigación, mensajes, configuración de secuencia, ejecución multicanal, seguimientos, clasificación de respuestas, reportes mensuales y optimización continua.', 'Strategy, research, messaging, sequence setup, multichannel execution, follow-ups, reply classification, monthly reporting and continuous optimization.')}</p></div>
-<div><div class="sub" style="margin-top:0">${esc(empresa)}</div><ul>${li(off ? [t('Proporcionar la información y los accesos necesarios.', 'Provide the necessary information and access.'), t('Aprobar los entregables y el enfoque en los plazos acordados.', 'Approve deliverables and the approach within the agreed timeframes.'), t('Designar a una persona de contacto para el servicio.', 'Appoint a contact person for the service.'), t('Responder oportunamente a las consultas y solicitudes.', 'Respond promptly to inquiries and requests.')] : [t('Proporcionar información sobre servicios y proyectos.', 'Provide information about services and projects.'), t('Colaborar en la selección de la oferta.', 'Collaborate in selecting the offer.'), t('Facilitar accesos y aprobar el enfoque inicial.', 'Provide access and approve the initial approach.'), t('Responder oportunamente a las oportunidades.', 'Respond promptly to opportunities.'), t('Gestionar reuniones, propuestas, negociación y cierre.', 'Handle meetings, proposals, negotiation and closing.'), t('Comunicar el resultado de las conversaciones.', 'Report the outcome of the conversations.')])}</ul></div></div></div>
-</div>${ft(2)}</section>`;
-
-  // ── 3 · método y plazos
+<div><div class="sub" style="margin-top:0">${esc(empresa)}</div><ul>${li(off ? [t('Proporcionar la información y los accesos necesarios.', 'Provide the necessary information and access.'), t('Aprobar los entregables y el enfoque en los plazos acordados.', 'Approve deliverables and the approach within the agreed timeframes.'), t('Designar a una persona de contacto para el servicio.', 'Appoint a contact person for the service.'), t('Responder oportunamente a las consultas y solicitudes.', 'Respond promptly to inquiries and requests.')] : [t('Proporcionar información sobre servicios y proyectos.', 'Provide information about services and projects.'), t('Colaborar en la selección de la oferta.', 'Collaborate in selecting the offer.'), t('Facilitar accesos y aprobar el enfoque inicial.', 'Provide access and approve the initial approach.'), t('Responder oportunamente a las oportunidades.', 'Respond promptly to opportunities.'), t('Gestionar reuniones, propuestas, negociación y cierre.', 'Handle meetings, proposals, negotiation and closing.'), t('Comunicar el resultado de las conversaciones.', 'Report the outcome of the conversations.')])}</ul></div></div></div>`;
   const n4 = (n, h, d, r) => `<div><i>${n}</i><span><b>${h}</b><p>${d}</p></span><em><small>${t('Resultado', 'Outcome')}</small>${r}</em></div>`;
   const n6 = (h, d) => `<div><b>${h}</b>${d}</div>`;
-  const p3Base = `<section class="page">${hdr}<div class="body">
-<div class="cl"><h2><i>4.</i>${t('Método y plazos', 'Method and timeline')}</h2>
+  const ent = off ? off.ent.map(pk) : [t('Oferta prioritaria evaluada e hipótesis comercial.', 'Evaluated priority offer and commercial hypothesis.'), t('ICP documentado y criterios de inclusión y descarte.', 'Documented ICP and inclusion and exclusion criteria.'), t('Universo de mercado validado (TAM, SAM y SOM).', 'Validated market universe (TAM, SAM and SOM).'), t('Base de cuentas investigadas y decisores identificados.', 'Base of researched accounts and identified decision-makers.'), t('Secuencia multicanal y hasta dos enfoques comerciales.', 'Multichannel sequence and up to two commercial approaches.'), t('Historial de actividad, respuestas y objeciones.', 'History of activity, replies and objections.'), t('Embudo organizado y acceso al portal en vivo.', 'Organized pipeline and access to the live portal.'), t('Informes mensuales de actividad comercial.', 'Monthly commercial activity reports.'), t('Guía comercial inicial y recomendaciones.', 'Initial playbook and commercial recommendations.')];
+  const B_ent = `<div class="cl"><h2><i>4.</i>${t('Entregables', 'Deliverables')}</h2>
+<div class="dl">${ent.map((x, i) => `<div><i>${String(i + 1).padStart(2, '0')}</i><span>${x}</span></div>`).join('')}</div>
+${off ? '' : `<p class="note">${t('El acceso al portal en vivo está disponible desde la semana 1. Recomendamos interpretar las métricas entre las semanas 4 y 6.', 'Access to the live portal is available from week 1. We recommend reading the metrics between weeks 4 and 6.')}</p>`}</div>`;
+  const B_met = off ? `<div class="cl"><h2><i>5.</i>${t('Método de trabajo', 'Working method')}</h2>
+<div class="n4" style="margin-top:14px">${off.met.map((m, i) => `<div><i>${String(i + 1).padStart(2, '0')}</i><span><b>${m[K]}</b><p>${m[2 + K]}</p></span><em></em></div>`).join('')}</div>
+<p style="margin-top:18px">${t('Cada mes revisamos los resultados contigo y decidimos si <b>continuar</b>, <b>ajustar</b> o <b>detener</b> lo que no funciona. El plazo y las etapas se confirman al inicio del servicio.', 'Every month we review the results with you and decide whether to <b>continue</b>, <b>adjust</b> or <b>stop</b> what is not working. The timeline and stages are confirmed at the start of the service.')}</p></div>` : `<div class="cl"><h2><i>5.</i>${t('Método y plazos', 'Method and timeline')}</h2>
 <div class="ph3">
 <div><small>${t('Semanas 1–2', 'Weeks 1–2')}</small><b>${t('Research comercial', 'Commercial research')}</b><p>${t('Validamos la oferta, el mercado y las cuentas antes de contactar a nadie.', 'We validate the offer, the market and the accounts before contacting anyone.')}</p></div>
 <div><small>${t('Semanas 2–3', 'Weeks 2–3')}</small><b>${t('Inicio del contacto', 'Outreach start')}</b><p>${t('Lanzamos la secuencia de LinkedIn y correo de forma progresiva, con mensajes basados en lo que validamos.', 'We launch the LinkedIn and email sequence progressively, with messages based on what we validated.')}</p></div>
@@ -212,23 +219,8 @@ ${n6(t('5 · Embudo', '5 · Pipeline'), t('Actualización de estado y cambio de 
 ${n6(t('6 · Entrega', '6 · Handover'), t('Oportunidades con historial completo y próxima acción definida.', 'Opportunities with full history and a defined next action.'))}
 </div></div>
 <div class="cl"><div class="sub" style="margin-top:0">${t('Optimización continua y revisión mensual', 'Continuous optimization and monthly review')}</div>
-<p>${t('Supervisamos la campaña de forma continua: calidad de empresas, precisión de decisores, aceptaciones de LinkedIn, entregabilidad, respuestas, objeciones y rendimiento de mensajes. Cada mes se revisa y se decide: <b>continuar</b> (escalar el enfoque con mejores señales), <b>ajustar</b> (refinar oferta, mercado, decisor o mensaje) o <b>detener</b> (descartar una hipótesis con baja afinidad).', 'We supervise the campaign continuously: company quality, decision-maker accuracy, LinkedIn acceptances, deliverability, replies, objections and message performance. Every month we review and decide: <b>continue</b> (scale the approach with the best signals), <b>adjust</b> (refine the offer, market, decision-maker or message) or <b>stop</b> (drop a hypothesis with low fit).')}</p></div>
-</div>${ft(3)}</section>`;
-
-  const p3Off = off ? `<section class="page">${hdr}<div class="body">
-<div class="cl"><h2><i>4.</i>${t('Método de trabajo', 'Working method')}</h2>
-<div class="n4" style="margin-top:14px">${off.met.map((m, i) => `<div><i>${String(i + 1).padStart(2, '0')}</i><span><b>${m[K]}</b><p>${m[2 + K]}</p></span><em></em></div>`).join('')}</div>
-<p style="margin-top:18px">${t('Cada mes revisamos los resultados contigo y decidimos si <b>continuar</b>, <b>ajustar</b> o <b>detener</b> lo que no funciona. El plazo y las etapas se confirman al inicio del servicio.', 'Every month we review the results with you and decide whether to <b>continue</b>, <b>adjust</b> or <b>stop</b> what is not working. The timeline and stages are confirmed at the start of the service.')}</p></div>
-</div>${ft(3)}</section>` : '';
-  const p3 = off ? p3Off : p3Base;
-
-  // ── 4 · entregables
-  const ent = off ? off.ent.map(pk) : [t('Oferta prioritaria evaluada e hipótesis comercial.', 'Evaluated priority offer and commercial hypothesis.'), t('ICP documentado y criterios de inclusión y descarte.', 'Documented ICP and inclusion and exclusion criteria.'), t('Universo de mercado validado (TAM, SAM y SOM).', 'Validated market universe (TAM, SAM and SOM).'), t('Base de cuentas investigadas y decisores identificados.', 'Base of researched accounts and identified decision-makers.'), t('Secuencia multicanal y hasta dos enfoques comerciales.', 'Multichannel sequence and up to two commercial approaches.'), t('Historial de actividad, respuestas y objeciones.', 'History of activity, replies and objections.'), t('Embudo organizado y acceso al portal en vivo.', 'Organized pipeline and access to the live portal.'), t('Informes mensuales de actividad comercial.', 'Monthly commercial activity reports.'), t('Guía comercial inicial y recomendaciones.', 'Initial playbook and commercial recommendations.')];
-  const p4 = `<section class="page">${hdr}<div class="body">
-<div class="cl"><h2><i>5.</i>${t('Entregables', 'Deliverables')}</h2>
-<div class="dl">${ent.map((x, i) => `<div><i>${String(i + 1).padStart(2, '0')}</i><span>${x}</span></div>`).join('')}</div>
-${off ? '' : `<p class="note">${t('El acceso al portal en vivo está disponible desde la semana 1. Recomendamos interpretar las métricas entre las semanas 4 y 6.', 'Access to the live portal is available from week 1. We recommend reading the metrics between weeks 4 and 6.')}</p>`}</div>
-<div class="cl"><h2><i>6.</i>${t('Inversión y condiciones de pago', 'Investment and payment terms')}</h2>
+<p>${t('Supervisamos la campaña de forma continua: calidad de empresas, precisión de decisores, aceptaciones de LinkedIn, entregabilidad, respuestas, objeciones y rendimiento de mensajes. Cada mes se revisa y se decide: <b>continuar</b> (escalar el enfoque con mejores señales), <b>ajustar</b> (refinar oferta, mercado, decisor o mensaje) o <b>detener</b> (descartar una hipótesis con baja afinidad).', 'We supervise the campaign continuously: company quality, decision-maker accuracy, LinkedIn acceptances, deliverability, replies, objections and message performance. Every month we review and decide: <b>continue</b> (scale the approach with the best signals), <b>adjust</b> (refine the offer, market, decision-maker or message) or <b>stop</b> (drop a hypothesis with low fit).')}</p></div>`;
+  const B_inv = `<div class="cl"><h2><i>6.</i>${t('Inversión y condiciones de pago', 'Investment and payment terms')}</h2>
 <div class="tb">
 ${row(t('Tarifa mensual', 'Monthly fee'), `<b>${feeTxt}</b> ${t('por mes', 'per month')}`)}
 ${row(t('Plazo', 'Term'), `${meses} ${meses === 1 ? t('mes', 'month') : t('meses', 'months')}`)}
@@ -238,50 +230,47 @@ ${row(t('Comisión', 'Commission'), com > 0 ? `<b>${comTxt}</b> ${t('sobre', 'on
 ${row(t('Forma y fecha de pago', 'Payment method and date'), notaPago)}
 ${row(t('Inicio del servicio', 'Service start'), inicio)}
 </div>
-<p class="note">${com > 0 ? t(`La comisión de ${comTxt} se calcula sobre ${comBase}, y se paga una vez que el cliente cobra la venta. Se suma a la tarifa mensual y no la reemplaza. `, `The ${comTxt} commission is calculated on ${comBase}, and is paid once the client collects the sale. It is added to the monthly fee and does not replace it. `) : ''}${t('Los montos no incluyen impuestos aplicables ni costos de herramientas, licencias, dominios o buzones de terceros.', 'Amounts do not include applicable taxes or the cost of third-party tools, licenses, domains or mailboxes.')}</p></div>
-</div>${ft(4)}</section>`;
-
-  // ── 5 · condiciones generales
+<p class="note">${com > 0 ? t(`La comisión de ${comTxt} se calcula sobre ${comBase}, y se paga una vez que el cliente cobra la venta. Se suma a la tarifa mensual y no la reemplaza. `, `The ${comTxt} commission is calculated on ${comBase}, and is paid once the client collects the sale. It is added to the monthly fee and does not replace it. `) : ''}${t('Los montos no incluyen impuestos aplicables ni costos de herramientas, licencias, dominios o buzones de terceros.', 'Amounts do not include applicable taxes or the cost of third-party tools, licenses, domains or mailboxes.')}</p></div>`;
   const c = (n, h, tx) => `<div class="cl"><h2><i>${n}</i>${h}</h2><p>${tx}</p></div>`;
-  const p5 = `<section class="page">${hdr}<div class="body">
-${c('7.', t('Vigencia y terminación', 'Term and termination'), t(`El acuerdo rige desde la fecha de firma y durante el plazo indicado en la cláusula 6 (${meses} ${meses === 1 ? 'mes' : 'meses'}). Al terminar el plazo, las partes podrán renovarlo por escrito. Cualquiera de las partes puede terminarlo con un preaviso escrito de ${preaviso} días; se pagará el servicio prestado hasta la fecha efectiva de terminación.`, `The agreement applies from the signing date and for the term set out in clause 6 (${meses} ${meses === 1 ? 'month' : 'months'}). At the end of the term the parties may renew it in writing. Either party may terminate it with ${preaviso} days’ written notice; the service provided up to the effective termination date shall be paid.`))}
-${c('8.', t('Sin garantía de resultados', 'No guarantee of results'), off ? pk(off.gar) : t('La prospección B2B depende del mercado, de la oferta y de la capacidad del cliente para atender las conversaciones. NovaCentrax se compromete a ejecutar el servicio con diligencia y método, pero no garantiza un número de respuestas, reuniones ni ventas.'.replace('NovaCentrax', esc(marca)), 'B2B prospecting depends on the market, the offer and the client’s ability to handle the conversations. NovaCentrax commits to deliver the service with diligence and method, but does not guarantee a number of replies, meetings or sales.'.replace('NovaCentrax', esc(marca))))}
-${c('9.', t('Confidencialidad', 'Confidentiality'), t('Cada parte mantendrá en reserva la información no pública de la otra a la que acceda por este acuerdo (incluidas listas de cuentas, mensajes, métricas y precios) y solo la usará para ejecutar el servicio. Esta obligación continúa después de terminado el acuerdo.', 'Each party shall keep confidential the other’s non-public information accessed under this agreement (including account lists, messages, metrics and prices) and use it only to perform the service. This obligation continues after the agreement ends.'))}
-${c('10.', t('Propiedad de los entregables', 'Ownership of deliverables'), t('Una vez pagado el servicio, el cliente puede usar los entregables descritos en la cláusula 5 (ICP, base de cuentas, secuencias, mensajes e informes) para su propio negocio. Las metodologías, plantillas, herramientas y el portal de NovaCentrax siguen siendo de NovaCentrax.'.replace(/NovaCentrax/g, esc(marca)), 'Once the service is paid, the client may use the deliverables described in clause 5 (ICP, account base, sequences, messages and reports) for its own business. NovaCentrax’s methodologies, templates, tools and portal remain NovaCentrax’s property.'.replace(/NovaCentrax/g, esc(marca))))}
-${c('11.', t('Datos personales', 'Personal data'), t('Las partes tratarán los datos personales de los contactos comerciales conforme a la normativa aplicable y solo para la prospección B2B objeto de este acuerdo, respetando las solicitudes de baja o de no contacto.', 'The parties shall process the personal data of business contacts in accordance with applicable law and only for the B2B prospecting covered by this agreement, honoring opt-out and do-not-contact requests.'))}
-${c('12.', t('Comunicaciones', 'Communications'), t(`Las comunicaciones se harán por correo electrónico a los contactos indicados en la portada${correo ? ` (${esc(correo)})` : ''} y a los que cada parte informe por escrito.`, `Communications shall be made by email to the contacts shown on the cover${correo ? ` (${esc(correo)})` : ''} and to those each party notifies in writing.`))}
-${c('13.', t('Ley aplicable', 'Governing law'), t(`Este acuerdo se rige por las leyes de ${esc(jur)}. Las partes procurarán resolver amistosamente cualquier diferencia antes de acudir a las instancias que correspondan.`, `This agreement is governed by the laws of ${esc(jur)}. The parties shall seek to resolve any dispute amicably before resorting to the competent bodies.`))}
-</div>${ft(5)}</section>`;
-
-  // ── 6 · aceptación y firma
-
-  const p6 = `<section class="page">${hdr}<div class="body">
-<div class="cl"><h2><i>14.</i>${t('Aceptación del acuerdo', 'Acceptance of the agreement')}</h2>
+  const C = [
+    `${c('7.', t('Vigencia y terminación', 'Term and termination'), t(`El acuerdo rige desde la fecha de firma y durante el plazo indicado en la cláusula 6 (${meses} ${meses === 1 ? 'mes' : 'meses'}). Al terminar el plazo, las partes podrán renovarlo por escrito. Cualquiera de las partes puede terminarlo con un preaviso escrito de ${preaviso} días; se pagará el servicio prestado hasta la fecha efectiva de terminación.`, `The agreement applies from the signing date and for the term set out in clause 6 (${meses} ${meses === 1 ? 'month' : 'months'}). At the end of the term the parties may renew it in writing. Either party may terminate it with ${preaviso} days’ written notice; the service provided up to the effective termination date shall be paid.`))}`,
+    `${c('8.', t('Sin garantía de resultados', 'No guarantee of results'), off ? pk(off.gar) : t('La prospección B2B depende del mercado, de la oferta y de la capacidad del cliente para atender las conversaciones. NovaCentrax se compromete a ejecutar el servicio con diligencia y método, pero no garantiza un número de respuestas, reuniones ni ventas.'.replace('NovaCentrax', esc(marca)), 'B2B prospecting depends on the market, the offer and the client’s ability to handle the conversations. NovaCentrax commits to deliver the service with diligence and method, but does not guarantee a number of replies, meetings or sales.'.replace('NovaCentrax', esc(marca))))}`,
+    `${c('9.', t('Confidencialidad', 'Confidentiality'), t('Cada parte mantendrá en reserva la información no pública de la otra a la que acceda por este acuerdo (incluidas listas de cuentas, mensajes, métricas y precios) y solo la usará para ejecutar el servicio. Esta obligación continúa después de terminado el acuerdo.', 'Each party shall keep confidential the other’s non-public information accessed under this agreement (including account lists, messages, metrics and prices) and use it only to perform the service. This obligation continues after the agreement ends.'))}`,
+    `${c('10.', t('Propiedad de los entregables', 'Ownership of deliverables'), t('Una vez pagado el servicio, el cliente puede usar los entregables descritos en la cláusula 4 (ICP, base de cuentas, secuencias, mensajes e informes) para su propio negocio. Las metodologías, plantillas, herramientas y el portal de NovaCentrax siguen siendo de NovaCentrax.'.replace(/NovaCentrax/g, esc(marca)), 'Once the service is paid, the client may use the deliverables described in clause 4 (ICP, account base, sequences, messages and reports) for its own business. NovaCentrax’s methodologies, templates, tools and portal remain NovaCentrax’s property.'.replace(/NovaCentrax/g, esc(marca))))}`,
+    `${c('11.', t('Datos personales', 'Personal data'), t('Las partes tratarán los datos personales de los contactos comerciales conforme a la normativa aplicable y solo para la prospección B2B objeto de este acuerdo, respetando las solicitudes de baja o de no contacto.', 'The parties shall process the personal data of business contacts in accordance with applicable law and only for the B2B prospecting covered by this agreement, honoring opt-out and do-not-contact requests.'))}`,
+    `${c('12.', t('Comunicaciones', 'Communications'), t(`Las comunicaciones se harán por correo electrónico a los contactos indicados en la portada${correo ? ` (${esc(correo)})` : ''} y a los que cada parte informe por escrito.`, `Communications shall be made by email to the contacts shown on the cover${correo ? ` (${esc(correo)})` : ''} and to those each party notifies in writing.`))}`,
+    `${c('13.', t('Ley aplicable', 'Governing law'), t(`Este acuerdo se rige por las leyes de ${esc(jur)}. Las partes procurarán resolver amistosamente cualquier diferencia antes de acudir a las instancias que correspondan.`, `This agreement is governed by the laws of ${esc(jur)}. The parties shall seek to resolve any dispute amicably before resorting to the competent bodies.`))}`
+  ];
+  const sg = (cls, lbl, val) => `<div class="row${cls ? ' ' + cls : ''}">${lbl}<b>${val}</b></div>`;
+  const B_acc = `<div class="cl"><h2><i>14.</i>${t('Aceptación del acuerdo', 'Acceptance of the agreement')}</h2>
 <p>${t(`Con su firma, ${esc(empresa)} y ${esc(marca)} aceptan esta propuesta y las condiciones que contiene como el acuerdo comercial que rige el servicio.`, `By signing, ${esc(empresa)} and ${esc(marca)} accept this proposal and the conditions it contains as the commercial agreement governing the service.`)}</p></div>
-<div class="sum"><div class="tb">
-${row(t('Servicio', 'Service'), esc(servicioNombre))}
-${row(t('Cliente', 'Client'), esc(empresa))}
-${row(t('Tarifa mensual', 'Monthly fee'), `<b>${feeTxt}</b> · ${modelo}`)}
-${row(t('Comisión', 'Commission'), com > 0 ? `<b>${comTxt}</b> ${t('sobre', 'on')} ${comBase}` : t('0 %', '0%'))}
-${row(t('Plazo y total', 'Term and total'), `${meses} ${meses === 1 ? t('mes', 'month') : t('meses', 'months')} · <b>${totalTxt}</b>`)}
-${row(t('Inicio', 'Start'), inicio)}
-${row(t('Validez de la propuesta', 'Proposal validity'), `${validez} ${t('días desde el', 'days from')} ${esc(hoy)}`)}
-</div></div>
+<div class="sum"><div class="sumg">
+<div><small>${t('Servicio', 'Service')}</small><b>${esc(servicioNombre)}</b></div>
+<div><small>${t('Cliente', 'Client')}</small><b>${esc(empresa)}</b></div>
+<div><small>${t('Tarifa mensual', 'Monthly fee')}</small><b>${feeTxt}</b></div>
+<div><small>${t('Comisión', 'Commission')}</small><b>${com > 0 ? comTxt : '0%'}</b></div>
+<div><small>${t('Plazo y total', 'Term and total')}</small><b>${meses} ${meses === 1 ? t('mes', 'month') : t('meses', 'months')} · ${totalTxt}</b></div>
+<div><small>${t('Inicio', 'Start')}</small><b>${inicio}</b></div>
+<div><small>${t('Validez', 'Validity')}</small><b>${validez} ${t('días desde el', 'days from')} ${esc(hoy)}</b></div></div></div>
 <div class="sig" style="grid-template-columns:1fr ${Math.max(1, firmantes.length)}fr">
 <div><h3>${t('Por el cliente', 'For the client')}</h3><div class="who">${esc(empresa)}</div>
-<div class="fg"><div class="row firma">${t('Firma', 'Signature')}<b></b></div><div class="row">${t('Nombre', 'Name')}<b>${esc(contacto)}</b></div><div class="row">${t('Cargo', 'Title')}<b>${esc(prm.clienteCargo || '')}</b></div><div class="row">${t('Fecha y lugar', 'Date and place')}<b></b></div></div></div>
+<div class="fg">${sg('firma', t('Firma', 'Signature'), '')}${sg('', t('Nombre', 'Name'), esc(contacto))}${sg('cargo', t('Cargo', 'Title'), esc(prm.clienteCargo || ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div></div>
 <div><h3>${t('Por la agencia', 'For the agency')}</h3><div class="who">${esc(marca)}</div>
-<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg"><div class="row firma">${t('Firma', 'Signature')}<b>${imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : ''}</b></div><div class="row">${t('Nombre', 'Name')}<b>${esc(f.nombre)}</b></div><div class="row">${t('Cargo', 'Title')}<b>${esc(f.cargo)}${f.especialidad ? `<span class="esp">${esc(f.especialidad)}</span>` : ''}</b></div><div class="row">${t('Fecha y lugar', 'Date and place')}<b></b></div></div>`).join('')}</div>
+<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg">${sg('firma', t('Firma', 'Signature'), imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : '')}${sg('', t('Nombre', 'Name'), esc(f.nombre))}${sg('cargo', t('Cargo', 'Title'), esc(f.cargo) + (f.especialidad ? `<span class="esp">${esc(f.especialidad)}</span>` : ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div>`).join('')}</div>
 </div>
 </div>
-<p class="note" style="margin-top:34px">${t('Se firma en dos ejemplares o en formato electrónico. Una copia firmada, escaneada o enviada por correo tiene el mismo efecto entre las partes.', 'Signed in two copies or electronically. A signed copy, scanned or sent by email, has the same effect between the parties.')}</p>
-</div>${ft(6)}</section>`;
+<p class="note">${t('Se firma en dos ejemplares o en formato electrónico. Una copia firmada, escaneada o enviada por correo tiene el mismo efecto entre las partes.', 'Signed in two copies or electronically. A signed copy, scanned or sent by email, has the same effect between the parties.')}</p>`;
+  const page = (n, parts) => `<section class="page">${hdr}<div class="body">${parts.join('\n')}</div>${ft(n)}</section>`;
+  // Reparto en hojas: cada hoja se llena casi por completo (el contenido corre de arriba abajo con el mismo espacio entre secciones)
+  const pages = off
+    ? [page(2, [B_obj, B_alc, B_res, B_ent]), page(3, [B_met, B_inv]), page(4, C), page(5, [B_acc])]
+    : [page(2, [B_obj, B_alc, B_res]), page(3, [B_met]), page(4, [B_ent, B_inv, C[0]]), page(5, C.slice(1)), page(6, [B_acc])];
 
   const title = `${marca} · ${t('Propuesta y acuerdo comercial', 'Commercial proposal and agreement')} · ${empresa}`;
   const root = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light}}`;
   return `<!DOCTYPE html>\n<html lang="${es ? 'es' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>${root}${CSS}</style></head><body>${p1}${p2}${p3}${p4}${p5}${p6}</body></html>`;
+<style>${root}${CSS}</style></head><body>${p1}${pages.join('')}</body></html>`;
 }
 
 module.exports = { render };
