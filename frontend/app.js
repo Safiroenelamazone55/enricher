@@ -42655,30 +42655,41 @@ const PlantillasModule = (() => {
     const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['marcas', 'Empresas y logos']]
       .map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="PlantillasModule.tab('${k}')">${l}</button>`).join('');
     const inner = _tab === 'plantillas' ? _viewPlantillas() : _tab === 'copias' ? _viewCopias() : _viewMarcas();
-    const acc = _tab === 'plantillas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Nueva plantilla</button>` : _tab === 'marcas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button>` : '';
-    const sub = { plantillas: 'Una plantilla por cada oferta o documento; cada una guarda su nombre, empresa y valores por defecto.', copias: 'Versiones ya generadas: no cambian aunque edites la plantilla después.', marcas: 'Cada empresa guarda sus logos, colores, correo y teléfono; las plantillas eligen cuál firma el documento.' }[_tab];
-    _host.innerHTML = `<div class="pl-wrap"><div class="pl-hd"><div><h1 class="pl-h1">Plantillas</h1><p class="pl-sub">${sub}</p></div>${acc}</div>
-      <div class="pl-tabs">${tabs}</div>${inner}</div>`;
+    const acc = _tab === 'plantillas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Plantilla</button>` : _tab === 'marcas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Empresa</button>` : '';
+    const sub = { plantillas: 'Una plantilla por cada oferta o documento', copias: 'Versiones ya generadas: no cambian aunque edites la plantilla', marcas: 'Logos, colores y datos de cada empresa que firma los documentos' }[_tab];
+    const izq = _tab === 'plantillas'
+      ? `<label class="pl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" placeholder="Buscar plantilla…" value="${E(_q)}" oninput="PlantillasModule.buscar(this.value)"></label>`
+      : `<span class="pl-sub">${sub}</span>`;
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-hd"><h1 class="pl-h1">Plantillas</h1></div>
+      <div class="pl-tabs">${tabs}</div><div class="pl-tb">${izq}<span class="pl-tb__sp"></span>${acc}</div>${inner}</div>`;
   }
 
   // ── Plantillas ──
-  function _viewPlantillas() {
-    const cards = _tpls.map(t => {
+  let _q = '';
+  function _tplRows() {
+    const q = _q.trim().toLowerCase();
+    const list = _tpls.filter(t => !q || (t.nombre + ' ' + (t.oferta || '') + ' ' + (TIPOS[t.tipo] || '')).toLowerCase().includes(q));
+    if (!list.length) return `<div class="pl-empty">${_tpls.length ? 'Sin coincidencias.' : 'Aún no hay plantillas.'}</div>`;
+    return list.map(t => {
       const b = _brands.find(x => x.id === t.brand_id);
       const d = t.defaults || {};
       const meta = t.tipo === 'pago'
-        ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'} · idioma base ${LANGS[t.lang] || 'Español'}`
-        : t.tipo === 'overview' ? `Documento A4 · idioma base ${LANGS[t.lang] || 'Español'}`
-        : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · idioma base ${LANGS[t.lang] || 'Español'}`;
-      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
-        <h3 class="hrm-card__t">${E(t.nombre)}</h3>
-        <p class="hrm-card__d">${E(t.oferta || 'Sin descripción')}</p>
-        <p class="hrm-card__meta">${E(b ? b.nombre : 'Sin empresa')} · ${meta}</p>
-        <div class="hrm-card__acts"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button>
+        ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
+        : t.tipo === 'overview' ? 'Documento A4'
+        : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
+      return `<div class="pl-tr"><div class="pl-td pl-td--n"><b>${E(t.nombre)}</b><span>${E(t.oferta || 'Sin descripción')}</span></div>
+        <div class="pl-td"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span></div>
+        <div class="pl-td pl-td--m">${E(b ? b.nombre : 'Sin empresa')}</div>
+        <div class="pl-td pl-td--m">${meta} · ${LANGS[t.lang] || 'Español'}</div>
+        <div class="pl-td pl-td--m">${t.copias}</div>
+        <div class="pl-td pl-td--a"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
           <button class="btn btn-ghost" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
     }).join('');
-    return `<div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay plantillas.</p>'}</div>`;
+  }
+  function buscar(v) { _q = v || ''; const el = document.getElementById('pl-rows'); if (el) el.innerHTML = _tplRows(); }
+  function _viewPlantillas() {
+    return `<div class="pl-table"><div class="pl-th"><span>Nombre</span><span>Tipo</span><span>Empresa</span><span>Detalle</span><span>Copias</span><span></span></div><div id="pl-rows">${_tplRows()}</div></div>`;
   }
 
   function _pasosChecks(pre, pasos, horas) {
@@ -43148,7 +43159,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
