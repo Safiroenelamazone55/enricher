@@ -84,7 +84,8 @@ function cleanParams(p) {
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
     plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
     simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '',
-    validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60) };
+    validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60),
+    comision: Math.min(100, Math.max(0, Math.round((parseFloat(String(p.comision).replace(',', '.')) || 0) * 10) / 10)), comisionBase: S(p.comisionBase, 160) };
 }
 
 function payDefaults(d) {
