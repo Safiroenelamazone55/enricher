@@ -42878,7 +42878,7 @@ const PlantillasModule = (() => {
         ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"> ${E(fm.nombre)} <span class="pl-opt">· ${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></label>`).join('')}</div>`
         : `<div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Co-founder')}</div></div><p class="hrm-card__meta">Carga las firmas de la agencia una sola vez en «Empresas y logos» y aparecerán aquí para elegirlas.</p>`;
       campos = `<label class="pl-l">Oferta de la propuesta</label><select class="pl-in" onchange="PlantillasModule.set('oferta',this.value)">${OFS.map(([v, l]) => `<option value="${v}"${(p.oferta || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <label class="pl-l">Cargar los datos de un cliente ya generado</label><select class="pl-in" onchange="PlantillasModule.cargarCliente(this.value)"><option value="">${cls.length ? 'Elegir un cliente…' : (_copies && _copies.length ? 'No hay copias con cliente' : 'Cargando copias…')}</option>${cls.map(cp => `<option value="${cp.id}">${E(cp.cliente)} · ${E((cp.plantilla || '').slice(0, 34))}</option>`).join('')}</select>
+        <label class="pl-l">Cargar los datos de un cliente ya generado</label><select class="pl-in" onchange="PlantillasModule.cargarCliente(this.value)"><option value="">${cls.length ? 'Elegir un cliente…' : (_copies && _copies.length ? 'No hay copias con cliente' : 'Cargando copias…')}</option>${cls.map(cp => `<option value="${cp.id}"${String(g.deCopia || '') === String(cp.id) ? ' selected' : ''}>${E(cp.cliente)} · ${E((cp.plantilla || '').slice(0, 34))}</option>`).join('')}</select>
         <p class="hrm-card__meta">Trae empresa, logo, contacto, correo, tarifa, plazo e inicio de esa copia: no los vuelves a escribir.</p>
         ${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}<div class="pl-row"><div>${f('contacto', 'Contacto que firma por el cliente', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo del contacto', 'text', 'Ej. CEO')}</div></div>${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
         <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
@@ -42946,7 +42946,8 @@ const PlantillasModule = (() => {
     if (!copyId || !_gen) return;
     try {
       const cp = await _j(`/tpl/copies/${copyId}`), pr = cp.params || {};
-      const g = _gen, keep = ['empresa', 'contacto', 'correo', 'fee', 'plazo', 'moneda', 'inicio'];
+      const g = _gen; g.deCopia = String(copyId);   // se recuerda para que el selector siga mostrando al cliente elegido
+      const keep = ['empresa', 'contacto', 'correo', 'fee', 'plazo', 'moneda', 'inicio'];
       keep.forEach(k => { if (pr[k] !== undefined && pr[k] !== null && pr[k] !== '') g.p[k] = pr[k]; });
       if (pr.logoCliente && typeof pr.logoCliente === 'object') g.p.logoCliente = JSON.parse(JSON.stringify(pr.logoCliente));
       _redrawKeep(); _preview(); showBanner('Datos del cliente cargados', 'success');
