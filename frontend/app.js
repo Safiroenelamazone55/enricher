@@ -42810,10 +42810,10 @@ const PlantillasModule = (() => {
       <p class="hrm-card__meta">Si subes una foto, reemplaza a la de stock en la portada.</p></div>`;
     const ovBox = `<div class="pl-box"><div class="pl-box__t">Company Overview</div>
       <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 4px"><input type="checkbox" ${p.fotos !== false ? 'checked' : ''} onchange="PlantillasModule.fotosSet(this.checked)"> Usar fotografías profesionales (necesita internet al abrirlo)</label>
-      <p class="hrm-card__meta">Documento de 4 hojas A4 con la presentación de la empresa. Si escribes la empresa cliente, la portada dice «Preparado para…».</p></div>`;
+      <p class="hrm-card__meta">Documento de 4 hojas A4 con la presentación de la empresa, igual para todos los clientes.</p></div>`;
     let campos;
     if (g.t.tipo === 'overview') {
-      campos = `${f('empresa', 'Preparado para (opcional)', 'text', 'Ej. Onezix')}${logoBox}${ovBox}`;
+      campos = ovBox;
     } else if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
         <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
