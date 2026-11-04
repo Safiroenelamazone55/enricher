@@ -20690,3 +20690,13 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-gc__a { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
 .pl-thumb { height: 220px; }
 .pl-thumb.is-deck { background: #0B1220; }
+
+/* ── Plantillas: estrella para fijar una plantilla al inicio ── */
+.pl-star { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.pl-star svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.pl-star:hover { color: #D99A00; background: var(--surface-secondary); }
+.pl-star.on { color: #E3A008; }
+.pl-star.on svg { fill: #F5B50A; stroke: #D99A00; }
+.pl-thumb .pl-star { position: absolute; top: 10px; right: 10px; z-index: 3; width: 30px; height: 30px; background: rgba(255,255,255,.92); border-color: var(--border); box-shadow: 0 1px 3px rgba(16,24,20,.12); }
+.pl-thumb .pl-star:hover { background: #fff; }
+.pl-th, .pl-tr { grid-template-columns: 28px minmax(200px, 2.2fr) 160px 100px minmax(130px, 1.3fr) 52px 232px; }
