@@ -118,7 +118,10 @@ h2 i{font-style:normal;color:var(--teal);font-weight:600}
 .sig .row{margin-top:0;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
 .sig .row b{display:block;margin-top:5px;min-height:20px;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink);border-bottom:1px solid var(--ink);padding-bottom:3px}
 .sig .row.firma b{min-height:78px;position:relative}
-.sig .row.cargo b{min-height:44px}
+.sig .idt{margin-top:10px;min-height:68px}
+.sig .idt b{display:block;font-size:13px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+.sig .idt span{display:block;margin-top:3px;font-size:11.6px;font-weight:600;color:var(--teal)}
+.sig .idt em{display:block;margin-top:2px;font-style:normal;font-size:10.8px;line-height:1.4;color:var(--mute)}
 .sig .fi{position:absolute;left:4px;bottom:3px;max-height:64px;max-width:200px;object-fit:contain}
 .sig .esp{display:block;margin-top:2px;font-size:10.5px;color:var(--mute);font-weight:500}
 .sig .fgs{display:grid;gap:22px}
@@ -241,6 +244,7 @@ ${row(t('Inicio del servicio', 'Service start'), inicio)}
     `${c('12.', t('Comunicaciones', 'Communications'), t(`Las comunicaciones se harán por correo electrónico a los contactos indicados en la portada${correo ? ` (${esc(correo)})` : ''} y a los que cada parte informe por escrito.`, `Communications shall be made by email to the contacts shown on the cover${correo ? ` (${esc(correo)})` : ''} and to those each party notifies in writing.`))}`,
     `${c('13.', t('Ley aplicable', 'Governing law'), t(`Este acuerdo se rige por las leyes de ${esc(jur)}. Las partes procurarán resolver amistosamente cualquier diferencia antes de acudir a las instancias que correspondan.`, `This agreement is governed by the laws of ${esc(jur)}. The parties shall seek to resolve any dispute amicably before resorting to the competent bodies.`))}`
   ];
+  const idt = (nombre, cargo, esp) => `<div class="idt"><b>${nombre || '&nbsp;'}</b><span>${cargo || ''}</span><em>${esp || ''}</em></div>`;
   const sg = (cls, lbl, val) => `<div class="row${cls ? ' ' + cls : ''}">${lbl}<b>${val}</b></div>`;
   const B_acc = `<div class="cl"><h2><i>14.</i>${t('Aceptación del acuerdo', 'Acceptance of the agreement')}</h2>
 <p>${t(`Con su firma, ${esc(empresa)} y ${esc(marca)} aceptan esta propuesta y las condiciones que contiene como el acuerdo comercial que rige el servicio.`, `By signing, ${esc(empresa)} and ${esc(marca)} accept this proposal and the conditions it contains as the commercial agreement governing the service.`)}</p></div>
@@ -254,9 +258,9 @@ ${row(t('Inicio del servicio', 'Service start'), inicio)}
 <div><small>${t('Validez', 'Validity')}</small><b>${validez} ${t('días desde el', 'days from')} ${esc(hoy)}</b></div></div></div>
 <div class="sig" style="grid-template-columns:1fr ${Math.max(1, firmantes.length)}fr">
 <div><h3>${t('Por el cliente', 'For the client')}</h3><div class="who">${esc(empresa)}</div>
-<div class="fg">${sg('firma', t('Firma', 'Signature'), '')}${sg('', t('Nombre', 'Name'), esc(contacto))}${sg('cargo', t('Cargo', 'Title'), esc(prm.clienteCargo || ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div></div>
+<div class="fg">${sg('firma', t('Firma', 'Signature'), '')}${idt(esc(contacto), esc(prm.clienteCargo || ''), '')}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div></div>
 <div><h3>${t('Por la agencia', 'For the agency')}</h3><div class="who">${esc(marca)}</div>
-<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg">${sg('firma', t('Firma', 'Signature'), imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : '')}${sg('', t('Nombre', 'Name'), esc(f.nombre))}${sg('cargo', t('Cargo', 'Title'), esc(f.cargo) + (f.especialidad ? `<span class="esp">${esc(f.especialidad)}</span>` : ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div>`).join('')}</div>
+<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg">${sg('firma', t('Firma', 'Signature'), imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : '')}${idt(esc(f.nombre), esc(f.cargo), esc(f.especialidad || ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div>`).join('')}</div>
 </div>
 </div>
 <p class="note">${t('Se firma en dos ejemplares o en formato electrónico. Una copia firmada, escaneada o enviada por correo tiene el mismo efecto entre las partes.', 'Signed in two copies or electronically. A signed copy, scanned or sent by email, has the same effect between the parties.')}</p>`;
