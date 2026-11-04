@@ -42625,7 +42625,7 @@ window.HerramientasModule = HerramientasModule;
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', pago: 'Métodos de pago' };
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', pago: 'Métodos de pago' };
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
   let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
@@ -42698,7 +42698,7 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id) || { tipo: 'propuesta', nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
     const d = t.defaults || {};
     _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
-      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="pago">Métodos de pago</option></select>`}
+      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="overview">Company Overview (PDF)</option><option value="pago">Métodos de pago</option></select>`}
       <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
       <label class="pl-l">Descripción (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué oferta o documento es">
       <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
@@ -42808,8 +42808,13 @@ const PlantillasModule = (() => {
       <div class="pl-ref__logo"><span class="pl-cs__box" style="background:#fff;width:120px;height:68px">${p.fotoPortada ? `<img src="${p.fotoPortada}" alt="" style="object-fit:cover;width:100%;height:100%">` : '<i>—</i>'}</span>
         <span><label class="hrm-lnk">${p.fotoPortada ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="PlantillasModule.fotoPortada(this)"></label>${p.fotoPortada ? ' <button type="button" class="hrm-lnk" onclick="PlantillasModule.fotoPortada(null)">Quitar</button>' : ''}</span></div>
       <p class="hrm-card__meta">Si subes una foto, reemplaza a la de stock en la portada.</p></div>`;
+    const ovBox = `<div class="pl-box"><div class="pl-box__t">Company Overview</div>
+      <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 4px"><input type="checkbox" ${p.fotos !== false ? 'checked' : ''} onchange="PlantillasModule.fotosSet(this.checked)"> Usar fotografías profesionales (necesita internet al abrirlo)</label>
+      <p class="hrm-card__meta">Documento de 4 hojas A4 con la presentación de la empresa. Si escribes la empresa cliente, la portada dice «Preparado para…».</p></div>`;
     let campos;
-    if (pago) {
+    if (g.t.tipo === 'overview') {
+      campos = `${f('empresa', 'Preparado para (opcional)', 'text', 'Ej. Onezix')}${logoBox}${ovBox}`;
+    } else if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
         <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_mios(g.t.id).map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Esta plantilla aún no tiene cuentas: agrégalas en «Editar».</span>'}</div>

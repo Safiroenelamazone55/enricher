@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { render, LANGS, logoOk, docName } = require('./proposalTemplate');
 const pay = require('./proposalPay');
 const deck = require('./presentationTemplate');
+const ov = require('./overviewTemplate');
 
 const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
@@ -186,7 +187,7 @@ function mount(app, { pool, requireAuth }) {
     if (!nombre) return { err: 'Ponle un nombre a la plantilla' };
     const { rows: [br] } = await pool.query('SELECT id FROM tpl_brands WHERE id=$1 AND user_id=$2', [parseInt(b.brand_id, 10) || 0, uid(req)]);
     if (!br) return { err: 'Elige una empresa (marca) para la plantilla' };
-    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : 'propuesta');
+    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : (b.tipo === 'overview' ? 'overview' : 'propuesta'));
     let d;
     if (tipo === 'pago') d = payDefaults(b.defaults);
     else { d = cleanParams(b.defaults); delete d.empresa; delete d.contacto; delete d.correo; delete d.inicio; }
@@ -238,6 +239,7 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given });
+    if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };
   }
