@@ -29,7 +29,7 @@ body{background:#E7EBF1;padding:24px 0}
 h1,h2{font-weight:700;letter-spacing:-.04em}
 .h1{margin-top:16px;font-size:50px;line-height:1.04}
 .h1 em{font-style:normal;color:var(--teal)}
-.lead{margin-top:22px;max-width:520px;font-size:16px;line-height:1.65;color:var(--text)}
+.lead{margin-top:22px;max-width:600px;font-size:16px;line-height:1.65;color:var(--text)}
 .bar{position:absolute;left:0;right:0;bottom:0;height:34px;display:grid;grid-template-columns:repeat(5,1fr);z-index:3}
 .bar i:nth-child(1){background:var(--teal-l)}.bar i:nth-child(2){background:var(--teal)}.bar i:nth-child(3){background:color-mix(in srgb,var(--teal) 78%,#000)}.bar i:nth-child(4){background:color-mix(in srgb,var(--teal) 55%,#000)}.bar i:nth-child(5){background:var(--navy)}
 .body{position:absolute;left:64px;right:64px;top:112px}
@@ -65,11 +65,20 @@ h1,h2{font-weight:700;letter-spacing:-.04em}
 .col li{padding:20px 0;border-top:1px solid var(--line)}.col li:first-child{border-top:0}
 .col li b{display:block;font-size:14px;font-weight:700;letter-spacing:-.015em}
 .col li span{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:var(--text)}
-.goal{margin-top:18px;padding:36px 34px;background:var(--navy);border-radius:18px;color:#fff;position:relative;overflow:hidden}
+.goal{margin-top:28px;padding:36px 34px;background:var(--navy);border-radius:18px;color:#fff;position:relative;overflow:hidden}
 .goal:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--teal-l)}
 .goal .k{color:var(--teal-l)}
 .goal b{display:block;margin-top:12px;font-size:36px;line-height:1.1;font-weight:700;letter-spacing:-.04em}
 .goal p{margin-top:12px;max-width:560px;font-size:13px;line-height:1.6;color:rgba(255,255,255,.8)}
+.rows3{margin-top:34px;border-top:1.5px solid var(--ink)}
+.rows3>div{display:grid;grid-template-columns:76px 196px 1fr;gap:10px;padding:26px 0;border-bottom:1px solid var(--line);align-items:start}
+.rows3 i{font-style:normal;font-size:50px;font-weight:300;line-height:1;letter-spacing:-.05em;color:var(--teal)}
+.rows3 .w b{display:block;font-size:30px;line-height:1.05;font-weight:700;letter-spacing:-.04em}
+.rows3 .w small{display:block;margin-top:8px;font-size:11.5px;color:var(--mute)}
+.rows3 ul{list-style:none}
+.rows3 li{padding-bottom:14px}.rows3 li:last-child{padding-bottom:0}
+.rows3 li b{display:block;font-size:14px;font-weight:700;letter-spacing:-.015em}
+.rows3 li span{display:block;margin-top:4px;font-size:12.5px;line-height:1.55;color:var(--text)}
 /* 4 · cómo trabajamos */
 .steps{margin-top:30px;border-top:1.5px solid var(--ink)}
 .steps>div{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:27px 0;border-bottom:1px solid var(--line);align-items:start}
@@ -144,12 +153,12 @@ function render(brand, p, lang) {
 </div></div>${foot(2)}</section>`;
 
   // ── 3 · qué hacemos
-  const fase = (n, h, small, bg, items) => `<div class="col"><div class="t" style="background:${bg}"><i>${n}</i><b>${h}</b><small>${small}</small></div><ul>${items.map(([a, d]) => `<li><b>${a}</b><span>${d}</span></li>`).join('')}</ul></div>`;
+  const fase = (n, h, small, bg, items) => `<div><i>${n}</i><div class="w"><b>${h}</b><small>${small}</small></div><ul>${items.map(([a, d]) => `<li><b>${a}</b><span>${d}</span></li>`).join('')}</ul></div>`;
   const p3 = `<section class="page">${hdr(lgC, rt)}<div class="body">
 <div class="k">${t('Qué hacemos', 'What we do')}</div>
 <h1 class="h1">${t('Validar. Estructurar. <em>Escalar.</em>', 'Validate. Structure. <em>Scale.</em>')}</h1>
 <p class="lead">${t('Cinco servicios conectados, un solo objetivo: conseguir clientes B2B.', 'Five connected services, one goal: winning B2B customers.')}</p>
-<div class="cols">
+<div class="rows3">
 ${fase('01', t('Validar', 'Validate'), t('Antes de invertir', 'Before investing'), 'var(--navy)', [[t('Estudio de mercado', 'Market research'), t('Sabes a quién venderle, cuánto vale y qué decirle.', 'You know who to sell to, how much it is worth and what to say.')]])}
 ${fase('02', t('Estructurar', 'Structure'), t('Un proceso que funciona', 'A process that works'), 'color-mix(in srgb,var(--navy) 78%,#5b6b85)', [[t('Prospección de clientes', 'Customer prospecting'), t('Llegamos a las empresas correctas y agendamos reuniones.', 'We reach the right companies and book meetings.')], [t('CRM y ventas', 'CRM &amp; sales'), t('Un proceso ordenado que no pierde ningún cliente.', 'An organized process that never loses a customer.')]])}
 ${fase('03', t('Escalar', 'Scale'), t('Más alcance, más clientes', 'More reach, more customers'), 'color-mix(in srgb,var(--teal) 60%,var(--navy))', [[t('Redes sociales', 'Social media'), t('Presencia que genera consultas, no solo likes.', 'A presence that generates inquiries, not just likes.')], [t('Publicidad online', 'Online advertising'), t('Anuncios que se miden en clientes, no en clics.', 'Ads measured in customers, not clicks.')]])}
