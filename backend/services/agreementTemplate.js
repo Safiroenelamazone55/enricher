@@ -264,9 +264,9 @@ ${row(t('Inicio del servicio', 'Service start'), inicio)}
 <div><small>${t('Validez', 'Validity')}</small><b>${validez} ${t('días desde el', 'days from')} ${esc(hoy)}</b></div></div></div>
 <div class="sig" style="grid-template-columns:1fr ${Math.max(1, firmantes.length)}fr">
 <div><h3>${t('Por el cliente', 'For the client')}</h3><div class="who">${esc(empresa)}</div>
-<div class="fg">${sg('firma', t('Firma', 'Signature'), '')}${idt(esc(contacto), esc(prm.clienteCargo || ''), '')}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div></div>
+<div class="fg">${sg('firma', t('Firma', 'Signature'), '')}${idt(esc(contacto), esc(prm.clienteCargo || ''), '')}${sg('', t('Fecha', 'Date'), esc(hoy))}</div></div>
 <div><h3>${t('Por la agencia', 'For the agency')}</h3><div class="who">${esc(marca)}</div>
-<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg">${sg('firma', t('Firma', 'Signature'), imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : '')}${idt(esc(f.nombre), esc(f.cargo), esc(f.especialidad || ''))}${sg('', t('Fecha y lugar', 'Date and place'), '')}</div>`).join('')}</div>
+<div class="fgs" style="grid-template-columns:repeat(${Math.max(1, firmantes.length)},1fr)">${firmantes.map(f => `<div class="fg">${sg('firma', t('Firma', 'Signature'), imgOk(f.firma) ? `<img class="fi" alt="" src="${f.firma}">` : '')}${idt(esc(f.nombre), esc(f.cargo), esc(f.especialidad || ''))}${sg('', t('Fecha', 'Date'), esc(hoy))}</div>`).join('')}</div>
 </div>
 </div>
 <p class="note">${t('Se firma en dos ejemplares o en formato electrónico. Una copia firmada, escaneada o enviada por correo tiene el mismo efecto entre las partes.', 'Signed in two copies or electronically. A signed copy, scanned or sent by email, has the same effect between the parties.')}</p>`;
