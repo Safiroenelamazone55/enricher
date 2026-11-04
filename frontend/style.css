@@ -20700,3 +20700,43 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-thumb .pl-star { position: absolute; top: 10px; right: 10px; z-index: 3; width: 30px; height: 30px; background: rgba(255,255,255,.92); border-color: var(--border); box-shadow: 0 1px 3px rgba(16,24,20,.12); }
 .pl-thumb .pl-star:hover { background: #fff; }
 .pl-th, .pl-tr { grid-template-columns: 28px minmax(200px, 2.2fr) 160px 100px minmax(130px, 1.3fr) 52px 232px; }
+
+/* ── Plantillas · generador y diálogos: mismo sistema que Operaciones (radios 4–6 px, tipografía 12.5/13 px, controles de 34 px, todo dentro del contenedor y alineado) ── */
+.pl-wrap .pl-gen { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 20px; }
+.pl-wrap .pl-form { min-width: 0; padding: 18px 20px 20px; border-radius: 6px; box-shadow: none; }
+.pl-wrap .pl-form > .pl-l:first-child { margin-top: 0; }
+.pl-wrap .pl-l { font-size: 12.5px; font-weight: 500; color: var(--text2); margin: 14px 0 6px; line-height: 1.3; }
+.pl-wrap .pl-in { height: 34px; padding: 0 10px; font-size: 13px; border: 1px solid var(--border2); border-radius: 4px; background: var(--surface); box-shadow: none; transition: border-color .15s, box-shadow .15s; }
+.pl-wrap textarea.pl-in { height: auto; padding: 8px 10px; line-height: 1.5; }
+.pl-wrap select.pl-in { padding-right: 28px; }
+.pl-wrap .pl-in:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
+.pl-wrap .pl-row, .pl-wrap .pl-row3 { align-items: end; gap: 12px; }
+.pl-wrap .pl-row > div, .pl-wrap .pl-row3 > div { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.pl-wrap .pl-row .pl-l:first-child, .pl-wrap .pl-row3 .pl-l:first-child { margin-top: 14px; }
+.pl-wrap .pl-box { margin-top: 16px; padding: 4px 14px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-secondary); }
+.pl-wrap .pl-box .pl-in { background: var(--surface); }
+.pl-wrap .pl-ckw { padding: 4px 12px; border: 1px solid var(--border2); border-radius: 4px; background: var(--surface); gap: 0; }
+.pl-wrap .pl-ck { display: flex; align-items: center; gap: 9px; min-height: 32px; padding: 0; font-size: 13px; line-height: 1.35; color: var(--text); cursor: pointer; }
+.pl-wrap .pl-ck + .pl-ck { border-top: 1px solid var(--border); }
+.pl-wrap .pl-ck input[type=checkbox], .pl-wrap .pl-chk input { width: 15px; height: 15px; flex: 0 0 15px; margin: 0; accent-color: var(--primary); }
+.pl-wrap .pl-ck--inl { flex-wrap: nowrap; }
+.pl-wrap .pl-ck__t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pl-wrap .pl-ck__t .pl-opt { font-size: 11.5px; color: var(--muted); }
+.pl-wrap .pl-ck--inl span { white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+.pl-wrap .pl-ck--inl .pl-mini { width: 56px; height: 28px; padding: 0 6px; flex: 0 0 56px; text-align: center; }
+.pl-wrap .pl-chks { gap: 8px; }
+.pl-wrap .pl-chk { height: 32px; padding: 0 12px; border-radius: 4px; font-size: 13px; }
+.pl-wrap .pl-chk.on { border-color: var(--primary); background: var(--primary-soft); color: var(--text); font-weight: 500; }
+.pl-wrap .pl-cs { grid-template-columns: 84px 104px auto; }
+.pl-wrap .pl-cs__box { border-radius: 4px; height: 38px; }
+.pl-wrap .pl-acts { gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.pl-wrap .pl-gh { margin-bottom: 16px; }
+.pl-wrap .pl-prevcol { min-width: 0; }
+.pl-wrap .hrm-card__meta { font-size: 12px; line-height: 1.5; }
+.pl-ovl .pl-modal { border-radius: 8px; }
+.pl-modal .pl-in { height: 34px; padding: 0 10px; font-size: 13px; border-radius: 4px; }
+.pl-modal textarea.pl-in { height: auto; padding: 8px 10px; }
+.pl-modal .pl-l { font-size: 12.5px; font-weight: 500; color: var(--text2); }
+.pl-modal .btn { height: 32px; padding: 0 14px; font-size: 13px; font-weight: 500; border-radius: 4px; box-shadow: none; display: inline-flex; align-items: center; }
+.pl-modal .btn-primary { background: var(--primary); border: 1px solid var(--primary); color: #fff; }
+.pl-modal .btn-ghost { background: var(--surface); border: 1px solid var(--border2); color: var(--text); }

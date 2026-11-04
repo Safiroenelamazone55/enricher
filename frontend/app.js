@@ -42739,7 +42739,7 @@ const PlantillasModule = (() => {
     pasos = pasos || {};
     return `<label class="pl-ck"><input type="checkbox" id="${pre}-comp" ${pasos.comprobante !== false ? 'checked' : ''}> Pedir que envíe el comprobante (a tu correo / WhatsApp)</label>
       <label class="pl-ck"><input type="checkbox" id="${pre}-ref" ${pasos.referencia ? 'checked' : ''}> Pedir que incluya la referencia</label>
-      <label class="pl-ck"><input type="checkbox" id="${pre}-plazo" ${pasos.plazo ? 'checked' : ''}> Avisar que confirmas la recepción en <input class="pl-in pl-mini" id="${pre}-horas" type="number" min="1" value="${horas || 24}"> horas hábiles</label>`;
+      <label class="pl-ck pl-ck--inl"><input type="checkbox" id="${pre}-plazo" ${pasos.plazo ? 'checked' : ''}><span>Confirmar la recepción en</span><input class="pl-in pl-mini" id="${pre}-horas" type="number" min="1" value="${horas || 24}"><span>h hábiles</span></label>`;
   }
   const _mios = tid => _methods.filter(m => m.template_id === tid);
   function _metodosSeccion(tid, sel) {
@@ -42875,7 +42875,7 @@ const PlantillasModule = (() => {
       if (!p.firmaIds.length && fms.length) p.firmaIds = [fms[0].id];   // por defecto firma el primero cargado; el estado de las casillas es siempre lo que se imprime
       const sel = p.firmaIds;
       const firmaBox = fms.length
-        ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"> ${E(fm.nombre)} <span class="pl-opt">· ${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></label>`).join('')}</div>`
+        ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"><span class="pl-ck__t">${E(fm.nombre)}<span class="pl-opt">${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></span></label>`).join('')}</div>`
         : `<div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Co-founder')}</div></div><p class="hrm-card__meta">Carga las firmas de la agencia una sola vez en «Empresas y logos» y aparecerán aquí para elegirlas.</p>`;
       campos = `<label class="pl-l">Oferta de la propuesta</label><select class="pl-in" onchange="PlantillasModule.set('oferta',this.value)">${OFS.map(([v, l]) => `<option value="${v}"${(p.oferta || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <label class="pl-l">Cargar los datos de un cliente ya generado</label><select class="pl-in" onchange="PlantillasModule.cargarCliente(this.value)"><option value="">${cls.length ? 'Elegir un cliente…' : (_copies && _copies.length ? 'No hay copias con cliente' : 'Cargando copias…')}</option>${cls.map(cp => `<option value="${cp.id}"${String(g.deCopia || '') === String(cp.id) ? ' selected' : ''}>${E(cp.cliente)} · ${E((cp.plantilla || '').slice(0, 34))}</option>`).join('')}</select>
@@ -42883,8 +42883,8 @@ const PlantillasModule = (() => {
         ${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}<div class="pl-row"><div>${f('contacto', 'Contacto que firma por el cliente', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo del contacto', 'text', 'Ej. CEO')}</div></div>${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
         <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
           <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
-          <div class="pl-row"><div>${f('comision', 'Comisión por venta (%)', 'number', '0, 5, 10, 15, 20…')}</div><div>${f('nota', 'Forma y fecha de pago', 'text', 'Pago al inicio de cada periodo')}</div></div>
-          ${f('comisionBase', 'La comisión se calcula sobre (opcional)', 'text', 'el valor de cada venta cerrada con una oportunidad generada por el servicio')}
+          <div class="pl-row"><div>${f('comision', 'Comisión por venta (%)', 'number', '0, 5, 10, 15, 20…')}</div><div>${f('nota', 'Forma y fecha de pago', 'text', 'Al inicio de cada mes')}</div></div>
+          ${f('comisionBase', 'La comisión se calcula sobre (opcional)', 'text', 'cada venta cerrada con una oportunidad del servicio')}
           <p class="hrm-card__meta">Con 0 el documento dice «sin comisión». Si pones un porcentaje, aparece en la inversión y en la hoja de firma.</p></div>
         ${f('inicio', 'Inicio del servicio (opcional)', 'text', 'Ej. 10 de noviembre')}
         <div class="pl-box"><div class="pl-box__t">Acuerdo y firma</div>
@@ -42893,8 +42893,7 @@ const PlantillasModule = (() => {
     } else if (g.t.tipo === 'overview') {
       campos = ovBox;
     } else if (pago) {
-      campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
-        <div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
+      campos = `<div class="pl-row"><div>${f('monto', 'Monto a pagar (opcional)', 'text', 'Ej. US$ 550')}</div><div>${f('ref', 'Concepto / referencia', 'text', 'Ej. Factura 0012')}</div></div>
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_mios(g.t.id).map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Esta plantilla aún no tiene cuentas: agrégalas en «Editar».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
