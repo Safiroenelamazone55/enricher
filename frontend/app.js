@@ -42643,7 +42643,7 @@ const PlantillasModule = (() => {
     _host = $(hostId); if (!_host) return;
     _host.innerHTML = '<div class="pl-wrap"><p class="hrm-sub">Cargando…</p></div>';
     try {
-      [_brands, _tpls, _methods] = await Promise.all([_j('/tpl/brands'), _j('/tpl/templates'), _j('/tpl/methods')]);
+      [_brands, _tpls, _methods] = await Promise.all([_j('/tpl/brands'), _j('/tpl/templates'), _j('/tpl/methods')]); _thumbs = {};
       if (_tab === 'copias') _copies = await _j('/tpl/copies');
     } catch (e) { _host.innerHTML = `<div class="pl-wrap"><p class="hrm-sub">${E(e.message)}</p></div>`; return; }
     _draw();
@@ -42660,36 +42660,68 @@ const PlantillasModule = (() => {
     const izq = _tab === 'plantillas'
       ? `<label class="pl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" placeholder="Buscar plantilla…" value="${E(_q)}" oninput="PlantillasModule.buscar(this.value)"></label>`
       : `<span class="pl-sub">${sub}</span>`;
+    const seg = _tab === 'plantillas' ? `<div class="pl-seg" role="group" aria-label="Vista"><button type="button" class="${_view === 'gal' ? 'on' : ''}" onclick="PlantillasModule.verComo('gal')" title="Galería"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Galería</button><button type="button" class="${_view === 'lista' ? 'on' : ''}" onclick="PlantillasModule.verComo('lista')" title="Lista"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>Lista</button></div>` : '';
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-hd"><h1 class="pl-h1">Plantillas</h1></div>
-      <div class="pl-tabs">${tabs}</div><div class="pl-tb">${izq}<span class="pl-tb__sp"></span>${acc}</div>${inner}</div>`;
+      <div class="pl-tabs">${tabs}</div><div class="pl-tb">${izq}<span class="pl-tb__sp"></span>${seg}${acc}</div>${inner}</div>`;
+    if (_tab === 'plantillas' && _view === 'gal') _loadThumbs();
   }
 
   // ── Plantillas ──
-  let _q = '';
-  function _tplRows() {
+  let _q = '', _view = (() => { try { return localStorage.getItem('pl_view') === 'lista' ? 'lista' : 'gal'; } catch (_) { return 'gal'; } })(), _thumbs = {}, _thSeq = 0;
+  function _tplMeta(t) {
+    const d = t.defaults || {};
+    return t.tipo === 'pago' ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
+      : t.tipo === 'overview' ? 'Documento A4'
+      : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
+  }
+  function _tplList() {
     const q = _q.trim().toLowerCase();
     const list = _tpls.filter(t => !q || (t.nombre + ' ' + (t.oferta || '') + ' ' + (TIPOS[t.tipo] || '')).toLowerCase().includes(q));
     if (!list.length) return `<div class="pl-empty">${_tpls.length ? 'Sin coincidencias.' : 'Aún no hay plantillas.'}</div>`;
+    const acts = t => `<button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button><button class="btn btn-ghost" onclick="PlantillasModule.editTpl(${t.id})">Editar</button><button class="btn btn-ghost" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button>`;
+    if (_view === 'gal') {
+      return list.map(t => {
+        const b = _brands.find(x => x.id === t.brand_id);
+        return `<div class="pl-gc"><div class="pl-thumb${t.tipo === 'presentacion' ? ' is-deck' : ''}" data-id="${t.id}" onclick="PlantillasModule.generar(${t.id})" title="Abrir"><iframe tabindex="-1" scrolling="no" aria-hidden="true" title="Vista previa de ${E(t.nombre)}"></iframe></div>
+          <div class="pl-gc__b"><div class="pl-card__top"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
+          <h3 class="pl-gc__t">${E(t.nombre)}</h3><p class="pl-gc__m">${E(b ? b.nombre : 'Sin empresa')} · ${_tplMeta(t)} · ${LANGS[t.lang] || 'Español'}</p>
+          <div class="pl-gc__a">${acts(t)}</div></div></div>`;
+      }).join('');
+    }
     return list.map(t => {
       const b = _brands.find(x => x.id === t.brand_id);
-      const d = t.defaults || {};
-      const meta = t.tipo === 'pago'
-        ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
-        : t.tipo === 'overview' ? 'Documento A4'
-        : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
       return `<div class="pl-tr"><div class="pl-td pl-td--n"><b>${E(t.nombre)}</b><span>${E(t.oferta || 'Sin descripción')}</span></div>
         <div class="pl-td"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span></div>
         <div class="pl-td pl-td--m">${E(b ? b.nombre : 'Sin empresa')}</div>
-        <div class="pl-td pl-td--m">${meta} · ${LANGS[t.lang] || 'Español'}</div>
+        <div class="pl-td pl-td--m">${_tplMeta(t)} · ${LANGS[t.lang] || 'Español'}</div>
         <div class="pl-td pl-td--m">${t.copias}</div>
-        <div class="pl-td pl-td--a"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button>
-          <button class="btn btn-ghost" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
-          <button class="btn btn-ghost" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
+        <div class="pl-td pl-td--a">${acts(t)}</div></div>`;
     }).join('');
   }
-  function buscar(v) { _q = v || ''; const el = document.getElementById('pl-rows'); if (el) el.innerHTML = _tplRows(); }
+  function buscar(v) { _q = v || ''; const el = document.getElementById('pl-rows'); if (el) { el.innerHTML = _tplList(); if (_view === 'gal') _loadThumbs(); } }
+  function verComo(v) { _view = v === 'lista' ? 'lista' : 'gal'; try { localStorage.setItem('pl_view', _view); } catch (_) { /* sin almacenamiento */ } _draw(); }
   function _viewPlantillas() {
-    return `<div class="pl-table"><div class="pl-th"><span>Nombre</span><span>Tipo</span><span>Empresa</span><span>Detalle</span><span>Copias</span><span></span></div><div id="pl-rows">${_tplRows()}</div></div>`;
+    return _view === 'gal'
+      ? `<div id="pl-rows" class="pl-gal">${_tplList()}</div>`
+      : `<div class="pl-table"><div class="pl-th"><span>Nombre</span><span>Tipo</span><span>Empresa</span><span>Detalle</span><span>Copias</span><span></span></div><div id="pl-rows">${_tplList()}</div></div>`;
+  }
+  // Miniatura del documento en cada tarjeta: se genera con los valores por defecto de la plantilla y se guarda en memoria mientras no cambie la lista
+  function _fitThumb(box, fr, tipo) {
+    const W = box.clientWidth || 300, deck = tipo === 'presentacion', w = deck ? 1280 : 850, k = W / w;
+    fr.style.width = w + 'px'; fr.style.height = (deck ? 720 : 1200) + 'px'; fr.style.transform = `scale(${k})`;
+    box.style.height = '220px'; fr.style.top = deck ? Math.max(0, Math.round((220 - 720 * k) / 2)) + 'px' : '0';
+  }
+  async function _loadThumbs() {
+    const seq = ++_thSeq;
+    for (const box of [...document.querySelectorAll('.pl-thumb')]) {
+      if (seq !== _thSeq) return;
+      const t = _tpls.find(x => x.id === +box.dataset.id), fr = box.querySelector('iframe'); if (!t || !fr) continue;
+      _fitThumb(box, fr, t.tipo);
+      let h = _thumbs[t.id];
+      if (h == null) { try { h = (await _j('/tpl/preview', _body({ data: { template_id: t.id, lang: t.lang, params: {} } }))).html; } catch (_) { h = ''; } _thumbs[t.id] = h; }
+      if (seq !== _thSeq || !fr.isConnected) return;
+      if (h) { fr.setAttribute('sandbox', t.tipo === 'presentacion' ? 'allow-scripts' : ''); fr.srcdoc = h; box.classList.add('is-ready'); }
+    }
   }
 
   function _pasosChecks(pre, pasos, horas) {
@@ -43159,7 +43191,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();
