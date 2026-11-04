@@ -74,7 +74,13 @@ h2 i{font-style:normal;color:var(--teal);font-weight:600}
 .cl li{position:relative;padding:3px 0 3px 15px}
 .cl li:before{content:"";position:absolute;left:2px;top:10px;width:4px;height:4px;border-radius:50%;background:var(--teal)}
 .sub{margin-top:14px;font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
-.two{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.two{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.two .sub{margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.two ul{margin-top:0}
+.two li{padding:4px 0 4px 15px}
+.two li:before{top:11px}
+.two p{margin-top:0}
+.two+.note{margin-top:20px}
 .tb{margin-top:10px;border-top:1.5px solid var(--ink)}
 .tb>div{display:grid;grid-template-columns:190px 1fr;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:12.4px;line-height:1.5}
 .tb b{font-weight:600;color:var(--ink)}.tb span{color:var(--text)}
