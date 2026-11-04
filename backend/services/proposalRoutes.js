@@ -96,6 +96,7 @@ function cleanMethod(b) {
   b = b || {};
   const accounts = (Array.isArray(b.accounts) ? b.accounts : []).slice(0, 6).map(a => ({
     moneda: pay.MONEDA_KEYS.includes(a && a.moneda) ? a.moneda : '',
+    imgs: (Array.isArray(a && a.imgs) ? a.imgs : []).slice(0, 3).map(i => ({ src: (logoOk(i && i.src) && i.src.length < 350000) ? i.src : '', label: S(i && i.label, 30) })).filter(i => i.src),
     fields: (Array.isArray(a && a.fields) ? a.fields : []).slice(0, 14).map(f => ({ k: pay.FIELD_KEYS.includes(f && f.k) ? f.k : 'custom', label: S(f && f.label, 60), value: S(f && f.value, 300) })).filter(f => f.value),
   })).filter(a => a.fields.length);
   const textos = {};

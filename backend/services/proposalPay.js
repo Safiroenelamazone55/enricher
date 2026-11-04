@@ -61,7 +61,7 @@ function render(brand, p, lang, methods) {
     if (f.k === 'link') { const u = /^https?:\/\//i.test(v) ? v : 'https://' + v; val = `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>`; }
     return `<div class="fd${f.k === 'address' || f.k === 'iban' ? ' wide' : ''}">${label ? `<span class="fl">${label}</span>` : ''}<span class="fv${f.k === 'link' || f.k === 'phone' || f.k === 'user' ? ' big' : ''}">${val}</span></div>`;
   };
-  const acctHtml = (a, single) => `<div class="ac">${a.moneda && MONEDAS[a.moneda] ? `<div class="am">${esc(MONEDAS[a.moneda][li])}</div>` : ''}${(a.fields || []).filter(f => String(f.value || '').trim()).map(fieldHtml).join('')}</div>`;
+  const acctHtml = (a, single) => `<div class="ac">${a.moneda && MONEDAS[a.moneda] ? `<div class="am">${esc(MONEDAS[a.moneda][li])}</div>` : ''}${(a.fields || []).filter(f => String(f.value || '').trim()).map(fieldHtml).join('')}${(a.imgs || []).filter(i => logoOk(i && i.src)).length ? `<div class="qrs">${a.imgs.filter(i => logoOk(i && i.src)).map(i => `<figure><img src="${i.src}" alt="">${i.label ? `<figcaption>${esc(i.label)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}</div>`;
 
   const methodHtml = m => {
     const badge = txt(m, 'badge'), nota = txt(m, 'nota'), pasos = txt(m, 'pasos');
@@ -113,6 +113,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;color:var(--ink);-webkit-font-smo
 .mh .bd{background:#334155;padding:0 16px;display:flex;align-items:center;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;text-align:center}.pref .mh .bd{background:var(--teal)}
 .mb{padding:16px 0 0}.ag{display:grid;grid-template-columns:1fr;gap:14px}.ag.two{grid-template-columns:1fr 1fr}
 .ac{background:var(--soft);border-left:3px solid var(--teal);padding:14px 18px;display:flex;flex-direction:column;gap:9px}.ag.two .ac+.ac{border-left-color:#334155}
+.qrs{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px}.qrs figure{margin:0;text-align:center;break-inside:avoid}.qrs img{display:block;height:210px;width:auto;border:1px solid var(--line);border-radius:10px;background:#fff}.qrs figcaption{margin-top:6px;font-size:11px;font-weight:600;color:var(--mute)}
 .am{font-size:12px;font-weight:600;color:var(--teal)}.ag.two .ac+.ac .am{color:var(--ink)}
 .fd{display:flex;flex-direction:column;gap:1px}.fl{font-size:10px;color:var(--mute)}.fv{font-size:13.5px;font-weight:600;word-break:break-word}.fv.big{font-size:16px}.fv a{color:#1D4ED8}
 .nt{margin-top:12px;font-size:10.5px;line-height:1.65;color:var(--text);background:var(--soft);padding:11px 14px}
