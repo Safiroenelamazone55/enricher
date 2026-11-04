@@ -14,7 +14,7 @@ const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
 const logoOk = v => typeof v === 'string' && /^data:image\/(png|jpe?g|svg\+xml|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
 
 // nombre del archivo exportado: «Cliente_Propuesta comercial Marca» en el idioma del documento (también es el <title>, que usa «Guardar como PDF»)
-const DOC = { propuesta: ['Propuesta comercial', 'Commercial Proposal', 'Geschäftsangebot', 'Proposta comercial'], pago: ['Métodos de pago', 'Payment Methods', 'Zahlungsmethoden', 'Métodos de pagamento'], overview: ['Company Overview 2026', 'Company Overview 2026', 'Company Overview 2026', 'Company Overview 2026'], presentacion: ['Presentación', 'Presentation', 'Präsentation', 'Apresentação'] };
+const DOC = { propuesta: ['Propuesta comercial', 'Commercial Proposal', 'Geschäftsangebot', 'Proposta comercial'], pago: ['Métodos de pago', 'Payment Methods', 'Zahlungsmethoden', 'Métodos de pagamento'], acuerdo: ['Propuesta y acuerdo comercial', 'Commercial Proposal and Agreement', 'Commercial Proposal and Agreement', 'Commercial Proposal and Agreement'], overview: ['Company Overview 2026', 'Company Overview 2026', 'Company Overview 2026', 'Company Overview 2026'], presentacion: ['Presentación', 'Presentation', 'Präsentation', 'Apresentação'] };
 function docName(marca, cliente, lang, tipo) {
   const clean = v => String(v || '').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
   const doc = (DOC[tipo] || DOC.propuesta)[IDX[lang] != null ? IDX[lang] : 0];

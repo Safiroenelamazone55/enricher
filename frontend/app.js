@@ -42625,7 +42625,7 @@ window.HerramientasModule = HerramientasModule;
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', pago: 'Métodos de pago' };
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago' };
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
   let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
@@ -42672,6 +42672,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     return t.tipo === 'pago' ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
       : t.tipo === 'overview' ? 'Documento A4'
+      : t.tipo === 'acuerdo' ? `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · con firma`
       : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
   }
   // Plantillas fijadas con la estrella: salen primero (en Galería y en Lista). Se guardan en este navegador, como los favoritos de Espacios.
@@ -42751,7 +42752,7 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id) || { tipo: 'propuesta', nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
     const d = t.defaults || {};
     _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
-      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="overview">Company Overview (PDF)</option><option value="pago">Métodos de pago</option></select>`}
+      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="overview">Company Overview (PDF)</option><option value="acuerdo">Propuesta y acuerdo (firma)</option><option value="pago">Métodos de pago</option></select>`}
       <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
       <label class="pl-l">Descripción (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué oferta o documento es">
       <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
@@ -42799,7 +42800,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     _gen = t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
-      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '' } };
+      : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '', validez: d.validez || 15, preaviso: d.preaviso || 15, jurisdiccion: d.jurisdiccion || '', firmante: d.firmante || '', firmanteCargo: d.firmanteCargo || '', clienteCargo: '' } };
     _draw(); _preview();
   }
   // reabrir una copia guardada en el generador para seguir editándola (mismo enlace; el HTML se regenera al guardar)
@@ -42812,7 +42813,7 @@ const PlantillasModule = (() => {
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
       const p = t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
-        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '' };
+        : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', validez: pr.validez || 15, preaviso: pr.preaviso || 15, jurisdiccion: pr.jurisdiccion || '', firmante: pr.firmante || '', firmanteCargo: pr.firmanteCargo || '', clienteCargo: pr.clienteCargo || '' };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
       _draw(); _preview();
     } catch (e) { showBanner(e.message, 'error'); }
@@ -42865,7 +42866,16 @@ const PlantillasModule = (() => {
       <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 4px"><input type="checkbox" ${p.fotos !== false ? 'checked' : ''} onchange="PlantillasModule.fotosSet(this.checked)"> Usar fotografías profesionales (necesita internet al abrirlo)</label>
       <p class="hrm-card__meta">Documento de 5 hojas A4 con la presentación de la empresa, igual para todos los clientes.</p></div>`;
     let campos;
-    if (g.t.tipo === 'overview') {
+    if (g.t.tipo === 'acuerdo') {
+      campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}<div class="pl-row"><div>${f('contacto', 'Contacto que firma por el cliente', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo del contacto', 'text', 'Ej. CEO')}</div></div>${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
+        <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
+          <div class="pl-row3"><div>${f('moneda', 'Moneda')}</div><div>${f('fee', 'Tarifa mensual', 'number')}</div><div>${f('plazo', 'Plazo (meses)', 'number')}</div></div>
+          <div class="pl-row"><div>${f('modelo', 'Modelo de compensación', 'text', 'Fee fijo + comisiones')}</div><div>${f('nota', 'Forma y fecha de pago', 'text', 'Pago al inicio de cada periodo')}</div></div></div>
+        ${f('inicio', 'Inicio del servicio (opcional)', 'text', 'Ej. 10 de noviembre')}
+        <div class="pl-box"><div class="pl-box__t">Acuerdo y firma</div>
+          <div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Director')}</div></div>
+          <div class="pl-row3"><div>${f('validez', 'Validez (días)', 'number')}</div><div>${f('preaviso', 'Preaviso (días)', 'number')}</div><div>${f('jurisdiccion', 'Ley aplicable', 'text', 'Perú')}</div></div></div>`;
+    } else if (g.t.tipo === 'overview') {
       campos = ovBox;
     } else if (pago) {
       campos = `${f('cliente', 'Cliente (opcional)', 'text', 'Nombre del cliente o empresa')}${logoBox}
@@ -42991,7 +43001,7 @@ const PlantillasModule = (() => {
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
     }
-    if (_gen && _gen.t && _gen.t.tipo === 'overview') {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
+    if (_gen && _gen.t && (_gen.t.tipo === 'overview' || _gen.t.tipo === 'acuerdo')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
       fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
       const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;   // la hoja entera cabe a la vista
       wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0';

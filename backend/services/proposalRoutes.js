@@ -7,6 +7,7 @@ const { render, LANGS, logoOk, docName } = require('./proposalTemplate');
 const pay = require('./proposalPay');
 const deck = require('./presentationTemplate');
 const ov = require('./overviewTemplate');
+const ag = require('./agreementTemplate');
 
 const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
@@ -82,7 +83,8 @@ function cleanParams(p) {
   p = p || {};
   return { empresa: S(p.empresa, 120), contacto: S(p.contacto, 120), correo: S(p.correo, 160), fee: Math.max(0, parseInt(p.fee, 10) || 0),
     plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
-    simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '' };
+    simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '',
+    validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60) };
 }
 
 function payDefaults(d) {
@@ -189,7 +191,7 @@ function mount(app, { pool, requireAuth }) {
     if (!nombre) return { err: 'Ponle un nombre a la plantilla' };
     const { rows: [br] } = await pool.query('SELECT id FROM tpl_brands WHERE id=$1 AND user_id=$2', [parseInt(b.brand_id, 10) || 0, uid(req)]);
     if (!br) return { err: 'Elige una empresa (marca) para la plantilla' };
-    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : (b.tipo === 'overview' ? 'overview' : 'propuesta'));
+    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : (b.tipo === 'overview' ? 'overview' : (b.tipo === 'acuerdo' ? 'acuerdo' : 'propuesta')));
     let d;
     if (tipo === 'pago') d = payDefaults(b.defaults);
     else { d = cleanParams(b.defaults); delete d.empresa; delete d.contacto; delete d.correo; delete d.inicio; }
@@ -241,6 +243,7 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given });
+    if (t.tipo === 'acuerdo') return { t, p, html: ag.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'acuerdo') };
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };
