@@ -166,7 +166,7 @@ function render(brand, p, lang) {
   const p1 = `<section class="page"><div class="hd">${lgC}<span class="r">${t('Confidencial', 'Confidential')}</span></div>
 <div class="cv"><div class="k">${t('Propuesta y acuerdo comercial', 'Commercial proposal and agreement')}</div><h1>${titulo}</h1><div class="ln"></div>
 <p>${off ? pk(off.tag) : t('Investigación, prospección y ejecución multicanal para generar oportunidades comerciales de forma estructurada, medible y constante.', 'Research, prospecting and multichannel execution to generate sales opportunities in a structured, measurable and consistent way.')}</p></div>
-<div class="meta">${row(t('Preparada para', 'Prepared for'), clLogo ? `<img class="cl-${esc(lc.usar)}" alt="${esc(empresa)}" src="${clLogo}">` : esc(empresa)).replace('<span>', '<span style="display:flex;align-items:center;gap:14px">')}
+<div class="meta">${row(t('Preparada para', 'Prepared for'), esc(empresa))}
 ${row(t('Contacto', 'Contact'), contacto ? esc(contacto) + (correo ? ' · ' + esc(correo) : '') : '—')}
 ${row(t('Fecha de emisión', 'Issue date'), esc(hoy))}
 ${row(t('Validez de la propuesta', 'Proposal validity'), `${validez} ${t('días desde su emisión', 'days from issue')}`)}
