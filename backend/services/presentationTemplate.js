@@ -422,7 +422,7 @@ function render(brand, p, lang) {
   const bgDark = `<div class="bg"><div class="blob a"></div><div class="blob b"></div><div class="grid"></div></div>`;
   // fotos de stock (Unsplash, licencia libre) con tratamiento de color de la marca; se apagan desde el generador
   const fotos = p.fotos !== false;
-  const U = id => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=70`;
+  const U = id => `https://images.unsplash.com/photo-${id}?fm=jpg&fit=crop&w=1600&q=70`;
   const dkr = rgb(dark);
   const ovL = (a, b2) => `linear-gradient(90deg,rgba(${dkr},${a}) 0%,rgba(${dkr},${b2}) 100%)`;
   const ovV = (a, b2) => `linear-gradient(180deg,rgba(${dkr},${a}) 0%,rgba(${dkr},${b2}) 100%)`;

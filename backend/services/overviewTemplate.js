@@ -6,7 +6,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : d);
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
 const imgOk = v => typeof v === 'string' && /^data:image\/(png|jpe?g|svg\+xml|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
-const U = id => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1400&q=70`;
+const U = id => `https://images.unsplash.com/photo-${id}?fm=jpg&fit=crop&w=1100&q=66`;   // fm=jpg: Chrome incrusta el JPEG tal cual en el PDF (con WebP lo recodifica sin pérdida y el PDF pesa MB y va lento)
 
 // Escala tipográfica única: etiqueta 10 · cuerpo 12.5–13 · destacado 16 · título 50 · cifra 64
 const CSS = `
