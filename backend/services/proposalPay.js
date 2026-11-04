@@ -66,7 +66,7 @@ function render(brand, p, lang, methods) {
   const methodHtml = m => {
     const badge = txt(m, 'badge'), nota = txt(m, 'nota'), pasos = txt(m, 'pasos');
     const accts = m.accounts || [];
-    return `<section class="mt${m.preferido ? ' pref' : ''}"><div class="mh"><b>${esc(m.nombre)}${m.preferido ? ` · ${x('Método preferido', 'Preferred method', 'Bevorzugte Methode', 'Método preferido')}` : ''}</b>${badge ? `<span class="bd">${esc(badge)}</span>` : ''}</div>
+    return `<section class="mt${m.preferido ? ' pref' : ''}"><div class="mh"><b>${esc(((m.textos || {})[lang] || {}).nombre || m.nombre)}${m.preferido ? ` · ${x('Método preferido', 'Preferred method', 'Bevorzugte Methode', 'Método preferido')}` : ''}</b>${badge ? `<span class="bd">${esc(badge)}</span>` : ''}</div>
 <div class="mb"><div class="ag${accts.length > 1 ? ' two' : ''}">${accts.map(a => acctHtml(a)).join('')}</div>
 ${nota ? `<div class="nt">${esc(nota)}</div>` : ''}
 ${pasos.length ? `<div class="hw">${x('Cómo enviar', 'How to send', 'So geht es', 'Como enviar')}</div><ol class="st">${pasos.map((t, i) => `<li><i>${i + 1}</i><span>${esc(t)}</span></li>`).join('')}</ol>` : ''}</div></section>`;

@@ -104,7 +104,8 @@ function cleanMethod(b) {
     const t = (b.textos || {})[l]; if (!t) continue;
     const pasos = (Array.isArray(t.pasos) ? t.pasos : []).map(x => S(x, 400)).filter(Boolean).slice(0, 12);
     const o = { badge: S(t.badge, 60), nota: S(t.nota, 700), pasos };
-    if (o.badge || o.nota || o.pasos.length) textos[l] = o;
+    const nm = S(t.nombre, 80); if (nm) o.nombre = nm;   // título del método traducido (si falta, se usa el nombre base)
+    if (o.badge || o.nota || o.pasos.length || o.nombre) textos[l] = o;
   }
   return { nombre: S(b.nombre, 80), preferido: !!b.preferido, accounts, textos };
 }
