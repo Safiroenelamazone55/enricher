@@ -48,7 +48,7 @@ h1,h2,h3{letter-spacing:-.03em}
 .r1 p.m{color:var(--mute)}
 .focus{margin-top:6px;padding:22px 24px;background:var(--soft);border-left:3px solid var(--teal);border-radius:0 14px 14px 0}
 .focus p{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:500;color:var(--ink)}
-.sec{margin-top:30px;padding-top:22px;border-top:1px solid var(--line)}
+.sec{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
 .sec h2{margin-top:8px;font-size:20px;line-height:1.25;font-weight:700}.sec h2 span{color:var(--mute);font-weight:500}
 .ar{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .ar>div{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
@@ -62,10 +62,23 @@ h1,h2,h3{letter-spacing:-.03em}
 .ar li{position:relative;padding:5px 0 5px 14px;font-size:10.8px;line-height:1.4;border-top:1px solid var(--line)}
 .ar li:before{content:"";position:absolute;left:0;top:11px;width:5px;height:5px;border-radius:50%;background:var(--teal)}
 .st{margin-top:14px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.st>div{position:relative;padding:14px 13px 15px;background:var(--soft);border-top:2.5px solid var(--teal);border-radius:0 0 10px 10px;min-height:132px}
+.st>div{position:relative;padding:14px 13px 15px;background:var(--soft);border-top:2.5px solid var(--teal);border-radius:0 0 10px 10px;min-height:112px}
 .st i{font-style:normal;font-size:23px;font-weight:700;color:var(--teal);letter-spacing:-.03em}
 .st b{display:block;margin-top:8px;font-size:12.5px;font-weight:700}
 .st p{margin-top:6px;font-size:10px;line-height:1.45;color:var(--text)}
+.f3{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch}
+.f3>div{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+.f3 .t{padding:14px 16px 13px;color:#fff}
+.f3 .t i{font-style:normal;font-size:12px;font-weight:600;letter-spacing:.14em;color:var(--teal-l)}
+.f3 .t b{display:block;margin-top:4px;font-size:20px;font-weight:700;letter-spacing:-.03em}
+.f3 .t small{display:block;margin-top:3px;font-size:10.5px;color:rgba(255,255,255,.7)}
+.f3 ul{list-style:none;padding:4px 16px 8px}
+.f3 li{padding:11px 0;border-top:1px solid var(--line)}.f3 li:first-child{border-top:0}
+.f3 li b{display:block;font-size:13px;font-weight:700;letter-spacing:-.01em}
+.f3 li span{display:block;margin-top:3px;font-size:11px;line-height:1.45;color:var(--text)}
+.goal{margin-top:14px;display:flex;align-items:center;gap:20px;padding:16px 22px;background:var(--navy);border-radius:14px;color:#fff;border-left:4px solid var(--teal-l)}
+.goal b{flex:0 0 190px;font-size:16px;font-weight:700;letter-spacing:-.02em;color:var(--teal-l)}
+.goal span{font-size:11.5px;line-height:1.5;color:rgba(255,255,255,.82)}
 .sv{margin-top:14px}
 .sv>div{display:grid;grid-template-columns:54px 200px 1fr;align-items:center;gap:6px;padding:13px 0;border-bottom:1px solid var(--line)}
 .sv>div:first-child{border-top:1px solid var(--line)}
@@ -142,25 +155,24 @@ function render(brand, p, lang) {
   const p1 = `<section class="page dark onph"><div class="ph" style="${fotos ? `background-image:url('${U('1486406146926-c627a92ad1ab')}');` : ''}--ov:linear-gradient(180deg,rgba(${dkr},.9) 0%,rgba(${dkr},.78) 55%,rgba(${dkr},.95) 100%)"></div>
 <div class="in">${hdr(lgW, '')}
 <div class="cv"><div class="rule"></div><h1>${t('Creamos sistemas de <b>crecimiento</b> B2B', 'We build B2B <b>growth</b> systems')}</h1>
-<p class="sub">${t('Ayudamos a las empresas a conocer su mercado, conseguir clientes, fortalecer su presencia en redes, invertir mejor en publicidad y organizar sus ventas.', 'We help companies understand their market, win customers, strengthen their social presence, invest better in advertising and organize their sales.')}</p>
+<p class="sub">${t('Ayudamos a las empresas B2B a conseguir clientes con un sistema comercial que se valida, se estructura y se escala.', 'We help B2B companies win customers with a commercial system that is validated, structured and scaled.')}</p>
 <div class="tag">Company Overview · ${YEAR}</div></div>${pre}</div>${bar}</section>`;
 
   // ── hoja 2 · quiénes somos, qué hacemos (5 servicios), cómo trabajamos
-  const sv = (n, h, d) => `<div><i>${n}</i><b>${h}</b><span>${d}</span></div>`;
+  const fase = (n, h, small, bg, items) => `<div><div class="t" style="background:${bg}"><i>${n}</i><b>${h}</b><small>${small}</small></div><ul>${items.map(([a, d]) => `<li><b>${a}</b><span>${d}</span></li>`).join('')}</ul></div>`;
   const step = (n, h, d) => `<div><i>${n}</i><b>${h}</b><p>${d}</p></div>`;
   const p2 = `<section class="page">${hdr(lgC, rt)}<div class="s2">
 <div class="r1"><div><div class="k">${t('Quiénes somos', 'Who we are')}</div><h2>${t('Agencia de crecimiento B2B.', 'A B2B growth agency.')}</h2>
-<p>${t('Diseñamos y ejecutamos el proceso completo detrás de tu crecimiento: desde conocer el mercado hasta ordenar las ventas.', 'We design and run the whole process behind your growth: from understanding the market to organizing sales.')}</p>
-<p class="m">${t('Desde 2022 · Perú · Atención remota.', 'Since 2022 · Peru · Remote service.')}</p></div>
-<div class="focus"><div class="k">${t('Nuestro enfoque', 'Our approach')}</div><p>${t('Operamos como si fuéramos parte de tu equipo.', 'We operate as if we were part of your team.')}</p></div></div>
-<div class="sec"><div class="k">${t('Qué hacemos', 'What we do')}</div><h2>${t('Cinco servicios conectados para ordenar, vender y escalar tu empresa B2B.', 'Five connected services to organize, sell and scale your B2B company.')}</h2>
-<div class="sv">
-${sv('01', t('Estudio de mercado', 'Market research'), t('Sabes a quién venderle, cuánto vale y qué decirle.', 'You know who to sell to, how much it is worth and what to say.'))}
-${sv('02', t('Prospección de clientes', 'Customer prospecting'), t('Llegamos a las empresas correctas y agendamos reuniones.', 'We reach the right companies and book meetings.'))}
-${sv('03', t('Redes sociales', 'Social media'), t('Presencia que genera consultas, no solo likes.', 'A presence that generates inquiries, not just likes.'))}
-${sv('04', t('Publicidad online', 'Online advertising'), t('Anuncios que se miden en clientes, no en clics.', 'Ads measured in customers, not clicks.'))}
-${sv('05', t('CRM y ventas', 'CRM &amp; sales'), t('Un proceso ordenado que no pierde ningún cliente.', 'An organized process that never loses a customer.'))}
-</div></div>
+<p>${t('Ayudamos a las empresas B2B a conseguir clientes: validamos el mercado, estructuramos el proceso comercial y lo escalamos.', 'We help B2B companies win customers: we validate the market, structure the commercial process and scale it.')}</p>
+<p class="m">${t('Desde 2022 · Perú.', 'Since 2022 · Peru.')}</p></div>
+<div class="focus"><div class="k">${t('Nuestro enfoque', 'Our approach')}</div><p>${t('Un solo objetivo: que tu empresa consiga clientes B2B de forma ordenada. Operamos como parte de tu equipo.', 'One goal: for your company to win B2B customers in an orderly way. We operate as part of your team.')}</p></div></div>
+<div class="sec"><div class="k">${t('Qué hacemos', 'What we do')}</div><h2>${t('Un solo objetivo: conseguir clientes B2B.', 'One goal: winning B2B customers.')} <span>${t('Cinco servicios para validar, estructurar y escalar tu sistema comercial.', 'Five services to validate, structure and scale your commercial system.')}</span></h2>
+<div class="f3">
+${fase('01', t('Validar', 'Validate'), t('Antes de invertir', 'Before investing'), 'var(--navy)', [[t('Estudio de mercado', 'Market research'), t('Sabes a quién venderle, cuánto vale y qué decirle.', 'You know who to sell to, how much it is worth and what to say.')]])}
+${fase('02', t('Estructurar', 'Structure'), t('Un proceso que funciona', 'A process that works'), 'color-mix(in srgb,var(--navy) 78%,#5b6b85)', [[t('Prospección de clientes', 'Customer prospecting'), t('Llegamos a las empresas correctas y agendamos reuniones.', 'We reach the right companies and book meetings.')], [t('CRM y ventas', 'CRM &amp; sales'), t('Un proceso ordenado que no pierde ningún cliente.', 'An organized process that never loses a customer.')]])}
+${fase('03', t('Escalar', 'Scale'), t('Más alcance, más clientes', 'More reach, more customers'), 'color-mix(in srgb,var(--teal) 60%,var(--navy))', [[t('Redes sociales', 'Social media'), t('Presencia que genera consultas, no solo likes.', 'A presence that generates inquiries, not just likes.')], [t('Publicidad online', 'Online advertising'), t('Anuncios que se miden en clientes, no en clics.', 'Ads measured in customers, not clicks.')]])}
+</div>
+<div class="goal"><b>${t('Optimización comercial', 'Commercial optimization')}</b><span>${t('El resultado de los cinco servicios juntos: un sistema que consigue clientes de forma ordenada y que mejora cada mes.', 'The result of all five services together: a system that wins customers in an orderly way and improves every month.')}</span></div></div>
 <div class="sec"><div class="k">${t('Cómo trabajamos', 'How we work')}</div><h2>${t('Un proceso claro.', 'A clear process.')} <span>${t('Medible y en mejora continua.', 'Measurable and continuously improving.')}</span></h2>
 <div class="st st4">
 ${step('01', t('Investigamos y definimos objetivos', 'We research and set goals'), t('Analizamos el mercado, el negocio, la competencia y las oportunidades para definir objetivos claros.', 'We analyze the market, the business, the competition and the opportunities to set clear goals.'))}
@@ -189,7 +201,7 @@ ${cap('03', t('Empezamos donde estés', 'We start where you are'), t('Una llamad
 <div class="ct"><div class="k">${t('¿Hablamos?', 'Let’s talk?')}</div>
 <h2>${t('Cuéntanos tu <b>proyecto</b> y te decimos por dónde <b>empezar</b>.', 'Tell us about your <b>project</b> and we will tell you where to <b>start</b>.')}</h2>
 <p class="l">${t('Agenda un diagnóstico y construyamos juntos un sistema para conseguir clientes de forma ordenada.', 'Book a diagnosis and let us build together a system to win customers in an orderly way.')}</p>
-<div class="cg"><div><small>Email</small><a href="mailto:${esc(mail)}">${esc(mail)}</a><span class="w">${esc(web)} · ${t('Perú · Atención remota', 'Peru · Remote service')}</span></div><div><small>WhatsApp</small><a href="https://wa.me/${esc(tel.replace(/\D/g, ''))}">${esc(tel)}</a></div></div></div>
+<div class="cg"><div><small>Email</small><a href="mailto:${esc(mail)}">${esc(mail)}</a><span class="w">${esc(web)} · ${t('Perú', 'Peru')}</span></div><div><small>WhatsApp</small><a href="https://wa.me/${esc(tel.replace(/\D/g, ''))}">${esc(tel)}</a></div></div></div>
 <div class="ctlogo">${lgW}</div></div>${bar}</section>`;
 
   const title = `${marca} · Company Overview ${YEAR}${empresa ? ' · ' + empresa : ''}`;
