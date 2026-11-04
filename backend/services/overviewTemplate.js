@@ -44,10 +44,11 @@ h1,h2{font-weight:700;letter-spacing:-.04em}
 .pre small{display:block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:6px}
 .pre b{font-size:20px;font-weight:600}.pre img{height:46px;max-width:200px;object-fit:contain}.pre img.cl-blanco{background:var(--navy);padding:8px 14px;border-radius:10px;height:54px}
 /* 2 · quiénes somos */
-.pic{position:relative;margin-top:40px;height:340px;border-radius:22px;overflow:hidden;background:var(--navy)}
+.pic{position:relative;margin-top:40px;height:560px;border-radius:22px;overflow:hidden;background:var(--navy)}
 .pic .ph{border-radius:22px}
-.pic .cap{position:absolute;left:30px;right:30px;bottom:26px;z-index:2;color:#fff;font-size:26px;line-height:1.15;font-weight:600;letter-spacing:-.03em}
+.pic .cap{position:absolute;left:34px;right:34px;bottom:32px;z-index:2;color:#fff;font-size:32px;line-height:1.15;font-weight:600;letter-spacing:-.03em}
 .pic .cap small{display:block;margin-bottom:10px;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal-l);font-weight:600}
+.since{margin-top:16px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);font-weight:500}
 .facts{margin-top:42px;display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1.5px solid var(--ink)}
 .facts>div{padding:18px 22px 0 0}
 .facts>div+div{padding-left:22px;border-left:1px solid var(--line)}
@@ -139,11 +140,7 @@ function render(brand, p, lang) {
 <h1 class="h1">${t('Ayudamos a empresas B2B a <em>conseguir clientes.</em>', 'We help B2B companies <em>win customers.</em>')}</h1>
 <p class="lead">${t('Validamos el mercado, estructuramos el proceso comercial y lo escalamos. Una agencia de crecimiento que ejecuta junto a tu equipo.', 'We validate the market, structure the commercial process and scale it. A growth agency that executes alongside your team.')}</p>
 <div class="pic">${bgPh('1557804506-669a67965ba0', `linear-gradient(180deg,rgba(${dkr},.05) 25%,rgba(${dkr},.85) 100%)`)}<div class="cap"><small>${t('Nuestro enfoque', 'Our approach')}</small>${t('Operamos como parte de tu equipo.', 'We operate as part of your team.')}</div></div>
-<div class="facts">
-<div><b>2022</b><p>${t('Agencia de crecimiento B2B con base en Perú, desde 2022.', 'B2B growth agency based in Peru, since 2022.')}</p></div>
-<div><b>5</b><p>${t('Servicios conectados: mercado, prospección, redes, publicidad y CRM.', 'Connected services: market, prospecting, social, advertising and CRM.')}</p></div>
-<div><b>${t('Mensual', 'Monthly')}</b><p>${t('Medimos y reportamos cada mes: contactos, respuestas y reuniones.', 'We measure and report every month: contacts, replies and meetings.')}</p></div>
-</div>
+<p class="since">${t('Desde 2022 · Perú', 'Since 2022 · Peru')}</p>
 </div></div>${foot(2)}</section>`;
 
   // ── 3 · qué hacemos
