@@ -138,7 +138,7 @@ function render(brand, p, lang) {
 <div class="k">${t('Quiénes somos', 'Who we are')}</div>
 <h1 class="h1">${t('Ayudamos a empresas B2B a <em>conseguir clientes.</em>', 'We help B2B companies <em>win customers.</em>')}</h1>
 <p class="lead">${t('Validamos el mercado, estructuramos el proceso comercial y lo escalamos. Una agencia de crecimiento que ejecuta junto a tu equipo.', 'We validate the market, structure the commercial process and scale it. A growth agency that executes alongside your team.')}</p>
-<div class="pic">${bgPh('1572021335469-31706a17aaef', `linear-gradient(180deg,rgba(${dkr},.05) 25%,rgba(${dkr},.85) 100%)`)}<div class="cap"><small>${t('Nuestro enfoque', 'Our approach')}</small>${t('Operamos como parte de tu equipo.', 'We operate as part of your team.')}</div></div>
+<div class="pic">${bgPh('1557804506-669a67965ba0', `linear-gradient(180deg,rgba(${dkr},.05) 25%,rgba(${dkr},.85) 100%)`)}<div class="cap"><small>${t('Nuestro enfoque', 'Our approach')}</small>${t('Operamos como parte de tu equipo.', 'We operate as part of your team.')}</div></div>
 <div class="facts">
 <div><b>2022</b><p>${t('Agencia de crecimiento B2B con base en Perú, desde 2022.', 'B2B growth agency based in Peru, since 2022.')}</p></div>
 <div><b>10–50</b><p>${t('Equipos de 10 a 50 personas, de cualquier sector B2B.', 'Teams of 10 to 50 people, in any B2B sector.')}</p></div>
