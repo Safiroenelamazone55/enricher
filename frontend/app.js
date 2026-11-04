@@ -42871,9 +42871,11 @@ const PlantillasModule = (() => {
       const OFS = [['', 'Adquisición comercial B2B (prospección de clientes)'], ['estudio', 'Estudio de mercado'], ['redes', 'Redes sociales'], ['publicidad', 'Publicidad online'], ['crm', 'CRM y ventas']];
       const cls = []; const vistos = new Set(); (_copies || []).forEach(cp => { const k = (cp.cliente || '').trim().toLowerCase(); if (k && !vistos.has(k)) { vistos.add(k); cls.push(cp); } });
       const brd = _brands.find(x => x.id === g.t.brand_id) || {}, fms = Array.isArray(brd.firmantes) ? brd.firmantes : [];
-      const sel = Array.isArray(p.firmaIds) ? p.firmaIds : [];
+      if (!Array.isArray(p.firmaIds)) p.firmaIds = [];
+      if (!p.firmaIds.length && fms.length) p.firmaIds = [fms[0].id];   // por defecto firma el primero cargado; el estado de las casillas es siempre lo que se imprime
+      const sel = p.firmaIds;
       const firmaBox = fms.length
-        ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) || (!sel.length && fm.id === fms[0].id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"> ${E(fm.nombre)} <span class="pl-opt">· ${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></label>`).join('')}</div>`
+        ? `<label class="pl-l">Firman por la agencia</label><div class="pl-ckw">${fms.map(fm => `<label class="pl-ck"><input type="checkbox" ${sel.includes(fm.id) ? 'checked' : ''} onchange="PlantillasModule.firmaSet('${E(fm.id)}',this.checked)"> ${E(fm.nombre)} <span class="pl-opt">· ${E(fm.cargo || '')}${fm.firma ? '' : ' · sin firma cargada'}</span></label>`).join('')}</div>`
         : `<div class="pl-row"><div>${f('firmante', 'Quién firma por la agencia', 'text', 'Ej. José Alberto Santos')}</div><div>${f('firmanteCargo', 'Cargo', 'text', 'Ej. Co-founder')}</div></div><p class="hrm-card__meta">Carga las firmas de la agencia una sola vez en «Empresas y logos» y aparecerán aquí para elegirlas.</p>`;
       campos = `<label class="pl-l">Oferta de la propuesta</label><select class="pl-in" onchange="PlantillasModule.set('oferta',this.value)">${OFS.map(([v, l]) => `<option value="${v}"${(p.oferta || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <label class="pl-l">Cargar los datos de un cliente ya generado</label><select class="pl-in" onchange="PlantillasModule.cargarCliente(this.value)"><option value="">${cls.length ? 'Elegir un cliente…' : (_copies && _copies.length ? 'No hay copias con cliente' : 'Cargando copias…')}</option>${cls.map(cp => `<option value="${cp.id}">${E(cp.cliente)} · ${E((cp.plantilla || '').slice(0, 34))}</option>`).join('')}</select>
