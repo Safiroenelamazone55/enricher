@@ -42655,8 +42655,9 @@ const PlantillasModule = (() => {
     const tabs = [['plantillas', 'Plantillas'], ['copias', 'Copias generadas'], ['marcas', 'Empresas y logos']]
       .map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="PlantillasModule.tab('${k}')">${l}</button>`).join('');
     const inner = _tab === 'plantillas' ? _viewPlantillas() : _tab === 'copias' ? _viewCopias() : _viewMarcas();
-    _host.innerHTML = `<div class="pl-wrap"><div class="hrm-hd"><h1 class="hrm-h1">Plantillas</h1>
-      <p class="hrm-sub">Propuestas y métodos de pago listos para personalizar, exportar en varios idiomas y guardar como copia.</p></div>
+    const acc = _tab === 'plantillas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Nueva plantilla</button>` : _tab === 'marcas' ? `<button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button>` : '';
+    const sub = { plantillas: 'Una plantilla por cada oferta o documento; cada una guarda su nombre, empresa y valores por defecto.', copias: 'Versiones ya generadas: no cambian aunque edites la plantilla después.', marcas: 'Cada empresa guarda sus logos, colores, correo y teléfono; las plantillas eligen cuál firma el documento.' }[_tab];
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-hd"><div><h1 class="pl-h1">Plantillas</h1><p class="pl-sub">${sub}</p></div>${acc}</div>
       <div class="pl-tabs">${tabs}</div>${inner}</div>`;
   }
 
@@ -42667,18 +42668,17 @@ const PlantillasModule = (() => {
       const d = t.defaults || {};
       const meta = t.tipo === 'pago'
         ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'} · idioma base ${LANGS[t.lang] || 'Español'}`
+        : t.tipo === 'overview' ? `Documento A4 · idioma base ${LANGS[t.lang] || 'Español'}`
         : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · idioma base ${LANGS[t.lang] || 'Español'}`;
-      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${E(b ? b.nombre : 'Sin empresa')} · ${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
+      return `<div class="pl-card"><div class="pl-card__top"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
         <h3 class="hrm-card__t">${E(t.nombre)}</h3>
         <p class="hrm-card__d">${E(t.oferta || 'Sin descripción')}</p>
-        <p class="hrm-card__meta">${meta}</p>
+        <p class="hrm-card__meta">${E(b ? b.nombre : 'Sin empresa')} · ${meta}</p>
         <div class="hrm-card__acts"><button class="btn btn-primary" onclick="PlantillasModule.generar(${t.id})">Generar</button>
-          <button class="hrm-lnk" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
-          <button class="hrm-lnk" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
+          <button class="btn btn-ghost" onclick="PlantillasModule.editTpl(${t.id})">Editar</button>
+          <button class="btn btn-ghost" onclick="PlantillasModule.dupTpl(${t.id})">Duplicar</button></div></div>`;
     }).join('');
-    return `<div class="pl-bar"><span class="hrm-sub">Crea una plantilla por cada oferta o documento; cada una guarda su nombre, empresa y valores por defecto.</span>
-      <button class="btn btn-primary" onclick="PlantillasModule.editTpl(0)">+ Nueva plantilla</button></div>
-      <div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay plantillas.</p>'}</div>`;
+    return `<div class="hrm-grid">${cards || '<p class="hrm-sub">Aún no hay plantillas.</p>'}</div>`;
   }
 
   function _pasosChecks(pre, pasos, horas) {
@@ -42829,7 +42829,7 @@ const PlantillasModule = (() => {
         <div class="pl-row"><div>${f('servicio', 'Título portada', 'text', 'por defecto')}</div><div>${f('servicioEm', '…resaltado')}</div></div>
         ${refsBox}${g.t.tipo === 'presentacion' ? deckBox : ''}`;
     }
-    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="hrm-h1" style="margin:0">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
+    _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="pl-h1">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
         ${g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
         <div class="pl-acts">${g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
@@ -43012,7 +43012,7 @@ const PlantillasModule = (() => {
     const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
       <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
         <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
-    return `<p class="hrm-sub" style="margin-bottom:12px">Versiones ya generadas: no cambian aunque edites la plantilla después.</p>${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}`;
+    return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
   }
   async function _htmlCopia(id) { const r = await apiFetch(`${API}/tpl/copies/${id}/html`); if (!r.ok) throw new Error('No se pudo abrir la copia'); return r.text(); }
   async function verCopia(id) { try { const h = await _htmlCopia(id); const w = window.open(URL.createObjectURL(new Blob([h], { type: 'text/html;charset=utf-8' })), '_blank'); if (!w) showBanner('Permite las ventanas emergentes', 'error'); } catch (e) { showBanner(e.message, 'error'); } }
@@ -43103,7 +43103,7 @@ const PlantillasModule = (() => {
         <h3 class="hrm-card__t">${E(b.nombre)}</h3><p class="hrm-card__meta">${E(b.email || 'sin correo')} · ${E(b.telefono || 'sin teléfono')} · ${E(b.web || 'sin web')}</p><div class="pl-lgs">${lg}</div>
         <div class="hrm-card__acts"><button class="btn btn-ghost" onclick="PlantillasModule.editBrand(${b.id})">Editar</button></div></div>`;
     }).join('');
-    return `<div class="pl-bar"><span class="hrm-sub">Cada empresa guarda sus logos (blanco, negro, color), colores, correo y teléfono. Las plantillas eligen cuál empresa firma el documento.</span><button class="btn btn-primary" onclick="PlantillasModule.editBrand(0)">+ Nueva empresa</button></div><div class="hrm-grid">${cards}</div>`;
+    return `<div class="hrm-grid">${cards}</div>`;
   }
   function editBrand(id) {
     const b = _brands.find(x => x.id === id) || { nombre: '', email: '', telefono: '', web: '', color_primary: '#0F9F8F', color_light: '#2DD4BF', color_dark: '#0F172A', logo_oscuro: 'blanco', logo_claro: 'color', prev: {} };
