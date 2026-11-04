@@ -42938,6 +42938,18 @@ const PlantillasModule = (() => {
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
     }
+    if (_gen && _gen.t && _gen.t.tipo === 'overview') {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
+      fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
+      const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;   // la hoja entera cabe a la vista
+      wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0';
+      wrap.style.height = Math.round(1159 * s + 20) + 'px'; inn.style.margin = '0 auto';
+      const size = () => { try { const h = fr.contentDocument.documentElement.scrollHeight + 20; fr.style.height = h + 'px'; inn.style.height = (h * s) + 'px'; } catch (_) {} };
+      fr.style.width = W + 'px'; fr.style.height = '1200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
+      inn.style.width = (W * s) + 'px'; inn.style.height = (1200 * s) + 'px';
+      fr.onload = () => { size(); setTimeout(size, 400); };
+      if (_gen && _gen.html) fr.srcdoc = _gen.html;
+      return;
+    }
     fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
     const s = Math.min(1, (box.clientWidth - 4) / 850);
     const size = () => { try { const h = fr.contentDocument.documentElement.scrollHeight + 20; fr.style.height = h + 'px'; inn.style.height = (h * s) + 'px'; } catch (_) {} };
