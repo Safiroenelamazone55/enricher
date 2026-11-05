@@ -20740,3 +20740,9 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-modal .btn { height: 32px; padding: 0 14px; font-size: 13px; font-weight: 500; border-radius: 4px; box-shadow: none; display: inline-flex; align-items: center; }
 .pl-modal .btn-primary { background: var(--primary); border: 1px solid var(--primary); color: #fff; }
 .pl-modal .btn-ghost { background: var(--surface); border: 1px solid var(--border2); color: var(--text); }
+
+/* Hora del prospecto: fuera de horario (antes de las 8:00 o desde las 18:00 de su zona) la fila se pinta en rojo suave; en buen horario no cambia nada */
+.cp-taskbar__clock.is-off { background: rgba(217, 75, 75, .09); border: 1px solid rgba(217, 75, 75, .30); border-radius: 6px; padding: 8px 10px; margin-top: 10px; color: #B42318; }
+.cp-taskbar__clock.is-off b { color: #B42318 !important; }
+.cp-taskbar__clock.is-off .ni { color: #B42318; }
+.cp-taskbar__clock.is-off span[style*="B4AFA8"] { color: #C0504D !important; }

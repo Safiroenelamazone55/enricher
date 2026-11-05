@@ -27560,12 +27560,13 @@ ${rhead}${foot}
     const dot = c => `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c};margin:0 4px 1px 0;vertical-align:middle"></span>`;
     const tag = h == null ? '' : (h >= 8 && h < 18)
       ? `<span style="color:#15803D;font-weight:600">${dot('#15803D')}buen horario</span>`
-      : `<span style="color:#B45309;font-weight:600">${dot('#D08A2D')}fuera de horario</span>`;
+      : `<span style="color:#B42318;font-weight:600">${dot('#D94B4B')}fuera de horario</span>`;
     return `${NI('clock', 12)} Hora del prospecto: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#B4AFA8">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
   }
+  const _clockOff = tz => { const h = _prospectHour(tz); return h != null && !(h >= 8 && h < 18); };   // fuera de 8:00–18:00 del prospecto
   function _ensureProspectClock() {
     if (_cpClockTimer) return;
-    _cpClockTimer = setInterval(() => { const el = document.getElementById('cp-clock-row'); if (el && el.dataset.tz) el.innerHTML = _prospectClockInner(el.dataset.tz); }, 20000);
+    _cpClockTimer = setInterval(() => { const el = document.getElementById('cp-clock-row'); if (el && el.dataset.tz) { el.innerHTML = _prospectClockInner(el.dataset.tz); el.classList.toggle('is-off', _clockOff(el.dataset.tz)); } }, 20000);
   }
   // CC efectivo de un paso: el del cliente, salvo que el paso lo tenga desactivado (cc_off). Única regla para runner, revisión y envío.
   function _ccFor(st, obc) { return (st && st.cc_off) ? '' : String((obc && obc.cc_email) || '').trim(); }
@@ -27652,7 +27653,7 @@ ${rhead}${foot}
         ${_runnerFltHtml(seqId)}
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#B4AFA8;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
+      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock${_clockOff(ptz) ? ' is-off' : ''}" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#B4AFA8;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
       <div class="cp-taskbar__win">${_recWindowsInner(ptz)}</div>`; })()}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
