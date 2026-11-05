@@ -23044,7 +23044,10 @@ const LeadManagerModule = (() => {
     if (_section === 'tasks') { try { await _apReload(); } catch (_) {} }
     const SAFE = ['dashboard', 'clients', 'campaigns', 'sequences', 'companies', 'contacts', 'leads', 'deals', 'activities', 'tasks'];
     const seqSafe = _section === 'sequence' && !['aprobar', 'bloqueos'].includes(_seqTab);
-    if (SAFE.includes(_section) || seqSafe) { const sc = document.scrollingElement ? document.scrollingElement.scrollTop : 0; _renderBody(); if (document.scrollingElement) document.scrollingElement.scrollTop = sc; }
+    // Cada 15 s la pantalla se repinta sola. Antes volvía al inicio (el que se desplaza es .app-main, no la página) y borraba el correo que estabas escribiendo: ahora conserva el desplazamiento y no repinta mientras escribes.
+    const _body = document.getElementById('lm2-body'), _ae = document.activeElement;
+    const _typing = !!_body && ((_ae && _body.contains(_ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(_ae.tagName)) || [..._body.querySelectorAll('input[type=text],input[type=email],input:not([type]),textarea')].some(x => x.value !== x.defaultValue));
+    if ((SAFE.includes(_section) || seqSafe) && !_typing) { const snap = _snapScroll(); _renderBody(); _restoreScroll(snap); }
     if (_dgContainerId && document.getElementById('dg-tbody')) _dgRenderRows();                 // grid de Datos
     _loadNavCounts();
   }
@@ -26006,6 +26009,9 @@ ${rhead}${foot}
     return out;
   }
   function fixHintUse(cid, email) { const inp = $('fix-em-' + cid); if (inp) { inp.value = email; inp.focus(); } }
+  // Al guardar o saltar un contacto de «Por corregir» la pantalla se repinta; sin esto volvía al inicio y había que bajar de nuevo hasta donde estabas.
+  const _snapScroll = () => { const m = document.querySelector('.app-main'); return { m: m ? m.scrollTop : 0, w: window.scrollY }; };
+  const _restoreScroll = sn => { const go = () => { const m = document.querySelector('.app-main'); if (m) m.scrollTop = sn.m; window.scrollTo(0, sn.w); }; go(); requestAnimationFrame(go); setTimeout(go, 120); };
   async function fixEmailSave(cid) {
     const inp = $('fix-em-' + cid), inpP = $('fix-emp-' + cid);
     const email = ((inp && inp.value) || '').trim(), personal = ((inpP && inpP.value) || '').trim();
@@ -26013,6 +26019,7 @@ ${rhead}${foot}
     if (!email && !personal) { showBanner('Escribe el email profesional o el personal', 'error'); if (inp) inp.focus(); return; }
     if (email && !ok(email)) { showBanner('El email profesional no es válido', 'error'); if (inp) inp.focus(); return; }
     if (personal && !ok(personal)) { showBanner('El email personal no es válido', 'error'); if (inpP) inpP.focus(); return; }
+    const snap = _snapScroll();
     try {
       const r = await apiFetch(API + '/lm/contacts/' + cid + '/fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, email_personal: personal }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
@@ -26023,7 +26030,7 @@ ${rhead}${foot}
       try { await _reloadContacts(); } catch (_) {}
       try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
       try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
-      _renderBody();
+      _renderBody(); _restoreScroll(snap);
       showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — se usará solo si no hay profesional disponible' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -26042,9 +26049,10 @@ ${rhead}${foot}
     menu.style.top = `${r.bottom + 6}px`;
   }
   async function _fixAfter() {
+    const snap = _snapScroll();
     try { await _reloadContacts(); } catch (_) {}
     try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
-    _renderBody();
+    _renderBody(); _restoreScroll(snap);
   }
   async function fixSkip(cid) {
     const x = _fixList().find(r => r.c.id === cid); if (!x) return;
