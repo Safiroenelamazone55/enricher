@@ -20746,3 +20746,36 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .cp-taskbar__clock.is-off b { color: #B42318 !important; }
 .cp-taskbar__clock.is-off .ni { color: #B42318; }
 .cp-taskbar__clock.is-off span[style*="B4AFA8"] { color: #C0504D !important; }
+
+/* ── Por corregir: la fila responde al ancho de SU contenedor (no al de la ventana): tabla en una línea cuando hay espacio y tarjeta ordenada cuando no ── */
+.lm-fix-tbl { container-type: inline-size; container-name: fxl; }
+.lm-fix-tbl .lm-fx-ic { grid-template-columns: 28px 28px 28px 28px 1fr 1fr !important; width: 270px; max-width: 100%; }
+.lm-fx-reb { font-size: .72rem; color: #B42318; line-height: 1.3; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.lm-fx-reb span { font-weight: 700; word-break: break-all; user-select: all; }
+.lm-fx-reb i { font-style: normal; color: #C0504D; }
+@container fxl (min-width: 1060px) {
+  .lm-fix-tbl .lm-fx-hd { display: grid !important; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) { display: grid !important; grid-template-columns: 28px minmax(150px, 1.1fr) 92px 270px minmax(110px, 1fr) minmax(110px, 1fr) 70px 104px 26px !important; gap: 8px; align-items: center; padding: 4px 12px; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { grid-column: 2 / -1; padding: 0 0 4px; }
+}
+@container fxl (max-width: 1059px) {
+  .lm-fix-tbl .lm-fx-hd { display: none !important; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; grid-template-columns: none !important; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-go { flex: none; order: 1; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-n { flex: 1 1 150px; min-width: 0; order: 2; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fix-tag { flex: none; order: 3; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-ic { flex: none; order: 4; padding-left: 0; grid-column: auto; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-mn { flex: none; order: 5; margin-left: auto; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd)::after { content: ""; flex: 1 0 100%; height: 0; order: 5; }   /* salto de línea: arriba, contacto y enlaces; abajo, los correos */
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-em-"] { flex: 1 1 150px; width: auto; min-width: 120px; order: 6; margin-left: 36px; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-emp-"] { flex: 1 1 150px; width: auto; min-width: 120px; order: 7; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-sv { flex: none; order: 8; grid-column: auto; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: none; order: 9; grid-column: auto; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { flex: 1 1 100%; order: 10; padding-left: 36px; box-sizing: border-box; }
+}
+@container fxl (max-width: 560px) {
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-n { flex-basis: calc(100% - 140px); }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-em"] { flex: 1 1 100%; margin-left: 0 !important; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-sv, .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: 1 1 auto; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { padding-left: 0; }
+}
