@@ -26116,15 +26116,15 @@ ${rhead}${foot}
       // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
       const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
       const site = fx(co && co.website), tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
-      const slot = (title, inner, attrs, on, lbl) => on ? '<a class="lm-fx-i' + (lbl ? ' lm-fx-i--lbl' : '') + '" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + (lbl ? '<b>' + lbl + '</b>' : '') + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
+      const slot = (title, inner, attrs, on, lbl) => on ? '<a class="lm-fx-i' + (lbl ? ' lm-fx-i--lbl' : '') + '" title="' + esc(title) + '" ' + attrs + (/\sonclick=/.test(' ' + attrs) ? '' : ' onclick="event.stopPropagation()"') + '>' + inner + (lbl ? '<b>' + lbl + '</b>' : '') + '</a>' : '<span class="lm-fx-i lm-fx-i--off" title="Sin dato">–</span>';
       const wa = _waDigits(c);
       const icons = [
         slot('Abrir su LinkedIn', NI('linkedin', 14), 'href="' + esc(fx(c.linkedin)) + '" target="_blank" rel="noopener"', !!c.linkedin),
         slot('Abrir su Sales Navigator', NI('compass', 14), 'href="' + esc(fx(c.linkedin_sales_nav)) + '" target="_blank" rel="noopener"', !!c.linkedin_sales_nav),
         slot('Sitio de la empresa', NI('external', 14), 'href="' + esc(site) + '" target="_blank" rel="noopener"', !!site),
         wa ? slot('Abrir WhatsApp', NI('whatsapp', 14), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"', true) : slot('Llamar: ' + tel, NI('phone', 14), 'href="tel:' + esc(tel) + '"', !!tel),
-        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?hl=es&q=' + qAI + '" target="_blank" rel="noopener"', true, 'IA'),
-        slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener"', true, 'Buscar'),
+        slot('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'href="https://www.google.com/search?hl=es&q=' + qAI + '" target="_blank" rel="noopener" onclick="return LeadManagerModule.fxPop(event,this)"', true, 'IA'),
+        slot('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'href="https://www.google.com/search?q=' + qOp + '" target="_blank" rel="noopener" onclick="return LeadManagerModule.fxPop(event,this)"', true, 'Buscar'),
       ].join('');
       const tag = bad === 'rebote'
         ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
@@ -27263,6 +27263,18 @@ ${rhead}${foot}
     _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId;
     if (global) { _section = 'tasks'; _renderBody(); return; }   // se vuelve a la lista de Tareas comerciales, con los filtros como los dejaste
     _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
+  }
+  // «IA» y «Buscar» de Por corregir: abren la búsqueda en una ventana propia al costado (mitad derecha de la pantalla), sin tapar la lista. Se reutiliza esa misma ventana en las búsquedas siguientes.
+  function fxPop(ev, a) {
+    if (ev) ev.stopPropagation();
+    const url = a && a.href; if (!url) return true;
+    try {
+      const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
+      const pw = Math.max(560, Math.floor(w / 2));
+      const win = window.open(url, 'nova_busqueda', `popup=yes,width=${pw},height=${h},left=${w - pw},top=0`);
+      if (win) { win.focus(); return false; }
+    } catch (e) { /* sin ventana emergente: se abre como pestaña */ }
+    return true;
   }
   function seqOpenLinkedIn(cid, kind) {
     const c = _contacts.find(x => x.id === cid);
@@ -39673,7 +39685,7 @@ ${rhead}${foot}
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
-    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
+    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, wamColaSave, wamColaPausa, wamColaItem, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddMissingLangs, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
