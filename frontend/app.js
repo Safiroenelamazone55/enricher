@@ -36050,8 +36050,8 @@ ${rhead}${foot}
   function lmSetPageSize(n) { try { localStorage.setItem('lm_page_size', String(parseInt(n) || 50)); } catch (_) {} _ctPage = 0; _coPage = 0; _seqCtPage = 0; _seqCoPage = 0; _renderBody(); }
   function seqCtGoPage(d) { _seqCtPage = Math.max(0, _seqCtPage + d); _seqCtRepaint(); const el = document.getElementById('seq-tabwrap'); if (el) el.scrollTop = 0; }
   function seqCoGoPage(d) { _seqCoPage = Math.max(0, _seqCoPage + d); const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) { el.innerHTML = _seqTabContent(_activeSeq); el.scrollTop = 0; } }
-  function ctGoPage(d) { _ctPage = Math.max(0, _ctPage + d); _renderContacts(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
-  function coGoPage(d) { _coPage = Math.max(0, _coPage + d); _renderCompanies(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
+  function ctGoPage(d) { _ctPage = Math.max(0, _ctPage + d); _renderContacts(); _toTop(); }
+  function coGoPage(d) { _coPage = Math.max(0, _coPage + d); _renderCompanies(); _toTop(); }
   function _pagerHtml(total, page, fn) {
     const ps = _pageSize();
     const pages = Math.max(1, Math.ceil(total / ps));
@@ -37077,12 +37077,14 @@ ${rhead}${foot}
   }
 
   // ── Página completa de contacto (estilo Outreach) — Fase 1 ──
+  // Al abrir una ficha o cambiar de página, arriba del todo: el que se desplaza es el panel .app-main (y su contenedor), no solo el cuerpo de la sección.
+  function _toTop() { const b = $('lm2-body'); if (b) b.scrollTop = 0; const m = document.querySelector('.app-main'); if (m) m.scrollTop = 0; window.scrollTo(0, 0); }
   function openContactPage(id, taskCtx) {
     // Si ya se estaba en otra ficha (navegando entre contactos vía "Anterior/Siguiente"
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
     if (!taskCtx && _section !== 'contact-view') { _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts'; _cpFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
-    _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id);
+    _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
   }
   function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
   function _vContactPage(id) {
@@ -38458,7 +38460,7 @@ ${rhead}${foot}
   // ═══════════════════════════════════════════════════════════════
   function openCompanyPage(id) {
     if (_section !== 'company-view') { _coFrom = _CP_FROM_LABEL[_section] ? _section : 'companies'; _coFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
-    _companyView = id; _section = 'company-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0;
+    _companyView = id; _section = 'company-view'; _renderBody(); _toTop();
   }
   function _coInfoRow(label, val, href) {
     if (!val) return '';
