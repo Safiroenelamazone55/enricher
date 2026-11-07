@@ -23293,9 +23293,9 @@ const LeadManagerModule = (() => {
     }
     const all = _gcAll.length ? _gcAll : _clients, nC = c => (_gcli ? 0 : (_campaigns || []).filter(x => x.outbound_client_id === c.id).length);
     _gcBox.innerHTML = `<div class="gc-fly__h">Ver Outreach de…</div>
-      <button type="button" class="gc-fly__i${!_gcli ? ' on' : ''}" onclick="LeadManagerModule.gcSet(null)"><span class="gc-fly__dot gc-fly__dot--all"></span><span class="gc-fly__n">Todos los clientes</span>${!_gcli ? '<em>✓</em>' : ''}</button>
+      <button type="button" class="gc-fly__i${!_gcli ? ' on' : ''}" onclick="LeadManagerModule.gcSet(null)"><span class="gc-fly__n">Todos los clientes</span>${!_gcli ? '<em>✓</em>' : ''}</button>
       <div class="gc-fly__sep"></div>
-      <div class="gc-fly__l">${all.map(c => `<button type="button" class="gc-fly__i${_gcli === c.id ? ' on' : ''}" onclick="LeadManagerModule.gcSet(${c.id})"><span class="gc-fly__dot">${esc((c.abrev || c.nombre || '?').slice(0, 2).toUpperCase())}</span><span class="gc-fly__n">${esc(c.nombre)}</span>${_gcli === c.id ? '<em>✓</em>' : ''}</button>`).join('') || '<div class="gc-fly__e">Sin clientes</div>'}</div>
+      <div class="gc-fly__l">${all.map(c => `<button type="button" class="gc-fly__i${_gcli === c.id ? ' on' : ''}" onclick="LeadManagerModule.gcSet(${c.id})"><span class="gc-fly__n">${esc(c.nombre)}</span>${_gcli === c.id ? '<em>✓</em>' : ''}</button>`).join('') || '<div class="gc-fly__e">Sin clientes</div>'}</div>
       <p class="gc-fly__p">Al elegir un cliente, todo Outreach muestra sólo su información.</p>`;
     const r = btn.getBoundingClientRect(); _gcBox.style.left = (r.right + 6) + 'px'; _gcBox.style.top = Math.max(8, Math.min(r.top - 6, innerHeight - 360)) + 'px'; _gcBox.style.display = '';
   }
