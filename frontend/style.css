@@ -20800,3 +20800,40 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .kdr__evr { margin-left: auto; padding: 2px 9px; border-radius: 4px; background: #FEF3C7; color: #92400E; font-weight: 600; }
 .kdr__evt { margin-top: 6px; font-size: .86rem; line-height: 1.55; color: #26332D; white-space: pre-wrap; background: #F7F8F6; border-left: 3px solid #D5DDD7; padding: 8px 12px; border-radius: 0 4px 4px 0; }
 .kdr__evt--no { color: #8B9690; font-style: italic; background: transparent; border-left-color: #EEE; }
+
+/* Respuestas: una fila por contacto; clic = historial como en el portal */
+.kdr__box:has(.kdr__rows) { width: min(1120px, 100%); }
+.kdr__rows { border-top: 1px solid #E8E6E1; }
+.kdr__rw { display: grid; grid-template-columns: minmax(190px, 1.1fr) auto auto minmax(0, 2fr) auto auto 16px; gap: 12px; align-items: center; padding: 9px 8px; border-bottom: 1px solid #F1EFEA; cursor: pointer; font-size: .84rem; }
+.kdr__rw:hover { background: #F7F8F6; }
+.kdr__rn { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.kdr__rn b { font-weight: 600; color: #14211B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kdr__rn span { font-size: .74rem; color: #8B9690; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kdr__rw .kdr__evd { white-space: nowrap; font-size: .78rem; }
+.kdr__rt { min-width: 0; color: #26332D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .kdr__rt em { color: #8B9690; }
+.kdr__rw .kdr__evr { margin: 0; white-space: nowrap; font-size: .72rem; }
+.kdr__more { font-size: .72rem; font-weight: 700; color: #5F6B64; background: #F1EFEB; border-radius: 999px; padding: 1px 8px; }
+.kdr__go { color: #8B9690; font-size: 1.1rem; }
+@media (max-width: 860px) { .kdr__rw { grid-template-columns: 1fr auto; } .kdr__rw .kdr__ch, .kdr__rw .kdr__evd, .kdr__rw .kdr__evr, .kdr__rw .kdr__more, .kdr__rw .kdr__go { display: none; } .kdr__rt { grid-column: 1 / -1; white-space: normal; } }
+/* Ficha lateral con el historial del contacto */
+.hd { position: fixed; inset: 0; z-index: 10010; }
+.hd__bg { position: absolute; inset: 0; background: rgba(15, 23, 42, .35); }
+.hd__p { position: absolute; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: #fff; box-shadow: -12px 0 40px rgba(15, 23, 42, .2); overflow: auto; }
+.hd__b { padding: 18px 22px 24px; }
+.hd__h { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.hd__h h2 { margin: 0; font-size: 1.1rem; font-weight: 600; color: #14211B; }
+.hd__s { font-size: .78rem; color: #8B9690; }
+.hd__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.hd__tag { display: inline-flex; align-items: center; font-size: .72rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #F1EFEB; color: #3D3A36; text-decoration: none; }
+.hd__tag--y { background: #FEF3C7; color: #92400E; } .hd__tag--l { background: #E6F2FA; color: #0A66C2; }
+.hd__info { font-size: .8rem; color: #5F6B64; margin: 8px 0; }
+.hd__deal { display: flex; gap: 18px; flex-wrap: wrap; font-size: .8rem; color: #5F6B64; background: #F7F8F6; border-left: 3px solid #00804C; padding: 8px 12px; margin: 10px 0; }
+.hd__t { margin: 18px 0 8px; font-size: .78rem; font-weight: 600; color: #5F6B64; letter-spacing: .02em; }
+.hd__ev { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 9px 0; position: relative; }
+.hd__ev:not(:last-of-type):before { content: ""; position: absolute; left: 12px; top: 34px; bottom: -6px; width: 2px; background: #EEECE8; }
+.hd__ic { width: 26px; height: 26px; border-radius: 50%; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; z-index: 1; }
+.hd__eb b { font-size: .86rem; color: #14211B; font-weight: 600; }
+.hd__d { font-size: .72rem; color: #8B9690; margin-top: 2px; }
+.hd__q { margin-top: 6px; font-size: .84rem; line-height: 1.55; color: #26332D; white-space: pre-wrap; background: #F7F8F6; border-left: 3px solid #D5DDD7; padding: 8px 12px; border-radius: 0 4px 4px 0; }
+.hd__q--no { color: #8B9690; font-style: italic; background: transparent; }
+.hd__f { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E8E6E1; }

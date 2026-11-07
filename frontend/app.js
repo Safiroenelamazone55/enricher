@@ -30386,15 +30386,52 @@ ${rhead}${foot}
       const fdt = d => { if (!d) return ''; const x = new Date(d); return x.toLocaleDateString('es', { day: '2-digit', month: 'short' }) + ', ' + x.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }); };
       const ev = e => '<div class="kdr__ev"><div class="kdr__evh"><span class="kdr__ch kdr__ch--' + esc(e.canal || 'x') + '">' + esc(CN[e.canal] || 'Canal sin registrar') + (e.probable ? ' <i title="El canal se deduce del último contacto que se le hizo">(probable)</i>' : '') + '</span><span class="kdr__evd">' + esc(fdt(e.fecha)) + '</span>' + (e.asunto ? '<span class="kdr__evs">' + esc(e.asunto) + '</span>' : '') + (e.registro ? '<span class="kdr__evr">' + esc(e.registro) + '</span>' : '') + '</div>'
         + (e.texto ? '<div class="kdr__evt">' + esc(e.texto) + '</div>' : '<div class="kdr__evt kdr__evt--no">' + (e.tipo === 'registro' ? 'Respuesta registrada a mano: no quedó guardado el texto.' : 'Sin texto guardado.') + '</div>') + '</div>';
-      b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + ' · por dónde respondió, cuándo y qué dijo (según lo registrado)</div><div class="kdr__list">'
-        + rows.map(r => '<div class="kdr__p"><div class="kdr__ph" onclick="document.getElementById(\'kdr\').remove();LeadManagerModule.openContactPage(' + r.id + ')"><b>' + esc(r.nombre || r.email || '—') + '</b><span>' + esc([r.cargo, r.empresa].filter(Boolean).join(' · ')) + '</span></div>'
-          + ((r.eventos || []).length ? r.eventos.map(ev).join('') : '<div class="kdr__evt kdr__evt--no">Sin detalle de la respuesta en este período.</div>') + '</div>').join('') + '</div>';
+      const one = r => { const e = (r.eventos || [])[0], more = (r.eventos || []).length - 1;
+        return '<div class="kdr__rw" onclick="LeadManagerModule.histOpen(' + r.id + ')" title="Ver su historial: cómo llegó hasta aquí"><div class="kdr__rn"><b>' + esc(r.nombre || r.email || '—') + '</b><span>' + esc([r.cargo, r.empresa].filter(Boolean).join(' · ')) + '</span></div>'
+          + (e ? '<span class="kdr__ch kdr__ch--' + esc(e.canal || 'x') + '">' + esc(CN[e.canal] || 'Canal sin registrar') + (e.probable ? ' <i>(probable)</i>' : '') + '</span><span class="kdr__evd">' + esc(fdt(e.fecha)) + '</span>'
+            + '<span class="kdr__rt">' + (e.texto ? esc(e.texto.replace(/\s+/g, ' ')) : '<em>' + (e.tipo === 'registro' ? 'Registrada a mano, sin texto' : 'Sin texto guardado') + '</em>') + '</span>'
+            + (e.registro ? '<span class="kdr__evr">' + esc(e.registro) + '</span>' : '<span></span>') + (more > 0 ? '<span class="kdr__more">+' + more + '</span>' : '<span></span>') : '<span></span><span></span><span class="kdr__rt"><em>Sin detalle en este período</em></span><span></span><span></span>')
+          + '<span class="kdr__go">›</span></div>'; };
+      b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + ' · clic en uno para ver su historial</div><div class="kdr__rows">' + rows.map(one).join('') + '</div>';
       return;
     }
     const fd = d => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '';
     b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + '</div><table class="kdr__t"><thead><tr><th>Contacto</th><th>Cargo</th><th>Empresa</th><th>Veces</th><th>Último</th></tr></thead><tbody>'
       + rows.map(r => '<tr onclick="document.getElementById(\'kdr\').remove();LeadManagerModule.openContactPage(' + r.id + ')"><td>' + esc(r.nombre || r.email || '—') + '</td><td>' + esc(r.cargo || '—') + '</td><td>' + esc(r.empresa || '—') + '</td><td>' + (r.n || 1) + '</td><td>' + fd(r.ultimo) + '</td></tr>').join('') + '</tbody></table>';
   }
+  // Ficha con el historial de un contacto (igual que en el portal del cliente): quién es, cómo llegó hasta aquí y qué respondió.
+  async function histOpen(cid) {
+    document.getElementById('hd-drawer')?.remove();
+    const box = document.createElement('div'); box.id = 'hd-drawer'; box.className = 'hd';
+    box.innerHTML = '<div class="hd__bg" onclick="LeadManagerModule.histClose()"></div><aside class="hd__p"><div class="hd__b"><div class="kdr__e">Cargando…</div></div></aside>';
+    document.body.appendChild(box);
+    let d;
+    try { const r = await apiFetch(API + '/portal/admin/contact/' + cid); d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); }
+    catch (e) { const bb = box.querySelector('.hd__b'); if (bb) bb.innerHTML = '<div class="kdr__e">No se pudo cargar: ' + esc(e.message) + '</div>'; return; }
+    const c = d.contact, tl = d.timeline || [];
+    const ICO = { linkedin: ['in', '#0A66C2'], email: ['@', '#2563EB'], whatsapp: ['W', '#15803D'], whatsapp_call: ['☎', '#0F9D8F'], call: ['☎', '#D97706'], task: ['•', '#8B9690'], reply: ['↩', '#15803D'], status: ['✓', '#2563EB'], booked: ['★', '#D97706'], meeting: ['★', '#D97706'], note: ['✎', '#2563EB'], added: ['+', '#14211B'] };
+    const fdl = x => { const t = new Date(x); return t.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) + (t.getHours() || t.getMinutes() ? ', ' + t.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }) : ''); };
+    const evh = e => {
+      let k = e.kind === 'touch' ? (e.canal || 'task') : e.kind, body = '';
+      if (e.kind === 'touch') body = '<b>' + esc(e.label || '') + '</b>' + (e.first ? ' <span class="hd__tag">Primer contacto</span>' : '');
+      else if (e.kind === 'reply') body = '<b>Respondió' + (e.canal ? ' por ' + esc(({ email: 'email', linkedin: 'LinkedIn', whatsapp: 'WhatsApp' })[e.canal] || e.canal) : '') + '</b>' + (e.asunto ? ' <span class="hd__s">' + esc(e.asunto) + '</span>' : '') + (e.text ? '<div class="hd__q">' + esc(e.text) + '</div>' : '<div class="hd__q hd__q--no">No quedó guardado el texto.</div>');
+      else if (e.kind === 'status') body = '<b>Estado</b> <span class="hd__tag hd__tag--y">' + esc(e.label) + '</span>';
+      else if (e.kind === 'booked') body = '<b>Oportunidad creada</b> <span class="hd__s">para el ' + esc(new Date(e.date).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })) + '</span>';
+      else if (e.kind === 'meeting') body = '<b>Oportunidad</b>';
+      else if (e.kind === 'note') body = '<b>Nota</b>' + (e.autor ? ' <span class="hd__s">' + esc(e.autor) + '</span>' : '') + '<div class="hd__q">' + esc(e.text) + '</div>';
+      else body = '<b>' + esc(e.label || e.kind) + '</b>';
+      const ic = ICO[k] || ICO.task;
+      return '<div class="hd__ev"><span class="hd__ic" style="background:' + ic[1] + '">' + ic[0] + '</span><div class="hd__eb"><div>' + body + '</div><div class="hd__d">' + esc(fdl(e.fecha)) + '</div></div></div>';
+    };
+    const dl = d.deal;
+    box.querySelector('.hd__b').innerHTML = '<div class="hd__h"><div><h2>' + esc(c.nombre || '—') + '</h2><div class="hd__s">' + esc([c.cargo, c.empresa].filter(Boolean).join(' · ')) + '</div></div><button class="kdr__x" onclick="LeadManagerModule.histClose()">×</button></div>'
+      + '<div class="hd__badges">' + (c.estado ? '<span class="hd__tag hd__tag--y">' + esc(c.estado) + '</span>' : '') + (c.etapa ? '<span class="hd__tag">' + esc(c.etapa) + '</span>' : '') + (c.linkedin ? '<a class="hd__tag hd__tag--l" href="' + esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin) + '" target="_blank" rel="noopener">LinkedIn ↗</a>' : '') + (c.pais ? '<span class="hd__s">' + esc(c.pais) + '</span>' : '') + '</div>'
+      + (c.secuencia ? '<div class="hd__info">Secuencia: <b>' + esc(c.secuencia) + '</b>' + (c.paso ? ' · paso ' + esc(c.paso) : '') + '</div>' : '')
+      + (dl ? '<div class="hd__deal"><span>Oportunidad para el <b>' + esc(new Date(dl.fecha).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })) + '</b></span>' + (dl.valor ? '<span>Valor <b>' + esc(String(dl.valor)) + ' ' + esc(dl.moneda || '') + '</b></span>' : '') + '</div>' : '')
+      + '<h3 class="hd__t">Historial del contacto · cómo llegó hasta aquí</h3>' + (tl.length ? tl.map(evh).join('') : '<div class="kdr__e">Sin historial todavía</div>')
+      + '<div class="hd__f"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.histClose();document.getElementById(\'kdr\')?.remove();LeadManagerModule.openContactPage(' + cid + ')">Abrir la ficha completa</button></div>';
+  }
+  function histClose() { document.getElementById('hd-drawer')?.remove(); }
   function kpiCfgOpen(scope, ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.getElementById('kpi-cfg-pop')?.remove();
@@ -39708,7 +39745,7 @@ ${rhead}${foot}
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
-    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop,
+    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     rpTzOpen, rpTzInput, rpTzHover, rpTzKey, rpTzBlur, rpTzPick, wamColaSave, wamColaPausa, wamColaItem, mbSigDevice, mbSigTab, mbSigMake, mbSigAddLang, mbSigFill, mbSigDel, stepSetMode, stepVarLang, stepAddLang, stepAddMissingLangs, stepAddAB, seqIdiAsignar, seqIdiomaFaltante, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
