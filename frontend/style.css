@@ -20842,3 +20842,5 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .hd__sub { margin-top: 2px; }
 .hd__tag--g { background: #E6F6EC; color: #15803D; }
 .hd__ev--reply { background: #F2FAF5; margin: 2px -10px; padding: 9px 10px; border-radius: 6px; }
+
+.hd__tag--s { background: #EEF2FF; color: #4338CA; margin-left: 4px; }

@@ -30414,7 +30414,7 @@ ${rhead}${foot}
     const t0 = tl.length ? new Date(tl[0].fecha).getTime() : 0;
     const evh = e => {
       let k = e.kind === 'touch' ? (e.canal || 'task') : e.kind, body = '';
-      if (e.kind === 'touch') body = '<b>' + esc(e.label || '') + '</b>' + (e.paso ? ' <span class="hd__tag">Paso ' + e.paso + '</span>' : '') + (e.first ? ' <span class="hd__tag hd__tag--g">Primer contacto</span>' : '') + (e.origen ? ' <span class="hd__s">· ' + esc(e.origen) + '</span>' : '') + (e.asunto ? '<div class="hd__s hd__sub">' + esc(e.asunto) + '</div>' : '');
+      if (e.kind === 'touch') body = '<b>' + esc(e.label || '') + '</b>' + (e.paso ? ' <span class="hd__tag">Paso ' + e.paso + '</span>' : '') + (e.first ? ' <span class="hd__tag hd__tag--g">Primer contacto</span>' : '') + (e.origen ? ' <span class="hd__s">· ' + esc(e.origen) + '</span>' : '') + (e.seq ? ' <span class="hd__tag hd__tag--s">' + esc(e.seq) + '</span>' : '') + (e.asunto ? '<div class="hd__s hd__sub">' + esc(e.asunto) + '</div>' : '');
       else if (e.kind === 'mine') body = '<b>' + esc(e.label) + '</b>' + (e.asunto ? '<div class="hd__s hd__sub">' + esc(e.asunto) + '</div>' : '');
       else if (e.kind === 'info') body = '<span class="hd__s">' + esc(e.label) + '</span>';
       else if (e.kind === 'reply') body = '<b>Respondió' + (e.canal ? ' por ' + esc(({ email: 'email', linkedin: 'LinkedIn', whatsapp: 'WhatsApp' })[e.canal] || e.canal) : '') + '</b>' + (e.asunto ? ' <span class="hd__s">' + esc(e.asunto) + '</span>' : '') + (e.text ? '<div class="hd__q">' + esc(e.text) + '</div>' : '<div class="hd__q hd__q--no">No quedó guardado el texto.</div>');
