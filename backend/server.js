@@ -8267,6 +8267,53 @@ app.get('/api/lm/inbox/history/:cid', requireAuth, async (req, res) => {
     res.json({ contacto: k, correos: rows });
   } catch (e) { console.error('[inbox history]', e.message); res.status(500).json({ error: 'No se pudo cargar el historial' }); }
 });
+// Respuestas de cada contacto en el período: POR DÓNDE respondió, CUÁNDO y QUÉ dijo (siempre que quede registrado).
+// Fuentes: el buzón (lm_inbox_messages, con el texto completo) y la actividad «respuesta»/cambio de disposición (con la nota que se guardó).
+const _cleanReply = t => {
+  let s = String(t || '').replace(/\r/g, '').replace(/<[^>]+>/g, ' ');
+  const cut = s.search(/^\s*(De:|From:|Enviado el:|Sent:|On .{5,120} wrote:|El .{5,120} escribió:|-{2,}\s*(Original|Mensaje original)|_{8,}|>)/mi);
+  if (cut > 0) s = s.slice(0, cut);
+  s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return s.length > 700 ? s.slice(0, 700).trim() + '…' : s;
+};
+async function _attachReplyEvents(uid, rows, from, to) {
+  const ids = rows.map(r => r.id); if (!ids.length) return;
+  const RT = 'Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar';
+  const { rows: acts } = await pool.query(`
+    SELECT a.contact_id, a.canal, a.fecha, a.nota, a.tipo,
+           (SELECT a2.canal FROM activities a2 WHERE a2.contact_id=a.contact_id AND a2.estado='hecha' AND COALESCE(a2.canal,'')<>'' AND a2.fecha<=a.fecha ORDER BY a2.fecha DESC LIMIT 1) AS canal_prev
+      FROM activities a
+     WHERE a.contact_id = ANY($1::int[]) AND a.fecha::date BETWEEN $2::date AND $3::date
+       AND (a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RT})[[:space:]]*$'))
+     ORDER BY a.fecha DESC`, [ids, from, to]);
+  const { rows: inb } = await pool.query(`
+    SELECT contact_id, received_at AS fecha, asunto, cuerpo FROM lm_inbox_messages
+     WHERE user_id=$1 AND contact_id = ANY($2::int[]) AND tipo='reply' AND received_at::date BETWEEN $3::date AND $4::date
+     ORDER BY received_at DESC`, [uid, ids, from, to]);
+  const by = {};
+  const push = (cid, e) => { (by[cid] = by[cid] || []).push(e); };
+  for (const m of inb) push(m.contact_id, { canal: 'email', fecha: m.fecha, asunto: m.asunto || '', texto: _cleanReply(m.cuerpo), tipo: 'mensaje' });
+  for (const a of acts) {
+    const nota = String(a.nota || '');
+    const _nc = x => { x = String(x || '').toLowerCase(); return x.startsWith('whatsapp') ? 'whatsapp' : x.startsWith('linkedin') ? 'linkedin' : x.startsWith('email') || x.startsWith('correo') ? 'email' : x.startsWith('llamada') ? 'llamada' : ''; };
+    let canal = _nc(a.canal), probable = false;
+    if (!canal && a.canal_prev) { canal = _nc(a.canal_prev); probable = !!canal; }
+    const hasInbox = (by[a.contact_id] || []).some(e => e.tipo === 'mensaje' && canal === 'email' && Math.abs(new Date(e.fecha) - new Date(a.fecha)) < 36 * 3600e3);
+    if (hasInbox) continue;                                    // ya está con su texto completo desde el buzón
+    let e;
+    let m = nota.match(/^Respondió a "([^"]*)"\s*—\s*([\s\S]*)$/);
+    if (m) e = { canal: canal || 'email', asunto: m[1], texto: _cleanReply(m[2]), tipo: 'mensaje' };
+    else if ((m = nota.match(/^Disposición:\s*(.*?)(?:\s+—\s+([\s\S]*))?$/))) e = { canal, probable, texto: _cleanReply((m[2] || '').replace(/^\[(LinkedIn|Email|WhatsApp)\]$/i, '')), registro: m[1].trim(), tipo: 'registro' };
+    else if ((m = nota.match(/→\s*([^→]+?)\s*$/))) e = { canal, probable, texto: '', registro: m[1].trim(), tipo: 'registro' };
+    else e = { canal, probable, texto: _cleanReply(nota), tipo: 'mensaje' };
+    e.fecha = a.fecha; push(a.contact_id, e);
+  }
+  for (const r of rows) {
+    const list = (by[r.id] || []).sort((x, y) => new Date(y.fecha) - new Date(x.fecha));
+    // La misma respuesta puede estar dos veces (la actividad «respuesta» y el cambio de disposición del mismo momento): se deja una.
+    r.eventos = list.filter((e, i) => !list.slice(0, i).some(o => o.tipo === 'registro' && e.tipo === 'registro' && o.registro === e.registro && Math.abs(new Date(o.fecha) - new Date(e.fecha)) < 120000)).slice(0, 8);
+  }
+}
 app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
   try {
     const uid = req.workspaceOwnerId, q = req.query, today = new Date();
@@ -8307,6 +8354,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
       } else return res.status(400).json({ error: 'KPI desconocido' });
     }
     const { rows } = await pool.query(sql, params);
+    if (kpi === 'respuesta' || kpi === 'respuestas') { try { await _attachReplyEvents(uid, rows, from, to); } catch (e) { console.warn('[dash drill] eventos:', e.message); } }
     res.json({ kpi, rows });
   } catch (e) { console.error('[dash drill]', e.message); res.status(500).json({ error: 'No se pudo cargar el detalle' }); }
 });

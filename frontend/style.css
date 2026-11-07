@@ -20779,3 +20779,24 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
   .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-sv, .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: 1 1 auto; }
   .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { padding-left: 0; }
 }
+
+/* Detalle de «Respuestas»: por dónde respondió, cuándo y qué dijo */
+.kdr__box:has(.kdr__list) { width: min(980px, 100%); }
+.kdr__list { display: flex; flex-direction: column; gap: 10px; }
+.kdr__p { border: 1px solid #E8E6E1; border-radius: 6px; padding: 10px 14px 12px; background: #fff; }
+.kdr__ph { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; padding-bottom: 6px; border-bottom: 1px solid #F1EFEA; margin-bottom: 8px; }
+.kdr__ph:hover b { color: #00804C; }
+.kdr__ph b { font-size: .92rem; font-weight: 600; color: #14211B; }
+.kdr__ph span { font-size: .78rem; color: #8B9690; }
+.kdr__ev + .kdr__ev { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #E8E6E1; }
+.kdr__evh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .76rem; color: #5F6B64; }
+.kdr__ch { padding: 2px 9px; border-radius: 999px; background: #F1EFEB; color: #3D3A36; font-weight: 600; }
+.kdr__ch i { font-style: normal; font-weight: 400; color: #8B9690; }
+.kdr__ch--email { background: #E8F0FE; color: #1D4ED8; }
+.kdr__ch--linkedin { background: #E6F2FA; color: #0A66C2; }
+.kdr__ch--whatsapp { background: #E6F6EC; color: #15803D; }
+.kdr__evd { font-weight: 600; color: #14211B; }
+.kdr__evs { color: #8B9690; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kdr__evr { margin-left: auto; padding: 2px 9px; border-radius: 4px; background: #FEF3C7; color: #92400E; font-weight: 600; }
+.kdr__evt { margin-top: 6px; font-size: .86rem; line-height: 1.55; color: #26332D; white-space: pre-wrap; background: #F7F8F6; border-left: 3px solid #D5DDD7; padding: 8px 12px; border-radius: 0 4px 4px 0; }
+.kdr__evt--no { color: #8B9690; font-style: italic; background: transparent; border-left-color: #EEE; }

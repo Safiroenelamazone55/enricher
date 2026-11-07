@@ -30380,6 +30380,17 @@ ${rhead}${foot}
     catch (e) { const b = document.getElementById('kdr-b'); if (b) b.textContent = 'No se pudo cargar: ' + e.message; return; }
     const b = document.getElementById('kdr-b'); if (!b) return;
     if (!rows.length) { b.innerHTML = '<div class="kdr__e">Nadie en este período.</div>'; return; }
+    if ((id === 'respuesta' || id === 'respuestas') && rows.some(r => (r.eventos || []).length)) {
+      // Respuestas: por dónde respondió, cuándo y qué dijo (lo que haya quedado registrado)
+      const CN = { email: 'Email', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: 'Llamada' };
+      const fdt = d => { if (!d) return ''; const x = new Date(d); return x.toLocaleDateString('es', { day: '2-digit', month: 'short' }) + ', ' + x.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }); };
+      const ev = e => '<div class="kdr__ev"><div class="kdr__evh"><span class="kdr__ch kdr__ch--' + esc(e.canal || 'x') + '">' + esc(CN[e.canal] || 'Canal sin registrar') + (e.probable ? ' <i title="El canal se deduce del último contacto que se le hizo">(probable)</i>' : '') + '</span><span class="kdr__evd">' + esc(fdt(e.fecha)) + '</span>' + (e.asunto ? '<span class="kdr__evs">' + esc(e.asunto) + '</span>' : '') + (e.registro ? '<span class="kdr__evr">' + esc(e.registro) + '</span>' : '') + '</div>'
+        + (e.texto ? '<div class="kdr__evt">' + esc(e.texto) + '</div>' : '<div class="kdr__evt kdr__evt--no">' + (e.tipo === 'registro' ? 'Respuesta registrada a mano: no quedó guardado el texto.' : 'Sin texto guardado.') + '</div>') + '</div>';
+      b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + ' · por dónde respondió, cuándo y qué dijo (según lo registrado)</div><div class="kdr__list">'
+        + rows.map(r => '<div class="kdr__p"><div class="kdr__ph" onclick="document.getElementById(\'kdr\').remove();LeadManagerModule.openContactPage(' + r.id + ')"><b>' + esc(r.nombre || r.email || '—') + '</b><span>' + esc([r.cargo, r.empresa].filter(Boolean).join(' · ')) + '</span></div>'
+          + ((r.eventos || []).length ? r.eventos.map(ev).join('') : '<div class="kdr__evt kdr__evt--no">Sin detalle de la respuesta en este período.</div>') + '</div>').join('') + '</div>';
+      return;
+    }
     const fd = d => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '';
     b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + '</div><table class="kdr__t"><thead><tr><th>Contacto</th><th>Cargo</th><th>Empresa</th><th>Veces</th><th>Último</th></tr></thead><tbody>'
       + rows.map(r => '<tr onclick="document.getElementById(\'kdr\').remove();LeadManagerModule.openContactPage(' + r.id + ')"><td>' + esc(r.nombre || r.email || '—') + '</td><td>' + esc(r.cargo || '—') + '</td><td>' + esc(r.empresa || '—') + '</td><td>' + (r.n || 1) + '</td><td>' + fd(r.ultimo) + '</td></tr>').join('') + '</tbody></table>';
