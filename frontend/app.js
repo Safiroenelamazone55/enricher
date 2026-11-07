@@ -23067,14 +23067,14 @@ const LeadManagerModule = (() => {
   // ── Navegación interna del workspace ──
   const _NAV = [
     { k: 'dashboard',  l: 'Dashboard',          g: '' },
-    // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
-    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
-    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
-    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
     { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
+    // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
+    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
+    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
+    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
