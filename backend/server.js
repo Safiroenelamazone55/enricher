@@ -7632,6 +7632,7 @@ app.patch('/api/lm/inbox/thread/:contactId/unread', requireAuth, async (req, res
 // ── Aprobaciones (modo pre-aprobado): borradores que el motor dejó esperando ──
 app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
   try {
+    await syncStepDrafts(req.workspaceOwnerId, { sequenceId: parseInt(req.params.id, 10) || 0 });
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at, m.scheduled_at,
              k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
@@ -11337,6 +11338,53 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
     res.status(201).json({ ...rows[0], reactivated });
   } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
 });
+// Los borradores «por aprobar» (awaiting) siguen SIEMPRE el copy actual del paso: si el texto, el asunto o las variantes cambian (desde la app, una plantilla o la base),
+// se vuelven a redactar. No se tocan los que ya se aprobaron, están programados o enviados, ni los que la persona editó a mano.
+const _stepCopyHash = new Map();   // paso → huella de su copy la última vez que se sincronizaron sus borradores
+async function syncStepDrafts(uid, opts) {
+  opts = opts || {};
+  try {
+    const params = [uid]; let w = '';
+    if (opts.sequenceId) { params.push(opts.sequenceId); w += ` AND sequence_id=$${params.length}`; }
+    if (opts.stepId) { params.push(opts.stepId); w += ` AND id=$${params.length}`; }
+    const { rows: steps } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 AND canal='email'${w}`, params);
+    const eng = require('./services/sendEngine');
+    let n = 0;
+    for (const st of steps) {
+      const h = require('crypto').createHash('md5').update(JSON.stringify([st.plantilla, st.asunto, st.variants, st.variant_mode, st.variant_field])).digest('hex');
+      if (!opts.force && _stepCopyHash.get(st.id) === h) continue;
+      const { rows: drafts } = await pool.query(`
+        SELECT m.id, m.contact_id, m.asunto, m.cuerpo, m.variant,
+               k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
+               k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.idioma, k.idiomas,
+               co.nombre AS company_nombre
+          FROM lm_messages m
+          JOIN lm_contacts k ON k.id=m.contact_id
+          LEFT JOIN lm_companies co ON co.id=k.company_id
+         WHERE m.step_id=$1 AND m.user_id=$2 AND m.estado='awaiting' AND NOT COALESCE(m.editado, FALSE)`, [st.id, uid]);
+      for (const d of drafts) {
+        const ctx = d;
+        await eng.attachCustom(pool, ctx, uid);
+        const variant = eng.pickVariant(st, ctx);
+        const asu = eng.renderTemplate((variant && variant.asunto) || st.asunto || 'Seguimiento — {{company}}', ctx) || `Seguimiento — ${ctx.company_nombre || ctx.empresa_nombre || ctx.nombre}`;
+        const cue = eng.renderTemplate((variant && variant.cuerpo) || st.plantilla, ctx);
+        const vn = (variant && variant.nombre) || d.variant || '';
+        if (asu !== d.asunto || cue !== d.cuerpo || vn !== d.variant) { await pool.query(`UPDATE lm_messages SET asunto=$1, cuerpo=$2, variant=$3 WHERE id=$4 AND estado='awaiting'`, [asu, cue, vn, d.id]); n++; }
+      }
+      _stepCopyHash.set(st.id, h);
+    }
+    return n;
+  } catch (e) { console.warn('[sync-drafts]', e.message); return 0; }
+}
+async function syncAllDrafts() {
+  try {
+    const { rows } = await pool.query(`SELECT DISTINCT user_id FROM lm_messages WHERE estado='awaiting'`);
+    let n = 0; for (const r of rows) n += await syncStepDrafts(r.user_id);
+    if (n) console.log(`[sync-drafts] ${n} borrador(es) por aprobar actualizados con el copy vigente`);
+  } catch (e) { console.warn('[sync-drafts]', e.message); }
+}
+setInterval(syncAllDrafts, 3 * 60 * 1000);
+setTimeout(syncAllDrafts, 40 * 1000);
 app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
@@ -11346,37 +11394,8 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
     `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), b.cond_step_id ? parseInt(b.cond_step_id) : null, _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion), req.params.id, req.workspaceOwnerId, (b.reply_to_prev && b.reply_to_step_id) ? (parseInt(b.reply_to_step_id) || null) : null]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
 
-    // Re-generar los borradores 'awaiting' de este step con la nueva plantilla/asunto.
-    // Los borradores son snapshots del momento en que se crearon: al editar el paso,
-    // los que aún no se han enviado deben tomar el texto nuevo (y sus variables se
-    // re-resuelven por contacto). Los 'approved' NO se tocan (ya fueron revisados).
-    let refreshed = 0;
-    if (canal === 'email') {
-      try {
-        const st = rows[0];
-        const { renderTemplate, pickVariant } = require('./services/sendEngine');
-        const { rows: drafts } = await pool.query(`
-          SELECT m.id, m.contact_id,
-                 k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.idioma, k.idiomas,
-                 co.nombre AS company_nombre
-            FROM lm_messages m
-            JOIN lm_contacts k ON k.id=m.contact_id
-            LEFT JOIN lm_companies co ON co.id=k.company_id
-           WHERE m.step_id=$1 AND m.user_id=$2 AND m.estado='awaiting'`,
-          [st.id, req.workspaceOwnerId]);
-        for (const d of drafts) {
-          const ctx = d; // renderTemplate lee k.* / company_nombre desde ctx
-          await require('./services/sendEngine').attachCustom(pool, ctx, req.workspaceOwnerId);
-          const variant = pickVariant(st, ctx);
-          const asu = renderTemplate((variant && variant.asunto) || st.asunto || 'Seguimiento — {{company}}', ctx)
-                    || `Seguimiento — ${ctx.company_nombre || ctx.empresa_nombre || ctx.nombre}`;
-          const cue = renderTemplate((variant && variant.cuerpo) || st.plantilla, ctx);
-          await pool.query(`UPDATE lm_messages SET asunto=$1, cuerpo=$2 WHERE id=$3`, [asu, cue, d.id]);
-          refreshed++;
-        }
-      } catch (e) { console.warn('[step] refresh drafts warn:', e.message); }
-    }
+    // Los borradores por aprobar de este paso toman el copy nuevo (ver syncStepDrafts: no toca lo aprobado, programado, enviado ni lo editado a mano).
+    const refreshed = canal === 'email' ? await syncStepDrafts(req.workspaceOwnerId, { stepId: rows[0].id, force: true }) : 0;
     res.json({ ...rows[0], drafts_refreshed: refreshed });
   } catch (err) { console.error('[step] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar paso' }); }
 });
