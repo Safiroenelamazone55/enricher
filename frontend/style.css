@@ -20837,3 +20837,8 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .hd__q { margin-top: 6px; font-size: .84rem; line-height: 1.55; color: #26332D; white-space: pre-wrap; background: #F7F8F6; border-left: 3px solid #D5DDD7; padding: 8px 12px; border-radius: 0 4px 4px 0; }
 .hd__q--no { color: #8B9690; font-style: italic; background: transparent; }
 .hd__f { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E8E6E1; }
+
+.hd__how { font-size: .74rem; color: #8B9690; margin: -2px 0 8px; }
+.hd__sub { margin-top: 2px; }
+.hd__tag--g { background: #E6F6EC; color: #15803D; }
+.hd__ev--reply { background: #F2FAF5; margin: 2px -10px; padding: 9px 10px; border-radius: 6px; }

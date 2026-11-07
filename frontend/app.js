@@ -30411,9 +30411,12 @@ ${rhead}${foot}
     const c = d.contact, tl = d.timeline || [];
     const ICO = { linkedin: ['in', '#0A66C2'], email: ['@', '#2563EB'], whatsapp: ['W', '#15803D'], whatsapp_call: ['☎', '#0F9D8F'], call: ['☎', '#D97706'], task: ['•', '#8B9690'], reply: ['↩', '#15803D'], status: ['✓', '#2563EB'], booked: ['★', '#D97706'], meeting: ['★', '#D97706'], note: ['✎', '#2563EB'], added: ['+', '#14211B'] };
     const fdl = x => { const t = new Date(x); return t.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) + (t.getHours() || t.getMinutes() ? ', ' + t.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }) : ''); };
+    const t0 = tl.length ? new Date(tl[0].fecha).getTime() : 0;
     const evh = e => {
       let k = e.kind === 'touch' ? (e.canal || 'task') : e.kind, body = '';
-      if (e.kind === 'touch') body = '<b>' + esc(e.label || '') + '</b>' + (e.first ? ' <span class="hd__tag">Primer contacto</span>' : '');
+      if (e.kind === 'touch') body = '<b>' + esc(e.label || '') + '</b>' + (e.paso ? ' <span class="hd__tag">Paso ' + e.paso + '</span>' : '') + (e.first ? ' <span class="hd__tag hd__tag--g">Primer contacto</span>' : '') + (e.origen ? ' <span class="hd__s">· ' + esc(e.origen) + '</span>' : '') + (e.asunto ? '<div class="hd__s hd__sub">' + esc(e.asunto) + '</div>' : '');
+      else if (e.kind === 'mine') body = '<b>' + esc(e.label) + '</b>' + (e.asunto ? '<div class="hd__s hd__sub">' + esc(e.asunto) + '</div>' : '');
+      else if (e.kind === 'info') body = '<span class="hd__s">' + esc(e.label) + '</span>';
       else if (e.kind === 'reply') body = '<b>Respondió' + (e.canal ? ' por ' + esc(({ email: 'email', linkedin: 'LinkedIn', whatsapp: 'WhatsApp' })[e.canal] || e.canal) : '') + '</b>' + (e.asunto ? ' <span class="hd__s">' + esc(e.asunto) + '</span>' : '') + (e.text ? '<div class="hd__q">' + esc(e.text) + '</div>' : '<div class="hd__q hd__q--no">No quedó guardado el texto.</div>');
       else if (e.kind === 'status') body = '<b>Estado</b> <span class="hd__tag hd__tag--y">' + esc(e.label) + '</span>';
       else if (e.kind === 'booked') body = '<b>Oportunidad creada</b> <span class="hd__s">para el ' + esc(new Date(e.date).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })) + '</span>';
@@ -30421,14 +30424,15 @@ ${rhead}${foot}
       else if (e.kind === 'note') body = '<b>Nota</b>' + (e.autor ? ' <span class="hd__s">' + esc(e.autor) + '</span>' : '') + '<div class="hd__q">' + esc(e.text) + '</div>';
       else body = '<b>' + esc(e.label || e.kind) + '</b>';
       const ic = ICO[k] || ICO.task;
-      return '<div class="hd__ev"><span class="hd__ic" style="background:' + ic[1] + '">' + ic[0] + '</span><div class="hd__eb"><div>' + body + '</div><div class="hd__d">' + esc(fdl(e.fecha)) + '</div></div></div>';
+      const dd = Math.round((new Date(e.fecha).getTime() - t0) / 864e5);
+      return '<div class="hd__ev' + (e.kind === 'reply' ? ' hd__ev--reply' : '') + '"><span class="hd__ic" style="background:' + ic[1] + '">' + ic[0] + '</span><div class="hd__eb"><div>' + body + '</div><div class="hd__d">' + esc(fdl(e.fecha)) + ' · ' + (dd <= 0 && e === tl[0] ? 'inicio' : 'día ' + dd) + '</div></div></div>';
     };
     const dl = d.deal;
     box.querySelector('.hd__b').innerHTML = '<div class="hd__h"><div><h2>' + esc(c.nombre || '—') + '</h2><div class="hd__s">' + esc([c.cargo, c.empresa].filter(Boolean).join(' · ')) + '</div></div><button class="kdr__x" onclick="LeadManagerModule.histClose()">×</button></div>'
       + '<div class="hd__badges">' + (c.estado ? '<span class="hd__tag hd__tag--y">' + esc(c.estado) + '</span>' : '') + (c.etapa ? '<span class="hd__tag">' + esc(c.etapa) + '</span>' : '') + (c.linkedin ? '<a class="hd__tag hd__tag--l" href="' + esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin) + '" target="_blank" rel="noopener">LinkedIn ↗</a>' : '') + (c.pais ? '<span class="hd__s">' + esc(c.pais) + '</span>' : '') + '</div>'
       + (c.secuencia ? '<div class="hd__info">Secuencia: <b>' + esc(c.secuencia) + '</b>' + (c.paso ? ' · paso ' + esc(c.paso) : '') + '</div>' : '')
       + (dl ? '<div class="hd__deal"><span>Oportunidad para el <b>' + esc(new Date(dl.fecha).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })) + '</b></span>' + (dl.valor ? '<span>Valor <b>' + esc(String(dl.valor)) + ' ' + esc(dl.moneda || '') + '</b></span>' : '') + '</div>' : '')
-      + '<h3 class="hd__t">Historial del contacto · cómo llegó hasta aquí</h3>' + (tl.length ? tl.map(evh).join('') : '<div class="kdr__e">Sin historial todavía</div>')
+      + '<h3 class="hd__t">Historial del contacto</h3><div class="hd__how">Del primero (arriba) al más reciente (abajo). «Día N» = días desde el primer contacto.</div>' + (tl.length ? tl.map(evh).join('') : '<div class="kdr__e">Sin historial todavía</div>')
       + '<div class="hd__f"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.histClose();document.getElementById(\'kdr\')?.remove();LeadManagerModule.openContactPage(' + cid + ')">Abrir la ficha completa</button></div>';
   }
   function histClose() { document.getElementById('hd-drawer')?.remove(); }
