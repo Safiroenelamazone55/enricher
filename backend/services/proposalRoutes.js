@@ -8,6 +8,7 @@ const pay = require('./proposalPay');
 const deck = require('./presentationTemplate');
 const ov = require('./overviewTemplate');
 const ag = require('./agreementTemplate');
+const dv = require('./devProposalTemplate');
 
 const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
@@ -90,7 +91,7 @@ function cleanParams(p) {
     plazo: Math.min(36, Math.max(1, parseInt(p.plazo, 10) || 3)), moneda: S(p.moneda, 6) || 'US$', servicio: S(p.servicio, 80), servicioEm: S(p.servicioEm, 80), inicio: S(p.inicio, 60), modelo: S(p.modelo, 80), nota: S(p.nota, 120), logoCliente: cleanLogoCliente(p.logoCliente), referencias: cleanRefs(p.referencias),
     simulador: !(p.simulador === false || p.simulador === 'false'), fotos: !(p.fotos === false || p.fotos === 'false'), fotoPortada: (logoOk(p.fotoPortada) && p.fotoPortada.length < 450000) ? p.fotoPortada : '',
     validez: Math.min(180, Math.max(1, parseInt(p.validez, 10) || 15)), preaviso: Math.min(180, Math.max(1, parseInt(p.preaviso, 10) || 15)), jurisdiccion: S(p.jurisdiccion, 60), firmante: S(p.firmante, 80), firmanteCargo: S(p.firmanteCargo, 60), clienteCargo: S(p.clienteCargo, 60), oferta: S(p.oferta, 20), firmaIds: (Array.isArray(p.firmaIds) ? p.firmaIds : []).slice(0, 4).map(x => S(x, 24)).filter(Boolean),
-    comision: Math.min(100, Math.max(0, Math.round((parseFloat(String(p.comision).replace(',', '.')) || 0) * 10) / 10)), comisionBase: S(p.comisionBase, 160) };
+    comision: Math.min(100, Math.max(0, Math.round((parseFloat(String(p.comision).replace(',', '.')) || 0) * 10) / 10)), comisionBase: S(p.comisionBase, 160), ...(p.dev && typeof p.dev === 'object' ? { dev: dv.cleanDev(p.dev) } : {}) };
 }
 
 function payDefaults(d) {
@@ -199,7 +200,7 @@ function mount(app, { pool, requireAuth }) {
     if (!nombre) return { err: 'Ponle un nombre a la plantilla' };
     const { rows: [br] } = await pool.query('SELECT id FROM tpl_brands WHERE id=$1 AND user_id=$2', [parseInt(b.brand_id, 10) || 0, uid(req)]);
     if (!br) return { err: 'Elige una empresa (marca) para la plantilla' };
-    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : (b.tipo === 'overview' ? 'overview' : (b.tipo === 'acuerdo' ? 'acuerdo' : 'propuesta')));
+    const tipo = b.tipo === 'pago' ? 'pago' : (b.tipo === 'presentacion' ? 'presentacion' : (b.tipo === 'overview' ? 'overview' : (b.tipo === 'acuerdo' ? 'acuerdo' : (b.tipo === 'propuesta2' ? 'propuesta2' : 'propuesta'))));
     let d;
     if (tipo === 'pago') d = payDefaults(b.defaults);
     else { d = cleanParams(b.defaults); delete d.empresa; delete d.contacto; delete d.correo; delete d.inicio; }
@@ -250,7 +251,8 @@ function mount(app, { pool, requireAuth }) {
       return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms), archivo: docName(b.nombre, p.cliente, lang, 'pago') };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
-    const p = cleanParams({ ...(t.defaults || {}), ...given });
+    const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
+    if (t.tipo === 'propuesta2') { const v = dv.validate(p); return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, 'es'), archivo: dv.archivo(b, p) }; }
     if (t.tipo === 'acuerdo') return { t, p, html: ag.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'acuerdo') };
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
@@ -260,7 +262,7 @@ function mount(app, { pool, requireAuth }) {
     const lang = LANGS[req.body.lang] ? req.body.lang : 'es';
     const r = await build(req, parseInt(req.body.template_id, 10), req.body.params, lang);
     if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
-    res.json({ html: r.html, nombre: r.archivo });
+    res.json({ html: r.html, nombre: r.archivo, v: r.v || null });
   }));
   app.post('/api/tpl/copies', A, wrap(async (req, res) => {
     const langs = [...new Set((Array.isArray(req.body.langs) ? req.body.langs : [req.body.lang]).filter(l => LANGS[l]))];
@@ -269,7 +271,8 @@ function mount(app, { pool, requireAuth }) {
     for (const lang of langs) {
       const r = await build(req, parseInt(req.body.template_id, 10), req.body.params, lang);
       if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
-      const titulo = [r.t.nombre, r.p.empresa || (r.t.tipo === 'pago' ? '' : 'Cliente'), lang.toUpperCase()].filter(Boolean).join(' · ');
+      if (r.v && r.v.faltan.length && !req.body.borrador) return res.status(400).json({ error: 'Faltan campos obligatorios: ' + r.v.faltan.map(f => f.l).join(', ') });
+      const titulo = [r.t.nombre, r.p.empresa || (r.t.tipo === 'pago' ? '' : 'Cliente'), lang.toUpperCase(), (r.v && req.body.borrador && r.v.faltan.length) ? 'Borrador' : ''].filter(Boolean).join(' · ');
       const { rows: [c] } = await pool.query('INSERT INTO tpl_copies (user_id,template_id,titulo,cliente,lang,params,html,token,archivo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,titulo,cliente,lang,token,created_at,archivo',
         [uid(req), r.t.id, titulo, r.p.empresa || '', lang, JSON.stringify(r.p), r.html, crypto.randomBytes(18).toString('hex'), r.archivo]);
       out.push(c);
@@ -292,6 +295,7 @@ function mount(app, { pool, requireAuth }) {
     if (!c.template_id) return res.status(409).json({ error: 'La plantilla de esta copia ya no existe, así que no se puede editar. Genera una nueva desde otra plantilla.' });
     const r = await build(req, c.template_id, req.body.params, LANGS[c.lang] ? c.lang : 'es');
     if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
+    if (r.v && r.v.faltan.length && !req.body.borrador) return res.status(400).json({ error: 'Faltan campos obligatorios: ' + r.v.faltan.map(f => f.l).join(', ') });
     await pool.query('UPDATE tpl_copies SET params=$3,html=$4,archivo=$5,cliente=$6 WHERE id=$1 AND user_id=$2', [c.id, uid(req), JSON.stringify(r.p), r.html, r.archivo, r.p.empresa || '']);
     res.json({ ok: true });
   }));

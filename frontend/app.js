@@ -42701,7 +42701,8 @@ window.HerramientasModule = HerramientasModule;
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago' };
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago', propuesta2: 'Presentación interactiva' };
+  const _isDeck = t => t === 'presentacion' || t === 'propuesta2';
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
   let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
@@ -42769,7 +42770,7 @@ const PlantillasModule = (() => {
     if (_view === 'gal') {
       return list.map(t => {
         const b = _brands.find(x => x.id === t.brand_id);
-        return `<div class="pl-gc"><div class="pl-thumb${t.tipo === 'presentacion' ? ' is-deck' : ''}" data-id="${t.id}" onclick="PlantillasModule.generar(${t.id})" title="Abrir">${_starBtn(t)}<iframe tabindex="-1" scrolling="no" aria-hidden="true" title="Vista previa de ${E(t.nombre)}"></iframe></div>
+        return `<div class="pl-gc"><div class="pl-thumb${_isDeck(t.tipo) ? ' is-deck' : ''}" data-id="${t.id}" onclick="PlantillasModule.generar(${t.id})" title="Abrir">${_starBtn(t)}<iframe tabindex="-1" scrolling="no" aria-hidden="true" title="Vista previa de ${E(t.nombre)}"></iframe></div>
           <div class="pl-gc__b"><div class="pl-card__top"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
           <h3 class="pl-gc__t">${E(t.nombre)}</h3><p class="pl-gc__m">${E(b ? b.nombre : 'Sin empresa')} · ${_tplMeta(t)} · ${LANGS[t.lang] || 'Español'}</p>
           <div class="pl-gc__a">${acts(t)}</div></div></div>`;
@@ -42794,7 +42795,7 @@ const PlantillasModule = (() => {
   }
   // Miniatura del documento en cada tarjeta: se genera con los valores por defecto de la plantilla y se guarda en memoria mientras no cambie la lista
   function _fitThumb(box, fr, tipo) {
-    const W = box.clientWidth || 300, deck = tipo === 'presentacion', w = deck ? 1280 : 850, k = W / w;
+    const W = box.clientWidth || 300, deck = _isDeck(tipo), w = deck ? 1280 : 850, k = W / w;
     fr.style.width = w + 'px'; fr.style.height = (deck ? 720 : 1200) + 'px'; fr.style.transform = `scale(${k})`;
     box.style.height = '220px'; fr.style.top = deck ? Math.max(0, Math.round((220 - 720 * k) / 2)) + 'px' : '0';
   }
@@ -42807,7 +42808,7 @@ const PlantillasModule = (() => {
       let h = _thumbs[t.id];
       if (h == null) { try { h = (await _j('/tpl/preview', _body({ data: { template_id: t.id, lang: t.lang, params: {} } }))).html; } catch (_) { h = ''; } _thumbs[t.id] = h; }
       if (seq !== _thSeq || !fr.isConnected) return;
-      if (h) { fr.setAttribute('sandbox', t.tipo === 'presentacion' ? 'allow-scripts' : ''); fr.srcdoc = h; box.classList.add('is-ready'); }
+      if (h) { fr.setAttribute('sandbox', _isDeck(t.tipo) ? 'allow-scripts' : ''); fr.srcdoc = h; box.classList.add('is-ready'); }
     }
   }
 
@@ -42874,7 +42875,9 @@ const PlantillasModule = (() => {
   function generar(id) {
     const t = _tpls.find(x => x.id === id); if (!t) return;
     const d = t.defaults || {};
-    _gen = t.tipo === 'pago'
+    _gen = t.tipo === 'propuesta2'
+      ? { t, langs: ['es'], vista: 'es', p: { empresa: '', logoCliente: {}, contacto: '', correo: '', clienteCargo: '', moneda: d.moneda || 'US$', inicio: '', fotos: d.fotos !== false, fotoPortada: '', referencias: Array.isArray(d.referencias) ? d.referencias.map(r => ({ ...r })) : [], dev: { ...(d.dev || {}), fecha_propuesta: new Date().toISOString().slice(0, 10), cierre_pct: null, valor_cliente: null, reuniones_mes_hoy: null, ciclo_dias: null } } }
+      : t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
       : { t, langs: [t.lang], vista: t.lang, p: { empresa: '', logoCliente: {}, contacto: '', correo: '', fee: d.fee || 0, plazo: d.plazo || 3, moneda: d.moneda || 'US$', servicio: d.servicio || '', servicioEm: d.servicioEm || '', inicio: '', modelo: d.modelo || '', nota: d.nota || '', referencias: Array.isArray(d.referencias) && d.referencias.length ? d.referencias.map(r => ({ ...r })) : t.tipo === 'presentacion' ? [{ nombre: '', link: '', descripcion: '', logo: '' }, { nombre: '', link: '', descripcion: '', logo: '' }] : [], simulador: d.simulador !== false, fotos: d.fotos !== false, fotoPortada: d.fotoPortada || '', validez: d.validez || 15, preaviso: d.preaviso || 15, jurisdiccion: d.jurisdiccion || '', firmante: d.firmante || '', firmanteCargo: d.firmanteCargo || '', clienteCargo: '', comision: d.comision == null ? 0 : d.comision, comisionBase: d.comisionBase || '', oferta: d.oferta || '', firmaIds: Array.isArray(d.firmaIds) ? [...d.firmaIds] : [] } };
     _draw(); _preview();
@@ -42888,7 +42891,9 @@ const PlantillasModule = (() => {
       if (!t) { showBanner('La plantilla de esta copia ya no existe: no se puede editar. Genera una nueva.', 'error'); return; }
       const pr = cp.params || {};
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
-      const p = t.tipo === 'pago'
+      const p = t.tipo === 'propuesta2'
+        ? { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', clienteCargo: pr.clienteCargo || '', moneda: pr.moneda || 'US$', inicio: pr.inicio || '', fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], dev: { ...(pr.dev || {}) } }
+        : t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
         : { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', fee: pr.fee || 0, plazo: pr.plazo || 3, moneda: pr.moneda || 'US$', servicio: pr.servicio || '', servicioEm: pr.servicioEm || '', inicio: pr.inicio || '', modelo: pr.modelo || '', nota: pr.nota || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], simulador: pr.simulador !== false, fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', validez: pr.validez || 15, preaviso: pr.preaviso || 15, jurisdiccion: pr.jurisdiccion || '', firmante: pr.firmante || '', firmanteCargo: pr.firmanteCargo || '', clienteCargo: pr.clienteCargo || '', comision: pr.comision == null ? 0 : pr.comision, comisionBase: pr.comisionBase || '', oferta: pr.oferta || '', firmaIds: Array.isArray(pr.firmaIds) ? [...pr.firmaIds] : [] };
       _gen = { t, langs: [cp.lang], vista: cp.lang, p, copiaId: id, titulo: cp.titulo };
@@ -42973,6 +42978,29 @@ const PlantillasModule = (() => {
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_mios(g.t.id).map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Esta plantilla aún no tiene cuentas: agrégalas en «Editar».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
+    } else if (g.t.tipo === 'propuesta2') {
+      p.dev = p.dev || {};
+      const dvf = (k, l, type, ph, opt) => `<label class="pl-l">${l}${opt ? ' <span class="pl-opt">(opcional)</span>' : ''}</label><input class="pl-in" type="${type || 'text'}" ${type === 'number' ? 'step="any" min="0"' : ''} value="${E(p.dev[k] == null ? '' : p.dev[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">`;
+      const dvt = (k, l, ph) => `<label class="pl-l">${l}</label><textarea class="pl-in" rows="2" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">${E(p.dev[k] || '')}</textarea>`;
+      const dvc = (k, l) => `<label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" ${p.dev[k] ? 'checked' : ''} onchange="PlantillasModule.setDevB('${k}',this.checked)"> ${l}</label>`;
+      const c10 = p.dev.cierre_pct == null ? '' : p.dev.cierre_pct / 10;
+      campos = `<div id="pl-v" class="pl-vbox"></div>
+        <div class="pl-box"><div class="pl-box__t">Cliente</div>${f('empresa', 'Empresa', 'text', 'Ej. Onezix')}${logoBox}
+          <div class="pl-row"><div>${f('contacto', 'Nombre', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo', 'text', 'Ej. Director')}</div></div>${f('correo', 'Correo', 'email', 'nombre@empresa.com')}</div>
+        <div class="pl-box"><div class="pl-box__t">Lo que te contó en la llamada</div>
+          ${dvf('oferta_cliente', 'Qué vende, en una línea', 'text', 'Ej. Software de gestión de flotas')}${dvf('cliente_ideal', 'A quién quiere venderle', 'text', 'Ej. Empresas de transporte de 20 a 200 camiones, en España')}
+          <div class="pl-row3"><div>${f('moneda', 'Moneda', 'text', 'US$ o €')}</div><div>${dvf('valor_cliente', 'Vale un cliente nuevo (1.er año)', 'number')}</div><div>${dvf('reuniones_mes_hoy', 'Reuniones nuevas al mes hoy', 'number')}</div></div>
+          <div class="pl-row"><div><label class="pl-l">De cada 10 reuniones, cuántas cierran</label><input class="pl-in" type="number" min="0" max="10" step="any" value="${E(c10)}" ${p.dev.cierre_sin_dato ? 'disabled' : ''} oninput="PlantillasModule.setCierre10(this.value)"></div><div>${dvf('ciclo_dias', 'Días desde la 1.ª reunión hasta firmar', 'number')}</div></div>
+          ${dvc('cierre_sin_dato', 'No sabe su cierre: usar el supuesto (se marca «supuesto» en el documento)')}
+          ${dvt('dolor_cliente', 'Su frase de la llamada', 'Ej. Mando propuestas y nadie contesta')}
+          <div class="pl-row"><div>${dvf('decision_quien', 'Quién decide', 'text', '', 1)}</div><div>${dvf('decision_plazo', 'En qué plazo decide', 'text', '', 1)}</div></div></div>
+        <div class="pl-box"><div class="pl-box__t">Propuesta</div>
+          <div class="pl-row3"><div>${dvf('fecha_propuesta', 'Fecha', 'date')}</div><div>${dvf('validez_dias', 'Válida (días)', 'number')}</div><div>${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}</div></div>
+          <div class="pl-row3"><div>${dvf('precio_piloto', 'Precio del piloto', 'number')}</div><div>${dvf('precio_mensual', 'Precio mensual', 'number')}</div><div>${dvf('margen_pct', 'Margen % (100 = sin margen)', 'number')}</div></div>
+          <div class="pl-row3"><div>${dvf('bonus_reunion', 'Bonus por reunión', 'number')}</div><div>${dvf('umbral_bonus', 'Bonus desde la reunión n.º', 'number')}</div><div>${dvf('reuniones_objetivo', 'Reuniones objetivo', 'number')}</div></div>
+          ${dvf('cierre_supuesto_pct', 'Cierre supuesto % (solo si no dio el suyo)', 'number')}${dvc('incluir_whatsapp', 'Incluir WhatsApp')}</div>
+        ${refsBox}
+        <div class="pl-box"><div class="pl-box__t">Resultados de referencia</div>${dvt('resultados_referencia', 'Texto + cifra (si lo dejas vacío, solo se cuenta qué hicimos)', 'Ej. 12 reuniones en 6 semanas')}</div>`;
     } else {
       campos = `${f('empresa', 'Empresa cliente', 'text', 'Ej. Onezix')}${logoBox}${f('contacto', 'Contacto principal', 'text', 'Nombre y apellido')}${f('correo', 'Correo del contacto', 'email', 'nombre@empresa.com')}
         <div class="pl-box"><div class="pl-box__t">Precio e inversión</div>
@@ -42984,14 +43012,14 @@ const PlantillasModule = (() => {
     }
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="pl-h1">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
-        ${g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
-        <div class="pl-acts">${g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
+        ${g.t.tipo === 'propuesta2' ? '' : g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
+        <div class="pl-acts">${g.t.tipo === 'propuesta2' ? `<button class="btn btn-primary" id="pl-bsave" onclick="PlantillasModule.guardar()">${g.copiaId ? 'Guardar cambios' : 'Guardar copia'}</button><button class="btn btn-ghost" onclick="PlantillasModule.guardar(true)" title="Guarda los datos aunque falte algo, para seguir después">Guardar borrador</button>` : ''}${g.t.tipo === 'propuesta2' ? '' : g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
-          <button class="btn btn-ghost" onclick="PlantillasModule.exportar('pdf')">PDF / Imprimir</button></div>
+          <button class="btn btn-ghost" id="pl-bpdf" onclick="PlantillasModule.exportar('pdf')">${g.t.tipo === 'propuesta2' ? 'Exportar PDF' : 'PDF / Imprimir'}</button></div>
         <p class="hrm-card__meta">${g.copiaId ? '«Guardar cambios» actualiza esta copia y conserva su enlace para compartir.' : '«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir.'} En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
       </div><div class="pl-prevcol">${vista}<div class="pl-prevwrap"><div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div></div>`;
     if (pago) document.querySelectorAll('#plg-comp,#plg-ref,#plg-plazo,#plg-horas').forEach(i => i.addEventListener('change', _readPagoPasos));
-    _fit();
+    _fit(); _paintV();
   }
   function _readPagoPasos() {
     const g = _gen; if (!g || g.t.tipo !== 'pago') return;
@@ -43106,7 +43134,7 @@ const PlantillasModule = (() => {
   }
   function _fit() {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
-    if (_gen && _gen.t && _gen.t.tipo === 'presentacion') {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
+    if (_gen && _gen.t && _isDeck(_gen.t.tipo)) {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
       const w = Math.max(320, box.clientWidth - 4), h = Math.round(w * 9 / 16);
       fr.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
       fr.style.transform = 'none'; fr.style.width = w + 'px'; fr.style.height = h + 'px'; inn.style.width = w + 'px'; inn.style.height = h + 'px'; fr.onload = null;
@@ -43134,6 +43162,35 @@ const PlantillasModule = (() => {
     if (_gen && _gen.html) fr.srcdoc = _gen.html;
   }
   function set(k, v) { _gen.p[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  // ── Propuesta comercial v2: campos propios, cálculos y reglas ──
+  function setDev(k, v) { const p = _gen.p; p.dev = p.dev || {}; p.dev[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  function setDevB(k, on) { setDev(k, !!on); if (k === 'cierre_sin_dato') _redrawKeep(); }
+  function setCierre10(v) { setDev('cierre_pct', v === '' ? null : Math.min(10, Math.max(0, parseFloat(v) || 0)) * 10); }
+  const _nf = (n, d) => { if (n == null || !isFinite(n)) return '—'; const x = Math.abs(n).toFixed(d == null ? (Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1) : d).split('.'); return (n < 0 ? '-' : '') + x[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (x[1] ? ',' + x[1] : ''); };
+  function _paintV() {
+    const g = _gen, box = $('pl-v'); if (!g || g.t.tipo !== 'propuesta2') return;
+    const v = g.v; const pdf = $('pl-bpdf'), sv = $('pl-bsave');
+    if (!v) { if (box) box.innerHTML = ''; return; }
+    if (pdf) pdf.disabled = v.faltan.length > 0;
+    if (sv) sv.disabled = v.faltan.length > 0;
+    if (!box) return;
+    const c = v.c || {}, sym = g.p.moneda || 'US$';
+    const av = v.avisos.map(a => `<div class="pl-warn" style="${a.nivel === 'rojo' ? 'background:#FEE2E2;color:#991B1B;border-color:#FCA5A5' : ''}">${a.nivel === 'rojo' ? '⛔' : '⚠'} ${E(a.txt)}</div>`).join('');
+    const fl = v.faltan.length ? `<div class="pl-warn" style="background:#FEE2E2;color:#991B1B;border-color:#FCA5A5"><b>Faltan campos obligatorios</b> (no se puede exportar): ${E(v.faltan.map(f => f.l).join(' · '))}</div>` : '';
+    const rows = [['Cierre usado', _nf(c.cierre_usado, 0) + ' %' + (c.cierre_real ? '' : ' (supuesto)')], ['Ventas al mes', _nf(c.ventas_mes, 1)], ['Ingreso al mes', sym + _nf(c.ingreso_mes, 0)], ['Veces el mensual', _nf(c.veces_mensual, 1)], ['Veces el piloto', _nf(c.veces_piloto, 1)],
+      ['Ventas para cubrir el piloto', _nf(c.ventas_para_cubrir_piloto, 1)], ['Mes de la 1.ª venta', c.mes_primera_venta == null ? '—' : c.mes_primera_venta], ['Ticket mínimo (3×)', sym + _nf(c.ticket_minimo_3x, 0)]];
+    box.innerHTML = fl + av + `<details class="pl-box" style="margin:8px 0"><summary class="pl-box__t" style="cursor:pointer">Cálculos del caso (solo para ti)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:.82rem;margin-top:8px">${rows.map(r => `<span style="color:#6C6862">${r[0]}</span><b style="text-align:right">${r[1]}</b>`).join('')}</div></details>`;
+  }
+  // Antes de guardar/exportar: obligatorios completos y confirmación en los casos débiles o con [corchetes] sin rellenar
+  function _gate(borrador) {
+    const g = _gen; if (!g || g.t.tipo !== 'propuesta2' || borrador || !g.v) return true;
+    if (g.v.faltan.length) { showBanner('Faltan campos obligatorios: ' + g.v.faltan.map(f => f.l).join(', '), 'error'); return false; }
+    const rojos = g.v.avisos.filter(a => a.k === 'debil' || a.k === 'valor');
+    if (rojos.length && !confirm(rojos.map(a => a.txt).join('\n\n') + '\n\n¿Exportar de todos modos?')) return false;
+    const cor = g.v.avisos.find(a => a.k === 'corchetes');
+    if (cor && !confirm(cor.txt + '\n\n¿Exportar de todos modos?')) return false;
+    return true;
+  }
   function toggleLang(k, on) {
     const g = _gen; g.langs = on ? [...new Set([...g.langs, k])] : g.langs.filter(x => x !== k);
     if (!g.langs.length) { g.langs = [k]; }
@@ -43146,25 +43203,27 @@ const PlantillasModule = (() => {
     try {
       const d = await _j('/tpl/preview', _body({ data: { template_id: _gen.t.id, lang: _gen.vista, params: _gen.p } }));
       if (seq !== _prevSeq || !_gen) return;
-      _gen.html = d.html; _gen.nombre = d.nombre; const fr = $('pl-frame'); if (fr) fr.srcdoc = d.html;
+      _gen.html = d.html; _gen.nombre = d.nombre; _gen.v = d.v || null; _paintV(); const fr = $('pl-frame'); if (fr) fr.srcdoc = d.html;
     } catch (e) { showBanner(e.message, 'error'); }
   }
-  async function guardar() {
+  async function guardar(borrador) {
+    if (!_gate(borrador === true)) return;
     if (_gen.copiaId) {
       try {
-        await _j(`/tpl/copies/${_gen.copiaId}`, _body({ method: 'PUT', data: { params: _gen.p } }));
+        await _j(`/tpl/copies/${_gen.copiaId}`, _body({ method: 'PUT', data: { params: _gen.p, borrador: borrador === true } }));
         showBanner('Cambios guardados: el enlace sigue siendo el mismo', 'success');
         _gen = null; _tab = 'copias'; render(_host.id);
       } catch (e) { showBanner(e.message, 'error'); }
       return;
     }
     try {
-      const out = await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p } }));
-      showBanner(`${out.length} copia${out.length === 1 ? '' : 's'} guardada${out.length === 1 ? '' : 's'}`, 'success');
+      const out = await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p, borrador: borrador === true } }));
+      showBanner(borrador === true ? 'Borrador guardado: lo encuentras en Copias generadas para seguir editándolo' : `${out.length} copia${out.length === 1 ? '' : 's'} guardada${out.length === 1 ? '' : 's'}`, 'success');
       _gen = null; _tab = 'copias'; render(_host.id);
     } catch (e) { showBanner(e.message, 'error'); }
   }
   async function guardarNueva() {
+    if (!_gate(false)) return;
     try {
       await _j('/tpl/copies', _body({ data: { template_id: _gen.t.id, langs: _gen.langs, params: _gen.p } }));
       showBanner('Copia nueva guardada; la original no cambió', 'success');
@@ -43172,7 +43231,7 @@ const PlantillasModule = (() => {
     } catch (e) { showBanner(e.message, 'error'); }
   }
   async function exportar(fmt) {
-    if (!_gen.html) return;
+    if (!_gen.html || !_gate(false)) return;
     _abrir(_gen.html, _gen.nombre || _gen.t.nombre, fmt);
   }
   function _abrir(html, nombre, fmt) {
@@ -43356,7 +43415,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

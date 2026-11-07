@@ -642,4 +642,4 @@ ${S.join('\n')}
 <script>${JS}</script></body></html>`;
 }
 
-module.exports = { render };
+module.exports = { render, CSS, JS };
