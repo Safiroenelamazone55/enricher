@@ -1,0 +1,368 @@
+'use strict';
+// «Formulario de inicio» del cliente: enlace público con token por cliente (sin cuenta), borrador en servidor, y el módulo interno
+// «Inicios de cliente» (tabla tipo Excel + ficha). Las contraseñas se cifran en reposo (AES-256-GCM, clave en variables de entorno)
+// y cada vez que alguien las muestra, copia o exporta queda registrado. NUNCA van a logs, correos de aviso ni URLs.
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const SC = require('./inicioSchema');
+
+const BASE = () => (process.env.PUBLIC_APP_URL || 'https://app.novacentrax.com').replace(/\/$/, '');
+const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;                      // 32 bytes aleatorios en base64url = 43 caracteres (256 bits)
+const DIAS_VALIDEZ = 30, DIAS_ACCESOS = 45;
+const ESTADOS = ['sin_enviar', 'enviado', 'en_curso', 'recibido', 'revisado', 'portal'];
+const ESTADO_L = { sin_enviar: 'Sin enviar', enviado: 'Enviado', en_curso: 'En curso', recibido: 'Recibido', revisado: 'Revisado', portal: 'Portal activo' };
+const nuevoToken = () => crypto.randomBytes(32).toString('base64url');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ── cifrado a nivel de campo ──
+// La clave sale SOLO del entorno (INICIO_SECRET, o en su defecto MAILBOX_SECRET / SESSION_SECRET). Sin clave no se guarda ningún secreto.
+let _key = null;
+function key() {
+  if (_key) return _key;
+  const s = process.env.INICIO_SECRET || process.env.MAILBOX_SECRET || process.env.SESSION_SECRET;
+  if (!s) throw new Error('Falta INICIO_SECRET en el entorno: no se pueden guardar contraseñas');
+  _key = crypto.scryptSync(s, 'nova-inicio-v1', 32); return _key;
+}
+function cifrar(plain) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', key(), iv);
+  const d = Buffer.concat([c.update(String(plain), 'utf8'), c.final()]);
+  return ['i1', iv.toString('base64'), c.getAuthTag().toString('base64'), d.toString('base64')].join(':');
+}
+function descifrar(enc) {
+  const [v, iv, tag, d] = String(enc || '').split(':');
+  if (v !== 'i1') throw new Error('Formato de secreto inválido');
+  const x = crypto.createDecipheriv('aes-256-gcm', key(), Buffer.from(iv, 'base64'));
+  x.setAuthTag(Buffer.from(tag, 'base64'));
+  return Buffer.concat([x.update(Buffer.from(d, 'base64')), x.final()]).toString('utf8');
+}
+
+async function init(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS inicio_cliente (
+    id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, cliente_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+    token TEXT UNIQUE NOT NULL, estado TEXT NOT NULL DEFAULT 'sin_enviar', idioma TEXT NOT NULL DEFAULT 'es',
+    prefill JSONB NOT NULL DEFAULT '{}'::jsonb, respuestas JSONB NOT NULL DEFAULT '{}'::jsonb, acuerdos JSONB NOT NULL DEFAULT '{}'::jsonb,
+    nota_interna TEXT NOT NULL DEFAULT '', revocado BOOLEAN NOT NULL DEFAULT FALSE, expira_en TIMESTAMPTZ NOT NULL,
+    enlace_enviado_en TIMESTAMPTZ, creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(), actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    enviado_en TIMESTAMPTZ, revisado_por INTEGER, revisado_en TIMESTAMPTZ, accesos_borrados_en TIMESTAMPTZ,
+    outbound_client_id INTEGER, portal_account_id INTEGER, portal_activado_en TIMESTAMPTZ, ultimo_recordatorio TIMESTAMPTZ)`);
+  await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_user ON inicio_cliente (user_id, creado_en DESC)');
+  await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_cliente ON inicio_cliente (cliente_id)');
+  await pool.query(`CREATE TABLE IF NOT EXISTS inicio_auditoria (
+    id SERIAL PRIMARY KEY, inicio_id INTEGER NOT NULL REFERENCES inicio_cliente(id) ON DELETE CASCADE, user_id INTEGER, quien TEXT NOT NULL DEFAULT '',
+    accion TEXT NOT NULL, campo TEXT NOT NULL DEFAULT '', ts TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await pool.query('CREATE INDEX IF NOT EXISTS inicio_aud_idx ON inicio_auditoria (inicio_id, ts DESC)');
+  // Datos de facturación y comunicación que pasan a la ficha del cliente al marcar «Revisado»
+  for (const c of ['razon_social', 'nif', 'direccion_fiscal', 'email_informes', 'canal_preferido', 'whatsapp', 'idioma_preferido', 'logo_url', 'sales_navigator'])
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS ${c} TEXT NOT NULL DEFAULT ''`);
+}
+
+// Valores en claro de las respuestas, con los secretos como marca de «guardado» (sirve para validar y calcular el progreso sin descifrar)
+function plano(r) {
+  const o = { ...(r || {}) };
+  for (const id of SC.SENSIBLES) if (o[id]) o[id] = '•';
+  return o;
+}
+const acuerdosBool = a => Object.fromEntries(Object.keys(a || {}).map(k => [k, !!a[k]]));
+
+// ── correo del sistema (Amazon SES, igual que el resto de avisos) ──
+async function correoSistema(to, subject, html, text) {
+  const from = process.env.SES_FROM_EMAIL;
+  if (!from || !process.env.AWS_ACCESS_KEY_ID) return { sent: false, error: 'El correo del sistema no está configurado' };
+  try {
+    const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+    const ses = new SESClient({ region: process.env.AWS_REGION || 'us-east-1', credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID || '', secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '' } });
+    await ses.send(new SendEmailCommand({ Source: from, Destination: { ToAddresses: [to] }, Message: { Subject: { Data: subject }, Body: { Html: { Data: html }, Text: { Data: text } } } }));
+    return { sent: true };
+  } catch (e) { console.warn('[inicio] correo no enviado:', e.message); return { sent: false, error: 'No se pudo enviar el correo' }; }
+}
+const marco = (titulo, cuerpo, btn) => `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1f2937"><div style="background:#0b2a5b;color:#fff;border-radius:12px 12px 0 0;padding:16px 22px;font-weight:700;letter-spacing:.02em">NovaCentrax</div>
+<div style="border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:22px"><h2 style="margin:0 0 12px;font-size:18px;color:#0b2a5b">${esc(titulo)}</h2>${cuerpo}${btn ? `<p style="margin:22px 0 4px"><a href="${esc(btn.url)}" style="background:#00b8ab;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">${esc(btn.txt)}</a></p>` : ''}</div></div>`;
+
+function mount(app, { pool, requireAuth }) {
+  init(pool).then(() => { setTimeout(borrarVencidos, 60000); setInterval(borrarVencidos, 3600000); }).catch(e => console.error('[inicio] init:', e.message));
+
+  const uidOf = req => req.workspaceOwnerId;
+  const quienDe = req => String((req.user && (req.user.name || req.user.email)) || 'usuario').slice(0, 120);
+  const audit = (inicioId, req, accion, campo) => { const u = req && req.user; return pool.query('INSERT INTO inicio_auditoria (inicio_id,user_id,quien,accion,campo) VALUES ($1,$2,$3,$4,$5)', [inicioId, u ? u.id : null, u ? quienDe(req) : 'sistema', accion, campo || '']).catch(() => {}); };
+  const urlDe = r => `${BASE()}/inicio/${r.token}`;
+  const vigente = r => !r.revocado && new Date(r.expira_en) > new Date();
+
+  // ══════════════ PÚBLICO (sin sesión): el cliente completa su formulario ══════════════
+  const nada = (req, res) => { res.set('Cache-Control', 'no-store'); res.status(404).json({ error: 'no_disponible' }); };   // misma respuesta para inválido, caducado o revocado
+  const limFallos = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false, message: { error: 'no_disponible' } });
+  const limGeneral = rateLimit({ windowMs: 10 * 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false, message: { error: 'demasiadas_peticiones' } });
+  const pub = [limGeneral, limFallos, (req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' }); next(); }];
+  async function porToken(req) {
+    if (!TOKEN_RE.test(req.params.token || '')) return null;
+    const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE token=$1', [req.params.token]);
+    return r && vigente(r) ? r : null;
+  }
+  const marca = r => ({ idioma: r.idioma });
+  function respuestasParaCliente(r) {
+    const o = { ...(r.prefill || {}), ...(r.respuestas || {}) };
+    for (const id of SC.SENSIBLES) { if (r.respuestas && r.respuestas[id]) { try { o[id] = descifrar(r.respuestas[id]); } catch (_) { o[id] = ''; } } else delete o[id]; }
+    return o;
+  }
+  const yaEnviado = r => ['recibido', 'revisado', 'portal'].includes(r.estado);
+
+  app.get('/api/inicio/public/:token', pub, async (req, res) => {
+    try {
+      const r = await porToken(req); if (!r) return nada(req, res);
+      if (yaEnviado(r)) return res.json({ enviado: true, ...marca(r) });
+      res.json({ enviado: false, ...marca(r), secciones: SC.publico(), respuestas: respuestasParaCliente(r),
+        acuerdos: Object.fromEntries(Object.keys(r.acuerdos || {}).map(k => [k, true])), expira_en: r.expira_en });
+    } catch (e) { console.error('[inicio] get público:', e.message); res.status(500).json({ error: 'error' }); }
+  });
+
+  // Aplica lo que manda el cliente a un registro: solo campos conocidos, limpios; los secretos se cifran
+  function aplicar(r, body) {
+    const resp = { ...(r.respuestas || {}) }, ac = { ...(r.acuerdos || {}) }, b = body || {};
+    const given = b.respuestas && typeof b.respuestas === 'object' ? b.respuestas : {};
+    for (const c of SC.CAMPOS) {
+      if (c.tipo === 'check') continue;
+      if (!(c.id in given)) continue;
+      const v = SC.limpiar(c, given[c.id]);
+      if (c.sensible) { if (v) resp[c.id] = cifrar(v); else delete resp[c.id]; }
+      else if (v) resp[c.id] = v; else delete resp[c.id];
+    }
+    const ga = b.acuerdos && typeof b.acuerdos === 'object' ? b.acuerdos : {};
+    for (const id of SC.ACUERDOS) if (id in ga) { if (ga[id] === true || ga[id] === 'true') ac[id] = ac[id] || new Date().toISOString(); else delete ac[id]; }
+    return { resp, ac, idioma: b.idioma === 'en' ? 'en' : (b.idioma === 'es' ? 'es' : r.idioma) };
+  }
+  app.put('/api/inicio/public/:token', pub, async (req, res) => {
+    try {
+      const r = await porToken(req); if (!r) return nada(req, res);
+      if (yaEnviado(r)) return res.status(409).json({ error: 'enviado' });
+      const { resp, ac, idioma } = aplicar(r, req.body);
+      await pool.query(`UPDATE inicio_cliente SET respuestas=$2, acuerdos=$3, idioma=$4, actualizado_en=NOW(), estado=CASE WHEN estado IN ('sin_enviar','enviado') THEN 'en_curso' ELSE estado END WHERE id=$1`, [r.id, JSON.stringify(resp), JSON.stringify(ac), idioma]);
+      res.json({ ok: true, guardado: new Date().toISOString() });
+    } catch (e) { console.error('[inicio] guardar borrador:', e.message); res.status(500).json({ error: 'error' }); }
+  });
+  app.post('/api/inicio/public/:token/enviar', pub, async (req, res) => {
+    try {
+      const r = await porToken(req); if (!r) return nada(req, res);
+      if (yaEnviado(r)) return res.json({ ok: true, enviado: true });
+      const { resp, ac, idioma } = aplicar(r, req.body);
+      const v = SC.validar(plano(resp), acuerdosBool(ac));
+      if (!v.ok) { await pool.query('UPDATE inicio_cliente SET respuestas=$2, acuerdos=$3, idioma=$4, actualizado_en=NOW() WHERE id=$1', [r.id, JSON.stringify(resp), JSON.stringify(ac), idioma]); return res.status(400).json({ error: 'incompleto', faltan: v.faltan, formato: v.formato }); }
+      await pool.query(`UPDATE inicio_cliente SET respuestas=$2, acuerdos=$3, idioma=$4, estado='recibido', enviado_en=NOW(), actualizado_en=NOW() WHERE id=$1`, [r.id, JSON.stringify(resp), JSON.stringify(ac), idioma]);
+      avisarRecibido(r, resp).catch(e => console.warn('[inicio] aviso:', e.message));
+      res.json({ ok: true, enviado: true });
+    } catch (e) { console.error('[inicio] enviar:', e.message); res.status(500).json({ error: 'error' }); }
+  });
+
+  // Aviso a la dueña: quién lo completó. Sin contraseñas.
+  async function avisarRecibido(r, resp) {
+    const quien = resp.razon || (r.prefill || {}).empresa || 'Un cliente', persona = resp.contacto || '', correo = resp.mailInf || '';
+    try { require('./notify').push(r.user_id, { kind: 'inicio', para: r.user_id, titulo: 'Formulario de inicio recibido', texto: [quien, persona].filter(Boolean).join(' · '), inicio_id: r.id }); } catch (_) {}
+    const { rows: [u] } = await pool.query('SELECT email FROM users WHERE id=$1', [r.user_id]);
+    if (!u || !u.email) return;
+    const cuerpo = `<p style="margin:0 0 12px;color:#374151"><b>${esc(quien)}</b> completó su formulario de inicio.</p><table style="font-size:14px;color:#374151"><tr><td style="padding:2px 14px 2px 0;color:#6b7280">Contacto</td><td>${esc(persona) || '—'}</td></tr><tr><td style="padding:2px 14px 2px 0;color:#6b7280">Correo</td><td>${esc(correo) || '—'}</td></tr><tr><td style="padding:2px 14px 2px 0;color:#6b7280">Recibido</td><td>${esc(new Date().toISOString().slice(0, 16).replace('T', ' '))} UTC</td></tr></table><p style="margin:14px 0 0;color:#6b7280;font-size:13px">Los accesos no se incluyen en este correo: ábrelos desde «Inicios de cliente».</p>`;
+    await correoSistema(u.email, `Formulario de inicio recibido — ${quien}`, marco('Formulario de inicio recibido', cuerpo, { url: BASE() + '/', txt: 'Abrir Inicios de cliente' }), `${quien} completó su formulario de inicio. Ábrelo en ${BASE()}/ (Inicios de cliente). Los accesos no van en este correo.`);
+  }
+
+  // ══════════════ INTERNO ══════════════
+  const own = async (req, id) => { const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE id=$1 AND user_id=$2', [id, uidOf(req)]); return r; };
+  const sinCache = (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
+  app.use('/api/inicios', sinCache);
+
+  function fila(r, extra) {
+    const p = plano(r.respuestas), ac = acuerdosBool(r.acuerdos);
+    return { id: r.id, cliente_id: r.cliente_id, estado: r.estado, estado_l: ESTADO_L[r.estado] || r.estado, idioma: r.idioma,
+      empresa: p.razon || (r.prefill || {}).empresa || '', contacto: p.contacto || (r.prefill || {}).contacto || '',
+      enviado_en: r.enviado_en, canal: p.canal || '', mailInf: p.mailInf || '', salesnav: p.salesnav || '', mailEstado: p.mailEstado || '',
+      atiende: p.atiende || '', progreso: SC.progreso(p, ac), revisado: !!r.revisado_en, revisado_en: r.revisado_en,
+      vigente: vigente(r), revocado: r.revocado, expira_en: r.expira_en, accesos_borrados: !!r.accesos_borrados_en, actualizado_en: r.actualizado_en, ...(extra || {}) };
+  }
+  app.get('/api/inicios/schema', requireAuth, (req, res) => res.json({ secciones: SC.publico(), estados: ESTADOS.map(k => ({ k, l: ESTADO_L[k] })), sensibles: SC.SENSIBLES, acuerdos: SC.ACUERDOS }));
+  app.get('/api/inicios', requireAuth, async (req, res) => {
+    try { const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC LIMIT 1000', [uidOf(req)]); res.json(rows.map(r => fila(r))); }
+    catch (e) { console.error('[inicios] lista:', e.message); res.status(500).json({ error: 'Error al cargar' }); }
+  });
+  // Cliente (si existe) por inicio, para el botón «Crear enlace de inicio» en su ficha
+  app.get('/api/inicios/por-cliente/:cid', requireAuth, async (req, res) => {
+    try { const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE cliente_id=$1 AND user_id=$2 ORDER BY id DESC LIMIT 1', [parseInt(req.params.cid, 10) || 0, uidOf(req)]); res.json(r ? { ...fila(r), url: urlDe(r) } : null); }
+    catch (e) { res.status(500).json({ error: 'Error' }); }
+  });
+
+  // Crear enlace: un enlace por cliente. Si ya hay uno vigente se devuelve; si caducó o se revocó, se emite uno nuevo.
+  app.post('/api/inicios', requireAuth, async (req, res) => {
+    try {
+      const b = req.body || {}, uid = uidOf(req), cid = parseInt(b.cliente_id, 10) || null;
+      let cli = null;
+      if (cid) { const { rows: [c] } = await pool.query('SELECT * FROM clients WHERE id=$1 AND user_id=$2', [cid, uid]); if (!c) return res.status(404).json({ error: 'Cliente no encontrado' }); cli = c; }
+      else if (!String(b.empresa || '').trim()) return res.status(400).json({ error: 'Elige un cliente o escribe el nombre de la empresa' });
+      if (cid) {
+        const { rows: [ex] } = await pool.query('SELECT * FROM inicio_cliente WHERE cliente_id=$1 AND user_id=$2 ORDER BY id DESC LIMIT 1', [cid, uid]);
+        if (ex && vigente(ex)) return res.json({ ...fila(ex), url: urlDe(ex), existente: true });
+        if (ex) { // caducado o revocado: se renueva con un token nuevo
+          const t = nuevoToken();
+          await pool.query(`UPDATE inicio_cliente SET token=$2, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [ex.id, t]);
+          await audit(ex.id, req, 'enlace_renovado', ''); const r2 = await own(req, ex.id); return res.json({ ...fila(r2), url: urlDe(r2), renovado: true });
+        }
+      }
+      const prefill = cli
+        ? { empresa: cli.empresa || cli.nombre || '', contacto: [cli.nombre, cli.cargo].filter(Boolean).join(', '), mailInf: cli.email || '', web: cli.sitio_web || '', pais: cli.pais_empresa || cli.pais || '', razon: cli.razon_social || cli.empresa || '' }
+        : { empresa: String(b.empresa).trim().slice(0, 200), contacto: String(b.contacto || '').trim().slice(0, 200), mailInf: String(b.correo || '').trim().slice(0, 200) };
+      const pre = { ...prefill }; if (!pre.razon) pre.razon = pre.empresa;
+      for (const k of Object.keys(pre)) if (!pre[k]) delete pre[k];
+      const idioma = b.idioma === 'en' ? 'en' : 'es'; if (idioma === 'en') pre.idioma = 'en'; else pre.idioma = 'es';
+      const { rows: [r] } = await pool.query(`INSERT INTO inicio_cliente (user_id, cliente_id, token, idioma, prefill, expira_en) VALUES ($1,$2,$3,$4,$5, NOW()+interval '${DIAS_VALIDEZ} days') RETURNING *`, [uid, cid, nuevoToken(), idioma, JSON.stringify(pre)]);
+      await audit(r.id, req, 'enlace_creado', '');
+      res.json({ ...fila(r), url: urlDe(r) });
+    } catch (e) { console.error('[inicios] crear:', e.message); res.status(500).json({ error: 'No se pudo crear el enlace' }); }
+  });
+
+  app.get('/api/inicios/export.csv', requireAuth, async (req, res) => {
+    try {
+      const accesos = req.query.accesos === '1';
+      if (accesos && req.query.confirmar !== '1') return res.status(400).json({ error: 'Confirma que quieres incluir los accesos' });
+      const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC', [uidOf(req)]);
+      const cols = SC.CAMPOS.filter(c => c.tipo !== 'check' && (accesos || !c.sensible));
+      const cell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+      const head = ['Estado', 'Enviado', 'Revisado', 'Progreso %', ...cols.map(c => c.es), ...SC.ACUERDOS.map(id => id + ' (fecha)')];
+      const out = [head.map(cell).join(',')];
+      for (const r of rows) {
+        const resp = { ...(r.prefill || {}), ...(r.respuestas || {}) };
+        const val = c => { if (!resp[c.id]) return ''; if (!c.sensible) return c.tipo === 'select' ? ((c.opts.find(o => o.v === resp[c.id]) || {}).es || resp[c.id]) : resp[c.id]; try { return descifrar(resp[c.id]); } catch (_) { return ''; } };
+        out.push([ESTADO_L[r.estado], r.enviado_en ? new Date(r.enviado_en).toISOString().slice(0, 16).replace('T', ' ') : '', r.revisado_en ? new Date(r.revisado_en).toISOString().slice(0, 10) : '', SC.progreso(plano(r.respuestas), acuerdosBool(r.acuerdos)), ...cols.map(val), ...SC.ACUERDOS.map(id => (r.acuerdos || {})[id] || '')].map(cell).join(','));
+        if (accesos) await audit(r.id, req, 'exportar_accesos', SC.SENSIBLES.join(','));
+      }
+      res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="inicios-de-cliente${accesos ? '-con-accesos' : ''}.csv"` });
+      res.send('﻿' + out.join('\r\n'));
+    } catch (e) { console.error('[inicios] csv:', e.message); res.status(500).json({ error: 'No se pudo exportar' }); }
+  });
+
+  app.get('/api/inicios/:id', requireAuth, async (req, res) => {
+    try {
+      const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
+      const resp = { ...(r.prefill || {}), ...(r.respuestas || {}) }, set = {};
+      for (const id of SC.SENSIBLES) { set[id] = !!(r.respuestas || {})[id]; delete resp[id]; }
+      const p = plano(r.respuestas), v = SC.validar({ ...(r.prefill || {}), ...p }, acuerdosBool(r.acuerdos));
+      let cliente = null; if (r.cliente_id) { const { rows: [c] } = await pool.query('SELECT id, nombre, empresa FROM clients WHERE id=$1', [r.cliente_id]); cliente = c || null; }
+      const { rows: aud } = await pool.query('SELECT quien, accion, campo, ts FROM inicio_auditoria WHERE inicio_id=$1 ORDER BY ts DESC LIMIT 40', [r.id]);
+      res.json({ ...fila(r), url: urlDe(r), respuestas: resp, secretos: set, acuerdos: r.acuerdos || {}, nota_interna: r.nota_interna, faltan: v.faltan, formato: v.formato,
+        completo: v.ok, cliente, auditoria: aud, enlace_enviado_en: r.enlace_enviado_en, portal_activado_en: r.portal_activado_en, ultimo_recordatorio: r.ultimo_recordatorio });
+    } catch (e) { console.error('[inicios] ficha:', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
+  // Editar cualquier campo desde la ficha (solo los que vienen); los secretos se cifran y se anota la edición
+  app.put('/api/inicios/:id', requireAuth, async (req, res) => {
+    try {
+      const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
+      const b = req.body || {}, { resp, ac } = aplicar(r, { respuestas: b.respuestas, acuerdos: b.acuerdos });
+      const tocados = Object.keys(b.respuestas || {}).filter(id => SC.SENSIBLES.includes(id));
+      await pool.query('UPDATE inicio_cliente SET respuestas=$2, acuerdos=$3, nota_interna=COALESCE($4,nota_interna), actualizado_en=NOW() WHERE id=$1', [r.id, JSON.stringify(resp), JSON.stringify(ac), b.nota_interna == null ? null : String(b.nota_interna).slice(0, 4000)]);
+      for (const id of tocados) await audit(r.id, req, 'editar_secreto', id);
+      res.json({ ok: true });
+    } catch (e) { console.error('[inicios] editar:', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+  });
+
+  // Mostrar / copiar una contraseña: siempre queda anotado quién y cuándo
+  app.post('/api/inicios/:id/secreto', requireAuth, async (req, res) => {
+    try {
+      const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
+      const campo = String((req.body || {}).campo || ''), accion = (req.body || {}).accion === 'copiar' ? 'copiar' : 'mostrar';
+      if (!SC.SENSIBLES.includes(campo)) return res.status(400).json({ error: 'Campo no válido' });
+      const enc = (r.respuestas || {})[campo]; if (!enc) return res.status(404).json({ error: 'Sin valor guardado' });
+      const valor = descifrar(enc); await audit(r.id, req, accion + '_secreto', campo);
+      res.json({ valor });
+    } catch (e) { console.error('[inicios] secreto:', e.message); res.status(500).json({ error: 'No se pudo leer' }); }
+  });
+
+  const simple = (ruta, fn) => app.post('/api/inicios/:id/' + ruta, requireAuth, async (req, res) => {
+    try { const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' }); await fn(req, res, r); }
+    catch (e) { console.error('[inicios] ' + ruta + ':', e.message); if (!res.headersSent) res.status(500).json({ error: 'No se pudo completar la acción' }); }
+  });
+  simple('renovar', async (req, res, r) => {   // amplía 30 días; si estaba revocado se emite un token nuevo
+    const t = r.revocado ? nuevoToken() : r.token;
+    await pool.query(`UPDATE inicio_cliente SET token=$2, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id, t]);
+    await audit(r.id, req, r.revocado ? 'enlace_renovado_nuevo' : 'enlace_renovado', ''); const n = await own(req, r.id); res.json({ ...fila(n), url: urlDe(n) });
+  });
+  simple('revocar', async (req, res, r) => { await pool.query('UPDATE inicio_cliente SET revocado=TRUE WHERE id=$1', [r.id]); await audit(r.id, req, 'enlace_revocado', ''); res.json({ ok: true }); });
+  simple('marcar-enviado', async (req, res, r) => {
+    await pool.query(`UPDATE inicio_cliente SET enlace_enviado_en=NOW(), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
+    await audit(r.id, req, 'enlace_enviado', ''); res.json({ ok: true });
+  });
+  simple('recordatorio', async (req, res, r) => {   // correo al cliente con su enlace (mensaje de recordatorio del formulario)
+    if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });
+    if (yaEnviado(r)) return res.status(409).json({ error: 'El cliente ya envió el formulario' });
+    const to = String((req.body || {}).to || (r.respuestas || {}).mailInf || (r.prefill || {}).mailInf || '').trim();
+    if (!SC.EMAIL_RE.test(to)) return res.status(400).json({ error: 'Falta el correo del cliente (escríbelo en el campo o en la ficha)' });
+    const en = r.idioma === 'en', url = urlDe(r), pct = SC.progreso(plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }), acuerdosBool(r.acuerdos));
+    const asunto = en ? 'Reminder: your NovaCentrax start form' : 'Recordatorio: tu formulario de inicio con NovaCentrax';
+    const cuerpo = en ? `<p style="margin:0 0 12px;color:#374151">A quick reminder: we need a few details to start your pilot. It takes about 10 minutes and you can save and come back anytime${pct ? ` (you are at ${pct}%)` : ''}.</p><p style="margin:0;color:#6b7280;font-size:13px">The link is personal and works until ${esc(new Date(r.expira_en).toISOString().slice(0, 10))}.</p>`
+      : `<p style="margin:0 0 12px;color:#374151">Un recordatorio rápido: necesitamos unos datos para arrancar tu piloto. Son unos 10 minutos y puedes guardar y volver cuando quieras${pct ? ` (llevas un ${pct} %)` : ''}.</p><p style="margin:0;color:#6b7280;font-size:13px">El enlace es personal y funciona hasta el ${esc(new Date(r.expira_en).toISOString().slice(0, 10))}.</p>`;
+    const out = await correoSistema(to, asunto, marco(en ? 'Your start form' : 'Tu formulario de inicio', cuerpo, { url, txt: en ? 'Complete the form' : 'Completar el formulario' }), `${asunto}\n${url}`);
+    if (!out.sent) return res.status(503).json({ error: out.error || 'No se pudo enviar', url });
+    await pool.query(`UPDATE inicio_cliente SET ultimo_recordatorio=NOW(), enlace_enviado_en=COALESCE(enlace_enviado_en,NOW()), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
+    await audit(r.id, req, 'recordatorio_enviado', ''); res.json({ ok: true });
+  });
+
+  // «Revisado»: pasa facturación y comunicación a la ficha de cliente existente (sin duplicarla) o la crea
+  simple('revisar', async (req, res, r) => {
+    if (r.estado !== 'recibido') return res.status(409).json({ error: r.estado === 'revisado' || r.estado === 'portal' ? 'Ya está revisado' : 'El cliente aún no ha enviado el formulario' });
+    const p = plano(r.respuestas), v = SC.validar({ ...(r.prefill || {}), ...p }, acuerdosBool(r.acuerdos));
+    if (!v.ok) return res.status(409).json({ error: 'Faltan campos obligatorios', faltan: v.faltan });
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req);
+    const nombreDe = (R.contacto || '').split(',')[0].trim();
+    let cid = r.cliente_id;
+    if (!cid) {   // buscar una existente por correo o empresa antes de crear
+      const { rows: [ex] } = await pool.query(`SELECT id FROM clients WHERE user_id=$1 AND ((LOWER(email)=LOWER($2) AND $2<>'') OR LOWER(empresa)=LOWER($3) OR LOWER(razon_social)=LOWER($3)) ORDER BY id LIMIT 1`, [uid, R.mailInf || '', R.razon || '']);
+      cid = ex ? ex.id : null;
+    }
+    if (!cid) {
+      const { rows: [c] } = await pool.query(`INSERT INTO clients (user_id, nombre, empresa, email, tipo) VALUES ($1,$2,$3,$4,'cliente') RETURNING id`, [uid, nombreDe || R.razon || 'Cliente', R.razon || '', R.mailInf || '']);
+      cid = c.id;
+    }
+    await pool.query(`UPDATE clients SET razon_social=$2, nif=$3, direccion_fiscal=$4, email_informes=$5, canal_preferido=$6, whatsapp=$7, idioma_preferido=$8, logo_url=$9, sales_navigator=$10,
+      empresa=CASE WHEN empresa='' THEN $11 ELSE empresa END, email=CASE WHEN email='' THEN $5 ELSE email END, sitio_web=CASE WHEN sitio_web='' THEN $12 ELSE sitio_web END,
+      pais=CASE WHEN pais='' THEN $13 ELSE pais END, nombre=CASE WHEN nombre='' THEN $14 ELSE nombre END, updated_at=NOW() WHERE id=$1 AND user_id=$15`,
+      [cid, R.razon || '', R.nif || '', R.dir || '', R.mailInf || '', R.canal || '', R.wpp || '', R.idioma || r.idioma, R.logo || '', R.salesnav || '', R.razon || '', R.web || '', R.pais || '', nombreDe, uid]);
+    await pool.query(`UPDATE inicio_cliente SET estado='revisado', revisado_por=$2, revisado_en=NOW(), cliente_id=$3 WHERE id=$1`, [r.id, req.user.id, cid]);
+    await audit(r.id, req, 'revisado', ''); res.json({ ok: true, cliente_id: cid });
+  });
+
+  // Compuerta del portal: solo con estado «Revisado» y todos los obligatorios completos
+  simple('portal', async (req, res, r) => {
+    const p = plano(r.respuestas), v = SC.validar({ ...(r.prefill || {}), ...p }, acuerdosBool(r.acuerdos));
+    if (r.estado === 'portal') return res.status(409).json({ error: 'El acceso al portal ya está activo' });
+    if (r.estado !== 'revisado' || !v.ok) return res.status(409).json({ error: 'Primero marca el formulario como «Revisado» (con todos los obligatorios completos)' });
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req), email = String(R.mailInf || '').trim().toLowerCase();
+    const portal = require('./portalRoutes');
+    const empresa = R.razon || (r.prefill || {}).empresa || 'Cliente';
+    let { rows: [oc] } = await pool.query('SELECT id FROM outbound_clients WHERE user_id=$1 AND LOWER(nombre)=LOWER($2) ORDER BY id LIMIT 1', [uid, empresa]);
+    if (!oc) ({ rows: [oc] } = await pool.query(`INSERT INTO outbound_clients (user_id, nombre, estado, website) VALUES ($1,$2,'preparacion',$3) RETURNING id`, [uid, empresa, R.web || '']));
+    const pw = portal.genPw();
+    let acc;
+    try {
+      ({ rows: [acc] } = await pool.query(`INSERT INTO client_accounts (user_id, outbound_client_id, email, nombre, password_hash, sections, lang, pw_remind_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()+interval '14 days') RETURNING id`,
+        [uid, oc.id, email, (R.contacto || '').split(',')[0].trim().slice(0, 120), portal.hashPw(pw), JSON.stringify(portal.defaultSections()), r.idioma === 'en' ? 'en' : 'es']));
+    } catch (e) { if (String(e.message).includes('client_accounts_email_uq')) return res.status(409).json({ error: 'Ya existe una cuenta del portal con ese correo' }); throw e; }
+    await pool.query(`UPDATE inicio_cliente SET estado='portal', outbound_client_id=$2, portal_account_id=$3, portal_activado_en=NOW() WHERE id=$1`, [r.id, oc.id, acc.id]);
+    let invite = null; try { invite = await portal.sendClientMail(oc.id, 'invite', r.idioma === 'en' ? 'en' : 'es', { to: email, nombre: (R.contacto || '').split(',')[0].trim(), cliente: empresa, pw, url: 'https://app.novacentrax.com/portal/' + portal.slugOf(empresa) }); } catch (e) { invite = { sent: false, error: e.message }; }
+    await audit(r.id, req, 'portal_activado', '');
+    res.json({ ok: true, email, password: pw, invite });     // la contraseña temporal solo se muestra ahora
+  });
+
+  async function borrarAccesos(id, req, motivo) {
+    const { rows: [r] } = await pool.query('SELECT respuestas FROM inicio_cliente WHERE id=$1', [id]);
+    const resp = { ...((r && r.respuestas) || {}) }; let n = 0;
+    for (const s of SC.SENSIBLES) if (resp[s]) { delete resp[s]; n++; }
+    await pool.query('UPDATE inicio_cliente SET respuestas=$2, accesos_borrados_en=NOW(), actualizado_en=NOW() WHERE id=$1', [id, JSON.stringify(resp)]);
+    await audit(id, req, motivo, SC.SENSIBLES.join(',')); return n;
+  }
+  simple('borrar-accesos', async (req, res, r) => { const n = await borrarAccesos(r.id, req, 'accesos_borrados'); res.json({ ok: true, borrados: n }); });
+
+  // Borrado automático: a los 45 días o al cerrar el piloto (lo que ocurra antes)
+  async function borrarVencidos() {
+    try {
+      const { rows } = await pool.query(`SELECT i.id FROM inicio_cliente i WHERE i.accesos_borrados_en IS NULL AND (i.respuestas ? 'liPass' OR i.respuestas ? 'mailPass')
+        AND (COALESCE(i.enviado_en, i.actualizado_en) < NOW() - interval '${DIAS_ACCESOS} days' OR i.outbound_client_id IN (SELECT id FROM outbound_clients WHERE estado='cerrado'))`);
+      for (const x of rows) await borrarAccesos(x.id, null, 'accesos_borrados_auto');
+      if (rows.length) console.log(`[inicio] accesos borrados automáticamente: ${rows.length}`);
+    } catch (e) { console.warn('[inicio] borrado automático:', e.message); }
+  }
+}
+
+module.exports = { mount, cifrar, descifrar };

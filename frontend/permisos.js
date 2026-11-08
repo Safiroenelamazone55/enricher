@@ -9,7 +9,7 @@ const PermsUI = (() => {
 
   // ── menús: lo que no puedes usar no aparece ──
   const TAB_MOD = { 'mgmt-dashboard': 'dashboard', 'mgmt-mywork': 'mywork', 'mgmt-opportunities': 'oportunidades', 'mgmt-clients': 'clientes', 'mgmt-projects': 'proyectos', 'mgmt-spaces': 'espacios', 'mgmt-tasks': 'tareas', 'mgmt-calendar': 'calendario', 'mgmt-timetracking': 'tiempo', 'mgmt-team': 'equipo', 'mgmt-chat': 'slack', 'mgmt-wa': 'whatsapp', 'mgmt-blocks': 'bloqueos' };
-  const MOD_MOD = { enricher: 'datos', cantera: 'datos', herramientas: 'datos', leadmanagement: 'outreach', finance: 'finanzas', contenido: 'contenido', plantillas: 'plantillas', config: 'config' };
+  const MOD_MOD = { enricher: 'datos', cantera: 'datos', herramientas: 'datos', leadmanagement: 'outreach', finance: 'finanzas', contenido: 'contenido', plantillas: 'plantillas', inicios: 'inicios', config: 'config' };
   function applyNav() {
     const u = window._authUser; if (!u || u.isOwner || !u.permisos) return;
     const no = k => !(u.permisos[k] && u.permisos[k].n > 0);

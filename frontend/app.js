@@ -808,7 +808,7 @@ const MatchSuggest = (() => {
   return { close: _close };
 })();
 
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', contenido: 'Contenido', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', inicios: 'Inicios de cliente', contenido: 'Contenido', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -895,6 +895,8 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15l2.5 2.5L16 13"/></svg>' },
   { id: 'plantillas',     tab: 'plantillas',     name: 'Plantillas',     desc: 'Propuestas comerciales por oferta, en varios idiomas y con tu logo', color: 'teal',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>' },
+  { id: 'inicios',         tab: 'inicios',        name: 'Inicios de cliente', desc: 'Formulario de inicio por cliente: datos, accesos y acuerdos antes del portal', color: 'blue',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
@@ -941,6 +943,7 @@ function _renderHomeInner(grid) {
     finance: { c: '#1F9D55', s: '#E6F6EC', i: sv('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 10l6-6 6 9" stroke-opacity=".0"/><rect x="2.5" y="10" width="3" height="10" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="8.5" y="4" width="3" height="16" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="14.5" y="13" width="3" height="7" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/>') },
     herramientas: { c: '#0E9AA7', s: '#E1F5F6', i: sv('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3.5 17.2a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.1-.5-.5-2.1z" fill="currentColor" fill-opacity=".18"/>') },
     plantillas: { c: '#8E4EC6', s: '#F3E9FA', i: sv('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="currentColor" fill-opacity=".18"/><path d="M14 3v5h5M9 13h6M9 17h4"/>') },
+    inicios: { c: '#0B2A5B', s: '#E1E9F6', i: sv('<rect x="5" y="4" width="14" height="17" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/>') },
     empresa: { c: '#5F6B64', s: '#EEF0EE', i: sv('<rect x="4.5" y="3" width="15" height="18" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 7.5h1.5M13.5 7.5H15M9 11.5h1.5M13.5 11.5H15M10 21v-4h4v4"/>') },
   };
   const card = m => {
@@ -951,7 +954,7 @@ function _renderHomeInner(grid) {
       <span class="home-card__go" aria-hidden="true">${ARROW}</span>
     </div>`;
   };
-  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 2], ['Utilidades', ['herramientas', 'plantillas', 'empresa'], 3]];
+  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 2], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 3]];
   const used = new Set();
   let html = GROUPS.map(([t, ids, cols]) => {
     const ms = ids.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean); ms.forEach(m => used.add(m.id));
@@ -1835,6 +1838,7 @@ const ClientsModule = (() => {
     const saveBtn = $('clients-save-btn');
     const section = $('clients-contacts-section');
     if (!form) return;
+    const _ib = $('clients-inicio-btn'); if (_ib) _ib.style.display = _editId ? '' : 'none';
     form.reset();
     closeContactForm();
     const singleFields = $('cr-single-fields');
@@ -2102,6 +2106,7 @@ const ClientsModule = (() => {
   }
 
   return {
+    currentId: () => _editId,
     load, filter, setFilter, render, sortBy,
     setViewTab, setLayout, filterByEmpresa, openDrawerForEmpresa,
     openDrawer, closeDrawer, save, confirmDelete, openRowMenu,
@@ -50648,6 +50653,7 @@ function initApp() {
     if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
     if (tabName === 'herramientas') HerramientasModule.render('herramientas-body');
     if (tabName === 'plantillas') PlantillasModule.render('plantillas-body');
+    if (tabName === 'inicios' && typeof InicioModule !== 'undefined') InicioModule.render('inicios-body');
     if (tabName.indexOf('contenido') === 0 && typeof ContenidoModule !== 'undefined') ContenidoModule.render(tabName);
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();

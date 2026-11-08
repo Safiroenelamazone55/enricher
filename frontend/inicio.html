@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>NovaCentrax · Formulario de inicio</title>
+<link rel="icon" href="/logo-nova.svg">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy: #0b2a5b; --teal: #00b8ab; --teal-d: #008f85; --bg: #f3f6fa; --card: #fff; --ink: #0f1d33; --mut: #5b6b84; --line: #dbe3ee; --field: #fff; --bad: #c0392b; --badbg: #fdecea; --okbg: #e6f7f5; --shadow: 0 1px 2px rgba(11,42,91,.06), 0 6px 20px rgba(11,42,91,.06); }
+  :root[data-theme="dark"] { --bg: #08111f; --card: #0f1b30; --ink: #e8eef8; --mut: #93a4bd; --line: #223250; --field: #0a1527; --bad: #ff8a7a; --badbg: #3a1714; --okbg: #0b2e2c; --shadow: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #08111f; --card: #0f1b30; --ink: #e8eef8; --mut: #93a4bd; --line: #223250; --field: #0a1527; --bad: #ff8a7a; --badbg: #3a1714; --okbg: #0b2e2c; --shadow: none; } }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.5; }
+  header { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 10; }
+  .hd { max-width: 680px; margin: 0 auto; padding: 12px 16px 0; display: flex; align-items: center; gap: 12px; }
+  .hd img { height: 26px; display: block; }
+  .hd .sp { flex: 1; }
+  .ctl { display: flex; gap: 6px; }
+  .ctl button { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; height: 32px; min-width: 38px; padding: 0 10px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .ctl button.on { background: var(--teal); border-color: var(--teal); }
+  .prog { max-width: 680px; margin: 0 auto; padding: 10px 16px 12px; }
+  .prog__t { display: flex; justify-content: space-between; font-size: 12px; opacity: .9; margin-bottom: 6px; }
+  .bar { height: 6px; background: rgba(255,255,255,.2); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--teal); border-radius: 99px; transition: width .25s; }
+  main { max-width: 680px; margin: 0 auto; padding: 18px 16px 90px; }
+  .hero h1 { font-size: 23px; margin: 6px 0 6px; color: var(--navy); letter-spacing: -.01em; }
+  :root[data-theme="dark"] .hero h1 { color: #fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hero h1 { color: #fff; } }
+  .hero p { margin: 0 0 6px; color: var(--mut); font-size: 14.5px; }
+  .sec { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px 8px; margin-top: 16px; box-shadow: var(--shadow); }
+  .sec h2 { margin: 0 0 4px; font-size: 17px; color: var(--navy); display: flex; gap: 10px; align-items: center; }
+  :root[data-theme="dark"] .sec h2 { color: #fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sec h2 { color: #fff; } }
+  .sec h2 b { width: 26px; height: 26px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 13px; display: grid; place-items: center; flex: none; }
+  .sec .intro { margin: 6px 0 12px; font-size: 13.5px; color: var(--mut); background: var(--okbg); border-radius: 10px; padding: 10px 12px; }
+  .f { margin: 14px 0; }
+  .f label.l { display: block; font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+  .f label.l .rq { color: var(--bad); margin-left: 2px; }
+  .f .help, .f .ej { font-size: 12.5px; color: var(--mut); margin: 3px 0 0; }
+  .f input[type=text], .f input[type=email], .f input[type=url], .f textarea, .f select { width: 100%; background: var(--field); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 16px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .f textarea { min-height: 92px; resize: vertical; }
+  .f input:focus, .f textarea:focus, .f select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,184,171,.2); }
+  .f.err input, .f.err textarea, .f.err select { border-color: var(--bad); }
+  .f .em { display: none; color: var(--bad); font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .f.err .em { display: block; }
+  .ck { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--field); }
+  .ck input { width: 22px; height: 22px; accent-color: var(--teal); flex: none; margin-top: 1px; }
+  .ck span { font-size: 14px; }
+  .f.err .ck { border-color: var(--bad); background: var(--badbg); }
+  .go { margin-top: 22px; }
+  .btn { width: 100%; height: 52px; border: 0; border-radius: 12px; background: var(--teal); color: #fff; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; }
+  .btn:hover { background: var(--teal-d); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .sum { display: none; background: var(--badbg); color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .save { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); background: var(--navy); color: #fff; border-radius: 99px; padding: 7px 16px; font-size: 12.5px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .save.show { opacity: .95; }
+  .save.bad { background: var(--bad); color: #fff; }
+  .center { max-width: 520px; margin: 14vh auto 0; padding: 0 20px; text-align: center; }
+  .center .ic { width: 64px; height: 64px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 32px; display: grid; place-items: center; margin: 0 auto 18px; }
+  .center .ic.no { background: var(--mut); }
+  .center h1 { font-size: 24px; margin: 0 0 10px; color: var(--navy); }
+  :root[data-theme="dark"] .center h1 { color: #fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .center h1 { color: #fff; } }
+  .center p { color: var(--mut); font-size: 16px; margin: 0; }
+  .load { text-align: center; padding: 80px 0; color: var(--mut); }
+</style>
+</head>
+<body>
+<header>
+  <div class="hd"><img src="/logo-white.png" alt="NovaCentrax"><span class="sp"></span>
+    <div class="ctl"><button type="button" id="l-es" aria-label="Español">ES</button><button type="button" id="l-en" aria-label="English">EN</button><button type="button" id="th" aria-label="Tema / Theme">◐</button></div></div>
+  <div class="prog" id="prog" hidden><div class="prog__t"><span id="pg-t"></span><span id="pg-n"></span></div><div class="bar"><i id="pg-b"></i></div></div>
+</header>
+<main id="m"><div class="load">…</div></main>
+<div class="save" id="sv" role="status"></div>
+<script src="/inicio.js?v=1"></script>
+</body>
+</html>

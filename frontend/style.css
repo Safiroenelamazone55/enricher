@@ -20870,3 +20870,58 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .hrm-pv .btn-ghost { background: var(--surface); border: 1px solid var(--border2); color: var(--text); }
 .hrm-pv .btn-ghost:hover { background: var(--surface-secondary); }
 .hrm-pv .hrm-lnk { white-space: nowrap; }
+
+/* ── Inicios de cliente ── */
+.ini-wrap { padding: 18px 22px 60px; max-width: 1280px; margin: 0 auto; }
+.ini-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.ini-h1 { margin: 0; font-size: 1.35rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; color: var(--text); }
+.ini-sub { margin: 4px 0 0; font-size: .86rem; color: var(--text2); }
+.ini-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ini-in { padding: 8px 10px; border: 1px solid var(--border2); background: var(--surface); font: inherit; font-size: .86rem; color: var(--text); box-sizing: border-box; border-radius: 8px; min-width: 0; }
+.ini-in:focus { outline: none; border-color: var(--primary); }
+textarea.ini-in { width: 100%; resize: vertical; }
+.ini-scroll { overflow: auto; border: 1px solid var(--border2); border-radius: 10px; background: var(--surface); }
+.ini-tbl { border-collapse: collapse; width: 100%; font-size: .84rem; white-space: nowrap; }
+.ini-tbl th { position: sticky; top: 0; background: var(--surface); text-align: left; padding: 9px 12px; font-size: .72rem; text-transform: none; letter-spacing: 0; color: var(--text2); border-bottom: 1px solid var(--border2); cursor: pointer; user-select: none; }
+.ini-tbl td { padding: 9px 12px; border-bottom: 1px solid var(--border2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.ini-tbl tbody tr { cursor: pointer; }
+.ini-tbl tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+.ini-chip { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+.ini-bar { width: 70px; height: 6px; background: var(--border2); border-radius: 99px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.ini-bar i { display: block; height: 100%; background: #00b8ab; }
+.ini-empty { padding: 50px 20px; text-align: center; color: var(--text2); border: 1px dashed var(--border2); border-radius: 10px; }
+.ini-gh { margin-bottom: 8px; }
+.ini-back { background: none; border: 0; color: var(--primary); cursor: pointer; font: inherit; font-size: .86rem; padding: 0; }
+.ini-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
+.ini-ct { font-weight: 700; font-size: .92rem; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; color: var(--text); }
+.ini-ct b { width: 22px; height: 22px; border-radius: 50%; background: #00b8ab; color: #fff; font-size: .74rem; display: grid; place-items: center; }
+.ini-bill { border-left: 4px solid #00b8ab; }
+.ini-bg { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 20px; }
+.ini-bg small { display: block; font-size: .7rem; color: var(--text2); }
+.ini-bg b { font-weight: 600; font-size: .9rem; word-break: break-word; }
+.ini-logo { max-height: 54px; max-width: 160px; background: #fff; border: 1px solid var(--border2); border-radius: 6px; padding: 4px; }
+.ini-line { margin-top: 12px; padding: 8px 12px; background: #E6F7F5; color: #0b2a5b; border-radius: 8px; font-size: .84rem; }
+.ini-warn { margin-top: 10px; padding: 9px 12px; background: #FEF3C7; color: #92400E; border-radius: 8px; font-size: .84rem; }
+.ini-f { margin: 10px 0; }
+.ini-f.bad .ini-in { border-color: #c0392b; }
+.ini-l { display: block; font-size: .74rem; font-weight: 600; color: var(--text2); margin: 0 0 4px; }
+.ini-rq { color: #c0392b; }
+.ini-opt { font-weight: 400; opacity: .7; }
+.ini-row { display: flex; gap: 6px; align-items: center; }
+.ini-row .ini-in { flex: 1; }
+.ini-lnk { font-size: .8rem; color: var(--primary); white-space: nowrap; }
+.ini-err { color: #c0392b; font-size: .76rem; margin: 3px 0 0; }
+.ini-ck { display: flex; gap: 10px; align-items: flex-start; font-size: .86rem; cursor: pointer; }
+.ini-ck small { display: block; color: var(--text2); font-size: .72rem; margin-top: 2px; }
+.ini-f--ck.bad .ini-ck { color: #c0392b; }
+.ini-hint { font-size: .78rem; color: var(--text2); margin: 8px 0 0; }
+.ini-mut { color: var(--text2); font-size: .82rem; }
+.ini-aud { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.ini-aud td { padding: 5px 8px; border-bottom: 1px solid var(--border2); }
+.ini-modal { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; }
+.ini-modal__bg { position: absolute; inset: 0; background: rgba(8, 17, 31, .5); }
+.ini-modal__box { position: relative; background: var(--surface); border-radius: 12px; padding: 20px; width: min(520px, 94vw); max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.ini-mh { margin: 0 0 12px; font-size: 1.05rem; color: var(--text); }
+.ini-modal__box .ini-in { width: 100%; }
+.ini-modal__box .ini-l { margin-top: 10px; }
+.ini-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }

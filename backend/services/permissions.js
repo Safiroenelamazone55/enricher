@@ -13,6 +13,7 @@ const MODULOS = [
   { k: 'slack', l: 'Slack', g: 'Comunicación', alc: false }, { k: 'whatsapp', l: 'WhatsApp', g: 'Comunicación', alc: false }, { k: 'bloqueos', l: 'Bloqueos', g: 'Comunicación', alc: true },
   { k: 'outreach', l: 'Outreach', g: 'Outreach', alc: true }, { k: 'datos', l: 'Datos (enriquecimiento)', g: 'Datos', alc: false },
   { k: 'contenido', l: 'Contenido', g: 'Contenido', alc: false }, { k: 'plantillas', l: 'Plantillas', g: 'Plantillas', alc: false },
+  { k: 'inicios', l: 'Inicios de cliente', g: 'Negocio', alc: false },
   { k: 'config', l: 'Configuración y usuarios', g: 'Administración', alc: false },
 ];
 const ROLES = [
@@ -28,7 +29,7 @@ const mk = o => Object.fromEntries(MODULOS.map(m => [m.k, o[m.k] || P(0)]));
 const ALL = mk(Object.fromEntries(MODULOS.map(m => [m.k, P(3)])));
 const DEFAULTS = {
   admin: ALL,
-  manager: mk({ dashboard: P(1), mywork: P(2), oportunidades: P(2), clientes: P(2), proyectos: P(2), espacios: P(2), tareas: P(2), calendario: P(1), tiempo: P(1), equipo: P(1), slack: P(2), whatsapp: P(2), bloqueos: P(2), outreach: P(2), datos: P(2), contenido: P(2), plantillas: P(2) }),
+  manager: mk({ dashboard: P(1), mywork: P(2), oportunidades: P(2), clientes: P(2), proyectos: P(2), espacios: P(2), tareas: P(2), calendario: P(1), tiempo: P(1), equipo: P(1), slack: P(2), whatsapp: P(2), bloqueos: P(2), outreach: P(2), datos: P(2), contenido: P(2), plantillas: P(2), inicios: P(2) }),
   miembro: mk({ dashboard: P(1, 'suyo'), mywork: P(2), clientes: P(1, 'suyo'), proyectos: P(2, 'suyo'), espacios: P(2, 'suyo'), tareas: P(2), calendario: P(1, 'suyo'), tiempo: P(2, 'suyo'), equipo: P(1), slack: P(2), whatsapp: P(1), bloqueos: P(2, 'suyo'), contenido: P(1), plantillas: P(2) }),
   lector: mk({ dashboard: P(1, 'suyo'), mywork: P(1), proyectos: P(1, 'suyo'), espacios: P(1, 'suyo'), tareas: P(1), calendario: P(1, 'suyo'), equipo: P(1), plantillas: P(1) }),
 };
@@ -46,7 +47,7 @@ const RUTAS = [
   [/^\/mgmt\/(spaces|space-views)(\/|$)/, 'espacios'], [/^\/mgmt\/(tasks|recur-subtasks|plan-overrides|meetings)(\/|$)/, 'tareas'],
   [/^\/(timer|mgmt\/time-off)(\/|$)/, 'tiempo'], [/^\/mgmt\/team(\/|$)/, 'equipo'], [/^\/mgmt\/(fin-|payments|pagos-internos|exchange-rates)/, 'finanzas'],
   [/^\/slack(\/|$)/, 'slack'], [/^\/wa\//, 'whatsapp'], [/^\/(lm|outbound-clients|sequences|sequence-steps|campaigns|leads|activities|tel)(\/|$)/, 'outreach'],
-  [/^\/(cantera|user\/verifications|tools)(\/|$)/, 'datos'], [/^\/content\/(?!public)/, 'contenido'], [/^\/tpl(\/|$)/, 'plantillas'],
+  [/^\/(cantera|user\/verifications|tools)(\/|$)/, 'datos'], [/^\/content\/(?!public)/, 'contenido'], [/^\/tpl(\/|$)/, 'plantillas'], [/^\/inicios(\/|$)/, 'inicios'],
 ];
 const BORRAR_ADMIN = new Set(['proyectos', 'clientes', 'espacios', 'outreach', 'finanzas', 'oportunidades', 'datos']);
 const needLevel = (mod, method) => (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') ? 1 : (method === 'DELETE' && BORRAR_ADMIN.has(mod) ? 3 : 2);

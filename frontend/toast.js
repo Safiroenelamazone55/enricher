@@ -37,6 +37,8 @@ const NovaToast = (() => {
     if (n.kind === 'whatsapp') {
       if (typeof selectModule === 'function') selectModule('chat');
       setTimeout(() => { try { if (typeof WaChatModule !== 'undefined' && n.chat) WaChatModule.abrirChat(n.chat, n.titulo); } catch (_) {} }, 400);
+    } else if (n.kind === 'inicio' && n.inicio_id && typeof InicioModule !== 'undefined') {
+      InicioModule.ir(n.inicio_id);
     } else if (n.kind === 'mencion' && n.task_id && typeof openTaskAnywhere === 'function') {
       openTaskAnywhere(n.task_id);
     } else if (typeof RChatPanel !== 'undefined') RChatPanel.open('notifs');

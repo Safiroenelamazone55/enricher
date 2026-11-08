@@ -5,3 +5,24 @@
   Cache-Control: no-cache, must-revalidate
 /index.html
   Cache-Control: no-cache, must-revalidate
+
+# Formulario de inicio: página con datos sensibles -> sin caché, sin indexar, sin referrer (el token va en la URL), sin iframes
+/inicio
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.novacentrax.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+/inicio/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.novacentrax.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+

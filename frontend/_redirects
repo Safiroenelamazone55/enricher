@@ -13,3 +13,6 @@
 
 # Aprobación de contenido por el cliente (enlace público)
 /aprobar/*  /aprobar  200
+
+# Formulario de inicio del cliente (enlace público con token)
+/inicio/*  /inicio  200

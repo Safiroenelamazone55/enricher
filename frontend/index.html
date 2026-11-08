@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261108c"/>
+  <link rel="stylesheet" href="style.css?v=20261108d"/>
   <link rel="stylesheet" href="mobile.css?v=24"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -347,6 +347,9 @@
       </button>
       <button class="snav-mod" data-module="plantillas" onclick="selectModule('plantillas')" data-tip="Plantillas" aria-label="Plantillas">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+      </button>
+      <button class="snav-mod" data-module="inicios" onclick="selectModule('inicios')" data-tip="Inicios de cliente" aria-label="Inicios de cliente">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg>
       </button>
     </div>
     <div class="snav-rail__spacer"></div>
@@ -720,6 +723,14 @@
         <button class="snav-item" data-tab="plantillas" data-tooltip="Plantillas">
           <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
           <span class="snav-item__label">Plantillas</span>
+        </button>
+      </div>
+
+      <div class="snav-group" data-module="inicios" id="snav-body-inicios">
+        <div class="snav-cat">Clientes</div>
+        <button class="snav-item" data-tab="inicios" data-tooltip="Inicios de cliente">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg></span>
+          <span class="snav-item__label">Inicios de cliente</span>
         </button>
       </div>
 
@@ -2193,6 +2204,9 @@
     <div class="pane" id="pane-plantillas">
       <div id="plantillas-body"></div>
     </div><!-- /pane-plantillas -->
+    <div class="pane" id="pane-inicios">
+      <div id="inicios-body"></div>
+    </div><!-- /pane-inicios -->
 
     <!-- Lead Manager vive FUERA de .content-wrap (full-width workspace) — ver abajo -->
 
@@ -2579,6 +2593,10 @@
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></span>
       <span class="ws-mod__lbl">Plantillas</span><span class="ws-mod__chk"></span>
     </button>
+    <button class="snav-mod ws-mod" data-module="inicios" onclick="selectModule('inicios');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg></span>
+      <span class="ws-mod__lbl">Inicios de cliente</span><span class="ws-mod__chk"></span>
+    </button>
   </div>
 
 </div><!-- /appShell -->
@@ -2676,6 +2694,7 @@
     </div>
 
     <div class="drawer__footer">
+      <button type="button" class="btn btn--ghost" id="clients-inicio-btn" style="display:none;margin-right:auto" onclick="InicioModule.crearParaCliente(ClientsModule.currentId())" title="Genera el enlace del formulario de inicio de este cliente">Crear enlace de inicio</button>
       <button type="button" class="btn btn--ghost" onclick="ClientsModule.closeDrawer()">Cancelar</button>
       <button type="submit" class="btn btn--primary" id="clients-save-btn">Crear contacto</button>
     </div>
@@ -3559,15 +3578,16 @@
   })();
 </script>
 
-<script src="app.js?v=2026110809"></script>
+<script src="app.js?v=2026110810"></script>
 <script src="worldclock.js?v=4"></script>
 <script src="agentes.js?v=3"></script>
 <script src="spaces.js?v=20261103p"></script>
-<script src="permisos.js?v=4"></script>
+<script src="permisos.js?v=5"></script>
+<script src="inicios.js?v=1"></script>
 <script src="home.js?v=3"></script>
 <script src="timesheets.js?v=16"></script>
 <script src="notepad.js?v=2"></script>
-<script src="toast.js?v=3"></script>
+<script src="toast.js?v=4"></script>
 <script src="contenido.js?v=7"></script>
 <script src="mobile.js?v=8"></script>
 <script src="varchips.js?v=2026101201"></script>
