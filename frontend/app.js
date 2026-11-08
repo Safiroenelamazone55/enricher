@@ -42668,41 +42668,83 @@ const HerramientasModule = (() => {
       pasos: ['Descarga el archivo y descomprímelo: obtienes la carpeta <b>la-pregunta-del-oso</b>.', 'Copia esa carpeta dentro de <b>C:\\Users\\tu-usuario\\.claude\\skills\\</b> (en Mac/Linux: <b>~/.claude/skills/</b>). Si la carpeta <b>skills</b> no existe, créala.', 'Reinicia Claude Code (o la app de Claude) para que cargue la skill.', 'Escribe <b>/la-pregunta-del-oso</b> con el nicho y la oferta (y el cliente, si ya lo tienes). Tras la llamada, pega tus notas o la transcripción para rellenar la hoja.'] },
   ];
   const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
-  function _card(t) {
+  // Misma estructura que Plantillas: contenedor grande, pestañas, buscador, Galería/Lista y vista previa al abrir una tarjeta.
+  const CAT = { 'Extensión de Chrome': 'ext', 'App de Windows': 'app', 'Skill de Claude': 'skill' };
+  const TABS = [['todas', 'Todas'], ['ext', 'Extensiones'], ['app', 'Aplicaciones'], ['skill', 'Skills de Claude']];
+  let _q = '', _tab = 'todas', _view = (() => { try { return localStorage.getItem('hrm_view') === 'lista' ? 'lista' : 'gal'; } catch (_) { return 'gal'; } })();
+  const _seg = `<div class="pl-seg" role="group" aria-label="Vista"><button type="button" data-v="gal" onclick="HerramientasModule.verComo('gal')" title="Galería"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Galería</button><button type="button" data-v="lista" onclick="HerramientasModule.verComo('lista')" title="Lista"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>Lista</button></div>`;
+  function _meta(t) {
     const i = (_info || []).find(x => x.id === t.id);
-    const meta = i ? `v${_esc(i.version)} · ${i.disponible ? _size(i.size) : 'no disponible'}` : '';
-    const ok = !i || i.disponible;
-    return `<article class="hrm-card" id="hrm-${t.id}">
-      <div class="hrm-card__prev">${PREV[t.prev]}</div>
-      <div class="hrm-card__body">
-        <div class="hrm-card__top"><span class="hrm-chip">${ICO[t.ico]} ${t.tipo}</span><span class="hrm-card__meta" id="hrm-meta-${t.id}">${meta}</span></div>
-        <h3 class="hrm-card__t">${t.nombre}</h3>
-        <p class="hrm-card__d">${t.desc}</p>
-        <div class="hrm-card__acts">
-          <button class="btn btn--primary btn--sm" id="hrm-dl-${t.id}" ${ok ? '' : 'disabled'} onclick="HerramientasModule.descargar('${t.id}')">${ICO.dl} Descargar</button>
-          <button class="btn btn--ghost btn--sm" onclick="HerramientasModule.pasos('${t.id}')">Cómo instalarla</button>
-          ${t.token ? `<button class="hrm-lnk" onclick="HerramientasModule.abrirTT()">Obtener mi token ›</button>` : ''}
-        </div>
-        <ol class="hrm-steps" id="hrm-steps-${t.id}" hidden>${t.pasos.map(p => `<li>${p}</li>`).join('')}</ol>
-      </div></article>`;
+    return i ? `v${_esc(i.version)} · ${i.disponible ? _size(i.size) : 'no disponible'}` : '';
+  }
+  function _ok(t) { const i = (_info || []).find(x => x.id === t.id); return !i || i.disponible; }
+  function _acts(t) {
+    return `<button class="btn btn-primary" id="hrm-dl-${t.id}" ${_ok(t) ? '' : 'disabled'} onclick="HerramientasModule.descargar('${t.id}')">${ICO.dl} Descargar</button>
+      <button class="btn btn-ghost" onclick="HerramientasModule.pasos('${t.id}')">Cómo instalarla</button>
+      ${t.token ? `<button class="hrm-lnk" onclick="HerramientasModule.abrirTT()">Obtener mi token ›</button>` : ''}`;
+  }
+  function _list() {
+    const q = _q.trim().toLowerCase();
+    const l = TOOLS.filter(t => (_tab === 'todas' || CAT[t.tipo] === _tab) && (!q || (t.nombre + ' ' + t.desc + ' ' + t.tipo).toLowerCase().includes(q)));
+    if (!l.length) return '<div class="pl-empty">Sin coincidencias.</div>';
+    if (_view === 'gal') {
+      return l.map(t => `<div class="pl-gc" id="hrm-${t.id}"><div class="pl-thumb pl-thumb--t is-ready" onclick="HerramientasModule.vista('${t.id}')" title="Ver vista previa">${PREV[t.prev]}</div>
+        <div class="pl-gc__b"><div class="pl-card__top"><span class="hrm-chip">${ICO[t.ico]} ${t.tipo}</span><span class="hrm-card__meta" id="hrm-meta-${t.id}">${_meta(t)}</span></div>
+          <h3 class="pl-gc__t">${t.nombre}</h3><p class="pl-gc__m">${t.desc}</p>
+          <ol class="hrm-steps" id="hrm-steps-${t.id}" hidden>${t.pasos.map(x => `<li>${x}</li>`).join('')}</ol>
+          <div class="pl-gc__a">${_acts(t)}</div></div></div>`).join('');
+    }
+    return l.map(t => `<div class="pl-tr" id="hrm-${t.id}"><div class="pl-td pl-td--n"><b>${t.nombre}</b><span>${t.desc.replace(/<[^>]+>/g, '')}</span></div>
+      <div class="pl-td"><span class="hrm-chip">${ICO[t.ico]} ${t.tipo}</span></div>
+      <div class="pl-td pl-td--m" id="hrm-meta-${t.id}">${_meta(t)}</div>
+      <div class="pl-td pl-td--a"><button class="btn btn-ghost" onclick="HerramientasModule.vista('${t.id}')">Vista previa</button>${_acts(t)}</div></div>`).join('');
+  }
+  function _rows() {
+    return _view === 'gal'
+      ? `<div id="hrm-rows" class="pl-gal">${_list()}</div>`
+      : `<div class="pl-table hrm-tbl"><div class="pl-th"><span>Nombre</span><span>Tipo</span><span>Versión</span><span></span></div><div id="hrm-rows">${_list()}</div></div>`;
   }
   function _html() {
-    return `<div class="hrm">
-      <div class="hrm-hd"><h1 class="hrm-h1">Herramientas</h1><p class="hrm-sub">Extensiones y aplicaciones que se conectan con Nova. Descárgalas, instálalas y listo.</p></div>
-      <div class="hrm-grid">${TOOLS.map(_card).join('')}</div>
-      <p class="hrm-foot">Las extensiones funcionan en Chrome, Edge y Brave. Se instalan por tu cuenta y las extensiones y apps solo envían a Nova lo que ves descrito arriba.</p>
-    </div>`;
+    const tabs = TABS.map(([k, l]) => `<button class="pl-tab${_tab === k ? ' on' : ''}" onclick="HerramientasModule.tab('${k}')">${l}</button>`).join('');
+    return `<div class="pl-wrap"><div class="pl-hd"><h1 class="pl-h1">Herramientas</h1></div>
+      <div class="pl-tabs">${tabs}</div>
+      <div class="pl-tb"><label class="pl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" id="hrm-q" placeholder="Buscar herramienta…" value="${_esc(_q)}" oninput="HerramientasModule.buscar(this.value)"></label><span class="pl-tb__sp"></span>${_seg.replace(`data-v="${_view}"`, `data-v="${_view}" class="on"`)}</div>
+      ${_rows()}
+      <p class="hrm-foot">Las extensiones funcionan en Chrome, Edge y Brave. Se instalan por tu cuenta y las extensiones y apps solo envían a Nova lo que ves descrito arriba.</p></div>`;
   }
+  let _host = null;
+  function _paint() { if (_host && _host.isConnected) _host.innerHTML = _html(); }
   async function render(id) {
     const el = document.getElementById(id); if (!el) return;
-    el.innerHTML = _html();
+    _host = el; _paint();
     try {
       const r = await apiFetch(`${API}/tools`); if (!r.ok) throw new Error('x');
       _info = await r.json();
-      el.innerHTML = _html();
+      _paint();
     } catch (_) { /* sin datos de versión: las tarjetas igual se ven y se puede intentar descargar */ }
   }
-  function pasos(id) { const o = document.getElementById('hrm-steps-' + id); if (o) o.hidden = !o.hidden; }
+  function tab(k) { _tab = k; _paint(); }
+  function buscar(v) { _q = v || ''; const el = document.getElementById('hrm-rows'); if (el) el.innerHTML = _list(); }
+  function verComo(v) { _view = v === 'lista' ? 'lista' : 'gal'; try { localStorage.setItem('hrm_view', _view); } catch (_) { /* sin almacenamiento */ } _paint(); }
+  function pasos(id) {
+    const o = document.getElementById('hrm-steps-' + id);
+    if (o) o.hidden = !o.hidden; else vista(id);   // en la Lista no hay espacio en la fila: los pasos se ven en la vista previa
+  }
+  // Vista previa grande: la maqueta de la herramienta a mayor tamaño, qué hace y cómo se instala
+  function vista(id) {
+    const t = TOOLS.find(x => x.id === id); if (!t) return; cerrar();
+    const o = document.createElement('div'); o.className = 'hrm-pv'; o.id = 'hrm-pv';
+    o.onclick = e => { if (e.target === o) cerrar(); };
+    o.innerHTML = `<div class="hrm-pv__box" role="dialog" aria-label="Vista previa de ${_esc(t.nombre)}">
+      <div class="hrm-pv__img"><div class="hrm-pv__scale">${PREV[t.prev]}</div></div>
+      <div class="hrm-pv__info"><div class="pl-card__top"><span class="hrm-chip">${ICO[t.ico]} ${t.tipo}</span><span class="hrm-card__meta">${_meta(t)}</span></div>
+        <h3 class="pl-gc__t">${t.nombre}</h3><p class="hrm-card__d">${t.desc}</p>
+        <div class="hrm-pv__h">Cómo instalarla</div><ol class="hrm-steps">${t.pasos.map(x => `<li>${x}</li>`).join('')}</ol>
+        <div class="pl-gc__a"><button class="btn btn-primary" ${_ok(t) ? '' : 'disabled'} onclick="HerramientasModule.descargar('${t.id}')">${ICO.dl} Descargar</button>${t.token ? `<button class="hrm-lnk" onclick="HerramientasModule.abrirTT()">Obtener mi token ›</button>` : ''}<span class="pl-tb__sp"></span><button class="btn btn-ghost" onclick="HerramientasModule.cerrar()">Cerrar</button></div></div></div>`;
+    document.body.appendChild(o); document.addEventListener('keydown', _esc_k);
+  }
+  function _esc_k(e) { if (e.key === 'Escape') cerrar(); }
+  function cerrar() { const o = document.getElementById('hrm-pv'); if (o) o.remove(); document.removeEventListener('keydown', _esc_k); }
   function descargar(id) {
     const i = (_info || []).find(x => x.id === id);
     if (i && !i.disponible) { showBanner('Este archivo todavía no está disponible', 'error'); return; }
@@ -42712,7 +42754,7 @@ const HerramientasModule = (() => {
   }
   // Antes llevaba a Time Tracking → Fuentes de actividad; esa tarjeta se quitó: el token se genera aquí mismo, en Configuración → Herramientas.
   function abrirTT() { if (typeof TimerModule !== 'undefined' && TimerModule.connectExtension) TimerModule.connectExtension(); }
-  return { render, descargar, pasos, abrirTT };
+  return { render, descargar, pasos, abrirTT, tab, buscar, verComo, vista, cerrar };
 })();
 window.HerramientasModule = HerramientasModule;
 
