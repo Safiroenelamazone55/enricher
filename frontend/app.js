@@ -42810,6 +42810,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     return t.tipo === 'pago' ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
       : t.tipo === 'overview' ? 'Documento A4'
+      : t.tipo === 'propuesta2' ? `10 diapositivas · piloto ${E((d.moneda || 'US$') + ((d.dev || {}).precio_piloto || 500))}, luego ${E((d.moneda || 'US$') + ((d.dev || {}).precio_mensual || 750))}/mes`
       : t.tipo === 'acuerdo' ? `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · con firma`
       : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
   }
