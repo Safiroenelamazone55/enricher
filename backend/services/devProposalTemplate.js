@@ -54,11 +54,11 @@ function build(valor, margen, cierre, objetivo, mensual, piloto, ciclo, real) {
 
 // ── reglas de validación ──
 const REQ = [['cliente_nombre', 'Nombre del cliente', p => p.contacto], ['cliente_empresa', 'Empresa del cliente', p => p.empresa], ['cliente_cargo', 'Cargo del cliente', p => p.clienteCargo],
-  ['cliente_email', 'Correo del cliente', p => p.correo], ['fecha_propuesta', 'Fecha de la propuesta', (p, d) => d.fecha_propuesta], ['validez_dias', 'Validez (días)', (p, d) => d.validez_dias],
+  ['fecha_propuesta', 'Fecha de la propuesta', (p, d) => d.fecha_propuesta], ['validez_dias', 'Validez (días)', (p, d) => d.validez_dias],
   ['oferta_cliente', 'Qué vende el cliente', (p, d) => d.oferta_cliente], ['cliente_ideal', 'A quién quiere venderle', (p, d) => d.cliente_ideal],
   ['reuniones_mes_hoy', 'Reuniones nuevas al mes hoy', (p, d) => (d.reuniones_mes_hoy == null ? '' : 'x')], ['valor_cliente', 'Valor de un cliente nuevo (primer año)', (p, d) => (d.valor_cliente ? 'x' : '')],
   ['cierre_pct', 'De cada 10 reuniones, cuántas cierran', (p, d) => (d.cierre_sin_dato || d.cierre_pct != null ? 'x' : '')], ['ciclo_dias', 'Días hasta firmar', (p, d) => (d.ciclo_dias ? 'x' : '')],
-  ['dolor_cliente', 'Su frase de la llamada', (p, d) => d.dolor_cliente], ['moneda', 'Moneda', p => p.moneda]];
+  ['moneda', 'Moneda', p => p.moneda]];
 function validate(p) {
   const d = (p && p.dev) || cleanDev({}), faltan = [], avisos = [];
   for (const [k, l, get] of REQ) if (!String(get(p || {}, d) || '').trim()) faltan.push({ k, l });
