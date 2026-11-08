@@ -12,6 +12,7 @@ const DIAS_VALIDEZ = 30, DIAS_ACCESOS = 45;
 const ESTADOS = ['sin_enviar', 'enviado', 'en_curso', 'recibido', 'revisado', 'portal'];
 const ESTADO_L = { sin_enviar: 'Sin enviar', enviado: 'Enviado', en_curso: 'En curso', recibido: 'Recibido', revisado: 'Revisado', portal: 'Portal activo' };
 const nuevoToken = () => crypto.randomBytes(32).toString('base64url');
+const huella = t => crypto.createHash('sha256').update(String(t)).digest('hex');   // en la base de datos NO queda el token en claro
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ── cifrado a nivel de campo ──
@@ -45,6 +46,7 @@ async function init(pool) {
     enlace_enviado_en TIMESTAMPTZ, creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(), actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     enviado_en TIMESTAMPTZ, revisado_por INTEGER, revisado_en TIMESTAMPTZ, accesos_borrados_en TIMESTAMPTZ,
     outbound_client_id INTEGER, portal_account_id INTEGER, portal_activado_en TIMESTAMPTZ, ultimo_recordatorio TIMESTAMPTZ)`);
+  await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS token_enc TEXT');
   await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_user ON inicio_cliente (user_id, creado_en DESC)');
   await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_cliente ON inicio_cliente (cliente_id)');
   await pool.query(`CREATE TABLE IF NOT EXISTS inicio_auditoria (
@@ -78,38 +80,47 @@ async function correoSistema(to, subject, html, text) {
 const marco = (titulo, cuerpo, btn) => `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1f2937"><div style="background:#0b2a5b;color:#fff;border-radius:12px 12px 0 0;padding:16px 22px;font-weight:700;letter-spacing:.02em">NovaCentrax</div>
 <div style="border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:22px"><h2 style="margin:0 0 12px;font-size:18px;color:#0b2a5b">${esc(titulo)}</h2>${cuerpo}${btn ? `<p style="margin:22px 0 4px"><a href="${esc(btn.url)}" style="background:#00b8ab;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">${esc(btn.txt)}</a></p>` : ''}</div></div>`;
 
-function mount(app, { pool, requireAuth }) {
+function mount(app, { pool, requireAuth, permsSvc }) {
   init(pool).then(() => { setTimeout(borrarVencidos, 60000); setInterval(borrarVencidos, 3600000); }).catch(e => console.error('[inicio] init:', e.message));
 
   const uidOf = req => req.workspaceOwnerId;
   const quienDe = req => String((req.user && (req.user.name || req.user.email)) || 'usuario').slice(0, 120);
   const audit = (inicioId, req, accion, campo) => { const u = req && req.user; return pool.query('INSERT INTO inicio_auditoria (inicio_id,user_id,quien,accion,campo) VALUES ($1,$2,$3,$4,$5)', [inicioId, u ? u.id : null, u ? quienDe(req) : 'sistema', accion, campo || '']).catch(() => {}); };
-  const urlDe = r => `${BASE()}/inicio/${r.token}`;
+  const urlDe = r => { try { return `${BASE()}/inicio/${descifrar(r.token_enc)}`; } catch (_) { return ''; } };
+  // Datos sensibles (ver/copiar/exportar/borrar accesos, activar portal): solo administración (nivel 3), no managers
+  async function soloAdmin(req, res) {
+    try { const c = await permsSvc.ctx(req); if (c.perms.inicios && c.perms.inicios.n >= 3) return true; } catch (_) {}
+    res.status(403).json({ error: 'Solo administración puede ver o gestionar accesos' }); return false;
+  }
   const vigente = r => !r.revocado && new Date(r.expira_en) > new Date();
 
   // ══════════════ PÚBLICO (sin sesión): el cliente completa su formulario ══════════════
   const nada = (req, res) => { res.set('Cache-Control', 'no-store'); res.status(404).json({ error: 'no_disponible' }); };   // misma respuesta para inválido, caducado o revocado
-  const limFallos = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false, message: { error: 'no_disponible' } });
-  const limGeneral = rateLimit({ windowMs: 10 * 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false, message: { error: 'demasiadas_peticiones' } });
-  const pub = [limGeneral, limFallos, (req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' }); next(); }];
+  // Tras Cloudflare, req.ip sería la IP del borde (compartida por miles de personas): se usa la IP real que Cloudflare entrega
+  const ipReal = req => String(req.headers['cf-connecting-ip'] || req.ip || '').slice(0, 64);
+  const limFallos = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, skipSuccessfulRequests: true, keyGenerator: ipReal, standardHeaders: true, legacyHeaders: false, message: { error: 'no_disponible' } });
+  const limGeneral = rateLimit({ windowMs: 10 * 60 * 1000, max: 240, keyGenerator: ipReal, standardHeaders: true, legacyHeaders: false, message: { error: 'demasiadas_peticiones' } });
+  const tamano = (req, res, next) => (parseInt(req.headers['content-length'], 10) > 65536 ? res.status(413).json({ error: 'demasiado_grande' }) : next());
+  const pub = [tamano, limGeneral, limFallos, (req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' }); next(); }];
   async function porToken(req) {
-    if (!TOKEN_RE.test(req.params.token || '')) return null;
-    const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE token=$1', [req.params.token]);
+    const tk = req.body && typeof req.body.token === 'string' ? req.body.token : '';
+    if (!TOKEN_RE.test(tk)) return null;
+    const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE token=$1', [huella(tk)]);
     return r && vigente(r) ? r : null;
   }
   const marca = r => ({ idioma: r.idioma });
   function respuestasParaCliente(r) {
     const o = { ...(r.prefill || {}), ...(r.respuestas || {}) };
-    for (const id of SC.SENSIBLES) { if (r.respuestas && r.respuestas[id]) { try { o[id] = descifrar(r.respuestas[id]); } catch (_) { o[id] = ''; } } else delete o[id]; }
+    for (const id of SC.SENSIBLES) delete o[id];   // nunca se devuelven al navegador, ni siquiera al dueño del enlace
     return o;
   }
   const yaEnviado = r => ['recibido', 'revisado', 'portal'].includes(r.estado);
 
-  app.get('/api/inicio/public/:token', pub, async (req, res) => {
+  app.post('/api/inicio/public/abrir', pub, async (req, res) => {
     try {
       const r = await porToken(req); if (!r) return nada(req, res);
       if (yaEnviado(r)) return res.json({ enviado: true, ...marca(r) });
-      res.json({ enviado: false, ...marca(r), secciones: SC.publico(), respuestas: respuestasParaCliente(r),
+      res.json({ enviado: false, ...marca(r), secciones: SC.publico(), respuestas: respuestasParaCliente(r), secretos: Object.fromEntries(SC.SENSIBLES.map(id => [id, !!(r.respuestas || {})[id]])),
         acuerdos: Object.fromEntries(Object.keys(r.acuerdos || {}).map(k => [k, true])), expira_en: r.expira_en });
     } catch (e) { console.error('[inicio] get público:', e.message); res.status(500).json({ error: 'error' }); }
   });
@@ -129,7 +140,7 @@ function mount(app, { pool, requireAuth }) {
     for (const id of SC.ACUERDOS) if (id in ga) { if (ga[id] === true || ga[id] === 'true') ac[id] = ac[id] || new Date().toISOString(); else delete ac[id]; }
     return { resp, ac, idioma: b.idioma === 'en' ? 'en' : (b.idioma === 'es' ? 'es' : r.idioma) };
   }
-  app.put('/api/inicio/public/:token', pub, async (req, res) => {
+  app.put('/api/inicio/public/guardar', pub, async (req, res) => {
     try {
       const r = await porToken(req); if (!r) return nada(req, res);
       if (yaEnviado(r)) return res.status(409).json({ error: 'enviado' });
@@ -138,7 +149,7 @@ function mount(app, { pool, requireAuth }) {
       res.json({ ok: true, guardado: new Date().toISOString() });
     } catch (e) { console.error('[inicio] guardar borrador:', e.message); res.status(500).json({ error: 'error' }); }
   });
-  app.post('/api/inicio/public/:token/enviar', pub, async (req, res) => {
+  app.post('/api/inicio/public/enviar', pub, async (req, res) => {
     try {
       const r = await porToken(req); if (!r) return nada(req, res);
       if (yaEnviado(r)) return res.json({ ok: true, enviado: true });
@@ -197,7 +208,7 @@ function mount(app, { pool, requireAuth }) {
         if (ex && vigente(ex)) return res.json({ ...fila(ex), url: urlDe(ex), existente: true });
         if (ex) { // caducado o revocado: se renueva con un token nuevo
           const t = nuevoToken();
-          await pool.query(`UPDATE inicio_cliente SET token=$2, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [ex.id, t]);
+          await pool.query(`UPDATE inicio_cliente SET token=$2, token_enc=$3, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [ex.id, huella(t), cifrar(t)]);
           await audit(ex.id, req, 'enlace_renovado', ''); const r2 = await own(req, ex.id); return res.json({ ...fila(r2), url: urlDe(r2), renovado: true });
         }
       }
@@ -207,7 +218,8 @@ function mount(app, { pool, requireAuth }) {
       const pre = { ...prefill }; if (!pre.razon) pre.razon = pre.empresa;
       for (const k of Object.keys(pre)) if (!pre[k]) delete pre[k];
       const idioma = b.idioma === 'en' ? 'en' : 'es'; if (idioma === 'en') pre.idioma = 'en'; else pre.idioma = 'es';
-      const { rows: [r] } = await pool.query(`INSERT INTO inicio_cliente (user_id, cliente_id, token, idioma, prefill, expira_en) VALUES ($1,$2,$3,$4,$5, NOW()+interval '${DIAS_VALIDEZ} days') RETURNING *`, [uid, cid, nuevoToken(), idioma, JSON.stringify(pre)]);
+      const t0 = nuevoToken();
+      const { rows: [r] } = await pool.query(`INSERT INTO inicio_cliente (user_id, cliente_id, token, token_enc, idioma, prefill, expira_en) VALUES ($1,$2,$3,$4,$5,$6, NOW()+interval '${DIAS_VALIDEZ} days') RETURNING *`, [uid, cid, huella(t0), cifrar(t0), idioma, JSON.stringify(pre)]);
       await audit(r.id, req, 'enlace_creado', '');
       res.json({ ...fila(r), url: urlDe(r) });
     } catch (e) { console.error('[inicios] crear:', e.message); res.status(500).json({ error: 'No se pudo crear el enlace' }); }
@@ -216,6 +228,7 @@ function mount(app, { pool, requireAuth }) {
   app.get('/api/inicios/export.csv', requireAuth, async (req, res) => {
     try {
       const accesos = req.query.accesos === '1';
+      if (accesos && !(await soloAdmin(req, res))) return;
       if (accesos && req.query.confirmar !== '1') return res.status(400).json({ error: 'Confirma que quieres incluir los accesos' });
       const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC', [uidOf(req)]);
       const cols = SC.CAMPOS.filter(c => c.tipo !== 'check' && (accesos || !c.sensible));
@@ -250,7 +263,9 @@ function mount(app, { pool, requireAuth }) {
   app.put('/api/inicios/:id', requireAuth, async (req, res) => {
     try {
       const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
-      const b = req.body || {}, { resp, ac } = aplicar(r, { respuestas: b.respuestas, acuerdos: b.acuerdos });
+      const b = req.body || {};
+      if (Object.keys(b.respuestas || {}).some(id => SC.SENSIBLES.includes(id)) && !(await soloAdmin(req, res))) return;
+      const { resp, ac } = aplicar(r, { respuestas: b.respuestas, acuerdos: b.acuerdos });
       const tocados = Object.keys(b.respuestas || {}).filter(id => SC.SENSIBLES.includes(id));
       await pool.query('UPDATE inicio_cliente SET respuestas=$2, acuerdos=$3, nota_interna=COALESCE($4,nota_interna), actualizado_en=NOW() WHERE id=$1', [r.id, JSON.stringify(resp), JSON.stringify(ac), b.nota_interna == null ? null : String(b.nota_interna).slice(0, 4000)]);
       for (const id of tocados) await audit(r.id, req, 'editar_secreto', id);
@@ -262,6 +277,7 @@ function mount(app, { pool, requireAuth }) {
   app.post('/api/inicios/:id/secreto', requireAuth, async (req, res) => {
     try {
       const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
+      if (!(await soloAdmin(req, res))) return;
       const campo = String((req.body || {}).campo || ''), accion = (req.body || {}).accion === 'copiar' ? 'copiar' : 'mostrar';
       if (!SC.SENSIBLES.includes(campo)) return res.status(400).json({ error: 'Campo no válido' });
       const enc = (r.respuestas || {})[campo]; if (!enc) return res.status(404).json({ error: 'Sin valor guardado' });
@@ -275,8 +291,8 @@ function mount(app, { pool, requireAuth }) {
     catch (e) { console.error('[inicios] ' + ruta + ':', e.message); if (!res.headersSent) res.status(500).json({ error: 'No se pudo completar la acción' }); }
   });
   simple('renovar', async (req, res, r) => {   // amplía 30 días; si estaba revocado se emite un token nuevo
-    const t = r.revocado ? nuevoToken() : r.token;
-    await pool.query(`UPDATE inicio_cliente SET token=$2, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id, t]);
+    if (r.revocado || !r.token_enc) { const t = nuevoToken(); await pool.query('UPDATE inicio_cliente SET token=$2, token_enc=$3 WHERE id=$1', [r.id, huella(t), cifrar(t)]); }
+    await pool.query(`UPDATE inicio_cliente SET revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id]);
     await audit(r.id, req, r.revocado ? 'enlace_renovado_nuevo' : 'enlace_renovado', ''); const n = await own(req, r.id); res.json({ ...fila(n), url: urlDe(n) });
   });
   simple('revocar', async (req, res, r) => { await pool.query('UPDATE inicio_cliente SET revocado=TRUE WHERE id=$1', [r.id]); await audit(r.id, req, 'enlace_revocado', ''); res.json({ ok: true }); });
@@ -325,6 +341,7 @@ function mount(app, { pool, requireAuth }) {
 
   // Compuerta del portal: solo con estado «Revisado» y todos los obligatorios completos
   simple('portal', async (req, res, r) => {
+    if (!(await soloAdmin(req, res))) return;
     const p = plano(r.respuestas), v = SC.validar({ ...(r.prefill || {}), ...p }, acuerdosBool(r.acuerdos));
     if (r.estado === 'portal') return res.status(409).json({ error: 'El acceso al portal ya está activo' });
     if (r.estado !== 'revisado' || !v.ok) return res.status(409).json({ error: 'Primero marca el formulario como «Revisado» (con todos los obligatorios completos)' });
@@ -352,7 +369,7 @@ function mount(app, { pool, requireAuth }) {
     await pool.query('UPDATE inicio_cliente SET respuestas=$2, accesos_borrados_en=NOW(), actualizado_en=NOW() WHERE id=$1', [id, JSON.stringify(resp)]);
     await audit(id, req, motivo, SC.SENSIBLES.join(',')); return n;
   }
-  simple('borrar-accesos', async (req, res, r) => { const n = await borrarAccesos(r.id, req, 'accesos_borrados'); res.json({ ok: true, borrados: n }); });
+  simple('borrar-accesos', async (req, res, r) => { if (!(await soloAdmin(req, res))) return; const n = await borrarAccesos(r.id, req, 'accesos_borrados'); res.json({ ok: true, borrados: n }); });
 
   // Borrado automático: a los 45 días o al cerrar el piloto (lo que ocurra antes)
   async function borrarVencidos() {

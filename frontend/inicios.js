@@ -1,7 +1,8 @@
 // Módulo «Inicios de cliente»: lista tipo Excel + ficha de cada cliente con lo que completó en su formulario de inicio.
 // Base de datos previa al acceso al portal. Las contraseñas llegan cifradas: se muestran/copian bajo demanda y cada vez queda anotado.
 const InicioModule = (() => {
-  const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const seguro = u => (/^https?:\/\/[^\s<>"']+$/i.test(String(u || '')) ? String(u) : '');   // el cliente escribe estos enlaces: solo http(s), nunca javascript:
   const $ = id => document.getElementById(id);
   let _host = null, _schema = null, _rows = [], _q = '', _fe = '', _sort = { k: 'actualizado_en', d: -1 }, _f = null, _shown = {}, _loading = false;
   const ESTADOS = { sin_enviar: ['Sin enviar', '#64748B', '#EEF1F5'], enviado: ['Enviado', '#2563EB', '#E3ECFD'], en_curso: ['En curso', '#B45309', '#FEF3C7'], recibido: ['Recibido', '#0F766E', '#D9F3EF'], revisado: ['Revisado', '#15803D', '#DDF4E4'], portal: ['Portal activo', '#0B2A5B', '#DCE6F7'] };
@@ -138,13 +139,13 @@ const InicioModule = (() => {
     if (c.tipo === 'long') ctl = `<textarea class="ini-in" rows="3" onchange="InicioModule.guardarCampo('${c.id}',this.value)">${E(v || '')}</textarea>`;
     else if (c.tipo === 'select') ctl = `<select class="ini-in" onchange="InicioModule.guardarCampo('${c.id}',this.value)"><option value=""></option>${c.opts.map(o => `<option value="${E(o.v)}"${o.v === v ? ' selected' : ''}>${E(o.es)}</option>`).join('')}</select>`;
     else ctl = `<input class="ini-in" type="text" value="${E(v || '')}" onchange="InicioModule.guardarCampo('${c.id}',this.value)">`;
-    const extra = c.tipo === 'url' && v ? `<a class="ini-lnk" href="${E(v)}" target="_blank" rel="noopener noreferrer">Abrir</a>` : '';
+    const extra = c.tipo === 'url' && seguro(v) ? `<a class="ini-lnk" href="${E(seguro(v))}" target="_blank" rel="noopener noreferrer">Abrir</a>` : '';
     return `<div class="ini-f${bad ? ' bad' : ''}"><label class="ini-l">${lbl}</label><div class="ini-row">${ctl}${extra}<button class="btn btn-ghost btn-sm" onclick="InicioModule.copiarCampo('${c.id}')">Copiar</button></div>${f.formato[c.id] ? '<p class="ini-err">Formato no válido</p>' : ''}</div>`;
   }
   function pintarFicha() {
     const f = _f, R = f.respuestas, puedeRev = f.estado === 'recibido' && f.completo, puedePortal = f.estado === 'revisado' && f.completo;
     const vig = f.vigente ? 'Vigente hasta ' + fdate(f.expira_en) : (f.revocado ? 'Revocado' : 'Caducado el ' + fdate(f.expira_en));
-    const logo = R.logo ? `<a href="${E(R.logo)}" target="_blank" rel="noopener noreferrer"><img class="ini-logo" src="${E(R.logo)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('(sin vista previa)'))"></a>` : '<span class="ini-mut">Sin logo</span>';
+    const logo = seguro(R.logo) ? `<a href="${E(seguro(R.logo))}" target="_blank" rel="noopener noreferrer"><img class="ini-logo" src="${E(seguro(R.logo))}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('(sin vista previa)'))"></a>` : '<span class="ini-mut">Sin logo</span>';
     const fact = `<div class="ini-card ini-bill"><div class="ini-ct">Facturación</div><div class="ini-bg">
       ${[['Razón social', R.razon], ['NIF / CIF / VAT', R.nif], ['Dirección fiscal', R.dir], ['Correo de informes y facturación', R.mailInf]].map(([l, v]) => `<div><small>${l}</small><b>${E(v || '—')}</b></div>`).join('')}
       <div><small>Logo</small>${logo}</div></div>
@@ -175,9 +176,9 @@ const InicioModule = (() => {
   function copiarCampo(id) { const v = _f.respuestas[id]; if (v) copiar(v); else msg('Sin valor para copiar', 'error'); }
   async function mostrar(id) {
     if (_shown[id]) { delete _shown[id]; return pintarFicha(); }
-    try { const r = await _post(`/inicios/${_f.id}/secreto`, { campo: id, accion: 'mostrar' }); _shown[id] = r.valor; await recargar(); } catch (e) { msg(e.message, 'error'); }
+    try { const r = await _post(`/inicios/${_f.id}/secreto`, { campo: id, accion: 'mostrar' }); _shown[id] = r.valor; await recargar(); setTimeout(() => { if (_shown[id]) { delete _shown[id]; if (_f) pintarFicha(); } }, 30000); } catch (e) { msg(e.message, 'error'); }
   }
-  async function copiarSecreto(id) { try { const r = await _post(`/inicios/${_f.id}/secreto`, { campo: id, accion: 'copiar' }); await copiar(r.valor, 'Contraseña copiada (queda anotado)'); await recargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function copiarSecreto(id) { try { const r = await _post(`/inicios/${_f.id}/secreto`, { campo: id, accion: 'copiar' }); await copiar(r.valor, 'Contraseña copiada (queda anotado; el portapapeles se limpia en 30 s)'); setTimeout(() => { try { navigator.clipboard.writeText(' '); } catch (_) {} }, 30000); await recargar(); } catch (e) { msg(e.message, 'error'); } }
   function cambiarSecreto(id) {
     modal(`<h3 class="ini-mh">${E((campoDe(id) || {}).es || id)}</h3><input class="ini-in" id="ini-sv" autocomplete="off" spellcheck="false" placeholder="Nueva contraseña"><div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" onclick="InicioModule._guardarSecreto('${id}')">Guardar</button></div>`);
     setTimeout(() => { const i = $('ini-sv'); if (i) i.focus(); }, 30);

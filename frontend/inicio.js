@@ -8,17 +8,17 @@
   const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/, URL_RE = /^https?:\/\/[^\s<>"']+$/i;
   const TX = {
     es: { title: 'Formulario de inicio', intro: 'Unos datos para arrancar tu piloto. Son unos 10 minutos: se guarda solo y puedes cerrar la página y volver a este mismo enlace cuando quieras.',
-      prog: 'Campos obligatorios', req: 'Obligatorio', opt: 'Opcional', choose: 'Elige una opción…', send: 'Enviar', sending: 'Enviando…', saved: 'Guardado', saving: 'Guardando…', saveErr: 'No se pudo guardar. Reintentando…',
+      prog: 'Campos obligatorios', req: 'Obligatorio', opt: 'Opcional', choose: 'Elige una opción…', send: 'Enviar', sending: 'Enviando…', saved: 'Guardado', saving: 'Guardando…', saveErr: 'No se pudo guardar. Reintentando…', secSaved: 'Guardada de forma segura. Escribe solo si quieres cambiarla.',
       eReq: 'Este campo es obligatorio.', eReqCk: 'Marca esta casilla para continuar.', eEmail: 'Escribe un correo válido (nombre@empresa.com).', eUrl: 'El enlace debe empezar por http:// o https://',
       sum: 'Faltan campos obligatorios. Revisa los marcados en rojo.', sumSrv: 'No se pudo enviar: revisa los campos marcados en rojo.',
       doneT: 'Recibido', doneP: 'Te escribo en las próximas 48 horas para la reunión de arranque de 30 minutos.', noT: 'Enlace no disponible', noP: 'Este enlace no está disponible. Si crees que es un error, pídeme uno nuevo.', netErr: 'Sin conexión con el servidor. Reintenta en un momento.' },
     en: { title: 'Start form', intro: 'A few details to start your pilot. It takes about 10 minutes: it saves automatically and you can close the page and come back to this same link anytime.',
-      prog: 'Required fields', req: 'Required', opt: 'Optional', choose: 'Choose an option…', send: 'Submit', sending: 'Sending…', saved: 'Saved', saving: 'Saving…', saveErr: 'Could not save. Retrying…',
+      prog: 'Required fields', req: 'Required', opt: 'Optional', choose: 'Choose an option…', send: 'Submit', sending: 'Sending…', saved: 'Saved', saving: 'Saving…', saveErr: 'Could not save. Retrying…', secSaved: 'Saved securely. Type only if you want to change it.',
       eReq: 'This field is required.', eReqCk: 'Tick this box to continue.', eEmail: 'Enter a valid email (name@company.com).', eUrl: 'The link must start with http:// or https://',
       sum: 'Some required fields are missing. Check the ones marked in red.', sumSrv: 'Could not submit: check the fields marked in red.',
       doneT: 'Received', doneP: 'I will write to you within 48 hours to set up the 30-minute kick-off meeting.', noT: 'Link unavailable', noP: 'This link is not available. If you think this is a mistake, ask me for a new one.', netErr: 'No connection to the server. Please try again in a moment.' },
   };
-  const S = { lang: 'es', secs: [], vals: {}, acs: {}, shown: new Set(), timer: null, busy: false, last: '' };
+  const S = { lang: 'es', secs: [], vals: {}, acs: {}, sec: {}, chg: new Set(), shown: new Set(), timer: null, busy: false, last: '' };
   const t = k => TX[S.lang][k];
   const campos = () => S.secs.flatMap(s => s.campos);
   const lb = c => c[S.lang] || c.es;
@@ -40,8 +40,9 @@
   }
 
   // ── validación ──
+  const lleno = c => (c.tipo === 'check' ? !!S.acs[c.id] : (String(S.vals[c.id] == null ? '' : S.vals[c.id]).trim() || (c.sensible && S.sec[c.id] && !S.chg.has(c.id) ? 'guardada' : '')));
   function errDe(c) {
-    const v = c.tipo === 'check' ? !!S.acs[c.id] : String(S.vals[c.id] == null ? '' : S.vals[c.id]).trim();
+    const v = lleno(c);
     if (c.req && !v) return c.tipo === 'check' ? t('eReqCk') : t('eReq');
     if (c.tipo === 'email' && v && !EMAIL_RE.test(v)) return t('eEmail');
     if (c.tipo === 'url' && v && !URL_RE.test(v)) return t('eUrl');
@@ -54,7 +55,7 @@
   }
   function progreso() {
     const req = campos().filter(c => c.req); let n = 0;
-    for (const c of req) { const v = c.tipo === 'check' ? !!S.acs[c.id] : String(S.vals[c.id] == null ? '' : S.vals[c.id]).trim(); if (v) n++; }
+    for (const c of req) { if (lleno(c)) n++; }
     const pct = req.length ? Math.round(n * 100 / req.length) : 0;
     $('pg-b').style.width = pct + '%'; $('pg-n').textContent = `${n}/${req.length} · ${pct} %`; $('pg-t').textContent = t('prog');
   }
@@ -73,7 +74,7 @@
     else {
       const type = c.tipo === 'email' ? 'email' : c.tipo === 'url' ? 'url' : 'text';   // las contraseñas son texto visible a propósito
       const im = c.tipo === 'email' ? 'email' : c.tipo === 'url' ? 'url' : 'text';
-      ctl = `<input id="${id}" type="${type}" inputmode="${im}" maxlength="${c.tipo === 'url' ? 500 : 300}" value="${E(v)}" placeholder="${E(c.ph || '')}" ${c.tipo === 'secret' ? 'name="x' + Math.random().toString(36).slice(2) + '"' : ''} ${off}>`;
+      ctl = `<input id="${id}" type="${type}" inputmode="${im}" maxlength="${c.tipo === 'url' ? 500 : 300}" value="${E(v)}" placeholder="${E(c.sensible && S.sec[c.id] && !S.chg.has(c.id) ? t('secSaved') : (c.ph || ''))}" ${c.tipo === 'secret' ? 'name="x' + Math.random().toString(36).slice(2) + '"' : ''} ${off}>`;
     }
     return `<div class="f" data-id="${c.id}">${l}${ctl}${ayuda}${ej}<div class="em"></div></div>`;
   }
@@ -93,21 +94,21 @@
   function ent(e) {
     const f = e.target.closest && e.target.closest('.f'); if (!f) return;
     const c = campos().find(x => x.id === f.dataset.id); if (!c) return;
-    if (c.tipo === 'check') S.acs[c.id] = e.target.checked; else S.vals[c.id] = e.target.value;
+    if (c.tipo === 'check') S.acs[c.id] = e.target.checked; else { S.vals[c.id] = e.target.value; if (c.sensible) S.chg.add(c.id); }
     if (e.type === 'change' || S.shown.has(c.id)) { S.shown.add(c.id); marca(c); }
     progreso(); programar();
   }
 
   // ── guardado automático del borrador en el servidor ──
   const estado = (m, bad) => { const el = $('sv'); el.textContent = m; el.classList.toggle('bad', !!bad); el.classList.add('show'); clearTimeout(estado.t); estado.t = setTimeout(() => el.classList.remove('show'), bad ? 4000 : 1600); };
-  const cuerpo = () => ({ respuestas: Object.fromEntries(campos().filter(c => c.tipo !== 'check').map(c => [c.id, S.vals[c.id] == null ? '' : S.vals[c.id]])), acuerdos: Object.fromEntries(campos().filter(c => c.tipo === 'check').map(c => [c.id, !!S.acs[c.id]])), idioma: S.lang });
+  const cuerpo = () => ({ token, respuestas: Object.fromEntries(campos().filter(c => c.tipo !== 'check' && (!c.sensible || S.chg.has(c.id))).map(c => [c.id, S.vals[c.id] == null ? '' : S.vals[c.id]])), acuerdos: Object.fromEntries(campos().filter(c => c.tipo === 'check').map(c => [c.id, !!S.acs[c.id]])), idioma: S.lang });
   function programar() { clearTimeout(S.timer); S.timer = setTimeout(guardar, 1500); }
   async function guardar(unload) {
     clearTimeout(S.timer);
     const body = JSON.stringify(cuerpo()); if (body === S.last || S.busy) return;
     try {
       if (!unload) estado(t('saving'));
-      const r = await fetch(`${API}/inicio/public/${token}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive: !!unload, credentials: 'omit', cache: 'no-store' });
+      const r = await fetch(`${API}/inicio/public/guardar`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive: !!unload, credentials: 'omit', cache: 'no-store' });
       if (r.status === 404) { noDisponible(); return; }
       if (r.status === 409) { pantalla('✓', t('doneT'), t('doneP')); return; }
       if (!r.ok) throw new Error('http');
@@ -128,7 +129,7 @@
     sum.style.display = 'none'; S.busy = true; clearTimeout(S.timer);
     const b = $('go'); b.disabled = true; b.textContent = t('sending');
     try {
-      const r = await fetch(`${API}/inicio/public/${token}/enviar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo()), credentials: 'omit', cache: 'no-store' });
+      const r = await fetch(`${API}/inicio/public/enviar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo()), credentials: 'omit', cache: 'no-store' });
       if (r.status === 404) { noDisponible(); return; }
       if (r.ok) { pantalla('✓', t('doneT'), t('doneP')); window.scrollTo(0, 0); return; }
       const d = await r.json().catch(() => ({}));
@@ -144,12 +145,12 @@
   (async function init() {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return noDisponible();
     try {
-      const r = await fetch(`${API}/inicio/public/${token}`, { credentials: 'omit', cache: 'no-store' });
+      const r = await fetch(`${API}/inicio/public/abrir`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), credentials: 'omit', cache: 'no-store' });
       if (!r.ok) return noDisponible();
       const d = await r.json();
       S.lang = d.idioma === 'en' ? 'en' : 'es';
       if (d.enviado) { $('l-es').classList.toggle('on', S.lang === 'es'); $('l-en').classList.toggle('on', S.lang === 'en'); return pantalla('✓', t('doneT'), t('doneP')); }
-      S.secs = d.secciones || []; S.vals = d.respuestas || {}; S.acs = d.acuerdos || {};
+      S.secs = d.secciones || []; S.vals = d.respuestas || {}; S.acs = d.acuerdos || {}; S.sec = d.secretos || {};
       S.last = JSON.stringify(cuerpo()); paint();
     } catch (_) { noDisponible(); }
   })();
