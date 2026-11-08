@@ -57,12 +57,13 @@ const REQ = [['cliente_nombre', 'Nombre del cliente', p => p.contacto], ['client
   ['fecha_propuesta', 'Fecha de la propuesta', (p, d) => d.fecha_propuesta], ['validez_dias', 'Validez (días)', (p, d) => d.validez_dias],
   ['oferta_cliente', 'Qué vende el cliente', (p, d) => d.oferta_cliente], ['cliente_ideal', 'A quién quiere venderle', (p, d) => d.cliente_ideal],
   ['valor_cliente', 'Valor de un cliente nuevo (primer año)', (p, d) => (d.valor_cliente ? 'x' : '')],
-  ['cierre_pct', 'De cada 10 reuniones, cuántas cierran', (p, d) => (d.cierre_sin_dato || d.cierre_pct != null ? 'x' : '')], ['ciclo_dias', 'Días hasta firmar', (p, d) => (d.ciclo_dias ? 'x' : '')],
+  ['cierre_pct', 'De cada 10 reuniones, cuántas cierran', (p, d) => (d.cierre_sin_dato || d.cierre_pct != null ? 'x' : '')],
   ['moneda', 'Moneda', p => p.moneda]];
 function validate(p) {
   const d = (p && p.dev) || cleanDev({}), faltan = [], avisos = [];
   for (const [k, l, get] of REQ) if (!String(get(p || {}, d) || '').trim()) faltan.push({ k, l });
   const c = calc(p), valor = d.valor_cliente || 0;
+  if (!d.ciclo_dias) avisos.push({ nivel: 'amarillo', k: 'sin_ciclo', txt: 'Sin dato previo: no pusiste los días que tarda en firmar. Las diapositivas 2 y 4 dirán «sin dato previo» y no se calcula el mes de la primera venta.' });
   if (d.reuniones_mes_hoy == null) avisos.push({ nivel: 'amarillo', k: 'sin_reuniones', txt: 'Sin dato previo: no pusiste cuántas reuniones nuevas al mes tiene hoy. La diapositiva 2 dirá «sin dato previo». Los cálculos no cambian: usan la meta de 3 reuniones.' });
   const debil = !!valor && c.veces_mensual < 3;
   if (debil) avisos.push({ nivel: 'rojo', k: 'debil', txt: 'Caso débil: no ofrezcas el mensual. Con estos números el ingreso mensual no llega a 3 veces su precio; la propuesta queda solo con el piloto.' });
@@ -154,7 +155,7 @@ function render(brand, p, lang) {
 <div class="card rv" style="--d:1"><div class="n">01</div><h3>Qué vendes</h3><p>${esc(d.oferta_cliente) || '—'}</p></div>
 <div class="card rv" style="--d:2"><div class="n">02</div><h3>A quién quieres venderle</h3><p>${esc(d.cliente_ideal) || '—'}</p></div>
 <div class="card rv" style="--d:3"><div class="n">03</div><h3>Dónde estás hoy</h3><p>${d.reuniones_mes_hoy == null ? 'Reuniones nuevas al mes: sin dato previo' : 'Consigues ' + fmt(d.reuniones_mes_hoy, 0) + ' reuniones nuevas al mes'}${d.cierre_sin_dato || d.cierre_pct == null ? '' : '; de cada 10 cierran ' + de10}.</p></div>
-<div class="card rv" style="--d:4"><div class="n">04</div><h3>Lo que vale cerrar</h3><p>Un cliente nuevo te deja ${d.valor_cliente ? m$(d.valor_cliente) : '—'} el primer año y tardas ${d.ciclo_dias ? d.ciclo_dias + ' días' : '—'} en firmar${d.decision_quien || d.decision_plazo ? '. Decide ' + esc([d.decision_quien, d.decision_plazo ? 'en ' + d.decision_plazo : ''].filter(Boolean).join(' ')) : ''}.</p></div></div>
+<div class="card rv" style="--d:4"><div class="n">04</div><h3>Lo que vale cerrar</h3><p>Un cliente nuevo te deja ${d.valor_cliente ? m$(d.valor_cliente) : '—'} el primer año y ${d.ciclo_dias ? 'tardas ' + d.ciclo_dias + ' días en firmar' : 'el tiempo hasta firmar: sin dato previo'}${d.decision_quien || d.decision_plazo ? '. Decide ' + esc([d.decision_quien, d.decision_plazo ? 'en ' + d.decision_plazo : ''].filter(Boolean).join(' ')) : ''}.</p></div></div>
 ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">«${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}»</div>` : ''}</div></section>`);
 
   // 3 · cuánto vale para ti
@@ -175,7 +176,7 @@ ${debil ? '' : `<div class="r big rv" style="--d:5"><span>Eso equivale a lo que 
 <h2 class="rv" style="--d:1">Cuánto tardas en <em>recuperarlo.</em></h2>
 <p class="fm rv" style="--d:2">Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.</p>
 <div class="calc">
-<div class="r rv" style="--d:2">Primera venta esperada<b>${c.mes_primera_venta == null ? '—' : 'Mes ' + c.mes_primera_venta}</b></div>
+<div class="r rv" style="--d:2">Primera venta esperada<b>${c.mes_primera_venta == null ? 'sin dato previo' : 'Mes ' + c.mes_primera_venta}</b></div>
 <div class="r rv" style="--d:3">Ventas para cubrir el piloto<b>${fmt(c.ventas_para_cubrir_piloto)}</b></div>
 <div class="r rv" style="--d:3">El piloto se paga ${fmt(c.veces_piloto)} veces<b>${m$(piloto)}</b></div>
 ${debil ? `<div class="r rv" style="--d:4">Tiempo medio hasta firmar<b>${d.ciclo_dias ? d.ciclo_dias + ' días' : '—'}</b></div>` : `<div class="r rv" style="--d:4">El mensual se paga ${fmt(c.veces_mensual)} veces<b>${m$(mensual)}</b></div>`}</div>
