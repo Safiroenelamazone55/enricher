@@ -20671,7 +20671,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-wrap .pl-card { padding: 14px 16px 14px; }
 
 /* ── Plantillas: contenedor a todo el ancho (como Operaciones), selector Galería/Lista y miniaturas del documento ── */
-.content-wrap:has(> #pane-plantillas.active) { max-width: none; padding-left: 28px; padding-right: 28px; }
+.content-wrap:has(> #pane-herramientas.active), .content-wrap:has(> #pane-plantillas.active) { max-width: none; padding-left: 28px; padding-right: 28px; }
 .pl-seg { display: inline-flex; border: 1px solid var(--border2); border-radius: 4px; overflow: hidden; background: var(--surface); }
 .pl-seg button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text2); cursor: pointer; }
 .pl-seg button + button { border-left: 1px solid var(--border2); }
