@@ -11,6 +11,7 @@ const TOOLS = {
   'nova-activity-web':     { file: 'elevn-activity-extension-0.1.3.zip', nombre: 'Elevn-Activity-Extension-0.1.3.zip', version: '0.1.3' },
   'nova-activity-desktop': { file: 'ElevnActivitySetup-1.0.2.exe',       nombre: 'ElevnActivitySetup-1.0.2.exe',       version: '1.0.2' },
   'ficha-cliente':         { file: 'ficha-cliente-1.0.0.zip',            nombre: 'ficha-cliente-1.0.0.zip',            version: '1.0.0' },
+  'la-pregunta-del-oso':   { file: 'la-pregunta-del-oso-1.0.0.zip',      nombre: 'la-pregunta-del-oso-1.0.0.zip',      version: '1.0.0' },
 };
 
 function info(id) {

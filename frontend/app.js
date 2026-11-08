@@ -42638,6 +42638,12 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Servicio a priorizar · su vocabulario</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Semáforo de encaje con la oferta</div>
         <div class="hrm-sc__btn">/ficha-cliente</div></div></div>`,
+    oso: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Claude Code · /la-pregunta-del-oso</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">La llamada de diagnóstico · entera</div>
+        <div class="hrm-sc__l">Frase para abrir · 12 preguntas en orden</div>
+        <div class="hrm-sc__l">La cuenta de lo que pierde el cliente</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>La pregunta del oso · cierre agendado</div>
+        <div class="hrm-sc__btn">/la-pregunta-del-oso</div></div></div>`,
     tray: `<div class="hrm-tray"><div class="hrm-menu">
         <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
         <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Elevn</div>
@@ -42657,6 +42663,9 @@ const HerramientasModule = (() => {
     { id: 'ficha-cliente', nombre: 'Skill · Ficha de cliente', tipo: 'Skill de Claude', ico: 'skill', prev: 'skill',
       desc: 'Analiza a un prospecto antes de una reunión o al abrir una conversación y entrega una ficha de una página: quién es, qué vende y a qué precio, qué priorizar y si encaja con la oferta.',
       pasos: ['Descarga el archivo y descomprímelo: obtienes la carpeta <b>ficha-cliente</b>.', 'Copia esa carpeta dentro de <b>C:\\Users\\tu-usuario\\.claude\\skills\\</b> (en Mac/Linux: <b>~/.claude/skills/</b>). Si la carpeta <b>skills</b> no existe, créala.', 'Reinicia Claude Code (o la app de Claude) para que cargue la skill.', 'Escribe <b>/ficha-cliente</b> y pasa el nombre, la empresa o el enlace de LinkedIn del prospecto.'] },
+    { id: 'la-pregunta-del-oso', nombre: 'Skill · La pregunta del oso', tipo: 'Skill de Claude', ico: 'skill', prev: 'oso',
+      desc: 'Prepara la llamada de diagnóstico entera: la frase para abrir, 12 preguntas en orden con qué escuchar, la cuenta de lo que pierde el cliente, la pregunta del oso y el cierre agendado. Después de la llamada rellena la hoja con lo que dijo.',
+      pasos: ['Descarga el archivo y descomprímelo: obtienes la carpeta <b>la-pregunta-del-oso</b>.', 'Copia esa carpeta dentro de <b>C:\\Users\\tu-usuario\\.claude\\skills\\</b> (en Mac/Linux: <b>~/.claude/skills/</b>). Si la carpeta <b>skills</b> no existe, créala.', 'Reinicia Claude Code (o la app de Claude) para que cargue la skill.', 'Escribe <b>/la-pregunta-del-oso</b> con el nicho y la oferta (y el cliente, si ya lo tienes). Tras la llamada, pega tus notas o la transcripción para rellenar la hoja.'] },
   ];
   const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
   function _card(t) {
