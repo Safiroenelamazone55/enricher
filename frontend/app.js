@@ -42762,6 +42762,7 @@ window.HerramientasModule = HerramientasModule;
 const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
+  const DVL = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };   // idiomas de la propuesta post-llamada
   const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago', propuesta2: 'Presentación interactiva' };
   const _isDeck = t => t === 'presentacion' || t === 'propuesta2';
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
@@ -43074,7 +43075,7 @@ const PlantillasModule = (() => {
     }
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="pl-h1">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
-        ${g.t.tipo === 'propuesta2' ? '' : g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
+        ${g.t.tipo === 'propuesta2' ? `<label class="pl-l">Idioma de la propuesta</label><div class="pl-chks">${Object.entries(DVL).map(([k, v]) => g.copiaId ? (g.langs[0] === k ? `<span class="pl-chk on">${v}</span>` : '') : `<label class="pl-chk${g.langs[0] === k ? ' on' : ''}"><input type="radio" name="pl-dvl" ${g.langs[0] === k ? 'checked' : ''} onchange="PlantillasModule.setLang('${k}')">${v}</label>`).join('')}</div><p class="hrm-card__meta">Cambia el idioma de todo el documento que verá el cliente. Los datos que escribes arriba (qué vende, su frase…) se muestran tal cual: escríbelos en el mismo idioma.</p>` : g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
         <div class="pl-acts">${g.t.tipo === 'propuesta2' ? `<button class="btn btn-primary" id="pl-bsave" onclick="PlantillasModule.guardar()">${g.copiaId ? 'Guardar cambios' : 'Guardar copia'}</button><button class="btn btn-ghost" onclick="PlantillasModule.guardar(true)" title="Guarda los datos aunque falte algo, para seguir después">Guardar borrador</button>` : ''}${g.t.tipo === 'propuesta2' ? '' : g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
           <button class="btn btn-ghost" id="pl-bpdf" onclick="PlantillasModule.exportar('pdf')">${g.t.tipo === 'propuesta2' ? 'Exportar PDF' : 'PDF / Imprimir'}</button></div>
@@ -43260,6 +43261,7 @@ const PlantillasModule = (() => {
     _drawGen(); _preview();
   }
   function vista(k) { _gen.vista = k; _drawGen(); _preview(); }
+  function setLang(k) { if (!DVL[k]) return; _gen.langs = [k]; _gen.vista = k; _drawGen(); _preview(); }
   async function _preview() {
     if (!_gen) return; const seq = ++_prevSeq;
     try {
@@ -43305,7 +43307,7 @@ const PlantillasModule = (() => {
 
   // ── Copias ──
   function _viewCopias() {
-    const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+    const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || DVL[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
       <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Abre el acuerdo con los datos de este cliente">Crear acuerdo</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
         <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
     return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
@@ -43477,7 +43479,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, setLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

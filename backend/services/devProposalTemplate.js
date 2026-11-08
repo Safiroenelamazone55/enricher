@@ -1,7 +1,10 @@
 'use strict';
-// «Propuesta comercial development v2»: plantilla con CAMPOS que se rellenan por cliente. Máximo 10 diapositivas, en español sencillo,
+// «Propuesta comercial development v2»: plantilla con CAMPOS que se rellenan por cliente. Máximo 10 diapositivas, en lenguaje sencillo,
 // con los cálculos del caso de negocio y las reglas de validación. Mismo diseño que la presentación interactiva (se reutiliza su CSS/JS).
+// Idiomas del documento del cliente: es · en · pt · it (los avisos de validación para quien la prepara quedan en español).
 const base = require('./presentationTemplate');
+
+const LANGS = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : d);
@@ -10,13 +13,14 @@ const imgOk = v => typeof v === 'string' && /^data:image\/(png|jpe?g|svg\+xml|we
 const pn = n => String(n).padStart(2, '0');
 const Sx = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 
-// ── números: formato español (3.000 · 0,6) ──
-function fmt(n, dec) {
+// ── números: español/portugués/italiano (3.000 · 0,6) e inglés (3,000 · 0.6) ──
+function fmt(n, dec, lang) {
   if (n == null || !isFinite(n)) return '—';
   const d = dec == null ? (Math.abs(n - Math.round(n)) < 1e-9 ? 0 : (Math.abs(n) < 10 ? 1 : 0)) : dec;
   const neg = n < 0; let s = Math.abs(n).toFixed(d); let [i, f] = s.split('.');
-  i = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return (neg ? '-' : '') + i + (f ? ',' + f : '');
+  const en = lang === 'en';
+  i = i.replace(/\B(?=(\d{3})+(?!\d))/g, en ? ',' : '.');
+  return (neg ? '-' : '') + i + (f ? (en ? '.' : ',') + f : '');
 }
 const num = v => { if (v === '' || v == null) return null; const x = parseFloat(String(v).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isFinite(x) ? x : null; };
 const today = () => new Date().toISOString().slice(0, 10);
@@ -74,7 +78,16 @@ function validate(p) {
   return { faltan, avisos, debil, c };
 }
 
-const fechaLarga = iso => { const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return ''; const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']; return `${+m[3]} de ${M[+m[2] - 1]} de ${m[1]}`; };
+const MESES = {
+  es: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  pt: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+  it: ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'] };
+const fechaLarga = (iso, lang) => {
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return '';
+  const mes = (MESES[lang] || MESES.es)[+m[2] - 1], d = +m[3];
+  return lang === 'en' ? `${mes} ${d}, ${m[1]}` : lang === 'it' ? `${d} ${mes} ${m[1]}` : `${d} de ${mes} de ${m[1]}`;
+};
 const sumDays = (iso, n) => { const t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 
 const EXTRA = `
@@ -94,7 +107,11 @@ const EXTRA = `
 .dolor{margin-top:18px}
 `;
 
-function render(brand, p, lang) {
+function render(brand, p, langIn) {
+  const lang = LANGS[langIn] ? langIn : 'es';
+  // x(es, en, pt, it): el texto en el idioma del documento
+  const x = (es, en, pt, it) => (lang === 'en' ? en : lang === 'pt' ? pt : lang === 'it' ? it : es);
+  const F = (n, dec) => fmt(n, dec, lang);
   const b = brand || {};
   const prim = hex(b.color_primary, '#0F9F8F'), light = hex(b.color_light, '#2DD4BF'), dark = hex(b.color_dark, '#0F172A');
   const marca = b.nombre || 'Mi empresa';
@@ -102,9 +119,9 @@ function render(brand, p, lang) {
   const mail = b.email || '';
   const d = p.dev || cleanDev({});
   const v = validate(p), c = v.c, debil = v.debil;
-  const empresa = p.empresa || 'Cliente', contacto = p.contacto || '', cargo = p.clienteCargo || '';
+  const empresa = p.empresa || x('Cliente', 'Client', 'Cliente', 'Cliente'), contacto = p.contacto || '', cargo = p.clienteCargo || '';
   const sym = p.moneda || 'US$';
-  const m$ = n => sym + fmt(n, 0);
+  const m$ = n => sym + F(n, 0);
   const fecha = d.fecha_propuesta || today();
   const validez = d.validez_dias || 10;
   const clLogo = p.logoCliente && typeof p.logoCliente === 'object' && imgOk(p.logoCliente[p.logoCliente.usar]) ? p.logoCliente[p.logoCliente.usar] : '';
@@ -112,7 +129,12 @@ function render(brand, p, lang) {
   const foto = imgOk(p.fotoPortada) ? p.fotoPortada : '';
   const obj = d.reuniones_objetivo || 3, piloto = d.precio_piloto || 500, mensual = d.precio_mensual || 750;
   const real = c.cierre_real, cierre = c.cierre_usado;
-  const de10 = fmt(cierre / 10, cierre % 10 ? 1 : 0);
+  const de10 = F(cierre / 10, cierre % 10 ? 1 : 0);
+  const sinDato = x('sin dato previo', 'no prior data', 'sem dado prévio', 'nessun dato precedente');
+  const dias = n => `${n} ${x('días', 'days', 'dias', 'giorni')}`;
+  const veces = n => `${F(n)} ${x('veces', 'times', 'vezes', 'volte')}`;
+  const pilotLbl = x('Piloto de 30 días', '30-day pilot', 'Piloto de 30 dias', 'Progetto progetto pilota di 30 giorni');
+  const perMes = x('/mes', '/month', '/mês', '/mese');
 
   const logos = { blanco: b.logo_white, negro: b.logo_black, color: b.logo_color };
   const pick = (elegido, orden) => { for (const k of [elegido, ...orden]) if (imgOk(logos[k])) return logos[k]; return ''; };
@@ -128,7 +150,8 @@ function render(brand, p, lang) {
   const bgFoto = (id, ov) => (fotos ? `<div class="bgph" style="background-image:url('${U(id)}');--ov:${ov}"></div><div class="bg"><div class="blob a"></div></div>` : bgDark);
   const hero = (id, n) => (fotos ? `<div class="hero"><i style="background-image:url('${U(id)}')"></i><b>${n}</b></div>` : '');
   const ttAttr = fotos ? 'dark' : 'light';
-  const sup = rango => `<span class="sup">supuesto · ${rango}</span>`;
+  const sup = rango => `<span class="sup">${x('supuesto', 'assumption', 'suposto', 'ipotesi')} · ${rango}</span>`;
+  const rangoTxt = (a, z, pct) => `${x('rango', 'range', 'faixa', 'intervallo')} ${a}–${z}${pct ? ' %' : ''}`;
   const li_ = a => a.map(t => `<li>${t}</li>`).join('');
   const S = [];
 
@@ -137,130 +160,169 @@ function render(brand, p, lang) {
   const edPhoto = foto || (fotos ? U('1486406146926-c627a92ad1ab') : '');
   const artSvg = `<svg viewBox="0 0 400 520" fill="none"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${prim}"/></linearGradient></defs><g stroke="url(#g1)" stroke-width="1.4" opacity=".7"><path d="M60 120 L190 70 L330 140 L270 260 L120 240 Z"/><path d="M190 70 L270 260"/><path d="M60 120 L270 260"/><path d="M330 140 L120 240"/><path d="M120 240 L180 400 L300 360 L270 260"/></g><g fill="url(#g1)"><circle cx="60" cy="120" r="9"/><circle cx="190" cy="70" r="12"/><circle cx="330" cy="140" r="9"/><circle cx="270" cy="260" r="14"/><circle cx="120" cy="240" r="10"/><circle cx="180" cy="400" r="12"/><circle cx="300" cy="360" r="9"/></g></svg>`;
   const edPh = (n, h, w) => `<li><i>${n}</i><b>${h}</b><span>${w}</span></li>`;
-  const precios = debil ? `Piloto de 30 días: ${m$(piloto)}` : `Piloto de 30 días: ${m$(piloto)} · Después, ${m$(mensual)}/mes`;
+  const wk = (a, z) => `${x('Semanas', 'Weeks', 'Semanas', 'Settimane')} ${a}–${z}`;
+  const wkFrom = n => x(`Desde la semana ${n}`, `From week ${n}`, `A partir da semana ${n}`, `Dalla settimana ${n}`);
+  const precios = debil ? `${pilotLbl}: ${m$(piloto)}` : `${pilotLbl}: ${m$(piloto)} · ${x('Después', 'Then', 'Depois', 'Poi')}, ${m$(mensual)}${perMes}`;
   const empLen = empresa.length;
-  S.push(`<section class="slide cover ed s-light" data-th="light" data-tt="light" data-cv="1"><div class="edph">${edPhoto ? `<i style="background-image:url('${edPhoto}')"></i>` : `<div class="edsvg">${artSvg}</div>`}<ul class="edl">${edPh('01', 'Investigamos', 'Semanas 1–2')}${edPh('02', 'Contactamos', 'Semanas 2–3')}${edPh('03', 'Mejoramos', 'Desde la semana 4')}</ul><span class="edv">${esc(marca)} · Propuesta comercial · ${esc(year)}</span></div><div class="content">
-<div class="edt rv" style="--d:0"><span>${esc(fechaLarga(fecha))}</span><span>Propuesta para ${esc(empresa)}</span><span>Válida ${validez} días</span></div>
-<div class="edm"><h1 class="rv${empLen > 14 ? ' long' : ''}" style="--d:1">Propuesta para <em>${esc(empresa)}</em></h1>
+  const propPara = x('Propuesta para', 'Proposal for', 'Proposta para', 'Proposta per');
+  const validaN = n => x(`Válida ${n} días`, `Valid for ${n} days`, `Válida por ${n} dias`, `Valida ${n} giorni`);
+  S.push(`<section class="slide cover ed s-light" data-th="light" data-tt="light" data-cv="1"><div class="edph">${edPhoto ? `<i style="background-image:url('${edPhoto}')"></i>` : `<div class="edsvg">${artSvg}</div>`}<ul class="edl">${edPh('01', x('Investigamos', 'We research', 'Pesquisamos', 'Analizziamo'), wk(1, 2))}${edPh('02', x('Contactamos', 'We reach out', 'Entramos em contato', 'Contattiamo'), wk(2, 3))}${edPh('03', x('Mejoramos', 'We improve', 'Melhoramos', 'Miglioriamo'), wkFrom(4))}</ul><span class="edv">${esc(marca)} · ${x('Propuesta comercial', 'Commercial proposal', 'Proposta comercial', 'Proposta commerciale')} · ${esc(year)}</span></div><div class="content">
+<div class="edt rv" style="--d:0"><span>${esc(fechaLarga(fecha, lang))}</span><span>${propPara} ${esc(empresa)}</span><span>${validaN(validez)}</span></div>
+<div class="edm"><h1 class="rv${empLen > 14 ? ' long' : ''}" style="--d:1">${propPara} <em>${esc(empresa)}</em></h1>
 <p class="sub rv" style="--d:2">${esc(precios)}</p></div>
-<div class="edb rv" style="--d:4"><div><small>Para</small><b>${clLogo ? `<img class="cl-${esc(p.logoCliente.usar)}" alt="${esc(empresa)}" src="${clLogo}">` : esc(contacto || '—')}<span>${esc([contacto && clLogo ? contacto : '', cargo].filter(Boolean).join(', ') || (clLogo ? '' : cargo))}</span></b></div>
-<div><small>Piloto de 30 días</small><b>${m$(piloto)}<span>Pago único</span></b></div>
-<div><small>${debil ? 'Válida' : 'Después'}</small><b>${debil ? validez + ' días' : m$(mensual) + '/mes'}<span>${debil ? 'desde la fecha de envío' : 'Válida ' + validez + ' días'}</span></b></div></div>
+<div class="edb rv" style="--d:4"><div><small>${x('Para', 'For', 'Para', 'Per')}</small><b>${clLogo ? `<img class="cl-${esc(p.logoCliente.usar)}" alt="${esc(empresa)}" src="${clLogo}">` : esc(contacto || '—')}<span>${esc([contacto && clLogo ? contacto : '', cargo].filter(Boolean).join(', ') || (clLogo ? '' : cargo))}</span></b></div>
+<div><small>${pilotLbl}</small><b>${m$(piloto)}<span>${x('Pago único', 'One-time payment', 'Pagamento único', 'Pagamento unico')}</span></b></div>
+<div><small>${debil ? x('Válida', 'Valid', 'Válida', 'Valida') : x('Después', 'Then', 'Depois', 'Poi')}</small><b>${debil ? dias(validez) : m$(mensual) + perMes}<span>${debil ? x('desde la fecha de envío', 'from the date sent', 'a partir da data de envio', 'dalla data di invio') : validaN(validez)}</span></b></div></div>
 </div></section>`);
 
   // 2 · lo que me contaste
-  S.push(`<section class="slide s-soft${fotos ? ' hasband' : ''}" data-th="light" data-tt="${ttAttr}">${hero('1551288049-bebda4e38f71', '01')}<div class="content"><div class="bh"><div class="eyebrow rv">01 · Lo que hablamos</div>
-<h2 class="rv" style="--d:1">Lo que me <em>contaste.</em></h2></div>
+  const cierran = d.cierre_sin_dato || d.cierre_pct == null ? '' : x('; de cada 10 cierran ', '; out of every 10, ', '; de cada 10, fecham ', '; su 10 ne chiudono ') + de10 + (lang === 'en' ? ' close' : '');
+  const decide = d.decision_quien || d.decision_plazo
+    ? x('. Decide ', '. The decision is made by ', '. Decide ', '. Decide ') + esc([d.decision_quien, d.decision_plazo ? x('en ', 'within ', 'em ', 'entro ') + d.decision_plazo : ''].filter(Boolean).join(' '))
+    : '';
+  const cicloTxt = d.ciclo_dias
+    ? x(`tardas ${d.ciclo_dias} días en firmar`, `it takes you ${d.ciclo_dias} days to sign`, `você leva ${d.ciclo_dias} dias para fechar`, `impieghi ${d.ciclo_dias} giorni per firmare`)
+    : x('el tiempo hasta firmar: sin dato previo', 'time to sign: no prior data', 'o tempo até fechar: sem dado prévio', 'il tempo per firmare: nessun dato precedente');
+  const valCli = d.valor_cliente ? m$(d.valor_cliente) : '—';
+  const qOpen = lang === 'en' ? '“' : '«', qClose = lang === 'en' ? '”' : '»';
+  S.push(`<section class="slide s-soft${fotos ? ' hasband' : ''}" data-th="light" data-tt="${ttAttr}">${hero('1551288049-bebda4e38f71', '01')}<div class="content"><div class="bh"><div class="eyebrow rv">01 · ${x('Lo que hablamos', 'What we discussed', 'O que conversamos', 'Di cosa abbiamo parlato')}</div>
+<h2 class="rv" style="--d:1">${x('Lo que me <em>contaste.</em>', 'What you <em>told me.</em>', 'O que você <em>me contou.</em>', 'Quello che <em>mi hai detto.</em>')}</h2></div>
 <div class="cf">
-<div class="card rv" style="--d:1"><div class="n">01</div><h3>Qué vendes</h3><p>${esc(d.oferta_cliente) || '—'}</p></div>
-<div class="card rv" style="--d:2"><div class="n">02</div><h3>A quién quieres venderle</h3><p>${esc(d.cliente_ideal) || '—'}</p></div>
-<div class="card rv" style="--d:3"><div class="n">03</div><h3>Dónde estás hoy</h3><p>${d.reuniones_mes_hoy == null ? 'Reuniones nuevas al mes: sin dato previo' : 'Consigues ' + fmt(d.reuniones_mes_hoy, 0) + ' reuniones nuevas al mes'}${d.cierre_sin_dato || d.cierre_pct == null ? '' : '; de cada 10 cierran ' + de10}.</p></div>
-<div class="card rv" style="--d:4"><div class="n">04</div><h3>Lo que vale cerrar</h3><p>Un cliente nuevo te deja ${d.valor_cliente ? m$(d.valor_cliente) : '—'} el primer año y ${d.ciclo_dias ? 'tardas ' + d.ciclo_dias + ' días en firmar' : 'el tiempo hasta firmar: sin dato previo'}${d.decision_quien || d.decision_plazo ? '. Decide ' + esc([d.decision_quien, d.decision_plazo ? 'en ' + d.decision_plazo : ''].filter(Boolean).join(' ')) : ''}.</p></div></div>
-${d.dolor_cliente ? `<div class="quote rv" style="--d:5">«${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}»</div>` : ''}</div></section>`);
+<div class="card rv" style="--d:1"><div class="n">01</div><h3>${x('Qué vendes', 'What you sell', 'O que você vende', 'Cosa vendi')}</h3><p>${esc(d.oferta_cliente) || '—'}</p></div>
+<div class="card rv" style="--d:2"><div class="n">02</div><h3>${x('A quién quieres venderle', 'Who you want to sell to', 'Para quem você quer vender', 'A chi vuoi vendere')}</h3><p>${esc(d.cliente_ideal) || '—'}</p></div>
+<div class="card rv" style="--d:3"><div class="n">03</div><h3>${x('Dónde estás hoy', 'Where you are today', 'Onde você está hoje', 'Dove sei oggi')}</h3><p>${d.reuniones_mes_hoy == null
+    ? x('Reuniones nuevas al mes: sin dato previo', 'New meetings per month: no prior data', 'Novas reuniões por mês: sem dado prévio', 'Nuovi incontri al mese: nessun dato precedente')
+    : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`)}${cierran}.</p></div>
+<div class="card rv" style="--d:4"><div class="n">04</div><h3>${x('Lo que vale cerrar', 'What a close is worth', 'Quanto vale fechar', 'Quanto vale chiudere')}</h3><p>${x(`Un cliente nuevo te deja ${valCli} el primer año y `, `A new client brings you ${valCli} in the first year and `, `Um novo cliente rende ${valCli} no primeiro ano e `, `Un nuovo cliente ti porta ${valCli} il primo anno e `)}${cicloTxt}${decide}.</p></div></div>
+${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}${qClose}</div>` : ''}</div></section>`);
 
   // 3 · cuánto vale para ti
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">02 · La cuenta</div>
-<h2 class="rv" style="--d:1">Cuánto <em>vale</em> para ti.</h2>
+  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">02 · ${x('La cuenta', 'The numbers', 'A conta', 'Il conto')}</div>
+<h2 class="rv" style="--d:1">${x('Cuánto <em>vale</em> para ti.', 'What it is <em>worth</em> to you.', 'Quanto <em>vale</em> para você.', 'Quanto <em>vale</em> per te.')}</h2>
 <div class="calc">
-<div class="r rv" style="--d:2">Reuniones nuevas al mes con nosotros${sup('rango 2–5')}<b>${fmt(obj, 0)}</b></div>
-<div class="r rv" style="--d:2">De cada 10 reuniones, cierran${real ? '' : sup('rango 10–30 %')}<b>${de10}</b></div>
-<div class="r rv" style="--d:3">Ventas nuevas al mes<b>${fmt(c.ventas_mes)}</b></div>
-<div class="r rv" style="--d:3">Lo que vale un cliente nuevo${(d.margen_pct || 100) < 100 ? ' (con tu margen del ' + fmt(d.margen_pct, 0) + ' %)' : ''}<b>${d.valor_cliente ? m$(d.valor_cliente * (d.margen_pct || 100) / 100) : '—'}</b></div>
-<div class="r big rv" style="--d:4"><span>Ingreso nuevo cada mes</span><b>${m$(c.ingreso_mes)}</b></div>
-${debil ? '' : `<div class="r big rv" style="--d:5"><span>Eso equivale a lo que cuesta el mensual</span><b>${fmt(c.veces_mensual)} veces</b></div>`}</div>
-<p class="fm rv" style="--d:6">Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste.</p></div></section>`);
+<div class="r rv" style="--d:2">${x('Reuniones nuevas al mes con nosotros', 'New meetings per month with us', 'Novas reuniões por mês conosco', 'Nuovi incontri al mese con noi')}${sup(rangoTxt(2, 5))}<b>${F(obj, 0)}</b></div>
+<div class="r rv" style="--d:2">${x('De cada 10 reuniones, cierran', 'Out of every 10 meetings, close', 'De cada 10 reuniões, fecham', 'Su 10 incontri, chiudono')}${real ? '' : sup(rangoTxt('10', '30', true))}<b>${de10}</b></div>
+<div class="r rv" style="--d:3">${x('Ventas nuevas al mes', 'New sales per month', 'Novas vendas por mês', 'Nuove vendite al mese')}<b>${F(c.ventas_mes)}</b></div>
+<div class="r rv" style="--d:3">${x('Lo que vale un cliente nuevo', 'What a new client is worth', 'Quanto vale um novo cliente', 'Quanto vale un nuovo cliente')}${(d.margen_pct || 100) < 100 ? x(` (con tu margen del ${F(d.margen_pct, 0)} %)`, ` (at your ${F(d.margen_pct, 0)} % margin)`, ` (com sua margem de ${F(d.margen_pct, 0)} %)`, ` (con il tuo margine del ${F(d.margen_pct, 0)} %)`) : ''}<b>${d.valor_cliente ? m$(d.valor_cliente * (d.margen_pct || 100) / 100) : '—'}</b></div>
+<div class="r big rv" style="--d:4"><span>${x('Ingreso nuevo cada mes', 'New revenue each month', 'Nova receita a cada mês', 'Nuovo ricavo ogni mese')}</span><b>${m$(c.ingreso_mes)}</b></div>
+${debil ? '' : `<div class="r big rv" style="--d:5"><span>${x('Eso equivale a lo que cuesta el mensual', 'That equals what the monthly fee costs', 'Isso equivale ao que custa a mensalidade', 'Equivale a quanto costa il canone mensile')}</span><b>${veces(c.veces_mensual)}</b></div>`}</div>
+<p class="fm rv" style="--d:6">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste.', 'Figures marked “assumption” are our estimates; the rest is what you gave us.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito.')}</p></div></section>`);
 
   // 4 · cuánto tardas en recuperarlo
   const ej = [2000, 4000, 8000, 15000].map(val => ({ val, k: build(val, (d.margen_pct || 100) / 100, cierre / 100, obj, mensual, piloto, null, real) }));
-  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">03 · Recuperarlo</div>
-<h2 class="rv" style="--d:1">Cuánto tardas en <em>recuperarlo.</em></h2>
-<p class="fm rv" style="--d:2">Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.</p>
+  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${x('Recuperarlo', 'Payback', 'Recuperar', 'Recuperarlo')}</div>
+<h2 class="rv" style="--d:1">${x('Cuánto tardas en <em>recuperarlo.</em>', 'How long to <em>get it back.</em>', 'Quanto tempo para <em>recuperar.</em>', 'Quanto ci metti a <em>recuperarlo.</em>')}</h2>
+<p class="fm rv" style="--d:2">${x('Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.', 'Investment ÷ (meetings × close rate × value × margin) = sales you need to cover it.', 'Investimento ÷ (reuniões × fechamento × valor × margem) = vendas necessárias para cobri-lo.', 'Investimento ÷ (incontri × chiusura × valore × margine) = vendite necessarie per coprirlo.')}</p>
 <div class="calc">
-<div class="r rv" style="--d:2">Primera venta esperada<b>${c.mes_primera_venta == null ? 'sin dato previo' : 'Mes ' + c.mes_primera_venta}</b></div>
-<div class="r rv" style="--d:3">Ventas para cubrir el piloto<b>${fmt(c.ventas_para_cubrir_piloto)}</b></div>
-<div class="r rv" style="--d:3">El piloto se paga ${fmt(c.veces_piloto)} veces<b>${m$(piloto)}</b></div>
-${debil ? `<div class="r rv" style="--d:4">Tiempo medio hasta firmar<b>${d.ciclo_dias ? d.ciclo_dias + ' días' : '—'}</b></div>` : `<div class="r rv" style="--d:4">El mensual se paga ${fmt(c.veces_mensual)} veces<b>${m$(mensual)}</b></div>`}</div>
-<table class="xt rv" style="--d:5"><tr><th>Ejemplo con supuestos · valor de un cliente nuevo</th>${ej.map(e => `<th>${m$(e.val)}</th>`).join('')}</tr>
-<tr><td>Ingreso nuevo al mes (${fmt(obj, 0)} reuniones, cierre ${fmt(cierre, 0)} %)</td>${ej.map(e => `<td><b>${m$(e.k.ingreso_mes)}</b></td>`).join('')}</tr>
-<tr><td>Veces que cubre el piloto</td>${ej.map(e => `<td><b>${fmt(e.k.veces_piloto)}</b></td>`).join('')}</tr></table>
-<p class="disc rv" style="--d:6">Ejemplo con supuestos, no es una promesa de resultado.</p></div></section>`);
+<div class="r rv" style="--d:2">${x('Primera venta esperada', 'Expected first sale', 'Primeira venda esperada', 'Prima vendita prevista')}<b>${c.mes_primera_venta == null ? sinDato : x('Mes ', 'Month ', 'Mês ', 'Mese ') + c.mes_primera_venta}</b></div>
+<div class="r rv" style="--d:3">${x('Ventas para cubrir el piloto', 'Sales to cover the pilot', 'Vendas para cobrir o piloto', 'Vendite per coprire il progetto pilota')}<b>${F(c.ventas_para_cubrir_piloto)}</b></div>
+<div class="r rv" style="--d:3">${x(`El piloto se paga ${veces(c.veces_piloto)}`, `The pilot pays for itself ${veces(c.veces_piloto)}`, `O piloto se paga ${veces(c.veces_piloto)}`, `Il progetto pilota si ripaga ${veces(c.veces_piloto)}`)}<b>${m$(piloto)}</b></div>
+${debil ? `<div class="r rv" style="--d:4">${x('Tiempo medio hasta firmar', 'Average time to sign', 'Tempo médio até fechar', 'Tempo medio per firmare')}<b>${d.ciclo_dias ? dias(d.ciclo_dias) : '—'}</b></div>` : `<div class="r rv" style="--d:4">${x(`El mensual se paga ${veces(c.veces_mensual)}`, `The monthly fee pays for itself ${veces(c.veces_mensual)}`, `A mensalidade se paga ${veces(c.veces_mensual)}`, `Il canone mensile si ripaga ${veces(c.veces_mensual)}`)}<b>${m$(mensual)}</b></div>`}</div>
+<table class="xt rv" style="--d:5"><tr><th>${x('Ejemplo con supuestos · valor de un cliente nuevo', 'Example with assumptions · value of a new client', 'Exemplo com suposições · valor de um novo cliente', 'Esempio con ipotesi · valore di un nuovo cliente')}</th>${ej.map(e => `<th>${m$(e.val)}</th>`).join('')}</tr>
+<tr><td>${x(`Ingreso nuevo al mes (${F(obj, 0)} reuniones, cierre ${F(cierre, 0)} %)`, `New revenue per month (${F(obj, 0)} meetings, ${F(cierre, 0)} % close rate)`, `Nova receita por mês (${F(obj, 0)} reuniões, fechamento de ${F(cierre, 0)} %)`, `Nuovo ricavo al mese (${F(obj, 0)} incontri, chiusura ${F(cierre, 0)} %)`)}</td>${ej.map(e => `<td><b>${m$(e.k.ingreso_mes)}</b></td>`).join('')}</tr>
+<tr><td>${x('Veces que cubre el piloto', 'Times it covers the pilot', 'Vezes que cobre o piloto', 'Volte che copre il progetto pilota')}</td>${ej.map(e => `<td><b>${F(e.k.veces_piloto)}</b></td>`).join('')}</tr></table>
+<p class="disc rv" style="--d:6">${x('Ejemplo con supuestos, no es una promesa de resultado.', 'Example based on assumptions; not a promise of results.', 'Exemplo com suposições, não é uma promessa de resultado.', 'Esempio basato su ipotesi, non è una promessa di risultato.')}</p></div></section>`);
 
   // 5 · qué hacemos
   const refs = (Array.isArray(p.referencias) ? p.referencias : []).filter(r => r && r.nombre).slice(0, 3);
   const refTxt = r => esc(r.nombre) + (r.descripcion ? ' · ' + esc(String(r.descripcion).slice(0, 90)) : '');
-  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.88, .55))}<div class="content"><div class="eyebrow rv">04 · Qué hacemos</div>
-<h2 class="rv" style="--d:1">Qué hacemos, <em>paso a paso.</em></h2>
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.88, .55))}<div class="content"><div class="eyebrow rv">04 · ${x('Qué hacemos', 'What we do', 'O que fazemos', 'Cosa facciamo')}</div>
+<h2 class="rv" style="--d:1">${x('Qué hacemos, <em>paso a paso.</em>', 'What we do, <em>step by step.</em>', 'O que fazemos, <em>passo a passo.</em>', 'Cosa facciamo, <em>passo dopo passo.</em>')}</h2>
 <div class="tl">
-<div class="st rv" style="--d:2"><b class="bn">01</b><small>Semanas 1–2</small><h3>Investigamos</h3><p>Averiguamos cuántas empresas hay, a cuáles llegamos y quién decide en cada una, antes de escribir a nadie.</p></div>
-<div class="st rv" style="--d:3"><b class="bn">02</b><small>Semanas 2–3</small><h3>Empezamos a contactar</h3><p>Les escribimos por LinkedIn y correo, hablándoles de lo que de verdad les importa.</p></div>
-<div class="st rv" style="--d:4"><b class="bn">03</b><small>Desde la semana 4</small><h3>Mejoramos cada mes</h3><p>Vemos qué respuestas llegan y mejoramos los mensajes y las empresas a las que escribimos.</p></div></div>
-<div class="chips rv" style="--d:5"><span class="chip">LinkedIn</span><span class="chip">Correo electrónico</span><span class="chip">Seguimiento automático</span>${d.incluir_whatsapp ? '<span class="chip">WhatsApp</span>' : ''}</div>
-${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">Ya lo hicimos para: ${refs.map(refTxt).join(' · ')}${d.resultados_referencia ? ' — ' + esc(d.resultados_referencia) : ''}</p>` : ''}</div></section>`);
+<div class="st rv" style="--d:2"><b class="bn">01</b><small>${wk(1, 2)}</small><h3>${x('Investigamos', 'We research', 'Pesquisamos', 'Analizziamo')}</h3><p>${x('Averiguamos cuántas empresas hay, a cuáles llegamos y quién decide en cada una, antes de escribir a nadie.', 'We find out how many companies there are, which ones we can reach and who decides at each, before writing to anyone.', 'Descobrimos quantas empresas existem, a quais chegamos e quem decide em cada uma, antes de escrever a alguém.', 'Verifichiamo quante aziende ci sono, quali raggiungiamo e chi decide in ciascuna, prima di scrivere a qualcuno.')}</p></div>
+<div class="st rv" style="--d:3"><b class="bn">02</b><small>${wk(2, 3)}</small><h3>${x('Empezamos a contactar', 'We start reaching out', 'Começamos a entrar em contato', 'Iniziamo a contattare')}</h3><p>${x('Les escribimos por LinkedIn y correo, hablándoles de lo que de verdad les importa.', 'We write to them on LinkedIn and by email, talking about what really matters to them.', 'Escrevemos por LinkedIn e e-mail, falando do que realmente importa para eles.', 'Scriviamo su LinkedIn e via email, parlando di ciò che a loro interessa davvero.')}</p></div>
+<div class="st rv" style="--d:4"><b class="bn">03</b><small>${wkFrom(4)}</small><h3>${x('Mejoramos cada mes', 'We improve every month', 'Melhoramos a cada mês', 'Miglioriamo ogni mese')}</h3><p>${x('Vemos qué respuestas llegan y mejoramos los mensajes y las empresas a las que escribimos.', 'We look at which replies come in and improve the messages and the companies we write to.', 'Vemos quais respostas chegam e melhoramos as mensagens e as empresas para as quais escrevemos.', 'Vediamo quali risposte arrivano e miglioriamo i messaggi e le aziende a cui scriviamo.')}</p></div></div>
+<div class="chips rv" style="--d:5"><span class="chip">LinkedIn</span><span class="chip">${x('Correo electrónico', 'Email', 'E-mail', 'Email')}</span><span class="chip">${x('Seguimiento automático', 'Automatic follow-up', 'Acompanhamento automático', 'Follow-up automatico')}</span>${d.incluir_whatsapp ? '<span class="chip">WhatsApp</span>' : ''}</div>
+${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">${x('Ya lo hicimos para:', 'We have already done this for:', 'Já fizemos isso para:', 'Lo abbiamo già fatto per:')} ${refs.map(refTxt).join(' · ')}${d.resultados_referencia ? ' — ' + esc(d.resultados_referencia) : ''}</p>` : ''}</div></section>`);
 
   // 6 · tu portal en vivo
+  const ilus = x('ilustrativo', 'illustrative', 'ilustrativo', 'illustrativo');
   const kp = (l, val, dsc) => `<div><small>${l}</small><b data-count="${val}">${val}</b><i>${dsc}</i></div>`;
   const rowp = (a, b2, c2) => `<div class="rowp"><b>${a}</b><span class="tg">${b2}</span><span>${c2}</span></div>`;
-  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">05 · Seguimiento</div>
-<h2 class="rv" style="--d:1">Tu operación, <em>visible en vivo.</em></h2>
-<div class="portal rv" style="--d:2"><div class="tb"><span>${esc(marca)} · Portal de seguimiento · ${esc(empresa)}</span><span class="lv">Ejemplo ilustrativo</span></div>
-<div class="tabs"><button class="tab on" data-t="a">Resumen</button><button class="tab" data-t="b">Oportunidades</button><button class="tab" data-t="c">Empresas</button></div>
-<div class="pane on" data-p="a"><div class="kp">${kp('Contactos alcanzados', 240, 'ilustrativo')}${kp('Respuestas', 6, '≈ 2,5 % · ilustrativo')}${kp('Reuniones', 1, 'ilustrativo')}${kp('Toques de contacto', 510, 'ilustrativo')}</div>
+  const ex = l => `${x('Empresa ejemplo', 'Sample company', 'Empresa exemplo', 'Azienda esempio')} ${l}`;
+  const sig = t => `${x('Siguiente paso: ', 'Next step: ', 'Próximo passo: ', 'Prossimo passo: ')}${t}`;
+  const paso = n => x(`Mensajes en curso · paso ${n} de 5`, `Messages in progress · step ${n} of 5`, `Mensagens em andamento · passo ${n} de 5`, `Messaggi in corso · passo ${n} di 5`);
+  S.push(`<section class="slide s-dark" data-th="dark">${bgDark}<div class="content"><div class="eyebrow rv">05 · ${x('Seguimiento', 'Tracking', 'Acompanhamento', 'Monitoraggio')}</div>
+<h2 class="rv" style="--d:1">${x('Tu operación, <em>visible en vivo.</em>', 'Your campaign, <em>visible live.</em>', 'Sua operação, <em>visível ao vivo.</em>', 'La tua operazione, <em>visibile in diretta.</em>')}</h2>
+<div class="portal rv" style="--d:2"><div class="tb"><span>${esc(marca)} · ${x('Portal de seguimiento', 'Tracking portal', 'Portal de acompanhamento', 'Portale di monitoraggio')} · ${esc(empresa)}</span><span class="lv">${x('Ejemplo ilustrativo', 'Illustrative example', 'Exemplo ilustrativo', 'Esempio illustrativo')}</span></div>
+<div class="tabs"><button class="tab on" data-t="a">${x('Resumen', 'Summary', 'Resumo', 'Riepilogo')}</button><button class="tab" data-t="b">${x('Oportunidades', 'Opportunities', 'Oportunidades', 'Opportunità')}</button><button class="tab" data-t="c">${x('Empresas', 'Companies', 'Empresas', 'Aziende')}</button></div>
+<div class="pane on" data-p="a"><div class="kp">${kp(x('Contactos alcanzados', 'Contacts reached', 'Contatos alcançados', 'Contatti raggiunti'), 240, ilus)}${kp(x('Respuestas', 'Replies', 'Respostas', 'Risposte'), 6, '≈ ' + F(2.5) + ' % · ' + ilus)}${kp(x('Reuniones', 'Meetings', 'Reuniões', 'Incontri'), 1, ilus)}${kp(x('Toques de contacto', 'Touchpoints', 'Pontos de contato', 'Punti di contatto'), 510, ilus)}</div>
 <svg class="trend" viewBox="0 0 640 84" preserveAspectRatio="none" width="100%" height="84"><g stroke="#E5E9F0" stroke-width="1"><line x1="0" y1="14" x2="640" y2="14"/><line x1="0" y1="42" x2="640" y2="42"/><line x1="0" y1="70" x2="640" y2="70"/></g><path d="M0 70 C40 66 60 48 100 52 S160 26 210 34 S270 56 320 38 S390 12 440 22 S520 44 560 20 S610 14 640 10" fill="none" stroke="${prim}" stroke-width="2.4"/></svg></div>
-<div class="pane" data-p="b"><div class="rows">${rowp('Empresa ejemplo A', 'Reunión pedida', 'Siguiente paso: confirmar horario')}${rowp('Empresa ejemplo B', 'Interesado', 'Siguiente paso: enviar información')}${rowp('Empresa ejemplo C', 'En conversación', 'Siguiente paso: responder una duda')}</div></div>
-<div class="pane" data-p="c"><div class="rows">${rowp('Empresa ejemplo A', 'Decisor identificado', 'Mensajes en curso · paso 3 de 5')}${rowp('Empresa ejemplo B', 'Contactado', 'Mensajes en curso · paso 2 de 5')}${rowp('Empresa ejemplo C', 'Respondió', 'Mensajes detenidos a la espera de ti')}</div></div></div>
-<p class="cap rv" style="--d:3">Vista ilustrativa con datos de ejemplo: no es lo que se espera de tu campaña. Tendrás acceso desde la semana 1.</p></div></section>`);
+<div class="pane" data-p="b"><div class="rows">${rowp(ex('A'), x('Reunión pedida', 'Meeting requested', 'Reunião solicitada', 'Incontro richiesto'), sig(x('confirmar horario', 'confirm the time', 'confirmar horário', 'confermare l\'orario')))}${rowp(ex('B'), x('Interesado', 'Interested', 'Interessado', 'Interessato'), sig(x('enviar información', 'send information', 'enviar informações', 'inviare informazioni')))}${rowp(ex('C'), x('En conversación', 'In conversation', 'Em conversa', 'In conversazione'), sig(x('responder una duda', 'answer a question', 'responder a uma dúvida', 'rispondere a un dubbio')))}</div></div>
+<div class="pane" data-p="c"><div class="rows">${rowp(ex('A'), x('Decisor identificado', 'Decision-maker identified', 'Decisor identificado', 'Decisore individuato'), paso(3))}${rowp(ex('B'), x('Contactado', 'Contacted', 'Contatado', 'Contattato'), paso(2))}${rowp(ex('C'), x('Respondió', 'Replied', 'Respondeu', 'Ha risposto'), x('Mensajes detenidos a la espera de ti', 'Messages paused, waiting for you', 'Mensagens pausadas, aguardando você', 'Messaggi in pausa, in attesa di te'))}</div></div></div>
+<p class="cap rv" style="--d:3">${x('Vista ilustrativa con datos de ejemplo: no es lo que se espera de tu campaña. Tendrás acceso desde la semana 1.', 'Illustrative view with sample data: not what is expected from your campaign. You will have access from week 1.', 'Visão ilustrativa com dados de exemplo: não é o que se espera da sua campanha. Você terá acesso desde a semana 1.', 'Vista illustrativa con dati di esempio: non è ciò che ci si aspetta dalla tua campagna. Avrai accesso dalla settimana 1.')}</p></div></section>`);
 
   // 7 · qué incluye y qué no
-  const inc = ['Un solo producto o servicio para empujar', 'Un tipo de cliente y un mercado para empezar', 'Hasta dos cargos de decisión por empresa', d.incluir_whatsapp ? 'LinkedIn, correo y WhatsApp' : 'LinkedIn y correo electrónico',
-    'Investigación, mensajes y seguimiento de las respuestas', 'Reuniones cualificadas con quien decide, medidas y reportadas cada mes', 'Informe mensual y acceso al portal en vivo'];
-  const exc = ['Varios productos, mercados o tipos de cliente a la vez', 'Publicidad pagada o redes sociales', 'Atender las reuniones, mandar presupuestos o cerrar la venta', 'Gestión después de la venta', d.incluir_whatsapp ? 'Licencias, dominios o buzones específicos del cliente' : 'WhatsApp (se puede añadir si lo necesitas)', 'Garantía de respuestas, reuniones o ventas'];
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">06 · Alcance</div>
-<h2 class="rv" style="--d:1">Qué incluye y <em>qué no.</em></h2>
-<div class="terms"><div class="in rv" style="--d:2"><h3>Incluye</h3><ul>${li_(inc.map(esc))}</ul></div><div class="ex rv" style="--d:3"><h3>No incluye</h3><ul>${li_(exc.map(esc))}</ul></div></div>
-<p class="disc rv" style="--d:4"><b>No garantizamos respuestas, reuniones ni ventas; el cliente lleva las reuniones, propuestas y cierre.</b></p></div></section>`);
+  const wa = !!d.incluir_whatsapp;
+  const inc = [
+    x('Un solo producto o servicio para empujar', 'A single product or service to push', 'Um único produto ou serviço para promover', 'Un solo prodotto o servizio da promuovere'),
+    x('Un tipo de cliente y un mercado para empezar', 'One type of client and one market to start', 'Um tipo de cliente e um mercado para começar', 'Un tipo di cliente e un mercato per iniziare'),
+    x('Hasta dos cargos de decisión por empresa', 'Up to two decision-maker roles per company', 'Até dois cargos de decisão por empresa', 'Fino a due ruoli decisionali per azienda'),
+    wa ? x('LinkedIn, correo y WhatsApp', 'LinkedIn, email and WhatsApp', 'LinkedIn, e-mail e WhatsApp', 'LinkedIn, email e WhatsApp') : x('LinkedIn y correo electrónico', 'LinkedIn and email', 'LinkedIn e e-mail', 'LinkedIn ed email'),
+    x('Investigación, mensajes y seguimiento de las respuestas', 'Research, messages and follow-up of replies', 'Pesquisa, mensagens e acompanhamento das respostas', 'Ricerca, messaggi e follow-up delle risposte'),
+    x('Reuniones cualificadas con quien decide, medidas y reportadas cada mes', 'Qualified meetings with the decision-maker, measured and reported every month', 'Reuniões qualificadas com quem decide, medidas e reportadas a cada mês', 'Incontri qualificati con chi decide, misurati e riportati ogni mese'),
+    x('Informe mensual y acceso al portal en vivo', 'Monthly report and live portal access', 'Relatório mensal e acesso ao portal ao vivo', 'Report mensile e accesso al portale in tempo reale')];
+  const exc = [
+    x('Varios productos, mercados o tipos de cliente a la vez', 'Several products, markets or client types at once', 'Vários produtos, mercados ou tipos de cliente ao mesmo tempo', 'Più prodotti, mercati o tipi di cliente contemporaneamente'),
+    x('Publicidad pagada o redes sociales', 'Paid advertising or social media', 'Publicidade paga ou redes sociais', 'Pubblicità a pagamento o social media'),
+    x('Atender las reuniones, mandar presupuestos o cerrar la venta', 'Attending the meetings, sending quotes or closing the sale', 'Atender as reuniões, enviar orçamentos ou fechar a venda', 'Gestire gli incontri, inviare preventivi o chiudere la vendita'),
+    x('Gestión después de la venta', 'Post-sale management', 'Gestão após a venda', 'Gestione post-vendita'),
+    wa ? x('Licencias, dominios o buzones específicos del cliente', 'Licenses, domains or mailboxes specific to the client', 'Licenças, domínios ou caixas de e-mail específicos do cliente', 'Licenze, domini o caselle specifiche del cliente') : x('WhatsApp (se puede añadir si lo necesitas)', 'WhatsApp (can be added if you need it)', 'WhatsApp (pode ser adicionado se você precisar)', 'WhatsApp (si può aggiungere se serve)'),
+    x('Garantía de respuestas, reuniones o ventas', 'Guarantee of replies, meetings or sales', 'Garantia de respostas, reuniões ou vendas', 'Garanzia di risposte, incontri o vendite')];
+  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">06 · ${x('Alcance', 'Scope', 'Escopo', 'Ambito')}</div>
+<h2 class="rv" style="--d:1">${x('Qué incluye y <em>qué no.</em>', 'What is included and <em>what is not.</em>', 'O que inclui e <em>o que não.</em>', 'Cosa include e <em>cosa no.</em>')}</h2>
+<div class="terms"><div class="in rv" style="--d:2"><h3>${x('Incluye', 'Included', 'Inclui', 'Incluso')}</h3><ul>${li_(inc.map(esc))}</ul></div><div class="ex rv" style="--d:3"><h3>${x('No incluye', 'Not included', 'Não inclui', 'Non incluso')}</h3><ul>${li_(exc.map(esc))}</ul></div></div>
+<p class="disc rv" style="--d:4"><b>${x('No garantizamos respuestas, reuniones ni ventas; el cliente lleva las reuniones, propuestas y cierre.', 'We do not guarantee replies, meetings or sales; the client handles the meetings, proposals and closing.', 'Não garantimos respostas, reuniões nem vendas; o cliente conduz as reuniões, propostas e o fechamento.', 'Non garantiamo risposte, incontri né vendite; il cliente gestisce gli incontri, le proposte e la chiusura.')}</b></p></div></section>`);
 
   // 8 · quién hace qué
-  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">07 · Responsabilidades</div>
-<h2 class="rv" style="--d:1">Quién hace <em>qué.</em></h2>
-<div class="two"><div class="rp dk rv" style="--d:2"><div class="k">Nosotros (${esc(marca)})</div><p>Investigamos, escribimos los mensajes, contactamos por los canales acordados, damos seguimiento a las respuestas, te pasamos las reuniones cualificadas y te enviamos un informe cada mes. Mejoramos todo con lo que vamos viendo.</p></div>
-<div class="rp lt rv" style="--d:3"><div class="k">Tú (${esc(empresa)})</div><ul>${li_(['Nos cuentas qué ofreces y apruebas el primer enfoque.', 'Nos das los accesos que haga falta.', 'Respondes a las reuniones en menos de 48 horas.', 'Llevas las reuniones, las propuestas y el cierre.', 'Nos cuentas cómo fueron las conversaciones.'])}</ul></div></div></div></section>`);
+  const tu = [
+    x('Nos cuentas qué ofreces y apruebas el primer enfoque.', 'You tell us what you offer and approve the first approach.', 'Você nos conta o que oferece e aprova a primeira abordagem.', 'Ci racconti cosa offri e approvi il primo approccio.'),
+    x('Nos das los accesos que haga falta.', 'You give us the access we need.', 'Você nos dá os acessos necessários.', 'Ci dai gli accessi necessari.'),
+    x('Respondes a las reuniones en menos de 48 horas.', 'You reply to meeting requests within 48 hours.', 'Você responde às reuniões em menos de 48 horas.', 'Rispondi agli incontri entro 48 ore.'),
+    x('Llevas las reuniones, las propuestas y el cierre.', 'You handle the meetings, proposals and closing.', 'Você conduz as reuniões, as propostas e o fechamento.', 'Gestisci gli incontri, le proposte e la chiusura.'),
+    x('Nos cuentas cómo fueron las conversaciones.', 'You tell us how the conversations went.', 'Você nos conta como foram as conversas.', 'Ci racconti come sono andate le conversazioni.')];
+  S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">07 · ${x('Responsabilidades', 'Responsibilities', 'Responsabilidades', 'Responsabilità')}</div>
+<h2 class="rv" style="--d:1">${x('Quién hace <em>qué.</em>', 'Who does <em>what.</em>', 'Quem faz <em>o quê.</em>', 'Chi fa <em>cosa.</em>')}</h2>
+<div class="two"><div class="rp dk rv" style="--d:2"><div class="k">${x('Nosotros', 'We', 'Nós', 'Noi')} (${esc(marca)})</div><p>${x('Investigamos, escribimos los mensajes, contactamos por los canales acordados, damos seguimiento a las respuestas, te pasamos las reuniones cualificadas y te enviamos un informe cada mes. Mejoramos todo con lo que vamos viendo.', 'We research, write the messages, reach out through the agreed channels, follow up on replies, hand you the qualified meetings and send you a report every month. We improve everything based on what we see.', 'Pesquisamos, escrevemos as mensagens, entramos em contato pelos canais combinados, acompanhamos as respostas, passamos a você as reuniões qualificadas e enviamos um relatório a cada mês. Melhoramos tudo com o que vamos vendo.', 'Analizziamo, scriviamo i messaggi, contattiamo tramite i canali concordati, seguiamo le risposte, ti passiamo gli incontri qualificati e ti inviamo un report ogni mese. Miglioriamo tutto in base a ciò che osserviamo.')}</p></div>
+<div class="rp lt rv" style="--d:3"><div class="k">${x('Tú', 'You', 'Você', 'Tu')} (${esc(empresa)})</div><ul>${li_(tu)}</ul></div></div></div></section>`);
 
   // 9 · inversión
-  const sim = `<div class="sim rv" style="--d:2"><div class="k">Piloto de 30 días</div><div class="tot">${esc(m$(piloto))}<small>pago único</small></div><div class="eq">Unos 450 contactos · objetivo: ${fmt(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.</div></div>`;
+  const sim = `<div class="sim rv" style="--d:2"><div class="k">${pilotLbl}</div><div class="tot">${esc(m$(piloto))}<small>${x('pago único', 'one-time payment', 'pagamento único', 'pagamento unico')}</small></div><div class="eq">${x(`Unos 450 contactos · objetivo: ${F(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.`, `About 450 contacts · goal: ${F(obj, 0)} qualified meetings.<br>If we do not reach 2, we repeat the pilot at no cost.`, `Cerca de 450 contatos · meta: ${F(obj, 0)} reuniões qualificadas.<br>Se não chegarmos a 2, repetimos o piloto sem custo.`, `Circa 450 contatti · obiettivo: ${F(obj, 0)} incontri qualificati.<br>Se non arriviamo a 2, ripetiamo il progetto pilota senza costi.`)}</div></div>`;
   const facts = debil
-    ? `<div class="facts"><div class="rv" style="--d:3"><small>Después del piloto</small><b style="font-size:21px">Lo decidimos juntos</b><p>Con los resultados a la vista.</p></div></div>`
-    : `<div class="facts"><div class="rv" style="--d:3"><small>Mensual</small><b>${esc(m$(mensual))}/mes</b><p>Desde el mes 2, sin permanencia.</p></div>
-<div class="rv" style="--d:4"><small>Bonus</small><b>${esc(m$(d.bonus_reunion == null ? 100 : d.bonus_reunion))} por reunión</b><p>Por cada reunión cualificada por encima de ${fmt(d.umbral_bonus == null ? 3 : d.umbral_bonus, 0)}. Sin otra comisión.</p></div></div>`;
-  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">08 · Inversión</div>
-<h2 class="rv" style="--d:1">Una inversión <em>clara.</em></h2>
+    ? `<div class="facts"><div class="rv" style="--d:3"><small>${x('Después del piloto', 'After the pilot', 'Depois do piloto', 'Dopo il progetto pilota')}</small><b style="font-size:21px">${x('Lo decidimos juntos', 'We decide together', 'Decidimos juntos', 'Decidiamo insieme')}</b><p>${x('Con los resultados a la vista.', 'With the results in front of us.', 'Com os resultados à vista.', 'Con i risultati sotto gli occhi.')}</p></div></div>`
+    : `<div class="facts"><div class="rv" style="--d:3"><small>${x('Mensual', 'Monthly', 'Mensal', 'Mensile')}</small><b>${esc(m$(mensual))}${perMes}</b><p>${x('Desde el mes 2, sin permanencia.', 'From month 2, no lock-in.', 'A partir do mês 2, sem fidelidade.', 'Dal mese 2, senza vincoli.')}</p></div>
+<div class="rv" style="--d:4"><small>Bonus</small><b>${esc(m$(d.bonus_reunion == null ? 100 : d.bonus_reunion))} ${x('por reunión', 'per meeting', 'por reunião', 'per incontro')}</b><p>${(() => { const u = F(d.umbral_bonus == null ? 3 : d.umbral_bonus, 0); return x(`Por cada reunión cualificada por encima de ${u}. Sin otra comisión.`, `For each qualified meeting above ${u}. No other commission.`, `Por cada reunião qualificada acima de ${u}. Sem outra comissão.`, `Per ogni incontro qualificato oltre ${u}. Nessun'altra commissione.`); })()}</p></div></div>`;
+  S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">08 · ${x('Inversión', 'Investment', 'Investimento', 'Investimento')}</div>
+<h2 class="rv" style="--d:1">${x('Una inversión <em>clara.</em>', 'A <em>clear</em> investment.', 'Um investimento <em>claro.</em>', 'Un investimento <em>chiaro.</em>')}</h2>
 <div class="inv">${sim}${facts}</div></div></section>`);
 
   // 10 · próximo paso
-  const subj = 'Confirmo el piloto de 30 días';
-  const body = `Hola,\n\nConfirmo el piloto de 30 días.\n\nPor favor indíquenme los siguientes pasos.\n\nSaludos,\n${contacto}${p.correo ? '\n' + p.correo : ''}`;
+  const subj = x('Confirmo el piloto de 30 días', 'I confirm the 30-day pilot', 'Confirmo o piloto de 30 dias', 'Confermo il progetto pilota di 30 giorni');
+  const body = x('Hola,\n\nConfirmo el piloto de 30 días.\n\nPor favor indíquenme los siguientes pasos.\n\nSaludos,\n', 'Hello,\n\nI confirm the 30-day pilot.\n\nPlease let me know the next steps.\n\nBest regards,\n', 'Olá,\n\nConfirmo o piloto de 30 dias.\n\nPor favor, indiquem-me os próximos passos.\n\nAtenciosamente,\n', 'Buongiorno,\n\nConfermo il progetto pilota di 30 giorni.\n\nVi prego di indicarmi i prossimi passi.\n\nCordiali saluti,\n') + contacto + (p.correo ? '\n' + p.correo : '');
   const mailto = mail ? `mailto:${encodeURIComponent(mail).replace(/%40/g, '@')}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}` : '#';
   const payInfo = [b.pago_email || mail, b.pago_telefono].filter(Boolean).join(' · ');
+  const decideP = d.decision_quien ? ' (' + x('decide ', 'decided by ', 'decide ', 'decide ') + esc(d.decision_quien) + (d.decision_plazo ? ', ' + esc(d.decision_plazo) : '') + ')' : '';
   S.push(`<section class="slide close s-dark" data-th="dark">${bgFoto('1521791136064-7986c2920216', ovL(.94, .62))}<div class="content">
-<div><div class="eyebrow rv">Próximo paso con ${esc(marca)}</div>
-<h2 class="rv" style="--d:1">Confirmemos el <em>piloto.</em></h2>
-<p class="lead rv" style="--d:2">Una sola cosa: confirma que arrancamos. Esta propuesta es válida hasta el ${esc(fechaLarga(sumDays(fecha, validez)))}.</p>
-<a class="cta rv" style="--d:3" target="_blank" rel="noopener noreferrer" href="${esc(mailto)}">Confirmar el piloto <span>↗</span></a></div>
-<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>Confirmas el piloto${d.decision_quien ? ' (decide ' + esc(d.decision_quien) + (d.decision_plazo ? ', ' + esc(d.decision_plazo) : '') + ')' : ''}.</span></div>
-<div class="rv" style="--d:4"><i>02</i><span>Pago del piloto: ${esc(m$(piloto))}.${payInfo ? ' Datos de pago: ' + esc(payInfo) + '.' : ''}</span></div>
-<div class="rv" style="--d:5"><i>03</i><span>Fecha de inicio: ${p.inicio ? esc(p.inicio) : 'la acordamos al confirmar'}.</span></div></div></div>
-<div class="foot"><span>${esc(marca)}${mail ? ' · ' + esc(mail) : ''}${web ? ' · ' + esc(web) : ''}</span><span>Confidencial · preparada para ${esc(empresa)}</span></div></section>`);
+<div><div class="eyebrow rv">${x('Próximo paso con', 'Next step with', 'Próximo passo com', 'Prossimo passo con')} ${esc(marca)}</div>
+<h2 class="rv" style="--d:1">${x('Confirmemos el <em>piloto.</em>', 'Let us confirm the <em>pilot.</em>', 'Vamos confirmar o <em>piloto.</em>', 'Confermiamo il <em>progetto pilota.</em>')}</h2>
+<p class="lead rv" style="--d:2">${x('Una sola cosa: confirma que arrancamos. Esta propuesta es válida hasta el ', 'Just one thing: confirm that we start. This proposal is valid until ', 'Apenas uma coisa: confirme que começamos. Esta proposta é válida até ', 'Una sola cosa: conferma che partiamo. Questa proposta è valida fino al ')}${esc(fechaLarga(sumDays(fecha, validez), lang))}.</p>
+<a class="cta rv" style="--d:3" target="_blank" rel="noopener noreferrer" href="${esc(mailto)}">${x('Confirmar el piloto', 'Confirm the pilot', 'Confirmar o piloto', 'Confermare il progetto pilota')} <span>↗</span></a></div>
+<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>${x('Confirmas el piloto', 'You confirm the pilot', 'Você confirma o piloto', 'Confermi il progetto pilota')}${decideP}.</span></div>
+<div class="rv" style="--d:4"><i>02</i><span>${x('Pago del piloto: ', 'Pilot payment: ', 'Pagamento do piloto: ', 'Pagamento del progetto pilota: ')}${esc(m$(piloto))}.${payInfo ? ' ' + x('Datos de pago: ', 'Payment details: ', 'Dados de pagamento: ', 'Dati di pagamento: ') + esc(payInfo) + '.' : ''}</span></div>
+<div class="rv" style="--d:5"><i>03</i><span>${x('Fecha de inicio: ', 'Start date: ', 'Data de início: ', 'Data di inizio: ')}${p.inicio ? esc(p.inicio) : x('la acordamos al confirmar', 'we agree on it when you confirm', 'combinamos ao confirmar', 'la concordiamo alla conferma')}.</span></div></div></div>
+<div class="foot"><span>${esc(marca)}${mail ? ' · ' + esc(mail) : ''}${web ? ' · ' + esc(web) : ''}</span><span>${x('Confidencial · preparada para ', 'Confidential · prepared for ', 'Confidencial · preparada para ', 'Riservato · preparata per ')}${esc(empresa)}</span></div></section>`);
 
   const total = S.length;
   const dots = S.map((_, i) => `<button class="dot" aria-label="${i + 1}"></button>`).join('');
   const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--pr-rgb:${rgb(prim)};--dk-rgb:${rgb(dark)};--sans:'Inter','Segoe UI',system-ui,sans-serif}`;
-  const title = archivo(b, p);
-  return `<!DOCTYPE html>\n<html lang="es" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
+  const title = archivo(b, p, lang);
+  return `<!DOCTYPE html>\n<html lang="${lang}" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>${rootVars}${base.CSS}${EXTRA}</style></head><body>
-<div class="hint">Gira el teléfono para ver mejor la presentación</div>
+<div class="hint">${x('Gira el teléfono para ver mejor la presentación', 'Rotate your phone for a better view', 'Gire o telefone para ver melhor a apresentação', 'Ruota il telefono per vedere meglio la presentazione')}</div>
 <div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
-<div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ Presentar</button></div></div>
+<div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ ${x('Presentar', 'Present', 'Apresentar', 'Presenta')}</button></div></div>
 ${S.join('\n')}
 <button class="arr l" id="prev" aria-label="←">‹</button><button class="arr r" id="next" aria-label="→">›</button>
 <div class="nav">${dots}</div>
@@ -269,9 +331,10 @@ ${S.join('\n')}
 }
 
 // «Propuesta NovaCentrax – Empresa – 2026-11-07»: nombre del PDF (el navegador lo toma del título del documento)
-function archivo(brand, p) {
+function archivo(brand, p, lang) {
   const d = (p && p.dev) || {};
-  return `Propuesta ${(brand && brand.nombre) || 'NovaCentrax'} – ${(p && p.empresa) || 'Cliente'} – ${d.fecha_propuesta || today()}`;
+  const w = lang === 'en' ? 'Proposal' : (lang === 'pt' || lang === 'it') ? 'Proposta' : 'Propuesta';
+  return `${w} ${(brand && brand.nombre) || 'NovaCentrax'} – ${(p && p.empresa) || (lang === 'en' ? 'Client' : 'Cliente')} – ${d.fecha_propuesta || today()}`;
 }
 
-module.exports = { render, cleanDev, calc, validate, archivo, REQ };
+module.exports = { render, cleanDev, calc, validate, archivo, REQ, LANGS };

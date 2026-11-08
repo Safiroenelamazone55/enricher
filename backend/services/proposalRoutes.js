@@ -243,6 +243,7 @@ function mount(app, { pool, requireAuth }) {
     if (!t) return null;
     const { rows: [b] } = await pool.query('SELECT * FROM tpl_brands WHERE id=$1 AND user_id=$2', [t.brand_id, uid(req)]);
     if (!b) return null;
+    if (t.tipo !== 'propuesta2' && !LANGS[lang]) lang = 'es';   // «it» solo existe en la propuesta post-llamada
     if (t.tipo === 'pago') {
       const pr = params || {}, d = payDefaults({ ...(t.defaults || {}), ...(Array.isArray(pr.metodos) ? { metodos: pr.metodos } : {}), ...(pr.pasos ? { pasos: pr.pasos } : {}), ...(pr.plazoHoras ? { plazoHoras: pr.plazoHoras } : {}) });
       const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND template_id=$3 AND id = ANY($2::int[])', [uid(req), d.metodos, t.id]) : { rows: [] };
@@ -252,20 +253,20 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
-    if (t.tipo === 'propuesta2') { const v = dv.validate(p); return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, 'es'), archivo: dv.archivo(b, p) }; }
+    if (t.tipo === 'propuesta2') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es'; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, dl), archivo: dv.archivo(b, p, dl) }; }
     if (t.tipo === 'acuerdo') return { t, p, html: ag.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'acuerdo') };
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };
   }
   app.post('/api/tpl/preview', A, wrap(async (req, res) => {
-    const lang = LANGS[req.body.lang] ? req.body.lang : 'es';
+    const lang = (LANGS[req.body.lang] || dv.LANGS[req.body.lang]) ? req.body.lang : 'es';
     const r = await build(req, parseInt(req.body.template_id, 10), req.body.params, lang);
     if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
     res.json({ html: r.html, nombre: r.archivo, v: r.v || null });
   }));
   app.post('/api/tpl/copies', A, wrap(async (req, res) => {
-    const langs = [...new Set((Array.isArray(req.body.langs) ? req.body.langs : [req.body.lang]).filter(l => LANGS[l]))];
+    const langs = [...new Set((Array.isArray(req.body.langs) ? req.body.langs : [req.body.lang]).filter(l => LANGS[l] || dv.LANGS[l]))];
     if (!langs.length) return res.status(400).json({ error: 'Elige al menos un idioma' });
     const out = [];
     for (const lang of langs) {
@@ -293,7 +294,7 @@ function mount(app, { pool, requireAuth }) {
     const { rows: [c] } = await pool.query('SELECT id,template_id,lang FROM tpl_copies WHERE id=$1 AND user_id=$2', [req.params.id, uid(req)]);
     if (!c) return res.status(404).json({ error: 'No encontrada' });
     if (!c.template_id) return res.status(409).json({ error: 'La plantilla de esta copia ya no existe, así que no se puede editar. Genera una nueva desde otra plantilla.' });
-    const r = await build(req, c.template_id, req.body.params, LANGS[c.lang] ? c.lang : 'es');
+    const r = await build(req, c.template_id, req.body.params, (LANGS[c.lang] || dv.LANGS[c.lang]) ? c.lang : 'es');
     if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
     if (r.v && r.v.faltan.length && !req.body.borrador) return res.status(400).json({ error: 'Faltan campos obligatorios: ' + r.v.faltan.map(f => f.l).join(', ') });
     await pool.query('UPDATE tpl_copies SET params=$3,html=$4,archivo=$5,cliente=$6 WHERE id=$1 AND user_id=$2', [c.id, uid(req), JSON.stringify(r.p), r.html, r.archivo, r.p.empresa || '']);
