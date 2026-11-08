@@ -42619,6 +42619,7 @@ const HerramientasModule = (() => {
     chrome: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8h8.2M8.2 14.4 4 7.2M13.6 14.6l-4.1 7"/></svg>',
     win: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>',
     dl: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 20h16"/></svg>',
+    skill: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   };
   // Vistas previas: la de Nova Activity (web) es una captura real de su popup; las otras dos son réplicas fieles de lo que se ve.
   const PREV = {
@@ -42631,6 +42632,12 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__h" style="margin-top:12px">Scraping Accounts from Sales Navigator</div>
         <div class="hrm-sc__btn">Start Scraping</div></div></div>`,
     web: `<div class="hrm-shot"><img src="herramientas/prev-elevn-activity.png" alt="Popup de Elevn Activity (web)" loading="lazy"></div>`,
+    skill: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Claude Code · /ficha-cliente</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Ficha de cliente · una página</div>
+        <div class="hrm-sc__l">Quién es · qué vende y a qué precio</div>
+        <div class="hrm-sc__l">Servicio a priorizar · su vocabulario</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Semáforo de encaje con la oferta</div>
+        <div class="hrm-sc__btn">/ficha-cliente</div></div></div>`,
     tray: `<div class="hrm-tray"><div class="hrm-menu">
         <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
         <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Elevn</div>
@@ -42647,6 +42654,9 @@ const HerramientasModule = (() => {
     { id: 'nova-activity-desktop', nombre: 'Elevn Activity · Escritorio', tipo: 'App de Windows', ico: 'win', prev: 'tray', token: true,
       desc: 'Mide el tiempo por aplicación (Figma, VS Code, Word…) y funciona con varios perfiles de Chrome. Corre en la bandeja y solo captura con el timer encendido.',
       pasos: ['Descarga y ejecuta el instalador. Si Windows muestra «Windows protegió tu PC», pulsa <b>Más información → Ejecutar de todas formas</b> (el instalador aún no tiene firma digital).', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Pégalo cuando el asistente lo pida. Queda un icono en la bandeja y arranca solo con Windows.', 'Enciende un timer en Nova: desde ese momento registra las apps que usas.'] },
+    { id: 'ficha-cliente', nombre: 'Skill · Ficha de cliente', tipo: 'Skill de Claude', ico: 'skill', prev: 'skill',
+      desc: 'Analiza a un prospecto antes de una reunión o al abrir una conversación y entrega una ficha de una página: quién es, qué vende y a qué precio, qué priorizar y si encaja con la oferta.',
+      pasos: ['Descarga el archivo y descomprímelo: obtienes la carpeta <b>ficha-cliente</b>.', 'Copia esa carpeta dentro de <b>C:\\Users\\tu-usuario\\.claude\\skills\\</b> (en Mac/Linux: <b>~/.claude/skills/</b>). Si la carpeta <b>skills</b> no existe, créala.', 'Reinicia Claude Code (o la app de Claude) para que cargue la skill.', 'Escribe <b>/ficha-cliente</b> y pasa el nombre, la empresa o el enlace de LinkedIn del prospecto.'] },
   ];
   const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
   function _card(t) {
@@ -42671,7 +42681,7 @@ const HerramientasModule = (() => {
     return `<div class="hrm">
       <div class="hrm-hd"><h1 class="hrm-h1">Herramientas</h1><p class="hrm-sub">Extensiones y aplicaciones que se conectan con Nova. Descárgalas, instálalas y listo.</p></div>
       <div class="hrm-grid">${TOOLS.map(_card).join('')}</div>
-      <p class="hrm-foot">Las extensiones funcionan en Chrome, Edge y Brave. Las tres se instalan por tu cuenta y solo envían a Nova lo que ves descrito arriba.</p>
+      <p class="hrm-foot">Las extensiones funcionan en Chrome, Edge y Brave. Se instalan por tu cuenta y las extensiones y apps solo envían a Nova lo que ves descrito arriba.</p>
     </div>`;
   }
   async function render(id) {
