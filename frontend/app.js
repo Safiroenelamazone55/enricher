@@ -43062,6 +43062,10 @@ const PlantillasModule = (() => {
           <div class="pl-row3"><div>${dvf('precio_piloto', 'Precio del piloto', 'number')}</div><div>${dvf('precio_mensual', 'Precio mensual', 'number')}</div><div>${dvf('margen_pct', 'Margen % (100 = sin margen)', 'number')}</div></div>
           <div class="pl-row3"><div>${dvf('bonus_reunion', 'Bonus por reunión', 'number')}</div><div>${dvf('umbral_bonus', 'Bonus desde la reunión n.º', 'number')}</div><div>${dvf('reuniones_objetivo', 'Reuniones objetivo', 'number')}</div></div>
           ${dvf('cierre_supuesto_pct', 'Cierre supuesto % (solo si no dio el suyo)', 'number')}${dvc('incluir_whatsapp', 'Incluir WhatsApp')}</div>
+        <div class="pl-box"><div class="pl-box__t">La fuga de tiempo del fundador <span class="pl-opt">(opcional)</span></div>
+          <div class="pl-row3"><div>${dvf('horas_semana_prospeccion', 'Horas a la semana buscando clientes', 'number', 'Ej. 20')}</div><div>${dvf('valor_hora', 'Lo que vale su hora', 'number', 'Ej. 15')}</div><div><label class="pl-l">Esas cifras son</label><select class="pl-in" onchange="PlantillasModule.setDev('horas_origen',this.value)"><option value="supuesto"${p.dev.horas_origen === 'real' ? '' : ' selected'}>Supuesto (estimación)</option><option value="real"${p.dev.horas_origen === 'real' ? ' selected' : ''}>Real (lo dijo el cliente)</option></select></div></div>
+          ${dvc('usar_supuesto_horas', 'Usar el supuesto si están vacías (20 h a la semana y 15 por hora, marcado «supuesto»)')}
+          <p class="hrm-card__meta">Añade a la página «Cuánto vale para ti» el coste de su tiempo. No suma al ingreso nuevo ni a la prueba de rentabilidad. Si no hay datos y no activas el supuesto, el bloque no aparece.</p></div>
         ${refsBox}
         <div class="pl-box"><div class="pl-box__t">Resultados de referencia</div>${dvt('resultados_referencia', 'Texto + cifra (si lo dejas vacío, solo se cuenta qué hicimos)', 'Ej. 12 reuniones en 6 semanas')}</div>`;
     } else {

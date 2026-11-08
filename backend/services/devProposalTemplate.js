@@ -34,6 +34,9 @@ function cleanDev(d) {
   N('reuniones_mes_hoy', null, 0, 10000); N('valor_cliente', null, 0, 1e9); N('cierre_pct', null, 0, 100); N('ciclo_dias', null, 0, 1000);
   N('validez_dias', 10, 1, 180); N('margen_pct', 100, 1, 100); N('reuniones_objetivo', 3, 1, 100); N('cierre_supuesto_pct', 20, 1, 100);
   N('precio_piloto', 500, 1, 1e8); N('precio_mensual', 750, 1, 1e8); N('bonus_reunion', 100, 0, 1e8); N('umbral_bonus', 3, 0, 1000);
+  N('horas_semana_prospeccion', null, 0, 168); N('valor_hora', null, 0, 1e6);
+  o.horas_origen = d.horas_origen === 'real' ? 'real' : 'supuesto';
+  o.usar_supuesto_horas = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
   return o;
@@ -54,6 +57,21 @@ function build(valor, margen, cierre, objetivo, mensual, piloto, ciclo, real) {
     ventas_para_cubrir_piloto: valor * margen ? piloto / (valor * margen) : null,
     mes_primera_venta: ciclo == null ? null : Math.ceil(1 + ciclo / 30),
     ticket_minimo_3x: objetivo * cierre * margen ? 3 * mensual / (objetivo * cierre * margen) : null };
+}
+
+// «Fuga de tiempo del fundador»: dato de apoyo. NO suma al ingreso nuevo ni entra en veces_mensual / veces_piloto / la regla de 3×.
+// Devuelve null (el bloque se oculta) si no hay horas ni valor de la hora, ni se activó «usar supuesto».
+const FUGA_H = 20, FUGA_V = 15, FUGA_SEM = 4.3;
+function fuga(p) {
+  const d = (p && p.dev) || {};
+  const usar = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
+  let h = d.horas_semana_prospeccion, v = d.valor_hora, hDef = false, vDef = false;
+  if (!(h > 0) && usar) { h = FUGA_H; hDef = true; }
+  if (!(v > 0) && usar) { v = FUGA_V; vDef = true; }
+  if (!(h > 0) || !(v > 0)) return null;
+  const sup = d.horas_origen !== 'real';
+  const horas_mes = h * FUGA_SEM, coste_mes = horas_mes * v;
+  return { h, v, horas_mes, coste_tiempo_mes: coste_mes, coste_tiempo_anio: coste_mes * 12, supH: sup || hDef, supV: sup || vDef, realH: !sup && !hDef };
 }
 
 // ── reglas de validación ──
@@ -105,6 +123,7 @@ const EXTRA = `
 .cf{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .cf .card{padding:18px 24px}.cf .card h3{margin-top:8px;font-size:18px}.cf .card p{margin-top:6px;font-size:14.5px;line-height:1.45}
 .dolor{margin-top:18px}
+.calc.c3{grid-template-columns:repeat(3,1fr);margin-top:10px}.calc.c3 .r{padding:10px 18px}.calc.c3 .r b{font-size:26px}
 `;
 
 function render(brand, p, langIn) {
@@ -152,6 +171,7 @@ function render(brand, p, langIn) {
   const ttAttr = fotos ? 'dark' : 'light';
   const sup = rango => `<span class="sup">${x('supuesto', 'assumption', 'suposto', 'ipotesi')} · ${rango}</span>`;
   const rangoTxt = (a, z, pct) => `${x('rango', 'range', 'faixa', 'intervallo')} ${a}–${z}${pct ? ' %' : ''}`;
+  const supOnly = () => `<span class="sup">${x('supuesto', 'assumption', 'suposto', 'ipotesi')}</span>`;
   const li_ = a => a.map(t => `<li>${t}</li>`).join('');
   const S = [];
 
@@ -184,6 +204,7 @@ function render(brand, p, langIn) {
     ? x(`tardas ${d.ciclo_dias} días en firmar`, `it takes you ${d.ciclo_dias} days to sign`, `você leva ${d.ciclo_dias} dias para fechar`, `impieghi ${d.ciclo_dias} giorni per firmare`)
     : x('el tiempo hasta firmar: sin dato previo', 'time to sign: no prior data', 'o tempo até fechar: sem dado prévio', 'il tempo per firmare: nessun dato precedente');
   const valCli = d.valor_cliente ? m$(d.valor_cliente) : '—';
+  const fg = fuga(p);
   const qOpen = lang === 'en' ? '“' : '«', qClose = lang === 'en' ? '”' : '»';
   S.push(`<section class="slide s-soft${fotos ? ' hasband' : ''}" data-th="light" data-tt="${ttAttr}">${hero('1551288049-bebda4e38f71', '01')}<div class="content"><div class="bh"><div class="eyebrow rv">01 · ${x('Lo que hablamos', 'What we discussed', 'O que conversamos', 'Di cosa abbiamo parlato')}</div>
 <h2 class="rv" style="--d:1">${x('Lo que me <em>contaste.</em>', 'What you <em>told me.</em>', 'O que você <em>me contou.</em>', 'Quello che <em>mi hai detto.</em>')}</h2></div>
@@ -192,11 +213,19 @@ function render(brand, p, langIn) {
 <div class="card rv" style="--d:2"><div class="n">02</div><h3>${x('A quién quieres venderle', 'Who you want to sell to', 'Para quem você quer vender', 'A chi vuoi vendere')}</h3><p>${esc(d.cliente_ideal) || '—'}</p></div>
 <div class="card rv" style="--d:3"><div class="n">03</div><h3>${x('Dónde estás hoy', 'Where you are today', 'Onde você está hoje', 'Dove sei oggi')}</h3><p>${d.reuniones_mes_hoy == null
     ? x('Reuniones nuevas al mes: sin dato previo', 'New meetings per month: no prior data', 'Novas reuniões por mês: sem dado prévio', 'Nuovi incontri al mese: nessun dato precedente')
-    : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`)}${cierran}.</p></div>
+    : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`)}${cierran}.${fg && fg.realH ? ' ' + x(`Dedicas ${F(fg.h)} horas a la semana a buscar clientes.`, `You spend ${F(fg.h)} hours a week looking for clients.`, `Você dedica ${F(fg.h)} horas por semana a buscar clientes.`, `Dedichi ${F(fg.h)} ore a settimana a cercare clienti.`) : ''}</p></div>
 <div class="card rv" style="--d:4"><div class="n">04</div><h3>${x('Lo que vale cerrar', 'What a close is worth', 'Quanto vale fechar', 'Quanto vale chiudere')}</h3><p>${x(`Un cliente nuevo te deja ${valCli} el primer año y `, `A new client brings you ${valCli} in the first year and `, `Um novo cliente rende ${valCli} no primeiro ano e `, `Un nuovo cliente ti porta ${valCli} il primo anno e `)}${cicloTxt}${decide}.</p></div></div>
 ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}${qClose}</div>` : ''}</div></section>`);
 
   // 3 · cuánto vale para ti
+  const Fd = n => F(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1);
+  const fugaHtml = !fg ? '' : `<h3 class="rv" style="--d:6;margin-top:22px;font-size:20px;color:var(--hd)">${x('La fuga de tiempo del fundador', "The founder's time leak", 'A fuga de tempo do fundador', 'La perdita di tempo del fondatore')} · ${x('Lo que te cuesta hacerlo a mano', 'What it costs you to do it by hand', 'Quanto custa fazer isso à mão', 'Quanto ti costa farlo a mano')}</h3>
+<div class="calc c3">
+<div class="r rv" style="--d:6">${x('Horas al mes', 'Hours per month', 'Horas por mês', 'Ore al mese')}${fg.supH ? sup(rangoTxt(5, 20) + ' h') : ''}<b>${Fd(fg.horas_mes)}</b></div>
+<div class="r rv" style="--d:6">${x('Valor de tu hora', 'Value of your hour', 'Valor da sua hora', 'Valore della tua ora')}${fg.supV ? supOnly() : ''}<b>${m$(fg.v)}</b></div>
+<div class="r rv" style="--d:7">${x('Coste al mes', 'Cost per month', 'Custo por mês', 'Costo al mese')}${fg.supH || fg.supV ? supOnly() : ''}<b>${m$(fg.coste_tiempo_mes)}</b></div></div>
+<p class="fm rv" style="--d:7">${F(fg.h)} h × ${F(FUGA_SEM, 1)} = ${Fd(fg.horas_mes)} ${x('horas al mes', 'hours per month', 'horas por mês', 'ore al mese')}; ${Fd(fg.horas_mes)} × ${m$(fg.v)} = ${m$(fg.coste_tiempo_mes)} ${x('al mes', 'per month', 'por mês', 'al mese')}. <b>${x('Al año', 'Per year', 'Por ano', "All'anno")}: ${m$(fg.coste_tiempo_anio)}.</b></p>
+${fg.supH || fg.supV ? `<p class="fm rv" style="--d:8">${x('Estimación nuestra; si me das tu cifra real, la sustituyo.', 'Our estimate; if you give me your real figure, I will replace it.', 'Estimativa nossa; se você me passar o seu número real, eu o substituo.', 'Nostra stima; se mi dai la tua cifra reale, la sostituisco.')}</p>` : ''}`;
   S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">02 · ${x('La cuenta', 'The numbers', 'A conta', 'Il conto')}</div>
 <h2 class="rv" style="--d:1">${x('Cuánto <em>vale</em> para ti.', 'What it is <em>worth</em> to you.', 'Quanto <em>vale</em> para você.', 'Quanto <em>vale</em> per te.')}</h2>
 <div class="calc">
@@ -206,6 +235,7 @@ ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.
 <div class="r rv" style="--d:3">${x('Lo que vale un cliente nuevo', 'What a new client is worth', 'Quanto vale um novo cliente', 'Quanto vale un nuovo cliente')}${(d.margen_pct || 100) < 100 ? x(` (con tu margen del ${F(d.margen_pct, 0)} %)`, ` (at your ${F(d.margen_pct, 0)} % margin)`, ` (com sua margem de ${F(d.margen_pct, 0)} %)`, ` (con il tuo margine del ${F(d.margen_pct, 0)} %)`) : ''}<b>${d.valor_cliente ? m$(d.valor_cliente * (d.margen_pct || 100) / 100) : '—'}</b></div>
 <div class="r big rv" style="--d:4"><span>${x('Ingreso nuevo cada mes', 'New revenue each month', 'Nova receita a cada mês', 'Nuovo ricavo ogni mese')}</span><b>${m$(c.ingreso_mes)}</b></div>
 ${debil ? '' : `<div class="r big rv" style="--d:5"><span>${x('Eso equivale a lo que cuesta el mensual', 'That equals what the monthly fee costs', 'Isso equivale ao que custa a mensalidade', 'Equivale a quanto costa il canone mensile')}</span><b>${veces(c.veces_mensual)}</b></div>`}</div>
+${fugaHtml}
 <p class="fm rv" style="--d:6">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste.', 'Figures marked “assumption” are our estimates; the rest is what you gave us.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito.')}</p></div></section>`);
 
   // 4 · cuánto tardas en recuperarlo
@@ -337,4 +367,4 @@ function archivo(brand, p, lang) {
   return `${w} ${(brand && brand.nombre) || 'NovaCentrax'} – ${(p && p.empresa) || (lang === 'en' ? 'Client' : 'Cliente')} – ${d.fecha_propuesta || today()}`;
 }
 
-module.exports = { render, cleanDev, calc, validate, archivo, REQ, LANGS };
+module.exports = { render, cleanDev, calc, fuga, validate, archivo, REQ, LANGS };
