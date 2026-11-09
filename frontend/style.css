@@ -20801,26 +20801,16 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
   .lm-fix-tbl .lm-fx:not(.lm-fx-hd) { display: grid !important; grid-template-columns: 28px minmax(150px, 1.1fr) 92px 270px minmax(110px, 1fr) minmax(110px, 1fr) 70px 104px 26px !important; gap: 8px; align-items: center; padding: 4px 12px; }
   .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { grid-column: 2 / -1; padding: 0 0 4px; }
 }
+/* Por corregir: SIEMPRE una sola fila por contacto. Con poco ancho los iconos pasan a solo icono y las columnas se encogen; si ni así cabe, la tabla se desplaza en horizontal (nunca se parte en dos líneas). */
 @container fxl (max-width: 1059px) {
-  .lm-fix-tbl .lm-fx-hd { display: none !important; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; grid-template-columns: none !important; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-go { flex: none; order: 1; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-n { flex: 1 1 150px; min-width: 0; order: 2; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fix-tag { flex: none; order: 3; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-ic { flex: none; order: 4; padding-left: 0; grid-column: auto; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-mn { flex: none; order: 5; margin-left: auto; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd)::after { content: ""; flex: 1 0 100%; height: 0; order: 5; }   /* salto de línea: arriba, contacto y enlaces; abajo, los correos */
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-em-"] { flex: 1 1 150px; width: auto; min-width: 120px; order: 6; margin-left: 36px; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-emp-"] { flex: 1 1 150px; width: auto; min-width: 120px; order: 7; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-sv { flex: none; order: 8; grid-column: auto; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: none; order: 9; grid-column: auto; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { flex: 1 1 100%; order: 10; padding-left: 36px; box-sizing: border-box; }
-}
-@container fxl (max-width: 560px) {
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-n { flex-basis: calc(100% - 140px); }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-in[id^="fix-em"] { flex: 1 1 100%; margin-left: 0 !important; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-sv, .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-pb { flex: 1 1 auto; }
-  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { padding-left: 0; }
+  .lm-fix-tbl { overflow-x: auto; }
+  .lm-fix-tbl .lm-fx { min-width: 840px; display: grid !important; grid-template-columns: 28px minmax(120px, 1.1fr) 84px 168px minmax(90px, 1fr) minmax(90px, 1fr) 70px 100px 26px !important; gap: 8px; align-items: center; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) { padding: 4px 12px; }
+  .lm-fix-tbl .lm-fx-hd > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lm-fix-tbl .lm-fx-ic { width: auto; grid-template-columns: repeat(6, 28px) !important; }
+  .lm-fix-tbl .lm-fx-i--lbl { width: 28px !important; padding: 0; justify-content: center; }
+  .lm-fix-tbl .lm-fx-i--lbl b { display: none; }
+  .lm-fix-tbl .lm-fx:not(.lm-fx-hd) > .lm-fx-reb { grid-column: 2 / -1; padding: 0 0 4px; }
 }
 
 /* Detalle de «Respuestas»: por dónde respondió, cuándo y qué dijo */
