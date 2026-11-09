@@ -34030,6 +34030,69 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div id="ldh-wrap"></div>
     </div>`;
   }
+  // ── Columnas de Leads: se pueden añadir o quitar con el «+» de la cabecera (panel «Campos»). Cliente y Secuencia vienen ocultas por defecto. ──
+  const _LD_COLS = [
+    { k: 'lead', l: 'Lead', w: 210, fixed: true, g: 'base' },
+    { k: 'contacto', l: 'Contacto', w: 150, def: true, g: 'base' },
+    { k: 'resultado', l: 'Resultado', w: 150, def: true, g: 'base' },
+    { k: 'fecha', l: 'Fecha', w: 76, def: true, g: 'base' },
+    { k: 'nota', l: 'Nota (clic para editar)', w: 0, def: true, g: 'base' },
+    { k: 'cliente', l: 'Cliente', w: 120, g: 'sec' },
+    { k: 'secuencia', l: 'Secuencia · paso', w: 176, g: 'sec' },
+    { k: 'campana', l: 'Campaña', w: 150, g: 'sec' },
+    { k: 'estado_seq', l: 'Estado en la secuencia', w: 150, g: 'sec' },
+    { k: 'empresa', l: 'Empresa', w: 150, g: 'dat' },
+    { k: 'cargo', l: 'Cargo', w: 160, g: 'dat' },
+    { k: 'email', l: 'Email', w: 200, g: 'dat' },
+    { k: 'telefono', l: 'Teléfono', w: 120, g: 'dat' },
+    { k: 'linkedin', l: 'LinkedIn', w: 100, g: 'dat' },
+    { k: 'pais', l: 'País', w: 100, g: 'dat' },
+    { k: 'ciudad', l: 'Ciudad', w: 110, g: 'dat' },
+    { k: 'idioma', l: 'Idioma', w: 90, g: 'dat' },
+    { k: 'tier', l: 'Tier', w: 90, g: 'dat' },
+    { k: 'industria', l: 'Industria', w: 140, g: 'dat' },
+    { k: 'tamano', l: 'Tamaño', w: 90, g: 'dat' },
+    { k: 'reunion', l: 'Reunión', w: 100, g: 'dat' },
+  ];
+  const _LD_GRP = { base: 'Principales', sec: 'Cliente y secuencia', dat: 'Datos del lead y su empresa' };
+  function _ldVisSet() {
+    try { const v = JSON.parse(localStorage.getItem('ld_cols') || 'null'); if (Array.isArray(v)) return new Set(v); } catch (_) {}
+    return new Set(_LD_COLS.filter(x => x.def).map(x => x.k));
+  }
+  function _ldVisibleCols() { const st = _ldVisSet(); return _LD_COLS.filter(x => x.fixed || st.has(x.k)); }
+  let _ldColsQ = '';
+  function _ldColsPanelHtml() {
+    const st = _ldVisSet(), q = _ldColsQ.trim().toLowerCase();
+    const row = x => `<label class="ldh-fld${x.fixed ? ' is-fixed' : ''}"><span class="ldh-fld__n">${esc(x.l)}</span><input type="checkbox" class="ldh-sw" ${x.fixed || st.has(x.k) ? 'checked' : ''} ${x.fixed ? 'disabled' : ''} onchange="LeadManagerModule.ldColToggle('${x.k}')"></label>`;
+    const match = x => !q || x.l.toLowerCase().includes(q);
+    const on = _LD_COLS.filter(x => (x.fixed || st.has(x.k)) && match(x)), off = _LD_COLS.filter(x => !(x.fixed || st.has(x.k)) && match(x));
+    const secOff = Object.keys(_LD_GRP).map(g => { const l = off.filter(x => x.g === g); return l.length ? `<div class="ldh-fld__g">${_LD_GRP[g]}<span>${l.length}</span></div>${l.map(row).join('')}` : ''; }).join('');
+    return `<div class="ldh-fld__g">Se muestran<span>${on.length}</span></div>${on.map(row).join('') || '<div class="ldh-fld__e">Nada que mostrar</div>'}`
+      + (off.length ? `<div class="ldh-fld__sep"></div><div class="ldh-fld__h">Disponibles para agregar</div>${secOff}` : '');
+  }
+  function ldColsOpen(ev) {
+    if (ev) ev.stopPropagation();
+    const old = document.getElementById('ldh-cols'); if (old) { ldColsClose(); return; }
+    _ldColsQ = '';
+    const box = document.createElement('div'); box.id = 'ldh-cols'; box.className = 'ldh-cols';
+    box.innerHTML = `<div class="ldh-cols__hd"><b>Campos</b><button type="button" class="ldh-cols__x" onclick="LeadManagerModule.ldColsClose()" title="Cerrar">✕</button></div>
+      <div class="ldh-cols__q"><input type="text" id="ldh-cols-q" placeholder="Buscar campos" oninput="LeadManagerModule.ldColsSearch(this.value)" autocomplete="off"></div>
+      <div class="ldh-cols__list" id="ldh-cols-list">${_ldColsPanelHtml()}</div>
+      <div class="ldh-cols__ft"><button type="button" class="ldh-cols__reset" onclick="LeadManagerModule.ldColsReset()">Restablecer columnas</button></div>`;
+    document.body.appendChild(box);
+    const away = e => { if (!box.contains(e.target) && !(e.target.closest && e.target.closest('.ldh-addcol'))) { ldColsClose(); } };
+    box._away = away; setTimeout(() => document.addEventListener('mousedown', away), 0);
+    box._esc = e => { if (e.key === 'Escape') ldColsClose(); }; document.addEventListener('keydown', box._esc);
+  }
+  function ldColsClose() { const b = document.getElementById('ldh-cols'); if (!b) return; document.removeEventListener('mousedown', b._away); document.removeEventListener('keydown', b._esc); b.remove(); }
+  function ldColsSearch(v) { _ldColsQ = v || ''; const l = document.getElementById('ldh-cols-list'); if (l) l.innerHTML = _ldColsPanelHtml(); }
+  function ldColToggle(k) {
+    const st = _ldVisSet(); if (st.has(k)) st.delete(k); else st.add(k);
+    try { localStorage.setItem('ld_cols', JSON.stringify([...st])); } catch (_) {}
+    const l = document.getElementById('ldh-cols-list'); if (l) { const sc = l.scrollTop; l.innerHTML = _ldColsPanelHtml(); l.scrollTop = sc; }
+    _ldPaint();
+  }
+  function ldColsReset() { try { localStorage.removeItem('ld_cols'); } catch (_) {} const l = document.getElementById('ldh-cols-list'); if (l) l.innerHTML = _ldColsPanelHtml(); _ldPaint(); }
   function _ldPaint() {
     const resEl = $('ldh-res'), wrap = $('ldh-wrap');
     if (!resEl || !wrap) return;
@@ -34064,10 +34127,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       return;
     }
     if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">No hay leads que cumplan estos filtros. Prueba con otro filtro o pestaña.</div></div>`; return; }
+    const cols = _ldVisibleCols();
     const rows = list.map(({ c, i }) => {
       const d = _DISPOS.find(x => x[0] === c.disposition);
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
       const cli = _clients.find(x => x.id === c.outbound_client_id);
+      const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || {};
       const seqs = c.sequences || [];
       const fecha = _ldFmtDate(i.fecha || c.updated_at);
       const tel = c.telefono || c.movil || '';
@@ -34084,17 +34149,37 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${slot('Abrir WhatsApp', NI('whatsapp', 13), _waDigits(c) ? `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"` : '')}
       </div>`;
       const paso = _ldPaso(c);
-      return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
-        <td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>
-        <td>${contacto}</td>
-        <td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>
-        <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
-        <td onclick="event.stopPropagation()">
+      const dim = t => `<td class="ldh-dim" title="${esc(t || '')}">${t ? esc(t) : '—'}</td>`;
+      const seq0 = seqs[0] ? ((_sequences || []).find(x => x.id === seqs[0].id) || {}) : {};
+      const cell = {
+        lead: `<td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>`,
+        contacto: `<td>${contacto}</td>`,
+        cliente: `<td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>`,
+        secuencia: `<td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>`,
+        resultado: `<td onclick="event.stopPropagation()">
           <button class="ldh-chip ldh-chip--btn ldh-chip--tag${d ? '' : ' ldh-chip--empty'}" style="${d ? `background:${_DISP_VIVO[d[0]] || d[2]}` : ''}" onclick="LeadManagerModule.ldOpenDispoMenu(event,${c.id})" title="Clic para cambiar el estado">${d ? d[1] : 'Sin estado'}</button>
           ${_derivLinkHtml(c)}
-        </td>
-        <td class="ldh-date">${fecha}</td>
-        <td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${(_ldSel === 'respondio' && _ldSnips[c.id] && _ldSnips[c.id].snippet) ? `<div class="ldh-sub" style="white-space:normal;color:var(--text)" title="Lo último que escribió">Escribió: “${esc(_ldSnips[c.id].snippet)}”${_ldSnips[c.id].n > 1 ? ` · ${_ldSnips[c.id].n} respuestas` : ''}</div>` : ''}${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>
+        </td>`,
+        fecha: `<td class="ldh-date">${fecha}</td>`,
+        nota: `<td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${(_ldSel === 'respondio' && _ldSnips[c.id] && _ldSnips[c.id].snippet) ? `<div class="ldh-sub" style="white-space:normal;color:var(--text)" title="Lo último que escribió">Escribió: “${esc(_ldSnips[c.id].snippet)}”${_ldSnips[c.id].n > 1 ? ` · ${_ldSnips[c.id].n} respuestas` : ''}</div>` : ''}${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>`,
+        // Campos que se pueden añadir con el «+» de la cabecera
+        empresa: dim(c.company_nombre || co.nombre || c.empresa_nombre),
+        cargo: dim(c.cargo),
+        email: `<td class="ldh-dim" title="${esc(mail)}" onclick="event.stopPropagation()">${mail ? `<a href="mailto:${esc(mail)}" class="ldh-lnk">${esc(mail)}</a>` : '—'}</td>`,
+        telefono: dim(tel),
+        linkedin: `<td class="ldh-dim" onclick="event.stopPropagation()">${li ? `<a class="ldh-lnk" target="_blank" rel="noopener" href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}">Ver perfil</a>` : '—'}</td>`,
+        pais: dim(c.pais || co.pais),
+        ciudad: dim(c.ciudad || co.ciudad),
+        idioma: dim(c.idioma_ef || c.idioma),
+        tier: dim(co.target_tier),
+        industria: dim(co.industria),
+        tamano: dim(co.tamano),
+        campana: dim(seq0.campaign_id ? _campaignName(seq0.campaign_id) : ''),
+        estado_seq: dim(seqs[0] ? [seqs[0].estado, seqs[0].paused_reason].filter(Boolean).join(' · ') : ''),
+        reunion: `<td class="ldh-date">${c.reunion_fecha ? _ldFmtDate(c.reunion_fecha) : '—'}</td>`,
+      };
+      return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
+        ${cols.map(k => cell[k.k] || '<td></td>').join('')}
         <td class="ldh-acts" onclick="event.stopPropagation()">
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
@@ -34103,9 +34188,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
+    const flexK = cols.some(x => x.k === 'nota') ? 'nota' : 'lead';   // la columna que se estira
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
-      <colgroup><col style="width:210px"><col style="width:150px"><col style="width:104px"><col style="width:176px"><col style="width:150px"><col style="width:76px"><col><col style="width:150px"></colgroup>
-      <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
+      <colgroup>${cols.map(x => x.k === flexK ? '<col>' : `<col style="width:${x.w}px">`).join('')}<col style="width:150px"></colgroup>
+      <thead><tr>${cols.map(x => `<th>${x.l}</th>`).join('')}<th class="ldh-addth"><button type="button" class="ldh-addcol" onclick="LeadManagerModule.ldColsOpen(event)" title="Agregar o quitar columnas">＋</button></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
   function ldSetResult(k) { _ldSel = k || ''; if (_ldSel === 'respondio') _ldLoadSnips(); else _ldPaint(); }
@@ -39960,7 +40046,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
