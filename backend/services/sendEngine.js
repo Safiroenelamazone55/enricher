@@ -174,6 +174,28 @@ function emptyVars(str, ctx) {
   return [...new Set(out)];
 }
 
+// Huecos en un mensaje YA redactado (asunto + cuerpo): un dato que faltaba (ciudad, nombre de una empresa…) deja frases como «agencias en .» o «incluyendo  y X».
+// Sirve para mensajes escritos por la IA o editados a mano, donde no hay plantilla contra la que comparar. Devuelve [{campo, motivo, texto}]; vacío = sin huecos.
+const _GAP_RULES = [
+  ['variable sin resolver', /\{\{[^}]*\}\}/],
+  ['dato vacío (dos espacios seguidos)', /[^\S\r\n]{2,}\S/],
+  ['dato vacío antes de un signo', /\b(in|en|de|del|for|at|para|por|to|of|and|y|und|et)[^\S\r\n]+[.,;:?!)]/i],
+  ['saludo sin nombre', /(^|\n)\s*(Hi|Hola|Hello|Ciao|Hallo|Hej|Olá|Bonjour|Dear|Estimad[oa])[^\S\r\n]*,/i],
+  ['frase que termina sin el dato', /\b(in|en|de|at|for|para|por|of|to|and|y)[^\S\r\n]*$/im],
+  ['paréntesis vacíos', /\(\s*\)|\[\s*\]/],
+];
+function draftGaps(asunto, cuerpo) {
+  const plain = t => String(t == null ? '' : t).replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ');
+  const out = [];
+  for (const [campo, t] of [['asunto', plain(asunto)], ['cuerpo', plain(cuerpo)]]) {
+    for (const [motivo, re] of _GAP_RULES) {
+      const x = re.exec(t);
+      if (x) { out.push({ campo, motivo, texto: ('…' + t.slice(Math.max(0, x.index - 28), x.index + x[0].length + 14).replace(/\n/g, ' ') + '…').trim() }); break; }
+    }
+  }
+  return out;
+}
+
 function _esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -950,6 +972,8 @@ async function _flushApproved(pool, apiBase) {
   `);
   for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
     try {
+      // Red de seguridad: un borrador aprobado con un hueco (dato vacío) NO sale: vuelve a «por aprobar» para que lo completes.
+      { const _gp = draftGaps(m.asunto, m.cuerpo); if (_gp.length) { await pool.query(`UPDATE lm_messages SET estado='awaiting' WHERE id=$1 AND estado='approved'`, [m.id]); console.warn('[flush] borrador con hueco devuelto a por aprobar:', m.id, _gp[0].motivo); continue; } }
       // Lista de exclusión: aunque el borrador ya esté aprobado, si ahora su empresa/contacto está excluido NO sale.
       try {
         if (await require('./exclusions').isEnrollmentExcluded(pool, { user_id: m.user_id, sequence_id: m.sequence_id, contact_id: m.contact_id })) {
@@ -1307,4 +1331,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { estimateSendTimes, responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { draftGaps, estimateSendTimes, responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

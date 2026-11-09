@@ -7646,6 +7646,7 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
        WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.estado IN ('awaiting','approved')
        ORDER BY m.created_at ASC
     `, [req.workspaceOwnerId, req.params.id]);
+    { const { draftGaps } = require('./services/sendEngine'); rows.forEach(r => { r.gaps = draftGaps(r.asunto, r.cuerpo); }); }
     // Variables que quedarían en BLANCO en el borrador (dato faltante o variable inexistente): se avisa al revisar.
     try {
       const eng = require('./services/sendEngine');
@@ -7679,7 +7680,7 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
 app.get('/api/lm/approvals', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT m.id, m.sequence_id, m.contact_id, m.asunto, m.to_email, m.scheduled_at,
+      SELECT m.id, m.sequence_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.scheduled_at,
              s.nombre AS seq_nombre,
              k.nombre, k.apellido, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa
         FROM lm_messages m
@@ -7690,6 +7691,8 @@ app.get('/api/lm/approvals', requireAuth, async (req, res) => {
        ORDER BY m.scheduled_at ASC NULLS FIRST, m.created_at ASC
        LIMIT 100
     `, [req.workspaceOwnerId]);
+    const { draftGaps } = require('./services/sendEngine');
+    rows.forEach(r => { r.gaps = draftGaps(r.asunto, r.cuerpo); delete r.cuerpo; });   // huecos (datos vacíos): esos no se pueden aprobar
     res.json(rows);
   } catch (err) { console.error('[approvals] GET all', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
 });
@@ -7713,6 +7716,7 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
     const cuerpo = String(b.cuerpo ?? m.cuerpo);
     const estado = action === 'approve' ? 'approved' : 'awaiting';
     if (action === 'approve' && require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar (o escribe el mensaje del paso en la secuencia).' });
+    if (action === 'approve') { const gp = require('./services/sendEngine').draftGaps(asunto, cuerpo); if (gp.length) return res.status(400).json({ error: 'Le faltan datos al mensaje (' + gp[0].motivo + ': «' + gp[0].texto + '»). Complétalo o edítalo antes de aprobar.', gaps: gp }); }
     const { rows: [upd] } = await pool.query(
       `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3, editado = (editado OR $5) WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,
       [asunto, cuerpo, estado, m.id, (asunto !== m.asunto || cuerpo !== m.cuerpo)]);

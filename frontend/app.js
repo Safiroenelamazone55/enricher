@@ -25991,9 +25991,10 @@ ${rhead}${foot}
       <div class="ap-row__main">
         <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
         <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at, a.sequence_id)}</b> · ${esc(a.to_email)}</div>
+        ${(a.gaps && a.gaps.length) ? `<div class="ap-row__gap" title="${esc(a.gaps.map(g => g.motivo + ': ' + g.texto).join(' | '))}">⚠ Falta un dato en el mensaje (${esc(a.gaps[0].motivo)}: ${esc(a.gaps[0].texto)}). Complétalo en «Revisar / editar» para poder aprobarlo.</div>` : ''}
       </div>
       <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.apReviewG(${a.sequence_id},${a.id})">Revisar / editar</button>
-      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
+      <button class="btn btn--primary btn--sm" ${(a.gaps && a.gaps.length) ? 'disabled title="Le falta un dato: complétalo antes de aprobar"' : ''} onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
     </div>`;
   }
   let _fixAll = false;   // "Por corregir": false = solo las primeras 5 (jerarquía, sin saturar)
@@ -26179,10 +26180,14 @@ ${rhead}${foot}
   let _apAllBusy = false;
   async function taskApproveAll() {
     if (_apAllBusy) return;
-    const lista = _apF(); if (!lista.length) return;
-    if (!confirm(`¿Aprobar los ${lista.length} emails de esta lista?
+    const todos = _apF(); if (!todos.length) return;
+    const sinDatos = todos.filter(a => a.gaps && a.gaps.length), lista = todos.filter(a => !(a.gaps && a.gaps.length));
+    if (!lista.length) { showBanner(`Los ${todos.length} emails tienen datos sin completar (ciudad, empresa…): ábrelos con «Revisar / editar» y complétalos antes de aprobar.`, 'error'); return; }
+    if (!confirm(`¿Aprobar ${lista.length} email${lista.length !== 1 ? 's' : ''} de esta lista?${sinDatos.length ? `
 
-Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su secuencia. Los que tengan el mensaje vacío no se aprobarán.`)) return;
+${sinDatos.length} no se aprobará${sinDatos.length !== 1 ? 'n' : ''}: les falta un dato (ciudad, empresa…). Queda${sinDatos.length !== 1 ? 'n' : ''} en la lista para que los completes.` : ''}
+
+Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su secuencia.`)) return;
     _apAllBusy = true;
     const btn = document.getElementById('lm-ap-all');
     let hechos = 0, fallos = [], i = 0;
@@ -26205,7 +26210,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _apAllBusy = false;
     _renderBody();
     if (fallos.length) showBanner(`✓ ${hechos} aprobado${hechos !== 1 ? 's' : ''} · ${fallos.length} no se pudo${fallos.length !== 1 ? 'ieron' : ''} aprobar${fallos[0].msg ? ' (' + fallos[0].msg + ')' : ''}`, 'error');
-    else showBanner(`✓ ${hechos} email${hechos !== 1 ? 's' : ''} aprobado${hechos !== 1 ? 's' : ''} — saldrán en su fecha desde el buzón del cliente`, 'success');
+    else showBanner(`✓ ${hechos} email${hechos !== 1 ? 's' : ''} aprobado${hechos !== 1 ? 's' : ''} — saldrán en su fecha desde el buzón del cliente${sinDatos.length ? ` · ${sinDatos.length} sin aprobar por falta de datos` : ''}`, sinDatos.length ? 'info' : 'success');
   }
   async function taskApprove(mid) {
     try {
@@ -26839,6 +26844,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <div class="seq-app__who">${meta}</div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
+      ${(a.gaps && a.gaps.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEE2E2;border:1px solid #F5B5B5;font-size:12.5px;color:#991B1B"><b>⚠ Le falta un dato a este mensaje y no se puede aprobar así.</b> ${a.gaps.map(g => esc(g.motivo) + ' en el ' + esc(g.campo) + ': <code>' + esc(g.texto) + '</code>').join(' · ')}. Complétalo en el texto (o corrige el dato del contacto) y vuelve a aprobar.</div>` : ''}
       ${(a.vars_vacias && a.vars_vacias.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEF3C7;border:1px solid #F5D9A0;font-size:12.5px;color:#92400E"><b>⚠ Hay huecos en este mensaje.</b> Estas variables no tienen valor para este contacto y salen en blanco: ${a.vars_vacias.map(v => '<code>{{' + esc(v) + '}}</code>').join(', ')}. Corrige el dato del contacto o edita el texto antes de aprobar.</div>` : ''}
       ${a.reply_to_prev && a.reply_subject
         ? `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px;flex-wrap:wrap"><span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px">Asunto</span>
