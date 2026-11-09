@@ -28227,7 +28227,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const sys = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && ((String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #')) || String(a.nota || '').startsWith('Rebote:')));   // igual que la lista: los rebotes viven en «Por corregir»
       const delInactiva = a => a.tipo === 'tarea' && inactivas.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
       const acts = (_activities || []).filter(a => a.estado === 'pendiente' && !sys(a) && !delInactiva(a) && _dayOf(a.fecha) <= today).length;
-      const aprob = Array.isArray(_apList) ? _apList.length : (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
+      const aprob = Array.isArray(_apList) ? _apAll().length : (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
       let fix = 0; try { fix = _fixList().length; } catch (_) {}
       return seq + acts + aprob + fix;
     } catch (e) { return 0; }
@@ -28271,7 +28271,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return !_taskFAccs.size || _taskFAccs.has(key);
   }
   function _apCliOk(a) { return !_gcli || (_sequences || []).some(x => x.id === a.sequence_id); }   // filtro global de cliente
-  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _apCliOk(a) && _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')) : []; }
+  function _apAll() { return Array.isArray(_apList) ? _apList.filter(_apCliOk) : []; }   // borradores por aprobar del cliente elegido en el filtro global (todos si no hay)
+  function _apF() { return _apAll().filter(a => _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')); }
   function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id)) && _tkSpecialPass('__fix')); }
   function _taskFilterPass(t) { return _tkSeqPass(t.sq.id) && _tkCanalPass(t.st && t.st.canal, t.st && t.st.accion); }
   function taskSetFilter(kind, val) {
@@ -28317,13 +28318,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (!seqMap.has(sid)) seqMap.set(sid, sq0.nombre);
       const cid0 = sq0.campaign_id; if (cid0 && !campMap.has(cid0)) campMap.set(cid0, _campaignName(cid0) || ('Campaña ' + cid0));
     };
-    (Array.isArray(_apList) ? _apList : []).forEach(a => _addSeqOpt(a.sequence_id));
+    _apAll().forEach(a => _addSeqOpt(a.sequence_id));
     _fixList().forEach(x => (x.seqs || []).forEach(sq => _addSeqOpt(sq.id)));
     // Cuántas tareas hay en cada secuencia/campaña según la vista elegida (arriba: Vencidas, Para hoy, Por aprobar…) — para empezar por donde hay más.
     const _cnt = {}, _bump = sid => { _cnt[sid] = (_cnt[sid] || 0) + 1; };
     const _sc = _taskStat;
     if (!_sc || ['over', 'today', 'next'].includes(_sc)) allRaw.forEach(t => { const ok = !_sc ? t.due <= today : _sc === 'over' ? t.due < today : _sc === 'today' ? t.due.getTime() === today.getTime() : t.due > today; if (ok) _bump(t.sq.id); });
-    if (!_sc || _sc === 'approve') (Array.isArray(_apList) ? _apList : []).forEach(a => _bump(a.sequence_id));
+    if (!_sc || _sc === 'approve') _apAll().forEach(a => _bump(a.sequence_id));
     if (!_sc || _sc === 'fix') _fixList().forEach(x => (x.seqs || []).forEach(sq => _bump(sq.id)));
     if (_sc === 'accept') _pendingAccept().forEach(x => (x.seqs || []).forEach(sq => _bump(sq.id)));
     const _campCnt = {}; Object.keys(_cnt).forEach(k => { const s0 = (_sequences || []).find(x => String(x.id) === k); const c0 = s0 && s0.campaign_id; if (c0) _campCnt[c0] = (_campCnt[c0] || 0) + _cnt[k]; });
@@ -28350,7 +28351,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const cnt = {}, acc = {};
       const bumpC = (canal, accion) => { cnt[canal] = (cnt[canal] || 0) + 1; if (accion) { (acc[canal] = acc[canal] || {})[accion] = ((acc[canal] || {})[accion] || 0) + 1; } };
       allRaw.filter(t => _tkSeqPass(t.sq.id) && t.due <= today).forEach(t => bumpC(t.st.canal || 'email', t.st.accion || ''));
-      const nApr = (Array.isArray(_apList) ? _apList : []).filter(a => _tkSeqPass(a.sequence_id)).length;
+      const nApr = _apAll().filter(a => _tkSeqPass(a.sequence_id)).length;
       const nFix = _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
       const nAcc = (typeof _pendingAccept === 'function' ? _pendingAccept() : []).filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
       const special = { __fix: nFix, __approve: nApr, __accept: nAcc };
@@ -28396,7 +28397,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const acts = _activities.filter(a => a.estado === 'pendiente' && !_ofInactiveSeq(a) && !_isSysNote(a)).sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
-    const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length) || _fixList().length;
+    const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apAll().length) || _fixList().length;
     const paCta = (_taskFCanals.size && !_taskFCanals.has('linkedin')) || (_taskFAccs.size && !_taskFAccs.has('__accept')) ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
