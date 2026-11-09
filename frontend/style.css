@@ -20996,3 +20996,9 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ibx-aichip:hover:not(:disabled) { background: #F7F6F3; color: #3F3B36; }
 .ibx-ainote { flex: 1 1 200px; min-width: 0; font-size: .72rem; color: #8F8B83; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ibx-ainote--warn { color: #B45309; }
+/* Barra de Outreach: grupos plegables (nada se quita; lo menos usado queda recogido) */
+.lm2-nav__grp--btn { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; font-family: inherit; text-align: left; cursor: pointer; }
+.lm2-nav__grp--btn:hover { color: #7C776F; }
+.lm2-nav__chev { flex: none; transition: transform .15s; }
+.lm2-nav__grp.closed .lm2-nav__chev { transform: rotate(-90deg); }
+.lm2-nav__gcnt { margin-left: auto; min-width: 16px; height: 16px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 8px; background: #E8E4DE; color: #5F5B54; font-size: .62rem; font-weight: 700; letter-spacing: 0; }

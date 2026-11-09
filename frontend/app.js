@@ -23188,23 +23188,45 @@ const LeadManagerModule = (() => {
   function settingsBack() { const b = _cfgBack || 'x-cantera'; _cfgBack = null; go(b); }
   function _mountCanteraCfg() { try { if ($('lm-set-cantera-body')) { const gc = (typeof gcName === 'function') ? gcName() : ''; CanteraConfigModule.setExtClient(gc); CanteraConfigModule.render('lm-set-cantera-body'); } } catch (e) { console.error('[outreach] cfg cantera', e); } }
   function setEmbed(sec) { _section = sec; _activeClient = null; try { localStorage.setItem('lm_last_section', sec); } catch (_) {} }
+  // Grupos plegables: nada se quita, pero lo que se usa menos queda recogido (Prospección, Datos, Preparación y Análisis, por defecto).
+  // El grupo de la pantalla en la que estás siempre se ve abierto, y con la barra en modo iconos se ven todas las opciones.
+  function _navCollapsedSet() {
+    try { const v = JSON.parse(localStorage.getItem('lm_nav_grp') || 'null'); if (Array.isArray(v)) return new Set(v); } catch (_) {}
+    return new Set(['Prospección', 'Datos', 'Preparación', 'Análisis']);
+  }
+  function navGrp(g) {
+    const st = _navCollapsedSet(); if (st.has(g)) st.delete(g); else st.add(g);
+    try { localStorage.setItem('lm_nav_grp', JSON.stringify([...st])); } catch (_) {}
+    _refreshNav();
+  }
   function _navHtml() {
-    let html = _gcli ? (_gcLoadLogo(), `<div class="lm2-gc" title="Viendo sólo ${esc(gcName())} · clic para quitar el filtro" onclick="LeadManagerModule.gcSet(null)">${_gcTile()}<div class="lm2-gc__x"><span>Viendo sólo</span><b>${esc(gcName())}</b></div><button type="button" title="Quitar filtro">×</button></div>`) : '', lastG = null;
-    _NAV.filter(n => !n.x || _canDatos()).forEach(n => {
-      if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
-      const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
-      // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada,
-      // el contador del servidor.
-      const nc = _gcli ? {} : (_navCounts || {});   // con filtro de cliente los totales del servidor (de todos los clientes) no valen
-      const cnt = n.k === 'tasks'  ? (Array.isArray(_contacts) && _contacts.length ? _pendingTaskCount() : (nc.tasks || 0))
+    let html = _gcli ? (_gcLoadLogo(), `<div class="lm2-gc" title="Viendo sólo ${esc(gcName())} · clic para quitar el filtro" onclick="LeadManagerModule.gcSet(null)">${_gcTile()}<div class="lm2-gc__x"><span>Viendo sólo</span><b>${esc(gcName())}</b></div><button type="button" title="Quitar filtro">×</button></div>`) : '';
+    const items = _NAV.filter(n => !n.x || _canDatos());
+    const isActive = n => (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
+    // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada, el contador del servidor.
+    const nc = _gcli ? {} : (_navCounts || {});   // con filtro de cliente los totales del servidor (de todos los clientes) no valen
+    const cntOf = n => n.k === 'tasks'  ? (Array.isArray(_contacts) && _contacts.length ? _pendingTaskCount() : (nc.tasks || 0))
                 : n.k === 'leads'  ? (_contacts.length ? _contacts.filter(c => _ldMatchPill(c, 'respondio')).length : (nc.leads || 0))   // = "Por calificar": lo que espera tu decisión (no los ya trabajados ni los que ya están en Deals)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
                 : n.k === 'clients' ? (_gcli ? 0 : _cuTotal())
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
-      html += `<button class="lm2-nav__item${active ? ' active' : ''}${n.k === 'clients' && _gcli ? ' has-gc' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')"${n.k === 'clients' ? ' onmouseenter="LeadManagerModule.gcOpen(this)" onmouseleave="LeadManagerModule.gcLeave()"' : ''}>
+    const itemHtml = n => {
+      const cnt = cntOf(n);
+      return `<button class="lm2-nav__item${isActive(n) ? ' active' : ''}${n.k === 'clients' && _gcli ? ' has-gc' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')"${n.k === 'clients' ? ' onmouseenter="LeadManagerModule.gcOpen(this)" onmouseleave="LeadManagerModule.gcLeave()"' : ''}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
+    };
+    const plegados = _navCollapsedGlobal() ? new Set() : _navCollapsedSet();
+    const activeG = (items.find(isActive) || {}).g;
+    const grupos = []; items.forEach(n => { let g = grupos[grupos.length - 1]; if (!g || g.name !== n.g) { g = { name: n.g, items: [] }; grupos.push(g); } g.items.push(n); });
+    grupos.forEach(g => {
+      const closed = !!g.name && plegados.has(g.name) && g.name !== activeG;
+      if (g.name) {
+        const tot = g.items.reduce((sum, n) => sum + (cntOf(n) || 0), 0);
+        html += `<button type="button" class="lm2-nav__grp lm2-nav__grp--btn${closed ? ' closed' : ''}" onclick="LeadManagerModule.navGrp('${g.name}')" aria-expanded="${!closed}" title="${closed ? 'Mostrar' : 'Recoger'} ${g.name}"><svg class="lm2-nav__chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span>${g.name}</span>${closed && tot ? `<span class="lm2-nav__gcnt">${tot}</span>` : ''}</button>`;
+      }
+      if (!closed) g.items.forEach(n => { html += itemHtml(n); });
     });
     return html;
   }
@@ -39939,7 +39961,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
