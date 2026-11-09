@@ -23703,7 +23703,8 @@ const LeadManagerModule = (() => {
     }
     return (_TOUCH[st.canal] || _TOUCH.email)[2];
   }
-  function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
+  const _SEQ_VIVO = { draft: '#64748B', activa: '#16A34A', pausada: '#F59E0B', completada: '#2563EB', archivada: '#78818C' };
+  function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="ldh-chip ldh-chip--tag" style="background:${_SEQ_VIVO[e] || _SEQ_VIVO.draft}">${s[0]}</span>`; }
   function _seqSteps(id) { return _steps.filter(s => s.sequence_id === id).sort((a, b) => (a.dia - b.dia) || (a.orden - b.orden) || (a.id - b.id)); }
   function _sequencesByClient(cid) { return _sequences.filter(s => s.outbound_client_id === cid); }
   function _sortSeq(arr) { const o = { activa: 0, pausada: 1, draft: 2, completada: 3, archivada: 4 }; return [...arr].sort((a, b) => (o[a.estado] ?? 9) - (o[b.estado] ?? 9) || (b.id || 0) - (a.id || 0)); }
