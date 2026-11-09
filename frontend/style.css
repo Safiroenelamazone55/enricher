@@ -21002,3 +21002,7 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .lm2-nav__chev { flex: none; transition: transform .15s; }
 .lm2-nav__grp.closed .lm2-nav__chev { transform: rotate(-90deg); }
 .lm2-nav__gcnt { margin-left: auto; min-width: 16px; height: 16px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 8px; background: #E8E4DE; color: #5F5B54; font-size: .62rem; font-weight: 700; letter-spacing: 0; }
+/* Leads · etiqueta de resultado: misma forma y estilo que el estado de los proyectos en Operaciones (rectángulo de esquinas suaves, color sólido, texto blanco en mayúsculas) */
+.ldh-chip--tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; line-height: 1; border: 0; }
+.ldh-chip--tag:hover { box-shadow: none; filter: brightness(.93); }
+.ldh-chip--tag.ldh-chip--empty { color: var(--text-muted, #8B9690); border: 1px dashed var(--border, #D5DDD7); }

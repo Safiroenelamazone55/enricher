@@ -25531,6 +25531,8 @@ ${rhead}${foot}
     ['no_califica',   'No califica',     '#8A6D3B', '#FBF0DA', 'desc'],
     ['no_contactar',  'No contactar',    '#C4342B', '#F1EFEB', 'desc'],
   ];
+  // Colores vivos y sólidos para la etiqueta de resultado de Leads (misma forma que el estado de los proyectos en Operaciones: relleno de color, texto blanco en mayúsculas)
+  const _DISP_VIVO = { respondio: '#0891B2', interesado: '#16A34A', reunion: '#7C3AED', mas_adelante: '#2563EB', derivado: '#8B5CF6', no_es_persona: '#64748B', no_interesado: '#F97316', no_califica: '#CA8A04', no_contactar: '#DC2626' };
   const _DISP_GRUPOS = [['pos', 'Positivos'], ['der', 'Derivados'], ['desc', 'Descartados']];
   function _dispGrupo(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[4] : ''; }
   function _dispoLabel(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[1] : ''; }
@@ -34088,7 +34090,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>
         <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
         <td onclick="event.stopPropagation()">
-          <button class="ldh-chip ldh-chip--btn${d ? '' : ' ldh-chip--empty'}" style="${d ? `background:${d[3]};color:${d[2]}` : ''}" onclick="LeadManagerModule.ldOpenDispoMenu(event,${c.id})" title="Clic para cambiar el estado">${d ? d[1] : 'Sin estado'}</button>
+          <button class="ldh-chip ldh-chip--btn ldh-chip--tag${d ? '' : ' ldh-chip--empty'}" style="${d ? `background:${_DISP_VIVO[d[0]] || d[2]}` : ''}" onclick="LeadManagerModule.ldOpenDispoMenu(event,${c.id})" title="Clic para cambiar el estado">${d ? d[1] : 'Sin estado'}</button>
           ${_derivLinkHtml(c)}
         </td>
         <td class="ldh-date">${fecha}</td>
