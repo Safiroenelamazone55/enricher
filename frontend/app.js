@@ -30374,7 +30374,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return [back(30), iso(now)];
   }
   function dashTab(t) { _dashTab = t; _dashSave(); _renderBody(); }
+  // El cliente del filtro GLOBAL (el de la barra lateral: «Viendo sólo …») manda sobre el del dashboard; antes el dashboard lo ignoraba y mostraba todos los clientes.
+  function _dashClient() { return _gcli ? String(_gcli) : (_dashF.client || ''); }
   function dashSet(k, v) {
+    if (k === 'client' && _gcli) { gcSet(v ? parseInt(v) : null); return; }   // cambiar de cliente aquí cambia el filtro global
     _dashF[k] = v;
     if (k === 'client') { _dashF.sequence = ''; _dashF.campaign = ''; }
     if (k === 'campaign') _dashF.sequence = '';
@@ -30384,7 +30387,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const my = ++_dashSeq; _dashLoading = true; _seqAb = null; _dashPaintBody();
     const [from, to] = _dashRange();
     const p = new URLSearchParams({ from, to });
-    ['client', 'campaign', 'sequence', 'country', 'channel'].forEach(k => { if (_dashF[k]) p.set(k, _dashF[k]); });
+    ['client', 'campaign', 'sequence', 'country', 'channel'].forEach(k => { const v = k === 'client' ? _dashClient() : _dashF[k]; if (v) p.set(k, v); });
     let d = null;
     try { const r = await apiFetch(`${API}/lm/dashboard?${p}`); d = (r && r.ok) ? await r.json() : null; } catch (e) {}
     if (my !== _dashSeq) return;
@@ -30393,7 +30396,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _dashFiltersHtml() {
     const f = _dashF;
     const sel = (k, label, ico, opts, cur) => `<label class="dash-f${(cur != null ? cur : f[k]) && (cur != null ? cur : f[k]) !== '' && k !== 'range' ? ' is-on' : ''}"><span class="dash-f__i">${_dashIco(ico, 16)}</span><select onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}">${k === 'range' ? '' : `<option value="">${label}</option>`}${opts.map(o => `<option value="${esc(String(o[0]))}"${String(cur != null ? cur : f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select></label>`;
-    const cl = parseInt(f.client) || 0, cp = parseInt(f.campaign) || 0;
+    const cl = parseInt(_dashClient()) || 0, cp = parseInt(f.campaign) || 0;
     const camps = _campaigns.filter(c => !cl || c.outbound_client_id === cl);
     const seqs = _sequences.filter(s => (!cl || s.outbound_client_id === cl) && (!cp || s.campaign_id === cp));
     const rg = [['7d', 'Últimos 7 días'], ['30d', 'Últimos 30 días'], ['mes', 'Este mes'], ['trim', 'Este trimestre'], ['ytd', 'Este año (YTD)'], ['custom', 'Personalizado']];
@@ -30402,12 +30405,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD'], ['custom', 'Personalizado']];
     return sel('range', 'Rango', 'cal', seg, f.range || '7d')
       + `${f.range === 'custom' ? `<input type="date" class="dash-date" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-date" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
-      ${sel('client', 'Cliente', 'building', _clients.map(c => [c.id, c.nombre]))}
+      ${sel('client', 'Cliente', 'building', (_gcAll && _gcAll.length ? _gcAll : _clients).map(c => [c.id, c.nombre]), _dashClient())}
       ${sel('campaign', 'Campaña', 'tag', camps.map(c => [c.id, c.nombre]))}
       ${sel('sequence', 'Secuencia', 'seq', seqs.map(s => [s.id, s.nombre]))}
       ${sel('channel', 'Canal', 'radio', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['wa_msg', 'WhatsApp · mensajes'], ['wa_call', 'WhatsApp · llamadas'], ['otros', 'Otros / tareas']])}
       ${sel('country', 'País', 'globe', ctry)}
-      ${(f.client || f.campaign || f.sequence || f.country || f.channel) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
+      ${(f.campaign || f.sequence || f.country || f.channel || (!_gcli && f.client)) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
   }
   function dashClear() { Object.assign(_dashF, { client: '', campaign: '', sequence: '', country: '', channel: '' }); _dashSave(); _dashLoad(); }
   function _dashPaintBody() {
@@ -30479,7 +30482,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const def = _KPI_DEFS.find(x => x[0] === id); if (!def) return;
     let from, to; const p = new URLSearchParams({ kpi: id });
     if (scope === 'seq') { [from, to] = _seqMetRangeDates(); p.set('sequence', _activeSeq); }
-    else { [from, to] = _dashRange(); ['client', 'campaign', 'sequence', 'country'].forEach(k => { if (_dashF[k]) p.set(k, _dashF[k]); }); }
+    else { [from, to] = _dashRange(); ['client', 'campaign', 'sequence', 'country'].forEach(k => { const v = k === 'client' ? _dashClient() : _dashF[k]; if (v) p.set(k, v); }); }
     p.set('from', from); p.set('to', to);
     document.getElementById('kdr')?.remove();
     const ov = document.createElement('div'); ov.id = 'kdr'; ov.className = 'kdr';
