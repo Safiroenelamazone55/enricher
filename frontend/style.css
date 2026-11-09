@@ -21032,3 +21032,7 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ldh-sw:disabled { cursor: default; }
 .ldh-cols__ft { padding: 10px 16px; border-top: 1px solid #ECEFEC; }
 .ldh-cols__reset { border: 0; background: none; color: #0A66E8; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; padding: 0; }
+
+.ldh-lead-table { table-layout: fixed; min-width: 0; }
+.ld-hub .ldh-lead-table .ldh-note__in { max-width: 100%; }
+.ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

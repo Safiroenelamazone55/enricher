@@ -34032,11 +34032,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   // ── Columnas de Leads: se pueden añadir o quitar con el «+» de la cabecera (panel «Campos»). Cliente y Secuencia vienen ocultas por defecto. ──
   const _LD_COLS = [
-    { k: 'lead', l: 'Lead', w: 210, fixed: true, g: 'base' },
-    { k: 'contacto', l: 'Contacto', w: 150, def: true, g: 'base' },
+    { k: 'lead', l: 'Lead', w: 230, fixed: true, g: 'base' },
+    { k: 'contacto', l: 'Contacto', w: 190, def: true, g: 'base' },
     { k: 'resultado', l: 'Resultado', w: 150, def: true, g: 'base' },
     { k: 'fecha', l: 'Fecha', w: 76, def: true, g: 'base' },
-    { k: 'nota', l: 'Nota (clic para editar)', w: 0, def: true, g: 'base' },
+    { k: 'nota', l: 'Nota (clic para editar)', w: 280, def: true, g: 'base' },
     { k: 'cliente', l: 'Cliente', w: 120, g: 'sec' },
     { k: 'secuencia', l: 'Secuencia · paso', w: 176, g: 'sec' },
     { k: 'campana', l: 'Campaña', w: 150, g: 'sec' },
@@ -34188,9 +34188,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
-    const flexK = cols.some(x => x.k === 'nota') ? 'nota' : 'lead';   // la columna que se estira
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
-      <colgroup>${cols.map(x => x.k === flexK ? '<col>' : `<col style="width:${x.w}px">`).join('')}<col style="width:150px"></colgroup>
+    const totW = cols.reduce((n, x) => n + x.w, 0) + 150;   // anchos fijos: nada se estira de más
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table" style="width:${totW}px">
+      <colgroup>${cols.map(x => `<col style="width:${x.w}px">`).join('')}<col style="width:150px"></colgroup>
       <thead><tr>${cols.map(x => `<th>${x.l}</th>`).join('')}<th class="ldh-addth"><button type="button" class="ldh-addcol" onclick="LeadManagerModule.ldColsOpen(event)" title="Agregar o quitar columnas">＋</button></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
