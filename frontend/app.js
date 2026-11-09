@@ -25951,7 +25951,7 @@ ${rhead}${foot}
   async function _apReload() {
     try { const r = await apiFetch(`${API}/lm/approvals`); _apList = (r && r.ok) ? await r.json() : []; }
     catch { _apList = []; }
-    if (_gcli && Array.isArray(_apList)) { const sq = new Set((_sequences || []).map(x => x.id)); _apList = _apList.filter(a => sq.has(a.sequence_id)); }   // filtro global de cliente
+    // El filtro por cliente se aplica al MOSTRAR (en _apF), no al cargar: si las secuencias aún no habían llegado, la lista quedaba vacía y así se quedaba.
     if (_section === 'tasks') _renderBody();
   }
   // Próximo día REAL de envío: parte de la fecha programada (o ahora) y avanza hasta el
@@ -28231,7 +28231,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_taskFCanals.size && !_taskFCanals.has(sp[1])) return false;
     return !_taskFAccs.size || _taskFAccs.has(key);
   }
-  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')) : []; }
+  function _apCliOk(a) { return !_gcli || (_sequences || []).some(x => x.id === a.sequence_id); }   // filtro global de cliente
+  function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _apCliOk(a) && _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')) : []; }
   function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id)) && _tkSpecialPass('__fix')); }
   function _taskFilterPass(t) { return _tkSeqPass(t.sq.id) && _tkCanalPass(t.st && t.st.canal, t.st && t.st.accion); }
   function taskSetFilter(kind, val) {
