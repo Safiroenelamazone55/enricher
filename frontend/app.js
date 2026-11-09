@@ -28715,6 +28715,41 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ibMode    = 'reply'; // 'reply' (email real) | 'note' (nota interna, no se envía)
   // Lo que se está escribiendo en cada conversación (y el texto sugerido que llega desde Tareas): sobrevive a cambiar de correo o de conversación y a repintar el Inbox.
   const _ibDrafts = {};
+  // «Sugerir con IA»: la IA lee la conversación de este contacto y propone el siguiente mensaje. Solo rellena la caja: nunca envía nada.
+  const _ibAi = {};   // por contacto: { done, razon, warn }
+  let _ibAiBusy = false;
+  function _ibAiBarHtml() {
+    const st = _ibAi[_ibActive] || {};
+    const chip = (t, ins) => `<button type="button" class="ibx-aichip" ${_ibAiBusy ? 'disabled' : ''} onclick="LeadManagerModule.ibSuggest('${ins}')">${t}</button>`;
+    return `<div class="ibx-aibar" id="ibx-aibar"><button type="button" class="ibx-ai" id="ibx-ai" ${_ibAiBusy ? 'disabled' : ''} onclick="LeadManagerModule.ibSuggest()" title="La IA lee la conversación con este contacto y propone el siguiente mensaje. Tú lo revisas y lo envías.">${_ibAiBusy ? 'Pensando…' : (st.done ? '✨ Otra propuesta' : '✨ Sugerir con IA')}</button>`
+      + (st.done ? chip('Más corto', 'Hazlo más corto: máximo 60 palabras') + chip('Proponer reunión', 'El objetivo de este mensaje es agendar una llamada de 15 minutos') + chip('Más cercano', 'Tono más cercano y menos formal') : '')
+      + (st.razon ? `<span class="ibx-ainote${st.warn ? ' ibx-ainote--warn' : ''}" title="${esc(st.razon)}">${st.warn ? '⚠ ' : 'IA: '}${esc(st.razon)}</span>` : '') + `</div>`;
+  }
+  async function ibSuggest(instr) {
+    if (!_ibActive || _ibAiBusy) return;
+    const cid = _ibActive, ta = document.getElementById('ibx-ta');
+    const actual = ta ? ta.value.trim() : '';
+    if (actual && !instr && !confirm('Ya hay un texto en la caja. ¿Reemplazarlo por la propuesta de la IA?')) return;
+    _ibAiBusy = true; const bar = document.getElementById('ibx-aibar'); if (bar) bar.outerHTML = _ibAiBarHtml();
+    try {
+      const r = await apiFetch(`${API}/lm/inbox/suggest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, instruccion: instr || '', borrador: instr ? actual : '' }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+      if (_ibActive !== cid) { _ibAi[cid] = { done: !!d.enviar, razon: d.razon }; return; }   // cambió de conversación mientras pensaba: no se pisa lo que escribe ahí
+      if (!d.enviar) { _ibAi[cid] = { done: false, razon: d.razon || 'La IA no recomienda escribir ahora.', warn: true }; showBanner('La IA recomienda no escribir ahora: ' + (d.razon || ''), 'info'); }
+      else {
+        _ibAi[cid] = { done: true, razon: d.razon };
+        const t2 = document.getElementById('ibx-ta'); if (t2) t2.value = d.mensaje;
+        const a2 = document.getElementById('ibx-asunto'); if (a2 && d.asunto && !a2.value.trim()) a2.value = d.asunto;
+        ibDraftSet();
+      }
+    } catch (e) { showBanner('IA: ' + e.message, 'error'); }
+    finally {
+      _ibAiBusy = false;
+      const bar2 = document.getElementById('ibx-aibar'); if (bar2) bar2.outerHTML = _ibAiBarHtml();
+      _ibTaFit();
+    }
+  }
   function ibDraftSet() { if (!_ibActive) return; const ta = document.getElementById('ibx-ta'); if (!ta) return; _ibDrafts[_ibActive] = { cuerpo: ta.value, asunto: (document.getElementById('ibx-asunto') || {}).value || '' }; _ibTaFit(); }
   let _ibSending = false;
   // "Enviados" mostraba por defecto una tabla de tracking (aperturas/clics) sin forma
@@ -29345,6 +29380,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
            <div class="ibx-tawrap">
              ${asuntoField}
              <textarea class="ibx-ta" id="ibx-ta" rows="${taRows}" oninput="LeadManagerModule.ibDraftSet()" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}">${esc(dr.cuerpo || '')}</textarea>
+             ${_ibAiBarHtml()}
              <div class="ibx-sendgrp">
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
                <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
@@ -39903,7 +39939,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,

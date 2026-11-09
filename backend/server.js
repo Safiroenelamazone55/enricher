@@ -8382,6 +8382,7 @@ app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 require('./services/inicioRoutes').mount(app, { pool, requireAuth, permsSvc });   // Formulario de inicio del cliente + modulo Inicios de cliente
 require('./services/translateRoutes').mount(app, { requireAuth });
+require('./services/inboxAi').mount(app, { pool, requireAuth });   // Inbox · «Sugerir con IA» (Cloudflare Workers AI, plan gratuito)
 require('./services/accessRoutes').mount(app, { pool, requireAuth, rateLimit, findUserById, mailboxSvc });
 require('./services/telRoutes').mount(app, { pool, requireAuth, mailboxSvc });   // Telefonía: llamadas desde el navegador con el número del cliente
 

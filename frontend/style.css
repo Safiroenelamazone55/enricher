@@ -20986,3 +20986,13 @@ textarea.ini-in { width: 100%; resize: vertical; }
 /* Inbox: el panel usa toda la altura visible, sin el relleno inferior de la página ni los 6 px del contenedor, que provocaban un scroll innecesario */
 main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #lm2-body:has(#ibx-wrap) { padding-bottom: 0 !important; }
+/* Inbox: sin la línea en blanco bajo los destinatarios (el campo para escribir otro correo ya no obliga a una segunda línea) y barra de «Sugerir con IA» */
+.rcp__t { flex: 1 1 24px; min-width: 24px; }
+.ibx-aibar { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; min-height: 26px; }
+.ibx-ai { height: 26px; padding: 0 11px; border: 1px solid var(--border-strong, #D5DDD7); background: #fff; font: inherit; font-size: .74rem; font-weight: 700; color: #3F3B36; cursor: pointer; }
+.ibx-ai:hover:not(:disabled) { background: #F1EFEB; }
+.ibx-ai:disabled, .ibx-aichip:disabled { opacity: .55; cursor: default; }
+.ibx-aichip { height: 24px; padding: 0 9px; border: 1px solid var(--border, #E4E8E3); background: #fff; font: inherit; font-size: .72rem; color: #6C6862; cursor: pointer; }
+.ibx-aichip:hover:not(:disabled) { background: #F7F6F3; color: #3F3B36; }
+.ibx-ainote { flex: 1 1 200px; min-width: 0; font-size: .72rem; color: #8F8B83; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ibx-ainote--warn { color: #B45309; }
