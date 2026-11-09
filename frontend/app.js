@@ -29344,7 +29344,6 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
            <div class="ibx-tawrap">
              ${asuntoField}
              <textarea class="ibx-ta" id="ibx-ta" rows="${taRows}" oninput="LeadManagerModule.ibDraftSet()" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}">${esc(dr.cuerpo || '')}</textarea>
-             <div class="ibx-sighint">✓ La firma de ${esc(c.buzon)} se añade sola al enviar</div>
              <div class="ibx-sendgrp">
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
                <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
@@ -29935,6 +29934,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // que en ventanas bajas los mensajes quedaban aplastados a casi 0px — el piso
   // ahora se calcula sumando ese "chrome" real + un mínimo visible para leer.
   let _ibFitBound = false;
+  // Altura del Inbox = el espacio visible, y además se descuenta lo que sobre dentro del contenedor con scroll (relleno inferior de la página):
+  // antes quedaba un scroll pequeño e innecesario aunque todo cupiera a pantalla completa.
+  function _ibSize() {
+    const g = document.querySelector('.ibx-grid'); if (!g) return;
+    g.style.height = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
+    let sp = g.parentElement;
+    while (sp && sp !== document.body && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
+    if (sp && sp !== document.body) { const over = sp.scrollHeight - sp.clientHeight; if (over > 0 && over < 200) g.style.height = Math.max(260, g.getBoundingClientRect().height - over) + 'px'; }
+  }
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
     // Nunca más alto que el espacio real visible: si el header + caja de responder
@@ -29943,8 +29951,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // SIEMPRE tiene que quedar completa dentro de la pantalla, nunca cortada abajo
     // (antes un "piso" mínimo podía forzar el grid a ser MÁS alto que lo visible,
     // y como el grid recorta con overflow:hidden, el botón Enviar quedaba tapado).
-    const available = window.innerHeight - g.getBoundingClientRect().top - 16;
-    g.style.height = Math.max(260, available) + 'px';
+    _ibSize();
     if (!_ibFitBound) {
       _ibFitBound = true;
       // La altura se medía una sola vez (y al redimensionar): tras un refresco, la página aún se estaba acomodando (barra de carga, tipografías,
@@ -29957,7 +29964,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (window.ResizeObserver) { try { new ResizeObserver(again).observe(document.body); } catch (_) {} }
     }
     // Re-medidas escalonadas tras pintar: cubren los cambios de layout que ocurren justo después de cargar.
-    [120, 450, 1200].forEach(ms => setTimeout(() => { const g2 = document.querySelector('.ibx-grid'); if (g2) g2.style.height = Math.max(260, window.innerHeight - g2.getBoundingClientRect().top - 16) + 'px'; }, ms));
+    [120, 450, 1200].forEach(ms => setTimeout(_ibSize, ms));
   }
 
   function _ibListHtml() {

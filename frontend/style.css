@@ -20980,3 +20980,6 @@ textarea.ini-in { width: 100%; resize: vertical; }
 /* Recuadros de arriba (Todas, Vencidas, Para hoy…): al elegir uno cambia ligeramente el fondo; sin barra verde ni tinte de color */
 .lm-stat--btn.on, .lm-stat--priority.on, .lm-stat--fix.on { background: #F1EFEB !important; box-shadow: none !important; }
 .lm-stat--btn.on .lm-stat__l { color: #3F3B36; }
+
+/* Inbox: la caja donde se escribe el mensaje es más grande (cabe el correo completo sin desplazarse) */
+.ibx-replybox .ibx-ta { min-height: 130px; max-height: 44vh; }
