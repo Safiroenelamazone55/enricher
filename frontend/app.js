@@ -26098,7 +26098,8 @@ ${rhead}${foot}
     const act = new Set((_sequences || []).filter(s => s.estado === 'activa').map(s => s.id));
     const out = [];
     (_contacts || []).forEach(c => {
-      if (['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
+      // Quien ya respondió o fue clasificado (respondió, interesado, reunión, más adelante, no interesado…) no se corrige ni se le escribe: no entra a esta lista.
+      if (['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
       const bad = !c.email ? 'sin' : (c.email_status === 'invalid' ? 'rebote' : '');
       if (!bad) return;
       // Sin profesional utilizable pero con email personal válido: el motor envía al personal, así que no hay nada que corregir.
