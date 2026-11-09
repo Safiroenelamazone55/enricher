@@ -23454,7 +23454,8 @@ const LeadManagerModule = (() => {
   // ── Helpers de campaña (Fase 2) ──
   const _CMP = { draft: ['Draft', '#F1EFEB', '#6C6862'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#F1EFEB', '#3B5573'] };
   const _CMP_ORDER = { activa: 0, pausada: 1, draft: 2, cerrada: 3 };
-  function _cmpBadge(e) { const s = _CMP[e] || _CMP.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
+  const _CMP_VIVO = { draft: '#64748B', activa: '#16A34A', pausada: '#F59E0B', cerrada: '#475569' };
+  function _cmpBadge(e) { const s = _CMP[e] || _CMP.draft; return `<span class="ldh-chip ldh-chip--tag" style="background:${_CMP_VIVO[e] || _CMP_VIVO.draft}">${s[0]}</span>`; }
   function _campaignName(id) { const c = _campaigns.find(x => x.id === id); return c ? c.nombre : null; }
   function _campaignsByClient(cid) { return _campaigns.filter(c => c.outbound_client_id === cid); }
   function _campaignLeads(id) { return _data.filter(l => l.campaign_id === id); }
