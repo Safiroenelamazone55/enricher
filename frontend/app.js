@@ -29934,14 +29934,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // que en ventanas bajas los mensajes quedaban aplastados a casi 0px — el piso
   // ahora se calcula sumando ese "chrome" real + un mínimo visible para leer.
   let _ibFitBound = false;
-  // Altura del Inbox = el espacio visible, y además se descuenta lo que sobre dentro del contenedor con scroll (relleno inferior de la página):
-  // antes quedaba un scroll pequeño e innecesario aunque todo cupiera a pantalla completa.
+  // Altura del Inbox = el espacio visible hasta el borde inferior (el relleno de la página se quita por CSS para este panel).
   function _ibSize() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
-    g.style.height = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
-    let sp = g.parentElement;
-    while (sp && sp !== document.body && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
-    if (sp && sp !== document.body) { for (let i = 0; i < 4; i++) { const over = sp.scrollHeight - sp.clientHeight; if (over <= 0 || over >= 200) break; g.style.height = Math.max(260, g.getBoundingClientRect().height - over) + 'px'; } }
+    g.style.height = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 14) + 'px';
   }
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
