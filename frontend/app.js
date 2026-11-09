@@ -28445,7 +28445,6 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apAll().length) || _fixList().length;
-    const paCta = (_taskFCanals.size && !_taskFCanals.has('linkedin')) || (_taskFAccs.size && !_taskFAccs.has('__accept')) ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn, sub) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span>' + (sub ? '<span class="lm-stat__sub">' + sub + '</span>' : '') + '</button>';
@@ -28486,7 +28485,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       </div>
       ${_taskView === 'priority' ? '<div class="lm-prio-link"><a href="#" onclick="event.preventDefault();LeadManagerModule.taskSetView(\'list\')">‹ Volver a la lista</a></div>' + _vTaskInboxPriority() : ''}
       ${_taskView === 'calendar' ? _vTaskCalendar() : ''}
-      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRowF}${canalRow.panel}${listHtml}` : ''}`;
+      ${_taskView === 'list' ? `${statStrip}${filterRowF}${canalRow.panel}${listHtml}` : ''}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
