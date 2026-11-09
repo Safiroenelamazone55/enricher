@@ -29941,7 +29941,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     g.style.height = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
     let sp = g.parentElement;
     while (sp && sp !== document.body && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
-    if (sp && sp !== document.body) { const over = sp.scrollHeight - sp.clientHeight; if (over > 0 && over < 200) g.style.height = Math.max(260, g.getBoundingClientRect().height - over) + 'px'; }
+    if (sp && sp !== document.body) { for (let i = 0; i < 4; i++) { const over = sp.scrollHeight - sp.clientHeight; if (over <= 0 || over >= 200) break; g.style.height = Math.max(260, g.getBoundingClientRect().height - over) + 'px'; } }
   }
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
@@ -29964,7 +29964,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (window.ResizeObserver) { try { new ResizeObserver(again).observe(document.body); } catch (_) {} }
     }
     // Re-medidas escalonadas tras pintar: cubren los cambios de layout que ocurren justo después de cargar.
-    [120, 450, 1200].forEach(ms => setTimeout(_ibSize, ms));
+    [120, 450, 1200, 2500].forEach(ms => setTimeout(_ibSize, ms));
   }
 
   function _ibListHtml() {
