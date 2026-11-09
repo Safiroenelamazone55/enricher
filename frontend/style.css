@@ -20969,13 +20969,14 @@ textarea.ini-in { width: 100%; resize: vertical; }
 .lm-stat__sub { display: block; margin-top: 2px; font-size: .68rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: #8F8B83; }
 .lm-fix-scope { flex: none; height: 24px; padding: 0 10px; border: 1px solid #E8C99A; border-radius: 999px; background: #FFF8EC; color: #92400E; font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; } .lm-fix-scope:hover { background: #FFF1D6; } .lm-fix-scope.on { background: #B45309; border-color: #B45309; color: #fff; }
 
-/* Por corregir: encabezado de la lista en dos mitades discretas («Por corregir N» | «Todos los pendientes N») */
+/* Por corregir: encabezado de la lista en dos mitades iguales y discretas. Sin barra de color ni burbujas: al elegir una cambia ligeramente el fondo y el texto. */
 .lm-fix-seg { display: grid; grid-template-columns: 1fr 1fr; margin: 14px 2px 6px; border: 1px solid #ECE9E4; background: #fff; }
-.lm-fix-seg__h { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border: 0; background: #fff; font: inherit; text-align: left; cursor: pointer; color: #918C85; border-bottom: 2px solid transparent; }
+.lm-fix-seg__h { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; border: 0; background: #fff; font: inherit; cursor: pointer; color: #918C85; }
 .lm-fix-seg__h + .lm-fix-seg__h { border-left: 1px solid #ECE9E4; }
-.lm-fix-seg__h:hover { background: #FAF9F7; }
-.lm-fix-seg__h.on { color: #B45309; border-bottom-color: #B45309; }
-.lm-fix-seg__t { font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 7px; }
-.lm-fix-seg__t i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.lm-fix-seg__h b { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(11,30,58,.06); color: inherit; font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.lm-fix-seg__h.on b { background: #FDEBD3; }
+.lm-fix-seg__h:hover { background: #F7F6F3; }
+.lm-fix-seg__h.on { background: #F1EFEB; color: #3F3B36; }
+.lm-fix-seg__t { font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.lm-fix-seg__h b { font-size: .72rem; font-weight: 800; color: inherit; font-variant-numeric: tabular-nums; }
+/* Recuadros de arriba (Todas, Vencidas, Para hoy…): al elegir uno cambia ligeramente el fondo; sin barra verde ni tinte de color */
+.lm-stat--btn.on, .lm-stat--priority.on, .lm-stat--fix.on { background: #F1EFEB !important; box-shadow: none !important; }
+.lm-stat--btn.on .lm-stat__l { color: #3F3B36; }
