@@ -20982,7 +20982,7 @@ textarea.ini-in { width: 100%; resize: vertical; }
 .lm-stat--btn.on .lm-stat__l { color: #3F3B36; }
 
 /* Inbox: la caja donde se escribe el mensaje es más grande (cabe el correo completo sin desplazarse) */
-.ibx-replybox .ibx-ta { min-height: 130px; max-height: 44vh; }
+.ibx-replybox .ibx-ta { min-height: 200px; max-height: 55vh; }
 /* Inbox: el panel usa toda la altura visible, sin el relleno inferior de la página ni los 6 px del contenedor, que provocaban un scroll innecesario */
 main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #lm2-body:has(#ibx-wrap) { padding-bottom: 0 !important; }

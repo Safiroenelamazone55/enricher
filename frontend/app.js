@@ -28589,6 +28589,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     go('inbox');
     if (_ibThreads === null) await _ibReload();
     await ibOpen(cid);
+    _ibTaFit();
     const ta = document.getElementById('ibx-ta'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
   }
   async function tiDealDone(cid) {
@@ -28714,7 +28715,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ibMode    = 'reply'; // 'reply' (email real) | 'note' (nota interna, no se envía)
   // Lo que se está escribiendo en cada conversación (y el texto sugerido que llega desde Tareas): sobrevive a cambiar de correo o de conversación y a repintar el Inbox.
   const _ibDrafts = {};
-  function ibDraftSet() { if (!_ibActive) return; const ta = document.getElementById('ibx-ta'); if (!ta) return; _ibDrafts[_ibActive] = { cuerpo: ta.value, asunto: (document.getElementById('ibx-asunto') || {}).value || '' }; }
+  function ibDraftSet() { if (!_ibActive) return; const ta = document.getElementById('ibx-ta'); if (!ta) return; _ibDrafts[_ibActive] = { cuerpo: ta.value, asunto: (document.getElementById('ibx-asunto') || {}).value || '' }; _ibTaFit(); }
   let _ibSending = false;
   // "Enviados" mostraba por defecto una tabla de tracking (aperturas/clics) sin forma
   // de abrir la conversación real. Ahora "Enviados" abre por defecto el MISMO panel de
@@ -29980,7 +29981,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibPaint() {
     const el = document.getElementById('ibx-wrap');
     if (el) el.outerHTML = _ibWrapHtml();
-    requestAnimationFrame(_ibFit);
+    requestAnimationFrame(() => { _ibFit(); _ibTaFit(); });
+  }
+  // La caja de escribir crece con el texto (hasta el 55 % de la pantalla): el mensaje sugerido se ve completo, sin desplazarse dentro de la caja.
+  function _ibTaFit() {
+    const ta = document.getElementById('ibx-ta'); if (!ta || !ta.closest('.ibx-replybox')) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 200), Math.round(window.innerHeight * 0.55)) + 'px';
   }
   function _ibWrapHtml() {
     const n = _ibCounts();
