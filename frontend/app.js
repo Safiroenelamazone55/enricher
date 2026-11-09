@@ -904,6 +904,20 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/><line x1="9" y1="15" x2="9.01" y2="15"/><line x1="15" y1="15" x2="15.01" y2="15"/></svg>' },
 ];
 
+// Buscador del inicio: filtra los módulos al escribir; Enter abre el primero que queda; «/» enfoca el buscador.
+function homeFilter(q) {
+  q = String(q || '').trim().toLowerCase();
+  document.querySelectorAll('#home-grid .home-card').forEach(c => { c.style.display = !q || (c.dataset.q || '').includes(q) ? '' : 'none'; });
+  document.querySelectorAll('#home-grid .home-sec').forEach(sec => { sec.style.display = [...sec.querySelectorAll('.home-card')].some(c => c.style.display !== 'none') ? '' : 'none'; });
+}
+function homeOpenFirst() { const c = [...document.querySelectorAll('#home-grid .home-card')].find(x => x.style.display !== 'none'); if (c) c.click(); }
+document.addEventListener('keydown', e => {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target, tag = t && t.tagName; if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  const pane = document.getElementById('pane-home'), q = document.getElementById('home-q');
+  if (pane && q && pane.offsetParent !== null) { e.preventDefault(); q.focus(); }
+});
+
 function renderHome() {
   const grid = document.getElementById('home-grid');
   if (!grid) {
@@ -931,29 +945,29 @@ function _renderHomeInner(grid) {
     const hi = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
     const fecha = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
     const hero = document.getElementById('home-hero');
-    if (hero) hero.innerHTML = `<h1 class="home-hero__t">${hi}${nom ? ', ' + nom.replace(/[<>&"]/g, '') : ''}</h1><p class="home-hero__s">${fecha.charAt(0).toUpperCase() + fecha.slice(1)} · ¿Qué quieres abrir?</p>`;
+    if (hero) hero.innerHTML = `<div class="home-hero__row"><div><h1 class="home-hero__t">${hi}${nom ? ', ' + nom.replace(/[<>&"]/g, '') : ''}</h1><p class="home-hero__s">${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</p></div><label class="home-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="home-q" type="search" placeholder="Ir a un módulo…" autocomplete="off" oninput="homeFilter(this.value)" onkeydown="if(event.key==='Enter'){homeOpenFirst()}else if(event.key==='Escape'){this.value='';homeFilter('');this.blur()}" aria-label="Ir a un módulo"><kbd>/</kbd></label></div>`;
   } catch (_) {}
   const ARROW = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>';
-  // Iconos de línea (24 px, trazo 1.5), todos en tinta neutra: el módulo se distingue por la forma, no por el color
-  const sv = d => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  // Iconos de app: trazo + relleno suave, en blanco sobre un recuadro de tinta oscura (todos iguales: el módulo se reconoce por la forma, no por el color)
+  const sv = d => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const SKIN = {
-    management: { i: sv('<rect x="3" y="3" width="7.5" height="10" rx="2"/><rect x="13.5" y="3" width="7.5" height="6" rx="2"/><rect x="13.5" y="12" width="7.5" height="9" rx="2"/><rect x="3" y="16" width="7.5" height="5" rx="2"/>') },
-    leadmanagement: { i: sv('<path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.6 21.5l-3.8-8.3L2.5 9.4z"/>') },
-    contenido: { i: sv('<rect x="3" y="4.5" width="18" height="16.5" rx="3.5"/><path d="M3 10h18M8 2.5v4M16 2.5v4"/><path d="M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01" stroke-width="2.2"/>') },
-    finance: { i: sv('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a1.5 1.5 0 0 1 1.5 1.5V8"/><path d="M3 7.5v10A2.5 2.5 0 0 0 5.5 20H19a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 19 8H5.5A2.5 2.5 0 0 1 3 5.5"/><circle cx="16.2" cy="14" r="1.2"/>') },
-    herramientas: { i: sv('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>') },
-    plantillas: { i: sv('<path d="M14.5 2.5H7a2.5 2.5 0 0 0-2.5 2.5v14A2.5 2.5 0 0 0 7 21.5h10a2.5 2.5 0 0 0 2.5-2.5V7.5z"/><path d="M14 2.5v3.8a1.2 1.2 0 0 0 1.2 1.2h4.3"/><path d="M8.5 12.5h7M8.5 16.5h5"/>') },
-    inicios: { i: sv('<rect x="8" y="2.5" width="8" height="4" rx="1.4"/><path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
-    empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>') },
+    management: { i: sv('<rect x="3.5" y="3.5" width="7.5" height="10" rx="2" fill="currentColor" fill-opacity=".24"/><rect x="13" y="3.5" width="7.5" height="6" rx="2"/><rect x="13" y="12.5" width="7.5" height="8" rx="2" fill="currentColor" fill-opacity=".24"/><rect x="3.5" y="16.5" width="7.5" height="4" rx="1.6"/>') },
+    leadmanagement: { i: sv('<path d="M21 3 3 10.2l7 3.1 3.1 7z" fill="currentColor" fill-opacity=".24"/><path d="M21 3 10 13.3"/>') },
+    contenido: { i: sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5" fill="currentColor" fill-opacity=".24"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 17.5h.01M12 17.5h.01" stroke-width="2.2"/>') },
+    finance: { i: sv('<rect x="3.5" y="7.5" width="17" height="12" rx="2.5" fill="currentColor" fill-opacity=".24"/><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h11.5A1.5 1.5 0 0 1 19 6.5V8"/><path d="M20.5 12h-3.2a1.8 1.8 0 0 0 0 3.6h3.2z"/>') },
+    herramientas: { i: sv('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="currentColor" fill-opacity=".24"/>') },
+    plantillas: { i: sv('<path d="M14.5 2.8H7A2.5 2.5 0 0 0 4.5 5.3v13.4A2.5 2.5 0 0 0 7 21.2h10a2.5 2.5 0 0 0 2.5-2.5V7.8z" fill="currentColor" fill-opacity=".24"/><path d="M14 2.8v3.6a1.4 1.4 0 0 0 1.4 1.4h4.1M8.5 13h7M8.5 16.5h4.5"/>') },
+    inicios: { i: sv('<path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8" fill="currentColor" fill-opacity=".24"/><rect x="8" y="2.5" width="8" height="4" rx="1.4" fill="#14211B" fill-opacity="0"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
+    empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="8" cy="12" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="16" cy="18" r="2" fill="currentColor" fill-opacity=".24"/>') },
   };
   const card = m => {
     const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { i: m.icon };
-    return `<div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
+    return `<div class="home-card" role="button" tabindex="0" data-q="${(m.name + ' ' + m.desc).toLowerCase()}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
       <div class="home-card__icon">${k.i}</div>
       <div class="home-card__body"><div class="home-card__title">${m.name}</div><div class="home-card__desc">${m.desc}</div></div>
     </div>`;
   };
-  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 4], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 4]];
+  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 4], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 'u4']];
   const used = new Set();
   let html = GROUPS.map(([t, ids, cols]) => {
     const ms = ids.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean); ms.forEach(m => used.add(m.id));
