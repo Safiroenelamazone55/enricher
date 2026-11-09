@@ -25,7 +25,8 @@ async function runModel(system, user) {
     const e = new Error((j && j.errors && j.errors[0] && j.errors[0].message) || ('HTTP ' + r.status)); e.status = r.status; throw e;
   }
   const out = j.result && (j.result.response != null ? j.result.response : (j.result.choices && j.result.choices[0] && j.result.choices[0].message && j.result.choices[0].message.content));
-  return String(out == null ? '' : out).trim();
+  // Workers AI ya entrega el JSON interpretado cuando el modelo responde en JSON: se vuelve a texto para tratarlo igual.
+  return (out !== null && typeof out === 'object') ? JSON.stringify(out) : String(out == null ? '' : out).trim();
 }
 
 // ── Limpieza del hilo: sin HTML, sin citas de correos anteriores, sin firmas largas ──
