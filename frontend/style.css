@@ -20968,3 +20968,23 @@ textarea.ini-in { width: 100%; resize: vertical; }
 /* Por corregir: total del cliente junto al número, y píldora para ver todos */
 .lm-stat__sub { display: block; margin-top: 2px; font-size: .68rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: #8F8B83; }
 .lm-fix-scope { flex: none; height: 24px; padding: 0 10px; border: 1px solid #E8C99A; border-radius: 999px; background: #FFF8EC; color: #92400E; font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; } .lm-fix-scope:hover { background: #FFF1D6; } .lm-fix-scope.on { background: #B45309; border-color: #B45309; color: #fff; }
+
+/* Por corregir en dos mitades: «tocan ahora» | «todos los pendientes» */
+.lm-stat--split { cursor: default; gap: 6px; }
+.lm-stat__halves { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 190px; margin: 0 auto; border-top: 1px solid rgba(11,30,58,.08); padding-top: 6px; }
+.lm-stat__half { border: 0; background: none; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.lm-stat__half + .lm-stat__half { border-left: 1px solid rgba(11,30,58,.08); border-radius: 0 6px 6px 0; }
+.lm-stat__half:hover { background: rgba(11,30,58,.05); }
+.lm-stat__half.sel { background: rgba(180,83,9,.10); }
+.lm-stat__half .lm-stat__n { margin: 0; }
+.lm-stat__half i { font-style: normal; font-size: .66rem; font-weight: 600; color: #8F8B83; }
+.lm-fix-seg { display: grid; grid-template-columns: 1fr 1fr; margin: 18px 2px 8px; border: 1px solid #ECE9E4; background: #fff; }
+.lm-fix-seg__h { display: flex; align-items: baseline; gap: 10px; padding: 11px 16px; border: 0; background: #fff; font: inherit; text-align: left; cursor: pointer; color: #8F8B83; border-bottom: 3px solid transparent; }
+.lm-fix-seg__h + .lm-fix-seg__h { border-left: 1px solid #ECE9E4; }
+.lm-fix-seg__h:hover { background: #FFFCF5; }
+.lm-fix-seg__h.on { color: #B45309; background: #FFF8EC; border-bottom-color: #B45309; }
+.lm-fix-seg__t { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+.lm-fix-seg__t i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.lm-fix-seg__h b { font-size: 1.15rem; font-weight: 800; color: inherit; font-variant-numeric: tabular-nums; }
+.lm-fix-seg__h em { font-style: normal; font-size: .74rem; font-weight: 500; color: #8F8B83; }
+@media (max-width: 700px) { .lm-fix-seg__h em { display: none; } .lm-fix-seg__h { padding: 10px 12px; } }

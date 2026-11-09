@@ -26118,6 +26118,7 @@ ${rhead}${foot}
   // «Por corregir» (la lista de arriba) es solo lo que toca ahora (su paso actual es un email); este es el total que habrá que resolver.
   let _fixScopeAll = false;
   function fixScopeToggle() { _fixScopeAll = !_fixScopeAll; _fixAll = false; _renderBody(); }
+  function fixScopeSet(all) { _fixScopeAll = !!all; _fixAll = false; _taskStat = 'fix'; _renderBody(); }
   function _fixAllList() {
     const act = new Set((_sequences || []).filter(s => s.estado === 'activa').map(s => s.id));
     const out = [];
@@ -26189,7 +26190,12 @@ ${rhead}${foot}
         (bad === 'rebote' && c.email ? '<div class="lm-fx-reb" title="Este correo ya rebotó: no lo vuelvas a poner"><b>Rebotó:</b> <span>' + esc(c.email) + '</span><i>no lo vuelvas a usar</i></div>' : '') + '</div>' +
         '<div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
-    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span>' + ((_tot > 0 && (_all || _tot !== list.length)) ? '<button type="button" class="lm-fix-scope' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeToggle()" title="' + (_all ? 'Volver a solo lo que toca ahora' : 'Ver todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email') + '">' + (_all ? 'Mostrando todos · volver a los de ahora' : 'de ' + _tot + ' en total · ver todos') + '</button>' : '') + '</div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    const _nowN = listOverride ? list.length : _fixF().length, _split = !listOverride && _tot > 0 && _tot !== _nowN;
+    const _head = _split
+      ? '<div class="lm-fix-seg"><button type="button" class="lm-fix-seg__h' + (!_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><span class="lm-fix-seg__t"><i></i>Por corregir</span><b>' + _nowN + '</b><em>tocan ahora</em></button>'
+        + '<button type="button" class="lm-fix-seg__h' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email"><span class="lm-fix-seg__t"><i></i>Todos los pendientes</span><b>' + _tot + '</b><em>del cliente, en total</em></button></div>'
+      : '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div>';
+    return _head + '<div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
@@ -28421,6 +28427,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn, sub) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span>' + (sub ? '<span class="lm-stat__sub">' + sub + '</span>' : '') + '</button>';
+    const fixTileSplit = (n, t) => '<div class="lm-stat lm-stat--btn lm-stat--fix lm-stat--split' + (_taskStat === 'fix' ? ' on' : '') + '"><span class="lm-stat__l">Por corregir</span><span class="lm-stat__halves"><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && !_fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><b class="lm-stat__n lm-stat__n--warn">' + n + '</b><i>ahora</i></button><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && _fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los pendientes del cliente, aunque aún no les toque un email"><b class="lm-stat__n">' + t + '</b><i>en total</i></button></span></div>';
     const statStrip = anything ? `<div class="lm-stat-strip">
       <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length}</span></button>
       ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
@@ -28428,7 +28435,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
-      ${(hasFilter ? _fixF() : _fixList()).length ? stat('fix', 'Por corregir', (hasFilter ? _fixF() : _fixList()).length, true, (() => { const t = _fixAllF().length, n = (hasFilter ? _fixF() : _fixList()).length; return t > n ? 'de ' + t + ' en total' : ''; })()) : ''}
+      ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return t > n ? fixTileSplit(n, t) : stat('fix', 'Por corregir', n, true); })() : ''}
       ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
     </div>` : '';
     const sel = _taskStat;
@@ -39881,7 +39888,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
