@@ -30023,7 +30023,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibTaFit() {
     const ta = document.getElementById('ibx-ta'); if (!ta || !ta.closest('.ibx-replybox')) return;
     ta.style.height = 'auto';
-    ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 200), Math.round(window.innerHeight * 0.55)) + 'px';
+    ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, ta.value.trim() ? 200 : 120), Math.round(window.innerHeight * 0.55)) + 'px';
   }
   function _ibWrapHtml() {
     const n = _ibCounts();
