@@ -28451,8 +28451,6 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const fixTileSplit = (n, t) => '<div class="lm-stat lm-stat--btn lm-stat--fix lm-stat--split' + (_taskStat === 'fix' ? ' on' : '') + '"><span class="lm-stat__l">Por corregir</span><span class="lm-stat__halves"><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && !_fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><b class="lm-stat__n lm-stat__n--warn">' + n + '</b><i>ahora</i></button><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && _fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los pendientes del cliente, aunque aún no les toque un email"><b class="lm-stat__n">' + t + '</b><i>en total</i></button></span></div>';
     const statStrip = anything ? `<div class="lm-stat-strip">
       <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length}</span></button>
-      ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
-      ${stat('today', 'Para hoy', seqHoy.length + actToday.length, false)}
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
