@@ -34189,7 +34189,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         </td></tr>`;
     }).join('');
     const totW = cols.reduce((n, x) => n + x.w, 0) + 150;   // anchos fijos: nada se estira de más
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table" style="width:${totW}px">
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table" style="width:100%;min-width:${totW}px">
       <colgroup>${cols.map(x => `<col style="width:${x.w}px">`).join('')}<col style="width:150px"></colgroup>
       <thead><tr>${cols.map(x => `<th>${x.l}</th>`).join('')}<th class="ldh-addth"><button type="button" class="ldh-addcol" onclick="LeadManagerModule.ldColsOpen(event)" title="Agregar o quitar columnas">＋</button></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
