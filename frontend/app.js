@@ -25992,7 +25992,7 @@ ${rhead}${foot}
         <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
         <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at, a.sequence_id)}</b> · ${esc(a.to_email)}</div>
       </div>
-      <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${a.sequence_id},${a.id})">Revisar / editar</button>
+      <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.apReviewG(${a.sequence_id},${a.id})">Revisar / editar</button>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
     </div>`;
   }
@@ -26230,18 +26230,43 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;
     openContactPage(pend[_seqAppIdx].contact_id, { seqId: id, approve: true });
   }
+  // Revisión desde «Tareas comerciales»: recorre TODOS los emails de esa lista (con sus filtros), de cualquier secuencia, y «‹ Tareas» vuelve a la lista global.
+  let _apQ = null, _apQi = 0;
+  async function _apQOpen() {
+    const it = _apQ && _apQ[_apQi]; if (!it) return;
+    if (_activeSeq !== it.sequence_id || !(_seqApprovals || []).some(x => x.id === it.id)) {
+      _activeSeq = it.sequence_id;
+      try { const r = await apiFetch(`${API}/lm/sequences/${it.sequence_id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; } catch { _seqApprovals = []; }
+    }
+    if (!(_seqApprovals || []).some(x => x.id === it.id && x.estado === 'awaiting')) {   // ya no está pendiente (lo aprobaron en otro sitio): se salta
+      _apQ.splice(_apQi, 1);
+      if (!_apQ.length) { _apQ = null; showBanner('Listo: no quedan emails por aprobar', 'success'); seqDoExit(); return; }
+      _apQi = Math.min(_apQi, _apQ.length - 1); return _apQOpen();
+    }
+    openContactPage(it.contact_id, { seqId: it.sequence_id, approve: true });
+  }
+  async function apReviewG(seqId, mid) {
+    const list = _apF(); if (!list.length) return;
+    _apQ = list.map(a => ({ id: a.id, sequence_id: a.sequence_id, contact_id: a.contact_id }));
+    _apQi = Math.max(0, _apQ.findIndex(x => x.id === mid));
+    _cpFromGlobal = true; _cpHistSeq.clear(); _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;
+    await _apQOpen();
+  }
   function apRunNav(d) {
     if (!_cpTaskCtx || !_cpTaskCtx.approve) return;
+    if (_apQ) { _apQi = Math.max(0, Math.min(_apQ.length - 1, _apQi + d)); _apQOpen(); return; }
     const pend = (_seqApprovals || []).filter(a => a.estado === 'awaiting'); if (!pend.length) return;
     _seqAppIdx = Math.max(0, Math.min(pend.length - 1, _seqAppIdx + d));
     openContactPage(pend[_seqAppIdx].contact_id, { seqId: _cpTaskCtx.seqId, approve: true });
   }
   function _cpApproveBar(cid) {
-    const pend = (_seqApprovals || []).filter(a => a.estado === 'awaiting');
-    const i = pend.findIndex(x => x.contact_id === cid), a = i >= 0 ? pend[i] : null;
+    const q = _apQ && _apQ.length ? _apQ : null;
+    const pend = q || (_seqApprovals || []).filter(a => a.estado === 'awaiting');
+    const i = q ? _apQi : pend.findIndex(x => x.contact_id === cid);
+    const a = q ? (_seqApprovals || []).find(x => x.id === q[_apQi].id) : (i >= 0 ? pend[i] : null);
     const head = `<div class="cp-taskbar__top"><span class="cp-taskbar__ico">${NI('mail', 15)}</span><div class="cp-taskbar__ttl"><span class="cp-taskbar__t">Revisar email antes de aprobar</span></div><button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button></div>`;
     if (!a) return `<div class="cp-taskbar cp-taskbar--slim">${head}<div class="cp-empty2" style="padding:12px">Este contacto no tiene un email pendiente de aprobar. <a href="#" onclick="LeadManagerModule.seqDoExit();return false;">Volver a Tareas</a></div></div>`;
-    _seqAppIdx = i;
+    _seqAppIdx = q ? 0 : i;
     const nav = `<div class="seq-app-nav"><div class="seq-app-nav__count"><b>${i + 1}</b> de ${pend.length} por aprobar</div><div class="seq-app-nav__arrows">
         <button class="btn btn--ghost btn--sm" ${i <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.apRunNav(-1)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" ${i >= pend.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.apRunNav(1)">Siguiente ›</button></div></div>`;
@@ -26687,6 +26712,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (_cpTaskCtx && _cpTaskCtx.approve) {
         try { _apReload(); } catch (_) {}
         if (action === 'save') { _renderBody(); showBanner('Borrador guardado.', 'success'); return; }
+        if (_apQ) {   // cola global: se saca este y se pasa al siguiente de la lista de Tareas comerciales
+          showBanner(action === 'approve' ? 'Aprobado. Saldrá respetando el intervalo.' : 'Descartado. El contacto avanza al siguiente paso.', 'success');
+          _apQ.splice(_apQi, 1);
+          if (!_apQ.length) { _apQ = null; showBanner('Listo: no quedan emails por aprobar', 'success'); seqDoExit(); }
+          else { _apQi = Math.min(_apQi, _apQ.length - 1); _apQOpen(); }
+          return;
+        }
         const rest = _seqApprovals.filter(x => x.estado === 'awaiting');
         showBanner(action === 'approve' ? 'Aprobado. Saldrá respetando el intervalo.' : 'Descartado. El contacto avanza al siguiente paso.', 'success');
         if (rest.length) { _seqAppIdx = Math.min(_seqAppIdx, rest.length - 1); openContactPage(rest[_seqAppIdx].contact_id, { seqId: _cpTaskCtx.seqId, approve: true }); }
@@ -27321,7 +27353,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     else _renderBody();
   }
   function seqDoExit() {
-    const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; const global = _cpFromGlobal; _cpFromGlobal = false;
+    const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; const global = _cpFromGlobal; _cpFromGlobal = false; _apQ = null;
     _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId;
     if (global) { _section = 'tasks'; _renderBody(); return; }   // se vuelve a la lista de Tareas comerciales, con los filtros como los dejaste
     _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
@@ -39819,7 +39851,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
