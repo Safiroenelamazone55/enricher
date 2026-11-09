@@ -20958,3 +20958,6 @@ textarea.ini-in { width: 100%; resize: vertical; }
 .ini-modal__box .ini-in { width: 100%; }
 .ini-modal__box .ini-l { margin-top: 10px; }
 .ini-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+
+/* Emails por aprobar: botón «Aprobar todo» a la derecha del encabezado (después de la línea) */
+.lm-tsec-h .lm-ap-all { order: 2; flex: none; height: 28px; padding: 0 12px; border: 1px solid #0062CC; border-radius: 8px; background: #007AFF; color: #fff; font: inherit; font-size: .76rem; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; } .lm-tsec-h .lm-ap-all:hover:not(:disabled) { background: #0A6BE0; } .lm-tsec-h .lm-ap-all:disabled { opacity: .65; cursor: default; }

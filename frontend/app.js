@@ -26172,8 +26172,40 @@ ${rhead}${foot}
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
-    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${apl.length}</span></div>
+    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${apl.length}</span><button type="button" class="lm-ap-all" id="lm-ap-all" onclick="LeadManagerModule.taskApproveAll()" title="Aprueba todos los emails que ves en esta lista (respeta los filtros)">✓ Aprobar todo (${apl.length})</button></div>
       <div class="seq-tasks">${apl.map(_apRowHtml).join('')}</div>`;
+  }
+  // Aprobar todos los emails de la lista (los que se ven con el filtro actual). Piden confirmación: al aprobarlos, salen en su fecha desde el buzón del cliente.
+  let _apAllBusy = false;
+  async function taskApproveAll() {
+    if (_apAllBusy) return;
+    const lista = _apF(); if (!lista.length) return;
+    if (!confirm(`¿Aprobar los ${lista.length} emails de esta lista?
+
+Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su secuencia. Los que tengan el mensaje vacío no se aprobarán.`)) return;
+    _apAllBusy = true;
+    const btn = document.getElementById('lm-ap-all');
+    let hechos = 0, fallos = [], i = 0;
+    const paint = () => { if (btn) { btn.disabled = true; btn.textContent = `Aprobando… ${hechos + fallos.length}/${lista.length}`; } };
+    paint();
+    const uno = async a => {
+      try {
+        const r = await apiFetch(`${API}/lm/approvals/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) });
+        if (r.ok) { hechos++; return a.id; }
+        let msg = ''; try { msg = (await r.json()).error || ''; } catch (_) {}
+        fallos.push({ a, msg });
+      } catch (e) { fallos.push({ a, msg: e.message }); }
+      return null;
+    };
+    const okIds = [];
+    const worker = async () => { while (i < lista.length) { const a = lista[i++]; const id = await uno(a); if (id != null) okIds.push(id); paint(); } };
+    await Promise.all([worker(), worker(), worker()]);   // de 3 en 3: rápido sin saturar el servidor
+    _apList = (_apList || []).filter(x => !okIds.includes(x.id));
+    (_sequences || []).forEach(sq => { const n = lista.filter(a => a.sequence_id === sq.id && okIds.includes(a.id)).length; if (n && sq.awaiting > 0) sq.awaiting = Math.max(0, sq.awaiting - n); });
+    _apAllBusy = false;
+    _renderBody();
+    if (fallos.length) showBanner(`✓ ${hechos} aprobado${hechos !== 1 ? 's' : ''} · ${fallos.length} no se pudo${fallos.length !== 1 ? 'ieron' : ''} aprobar${fallos[0].msg ? ' (' + fallos[0].msg + ')' : ''}`, 'error');
+    else showBanner(`✓ ${hechos} email${hechos !== 1 ? 's' : ''} aprobado${hechos !== 1 ? 's' : ''} — saldrán en su fecha desde el buzón del cliente`, 'success');
   }
   async function taskApprove(mid) {
     try {
@@ -39786,7 +39818,7 @@ ${rhead}${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
