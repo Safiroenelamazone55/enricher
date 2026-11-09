@@ -26192,8 +26192,8 @@ ${rhead}${foot}
     }).join('');
     const _nowN = listOverride ? list.length : _fixF().length, _split = !listOverride && _tot > 0 && _tot !== _nowN;
     const _head = _split
-      ? '<div class="lm-fix-seg"><button type="button" class="lm-fix-seg__h' + (!_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><span class="lm-fix-seg__t"><i></i>Por corregir</span><b>' + _nowN + '</b><em>tocan ahora</em></button>'
-        + '<button type="button" class="lm-fix-seg__h' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email"><span class="lm-fix-seg__t"><i></i>Todos los pendientes</span><b>' + _tot + '</b><em>del cliente, en total</em></button></div>'
+      ? '<div class="lm-fix-seg"><button type="button" class="lm-fix-seg__h' + (!_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><span class="lm-fix-seg__t"><i></i>Por corregir</span><b>' + _nowN + '</b></button>'
+        + '<button type="button" class="lm-fix-seg__h' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email"><span class="lm-fix-seg__t"><i></i>Todos los pendientes</span><b>' + _tot + '</b></button></div>'
       : '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div>';
     return _head + '<div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
@@ -28435,7 +28435,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
-      ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return t > n ? fixTileSplit(n, t) : stat('fix', 'Por corregir', n, true); })() : ''}
+      ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return stat('fix', 'Por corregir', n, true); })() : ''}
       ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
     </div>` : '';
     const sel = _taskStat;
