@@ -6241,7 +6241,8 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
     const p = await pool.query(
       `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=COALESCE(next_action_at, NOW())
-        WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')`, [uid, cid]);
+        WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')
+          AND NOT EXISTS (SELECT 1 FROM lm_contacts kx WHERE kx.id=$2 AND kx.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar'))`, [uid, cid]);   // quien ya respondió NO se reanuda al corregir su email
     await pool.query(
       `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND estado='pendiente' AND tipo='tarea'
           AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%')`, [uid, cid]);
@@ -6297,7 +6298,8 @@ app.post('/api/lm/contacts/:id/data-issue', requireAuth, async (req, res) => {
       const p = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$1 WHERE user_id=$2 AND contact_id=$3 AND estado='activo'`, ['dato_' + issue, uid, cid]);
       paused = p.rowCount;
     } else {
-      const p = await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason LIKE 'dato_%'`, [uid, cid]);
+      const p = await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason LIKE 'dato_%'
+          AND NOT EXISTS (SELECT 1 FROM lm_contacts kx WHERE kx.id=$2 AND kx.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar'))`, [uid, cid]);   // quien ya respondió no se reanuda
       resumed = p.rowCount;
     }
     const L = { falta_email: 'Falta email', falta_linkedin: 'Falta LinkedIn', dato_incorrecto: 'Dato incorrecto' };
@@ -7644,6 +7646,7 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
         LEFT JOIN lm_companies co ON co.id = k.company_id
         LEFT JOIN sequence_steps st ON st.id = m.step_id
        WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.estado IN ('awaiting','approved')
+         AND NOT ${_RESPONDED_M}
        ORDER BY m.created_at ASC
     `, [req.workspaceOwnerId, req.params.id]);
     { const { draftGaps } = require('./services/sendEngine'); rows.forEach(r => { r.gaps = draftGaps(r.asunto, r.cuerpo); }); }
@@ -7677,6 +7680,11 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
   } catch (err) { console.error('[approvals] GET', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
 });
 // Lista GLOBAL de borradores por aprobar (para la lista de Tareas comerciales).
+// Quien ya respondió (o salió de la secuencia) NO debe aparecer en «Por aprobar» ni poder aprobarse: es un riesgo escribirle de nuevo.
+const _STOP_DISP = "('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar')";
+const _RESPONDED_M = `(k.disposition IN ${_STOP_DISP}
+   OR EXISTS (SELECT 1 FROM lm_contact_sequences csr WHERE csr.user_id=m.user_id AND csr.contact_id=m.contact_id AND csr.sequence_id=m.sequence_id AND csr.estado IN ('respondido','terminado'))
+   OR EXISTS (SELECT 1 FROM lm_inbox_messages imr WHERE imr.contact_id=m.contact_id AND imr.tipo='reply' AND imr.received_at > m.created_at))`;
 app.get('/api/lm/approvals', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -7688,6 +7696,7 @@ app.get('/api/lm/approvals', requireAuth, async (req, res) => {
         JOIN lm_contacts k ON k.id = m.contact_id
         LEFT JOIN lm_companies co ON co.id = k.company_id
        WHERE m.user_id=$1 AND m.estado='awaiting' AND s.estado='activa'
+         AND NOT ${_RESPONDED_M}
        ORDER BY m.scheduled_at ASC NULLS FIRST, m.created_at ASC
        LIMIT 100
     `, [req.workspaceOwnerId]);
@@ -7716,6 +7725,10 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
     const cuerpo = String(b.cuerpo ?? m.cuerpo);
     const estado = action === 'approve' ? 'approved' : 'awaiting';
     if (action === 'approve' && require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar (o escribe el mensaje del paso en la secuencia).' });
+    if (action === 'approve') {   // quien ya respondió o salió de la secuencia no puede recibir este mensaje
+      const rsp = (await pool.query(`SELECT 1 FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.id=$1 AND ${_RESPONDED_M}`, [m.id])).rowCount;
+      if (rsp) { await pool.query(`UPDATE lm_messages SET estado='omitido', error='No enviado a propósito: el contacto ya respondió o salió de la secuencia' WHERE id=$1 AND estado='awaiting'`, [m.id]); return res.status(409).json({ error: 'Este contacto ya respondió o salió de la secuencia: no se le envía este mensaje.' }); }
+    }
     if (action === 'approve') { const gp = require('./services/sendEngine').draftGaps(asunto, cuerpo); if (gp.length) return res.status(400).json({ error: 'Le faltan datos al mensaje (' + gp[0].motivo + ': «' + gp[0].texto + '»). Complétalo o edítalo antes de aprobar.', gaps: gp }); }
     const { rows: [upd] } = await pool.query(
       `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3, editado = (editado OR $5) WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,

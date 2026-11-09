@@ -1096,7 +1096,8 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
        -- Solo quien REALMENTE puede tener borrador: antes los ~400 enrolados viejos que nunca podían redactarse
        -- (paso no-email, sin buzón, sin email…) ocupaban los 25 cupos de cada pasada y dejaban sin borrador a las secuencias nuevas.
        AND ((k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid') OR COALESCE(k.email_personal,'') <> '')
-       AND COALESCE(k.disposition,'') NOT IN ('no_interesado','no_contactar')
+       -- Quien ya respondió o fue clasificado (interesado, reunión, no interesado…) NO recibe más borradores: antes se redactaban y el barrido los descartaba cada 10 min, en bucle.
+       AND COALESCE(k.disposition,'') NOT IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar')
        AND (SELECT st3.canal FROM sequence_steps st3 WHERE st3.sequence_id = cs.sequence_id ORDER BY st3.dia ASC, st3.orden ASC, st3.id ASC OFFSET GREATEST(COALESCE(cs.paso,1),1) - 1 LIMIT 1) = 'email'
        AND EXISTS (SELECT 1 FROM lm_mailboxes mb2 WHERE mb2.user_id = s.user_id AND mb2.outbound_client_id = s.outbound_client_id AND mb2.estado IN ('conectado','solo_envio'))
        AND NOT EXISTS (SELECT 1 FROM lm_messages w WHERE w.user_id = cs.user_id AND w.contact_id = cs.contact_id AND w.sequence_id = cs.sequence_id AND w.estado IN ('awaiting','approved'))
@@ -1116,7 +1117,7 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
       await _destino(pool, enr);
       if (!enr.email || enr.email_status === 'invalid') continue;
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
-      if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
+      if (['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(enr.disposition)) continue;
       // Lista de exclusión: si la empresa/contacto quedó excluido DESPUÉS de inscribirse (o entró por otra vía), no se redacta ni el borrador.
       try { if (await require('./exclusions').isEnrollmentExcluded(pool, enr)) { await _pauseEnrollment(pool, enr, 'excluida', null); continue; } } catch (e) { console.warn('[draft] exclusiones:', e.message); }
       const { rows: steps } = await pool.query(
