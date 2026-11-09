@@ -20964,3 +20964,7 @@ textarea.ini-in { width: 100%; resize: vertical; }
 
 .ap-row__gap { margin-top: 3px; font-size: .74rem; font-weight: 600; color: #B42318; }
 .ap-row .btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Por corregir: total del cliente junto al número, y píldora para ver todos */
+.lm-stat__sub { display: block; margin-top: 2px; font-size: .68rem; font-weight: 600; letter-spacing: 0; text-transform: none; color: #8F8B83; }
+.lm-fix-scope { flex: none; height: 24px; padding: 0 10px; border: 1px solid #E8C99A; border-radius: 999px; background: #FFF8EC; color: #92400E; font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; } .lm-fix-scope:hover { background: #FFF1D6; } .lm-fix-scope.on { background: #B45309; border-color: #B45309; color: #fff; }

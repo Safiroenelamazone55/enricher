@@ -26114,13 +26114,32 @@ ${rhead}${foot}
     });
     return out;
   }
+  // TODOS los pendientes de corregir del cliente (o de todos, sin filtro): sin email o con email rebotado, en una secuencia activa, aunque su paso actual NO sea un email todavía.
+  // «Por corregir» (la lista de arriba) es solo lo que toca ahora (su paso actual es un email); este es el total que habrá que resolver.
+  let _fixScopeAll = false;
+  function fixScopeToggle() { _fixScopeAll = !_fixScopeAll; _fixAll = false; _renderBody(); }
+  function _fixAllList() {
+    const act = new Set((_sequences || []).filter(s => s.estado === 'activa').map(s => s.id));
+    const out = [];
+    (_contacts || []).forEach(c => {
+      if (['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
+      const bad = !c.email ? 'sin' : (c.email_status === 'invalid' ? 'rebote' : '');
+      if (!bad) return;
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(c.email_personal || '').trim())) return;
+      const seqs = (c.sequences || []).filter(sq => act.has(sq.id) && ['activo', 'pausado'].includes(sq.estado) && !(/^disposition_/.test(sq.paused_reason || '') || sq.paused_reason === 'reply_received'));
+      if (seqs.length) out.push({ c, bad, seqs });
+    });
+    return out;
+  }
+  function _fixAllF() { return _fixAllList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id)) && _tkSpecialPass('__fix')); }
   // De una secuencia: lo que su pantalla cuenta y muestra de "Por corregir" (sin email Y rebotados): la misma lista, con la misma casilla para poner el email, que en Tareas comerciales.
   function _fixOfSeq(id) {
     return _fixList().filter(x => (x.seqs || []).some(s => s.id === id));
   }
   function _seqFixRowsHtml(id) { const l = _fixOfSeq(id); return l.length ? _fixSectionHtml(l) : ''; }
   function _fixSectionHtml(listOverride) {
-    const list = listOverride || _fixF(); if (!list.length) return '';
+    const _all = !listOverride && _fixScopeAll, _tot = listOverride ? 0 : _fixAllF().length;
+    const list = listOverride || (_all ? _fixAllF() : _fixF()); if (!list.length && !_tot) return '';
     const shown = (listOverride || _taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
     const rows = shown.map(({ c, bad, seqs }) => {
       const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
@@ -26170,7 +26189,7 @@ ${rhead}${foot}
         (bad === 'rebote' && c.email ? '<div class="lm-fx-reb" title="Este correo ya rebotó: no lo vuelvas a poner"><b>Rebotó:</b> <span>' + esc(c.email) + '</span><i>no lo vuelvas a usar</i></div>' : '') + '</div>' +
         '<div class="lm-fix-hints" id="fix-hints-' + c.id + '" hidden></div>';
     }).join('');
-    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span>' + ((_tot > 0 && (_all || _tot !== list.length)) ? '<button type="button" class="lm-fix-scope' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeToggle()" title="' + (_all ? 'Volver a solo lo que toca ahora' : 'Ver todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email') + '">' + (_all ? 'Mostrando todos · volver a los de ahora' : 'de ' + _tot + ' en total · ver todos') + '</button>' : '') + '</div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
@@ -28401,7 +28420,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const paCta = (_taskFCanals.size && !_taskFCanals.has('linkedin')) || (_taskFAccs.size && !_taskFAccs.has('__accept')) ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
-    const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
+    const stat = (k, l, n, warn, sub) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span>' + (sub ? '<span class="lm-stat__sub">' + sub + '</span>' : '') + '</button>';
     const statStrip = anything ? `<div class="lm-stat-strip">
       <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length}</span></button>
       ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
@@ -28409,7 +28428,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
-      ${(hasFilter ? _fixF() : _fixList()).length ? stat('fix', 'Por corregir', (hasFilter ? _fixF() : _fixList()).length, true) : ''}
+      ${(hasFilter ? _fixF() : _fixList()).length ? stat('fix', 'Por corregir', (hasFilter ? _fixF() : _fixList()).length, true, (() => { const t = _fixAllF().length, n = (hasFilter ? _fixF() : _fixList()).length; return t > n ? 'de ' + t + ' en total' : ''; })()) : ''}
       ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
     </div>` : '';
     const sel = _taskStat;
@@ -39862,7 +39881,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
