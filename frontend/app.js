@@ -26802,9 +26802,11 @@ ${rhead}${foot}
     try {
       const r = await apiFetch(`${API}/lm/sequences/${seqId}/contacts-idioma`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ desde, a }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
-      showBanner(`✓ ${d.actualizados} contacto${d.actualizados !== 1 ? 's' : ''} → ${a}`, 'success');
       // Se actualiza en pantalla al instante (sin vaciar ni recargar la página); lo demás se refresca por detrás.
       (_seqContacts || []).forEach(c => { if (desde === '_none' ? !c.idioma_ef : c.idioma_ef === desde) { c.idioma = a; c.idioma_ef = a; c.idioma_origen = 'guardado'; } });
+      // Al asignar, el grupo de origen se FUSIONA con el destino y desaparece de la lista (las filas de abajo suben): el aviso lo dice para que no parezca que cambió otro idioma.
+      const _tot = (_seqContacts || []).filter(c => c.idioma_ef === a).length;
+      showBanner(`✓ ${d.actualizados} contacto${d.actualizados !== 1 ? 's' : ''} de ${desde === '_none' ? 'sin idioma' : '«' + desde + '»'} → ${a}. «${a}» ahora tiene ${_tot} contacto${_tot !== 1 ? 's' : ''}; el grupo anterior se unió a él y ya no aparece aparte.`, 'success');
       _seqCtRepaint();
       (async () => {
         try { const r2 = await apiFetch(`${API}/lm/sequences/${seqId}/contacts`); if (r2 && r2.ok) { const nd = await r2.json(); if (Array.isArray(nd) && _activeSeq === seqId) { _seqContacts = nd; _seqCtRepaint(); } } } catch (_) {}
