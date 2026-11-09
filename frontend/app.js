@@ -27295,26 +27295,45 @@ ${rhead}${foot}
     _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
   }
   // «IA» y «Buscar» de Por corregir: abren la búsqueda en una ventana propia al costado (mitad derecha de la pantalla), sin tapar la lista. Se reutiliza esa misma ventana en las búsquedas siguientes.
+  // Ventana única para búsquedas y perfiles: Google/LinkedIn cortan la conexión con la ventana que abre Nova y por eso se abría una nueva cada vez.
+  // Con la extensión «Nova · Ventana de búsqueda» (Herramientas) se reutiliza SIEMPRE la misma; sin ella, se abre como antes.
+  const NOVA_WIN_EXT = 'olccllgkoogdahkhdbihjepmnafbhfhm';
+  let _winExt = null;   // null = sin comprobar · true = extensión instalada · false = no
+  function _winExtPing() {
+    try {
+      if (!(window.chrome && chrome.runtime && chrome.runtime.sendMessage)) { _winExt = false; return; }
+      chrome.runtime.sendMessage(NOVA_WIN_EXT, { type: 'nova-ping' }, r => { void chrome.runtime.lastError; _winExt = !!(r && r.ok); });
+    } catch (_) { _winExt = false; }
+  }
+  function _winExtOpen(slot, url, bounds) {
+    return new Promise(res => {
+      try { chrome.runtime.sendMessage(NOVA_WIN_EXT, { type: 'nova-open', slot, url, bounds }, r => { void chrome.runtime.lastError; res(!!(r && r.ok)); }); }
+      catch (_) { res(false); }
+    });
+  }
+  // Abre (o reutiliza) la ventana de un «slot». Devuelve false si se encargó la extensión (hay que cancelar el enlace) y true si no se pudo abrir ventana.
+  function _novaWin(slot, url, name, extraFeat) {
+    const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
+    const pw = Math.max(560, Math.floor(w / 2));
+    const old = () => { try { const win = window.open(url, name, `${extraFeat}width=${pw},height=${h},left=${w - pw},top=0`); if (win) { win.focus(); return true; } } catch (_) {} return false; };
+    if (_winExt === true) {
+      _winExtOpen(slot, url, { left: w - pw, top: 0, width: pw, height: h }).then(ok => { if (!ok && !old()) window.open(url, '_blank'); });
+      return true;
+    }
+    if (_winExt === null) _winExtPing();
+    return old();
+  }
+  _winExtPing();
   function fxPop(ev, a) {
     if (ev) ev.stopPropagation();
     const url = a && a.href; if (!url) return true;
-    try {
-      const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
-      const pw = Math.max(560, Math.floor(w / 2));
-      const win = window.open(url, 'nova_busqueda', `popup=yes,width=${pw},height=${h},left=${w - pw},top=0`);
-      if (win) { win.focus(); return false; }
-    } catch (e) { /* sin ventana emergente: se abre como pestaña */ }
+    try { if (_novaWin('busqueda', url, 'nova_busqueda', 'popup=yes,')) return false; } catch (e) { /* sin ventana emergente: se abre como pestaña */ }
     return true;
   }
   function seqOpenLinkedIn(cid, kind) {
     const c = _contacts.find(x => x.id === cid);
     const url = c && (kind === 'sn' ? c.linkedin_sales_nav : c.linkedin); if (!url) return;
-    try {
-      const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
-      const pw = Math.max(560, Math.floor(w / 2));
-      const win = window.open(url, 'nova_linkedin', `width=${pw},height=${h},left=${w - pw},top=0`);
-      if (win) win.focus(); else window.open(url, '_blank');
-    } catch (e) { window.open(url, '_blank'); }
+    try { if (!_novaWin('linkedin', url, 'nova_linkedin', '')) window.open(url, '_blank'); } catch (e) { window.open(url, '_blank'); }
     _cpMarkDone('open');
   }
   // Vínculo con plantilla — automático:
@@ -42664,6 +42683,11 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">La cuenta de lo que pierde el cliente</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>La pregunta del oso · cierre agendado</div>
         <div class="hrm-sc__btn">/la-pregunta-del-oso</div></div></div>`,
+    ventana: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Nova · una sola ventana</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Búsqueda con IA y perfiles de LinkedIn</div>
+        <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
+        <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
     tray: `<div class="hrm-tray"><div class="hrm-menu">
         <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
         <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Elevn</div>
@@ -42674,6 +42698,9 @@ const HerramientasModule = (() => {
     { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
       desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
+    { id: 'nova-ventana', nombre: 'Nova · Ventana de búsqueda', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'ventana',
+      desc: 'Las búsquedas con IA y los perfiles de LinkedIn que abres desde Nova se muestran siempre en la misma ventana, a la derecha, en vez de abrir una nueva en cada clic.',
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> en el Chrome donde usas Nova, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Elige esa carpeta y recarga Nova con <b>Ctrl+F5</b>. No hay nada más que configurar.', 'Prueba con el botón <b>IA</b> de un contacto en Por corregir: la ventana de la derecha se reutiliza.'] },
     { id: 'nova-activity-web', nombre: 'Elevn Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
       desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },

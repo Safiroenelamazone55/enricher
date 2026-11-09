@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Nova · Ventana de búsqueda",
+  "version": "1.0.0",
+  "description": "Reutiliza una sola ventana para las búsquedas (Google/IA) y los perfiles de LinkedIn que abres desde Nova, en vez de abrir una nueva cada vez.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqL8cRtUu330RVo1p0EmXjn9qFRvCDtaoCR5r8X0EjDiGbC1LQMYnlRrrIHQ0TUZmbnmmjEsGnkhh+rkR01ZXaCWzvB9GC0sxsZkpPB77tDDcc4AUtgglapD4kMdHfePsvdYTI6xImFa9yCW7Pvy2Z8+zb8DnME6dL6g9VYFiEsRc9KLoRfkKCQ8uuenL200Xjl/FSh+JHUeNBffzkRyf8znD4qIda5ydOAPIKleEP6yfBa55I50P/yHZRaNKpiI+wX5NKZYjHZ8yvUNzcExsjElz3EBRsK1GWx30Q7UnBZ0/87QI5z1F2T+tAtoCPl1zNeUI9tqzkxj9EgEZrNRE6QIDAQAB",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://app.novacentrax.com/*"
+    ]
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_title": "Nova · Ventana de búsqueda",
+    "default_popup": "popup.html"
+  }
+}
