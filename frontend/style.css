@@ -20433,15 +20433,21 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 #lm2-body .dash-kpis { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); overflow: visible !important; }
 #lm2-body .dash-filters .dash-f { flex: 1 1 150px; max-width: 230px; }
 
-/* Inicio · módulos: color propio por módulo, iconos de dos tonos y un brillo suave en la esquina */
-#pane-home .home-card { background: radial-gradient(180px 110px at 100% 100%, var(--acc-soft, #F3F5F2), rgba(255,255,255,0) 70%), #fff; overflow: hidden; }
-#pane-home .home-card__icon { width: 44px; height: 44px; border-radius: 12px; background: var(--acc-soft, #F3F5F2); color: var(--acc, #14211B); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc, #14211B) 14%, transparent); }
-#pane-home .home-card__icon svg { width: 24px; height: 24px; stroke-width: 1.6; }
-#pane-home .home-card:hover { border-color: color-mix(in srgb, var(--acc, #C8D0CA) 45%, #fff); box-shadow: 0 8px 22px color-mix(in srgb, var(--acc, #14211B) 12%, transparent); }
-#pane-home .home-card:hover .home-card__icon { background: var(--acc, #007AFF); color: #fff; box-shadow: none; }
-#pane-home .home-card:hover .home-card__icon svg [fill-opacity] { fill-opacity: .28; }
-#pane-home .home-card:hover .home-card__go { color: var(--acc, #007AFF); }
+/* Inicio · minimalista: saludo grande, módulos en neutro (sin color por módulo, sin brillo) y casi sin interacción */
+#pane-home .home-hero { max-width: 960px; margin: 28px auto 12px; }
+#pane-home .home-hero__t { font-size: 3rem; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; }
+#pane-home .home-hero__s { margin-top: 10px; font-size: 1.1rem; }
+#pane-home .home-sec { margin-top: 40px; }
+#pane-home .home-sec__t { margin-bottom: 14px; }
+#pane-home .home-card { background: #fff; overflow: hidden; box-shadow: none; transform: none; transition: border-color .12s; }
+#pane-home .home-card__icon { width: 40px; height: 40px; border-radius: 10px; background: transparent; color: var(--text-secondary, #5F6B64); box-shadow: none; border: 1px solid var(--border, #E2E7E3); }
+#pane-home .home-card__icon svg { width: 20px; height: 20px; stroke-width: 1.5; }
+#pane-home .home-card__icon svg [fill-opacity] { fill-opacity: 0; }
+#pane-home .home-card:hover { border-color: var(--border-strong, #C8D0CA); box-shadow: none; transform: none; }
+#pane-home .home-card:hover .home-card__icon { background: transparent; color: var(--text-secondary, #5F6B64); box-shadow: none; }
+#pane-home .home-card__go, #pane-home .home-card:hover .home-card__go { display: none; }
 #pane-home .home-sec__g--2 .home-card { padding: 22px; min-height: 104px; }
+@media (max-width: 720px) { #pane-home .home-hero__t { font-size: 2.1rem; } }
 
 /* Avisos: resúmenes plegables para lo atrasado o por ordenar */
 .rnf-sumh { display: flex; align-items: center; gap: 12px; margin: 6px 12px; padding: 12px 12px; border: 1px solid var(--border, #E2E7E3); border-radius: 12px; background: #fff; cursor: pointer; transition: background .12s, border-color .12s; } .rnf-sumh:hover { background: var(--surface-secondary, #F7F8F6); } .rnf-sumh.open { border-color: var(--border-strong, #D5DDD7); background: var(--surface-secondary, #F7F8F6); }
