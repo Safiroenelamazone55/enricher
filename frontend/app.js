@@ -934,27 +934,26 @@ function _renderHomeInner(grid) {
     if (hero) hero.innerHTML = `<h1 class="home-hero__t">${hi}${nom ? ', ' + nom.replace(/[<>&"]/g, '') : ''}</h1><p class="home-hero__s">${fecha.charAt(0).toUpperCase() + fecha.slice(1)} · ¿Qué quieres abrir?</p>`;
   } catch (_) {}
   const ARROW = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>';
-  // Iconos propios (duotono: trazo + relleno suave) y un color por módulo
-  const sv = d => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  // Iconos de línea (24 px, trazo 1.5), todos en tinta neutra: el módulo se distingue por la forma, no por el color
+  const sv = d => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const SKIN = {
-    management: { c: '#5B5BD6', s: '#EEEEFD', i: sv('<rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="currentColor" fill-opacity=".18"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2" fill="currentColor" fill-opacity=".18"/>') },
-    leadmanagement: { c: '#E5484D', s: '#FDECEC', i: sv('<path d="M3.5 11.5l16-7.5-4.5 16-3.4-6.1z" fill="currentColor" fill-opacity=".18"/><path d="M11.6 13.9L19.5 4"/>') },
-    contenido: { c: '#E58A00', s: '#FFF3DF', i: sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="currentColor" fill-opacity=".18"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/>') },
-    finance: { c: '#1F9D55', s: '#E6F6EC', i: sv('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 10l6-6 6 9" stroke-opacity=".0"/><rect x="2.5" y="10" width="3" height="10" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="8.5" y="4" width="3" height="16" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/><rect x="14.5" y="13" width="3" height="7" rx="1" fill="currentColor" fill-opacity=".18" stroke="none"/>') },
-    herramientas: { c: '#0E9AA7', s: '#E1F5F6', i: sv('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3.5 17.2a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.1-.5-.5-2.1z" fill="currentColor" fill-opacity=".18"/>') },
-    plantillas: { c: '#8E4EC6', s: '#F3E9FA', i: sv('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="currentColor" fill-opacity=".18"/><path d="M14 3v5h5M9 13h6M9 17h4"/>') },
-    inicios: { c: '#0B2A5B', s: '#E1E9F6', i: sv('<rect x="5" y="4" width="14" height="17" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/>') },
-    empresa: { c: '#5F6B64', s: '#EEF0EE', i: sv('<rect x="4.5" y="3" width="15" height="18" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 7.5h1.5M13.5 7.5H15M9 11.5h1.5M13.5 11.5H15M10 21v-4h4v4"/>') },
+    management: { i: sv('<rect x="3" y="3" width="7.5" height="10" rx="2"/><rect x="13.5" y="3" width="7.5" height="6" rx="2"/><rect x="13.5" y="12" width="7.5" height="9" rx="2"/><rect x="3" y="16" width="7.5" height="5" rx="2"/>') },
+    leadmanagement: { i: sv('<path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.6 21.5l-3.8-8.3L2.5 9.4z"/>') },
+    contenido: { i: sv('<rect x="3" y="4.5" width="18" height="16.5" rx="3.5"/><path d="M3 10h18M8 2.5v4M16 2.5v4"/><path d="M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01" stroke-width="2.2"/>') },
+    finance: { i: sv('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a1.5 1.5 0 0 1 1.5 1.5V8"/><path d="M3 7.5v10A2.5 2.5 0 0 0 5.5 20H19a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 19 8H5.5A2.5 2.5 0 0 1 3 5.5"/><circle cx="16.2" cy="14" r="1.2"/>') },
+    herramientas: { i: sv('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>') },
+    plantillas: { i: sv('<path d="M14.5 2.5H7a2.5 2.5 0 0 0-2.5 2.5v14A2.5 2.5 0 0 0 7 21.5h10a2.5 2.5 0 0 0 2.5-2.5V7.5z"/><path d="M14 2.5v3.8a1.2 1.2 0 0 0 1.2 1.2h4.3"/><path d="M8.5 12.5h7M8.5 16.5h5"/>') },
+    inicios: { i: sv('<rect x="8" y="2.5" width="8" height="4" rx="1.4"/><path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
+    empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>') },
   };
   const card = m => {
-    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { c: '#5F6B64', s: '#EEF0EE', i: m.icon };
-    return `<div class="home-card" role="button" tabindex="0" style="--acc:${k.c};--acc-soft:${k.s}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
+    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { i: m.icon };
+    return `<div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
       <div class="home-card__icon">${k.i}</div>
       <div class="home-card__body"><div class="home-card__title">${m.name}</div><div class="home-card__desc">${m.desc}</div></div>
-      <span class="home-card__go" aria-hidden="true">${ARROW}</span>
     </div>`;
   };
-  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 2], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 3]];
+  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 4], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 4]];
   const used = new Set();
   let html = GROUPS.map(([t, ids, cols]) => {
     const ms = ids.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean); ms.forEach(m => used.add(m.id));
