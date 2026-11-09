@@ -22872,9 +22872,11 @@ const LeadManagerModule = (() => {
   window.addEventListener('nova:sent', () => { if (_tiData && !_tiData.loading) setTimeout(() => { try { _tiReload(); } catch (_) {} }, 700); });
   let _pulseTi = null;        // firma de los mensajes de WhatsApp/correo: si cambia (llegó o salió uno), Prioridad se actualiza sola
   let _taskFCli = '', _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (cliente / campaña / secuencia)
-  let _taskCanalOpen = false;                            // panel «Canal y paso»: oculto por defecto
-  function taskToggleCanal() { _taskCanalOpen = !_taskCanalOpen; _renderBody(); }
-  let _taskFCanal = '', _taskFAcc = '';                  // canal (email/linkedin/…) y, dentro del canal, el tipo de paso (InMail, mensaje, invitación…)
+  let _taskDd = '';                                      // desplegable abierto en Tareas comerciales: '' | 'canal' | 'paso'
+  function taskToggleDd(which) { _taskDd = _taskDd === which ? '' : which; _renderBody(); }
+  document.addEventListener('click', e => { if (_taskDd && !(e.target.closest && e.target.closest('.lm-dd'))) { _taskDd = ''; try { _renderBody(); } catch (_) {} } });
+  // Canales elegidos (varios a la vez) y pasos elegidos: «canal|acción» (acción '_none' = sin tipo) o una sección especial (__fix, __approve, __accept).
+  const _taskFCanals = new Set(), _taskFAccs = new Set();
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
   let _lmBootRestored = false; // solo restaura la última sección UNA vez por carga de página, no en cada clic a Outreach
@@ -28150,28 +28152,35 @@ ${rhead}${foot}
   }
   // Canal / tipo de paso: las tareas de secuencia traen su canal y acción; los emails por aprobar y los contactos por corregir son de pasos de EMAIL,
   // y las aceptaciones de LinkedIn son de LinkedIn. Así todas las secciones de la pantalla responden al mismo filtro.
+  const _accN = () => [..._taskFAccs].filter(k => !k.startsWith('__')), _accS = () => [..._taskFAccs].filter(k => k.startsWith('__'));
   function _tkCanalPass(canal, accion) {
-    if (_taskFAcc && _taskFAcc.startsWith('__')) return false;       // se eligió una sección especial (por corregir…): las tareas normales no van
-    if (!_taskFCanal) return true;
-    if ((canal || 'email') !== _taskFCanal) return false;
-    if (_taskFAcc === '_none') return !accion;
-    return !_taskFAcc || (accion || '') === _taskFAcc;
+    const n = _accN();
+    if (_accS().length && !n.length) return false;                   // solo se eligieron secciones especiales (por corregir…): las tareas normales no van
+    const c = canal || 'email';
+    if (_taskFCanals.size && !_taskFCanals.has(c)) return false;
+    if (n.length) return _taskFAccs.has(c + '|' + (accion || '_none'));
+    return true;
   }
   // Secciones que también son tareas: cada una pertenece a un canal (corregir/aprobar = email, aceptar = LinkedIn) y se elige como «paso».
   const _SPECIAL = { __fix: ['Por corregir', 'email'], __approve: ['Por aprobar', 'email'], __accept: ['Por aceptar', 'linkedin'] };
   function _tkSpecialPass(key) {
     const sp = _SPECIAL[key];
-    if (_taskFCanal && _taskFCanal !== sp[1]) return false;
-    return !_taskFAcc || _taskFAcc === key;
+    if (_taskFCanals.size && !_taskFCanals.has(sp[1])) return false;
+    return !_taskFAccs.size || _taskFAccs.has(key);
   }
   function _apF() { return Array.isArray(_apList) ? _apList.filter(a => _tkSeqPass(a.sequence_id) && _tkSpecialPass('__approve')) : []; }
   function _fixF() { return _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id)) && _tkSpecialPass('__fix')); }
   function _taskFilterPass(t) { return _tkSeqPass(t.sq.id) && _tkCanalPass(t.st && t.st.canal, t.st && t.st.accion); }
   function taskSetFilter(kind, val) {
-    if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _taskFCanal = ''; _taskFAcc = ''; _renderBody(); return; }
-    if (kind === 'canal') { _taskFCanal = val; if (_taskFAcc && _taskFAcc.startsWith('__') && _SPECIAL[_taskFAcc][1] !== val && val) _taskFAcc = ''; else if (!_taskFAcc || !_taskFAcc.startsWith('__')) _taskFAcc = ''; _renderBody(); return; }
-    if (kind === 'acc') { _taskFAcc = val; _renderBody(); return; }
-    if (kind === 'combo') { const [cn, ac] = String(val).split('|'); _taskFCanal = cn; _taskFAcc = ac || ''; _renderBody(); return; }
+    if (kind === 'clear') { _taskFCli = ''; _taskFCamp = ''; _taskFSeq = ''; _taskFCanals.clear(); _taskFAccs.clear(); _taskDd = ''; _renderBody(); return; }
+    // Canal y paso: varias opciones a la vez (casillas). Al quitar un canal se quitan también sus pasos elegidos.
+    if (kind === 'canalT') {
+      if (_taskFCanals.has(val)) { _taskFCanals.delete(val); [..._taskFAccs].forEach(k => { const c = k.startsWith('__') ? _SPECIAL[k][1] : k.split('|')[0]; if (c === val) _taskFAccs.delete(k); }); } else _taskFCanals.add(val);
+      _renderBody(); return;
+    }
+    if (kind === 'accT') { if (_taskFAccs.has(val)) _taskFAccs.delete(val); else _taskFAccs.add(val); _renderBody(); return; }
+    if (kind === 'canalClear') { _taskFCanals.clear(); _taskFAccs.clear(); _renderBody(); return; }
+    if (kind === 'accClear') { _taskFAccs.clear(); _renderBody(); return; }
     if (kind === 'cli') {
       _taskFCli = val;
       // la campaña y la secuencia elegidas se limpian si no pertenecen al cliente nuevo
@@ -28188,7 +28197,7 @@ ${rhead}${foot}
     if (_tiData === null) setTimeout(() => { if (_tiData === null) _tiReload(); }, 0);   // para que el recuadro Prioridad ya traiga su número
 
     const allRaw = _allSeqTasks();
-    const hasFilter = !!(_taskFCli || _taskFCamp || _taskFSeq || _taskFCanal || _taskFAcc);
+    const hasFilter = !!(_taskFCli || _taskFCamp || _taskFSeq || _taskFCanals.size || _taskFAccs.size);
     const all = hasFilter ? allRaw.filter(_taskFilterPass) : allRaw;
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
@@ -28244,42 +28253,34 @@ ${rhead}${foot}
       const special = { __fix: nFix, __approve: nApr, __accept: nAcc };
       cnt.email = (cnt.email || 0) + nApr + nFix; if (nAcc) cnt.linkedin = (cnt.linkedin || 0) + nAcc;
       const present = _CANALES.filter(k => cnt[k]);
-      if (present.length < 2 && !_taskFCanal && !_taskFAcc) return { btn: '', panel: '' };
-      const chip = (on, lbl, js, cls) => `<button class="lm-filter-btn${on ? ' on' : ''}${cls ? ' ' + cls : ''}" onclick="${js}">${lbl}</button>`;
-      const total = present.reduce((n, k) => n + cnt[k], 0);
-      const canalChips = chip(!_taskFCanal, `Todos · ${total}`, "LeadManagerModule.taskSetFilter('canal','')")
-        + present.map(k => chip(_taskFCanal === k, `${(_TOUCH[k] || [k])[0]} · ${cnt[k]}`, `LeadManagerModule.taskSetFilter('canal','${k}')`)).join('');
-      // pasos del canal elegido (InMail, mensaje, invitación…) + las secciones que también son tareas de ese canal (por corregir, por aprobar, por aceptar)
+      if (present.length < 2 && !_taskFCanals.size && !_taskFAccs.size) return { btn: '', panel: '' };
       const none = {};   // tareas de un canal sin tipo de paso definido
       allRaw.filter(t => _tkSeqPass(t.sq.id) && t.due <= today && !t.st.accion).forEach(t => { const k = t.st.canal || 'email'; none[k] = (none[k] || 0) + 1; });
       const cName = k => (_TOUCH[k] || [k])[0];
       const accLbl = (k, a) => a === '_none' ? 'Sin tipo definido' : (_accionLabel(k, a) || a);
-      // con un canal elegido: sus pasos; sin canal: todas las combinaciones canal · paso disponibles
-      const ordered = k => Object.entries(acc[k] || {}).sort((x, y) => y[1] - x[1]);
-      const paso = [];
-      if (_taskFCanal) {
-        ordered(_taskFCanal).forEach(([a, n]) => paso.push([a, `${esc(accLbl(_taskFCanal, a))} · ${n}`, `LeadManagerModule.taskSetFilter('acc','${a}')`]));
-        if (none[_taskFCanal] && (acc[_taskFCanal] && Object.keys(acc[_taskFCanal]).length)) paso.push(['_none', `Sin tipo definido · ${none[_taskFCanal]}`, "LeadManagerModule.taskSetFilter('acc','_none')"]);
-      } else {
-        present.forEach(k => ordered(k).forEach(([a, n]) => paso.push([k + '|' + a, `${cName(k)} · ${esc(accLbl(k, a))} · ${n}`, `LeadManagerModule.taskSetFilter('combo','${k}|${a}')`])));
-      }
-      const sp = Object.keys(special).filter(k => special[k] && (!_taskFCanal || _SPECIAL[k][1] === _taskFCanal));
-      let pasoChips = '';
-      if (paso.length || sp.length) {
-        pasoChips = (_taskFCanal || _taskFAcc ? chip(!_taskFAcc, 'Todos', "LeadManagerModule.taskSetFilter('acc','')") : '')
-          + paso.map(([key, lbl, js]) => chip(_taskFCanal ? _taskFAcc === key : false, lbl, js)).join('')
-          + sp.map(k => chip(_taskFAcc === k, `${_SPECIAL[k][0]} · ${special[k]}`, `LeadManagerModule.taskSetFilter('acc','${k}')`, 'lm-filter-btn--sp')).join('');
-      }
-      // resumen de lo elegido (se ve aunque el panel esté oculto)
-      const spLbl = _taskFAcc && _taskFAcc.startsWith('__') ? _SPECIAL[_taskFAcc][0] : '';
-      const sum = [_taskFCanal ? cName(_taskFCanal) : '', spLbl || (_taskFAcc ? accLbl(_taskFCanal, _taskFAcc) : '')].filter(Boolean).join(' · ');
-      const on = !!(_taskFCanal || _taskFAcc);
       const chev = `<svg class="lm-fbtn__chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
-      const ico = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>`;
-      const btn = `<button type="button" class="lm-fbtn${on ? ' on' : ''}${_taskCanalOpen ? ' open' : ''}" onclick="LeadManagerModule.taskToggleCanal()" aria-expanded="${_taskCanalOpen}" title="Filtrar por canal (LinkedIn, Email, WhatsApp…) y tipo de paso (InMail, mensaje, llamada…)">${ico}<span>Canal y paso</span>${sum ? `<span class="lm-fbtn__sum">${esc(sum)}</span>` : ''}${chev}</button>`;
-      const panel = _taskCanalOpen ? `<div class="lm-cp"><div class="lm-cp__row"><span class="lm-cp__l">Canal</span><div class="lm-cp__chips">${canalChips}</div></div>`
-        + (pasoChips ? `<div class="lm-cp__row"><span class="lm-cp__l">Paso</span><div class="lm-cp__chips">${pasoChips}</div></div>` : '') + `</div>` : '';
-      return { btn, panel };
+      const tick = `<svg class="lm-dd__tick" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>`;
+      const row = (on, lbl, n, js) => `<button type="button" class="lm-dd__opt${on ? ' on' : ''}" onclick="${js}"><span class="lm-dd__box">${on ? tick : ''}</span><span class="lm-dd__lbl">${lbl}</span><span class="lm-dd__n">${n}</span></button>`;
+      const summary = (names, empty) => !names.length ? empty : names.length <= 2 ? names.join(', ') : names[0] + ' +' + (names.length - 1);
+      const ddBtn = (which, label, names) => `<button type="button" class="lm-fbtn${names.length ? ' on' : ''}${_taskDd === which ? ' open' : ''}" onclick="LeadManagerModule.taskToggleDd('${which}')" aria-expanded="${_taskDd === which}" aria-haspopup="true"><span class="lm-fbtn__k">${label}</span>${names.length ? `<span class="lm-fbtn__sum">${esc(summary(names, ''))}</span>${names.length > 1 ? `<span class="lm-fbtn__cnt">${names.length}</span>` : ''}` : '<span class="lm-fbtn__sum lm-fbtn__sum--all">Todos</span>'}${chev}</button>`;
+      // ── Canal: casillas (LinkedIn, Email, WhatsApp…) ──
+      const canalOpts = present.map(k => row(_taskFCanals.has(k), esc(cName(k)), cnt[k], `LeadManagerModule.taskSetFilter('canalT','${k}')`)).join('');
+      const canalPop = `<div class="lm-dd__pop" role="menu"><div class="lm-dd__h"><span>Elige uno o varios canales</span>${_taskFCanals.size ? `<button type="button" class="lm-dd__clr" onclick="LeadManagerModule.taskSetFilter('canalClear','')">Quitar</button>` : ''}</div>${canalOpts}</div>`;
+      // ── Paso: pasos de cada canal (InMail, mensaje, invitación…) + secciones que también son tareas (por corregir, por aprobar, por aceptar) ──
+      const chans = present.filter(k => !_taskFCanals.size || _taskFCanals.has(k));
+      let pasoOpts = '';
+      chans.forEach(k => {
+        const items = Object.entries(acc[k] || {}).sort((x, y) => y[1] - x[1]).map(([a, n]) => [k + '|' + a, esc(accLbl(k, a)), n]);
+        if (none[k] && items.length) items.push([k + '|_none', 'Sin tipo definido', none[k]]);
+        Object.keys(special).filter(s => special[s] && _SPECIAL[s][1] === k).forEach(s => items.push([s, esc(_SPECIAL[s][0]), special[s]]));
+        if (!items.length) return;
+        pasoOpts += `<div class="lm-dd__g">${esc(cName(k))}</div>` + items.map(([key, lbl, n]) => row(_taskFAccs.has(key), lbl, n, `LeadManagerModule.taskSetFilter('accT','${key}')`)).join('');
+      });
+      const pasoPop = `<div class="lm-dd__pop" role="menu"><div class="lm-dd__h"><span>Elige uno o varios pasos</span>${_taskFAccs.size ? `<button type="button" class="lm-dd__clr" onclick="LeadManagerModule.taskSetFilter('accClear','')">Quitar</button>` : ''}</div>${pasoOpts || '<div class="lm-dd__empty">No hay pasos para estos canales.</div>'}</div>`;
+      const accNames = [..._taskFAccs].map(k => k.startsWith('__') ? _SPECIAL[k][0] : (() => { const [c, a] = k.split('|'); return accLbl(c, a); })());
+      const btn = `<span class="lm-dd">${ddBtn('canal', 'Canal', [..._taskFCanals].map(cName))}${_taskDd === 'canal' ? canalPop : ''}</span>`
+        + (pasoOpts || _taskFAccs.size ? `<span class="lm-dd">${ddBtn('paso', 'Paso', accNames)}${_taskDd === 'paso' ? pasoPop : ''}</span>` : '');
+      return { btn, panel: '' };
     })();
     const _cb = canalRow.btn || '';
     const filterRowF = filterRow ? filterRow.replace('<!--CBTN-->', _cb) : (_cb ? `<div class="lm-task-filters">${_cb}</div>` : '');
@@ -28293,7 +28294,7 @@ ${rhead}${foot}
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length) || _fixList().length;
-    const paCta = (_taskFCanal && _taskFCanal !== 'linkedin') || (_taskFAcc && _taskFAcc !== '__accept') ? '' : _acceptCtaHtml();
+    const paCta = (_taskFCanals.size && !_taskFCanals.has('linkedin')) || (_taskFAccs.size && !_taskFAccs.has('__accept')) ? '' : _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
@@ -39783,7 +39784,7 @@ ${rhead}${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleCanal, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleDd, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
