@@ -8114,6 +8114,9 @@ app.get('/api/lm/today', requireAuth, async (req, res) => {
 // ── LM · Dashboard de rendimiento (agregados con filtros) ──
 // Filtros: from, to (YYYY-MM-DD), client, campaign, sequence, country, channel.
 // Toques = activities 'hecha' de outreach; respuestas/aceptaciones/reuniones = activities por tipo.
+// Una invitación de LinkedIn = la tarea hecha de un paso cuya acción es «invitación» (con o sin nota). La tarea se registra como 'linkedin_msg' o 'nota' con el texto «Paso N · …»,
+// y su acción se averigua por la posición N dentro de la secuencia del contacto. Es el UNIVERSO sobre el que se calcula el % de aceptación.
+const _SQL_IS_INVITE = `(a.tipo='linkedin_connect' OR ((a.tipo='nota' OR a.tipo LIKE 'linkedin%') AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
 const _lmDashHandler = async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
@@ -8139,7 +8142,7 @@ const _lmDashHandler = async (req, res) => {
     const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar`;
     const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
     const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
-    const IS_INVITE = `(a.tipo='linkedin_connect' OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
+    const IS_INVITE = _SQL_IS_INVITE;
     const ch = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].includes(q.channel) ? q.channel : null;
     const chw = ch ? ` AND ${CH}='${ch}'` : '';
     const iF = `'${from}'`, iT = `'${to}'`, iPF = `'${prevFrom}'`, iPT = `'${prevTo}'`; // fechas ya validadas (ISO)
@@ -8341,7 +8344,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
       const W = {
         respuestas: "(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (" + RT + ")[[:space:]]*$'))",
         reuniones: "a.tipo='reunion'",
-        invitaciones: "a.estado='hecha' AND a.tipo='linkedin_connect'",
+        invitaciones: "a.estado='hecha' AND " + _SQL_IS_INVITE,
         contactados: "a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))",
       };
       W.respuesta = W.respuestas;
