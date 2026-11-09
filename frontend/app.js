@@ -28583,15 +28583,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (!c) { showBanner('No se encontró el contacto', 'error'); return; }
     const t = _fuText(c, kind, canal);
     if (canal === 'wa') { openWaFor(cid, t.cuerpo); return; }
-    go('inbox');                       // cambia de sección dentro de Outreach: el correo se redacta en el Inbox
-    await composeAbrir();
-    _cmpElegir(cid);
-    { const sel = $('cmp-client'), cl = (_clients || []).find(x => x.id === c.outbound_client_id), mb = cl ? _mbFor(cl.id) : null;
-      if (sel) { const op = sel.options[sel.selectedIndex]; if (op) op.textContent = (cl ? cl.nombre : op.textContent) + (mb && mb.email ? ' · ' + mb.email : ''); sel.disabled = true; sel.classList.add('cmp-fixed'); } }
-    const a = $('cmp-asunto'), b = $('cmp-cuerpo');
-    if (a) a.value = t.asunto; if (b) { b.value = t.cuerpo; b.dispatchEvent(new Event('input')); }
-    _cmpPreviewUpdate();
-    if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
+    // Se abre la CONVERSACIÓN del contacto en el Inbox (con su historial y el buzón del cliente), con el texto ya escrito y listo para enviar.
+    // El borrador queda guardado por contacto: se pueden ver los correos anteriores y volver sin perderlo.
+    _ibDrafts[cid] = { asunto: t.asunto || '', cuerpo: t.cuerpo || '' };
+    go('inbox');
+    if (_ibThreads === null) await _ibReload();
+    await ibOpen(cid);
+    const ta = document.getElementById('ibx-ta'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
   }
   async function tiDealDone(cid) {
     try {
@@ -28714,6 +28712,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ibThread  = null;   // { contact, messages } del hilo abierto
   let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
   let _ibMode    = 'reply'; // 'reply' (email real) | 'note' (nota interna, no se envía)
+  // Lo que se está escribiendo en cada conversación (y el texto sugerido que llega desde Tareas): sobrevive a cambiar de correo o de conversación y a repintar el Inbox.
+  const _ibDrafts = {};
+  function ibDraftSet() { if (!_ibActive) return; const ta = document.getElementById('ibx-ta'); if (!ta) return; _ibDrafts[_ibActive] = { cuerpo: ta.value, asunto: (document.getElementById('ibx-asunto') || {}).value || '' }; }
   let _ibSending = false;
   // "Enviados" mostraba por defecto una tabla de tracking (aperturas/clics) sin forma
   // de abrir la conversación real. Ahora "Enviados" abre por defecto el MISMO panel de
@@ -29334,13 +29335,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // asociado a nada. Sin hilo previo no hay "Re: " de dónde sacar el asunto, así
     // que se pide a mano — ibSend() lo manda como asunto si este input existe.
     const esNuevo = !(_ibThread?.messages || []).length;
-    const asuntoField = esNuevo ? `<input class="form-input" id="ibx-asunto" placeholder="Asunto…" style="margin-bottom:6px">` : '';
+    const dr = _ibDrafts[_ibActive] || {};
+    const taRows = dr.cuerpo ? Math.min(12, Math.max(4, String(dr.cuerpo).split(String.fromCharCode(10)).length + 1)) : 3;
+    const asuntoField = esNuevo ? `<input class="form-input" id="ibx-asunto" placeholder="Asunto…" style="margin-bottom:6px" value="${esc(dr.asunto || '')}" oninput="LeadManagerModule.ibDraftSet()">` : '';
     return `<div class="ibx-replybox">
       ${canSend
         ? `${_ibDestHtml(c)}
            <div class="ibx-tawrap">
              ${asuntoField}
-             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}"></textarea>
+             <textarea class="ibx-ta" id="ibx-ta" rows="${taRows}" oninput="LeadManagerModule.ibDraftSet()" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}">${esc(dr.cuerpo || '')}</textarea>
              <div class="ibx-sighint">✓ La firma de ${esc(c.buzon)} se añade sola al enviar</div>
              <div class="ibx-sendgrp">
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
@@ -30086,6 +30089,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
     if (!cuerpo) { if (schedIso) showBanner('Escribe el mensaje antes de programarlo', 'info'); return; }
+    const cidSent = _ibActive;
     _rcpFlush();
     if (document.querySelector('#ibx-to-w .rcp__c--bad, #ibx-cc-w .rcp__c--bad')) { showBanner('Hay direcciones no válidas (en rojo): corrígelas o quítalas con la ✕', 'info'); return; }
     const asuntoEl0 = document.getElementById('ibx-asunto');
@@ -30105,6 +30109,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
+      delete _ibDrafts[cidSent];   // ya salió (o quedó programado): el borrador de esta conversación se limpia
       if (_ibThread) _ibThread.messages.push(d.scheduled
         ? { dir: 'out', id: d.message?.id, asunto: d.message?.asunto || '', cuerpo, at: d.message?.scheduled_at || schedIso, estado: 'scheduled', buzon: _ibThread.contact?.buzon || '' }
         : { dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
@@ -39888,7 +39893,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
