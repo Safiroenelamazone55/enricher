@@ -60,7 +60,8 @@ HOW TO THINK (do this silently before writing):
 WRITING RULES:
 - Language: ${idiomaHint}. Match the formality the prospect used.
 - Length: 50 to 110 words. Plain text, short paragraphs, no markdown, no bullet lists unless the prospect asked for options.
-- Start with "Hi/Hola/Ciao {first name},". Reference ONE concrete thing from the thread (their words, their company, their question). One call to action only.
+- Start with a greeting in the message language ("Hola", "Hi", "Ciao", "Hallo"…) plus the first name. Reference ONE concrete thing from the thread (their words, their company, their question). One call to action only.
+- Only attribute a statement to the prospect if a PROSPECT message in the thread says it. Messages marked "OUR SIDE" were written by our team, even if they arrived in the inbox: they are not the prospect's words. If there is a past meeting, demo or access mentioned in the thread, build on it.
 - Never invent facts: no prices, discounts, results, client names, features, deadlines or dates that are not in the thread or the business context. If the prospect asks something you cannot answer from the context, say you will confirm and come back, or ask the one clarifying question needed.
 - No filler openers ("I hope you are well"), no flattery, no exclamation marks, no emojis, no "just following up". Do not apologise for writing.
 - Do NOT write a signature or sign-off with a name: the signature is added automatically. End with the call to action or a short closing line.
@@ -106,15 +107,18 @@ function mount(app, { pool, requireAuth }) {
           JOIN sequences s ON s.id = cs.sequence_id LEFT JOIN campaigns ca ON ca.id = s.campaign_id
          WHERE cs.contact_id=$1 AND cs.user_id=$2 ORDER BY cs.created_at DESC LIMIT 1`, [cid, uid]);
 
+      // Quién escribió cada correo: el PROSPECTO (reply), NUESTRO equipo (out o «equipo»: alguien del cliente respondiendo desde su lado), o una respuesta automática.
+      const quienDe = m => m.dir === 'out' ? 'us' : m.dir === 'in' ? (m.tipo === 'equipo' ? 'us' : (m.tipo === 'ooo' || m.tipo === 'auto' || m.tipo === 'rebote') ? 'auto' : 'prospect') : 'note';
       const real = msgs.filter(m => m.dir !== 'note');
-      const lastIn = [...real].reverse().find(m => m.dir === 'in'), lastOut = [...real].reverse().find(m => m.dir === 'out');
+      const lastIn = [...real].reverse().find(m => quienDe(m) === 'prospect'), lastOut = [...real].reverse().find(m => quienDe(m) === 'us');
       const ult = real[real.length - 1] || null;
       const nombre = String(k.nombre || '').trim().split(/\s+/)[0] || '';
 
       // Hilo (últimos 8 correos reales + notas internas recientes), de más antiguo a más nuevo, con tope total de texto
       const tail = msgs.slice(-10);
       let hilo = tail.map(m => {
-        const quien = m.dir === 'out' ? 'WE (' + k.cliente + ') wrote' : m.dir === 'in' ? (m.tipo === 'ooo' || m.tipo === 'auto' ? 'AUTOMATIC REPLY from prospect' : 'PROSPECT wrote') : 'INTERNAL NOTE (team only)';
+        const qd = quienDe(m);
+        const quien = qd === 'us' ? 'OUR SIDE (' + k.cliente + ' team) wrote' : qd === 'auto' ? 'AUTOMATIC REPLY (not a person)' : qd === 'prospect' ? 'PROSPECT wrote' : 'INTERNAL NOTE (team only)';
         const f = m.at ? new Date(m.at).toISOString().slice(0, 10) : '';
         return `[${f}] ${quien}${m.asunto ? ' — subject: ' + String(m.asunto).slice(0, 120) : ''}\n${recorta(sinCitas(m.cuerpo), m.dir === 'in' ? 1400 : 900)}`;
       }).join('\n\n---\n\n');
@@ -128,10 +132,10 @@ function mount(app, { pool, requireAuth }) {
       const ctx = [
         `Prospect: ${[k.nombre, k.apellido].filter(Boolean).join(' ')}${k.cargo ? ', ' + k.cargo : ''}${k.empresa ? ' at ' + k.empresa : ''}${k.pais ? ' (' + k.pais + ')' : ''}. First name for the greeting: ${nombre || '(unknown)'}.`,
         `Status in our CRM: ${DISP[k.disposition] || 'no classification yet'}.`,
-        `Emails sent by us: ${real.filter(m => m.dir === 'out').length}. Replies from the prospect: ${real.filter(m => m.dir === 'in').length}.`,
+        `Emails from our side: ${real.filter(m => quienDe(m) === 'us').length}. Replies written by the prospect: ${real.filter(m => quienDe(m) === 'prospect').length}.`,
         lastIn ? `Last message from the prospect: ${dias(lastIn.at)} days ago.` : 'The prospect has never replied.',
         lastOut ? `Our last email: ${dias(lastOut.at)} days ago.` : 'We have not emailed this person yet.',
-        ult ? `Who spoke last: ${ult.dir === 'out' ? 'WE did' : 'the PROSPECT did'}.` : '',
+        ult ? `Who spoke last: ${quienDe(ult) === 'prospect' ? 'the PROSPECT' : quienDe(ult) === 'auto' ? 'an automatic reply' : 'OUR SIDE'}, ${dias(ult.at)} days ago.` : '',
         `Who we are writing for: ${k.cliente || 'the client'}${k.li_que_hace ? ' — what they do: ' + recorta(k.li_que_hace, 400) : ''}${k.website ? ' (' + k.website + ')' : ''}.`,
         (cp && cp.objetivo) ? `Campaign goal: ${recorta(cp.objetivo, 300)}.` : '',
         (cp && (cp.mercado || k.c_mercado)) ? `Market: ${recorta(cp.mercado || k.c_mercado, 250)}.` : '',
