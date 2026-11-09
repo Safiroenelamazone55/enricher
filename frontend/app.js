@@ -23091,12 +23091,6 @@ const LeadManagerModule = (() => {
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
-    // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
-    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
-    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
-    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
-    { k: 'companies',  l: 'Empresas',           g: 'Datos' },
-    { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
@@ -23111,6 +23105,12 @@ const LeadManagerModule = (() => {
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
+    // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
+    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
+    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
+    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
+    { k: 'companies',  l: 'Empresas',           g: 'Datos' },
+    { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
   ];
   const _NAV_ICON = {
     'x-cantera': '<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
