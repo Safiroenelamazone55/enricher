@@ -21036,3 +21036,6 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ldh-lead-table { table-layout: fixed; min-width: 0; }
 .ld-hub .ldh-lead-table .ldh-note__in { max-width: 100%; }
 .ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ld-hub .ldh-toolbar { gap: 10px; }
+.ld-hub .ldh-toolbar .ldh-sel, .ld-hub .ldh-toolbar .lm-filter-btn { border-radius: 8px; }
