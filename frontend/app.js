@@ -38642,7 +38642,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${_lmFld('ct-cargo', 'Cargo', c?.cargo)}
         ${_lmFld('ct-telefono', 'Teléfono', c?.telefono)}
         ${_lmFld('ct-movil', 'Móvil', c?.movil)}
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Empresa</span><select class="form-input" id="ct-company">${coOpts}</select></label>
+        <div class="fin-cfg-field ct-co"><span class="fin-cfg-lbl">Empresa</span>
+          <input type="hidden" id="ct-company" value="${selCompanyId || ''}">
+          <input class="form-input" id="ct-company-q" autocomplete="off" placeholder="Busca o escribe una empresa nueva…" value="${esc((_companies.find(x => String(x.id) === String(selCompanyId)) || {}).nombre || '')}" oninput="LeadManagerModule.ctCoInput(this.value)" onfocus="LeadManagerModule.ctCoInput(this.value, true)" onkeydown="LeadManagerModule.ctCoKey(event)">
+          <div class="ct-co__dd" id="ct-co-dd" hidden></div>
+          <span class="seq-drip-hint" id="ct-co-hint"></span></div>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound <b class="lm-req">*</b></span><select class="form-input" id="ct-obc"><option value="">— Elegir —</option>${_clients.map(cl => `<option value="${cl.id}"${c && String(c.outbound_client_id) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select></label>
         ${_lmFld('ct-seniority', 'Seniority', c?.seniority)}
         ${_lmFld('ct-departamento', 'Departamento', c?.departamento)}
@@ -38667,6 +38671,51 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     document.body.appendChild(m);
     setTimeout(() => $('ct-nombre')?.focus(), 60);
   }
+  // ── Empresa del prospecto: se busca entre las existentes o se escribe una nueva (se crea al guardar y queda seleccionada) ──
+  function _ctCoNorm(t) { return String(t || '').trim().toLowerCase(); }
+  function ctCoInput(v, open) {
+    const hid = $('ct-company'), dd = $('ct-co-dd'), hint = $('ct-co-hint'); if (!dd) return;
+    const q = _ctCoNorm(v);
+    const cur = (_companies || []).find(x => String(x.id) === String(hid.value));
+    if (!cur || _ctCoNorm(cur.nombre) !== q) hid.value = '';
+    const exact = (_companies || []).find(x => _ctCoNorm(x.nombre) === q);
+    if (exact) hid.value = String(exact.id);
+    const list = (_companies || []).filter(x => !q || _ctCoNorm(x.nombre || x.dominio).includes(q)).slice(0, 40);
+    const rows = list.map(x => `<button type="button" class="ct-co__o" onmousedown="event.preventDefault();LeadManagerModule.ctCoPick(${x.id})">${esc(x.nombre || x.dominio)}${x.pais ? `<span>${esc(x.pais)}</span>` : ''}</button>`).join('');
+    const crear = q && !exact ? `<button type="button" class="ct-co__o ct-co__o--new" onmousedown="event.preventDefault();LeadManagerModule.ctCoNew()">＋ Crear empresa «${esc(String(v).trim())}»</button>` : '';
+    dd.innerHTML = crear + (rows || (crear ? '' : '<div class="ct-co__e">Sin empresas todavía</div>'));
+    dd.hidden = !(crear || rows);
+    if (hint) hint.textContent = hid.value ? '' : (q ? 'Empresa nueva: se creará al guardar el prospecto y quedará seleccionada.' : '');
+    if (!ctCoInput._away) { ctCoInput._away = e => { const d = $('ct-co-dd'); if (d && !e.target.closest('.ct-co')) d.hidden = true; }; document.addEventListener('mousedown', ctCoInput._away); }
+  }
+  function ctCoPick(id) {
+    const co = (_companies || []).find(x => x.id === id); if (!co) return;
+    $('ct-company').value = String(co.id); $('ct-company-q').value = co.nombre || co.dominio || '';
+    const d = $('ct-co-dd'); if (d) d.hidden = true; const h = $('ct-co-hint'); if (h) h.textContent = '';
+    if (!$('ct-ciudad')?.value && co.ciudad) $('ct-ciudad').value = co.ciudad;
+    if (!$('ct-pais')?.value && co.pais) $('ct-pais').value = co.pais;
+  }
+  async function ctCoNew() {
+    const nombre = ($('ct-company-q')?.value || '').trim(); if (!nombre) return;
+    const h = $('ct-co-hint'); if (h) h.textContent = 'Creando empresa…';
+    try {
+      const co = await _ctCreateCompany(nombre);
+      $('ct-company').value = String(co.id); const d = $('ct-co-dd'); if (d) d.hidden = true;
+      if (h) h.textContent = '✓ Empresa creada y seleccionada';
+    } catch (e) { if (h) h.textContent = 'Error: ' + e.message; }
+  }
+  async function _ctCreateCompany(nombre) {
+    const res = await apiFetch(`${API}/lm/companies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) });
+    const d = await res.json(); if (!res.ok) throw new Error(d.error || 'No se pudo crear la empresa');
+    if (!Array.isArray(_companies)) _companies = [];
+    _companies.push(d);
+    return d;
+  }
+  function ctCoKey(e) {
+    const d = $('ct-co-dd');
+    if (e.key === 'Escape') { if (d) d.hidden = true; return; }
+    if (e.key === 'Enter') { e.preventDefault(); const f = d && !d.hidden ? d.querySelector('.ct-co__o') : null; if (f) f.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
+  }
   function closeContact() { document.getElementById('lm-ct-modal')?.remove(); }
   // ── Bloque 8: duplicados por email / LinkedIn / teléfono / nombre+empresa antes de crear ──
   function _ctFindDup(payload, excludeId) {
@@ -38687,7 +38736,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   async function saveContact(id) {
     const g = fid => ($(fid)?.value || '').trim();
-    const companyId = $('ct-company')?.value ? Number($('ct-company').value) : null;
+    let companyId = $('ct-company')?.value ? Number($('ct-company').value) : null;
+    { const typed = ($('ct-company-q')?.value || '').trim();
+      if (!companyId && typed) {
+        const ex = (_companies || []).find(x => _ctCoNorm(x.nombre) === _ctCoNorm(typed));
+        if (ex) companyId = ex.id;
+        else { try { companyId = (await _ctCreateCompany(typed)).id; } catch (e) { const hh = $('ct-hint'); if (hh) { hh.textContent = 'No se pudo crear la empresa: ' + e.message; hh.style.color = '#C4342B'; } return; } }
+      } }
     const co = companyId ? _companies.find(x => x.id === companyId) : null;
     const payload = {
       nombre: g('ct-nombre'), apellido: g('ct-apellido'), email: g('ct-email'), email_personal: g('ct-email_personal'), cargo: g('ct-cargo'),
@@ -40058,7 +40113,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,

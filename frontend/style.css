@@ -21087,3 +21087,13 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #pane-home .home-app__ic { width: clamp(92px, 14vh, 116px); height: clamp(92px, 14vh, 116px); border-radius: 26px; box-shadow: 0 1px 3px rgba(20,33,27,.10), 0 10px 22px -10px rgba(20,33,27,.30); }
 #pane-home .home-app__ic svg { width: 66%; height: 66%; }
 #pane-home .home-app__n { font-size: .9rem; font-weight: 600; color: #26332C; }
+
+/* Prospecto: selector de empresa con búsqueda y «Crear empresa» */
+.ct-co { position: relative; }
+.ct-co__dd { position: absolute; left: 0; right: 0; top: calc(100% - 2px); z-index: 30; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid var(--border-strong, #D5DDD7); border-radius: 8px; box-shadow: 0 12px 28px rgba(16,24,20,.16); padding: 4px; }
+.ct-co__dd[hidden] { display: none; }
+.ct-co__o { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: none; text-align: left; font: inherit; font-size: .86rem; color: var(--text-primary, #14211B); padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.ct-co__o span { color: var(--text-muted, #8B9690); font-size: .74rem; }
+.ct-co__o:hover { background: #F1F5F2; }
+.ct-co__o--new { color: #00804C; font-weight: 600; justify-content: flex-start; }
+.ct-co__e { padding: 10px; font-size: .82rem; color: var(--text-muted, #8B9690); }
