@@ -5497,7 +5497,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     // Idempotencia clave: si el estado no cambió y no viene una nota nueva,
     // no ejecutamos efectos secundarios — solo tocamos updated_at.
     const noChange = disp === oldDisp;
-    if (noChange && !nota) {
+    if (noChange && !nota && !(disp === 'mas_adelante' && (req.body || {}).nurture_at)) {
       await pool.query(`UPDATE lm_contacts SET updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
       return res.json({ ok: true, disposition: disp, paused: 0, rerouted: 0, stage: null, no_change: true });
     }
