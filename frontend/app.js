@@ -26092,7 +26092,7 @@ ${rhead}${foot}
   function fixRowMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const x = _fixList().find(r => r.c.id === cid); if (!x) return;
+    const x = _fixList().find(r => r.c.id === cid) || _fixAllList().find(r => r.c.id === cid); if (!x) return;
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const html = `<div class="cp-mark-menu__list">
       <button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.fixSkip(${cid})">${x.bad === 'rebote' ? 'Email inválido' : 'No tiene email'} — saltar paso</button>
@@ -26110,7 +26110,7 @@ ${rhead}${foot}
     _renderBody(); _restoreScroll(snap);
   }
   async function fixSkip(cid) {
-    const x = _fixList().find(r => r.c.id === cid); if (!x) return;
+    const x = _fixList().find(r => r.c.id === cid) || _fixAllList().find(r => r.c.id === cid); if (!x) return;
     const inSeq = _section === 'sequence' && _activeSeq && x.seqs.some(s => s.id === _activeSeq);
     const ids = inSeq ? [_activeSeq] : x.seqs.map(s => s.id);
     if (!confirm('¿Saltar el email de este contacto?\n\nNo se envía nada: sigue en la secuencia y pasa al siguiente paso (LinkedIn, llamada, etc.). Si más adelante hay otro email, volverá a aparecer en esta lista.')) return;
