@@ -86,6 +86,25 @@ const _CF_KEYS = Array.from({ length: 10 }, (_, i) => 'campo' + (i + 1));
 function _slugVar(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
 // Un campo personalizado se puede escribir en español o en inglés dentro del mensaje: {{competidor_1}} o {{competitor_1}}.
 // (Las variantes por idioma suelen llevar el nombre traducido; sin esto el dato existe pero la variable sale sin resolver.)
+// Dominio inexistente (NXDOMAIN): un email como «hola@empresa.comconecto» (texto pegado tras el .com) rebota seguro y daña la reputación del buzón.
+// Solo se bloquea el «dominio no existe»; cualquier otro fallo de DNS (timeout, SERVFAIL) NO bloquea.
+const _dnsP = require('dns').promises;
+const _deadCache = new Map();
+async function emailDomainDead(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(e)) return true;
+  const d = e.split('@')[1];
+  const hit = _deadCache.get(d);
+  if (hit && Date.now() - hit.t < 6 * 3600e3) return hit.dead;
+  let dead = false;
+  try { await _dnsP.resolveMx(d); }
+  catch (err) {
+    if (err.code === 'ENOTFOUND') dead = true;
+    else if (err.code === 'ENODATA') { try { await _dnsP.resolve4(d); } catch (e2) { dead = e2.code === 'ENOTFOUND' || e2.code === 'ENODATA'; } }
+  }
+  _deadCache.set(d, { dead, t: Date.now() });
+  return dead;
+}
 const _VAR_WORDS = { competidor: 'competitor', competidores: 'competitors', empresa: 'company', ciudad: 'city', pais: 'country', cliente: 'client', clientes: 'clients', agencia: 'agency', agencias: 'agencies', ubicacion: 'location', industria: 'industry', zona: 'area', sitio: 'site', producto: 'product', servicio: 'service' };
 const _VAR_WORDS_REV = Object.fromEntries(Object.entries(_VAR_WORDS).map(([a, b]) => [b, a]));
 function _slugAliases(slug) {
@@ -607,6 +626,12 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       `[${enr.seq_nombre}] Email de ${enr.nombre || enr.email} rebotó antes — corregir para reanudar`);
     return false;
   }
+  if (await emailDomainDead(enr.email)) {
+    await pool.query(`UPDATE lm_contacts SET email_status='invalid' WHERE id=$1`, [enr.contact_id]);
+    await _pauseEnrollment(pool, enr, 'email_invalido',
+      `[${enr.seq_nombre}] El email de ${enr.nombre || enr.email} (${enr.email}) no es válido: su dominio no existe — corregir para reanudar`);
+    return false;
+  }
 
   // Paso por idioma sin mensaje para el idioma de este contacto (y la secuencia pide detener): se pausa y se avisa, no se manda en otro idioma.
   { const gap = idiomaGap(step, enr); if (gap) { await _pauseEnrollment(pool, enr, 'sin_traduccion', `[${enr.seq_nombre}] ${enr.nombre || enr.email}: falta el mensaje en ${gap} (paso ${enr.paso}) — agrégalo en el paso para reanudar`); return false; } }
@@ -982,6 +1007,14 @@ async function _flushApproved(pool, apiBase) {
           continue;
         }
       } catch (e) { console.warn('[flush] exclusiones:', e.message); }
+      // Email con dominio inexistente (p. ej. «…com» + texto pegado): no se envía; se marca inválido y se pausa para corregir.
+      if (await emailDomainDead(m.to_email)) {
+        await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`, ['No enviado: el email ' + m.to_email + ' no es válido (el dominio no existe)', m.id]);
+        await pool.query(`UPDATE lm_contacts SET email_status='invalid' WHERE id=$1`, [m.contact_id]);
+        await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='email_invalido' WHERE sequence_id=$1 AND contact_id=$2`, [m.sequence_id, m.contact_id]);
+        console.warn('[flush] email con dominio inexistente, no se envía:', m.to_email);
+        continue;
+      }
       // El buzón es compartido: si ya está lleno hoy (por esta o por otra secuencia), este queda para mañana, en su orden.
       if (await _mailboxFull(pool, m.ocid, m.timezone || 'America/Lima')) continue;
       // Ventana horaria, fin de semana y DÍAS DE CADENCIA de la secuencia: aprobar un
