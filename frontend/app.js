@@ -907,10 +907,10 @@ const HOME_MODULES = [
 // Buscador del inicio: filtra los módulos al escribir; Enter abre el primero que queda; «/» enfoca el buscador.
 function homeFilter(q) {
   q = String(q || '').trim().toLowerCase();
-  document.querySelectorAll('#home-grid .home-card').forEach(c => { c.style.display = !q || (c.dataset.q || '').includes(q) ? '' : 'none'; });
-  document.querySelectorAll('#home-grid .home-sec').forEach(sec => { sec.style.display = [...sec.querySelectorAll('.home-card')].some(c => c.style.display !== 'none') ? '' : 'none'; });
+  document.querySelectorAll('#home-grid .home-card, #home-grid .home-app').forEach(c => { c.style.display = !q || (c.dataset.q || '').includes(q) ? '' : 'none'; });
+  document.querySelectorAll('#home-grid .home-sec').forEach(sec => { sec.style.display = [...sec.querySelectorAll('.home-card, .home-app')].some(c => c.style.display !== 'none') ? '' : 'none'; });
 }
-function homeOpenFirst() { const c = [...document.querySelectorAll('#home-grid .home-card')].find(x => x.style.display !== 'none'); if (c) c.click(); }
+function homeOpenFirst() { const c = [...document.querySelectorAll('#home-grid .home-card, #home-grid .home-app')].find(x => x.style.display !== 'none'); if (c) c.click(); }
 document.addEventListener('keydown', e => {
   if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target, tag = t && t.tagName; if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
@@ -960,21 +960,21 @@ function _renderHomeInner(grid) {
     inicios: { i: sv('<path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8" fill="currentColor" fill-opacity=".24"/><rect x="8" y="2.5" width="8" height="4" rx="1.4" fill="#14211B" fill-opacity="0"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
     empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="8" cy="12" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="16" cy="18" r="2" fill="currentColor" fill-opacity=".24"/>') },
   };
+  // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
+  const GRAD = {
+    management: ['#8B6CF6', '#5B3DF5'], leadmanagement: ['#3B8CFA', '#1D5FD1'], contenido: ['#FF9A4D', '#F2542D'], finance: ['#22C97A', '#0E8F4E'],
+    herramientas: ['#7A8AA0', '#4B5A70'], plantillas: ['#F8C14A', '#E08A0B'], inicios: ['#2CD4C0', '#0E8F82'], empresa: ['#F472B6', '#C026D3'],
+  };
   const card = m => {
-    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { i: m.icon };
-    return `<div class="home-card" role="button" tabindex="0" data-q="${(m.name + ' ' + m.desc).toLowerCase()}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
-      <div class="home-card__icon">${k.i}</div>
-      <div class="home-card__body"><div class="home-card__title">${m.name}</div><div class="home-card__desc">${m.desc}</div></div>
+    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { i: m.icon }, g = GRAD[m.id] || ['#7A8AA0', '#4B5A70'];
+    return `<div class="home-app" role="button" tabindex="0" data-q="${(m.name + ' ' + m.desc).toLowerCase()}" title="${String(m.desc || '').replace(/"/g, '&quot;')}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
+      <div class="home-app__ic" style="--g1:${g[0]};--g2:${g[1]}">${k.i}</div>
+      <div class="home-app__n">${m.name}</div>
     </div>`;
   };
-  const GROUPS = [['Trabajo', ['management', 'leadmanagement', 'contenido', 'finance'], 4], ['Utilidades', ['herramientas', 'plantillas', 'inicios', 'empresa'], 'u4']];
-  const used = new Set();
-  let html = GROUPS.map(([t, ids, cols]) => {
-    const ms = ids.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean); ms.forEach(m => used.add(m.id));
-    return ms.length ? `<section class="home-sec"><h2 class="home-sec__t">${t}</h2><div class="home-sec__g home-sec__g--${cols}">${ms.map(card).join('')}</div></section>` : '';
-  }).join('');
-  const rest = HOME_MODULES.filter(m => !used.has(m.id));   // cualquier módulo nuevo sin grupo aparece igualmente
-  if (rest.length) html += `<section class="home-sec"><h2 class="home-sec__t">Más</h2><div class="home-sec__g home-sec__g--3">${rest.map(card).join('')}</div></section>`;
+  const ORDER = ['management', 'leadmanagement', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'empresa'];
+  const ordered = [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))];
+  const html = `<section class="home-sec"><div class="home-apps">${ordered.map(card).join('')}</div></section>`;
   grid.innerHTML = html;
 }
 // ── Barra superior global: avatar + workspace + menú (Configuración / Salir) ──
