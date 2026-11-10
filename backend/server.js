@@ -4762,6 +4762,9 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
       INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
       VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
     `, [req.workspaceOwnerId, ...vals, b.company_id || null, b.outbound_client_id || null]);
+    // El historial arranca con la creación del contacto (quién lo añadió y de dónde viene).
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [req.workspaceOwnerId, rows[0].id, rows[0].outbound_client_id || null, 'Contacto creado · fuente: ' + (_lmS(rows[0].fuente) || 'manual')]).catch(() => {});
     if (_lmS(b.linkedin_sales_nav)) { rows[0].linkedin_sales_nav = _lmCleanUrlish(b.linkedin_sales_nav); await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [rows[0].linkedin_sales_nav, rows[0].id]); }
     // Auto-enriquecimiento: verificar (o buscar) el email en background, sin bloquear la respuesta.
     if (b.auto_verify !== false) {
@@ -5580,9 +5583,17 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     }
 
     // "Más adelante": guarda cuándo hay que retomarlo (nurturing).
+    let _nurtureTxt = '';
     if (disp === 'mas_adelante') {
-      await pool.query(`UPDATE lm_contacts SET nurture_at=$1, nurture_motivo=$4 WHERE id=$2 AND user_id=$3`,
-        [_sanDate((req.body || {}).nurture_at), cid, uid, _lmS((req.body || {}).nurture_motivo).slice(0, 60)]);
+      const _nf = _sanDate((req.body || {}).nurture_at), _nm = _lmS((req.body || {}).nurture_motivo).slice(0, 60);
+      const { rows: [_prev] } = await pool.query(`SELECT nurture_at::text AS f FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      await pool.query(`UPDATE lm_contacts SET nurture_at=$1, nurture_motivo=$4 WHERE id=$2 AND user_id=$3`, [_nf, cid, uid, _nm]);
+      _nurtureTxt = (_nf ? ` · Recordatorio: retomar el ${String(_nf).slice(0, 10)}` : '') + (_nm ? ` · Motivo: ${_nm}` : '');
+      // Si ya estaba en «Más adelante» y solo cambió la fecha, también queda en el historial.
+      if (oldDisp === 'mas_adelante' && _nf && String((_prev && _prev.f) || '').slice(0, 10) !== String(_nf).slice(0, 10)) {
+        await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+          [uid, cid, obcId, `Recordatorio cambiado: retomar el ${String(_nf).slice(0, 10)}${_nm ? ' · Motivo: ' + _nm : ''}`]);
+      }
     }
 
     // Actividad tipada por disposition (respuesta/reunion/aceptacion/nota) — SOLO
@@ -5593,7 +5604,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
         `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado, canal)
          VALUES ($1,$2,$3,$4,$5,NOW(),'hecha',$6)`,
         [uid, cid, obcId, LM_DISP_TIPO[disp] || 'nota',
-         `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`, canal]);
+         `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}${_nurtureTxt}`, canal]);
     }
     // La disposición alimenta el pipeline (solo hacia adelante).
     const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;
