@@ -7729,6 +7729,10 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
       const rsp = (await pool.query(`SELECT 1 FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.id=$1 AND ${_RESPONDED_M}`, [m.id])).rowCount;
       if (rsp) { await pool.query(`UPDATE lm_messages SET estado='omitido', error='No enviado a propósito: el contacto ya respondió o salió de la secuencia' WHERE id=$1 AND estado='awaiting'`, [m.id]); return res.status(409).json({ error: 'Este contacto ya respondió o salió de la secuencia: no se le envía este mensaje.' }); }
     }
+    if (action === 'approve') {   // sin zona horaria definida en la secuencia no se programa: la hora de envío depende de ella
+      const tzq = (await pool.query(`SELECT timezone, nombre FROM sequences WHERE id=$1`, [m.sequence_id])).rows[0];
+      if (tzq && !String(tzq.timezone || '').trim()) return res.status(400).json({ error: 'Primero define la zona horaria de la secuencia «' + tzq.nombre + '» (Editar secuencia → Zona horaria). Sin ella no se sabe a qué hora programar el envío.', code: 'sin_zona_horaria' });
+    }
     if (action === 'approve') { const gp = require('./services/sendEngine').draftGaps(asunto, cuerpo); if (gp.length) return res.status(400).json({ error: 'Le faltan datos al mensaje (' + gp[0].motivo + ': «' + gp[0].texto + '»). Complétalo o edítalo antes de aprobar.', gaps: gp }); }
     const { rows: [upd] } = await pool.query(
       `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3, editado = (editado OR $5) WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,

@@ -26235,6 +26235,8 @@ ${rhead}${foot}
     const todos = _apF(); if (!todos.length) return;
     const sinDatos = todos.filter(a => a.gaps && a.gaps.length), lista = todos.filter(a => !(a.gaps && a.gaps.length));
     if (!lista.length) { showBanner(`Los ${todos.length} emails tienen datos sin completar (ciudad, empresa…): ábrelos con «Revisar / editar» y complétalos antes de aprobar.`, 'error'); return; }
+    { const sinTz = [...new Set(lista.map(x => x.sequence_id))].map(id => (_sequences || []).find(q => q.id === id)).filter(q => q && !String(q.timezone || '').trim());
+      if (sinTz.length) { showBanner(`Primero define la zona horaria de la secuencia «${sinTz[0].nombre}»${sinTz.length > 1 ? ` (y ${sinTz.length - 1} más)` : ''} (Editar secuencia → Zona horaria): sin ella no se sabe a qué hora programar el envío.`, 'error'); return; } }
     if (!confirm(`¿Aprobar ${lista.length} email${lista.length !== 1 ? 's' : ''} de esta lista?${sinDatos.length ? `
 
 ${sinDatos.length} no se aprobará${sinDatos.length !== 1 ? 'n' : ''}: les falta un dato (ciudad, empresa…). Queda${sinDatos.length !== 1 ? 'n' : ''} en la lista para que los completes.` : ''}
