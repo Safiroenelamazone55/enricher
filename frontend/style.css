@@ -21074,3 +21074,16 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #pane-home .home-app__ic { width: clamp(64px, 9vh, 78px); height: clamp(64px, 9vh, 78px); border-radius: 20px; }
 #pane-home .home-app__ic svg { width: 56%; height: 56%; }
 #pane-home .home-apps { max-width: 680px; }
+
+/* Inicio estilo Odoo (v3): iconos multicolor grandes que llenan la ficha, menos espacio vacío */
+#pane-home .home-hero { margin-top: clamp(6px, 2.4vh, 26px); }
+#pane-home .home-hero__t { font-size: clamp(1.25rem, 3vh, 1.6rem); }
+#pane-home .home-hero__s { display: none; }
+#pane-home .home-hero__row { gap: 12px; }
+#pane-home .home-search { height: 40px; width: min(340px, 100%); }
+#pane-home .home-sec { margin-top: clamp(16px, 3.6vh, 36px); }
+#pane-home .home-apps { max-width: 620px; gap: clamp(18px, 3.4vh, 30px) 10px; }
+#pane-home .home-app { gap: 10px; max-width: 150px; }
+#pane-home .home-app__ic { width: clamp(92px, 14vh, 116px); height: clamp(92px, 14vh, 116px); border-radius: 26px; box-shadow: 0 1px 3px rgba(20,33,27,.10), 0 10px 22px -10px rgba(20,33,27,.30); }
+#pane-home .home-app__ic svg { width: 66%; height: 66%; }
+#pane-home .home-app__n { font-size: .9rem; font-weight: 600; color: #26332C; }
