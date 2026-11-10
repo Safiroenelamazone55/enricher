@@ -21055,3 +21055,17 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #pane-home .home-app:focus-visible { box-shadow: 0 0 0 3px rgba(20,33,27,.12); }
 #pane-home .home-app__n { font-size: .92rem; font-weight: 600; letter-spacing: -.005em; color: var(--text-primary, #14211B); line-height: 1.25; }
 @media (max-width: 640px) { #pane-home .home-apps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 8px; } }
+
+/* Inicio estilo Odoo (v2): fondo suave, ficha blanca con icono de dos tonos y nombre debajo */
+#appShell.home-mode .content-wrap { background: linear-gradient(135deg, #E6ECE8 0%, #F3F6F4 55%, #EAF0EC 100%) !important; }
+#pane-home .home-hero__t { font-size: clamp(1.4rem, 3.4vh, 1.9rem); font-weight: 600; }
+#pane-home .home-hero__s { margin-top: 4px; }
+#pane-home .home-hero__row { gap: 14px; }
+#pane-home .home-search { background: rgba(255,255,255,.75); border-color: rgba(20,33,27,.08); }
+#pane-home .home-sec { margin-top: clamp(24px, 6vh, 52px); }
+#pane-home .home-apps { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 640px; gap: clamp(22px, 4.6vh, 38px) 14px; }
+#pane-home .home-app { gap: 9px; max-width: 140px; }
+#pane-home .home-app__ic { width: clamp(58px, 8vh, 70px); height: clamp(58px, 8vh, 70px); border-radius: 18px; background: #fff; color: inherit; box-shadow: 0 1px 2px rgba(20,33,27,.10), 0 6px 14px -8px rgba(20,33,27,.28); }
+#pane-home .home-app__ic svg { width: 52%; height: 52%; }
+#pane-home .home-app:hover .home-app__ic, #pane-home .home-app:focus-visible .home-app__ic { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(20,33,27,.10), 0 14px 24px -10px rgba(20,33,27,.34); }
+#pane-home .home-app__n { font-size: .8rem; font-weight: 500; color: #2F3A34; }

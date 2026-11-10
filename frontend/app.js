@@ -961,14 +961,23 @@ function _renderHomeInner(grid) {
     empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="8" cy="12" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="16" cy="18" r="2" fill="currentColor" fill-opacity=".24"/>') },
   };
   // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
-  const GRAD = {
-    management: ['#8B6CF6', '#5B3DF5'], leadmanagement: ['#3B8CFA', '#1D5FD1'], contenido: ['#FF9A4D', '#F2542D'], finance: ['#22C97A', '#0E8F4E'],
-    herramientas: ['#7A8AA0', '#4B5A70'], plantillas: ['#F8C14A', '#E08A0B'], inicios: ['#2CD4C0', '#0E8F82'], empresa: ['#F472B6', '#C026D3'],
+  // Iconos de dos tonos (verde de marca, tinta y lima) sobre una ficha blanca, como las apps de Odoo.
+  const d2 = d => `<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">${d}</svg>`;
+  const G = '#00804C', INK = '#14211B', LIME = '#A3D65C';
+  const ICO2 = {
+    management: d2(`<rect x="3" y="3" width="8" height="10" rx="2" fill="${G}"/><rect x="13" y="3" width="8" height="6" rx="2" fill="${INK}"/><rect x="13" y="11" width="8" height="10" rx="2" fill="${LIME}"/><rect x="3" y="15" width="8" height="6" rx="2" fill="${INK}"/>`),
+    leadmanagement: d2(`<path d="M21 3 3 10.2l7 3.1z" fill="${G}"/><path d="M21 3 10 13.3l3.1 7z" fill="${INK}"/><path d="M21 3 10 13.3" stroke="${LIME}" stroke-width="1.6" stroke-linecap="round"/>`),
+    contenido: d2(`<rect x="3" y="5" width="18" height="16" rx="3.5" fill="${INK}"/><path d="M3 9.5A4.5 4.5 0 0 1 7.5 5h9A4.5 4.5 0 0 1 21 9.5V11H3z" fill="${LIME}"/><rect x="7" y="2.5" width="2" height="5" rx="1" fill="${G}"/><rect x="15" y="2.5" width="2" height="5" rx="1" fill="${G}"/><circle cx="8.5" cy="15.5" r="1.4" fill="#fff"/><circle cx="12" cy="15.5" r="1.4" fill="#fff"/><circle cx="15.5" cy="15.5" r="1.4" fill="${G}"/>`),
+    finance: d2(`<rect x="3" y="6" width="18" height="14" rx="3" fill="${G}"/><path d="M3 9a3 3 0 0 1 3-3h10a2 2 0 0 1 2 2v1H3z" fill="${INK}"/><rect x="14" y="12" width="7" height="4.5" rx="2.25" fill="${LIME}"/><circle cx="16.4" cy="14.25" r="1" fill="${INK}"/>`),
+    herramientas: d2(`<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="${INK}"/><circle cx="5.7" cy="18.3" r="1.3" fill="${LIME}"/>`),
+    plantillas: d2(`<path d="M14.5 2.8H7A2.5 2.5 0 0 0 4.5 5.3v13.4A2.5 2.5 0 0 0 7 21.2h10a2.5 2.5 0 0 0 2.5-2.5V7.8z" fill="${INK}"/><path d="M14.5 2.8v3.5a1.5 1.5 0 0 0 1.5 1.5h3.5z" fill="${LIME}"/><rect x="8" y="12" width="8" height="1.8" rx=".9" fill="#fff"/><rect x="8" y="15.5" width="5" height="1.8" rx=".9" fill="${G}"/>`),
+    inicios: d2(`<rect x="4" y="4" width="16" height="17.5" rx="3" fill="${G}"/><rect x="8" y="2.5" width="8" height="4.5" rx="1.8" fill="${INK}"/><path d="m8.5 14 2.6 2.6 4.6-5" stroke="${LIME}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
+    empresa: d2(`<rect x="3" y="5" width="18" height="2.4" rx="1.2" fill="${INK}"/><rect x="3" y="10.8" width="18" height="2.4" rx="1.2" fill="${INK}"/><rect x="3" y="16.6" width="18" height="2.4" rx="1.2" fill="${INK}"/><circle cx="8" cy="6.2" r="2.8" fill="${G}"/><circle cx="16" cy="12" r="2.8" fill="${LIME}"/><circle cx="10" cy="17.8" r="2.8" fill="${G}"/>`),
   };
   const card = m => {
-    const act = m.action || `selectModule('${m.id}')`, k = SKIN[m.id] || { i: m.icon }, g = GRAD[m.id] || ['#7A8AA0', '#4B5A70'];
+    const act = m.action || `selectModule('${m.id}')`;
     return `<div class="home-app" role="button" tabindex="0" data-q="${(m.name + ' ' + m.desc).toLowerCase()}" title="${String(m.desc || '').replace(/"/g, '&quot;')}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
-      <div class="home-app__ic" style="--g1:${g[0]};--g2:${g[1]}">${k.i}</div>
+      <div class="home-app__ic">${ICO2[m.id] || (SKIN[m.id] ? SKIN[m.id].i : m.icon)}</div>
       <div class="home-app__n">${m.name}</div>
     </div>`;
   };
