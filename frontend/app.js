@@ -42952,6 +42952,11 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
         <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
+    manual: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Manual · Outreach</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Cómo funciona todo, paso a paso</div>
+        <div class="hrm-sc__l">Cliente → buzón → campaña → secuencia</div>
+        <div class="hrm-sc__l">Cada campo explicado · modos de envío</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Lista de revisión antes de activar</div></div></div>`,
     tray: `<div class="hrm-tray"><div class="hrm-menu">
         <div class="hrm-menu__row hrm-menu__row--st"><span class="hrm-menu__dot"></span>Monitoreando · 0 por enviar</div>
         <div class="hrm-menu__row">Pausar</div><div class="hrm-menu__row">Ver registro (log)</div><div class="hrm-menu__row">Abrir Elevn</div>
@@ -42959,6 +42964,9 @@ const HerramientasModule = (() => {
         <div class="hrm-tbar"><span class="hrm-tbar__ico hrm-tbar__ico--nova">E</span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__ico"></span><span class="hrm-tbar__t">11:19 a. m.</span></div></div>`,
   };
   const TOOLS = [
+    { id: 'manual-outreach', nombre: 'Manual del módulo Outreach', tipo: 'Guía de uso', ico: 'skill', prev: 'manual',
+      desc: 'Cómo está armado Outreach y cómo se conecta cada parte: puesta en marcha, configuración de una secuencia campo por campo, pasos, aprobaciones, respuestas, protecciones y lista de revisión antes de activar.',
+      pasos: ['Pulsa <b>Descargar</b> y abre el PDF (se ve en cualquier navegador o lector de PDF).', 'Empieza por la sección <b>3 · Puesta en marcha</b> si vas a configurar un cliente nuevo, o por la <b>4 · Configurar una secuencia</b> si ya tienes cliente y buzón.', 'Antes de activar cualquier secuencia, repasa la sección <b>12 · Lista de revisión</b>.'] },
     { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
       desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
@@ -42980,8 +42988,8 @@ const HerramientasModule = (() => {
   ];
   const _size = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.0', '') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
   // Misma estructura que Plantillas: contenedor grande, pestañas, buscador, Galería/Lista y vista previa al abrir una tarjeta.
-  const CAT = { 'Extensión de Chrome': 'ext', 'App de Windows': 'app', 'Skill de Claude': 'skill' };
-  const TABS = [['todas', 'Todas'], ['ext', 'Extensiones'], ['app', 'Aplicaciones'], ['skill', 'Skills de Claude']];
+  const CAT = { 'Guía de uso': 'guia', 'Extensión de Chrome': 'ext', 'App de Windows': 'app', 'Skill de Claude': 'skill' };
+  const TABS = [['todas', 'Todas'], ['guia', 'Guías'], ['ext', 'Extensiones'], ['app', 'Aplicaciones'], ['skill', 'Skills de Claude']];
   let _q = '', _tab = 'todas', _view = (() => { try { return localStorage.getItem('hrm_view') === 'lista' ? 'lista' : 'gal'; } catch (_) { return 'gal'; } })();
   const _seg = `<div class="pl-seg" role="group" aria-label="Vista"><button type="button" data-v="gal" onclick="HerramientasModule.verComo('gal')" title="Galería"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Galería</button><button type="button" data-v="lista" onclick="HerramientasModule.verComo('lista')" title="Lista"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>Lista</button></div>`;
   function _meta(t) {

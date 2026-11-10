@@ -7,6 +7,7 @@ const path = require('path');
 const DIR = path.join(__dirname, '..', 'tools_files');
 // id → archivo guardado, nombre con el que se descarga y versión (se muestra en la pantalla).
 const TOOLS = {
+  'manual-outreach':       { file: 'manual-outreach-1.0.0.pdf',          nombre: 'Manual-Outreach-Nova.pdf',           version: '1.0.0' },
   'linkedin-scraper':      { file: 'linkedin-sales-scraper-1.0.14.zip',   nombre: 'LinkedIn-Sales-Scraper-1.0.14.zip',   version: '1.0.14' },
   'nova-ventana':          { file: 'nova-ventana-1.0.0.zip',             nombre: 'Nova-Ventana-de-busqueda-1.0.0.zip', version: '1.0.0' },
   'nova-activity-web':     { file: 'elevn-activity-extension-0.1.3.zip', nombre: 'Elevn-Activity-Extension-0.1.3.zip', version: '0.1.3' },
