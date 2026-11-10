@@ -21069,3 +21069,8 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #pane-home .home-app__ic svg { width: 52%; height: 52%; }
 #pane-home .home-app:hover .home-app__ic, #pane-home .home-app:focus-visible .home-app__ic { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(20,33,27,.10), 0 14px 24px -10px rgba(20,33,27,.34); }
 #pane-home .home-app__n { font-size: .8rem; font-weight: 500; color: #2F3A34; }
+#appShell.home-mode .app-main, #appShell.home-mode .home-page, #appShell.home-mode #pane-home { background: transparent !important; }
+#appShell.home-mode .app-main { background: linear-gradient(135deg, #E6ECE8 0%, #F3F6F4 55%, #EAF0EC 100%) !important; }
+#pane-home .home-app__ic { width: clamp(64px, 9vh, 78px); height: clamp(64px, 9vh, 78px); border-radius: 20px; }
+#pane-home .home-app__ic svg { width: 56%; height: 56%; }
+#pane-home .home-apps { max-width: 680px; }
