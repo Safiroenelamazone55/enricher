@@ -51024,6 +51024,7 @@ function initApp() {
     // deja bien; si no, el remove('active') de mas abajo tambien lo cubre.
     if (tabName !== 'mgmt-empresa') WorkspaceModule.closeNameModal();
     try { LeadManagerModule.unmountEmbed(); } catch (_) {}   // lo que Outreach tenía montado (p. ej. Tabla de datos) vuelve a su sitio
+    { const _pn = $(`pane-${tabName}`); if (_pn && _pn.closest('#lm2-body')) { const _host = $('pane-home') && $('pane-home').parentElement; if (_host) { _host.appendChild(_pn); _pn.classList.remove('pane--embedded'); } } }   // por si Outreach lo remontó justo después
     document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
