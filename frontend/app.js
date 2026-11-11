@@ -43015,6 +43015,11 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
         <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
+    ofertas: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Manual · NovaCentrax</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Oferta, ruta y mensajes en un solo lugar</div>
+        <div class="hrm-sc__l">Qué vendes, a quién y por cuánto</div>
+        <div class="hrm-sc__l">Ruta de trabajo y secuencia de contacto</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Mensajes · formulario de inicio · pendientes</div></div></div>`,
     respuestas: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Guía · Cuando responde</div>
       <div class="hrm-sc"><div class="hrm-sc__h">Qué contestar a cada respuesta</div>
         <div class="hrm-sc__l">Quiere saber más · pone una pega · dice que no</div>
@@ -43035,6 +43040,9 @@ const HerramientasModule = (() => {
     { id: 'manual-outreach', nombre: 'Manual del módulo Outreach', tipo: 'Guía de uso', ico: 'skill', prev: 'manual',
       desc: 'Cómo está armado Outreach y cómo se conecta cada parte: puesta en marcha, configuración de una secuencia campo por campo, pasos, aprobaciones, respuestas, protecciones y lista de revisión antes de activar.',
       pasos: ['Pulsa <b>Descargar</b> y abre el PDF (se ve en cualquier navegador o lector de PDF).', 'Empieza por la sección <b>3 · Puesta en marcha</b> si vas a configurar un cliente nuevo, o por la <b>4 · Configurar una secuencia</b> si ya tienes cliente y buzón.', 'Antes de activar cualquier secuencia, repasa la sección <b>12 · Lista de revisión</b>.'] },
+    { id: 'manual-ofertas', nombre: 'Manual NovaCentrax · Ofertas', tipo: 'Guía de uso', ico: 'skill', prev: 'ofertas',
+      desc: 'Documento interno con todo lo necesario para llevar a un prospecto de «me interesa» a un piloto firmado: la oferta completa, a quién sí y a quién no, la ruta de trabajo, la secuencia de contacto, los mensajes, el formulario de inicio y los pendientes.',
+      pasos: ['Pulsa <b>Descargar</b>: obtienes un único archivo <b>.html</b>, que ya trae todo dentro.', 'Ábrelo con doble clic: se abre en tu navegador (no necesita internet ni instalar nada). Puedes guardarlo en una carpeta fija.', 'Usa las pestañas de arriba (Resumen, Oferta completa, Ruta de trabajo, Secuencia de contacto, Cuando responde, Mensajes, Formulario de inicio y Pendientes) para ir directo a lo que necesites.'] },
     { id: 'guia-respuestas', nombre: 'Guía · Cuando responde (ES y EN)', tipo: 'Guía de uso', ico: 'skill', prev: 'respuestas',
       desc: 'Para el equipo: qué hacer y qué contestar cuando un contacto responde a Outreach. Dos PDF en la misma carpeta, uno con los mensajes en español y otro con los mensajes en inglés, con índice y textos listos para copiar.',
       pasos: ['Pulsa <b>Descargar</b> y descomprime el archivo: obtienes la carpeta <b>Respuestas-Outreach</b> con los dos PDF.', 'Abre <b>respuestas-es.pdf</b> si la persona escribe en español, o <b>respuestas-en.pdf</b> si escribe en inglés (la explicación de cada caso es la misma; cambia el idioma de los mensajes para copiar).', 'Entra por el <b>índice</b>: un clic y estás en el caso. Copia el mensaje y rellena lo que va entre [corchetes] con los datos de la persona.'] },

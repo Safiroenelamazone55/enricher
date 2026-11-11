@@ -8,6 +8,7 @@ const DIR = path.join(__dirname, '..', 'tools_files');
 // id → archivo guardado, nombre con el que se descarga y versión (se muestra en la pantalla).
 const TOOLS = {
   'manual-outreach':       { file: 'manual-outreach-1.0.0.pdf',          nombre: 'Manual-Outreach-Nova.pdf',           version: '1.0.0' },
+  'manual-ofertas':        { file: 'manual-novacentrax-ofertas-1.0.0.html', nombre: 'Manual-NovaCentrax-Ofertas.html',    version: '1.0.0' },
   'guia-respuestas':       { file: 'guia-respuestas-outreach-1.0.0.zip', nombre: 'Respuestas-Outreach.zip',             version: '1.0.0' },
   'linkedin-scraper':      { file: 'linkedin-sales-scraper-1.0.14.zip',   nombre: 'LinkedIn-Sales-Scraper-1.0.14.zip',   version: '1.0.14' },
   'nova-ventana':          { file: 'nova-ventana-1.0.0.zip',             nombre: 'Nova-Ventana-de-busqueda-1.0.0.zip', version: '1.0.0' },
