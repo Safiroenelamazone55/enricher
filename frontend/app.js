@@ -879,8 +879,11 @@ window.addEventListener('popstate', () => {
 const HOME_MODULES = [
   { id: 'management',    tab: 'mgmt-dashboard', name: 'Operaciones',    desc: 'Proyectos, tareas, clientes y finanzas',      color: 'orange',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>' },
-  { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'Cantera, datos, CRM, campañas, secuencias y leads',            color: 'red',
+  { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias, inbox, leads y deals',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
+  // Cantera: prospección y preparación de datos (antes dentro de Outreach). «Tabla de datos» también sigue disponible en Outreach.
+  { id: 'cantera',        tab: 'cantera',        name: 'Cantera',        desc: 'Prospección y preparación de datos: borradores, mesa de trabajo, base global, cargas y tabla de datos', color: 'orange',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>' },
   // Finanzas salió de Operaciones y pasa a ser su propio módulo (pedido explícito
   // 2026-09-02: "todo lo que tenga que ver con contabilidad finanzas, lo quiero en
   // un módulo separado") — el pane #pane-mgmt-finance no se movió de sitio (los
@@ -971,6 +974,7 @@ function _renderHomeInner(grid) {
     herramientas: d2(`<g transform="scale(2)"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="#475569"/></g><circle cx="11.4" cy="36.6" r="3.4" fill="#F59E0B"/>`),
     plantillas: d2(`<path d="M29 4H14a6 6 0 0 0-6 6v28a6 6 0 0 0 6 6h20a6 6 0 0 0 6-6V15z" fill="#8B5CF6"/><path d="M29 4v8a3 3 0 0 0 3 3h8z" fill="#C4B5FD"/><rect x="15" y="24" width="18" height="3.4" rx="1.7" fill="#fff"/><rect x="15" y="31" width="12" height="3.4" rx="1.7" fill="#FDE68A"/>`),
     inicios: d2(`<rect x="8" y="8" width="32" height="36" rx="7" fill="#14B8A6"/><rect x="16" y="4" width="16" height="9" rx="4" fill="#0F766E"/><path d="m16 27 6 6 11-12" stroke="#fff" stroke-width="4.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
+    cantera: d2(`<path d="M24 5 5 14l19 9 19-9z" fill="#FBBF24"/><path d="M5 22.5l19 9 19-9" stroke="#F59E0B" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/><path d="M5 32l19 9 19-9" stroke="#D97706" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`),
     empresa: d2(`<rect x="5" y="9.5" width="38" height="5" rx="2.5" fill="#CBD5E1"/><rect x="5" y="21.5" width="38" height="5" rx="2.5" fill="#CBD5E1"/><rect x="5" y="33.5" width="38" height="5" rx="2.5" fill="#CBD5E1"/><circle cx="15" cy="12" r="6.5" fill="#F4636B" stroke="#fff" stroke-width="2.5"/><circle cx="33" cy="24" r="6.5" fill="#3B82F6" stroke="#fff" stroke-width="2.5"/><circle cx="21" cy="36" r="6.5" fill="#10B981" stroke="#fff" stroke-width="2.5"/>`),
   };
   const card = m => {
@@ -980,8 +984,9 @@ function _renderHomeInner(grid) {
       <div class="home-app__n">${m.name}</div>
     </div>`;
   };
-  const ORDER = ['management', 'leadmanagement', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'empresa'];
-  const ordered = [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))];
+  const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'empresa'];
+  const _u = window._authUser || {}, _datosOk = !!(_u.isOwner || !_u.permisos || (_u.permisos.datos && _u.permisos.datos.n > 0));
+  const ordered = [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))].filter(m => m.id !== 'cantera' || _datosOk);
   const html = `<section class="home-sec"><div class="home-apps">${ordered.map(card).join('')}</div></section>`;
   grid.innerHTML = html;
 }
@@ -23106,17 +23111,11 @@ const LeadManagerModule = (() => {
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
-    { k: 'x-single',             l: 'Lead individual',      g: 'Preparación', x: 1 },
-    { k: 'x-batch',              l: 'Carga masiva',         g: 'Preparación', x: 1 },
-    { k: 'x-verifications',      l: 'Verificaciones',       g: 'Preparación', x: 1 },
-    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Preparación', x: 1 },
+    { k: 'x-datos',              l: 'Tabla de datos',       g: 'Datos', x: 1 },
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
     // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
-    { k: 'x-cantera',            l: 'Borradores',           g: 'Prospección', x: 1 },
-    { k: 'x-cantera-mesa',       l: 'Mesa de trabajo',      g: 'Prospección', x: 1 },
-    { k: 'x-cantera-global',     l: 'Base global',          g: 'Prospección', x: 1 },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
   ];
@@ -23195,6 +23194,7 @@ const LeadManagerModule = (() => {
   function criteriosBack() { go('x-cantera'); }
   function settingsBack() { const b = _cfgBack || 'x-cantera'; _cfgBack = null; go(b); }
   function _mountCanteraCfg() { try { if ($('lm-set-cantera-body')) { const gc = (typeof gcName === 'function') ? gcName() : ''; CanteraConfigModule.setExtClient(gc); CanteraConfigModule.render('lm-set-cantera-body'); } } catch (e) { console.error('[outreach] cfg cantera', e); } }
+  function unmountEmbed() { _xUnmount(); }
   function setEmbed(sec) { _section = sec; _activeClient = null; try { localStorage.setItem('lm_last_section', sec); } catch (_) {} }
   // Grupos plegables: nada se quita, pero lo que se usa menos queda recogido (Prospección, Datos, Preparación y Análisis, por defecto).
   // El grupo de la pantalla en la que estás siempre se ve abierto, y con la barra en modo iconos se ven todas las opciones.
@@ -40113,7 +40113,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
@@ -51011,9 +51011,6 @@ function initApp() {
   };
   function _switchTab(tabName, opts = {}) {
     // Proyectos y Tareas se retiraron: todo ese trabajo vive ahora en Espacios (el detalle de una tarea sí usa el pane de Tareas)
-    // Cantera y Datos viven dentro de Outreach: los enlaces y atajos antiguos entran por ahí
-    const _EMB = { cantera: 'x-cantera', 'cantera-mesa': 'x-cantera-mesa', 'cantera-global': 'x-cantera-global', 'cantera-criterios': 'x-cantera-criterios', 'cantera-config': 'x-cantera-config', single: 'x-single', batch: 'x-batch', verifications: 'x-verifications', datos: 'x-datos' };
-    if (_EMB[tabName]) { try { LeadManagerModule.setEmbed(_EMB[tabName]); } catch (_) {} tabName = 'lead-manager'; }
     let _soloDetalle = false;   // se entra al pane de Tareas solo para el detalle de una tarea: no se recarga su lista (taparía el detalle)
     if (tabName === 'mgmt-projects') { try { SpacesModule.showProjects(); } catch (_) {} tabName = 'mgmt-spaces'; }
     else if (tabName === 'mgmt-tasks') {
@@ -51026,6 +51023,7 @@ function initApp() {
     // asi, si el destino es justo "Equipo", el add('active') de mas abajo lo
     // deja bien; si no, el remove('active') de mas abajo tambien lo cubre.
     if (tabName !== 'mgmt-empresa') WorkspaceModule.closeNameModal();
+    try { LeadManagerModule.unmountEmbed(); } catch (_) {}   // lo que Outreach tenía montado (p. ej. Tabla de datos) vuelve a su sitio
     document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
@@ -51039,11 +51037,11 @@ function initApp() {
       loadVerifications();
     }
     if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
-    if (tabName === 'cantera') CanteraModule.render('cantera-body');
-    if (tabName === 'cantera-mesa') CanteraMesaModule.render('cantera-mesa-body');
-    if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
+    if (tabName === 'cantera') { try { CanteraModule.setExtClient(null); } catch (_) {} CanteraModule.render('cantera-body'); }
+    if (tabName === 'cantera-mesa') { try { CanteraMesaModule.setExtClient(null); } catch (_) {} CanteraMesaModule.render('cantera-mesa-body'); }
+    if (tabName === 'cantera-global') { try { CanteraGlobalModule.setExtClient(''); } catch (_) {} CanteraGlobalModule.render('cantera-global-body'); }
     if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
-    if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
+    if (tabName === 'cantera-config') { try { CanteraConfigModule.setExtClient(''); } catch (_) {} CanteraConfigModule.render('cantera-config-body'); }
     if (tabName === 'herramientas') HerramientasModule.render('herramientas-body');
     if (tabName === 'plantillas') PlantillasModule.render('plantillas-body');
     if (tabName === 'inicios' && typeof InicioModule !== 'undefined') InicioModule.render('inicios-body');

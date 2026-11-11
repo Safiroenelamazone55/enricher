@@ -21097,3 +21097,7 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ct-co__o:hover { background: #F1F5F2; }
 .ct-co__o--new { color: #00804C; font-weight: 600; justify-content: flex-start; }
 .ct-co__e { padding: 10px; font-size: .82rem; color: var(--text-muted, #8B9690); }
+
+/* Inicio: con 9 módulos, 5 por fila */
+#pane-home .home-apps { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 780px; }
+@media (max-width: 760px) { #pane-home .home-apps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
