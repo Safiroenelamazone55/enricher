@@ -21163,3 +21163,13 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .global-topbar__brand--mod { gap: 9px; }
 .global-topbar__brand--mod .global-topbar__name { font-size: 14.5px; font-weight: 700; }
 .global-topbar__mod-back { width: 22px; height: 22px; }
+
+/* Barra lateral de Outreach igualada a la de los demás módulos (mismo ancho, alto de fila, letra y encabezados de sección) */
+.lm2 .lm2-nav { width: 210px; }
+.lm2 .lm2-nav.lm2-nav--collapsed { width: 64px; }
+.lm2 .lm2-nav .lm2-nav__list { padding: 8px 10px; gap: 1px; }
+.lm2 .lm2-nav .lm2-nav__item { height: 33px; min-height: 33px; padding: 0 12px; gap: 11px; font-size: 14px; font-weight: 500; letter-spacing: -.01em; line-height: 1; margin-bottom: 0; }
+.lm2 .lm2-nav.lm2-nav--collapsed .lm2-nav__item { padding: 0; justify-content: center; }
+.lm2 .lm2-nav .lm2-nav__item.active { font-weight: 600; }
+.lm2 .lm2-nav .lm2-nav__grp { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; line-height: 16px; padding: 8px 14px 3px; }
+.lm2 .lm2-nav .lm2-nav__list > .lm2-nav__grp:first-child { padding-top: 3px; }
