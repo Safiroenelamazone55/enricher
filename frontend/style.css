@@ -21153,3 +21153,6 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 #pane-home .home-app:hover .home-app__ic, #pane-home .home-app:focus-visible .home-app__ic { transform: translateY(-4px); }
 #pane-home .home-app__n { font-size: .95rem; font-weight: 600; color: #1F2B25; }
 @media (max-width: 760px) { #pane-home .home-apps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Inicio: fondo cálido */
+#appShell.home-mode .app-main { background: linear-gradient(115deg, rgba(255,255,255,.42) 0 24%, transparent 24% 100%), linear-gradient(135deg, #F2E6DA 0%, #FAF4EC 48%, #F0E3D5 100%) !important; }

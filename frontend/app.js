@@ -966,10 +966,10 @@ function _renderHomeInner(grid) {
   // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
   // Iconos de dos tonos (verde de marca, tinta y lima) sobre una ficha blanca, como las apps de Odoo.
   const d2 = d => `<svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true">${d}</svg>`;
-  // Marcas abstractas: 2-3 formas redondeadas superpuestas con degradado suave y un brillo, en la paleta de Nova (verde, lima, tinta y menta).
+  // Marcas abstractas: 2-3 formas redondeadas superpuestas con degradado suave y un brillo, en colores cálidos.
   const GR = (id, c1, c2) => `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>`;
   const HLG = id => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".4"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
-  const GRN = ['#34AE72', '#006B40'], LIM = ['#CBEC84', '#8CC63F'], INK = ['#2C3B34', '#0E1A15'], MINT = '#CDEBDB';
+  const GRN = ['#FFA04D', '#E8590C'], LIM = ['#FFDB74', '#F5A524'], INK = ['#E8604B', '#9E2A1B'], MINT = '#FFE6CC';   // cálidos: naranja, ámbar, coral-ladrillo y crema
   const df = (id, ...cs) => `<defs>${cs.map((c, i) => GR(id + i, c[0], c[1])).join('')}${HLG(id + 'h')}</defs>`;
   const ICO2 = {
     management: d2(`${df('m', GRN, INK)}<rect x="5" y="5" width="28" height="28" rx="9" fill="url(#m0)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#m1)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#mh)"/><circle cx="37" cy="11" r="5.5" fill="${LIM[1]}" stroke="#fff" stroke-width="2"/>`),
