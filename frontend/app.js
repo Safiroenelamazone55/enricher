@@ -37625,7 +37625,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (e.kind === 'created') return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:#14211B">+</span><div class="cp-hist__b"><div class="cp-hist__t"><b>Contacto creado</b>${e.fuente ? ` <span class="cp-hist__tag">${esc(e.fuente)}</span>` : ''}</div><div class="cp-hist__d">${esc(fd(e.fecha))}</div></div></div>`;
       if (e.kind === 'sent') {
         const ic = ICO[e.canal] || ICO.email, st = ESTADO[e.estado] || ['', ''];
-        const nombre = (e.canal === 'email' || !e.canal) ? (ACCION[e.accion] || e.titulo || 'Email') : (e.titulo || e.canal);
+        const cn = (_TOUCH[e.canal || 'email'] || ['Email'])[0];
+        const an = _accionLabel(e.canal || 'email', e.accion) || e.titulo || '';
+        const nombre = an ? `${cn} · ${an}` : cn;
         const open = _cpHistOpen.has(key);
         return `<div class="cp-hist__ev${e.futuro ? ' is-future' : ''}"><span class="cp-hist__ic" style="background:${ic[1]}">${ic[0]}</span><div class="cp-hist__b">
           <div class="cp-hist__t"><b>${e.paso ? `Paso ${e.paso} · ` : ''}${esc(nombre)}</b>${st[0] ? ` <span class="cp-hist__st cp-hist__st--${st[1]}">${st[0]}</span>` : ''}${e.opens ? ` <span class="cp-hist__tag" title="Veces que abrió el correo">Abrió ×${e.opens}</span>` : ''}${e.clicks ? ` <span class="cp-hist__tag" title="Clics en enlaces">Clic ×${e.clicks}</span>` : ''}</div>
@@ -37651,10 +37653,21 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       // actividades: notas, cambios de estado, reuniones, llamadas, LinkedIn…
       const m = _actMeta(e.tipo);
       const isState = e.tipo === 'disposition_change';
-      return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:${m[1]}">${isState ? '✓' : e.tipo === 'nota' ? '✎' : '•'}</span><div class="cp-hist__b">
-        <div class="cp-hist__t"><b>${esc(m[0])}</b>${e.paso ? ` <span class="cp-hist__tag">Paso ${e.paso}</span>` : ''}${e.cliente ? ` <span class="cp-hist__tag">${esc(e.cliente)}</span>` : ''}</div>
-        ${e.nota ? `<div class="${e.tipo === 'nota' ? 'cp-hist__q cp-hist__q--note' : 'cp-hist__n'}">${esc(e.nota)}</div>` : ''}
+      const isStep = !!e.paso;
+      const ic = isStep ? (ICO[e.canal] || null) : null;
+      const cn = e.canal ? (_TOUCH[e.canal] || [e.canal])[0] : '';
+      const an = isStep ? _accionLabel(e.canal || '', e.accion) : '';
+      const titulo = isStep && cn ? (an ? `${cn} · ${an}` : `${cn} · ${m[0].replace(/^LinkedIn |^Email |^WhatsApp /i, '')}`) : m[0];
+      const open = _cpHistOpen.has(key);
+      let copyTxt = '';
+      if (isStep && e.copy) { const ct = (_contacts || []).find(x => x.id === _cpHistFor) || {}; try { copyTxt = _seqRenderTpl(e.copy.cuerpo || '', ct); } catch (_) { copyTxt = e.copy.cuerpo || ''; } }
+      return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:${ic ? ic[1] : m[1]}">${ic ? ic[0] : isState ? '✓' : e.tipo === 'nota' ? '✎' : '•'}</span><div class="cp-hist__b">
+        <div class="cp-hist__t"><b>${esc(titulo)}</b>${isStep ? ` <span class="cp-hist__st cp-hist__st--ok">Hecho</span>` : ''}</div>
+        ${isStep ? `<div class="cp-hist__m"><span class="cp-hist__tag">Paso ${e.paso}</span>${e.seq ? `<span class="cp-hist__tag cp-hist__tag--seq">${esc(e.seq)}</span>` : ''}${e.cliente ? `<span class="cp-hist__tag">${esc(e.cliente)}</span>` : ''}${e.variante ? `<span class="cp-hist__tag" title="Variante del mensaje">Variante ${esc(e.variante)}</span>` : ''}</div>` : (e.cliente ? `<div class="cp-hist__m"><span class="cp-hist__tag">${esc(e.cliente)}</span></div>` : '')}
+        ${e.nota && !isStep ? `<div class="${e.tipo === 'nota' ? 'cp-hist__q cp-hist__q--note' : 'cp-hist__n'}">${esc(e.nota)}</div>` : ''}
         <div class="cp-hist__d">${esc(fd(e.fecha))}${e.estado === 'pendiente' ? ' · pendiente' : ''}</div>
+        ${isStep && (copyTxt || (e.copy && e.copy.asunto)) ? `<button type="button" class="cp-hist__more" onclick="LeadManagerModule.cpHistToggle('${key}')">${open ? 'Ocultar el copy' : 'Ver el copy usado'}</button>` : ''}
+        ${open && isStep ? `<div class="cp-hist__copy">${e.copy && e.copy.asunto ? `<div class="cp-hist__subj">${esc(e.copy.asunto)}</div>` : ''}<div class="cp-hist__txt">${esc(copyTxt)}</div><div class="cp-hist__d" style="margin-top:6px">Texto del paso con los datos de este contacto${e.variante ? ` · variante ${esc(e.variante)}` : ''}</div></div>` : ''}
       </div></div>`;
     }).join('');
     return head + `<div class="cp-hist__chips">${chip('todo', 'Todo', all.length)}${chip('envios', 'Envíos', cnt('envios'))}${chip('respuestas', 'Respuestas', cnt('respuestas'))}${chip('notas', 'Notas', cnt('notas'))}</div>`

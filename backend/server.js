@@ -11548,7 +11548,7 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
   try {
     const { rows: [k] } = await pool.query(`SELECT id, created_at, fuente FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
     if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
-    const [msgs, acts, inbox] = await Promise.all([
+    const [msgs, acts, inbox, enr] = await Promise.all([
       pool.query(`
         SELECT m.id, m.estado, m.sent_at, m.scheduled_at, m.created_at, m.asunto, m.cuerpo, m.variant, m.to_email,
                s.id AS seq_id, s.nombre AS seq, oc.nombre AS cliente, st.canal, st.accion, st.titulo,
@@ -11571,7 +11571,36 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
            AND NOT (a.tipo = 'respuesta' AND (a.nota LIKE 'Disposición:%' OR a.nota LIKE 'Respondió a%'))
          ORDER BY a.fecha`, [uid, cid]),
       pool.query(`SELECT id, tipo, asunto, cuerpo, received_at, from_email FROM lm_inbox_messages WHERE user_id = $1 AND contact_id = $2 ORDER BY received_at`, [uid, cid]),
+      // pasos de las secuencias en las que está (o estuvo) el contacto: para saber el canal, la acción y el copy de cada paso manual
+      pool.query(`
+        SELECT st.id, st.sequence_id, st.canal, st.accion, st.titulo, st.plantilla, st.asunto, st.variants, st.dia, st.orden, s.nombre AS seq, oc.nombre AS cliente
+          FROM lm_contact_sequences cs
+          JOIN sequences s ON s.id = cs.sequence_id
+          JOIN sequence_steps st ON st.sequence_id = s.id
+          LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
+         WHERE cs.user_id = $1 AND cs.contact_id = $2
+         ORDER BY cs.sequence_id, st.dia, st.orden, st.id`, [uid, cid]),
     ]);
+    // pasos por secuencia, en orden (posición 1, 2, 3…)
+    const bySeq = new Map();
+    enr.rows.forEach(r => { if (!bySeq.has(r.sequence_id)) bySeq.set(r.sequence_id, []); bySeq.get(r.sequence_id).push(r); });
+    const stepFor = (paso, canal, variante) => {
+      const cands = [];
+      bySeq.forEach(list => { const st = list[paso - 1]; if (st) cands.push(st); });
+      const sameCanal = cands.filter(c => !canal || c.canal === canal);
+      const pool_ = sameCanal.length ? sameCanal : cands;
+      if (!pool_.length) return null;
+      const hasVar = c => { try { const v = typeof c.variants === 'string' ? JSON.parse(c.variants) : c.variants; return Array.isArray(v) && v.some(x => String(x.nombre || '') === String(variante || '')); } catch (_) { return false; } };
+      return pool_.find(hasVar) || pool_[pool_.length - 1];
+    };
+    const copyOf = (st, variante) => {
+      if (!st) return null;
+      let v = []; try { v = typeof st.variants === 'string' ? JSON.parse(st.variants) : (st.variants || []); } catch (_) {}
+      const m = Array.isArray(v) && v.length ? (v.find(x => String(x.nombre || '') === String(variante || '')) || (v.length === 1 ? v[0] : null)) : null;
+      if (m && (m.cuerpo || m.asunto)) return { asunto: m.asunto || '', cuerpo: m.cuerpo || '' };
+      if (st.plantilla || st.asunto) return { asunto: st.asunto || '', cuerpo: st.plantilla || '' };
+      return null;
+    };
     const clip = t => { t = String(t || '').replace(/\r/g, ''); return t.length > 3000 ? t.slice(0, 3000) + '…' : t; };
     const ev = [];
     msgs.rows.forEach(m => {
@@ -11580,7 +11609,10 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
     });
     acts.rows.forEach(a => {
       const pm = /^Paso (\d+)/.exec(a.nota || '');
-      ev.push({ kind: 'act', id: a.id, fecha: a.fecha, tipo: a.tipo, nota: a.nota || '', estado: a.estado, canal: a.canal || '', cliente: a.cliente || '', paso: pm ? +pm[1] : null });
+      const vm = /Variante (.+)$/.exec(a.nota || '');
+      const st = pm ? stepFor(+pm[1], a.canal || '', vm ? vm[1].trim() : '') : null;
+      ev.push({ kind: 'act', id: a.id, fecha: a.fecha, tipo: a.tipo, nota: a.nota || '', estado: a.estado, canal: (a.canal || (st && st.canal) || ''), cliente: a.cliente || (st && st.cliente) || '', paso: pm ? +pm[1] : null,
+               accion: st ? st.accion || '' : '', seq: st ? st.seq : '', variante: vm ? vm[1].trim() : '', copy: st ? copyOf(st, vm ? vm[1].trim() : '') : null });
     });
     inbox.rows.forEach(i => ev.push({ kind: 'inbox', id: i.id, fecha: i.received_at, tipo: i.tipo, asunto: i.asunto || '', cuerpo: clip(i.cuerpo), from: i.from_email || '' }));
     ev.push({ kind: 'created', id: 0, fecha: k.created_at, fuente: k.fuente || '' });
