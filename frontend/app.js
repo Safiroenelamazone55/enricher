@@ -23380,7 +23380,7 @@ const LeadManagerModule = (() => {
   function gcLeave() { _gcClose(); }
   function go(section) {
     if (!_tph.loaded && !_tph.loading) _telLoad();
-    _section = section; _activeClient = null; _seqTaskCanal = ''; _refreshNav(); _renderBody();
+    _section = section; _activeClient = null; _seqTaskCanal = ''; _cpReturnTo = null; _refreshNav(); _renderBody();
     // Recuerda la última sección (sin parámetros — no vistas de un contacto/secuencia/cliente
     // puntual) para volver aquí si se recarga la página en vez de caer siempre al Dashboard.
     try { localStorage.setItem('lm_last_section', section); } catch (_) {}
@@ -26316,7 +26316,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // Revisar un email antes de aprobarlo: abre la FICHA del contacto (como cualquier otra tarea) con el mensaje editable y la vista previa;
   // "Aprobar" pasa al siguiente contacto de la cola y "Siguiente/Anterior" recorre los emails por aprobar.
   async function seqGoApprove(id, mid) {
-    _activeSeq = id;
+    _activeSeq = id; _cpReturnTo = null;
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; } catch { _seqApprovals = []; }
     const pend = _seqApprovals.filter(a => a.estado === 'awaiting');
     if (!pend.length) { showBanner('No hay emails por aprobar en esta secuencia', 'info'); return; }
@@ -27417,9 +27417,22 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return g;
   }
   async function seqTaskOpenG(seqId, cid) { await seqTaskOpen(seqId, cid, true); }
+  // Desde la lista de Contactos: si el contacto tiene una tarea que toca YA (vencida o de hoy) o un email por aprobar, se abre como «Hacer tarea»
+  // (la tarea arriba y la información del contacto debajo). Si solo tiene tareas próximas, o ninguna, se abre su ficha normal.
+  let _cpReturnTo = null;
+  async function openContactWork(cid) {
+    try {
+      const today = _dayOf(new Date());
+      const t = _allSeqTasks().find(x => x.c.id === cid && x.due <= today);
+      if (t) { await seqTaskOpen(t.sq.id, cid, false); _cpReturnTo = 'contacts'; return; }
+      const a = _apAll().find(x => x.contact_id === cid);
+      if (a) { await seqGoApprove(a.sequence_id, a.id); if (_cpTaskCtx) _cpReturnTo = 'contacts'; return; }
+    } catch (e) { console.warn('[contactos] tarea pendiente:', e.message); }
+    openContactPage(cid);
+  }
   async function seqTaskOpen(seqId, cid, fromGlobal) {
     if (!cid) return;
-    _cpFromGlobal = !!fromGlobal; _cpHistSeq.clear();
+    _cpFromGlobal = !!fromGlobal; _cpHistSeq.clear(); _cpReturnTo = null;
     _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;   // corrida nueva
     const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
     if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
@@ -27450,6 +27463,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function seqDoExit() {
     const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; const global = _cpFromGlobal; _cpFromGlobal = false; _apQ = null;
     _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId;
+    if (_cpReturnTo) { const r = _cpReturnTo; _cpReturnTo = null; go(r); return; }   // se abrió desde la lista de Contactos: vuelve a ella
     if (global) { _section = 'tasks'; _renderBody(); return; }   // se vuelve a la lista de Tareas comerciales, con los filtros como los dejaste
     _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId);
   }
@@ -37133,7 +37147,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCtAll(this.checked)"></th>
         ${cols.map(d => `<th>${d.l}</th>`).join('')}<th></th>
       </tr></thead>
-      <tbody>${pageList.map(c => `<tr class="clients-table__row${_ctSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openContactPage(${c.id})" style="cursor:pointer">
+      <tbody>${pageList.map(c => `<tr class="clients-table__row${_ctSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openContactWork(${c.id})" style="cursor:pointer">
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_ctSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCt(event,${c.id})"></td>
         ${cols.map(d => `<td class="client-meta">${_ctCell(c, d.k)}</td>`).join('')}
         <td class="lm-dt-act"><button class="lm-mini-b" title="Borradores IA (✨)" onclick="event.stopPropagation();LeadManagerModule.openAiDrafts(${c.id})">${NI('sparkles')}</button><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteContact(${c.id})">✕</button></td>
@@ -37491,7 +37505,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
-      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? 'Tareas' : (_cpFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos'))}</button>
+      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? (_cpReturnTo ? 'Contactos' : 'Tareas') : (_cpFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos'))}</button>
       ${_derivBanner(c)}
       ${_cpTaskBar(id)}
       <div class="cp-head">
@@ -40142,7 +40156,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
