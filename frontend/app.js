@@ -43015,6 +43015,11 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
         <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
+    respuestas: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Guía · Cuando responde</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Qué contestar a cada respuesta</div>
+        <div class="hrm-sc__l">Quiere saber más · pone una pega · dice que no</div>
+        <div class="hrm-sc__l">Mensajes listos para copiar · ES y EN</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Agendar · reunión · cerrar con amabilidad</div></div></div>`,
     manual: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Manual · Outreach</div>
       <div class="hrm-sc"><div class="hrm-sc__h">Cómo funciona todo, paso a paso</div>
         <div class="hrm-sc__l">Cliente → buzón → campaña → secuencia</div>
@@ -43030,6 +43035,9 @@ const HerramientasModule = (() => {
     { id: 'manual-outreach', nombre: 'Manual del módulo Outreach', tipo: 'Guía de uso', ico: 'skill', prev: 'manual',
       desc: 'Cómo está armado Outreach y cómo se conecta cada parte: puesta en marcha, configuración de una secuencia campo por campo, pasos, aprobaciones, respuestas, protecciones y lista de revisión antes de activar.',
       pasos: ['Pulsa <b>Descargar</b> y abre el PDF (se ve en cualquier navegador o lector de PDF).', 'Empieza por la sección <b>3 · Puesta en marcha</b> si vas a configurar un cliente nuevo, o por la <b>4 · Configurar una secuencia</b> si ya tienes cliente y buzón.', 'Antes de activar cualquier secuencia, repasa la sección <b>12 · Lista de revisión</b>.'] },
+    { id: 'guia-respuestas', nombre: 'Guía · Cuando responde (ES y EN)', tipo: 'Guía de uso', ico: 'skill', prev: 'respuestas',
+      desc: 'Para el equipo: qué hacer y qué contestar cuando un contacto responde a Outreach. Dos PDF en la misma carpeta, uno con los mensajes en español y otro con los mensajes en inglés, con índice y textos listos para copiar.',
+      pasos: ['Pulsa <b>Descargar</b> y descomprime el archivo: obtienes la carpeta <b>Respuestas-Outreach</b> con los dos PDF.', 'Abre <b>respuestas-es.pdf</b> si la persona escribe en español, o <b>respuestas-en.pdf</b> si escribe en inglés (la explicación de cada caso es la misma; cambia el idioma de los mensajes para copiar).', 'Entra por el <b>índice</b>: un clic y estás en el caso. Copia el mensaje y rellena lo que va entre [corchetes] con los datos de la persona.'] },
     { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
       desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
