@@ -26129,6 +26129,11 @@ ${rhead}${foot}
     const r = ((ev && (ev.currentTarget || ev.target)) || document.body).getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.right - 230, window.innerWidth - 240))}px`;
     menu.style.top = `${r.bottom + 6}px`;
+    // se cierra al hacer clic fuera, con Esc, al desplazar la lista o al cambiar el tamaño de la ventana
+    const cerrar = () => { menu.remove(); document.removeEventListener('mousedown', fuera, true); document.removeEventListener('keydown', tecla, true); window.removeEventListener('scroll', cerrar, true); window.removeEventListener('resize', cerrar); };
+    const fuera = e => { if (!menu.contains(e.target)) cerrar(); };
+    const tecla = e => { if (e.key === 'Escape') cerrar(); };
+    setTimeout(() => { if (!document.body.contains(menu)) return; document.addEventListener('mousedown', fuera, true); document.addEventListener('keydown', tecla, true); window.addEventListener('scroll', cerrar, true); window.addEventListener('resize', cerrar); }, 0);
   }
   async function _fixAfter() {
     const snap = _snapScroll();
