@@ -29564,13 +29564,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_ibMenuClose) _ibMenuClose();
     const t = (_ibThreads || []).find(x => x.contact_id === cid);
     const m = document.createElement('div');
-    m.className = 'd3-status-menu';
+    m.className = 'd3-status-menu ibx-rowmenu';
     m.innerHTML =
       `<button class="d3-status-opt" onclick="LeadManagerModule.ibMarkUnread(${cid})">Marcar como no leído</button>`
       + `<button class="d3-status-opt" onclick="LeadManagerModule.ibOpen(${cid});LeadManagerModule.ibCloseMenu()">Abrir conversación</button>`
       + (t ? `<button class="d3-status-opt" onclick="LeadManagerModule.ibCloseMenu();LeadManagerModule.openContactPage(${cid})">Ver ficha del contacto</button>` : '');
     document.body.appendChild(m);
-    m.style.cssText = `position:fixed;z-index:10050;top:${Math.min(e.clientY + 4, window.innerHeight - 130)}px;left:${Math.min(e.clientX + 4, window.innerWidth - 210)}px;min-width:196px`;
+    m.style.cssText = `position:fixed;z-index:10050;top:${Math.min(e.clientY + 4, window.innerHeight - 180)}px;left:${Math.min(e.clientX + 4, window.innerWidth - 230)}px;min-width:216px`;
     const onDoc = ev => { if (!m.contains(ev.target)) _ibMenuClose(); };
     _ibMenuClose = () => { m.remove(); document.removeEventListener('mousedown', onDoc); _ibMenuClose = null; };
     setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
