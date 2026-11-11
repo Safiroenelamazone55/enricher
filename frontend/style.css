@@ -21212,3 +21212,4 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .nav-std__item { display: flex; align-items: center; gap: var(--nav-item-gap); width: 100%; height: var(--nav-item-h); padding: 0 var(--nav-item-px); border: 0; background: transparent; border-radius: 8px; font: inherit; font-size: var(--nav-item-fs); font-weight: var(--nav-item-fw); color: var(--text2, #3B3A38); cursor: pointer; text-align: left; box-sizing: border-box; }
 .nav-std__item:hover { background: #F1EFEB; }
 .nav-std__item.active { font-weight: var(--nav-item-fw-active); background: #EAF2FF; color: var(--brand-d, #0062CC); }
+.lm2 .lm2-nav .lm2-nav__item { margin: 0; }
