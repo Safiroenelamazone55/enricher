@@ -21260,3 +21260,9 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .cp-hist__copy { margin-top: 8px; }
 .cp-hist__copy.is-clamp .cp-hist__txt { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-hist__m { margin-top: 8px; }
+
+/* Por corregir: barra con el menú ⋮ al extremo derecho */
+.lm-fix-hd { display: flex; align-items: stretch; gap: 8px; margin: 14px 2px 6px; }
+.lm-fix-hd .lm-fix-seg, .lm-fix-hd .lm-tsec-h { flex: 1 1 auto; margin: 0; min-width: 0; }
+.lm-fix-kb { flex: none; width: 40px; border: 1px solid #ECE9E4; background: #fff; color: #5C6862; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.lm-fix-kb:hover { background: #F1EFEB; color: #14211B; }

@@ -26135,6 +26135,50 @@ ${rhead}${foot}
     const tecla = e => { if (e.key === 'Escape') cerrar(); };
     setTimeout(() => { if (!document.body.contains(menu)) return; document.addEventListener('mousedown', fuera, true); document.addEventListener('keydown', tecla, true); window.addEventListener('scroll', cerrar, true); window.addEventListener('resize', cerrar); }, 0);
   }
+  // ⋮ de la barra «Por corregir | Todos los pendientes»: exporta la lista que está abierta, para buscar los emails en cantidad y volver a importarlos.
+  function _fixOpenList() { return _fixScopeAll ? _fixAllF() : _fixF(); }
+  function fixHeadMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const all = _fixScopeAll, n = _fixOpenList().length;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '280px';
+    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" ${n ? '' : 'disabled'} onclick="document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());LeadManagerModule.fixExport()">Exportar «${all ? 'Todos los pendientes' : 'Por corregir'}» (${n}) a CSV</button>
+      <div style="padding:6px 12px 8px;font-size:.72rem;line-height:1.4;color:#8B9690;max-width:280px">Trae el ID de cada contacto. Rellena las columnas Email / Email personal y vuelve a importarlo: se actualizan por ID, sin duplicar, y salen de esta lista.</div></div>`;
+    document.body.appendChild(menu);
+    const r = ((ev && (ev.currentTarget || ev.target)) || document.body).getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 280, window.innerWidth - 290))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    const cerrar = () => { menu.remove(); document.removeEventListener('mousedown', fuera, true); document.removeEventListener('keydown', tecla, true); window.removeEventListener('scroll', cerrar, true); window.removeEventListener('resize', cerrar); };
+    const fuera = e => { if (!menu.contains(e.target)) cerrar(); };
+    const tecla = e => { if (e.key === 'Escape') cerrar(); };
+    setTimeout(() => { if (!document.body.contains(menu)) return; document.addEventListener('mousedown', fuera, true); document.addEventListener('keydown', tecla, true); window.addEventListener('scroll', cerrar, true); window.addEventListener('resize', cerrar); }, 0);
+  }
+  function fixExport() {
+    const all = _fixScopeAll, list = _fixOpenList();
+    if (!list.length) { showBanner('No hay contactos en esta lista para exportar.', 'info'); return; }
+    // «ID» (código CON-xxxxx) es el mismo que usa el importador para ACTUALIZAR el contacto exacto. «Email» y «Email personal» van vacías para rellenarlas.
+    const cols = [
+      ['ID', c => c.codigo || ('CON-' + String(c.id).padStart(5, '0'))],
+      ['Nombre completo', c => [c.nombre, c.apellido].filter(Boolean).join(' ')],
+      ['Primer nombre', c => String(c.nombre || '').trim().split(/\s+/)[0] || ''],
+      ['LinkedIn', c => c.linkedin],
+      ['LinkedIn (Sales Navigator)', c => c.linkedin_sales_nav],
+      ['Empresa', (c, co) => c.company_nombre || (co && co.nombre) || c.empresa_nombre],
+      ['Empresa Website', (c, co) => (co && (co.website || co.dominio)) || ''],
+      ['Empresa LinkedIn', (c, co) => (co && co.linkedin) || ''],
+      ['Email', () => ''],
+      ['Email personal', () => ''],
+    ];
+    const cell = v => { v = v == null ? '' : String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const rows = list.map(({ c }) => { const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || null; return cols.map(k => cell(k[1](c, co))).join(','); });
+    const csv = '﻿' + cols.map(k => k[0]).join(',') + '\n' + rows.join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `${all ? 'todos-los-pendientes' : 'por-corregir'}_${_localISO()}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    showBanner(`✓ Exportados ${list.length} contactos de «${all ? 'Todos los pendientes' : 'Por corregir'}». Rellena Email / Email personal y vuelve a importarlo (se actualiza por ID).`, 'success');
+  }
   async function _fixAfter() {
     const snap = _snapScroll();
     try { await _reloadContacts(); } catch (_) {}
@@ -26261,7 +26305,7 @@ ${rhead}${foot}
       ? '<div class="lm-fix-seg"><button type="button" class="lm-fix-seg__h' + (!_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><span class="lm-fix-seg__t">Por corregir</span><b>' + _nowN + '</b></button>'
         + '<button type="button" class="lm-fix-seg__h' + (_all ? ' on' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los contactos sin email o con email rebotado de este cliente, aunque aún no les toque un paso de email"><span class="lm-fix-seg__t">Todos los pendientes</span><b>' + _tot + '</b></button></div>'
       : '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div>';
-    return _head + '<div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+    return '<div class="lm-fix-hd">' + _head + (listOverride ? '' : '<button type="button" class="lm-fix-kb" title="Más opciones" aria-label="Más opciones" onclick="LeadManagerModule.fixHeadMenu(event)"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>') + '</div><div class="lm-fix-sub">Contactos a los que no se les puede escribir por email. Escribe el correo que falta y guarda: su secuencia se reanuda sola.</div><div class="seq-tasks lm-fix-tbl"><div class="lm-fx lm-fx-hd"><span></span><span>Contacto</span><span>Problema</span><span>LinkedIn · S.Nav · Web · Tel · IA · Buscar</span><span>Email profesional</span><span>Email personal</span><span></span><span></span><span></span></div>' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
   }
   function _apSectionHtml() {
     const apl = _apF(); if (!apl.length) return '';
@@ -40240,7 +40284,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,

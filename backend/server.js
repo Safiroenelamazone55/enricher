@@ -8736,10 +8736,13 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
           if (_lg.lista.length) sets.push(`idiomas=$${vals.push(JSON.stringify(_lg.lista))}::jsonb`);
           // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
+          let _emailNuevo = false;
           if (email && email !== String(existing.email || '').trim().toLowerCase()) {
             sets.push(`email=$${vals.push(email)}`);
             sets.push(`email_status=''`, 'email_score=NULL', 'email_verified_at=NULL');
+            _emailNuevo = true;
           }
+          if (_lmS(f.email_personal)) _emailNuevo = true;
           // Empresa: si el archivo trae datos de empresa, se resuelve/crea y se re-enlaza
           if (_lmS(f.co_nombre) || _lmS(f.co_dominio) || _lmS(f.co_website)) {
             const cid2 = await _co({
@@ -8756,6 +8759,21 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             sets.push('updated_at=NOW()');
             await pool.query(`UPDATE lm_contacts SET ${sets.join(',')} WHERE id=$1 AND user_id=$2`, vals);
             summary.contactsUpdated++;
+            // Un email nuevo (profesional o personal) resuelve «Por corregir»: se reanudan sus secuencias pausadas por falta/rebote de email,
+            // se cierran sus avisos y se verifica el email. Es lo mismo que pasa al escribirlo a mano en esa lista.
+            if (_emailNuevo) {
+              try {
+                await pool.query(`UPDATE lm_contacts SET data_issue = CASE WHEN data_issue IN ('falta_email','dato_incorrecto') THEN '' ELSE data_issue END WHERE id=$1 AND user_id=$2`, [existing.id, uid]);
+                await pool.query(
+                  `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=COALESCE(next_action_at, NOW())
+                    WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')
+                      AND NOT EXISTS (SELECT 1 FROM lm_contacts kx WHERE kx.id=$2 AND kx.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar'))`, [uid, existing.id]);
+                await pool.query(`UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND estado='pendiente' AND tipo='tarea' AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%')`, [uid, existing.id]);
+                await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado) VALUES ($1,$2,'nota',$3,NOW(),'hecha')`, [uid, existing.id, 'Email actualizado por importación' + (email ? ': ' + email : '')]);
+                if (email) { try { require('./services/lmVerifyService').queueVerify(pool, uid, [existing.id]); } catch (_) {} }
+                summary.emailsResueltos = (summary.emailsResueltos || 0) + 1;
+              } catch (e) { console.warn('[import] reanudar tras email:', e.message); }
+            }
           } else {
             summary.contactsSkipped++;   // fila sin nada nuevo
           }
