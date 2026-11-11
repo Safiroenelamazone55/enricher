@@ -28443,7 +28443,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const nFix = _fixList().filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
       const nAcc = (typeof _pendingAccept === 'function' ? _pendingAccept() : []).filter(x => (x.seqs || []).some(sq => _tkSeqPass(sq.id))).length;
       const special = { __fix: nFix, __approve: nApr, __accept: nAcc };
-      cnt.email = (cnt.email || 0) + nApr + nFix; if (nAcc) cnt.linkedin = (cnt.linkedin || 0) + nAcc;
+      cnt.email = (cnt.email || 0) + nApr + nFix;   // «Por aceptar» (invitaciones esperando respuesta) no es trabajo de hoy: no se suma al canal, se ve aparte
       const present = _CANALES.filter(k => cnt[k]);
       if (present.length < 2 && !_taskFCanals.size && !_taskFAccs.size) return { btn: '', panel: '' };
       const none = {};   // tareas de un canal sin tipo de paso definido
@@ -28490,13 +28490,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn, sub) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Prioridad: correos y WhatsApp sin contestar, interesados y deals que dejaron de responder' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span>' + (sub ? '<span class="lm-stat__sub">' + sub + '</span>' : '') + '</button>';
     const fixTileSplit = (n, t) => '<div class="lm-stat lm-stat--btn lm-stat--fix lm-stat--split' + (_taskStat === 'fix' ? ' on' : '') + '"><span class="lm-stat__l">Por corregir</span><span class="lm-stat__halves"><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && !_fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(false)" title="Los que tocan ahora: su paso actual es un email"><b class="lm-stat__n lm-stat__n--warn">' + n + '</b><i>ahora</i></button><button type="button" class="lm-stat__half' + (_taskStat === 'fix' && _fixScopeAll ? ' sel' : '') + '" onclick="LeadManagerModule.fixScopeSet(true)" title="Todos los pendientes del cliente, aunque aún no les toque un email"><b class="lm-stat__n">' + t + '</b><i>en total</i></button></span></div>';
+    const _aprN = Array.isArray(_apList) ? (hasFilter ? _apF() : _apAll()).length : totalAwaiting;   // mismo número en «Todas», en «Por aprobar» y en el contador de la barra
     const statStrip = anything ? `<div class="lm-stat-strip">
-      <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length}</span></button>
+      <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length + _aprN + (hasFilter ? _fixF() : _fixList()).length}</span></button>
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
       ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return stat('fix', 'Por corregir', n, true); })() : ''}
-      ${(hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting) ? stat('approve', 'Por aprobar', (hasFilter && Array.isArray(_apList) ? _apF().length : totalAwaiting), true) : ''}
+      ${_aprN ? stat('approve', 'Por aprobar', _aprN, true) : ''}
     </div>` : '';
     const sel = _taskStat;
     const showApr = !sel || sel === 'approve', showOver = !sel || sel === 'over', showHoy = !sel || sel === 'today';
