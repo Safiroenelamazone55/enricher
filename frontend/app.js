@@ -825,7 +825,7 @@ function _setActiveModule(mod) {
   const modIcon = document.getElementById('gtb-mod-icon');
   const modName = document.getElementById('gtb-mod-name');
   const railIcon = document.querySelector(`.snav-mod[data-module="${mod}"] svg`);
-  if (modIcon) modIcon.innerHTML = railIcon ? railIcon.outerHTML : '';
+  if (modIcon) modIcon.innerHTML = _moduleIcon(mod) || (railIcon ? railIcon.outerHTML : '');
   if (modName) modName.textContent = _MOD_TITLES[mod] || '';
 }
 function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }
@@ -921,6 +921,34 @@ document.addEventListener('keydown', e => {
   if (pane && q && pane.offsetParent !== null) { e.preventDefault(); q.focus(); }
 });
 
+function _buildHomeIcons() {
+  const d2 = d => `<svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true">${d}</svg>`;
+  // Marcas abstractas: 2-3 formas redondeadas superpuestas con degradado suave y un brillo, en colores cálidos.
+  const GR = (id, c1, c2) => `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>`;
+  const HLG = id => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".4"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
+  const GRN = ['#FFA04D', '#E8590C'], LIM = ['#FFDB74', '#F5A524'], INK = ['#E8604B', '#9E2A1B'], MINT = '#FFE6CC';   // cálidos: naranja, ámbar, coral-ladrillo y crema
+  const df = (id, ...cs) => `<defs>${cs.map((c, i) => GR(id + i, c[0], c[1])).join('')}${HLG(id + 'h')}</defs>`;
+  const ICO2 = {
+    management: d2(`${df('m', GRN, INK)}<rect x="5" y="5" width="28" height="28" rx="9" fill="url(#m0)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#m1)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#mh)"/><circle cx="37" cy="11" r="5.5" fill="${LIM[1]}" stroke="#fff" stroke-width="2"/>`),
+    leadmanagement: d2(`${df('o', GRN, LIM)}<path d="M4 19 14 24 4 29z" fill="url(#o1)" stroke="url(#o1)" stroke-width="3" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#o0)" stroke="url(#o0)" stroke-width="6" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#oh)" stroke="url(#oh)" stroke-width="6" stroke-linejoin="round"/>`),
+    cantera: d2(`${df('c', LIM, GRN, INK)}<rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#c0)"/><rect x="6" y="17" width="36" height="15" rx="7.5" fill="url(#c1)"/><rect x="6" y="29" width="36" height="15" rx="7.5" fill="url(#c2)"/><rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#ch)"/>`),
+    contenido: d2(`${df('t', GRN, LIM)}<rect x="5" y="9" width="34" height="34" rx="10" fill="url(#t0)"/><rect x="5" y="9" width="34" height="34" rx="10" fill="url(#th)"/><circle cx="15.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="15.5" cy="32" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="32" r="4" fill="#fff" fill-opacity=".55"/><circle cx="38" cy="12" r="7" fill="url(#t1)" stroke="#fff" stroke-width="2.5"/>`),
+    finance: d2(`${df('f', GRN, LIM, INK)}<rect x="10" y="6" width="24" height="12" rx="6" fill="url(#f2)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#f0)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#fh)"/><rect x="26" y="24" width="18" height="12" rx="6" fill="url(#f1)"/><circle cx="33" cy="30" r="2.8" fill="${INK[1]}"/>`),
+    herramientas: d2(`${df('h', INK, GRN, LIM)}<g transform="rotate(45 24 24)"><rect x="19.5" y="3" width="9" height="42" rx="4.5" fill="url(#h0)"/></g><g transform="rotate(-45 24 24)"><rect x="19.5" y="3" width="9" height="42" rx="4.5" fill="url(#h1)"/></g><circle cx="24" cy="24" r="8.5" fill="url(#h2)" stroke="#fff" stroke-width="2.5"/>`),
+    plantillas: d2(`${df('p', INK)}<rect x="9" y="5" width="27" height="35" rx="8" fill="${MINT}"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#p0)"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#ph)"/><rect x="21" y="22" width="15" height="4" rx="2" fill="${LIM[0]}"/><rect x="21" y="30" width="10" height="4" rx="2" fill="#fff" fill-opacity=".6"/>`),
+    inicios: d2(`${df('i', GRN, INK)}<rect x="16" y="3" width="16" height="10" rx="5" fill="url(#i1)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#i0)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#ih)"/><path d="m16 27 6 6 11-12" stroke="${LIM[0]}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
+    empresa: d2(`${df('s', INK, GRN, LIM)}<rect x="5" y="8" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="20" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="32" width="38" height="8" rx="4" fill="${MINT}"/><circle cx="15" cy="12" r="7" fill="url(#s0)" stroke="#fff" stroke-width="2.5"/><circle cx="33" cy="24" r="7" fill="url(#s1)" stroke="#fff" stroke-width="2.5"/><circle cx="21" cy="36" r="7" fill="url(#s2)" stroke="#fff" stroke-width="2.5"/>`),
+  };
+  return ICO2;
+}
+let _homeIcoCache = null;
+function _moduleIcon(mod) {
+  try {
+    if (!_homeIcoCache) _homeIcoCache = _buildHomeIcons();
+    const k = { config: 'empresa', enricher: 'cantera' }[mod] || mod;
+    return _homeIcoCache[k] || '';
+  } catch (_) { return ''; }
+}
 function renderHome() {
   const grid = document.getElementById('home-grid');
   if (!grid) {
@@ -965,23 +993,7 @@ function _renderHomeInner(grid) {
   };
   // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
   // Iconos de dos tonos (verde de marca, tinta y lima) sobre una ficha blanca, como las apps de Odoo.
-  const d2 = d => `<svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true">${d}</svg>`;
-  // Marcas abstractas: 2-3 formas redondeadas superpuestas con degradado suave y un brillo, en colores cálidos.
-  const GR = (id, c1, c2) => `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>`;
-  const HLG = id => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".4"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
-  const GRN = ['#FFA04D', '#E8590C'], LIM = ['#FFDB74', '#F5A524'], INK = ['#E8604B', '#9E2A1B'], MINT = '#FFE6CC';   // cálidos: naranja, ámbar, coral-ladrillo y crema
-  const df = (id, ...cs) => `<defs>${cs.map((c, i) => GR(id + i, c[0], c[1])).join('')}${HLG(id + 'h')}</defs>`;
-  const ICO2 = {
-    management: d2(`${df('m', GRN, INK)}<rect x="5" y="5" width="28" height="28" rx="9" fill="url(#m0)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#m1)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#mh)"/><circle cx="37" cy="11" r="5.5" fill="${LIM[1]}" stroke="#fff" stroke-width="2"/>`),
-    leadmanagement: d2(`${df('o', GRN, LIM)}<path d="M4 19 14 24 4 29z" fill="url(#o1)" stroke="url(#o1)" stroke-width="3" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#o0)" stroke="url(#o0)" stroke-width="6" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#oh)" stroke="url(#oh)" stroke-width="6" stroke-linejoin="round"/>`),
-    cantera: d2(`${df('c', LIM, GRN, INK)}<rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#c0)"/><rect x="6" y="17" width="36" height="15" rx="7.5" fill="url(#c1)"/><rect x="6" y="29" width="36" height="15" rx="7.5" fill="url(#c2)"/><rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#ch)"/>`),
-    contenido: d2(`${df('t', GRN, LIM)}<rect x="5" y="9" width="34" height="34" rx="10" fill="url(#t0)"/><rect x="5" y="9" width="34" height="34" rx="10" fill="url(#th)"/><circle cx="15.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="15.5" cy="32" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="32" r="4" fill="#fff" fill-opacity=".55"/><circle cx="38" cy="12" r="7" fill="url(#t1)" stroke="#fff" stroke-width="2.5"/>`),
-    finance: d2(`${df('f', GRN, LIM, INK)}<rect x="10" y="6" width="24" height="12" rx="6" fill="url(#f2)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#f0)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#fh)"/><rect x="26" y="24" width="18" height="12" rx="6" fill="url(#f1)"/><circle cx="33" cy="30" r="2.8" fill="${INK[1]}"/>`),
-    herramientas: d2(`${df('h', INK, GRN, LIM)}<g transform="rotate(45 24 24)"><rect x="19.5" y="3" width="9" height="42" rx="4.5" fill="url(#h0)"/></g><g transform="rotate(-45 24 24)"><rect x="19.5" y="3" width="9" height="42" rx="4.5" fill="url(#h1)"/></g><circle cx="24" cy="24" r="8.5" fill="url(#h2)" stroke="#fff" stroke-width="2.5"/>`),
-    plantillas: d2(`${df('p', INK)}<rect x="9" y="5" width="27" height="35" rx="8" fill="${MINT}"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#p0)"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#ph)"/><rect x="21" y="22" width="15" height="4" rx="2" fill="${LIM[0]}"/><rect x="21" y="30" width="10" height="4" rx="2" fill="#fff" fill-opacity=".6"/>`),
-    inicios: d2(`${df('i', GRN, INK)}<rect x="16" y="3" width="16" height="10" rx="5" fill="url(#i1)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#i0)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#ih)"/><path d="m16 27 6 6 11-12" stroke="${LIM[0]}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
-    empresa: d2(`${df('s', INK, GRN, LIM)}<rect x="5" y="8" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="20" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="32" width="38" height="8" rx="4" fill="${MINT}"/><circle cx="15" cy="12" r="7" fill="url(#s0)" stroke="#fff" stroke-width="2.5"/><circle cx="33" cy="24" r="7" fill="url(#s1)" stroke="#fff" stroke-width="2.5"/><circle cx="21" cy="36" r="7" fill="url(#s2)" stroke="#fff" stroke-width="2.5"/>`),
-  };
+  const ICO2 = _buildHomeIcons();
   const card = m => {
     const act = m.action || `selectModule('${m.id}')`;
     return `<div class="home-app" role="button" tabindex="0" data-q="${(m.name + ' ' + m.desc).toLowerCase()}" title="${String(m.desc || '').replace(/"/g, '&quot;')}" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
