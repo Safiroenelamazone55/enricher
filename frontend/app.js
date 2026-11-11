@@ -825,7 +825,7 @@ function _setActiveModule(mod) {
   const modIcon = document.getElementById('gtb-mod-icon');
   const modName = document.getElementById('gtb-mod-name');
   const railIcon = document.querySelector(`.snav-mod[data-module="${mod}"] svg`);
-  if (modIcon) modIcon.innerHTML = railIcon ? railIcon.outerHTML : '';   // icono de línea en blanco y negro (el de color vive solo en Inicio: sus degradados no se pueden repetir en el encabezado)
+  if (modIcon) modIcon.innerHTML = _moduleIcon(mod) || (railIcon ? railIcon.outerHTML : '');   // el icono nuevo, en blanco y negro
   if (modName) modName.textContent = _MOD_TITLES[mod] || '';
 }
 function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }
@@ -946,8 +946,18 @@ function _moduleIcon(mod) {
   try {
     if (!_homeIcoCache) _homeIcoCache = _buildHomeIcons();
     const k = { config: 'empresa', enricher: 'cantera' }[mod] || mod;
-    return _homeIcoCache[k] || '';
+    return _monoIcon(_homeIcoCache[k] || '');
   } catch (_) { return ''; }
+}
+// Versión en blanco y negro del icono de color (para el encabezado): sin degradados (no se pueden repetir ids en la página) y con tres tonos de gris que conservan las formas.
+function _monoIcon(svg) {
+  if (!svg) return '';
+  const tones = ['#1F1D1B', '#5F5B55', '#9A958E'];
+  return svg.replace(/<defs>[\s\S]*?<\/defs>/g, '')
+    .replace(/<(?:rect|path|circle)[^>]*url\(#[a-z]h\)[^>]*\/>/g, '')          // brillos
+    .replace(/url\(#[a-z](\d)\)/g, (m, d) => tones[+d] || tones[0])
+    .replace(/#FFE6CC/gi, '#CFCBC4').replace(/#FFDB74/gi, '#FFFFFF').replace(/#F5A524/gi, '#9A958E')
+    .replace(/ width="56" height="56"/, '');
 }
 function renderHome() {
   const grid = document.getElementById('home-grid');
