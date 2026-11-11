@@ -825,7 +825,7 @@ function _setActiveModule(mod) {
   const modIcon = document.getElementById('gtb-mod-icon');
   const modName = document.getElementById('gtb-mod-name');
   const railIcon = document.querySelector(`.snav-mod[data-module="${mod}"] svg`);
-  if (modIcon) modIcon.innerHTML = _moduleIcon(mod) || (railIcon ? railIcon.outerHTML : '');
+  if (modIcon) modIcon.innerHTML = railIcon ? railIcon.outerHTML : '';   // icono de línea en blanco y negro (el de color vive solo en Inicio: sus degradados no se pueden repetir en el encabezado)
   if (modName) modName.textContent = _MOD_TITLES[mod] || '';
 }
 function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }

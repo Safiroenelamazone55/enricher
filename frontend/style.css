@@ -21157,9 +21157,9 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 /* Inicio: fondo cálido */
 #appShell.home-mode .app-main { background: linear-gradient(115deg, rgba(255,255,255,.42) 0 24%, transparent 24% 100%), linear-gradient(135deg, #F2E6DA 0%, #FAF4EC 48%, #F0E3D5 100%) !important; }
 
-/* Encabezado de módulo: icono de color (el mismo de Inicio) y nombre más grandes */
-.global-topbar__mod-icon { width: 30px; height: 30px; }
-.global-topbar__mod-icon svg { width: 30px; height: 30px; }
-.global-topbar__brand--mod { gap: 10px; }
-.global-topbar__brand--mod .global-topbar__name { font-size: 16px; font-weight: 700; }
-.global-topbar__mod-back { width: 30px; height: 30px; }
+/* Encabezado de módulo: icono de línea en blanco y negro, un poco más grande que antes */
+.global-topbar__mod-icon { width: 22px; height: 22px; }
+.global-topbar__mod-icon svg { width: 21px; height: 21px; }
+.global-topbar__brand--mod { gap: 9px; }
+.global-topbar__brand--mod .global-topbar__name { font-size: 14.5px; font-weight: 700; }
+.global-topbar__mod-back { width: 22px; height: 22px; }
