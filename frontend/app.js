@@ -28955,6 +28955,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}<span class="ibx-row__nm-txt">${esc(nm)}</span>${t.disposition ? _dispoBadge(t.disposition) : ''}</span><span style="display:flex;align-items:center;gap:5px;flex:0 0 auto"><span class="ibx-row__t">${when}</span>${eyeIco}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
       <div class="ibx-row__meta"><span class="ibx-row__meta-txt">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''}</span>${(badge || schedBadge) ? `<span class="ibx-row__meta-badges">${badge}${schedBadge}</span>` : ''}</div>
+      <button type="button" class="ibx-row__mn" title="Más opciones" aria-label="Más opciones" onclick="LeadManagerModule.ibRowMenu(event,${t.contact_id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
     </div>`;
   }
   // Los correos de respuesta suelen traer todo el hilo citado debajo (firma +
