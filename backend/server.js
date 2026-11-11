@@ -11566,6 +11566,7 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
           FROM activities a LEFT JOIN outbound_clients oc ON oc.id = a.outbound_client_id
          WHERE a.user_id = $1 AND a.contact_id = $2
            AND a.tipo NOT IN ('revisar_respuesta', 'revisar_nurture', 'email_enviado', 'seguimiento_inactivo', 'contacto_esperando')
+           AND NOT (a.nota LIKE '[Envío manual] Email enviado%' OR a.nota LIKE '[Aprobado] Email enviado%')
            AND NOT (a.tipo = 'email' AND (a.nota LIKE '[Aprobado]%' OR a.nota LIKE '[Inbox]%' OR a.nota LIKE '[Automático]%'))
            AND NOT (a.tipo = 'respuesta' AND (a.nota LIKE 'Disposición:%' OR a.nota LIKE 'Respondió a%'))
          ORDER BY a.fecha`, [uid, cid]),
