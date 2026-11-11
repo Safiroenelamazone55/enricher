@@ -334,6 +334,25 @@ function startWatchdog(pool, { emit } = {}) {
 
 // Rutas: estado de los agentes, revisar ahora, activar/desactivar y descartar un aviso.
 function mount(app, { pool, requireAuth }) {
+  // Rebotes por cliente outbound: últimos 30 días y total (enviados = sent + replied + bounced).
+  app.get('/api/watchdog/bounces', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT COALESCE(sq.outbound_client_id, k.outbound_client_id) AS cid, COALESCE(oc.nombre, 'Sin cliente') AS cliente,
+               COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced') AND m.sent_at > NOW() - INTERVAL '30 days')::int AS env30,
+               COUNT(*) FILTER (WHERE m.estado = 'bounced' AND m.sent_at > NOW() - INTERVAL '30 days')::int AS reb30,
+               COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS env,
+               COUNT(*) FILTER (WHERE m.estado = 'bounced')::int AS reb
+          FROM lm_messages m
+          LEFT JOIN lm_contacts k ON k.id = m.contact_id
+          LEFT JOIN sequences sq ON sq.id = m.sequence_id
+          LEFT JOIN outbound_clients oc ON oc.id = COALESCE(sq.outbound_client_id, k.outbound_client_id)
+         WHERE m.user_id = $1 AND m.sent_at IS NOT NULL
+         GROUP BY 1, 2 HAVING COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced')) > 0
+         ORDER BY env DESC`, [req.workspaceOwnerId]);
+      res.json(rows);
+    } catch (e) { console.error('[watchdog] bounces', e.message); res.status(500).json({ error: 'No se pudieron calcular los rebotes por cliente' }); }
+  });
   app.get('/api/watchdog', requireAuth, async (req, res) => {
     try {
       const uid = req.workspaceOwnerId;

@@ -2,7 +2,7 @@
 // Cada aviso se abre para ver el ERROR EXACTO (mensaje completo, dónde ocurre, cuántas veces) y debajo hay un Registro de errores permanente
 // para volver, copiar el error tal cual y arreglarlo.
 const AgentesModule = (() => {
-  let _data = null, _busy = new Set(), _timer = null, _errs = null;
+  let _data = null, _busy = new Set(), _timer = null, _errs = null, _bt = null;
   const _open = new Set(), _errOpen = new Set();
   const API_B = () => (typeof API !== 'undefined' ? API : '/api');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -28,6 +28,22 @@ const AgentesModule = (() => {
     }
   }
   const _txtErr = x => `[${x.tipo || 'Error'}] ×${x.veces}${x.origen ? ' · en ' + x.origen : ''}\n${x.mensaje || ''}${(x.stack || []).length ? '\n' + x.stack.map(f => '    ' + f).join('\n') : ''}`;
+  // Rebotes por cliente: últimos 30 días y total.
+  function _btCell(env, reb) {
+    if (!env) return '<span class="agt-bt__z">—</span>';
+    const pct = Math.round((reb / env) * 1000) / 10, c = pct >= 10 ? 'fail' : pct >= 5 ? 'warn' : 'ok';
+    return `<b class="agt-bt__p agt-bt__p--${c}">${pct}%</b> <span class="agt-bt__n">${reb} de ${env}</span>`;
+  }
+  function _btHtml() {
+    if (_bt === null) return '<div class="agt-bt agt-bt--load">Calculando rebotes por cliente…</div>';
+    if (!_bt.length) return '<div class="agt-bt agt-bt--load">Aún no hay envíos para medir rebotes por cliente.</div>';
+    const sum = k => _bt.reduce((n, r) => n + (r[k] || 0), 0);
+    return `<table class="agt-bt"><thead><tr><th>Cliente</th><th>Últimos 30 días</th><th>Total</th></tr></thead><tbody>
+      ${_bt.map(r => `<tr><td>${esc(r.cliente)}</td><td>${_btCell(r.env30, r.reb30)}</td><td>${_btCell(r.env, r.reb)}</td></tr>`).join('')}
+      <tr class="agt-bt__t"><td>Todos los clientes</td><td>${_btCell(sum('env30'), sum('reb30'))}</td><td>${_btCell(sum('env'), sum('reb'))}</td></tr>
+    </tbody></table>`;
+  }
+  async function _loadBt() { try { const r = await apiFetch(API_B() + '/watchdog/bounces'); if (r.ok) _bt = await r.json(); } catch (_) {} }
   function _card(a) {
     const [lbl, cls] = ST[a.status] || ST.pendiente;
     const off = a.enabled === false;
@@ -37,6 +53,7 @@ const AgentesModule = (() => {
         <div class="agt-row1"><b>${esc(a.name)}</b><span class="agt-badge agt-badge--${off ? 'pend' : cls}">${off ? 'Desactivado' : lbl}</span></div>
         <div class="agt-desc">${esc(a.desc)}</div>
         <div class="agt-msg">${off ? 'Este agente no está revisando.' : esc(a.message || '')}</div>
+        ${a.key === 'rebotes' ? _btHtml() : ''}
       </div>
       <div class="agt-side">
         <span class="agt-when">${off ? '' : _ago(a.last_run_at) + ' · cada ' + a.every + ' min'}</span>
@@ -121,11 +138,11 @@ const AgentesModule = (() => {
     _render();
     try {
       const r = await apiFetch(API_B() + '/watchdog'); if (!r.ok) throw new Error('Error ' + r.status);
-      _data = await r.json(); await _loadErrs(); _render();
+      _data = await r.json(); await Promise.all([_loadErrs(), _loadBt()]); _render();
     } catch (e) { const root = document.getElementById('agt-root'); if (root) root.innerHTML = '<div class="agt-empty">No se pudo cargar: ' + esc(e.message) + '</div>'; }
     clearInterval(_timer); _timer = setInterval(() => { if (!document.getElementById('agt-root') || document.querySelector('[data-sec="agentes"]')?.hidden) { clearInterval(_timer); return; } _refresh(); }, 30000);
   }
-  async function _refresh() { try { const r = await apiFetch(API_B() + '/watchdog'); if (r.ok) { _data = await r.json(); await _loadErrs(); _render(); } } catch (_) {} }
+  async function _refresh() { try { const r = await apiFetch(API_B() + '/watchdog'); if (r.ok) { _data = await r.json(); await Promise.all([_loadErrs(), _loadBt()]); _render(); } } catch (_) {} }
   async function runOne(key) {
     _busy.add(key); _render();
     try { await apiFetch(API_B() + '/watchdog/' + key + '/run', { method: 'POST' }); } catch (_) {}
