@@ -23138,13 +23138,13 @@ const LeadManagerModule = (() => {
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
+    { k: 'companies',  l: 'Empresas',           g: 'Datos' },
+    { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'x-datos',              l: 'Tabla de datos',       g: 'Datos', x: 1 },
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
     // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
-    { k: 'companies',  l: 'Empresas',           g: 'Datos' },
-    { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
   ];
   const _NAV_ICON = {
     'x-cantera': '<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
@@ -23227,7 +23227,7 @@ const LeadManagerModule = (() => {
   // El grupo de la pantalla en la que estás siempre se ve abierto, y con la barra en modo iconos se ven todas las opciones.
   function _navCollapsedSet() {
     try { const v = JSON.parse(localStorage.getItem('lm_nav_grp') || 'null'); if (Array.isArray(v)) return new Set(v); } catch (_) {}
-    return new Set(['Prospección', 'Datos', 'Preparación', 'Análisis']);
+    return new Set(['Análisis']);   // por defecto solo se recoge Análisis; Datos queda a la vista
   }
   function navGrp(g) {
     const st = _navCollapsedSet(); if (st.has(g)) st.delete(g); else st.add(g);
