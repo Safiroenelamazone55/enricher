@@ -37490,7 +37490,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
     if (!taskCtx && _section !== 'contact-view') { _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts'; _cpFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
-    _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
+    _cpHistFor = null; _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
   }
   function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
   function _vContactPage(id) {
@@ -37583,7 +37583,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function _cpSeguimientoHtml(c) {
     const id = c.id;
-    return `<div class="cp-info cp-info--one">
+    setTimeout(() => _cpHistLoad(id), 0);
+    return `<div class="cp-seg"><div class="cp-info cp-info--one cp-seg__l">
           ${_seqEnrollCard(c, id)}
           <div class="cp-card"><div class="cp-card__t">Resultado de la interacción</div><div class="cp-fields">
             <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div>${c.disposition === 'interesado' ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpTouchOpen(${id})">Registrar conversación (llamada u otro canal)</button><span class="seq-drip-hint" style="margin:0">Reinicia el seguimiento automático de este Interesado.</span></div>` : ''}</div>
@@ -37591,7 +37592,73 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
             ${_derivLinkHtml(c) ? `<div class="cp-f cp-f--full" style="gap:5px">${_derivLinkHtml(c)}</div>` : ''}
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
           </div></div>
-</div>`;
+</div>
+<div class="cp-card cp-hist" id="cp-hist">${_cpHistHtml()}</div></div>`;
+  }
+  // ── Historial del contacto: cada paso (con el copy enviado, secuencia, cliente y fecha), sus respuestas, notas y cambios de estado ──
+  let _cpHist = null, _cpHistFor = null, _cpHistF = 'todo';
+  const _cpHistOpen = new Set();
+  async function _cpHistLoad(id) {
+    if (_cpHistFor === id && Array.isArray(_cpHist)) { const el = document.getElementById('cp-hist'); if (el) el.innerHTML = _cpHistHtml(); return; }
+    _cpHist = null; _cpHistFor = id; _cpHistOpen.clear();
+    try { const r = await apiFetch(`${API}/lm/contacts/${id}/history`); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); _cpHist = d; }
+    catch (e) { _cpHist = { error: e.message }; }
+    const el = document.getElementById('cp-hist'); if (el && _contactView === id) el.innerHTML = _cpHistHtml();
+  }
+  function cpHistFilter(f) { _cpHistF = f; const el = document.getElementById('cp-hist'); if (el) el.innerHTML = _cpHistHtml(); }
+  function cpHistToggle(key) { if (_cpHistOpen.has(key)) _cpHistOpen.delete(key); else _cpHistOpen.add(key); const el = document.getElementById('cp-hist'); if (el) el.innerHTML = _cpHistHtml(); }
+  function _cpHistHtml() {
+    const head = '<div class="cp-card__t">Historial <span class="cp-hist__sub">todo lo que pasó con este contacto, del primer registro al más reciente</span></div>';
+    if (_cpHist === null) return head + '<div class="cp-empty2">Cargando historial…</div>';
+    if (_cpHist.error) return head + `<div class="cp-empty2">No se pudo cargar: ${esc(_cpHist.error)}</div>`;
+    const all = _cpHist;
+    const grp = e => e.kind === 'sent' ? 'envios' : (e.kind === 'inbox' && e.tipo === 'reply') || (e.kind === 'act' && ['respuesta', 'aceptacion'].includes(e.tipo)) ? 'respuestas' : (e.kind === 'act' && e.tipo === 'nota') ? 'notas' : 'otros';
+    const cnt = k => all.filter(e => grp(e) === k).length;
+    const chip = (k, l, n) => `<button type="button" class="cp-hist__chip${_cpHistF === k ? ' on' : ''}" onclick="LeadManagerModule.cpHistFilter('${k}')">${l}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+    const list = _cpHistF === 'todo' ? all : all.filter(e => grp(e) === _cpHistF || e.kind === 'created' && false);
+    const fd = d => { const x = new Date(d); return x.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + x.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }); };
+    const ICO = { email: ['@', '#2563EB'], linkedin: ['in', '#0A66C2'], whatsapp: ['W', '#15803D'], call: ['☎', '#D97706'], llamada: ['☎', '#D97706'], task: ['•', '#8B9690'] };
+    const ACCION = { inicial: 'Email inicial', seguimiento: 'Email de seguimiento', valor: 'Email con caso de éxito', cierre: 'Email de cierre' };
+    const ESTADO = { sent: ['Enviado', 'ok'], replied: ['Enviado · respondió', 'ok'], bounced: ['Rebotó', 'bad'], failed: ['No salió', 'bad'], approved: ['Aprobado · en cola', 'wait'], awaiting: ['Por aprobar', 'wait'], scheduled: ['Programado', 'wait'] };
+    const body = list.map(e => {
+      const key = e.kind + e.id;
+      if (e.kind === 'created') return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:#14211B">+</span><div class="cp-hist__b"><div class="cp-hist__t"><b>Contacto creado</b>${e.fuente ? ` <span class="cp-hist__tag">${esc(e.fuente)}</span>` : ''}</div><div class="cp-hist__d">${esc(fd(e.fecha))}</div></div></div>`;
+      if (e.kind === 'sent') {
+        const ic = ICO[e.canal] || ICO.email, st = ESTADO[e.estado] || ['', ''];
+        const nombre = (e.canal === 'email' || !e.canal) ? (ACCION[e.accion] || e.titulo || 'Email') : (e.titulo || e.canal);
+        const open = _cpHistOpen.has(key);
+        return `<div class="cp-hist__ev${e.futuro ? ' is-future' : ''}"><span class="cp-hist__ic" style="background:${ic[1]}">${ic[0]}</span><div class="cp-hist__b">
+          <div class="cp-hist__t"><b>${e.paso ? `Paso ${e.paso} · ` : ''}${esc(nombre)}</b>${st[0] ? ` <span class="cp-hist__st cp-hist__st--${st[1]}">${st[0]}</span>` : ''}${e.opens ? ` <span class="cp-hist__tag" title="Veces que abrió el correo">Abrió ×${e.opens}</span>` : ''}${e.clicks ? ` <span class="cp-hist__tag" title="Clics en enlaces">Clic ×${e.clicks}</span>` : ''}</div>
+          <div class="cp-hist__m">${e.seq ? `<span class="cp-hist__tag cp-hist__tag--seq">${esc(e.seq)}</span>` : ''}${e.cliente ? `<span class="cp-hist__tag">${esc(e.cliente)}</span>` : ''}${e.variante ? `<span class="cp-hist__tag" title="Variante del mensaje">Variante ${esc(e.variante)}</span>` : ''}</div>
+          <div class="cp-hist__d">${e.futuro ? 'Saldrá ' : ''}${esc(fd(e.fecha))}${e.to ? ` · a ${esc(e.to)}` : ''}</div>
+          ${(e.asunto || e.cuerpo) ? `<button type="button" class="cp-hist__more" onclick="LeadManagerModule.cpHistToggle('${key}')">${open ? 'Ocultar el copy' : 'Ver el copy enviado'}</button>` : ''}
+          ${open ? `<div class="cp-hist__copy">${e.asunto ? `<div class="cp-hist__subj">${esc(e.asunto)}</div>` : ''}<div class="cp-hist__txt">${esc(e.cuerpo)}</div></div>` : ''}
+        </div></div>`;
+      }
+      if (e.kind === 'inbox') {
+        const mine = e.tipo === 'equipo', bounce = e.tipo === 'bounce', ooo = e.tipo === 'ooo';
+        const lbl = bounce ? 'Rebote del correo' : ooo ? 'Respuesta automática (ausencia)' : mine ? 'Tú respondiste' : 'Respondió por email';
+        const col = bounce ? '#B42318' : ooo ? '#8B9690' : mine ? '#2563EB' : '#15803D';
+        const open = _cpHistOpen.has(key);
+        const short = String(e.cuerpo || '').replace(/\s+/g, ' ').slice(0, 160);
+        return `<div class="cp-hist__ev${!mine && !bounce && !ooo ? ' is-reply' : ''}"><span class="cp-hist__ic" style="background:${col}">${mine ? '↗' : bounce ? '!' : '↩'}</span><div class="cp-hist__b">
+          <div class="cp-hist__t"><b>${lbl}</b></div>
+          ${e.asunto ? `<div class="cp-hist__m"><span class="cp-hist__tag">${esc(e.asunto)}</span></div>` : ''}
+          <div class="cp-hist__d">${esc(fd(e.fecha))}</div>
+          ${short ? (open ? `<div class="cp-hist__copy"><div class="cp-hist__txt">${esc(e.cuerpo)}</div></div><button type="button" class="cp-hist__more" onclick="LeadManagerModule.cpHistToggle('${key}')">Ocultar</button>` : `<div class="cp-hist__q">${esc(short)}${String(e.cuerpo || '').length > 160 ? '…' : ''}</div><button type="button" class="cp-hist__more" onclick="LeadManagerModule.cpHistToggle('${key}')">Leer completo</button>`) : ''}
+        </div></div>`;
+      }
+      // actividades: notas, cambios de estado, reuniones, llamadas, LinkedIn…
+      const m = _actMeta(e.tipo);
+      const isState = e.tipo === 'disposition_change';
+      return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:${m[1]}">${isState ? '✓' : e.tipo === 'nota' ? '✎' : '•'}</span><div class="cp-hist__b">
+        <div class="cp-hist__t"><b>${esc(m[0])}</b>${e.paso ? ` <span class="cp-hist__tag">Paso ${e.paso}</span>` : ''}${e.cliente ? ` <span class="cp-hist__tag">${esc(e.cliente)}</span>` : ''}</div>
+        ${e.nota ? `<div class="${e.tipo === 'nota' ? 'cp-hist__q cp-hist__q--note' : 'cp-hist__n'}">${esc(e.nota)}</div>` : ''}
+        <div class="cp-hist__d">${esc(fd(e.fecha))}${e.estado === 'pendiente' ? ' · pendiente' : ''}</div>
+      </div></div>`;
+    }).join('');
+    return head + `<div class="cp-hist__chips">${chip('todo', 'Todo', all.length)}${chip('envios', 'Envíos', cnt('envios'))}${chip('respuestas', 'Respuestas', cnt('respuestas'))}${chip('notas', 'Notas', cnt('notas'))}</div>`
+      + (list.length ? `<div class="cp-hist__tl">${body}</div>` : '<div class="cp-empty2">Nada en esta vista todavía.</div>');
   }
   function _cpCanalesHtml(c) {
     const id = c.id;
@@ -37836,6 +37903,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <button class="cp-actv__x" onclick="LeadManagerModule.cpActDel(${a.id})" title="Eliminar">✕</button></div>`;
   }
   async function _cpReloadActs(id) {
+    _cpHistFor = null;   // el historial se vuelve a pedir (hay algo nuevo)
     try { const r = await apiFetch(`${API}/lm/contacts/${id}/activities`); _cpActs = (r && r.ok) ? await r.json() : []; } catch { _cpActs = []; }
     if (!Array.isArray(_cpActs)) _cpActs = [];
     if (_section === 'contact-view' && _contactView === id) { const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === id)); }
@@ -40156,7 +40224,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
+    seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn, fxPop, histOpen, histClose,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,

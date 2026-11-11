@@ -11541,6 +11541,52 @@ app.get('/api/lm/contacts/:id/activities', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (err) { console.error('[lm-act] GET', err.message); res.status(500).json({ error: 'Error al cargar actividades' }); }
 });
+// Historial completo de un contacto: cada paso enviado (con el copy exacto, secuencia, cliente y fecha), sus respuestas, notas y cambios de estado, en orden cronológico.
+app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  if (!cid) return res.status(400).json({ error: 'Contacto inválido' });
+  try {
+    const { rows: [k] } = await pool.query(`SELECT id, created_at, fuente FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const [msgs, acts, inbox] = await Promise.all([
+      pool.query(`
+        SELECT m.id, m.estado, m.sent_at, m.scheduled_at, m.created_at, m.asunto, m.cuerpo, m.variant, m.to_email,
+               s.id AS seq_id, s.nombre AS seq, oc.nombre AS cliente, st.canal, st.accion, st.titulo,
+               (SELECT COUNT(*)::int FROM sequence_steps x WHERE x.sequence_id = st.sequence_id AND (x.dia, x.orden, x.id) <= (st.dia, st.orden, st.id)) AS paso,
+               (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id = m.id AND e.tipo = 'open') AS opens,
+               (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id = m.id AND e.tipo = 'click') AS clicks
+          FROM lm_messages m
+          LEFT JOIN sequence_steps st ON st.id = m.step_id
+          LEFT JOIN sequences s ON s.id = m.sequence_id
+          LEFT JOIN outbound_clients oc ON oc.id = COALESCE(s.outbound_client_id, $3)
+         WHERE m.user_id = $1 AND m.contact_id = $2 AND m.estado IN ('sent','replied','bounced','approved','awaiting','scheduled','failed')
+         ORDER BY COALESCE(m.sent_at, m.scheduled_at, m.created_at)`, [uid, cid, null]),
+      pool.query(`
+        SELECT a.id, a.tipo, a.nota, a.fecha, a.estado, a.canal, oc.nombre AS cliente
+          FROM activities a LEFT JOIN outbound_clients oc ON oc.id = a.outbound_client_id
+         WHERE a.user_id = $1 AND a.contact_id = $2
+           AND a.tipo NOT IN ('revisar_respuesta', 'revisar_nurture', 'email_enviado', 'seguimiento_inactivo', 'contacto_esperando')
+           AND NOT (a.tipo = 'email' AND (a.nota LIKE '[Aprobado]%' OR a.nota LIKE '[Inbox]%' OR a.nota LIKE '[Automático]%'))
+           AND NOT (a.tipo = 'respuesta' AND (a.nota LIKE 'Disposición:%' OR a.nota LIKE 'Respondió a%'))
+         ORDER BY a.fecha`, [uid, cid]),
+      pool.query(`SELECT id, tipo, asunto, cuerpo, received_at, from_email FROM lm_inbox_messages WHERE user_id = $1 AND contact_id = $2 ORDER BY received_at`, [uid, cid]),
+    ]);
+    const clip = t => { t = String(t || '').replace(/\r/g, ''); return t.length > 3000 ? t.slice(0, 3000) + '…' : t; };
+    const ev = [];
+    msgs.rows.forEach(m => {
+      const futuro = ['approved', 'awaiting', 'scheduled'].includes(m.estado);
+      ev.push({ kind: 'sent', id: m.id, fecha: m.sent_at || m.scheduled_at || m.created_at, futuro, estado: m.estado, paso: m.paso || null, canal: m.canal || 'email', accion: m.accion || '', titulo: m.titulo || '', seq: m.seq || '', seq_id: m.seq_id || null, cliente: m.cliente || '', variante: m.variant || '', asunto: m.asunto || '', cuerpo: clip(m.cuerpo), opens: m.opens || 0, clicks: m.clicks || 0, to: m.to_email || '' });
+    });
+    acts.rows.forEach(a => {
+      const pm = /^Paso (\d+)/.exec(a.nota || '');
+      ev.push({ kind: 'act', id: a.id, fecha: a.fecha, tipo: a.tipo, nota: a.nota || '', estado: a.estado, canal: a.canal || '', cliente: a.cliente || '', paso: pm ? +pm[1] : null });
+    });
+    inbox.rows.forEach(i => ev.push({ kind: 'inbox', id: i.id, fecha: i.received_at, tipo: i.tipo, asunto: i.asunto || '', cuerpo: clip(i.cuerpo), from: i.from_email || '' }));
+    ev.push({ kind: 'created', id: 0, fecha: k.created_at, fuente: k.fuente || '' });
+    ev.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    res.json(ev);
+  } catch (err) { console.error('[lm-hist] GET', err.message); res.status(500).json({ error: 'No se pudo cargar el historial' }); }
+});
 app.patch('/api/lm/activities/:id', requireAuth, async (req, res) => {
   const estado = req.body?.estado === 'pendiente' ? 'pendiente' : 'hecha';
   try {
