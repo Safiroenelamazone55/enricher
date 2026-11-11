@@ -21173,3 +21173,42 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .lm2 .lm2-nav .lm2-nav__item.active { font-weight: 600; }
 .lm2 .lm2-nav .lm2-nav__grp { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; line-height: 16px; padding: 8px 14px 3px; }
 .lm2 .lm2-nav .lm2-nav__list > .lm2-nav__grp:first-child { padding-top: 3px; }
+
+/* ═══ Barra lateral · medidas predeterminadas ═══
+   Una sola fuente de verdad para TODA barra de navegación a la izquierda (módulos con .snav-item, Outreach con .lm2-nav__item
+   y cualquier barra futura con .nav-std). Para cambiar el alto, la letra o el espaciado en todos los módulos a la vez, se cambian aquí. */
+:root {
+  --nav-w: 210px;
+  --nav-pad: 8px 10px;
+  --nav-list-gap: 1px;
+  --nav-item-h: 33px;
+  --nav-item-px: 12px;
+  --nav-item-gap: 11px;
+  --nav-item-fs: 14px;
+  --nav-item-fw: 500;
+  --nav-item-fw-active: 600;
+  --nav-cat-fs: 10px;
+  --nav-cat-fw: 700;
+  --nav-cat-ls: .07em;
+  --nav-cat-pad: 8px 14px 3px;
+  --nav-cat-pad-first: 3px 14px 3px;
+}
+#sidebar:not(.sidebar--collapsed) .snav-group { gap: var(--nav-list-gap); }
+#sidebar:not(.sidebar--collapsed) .snav-item { height: var(--nav-item-h); min-height: var(--nav-item-h); padding: 0 var(--nav-item-px); gap: var(--nav-item-gap); }
+#sidebar:not(.sidebar--collapsed) .snav-item__label { font-size: var(--nav-item-fs); font-weight: var(--nav-item-fw); }
+#sidebar:not(.sidebar--collapsed) .snav-item.active .snav-item__label { font-weight: var(--nav-item-fw-active); }
+#sidebar:not(.sidebar--collapsed) .snav-cat { font-size: var(--nav-cat-fs); font-weight: var(--nav-cat-fw); letter-spacing: var(--nav-cat-ls); line-height: 16px; padding: var(--nav-cat-pad); text-transform: uppercase; }
+#sidebar:not(.sidebar--collapsed) .snav-group > .snav-cat:first-child { padding: var(--nav-cat-pad-first); }
+.lm2 .lm2-nav:not(.lm2-nav--collapsed) { width: var(--nav-w); }
+.lm2 .lm2-nav .lm2-nav__list { padding: var(--nav-pad); gap: var(--nav-list-gap); }
+.lm2 .lm2-nav:not(.lm2-nav--collapsed) .lm2-nav__item { height: var(--nav-item-h); min-height: var(--nav-item-h); padding: 0 var(--nav-item-px); gap: var(--nav-item-gap); font-size: var(--nav-item-fs); font-weight: var(--nav-item-fw); line-height: 1; margin-bottom: 0; }
+.lm2 .lm2-nav .lm2-nav__item.active { font-weight: var(--nav-item-fw-active); }
+.lm2 .lm2-nav .lm2-nav__grp { font-size: var(--nav-cat-fs); font-weight: var(--nav-cat-fw); letter-spacing: var(--nav-cat-ls); line-height: 16px; padding: var(--nav-cat-pad); text-transform: uppercase; }
+.lm2 .lm2-nav .lm2-nav__list > .lm2-nav__grp:first-child { padding: var(--nav-cat-pad-first); }
+/* Para cualquier barra lateral nueva: <nav class="nav-std"> <div class="nav-std__cat">…</div> <button class="nav-std__item">…</button> </nav> */
+.nav-std { display: flex; flex-direction: column; gap: var(--nav-list-gap); width: var(--nav-w); padding: var(--nav-pad); box-sizing: border-box; }
+.nav-std__cat { font-size: var(--nav-cat-fs); font-weight: var(--nav-cat-fw); letter-spacing: var(--nav-cat-ls); line-height: 16px; padding: var(--nav-cat-pad); text-transform: uppercase; color: var(--muted, #B4AFA8); }
+.nav-std__cat:first-child { padding: var(--nav-cat-pad-first); }
+.nav-std__item { display: flex; align-items: center; gap: var(--nav-item-gap); width: 100%; height: var(--nav-item-h); padding: 0 var(--nav-item-px); border: 0; background: transparent; border-radius: 8px; font: inherit; font-size: var(--nav-item-fs); font-weight: var(--nav-item-fw); color: var(--text2, #3B3A38); cursor: pointer; text-align: left; box-sizing: border-box; }
+.nav-std__item:hover { background: #F1EFEB; }
+.nav-std__item.active { font-weight: var(--nav-item-fw-active); background: #EAF2FF; color: var(--brand-d, #0062CC); }
