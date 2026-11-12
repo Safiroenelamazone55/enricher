@@ -80,7 +80,7 @@ function fuga(p) {
 const REQ = [['cliente_nombre', 'Nombre del cliente', p => p.contacto], ['cliente_empresa', 'Empresa del cliente', p => p.empresa], ['cliente_cargo', 'Cargo del cliente', p => p.clienteCargo],
   ['fecha_propuesta', 'Fecha de la propuesta', (p, d) => d.fecha_propuesta], ['validez_dias', 'Validez (días)', (p, d) => d.validez_dias],
   ['oferta_cliente', 'Qué vende el cliente', (p, d) => d.oferta_cliente], ['cliente_ideal', 'A quién quiere venderle', (p, d) => d.cliente_ideal],
-  ['valor_cliente', 'Valor de un cliente nuevo (primer año)', (p, d) => (d.valor_cliente ? 'x' : '')],
+  ['valor_cliente', 'Lo que te deja un cliente nuevo', (p, d) => (d.valor_cliente ? 'x' : '')],
   ['cierre_pct', 'De cada 10 reuniones, cuántas cierran', (p, d) => (d.cierre_sin_dato || d.cierre_pct != null ? 'x' : '')],
   ['moneda', 'Moneda', p => p.moneda]];
 function validate(p) {
@@ -238,7 +238,7 @@ function render(brand, p, langIn) {
 <div class="card rv" style="--d:3"><div class="n">03</div><h3>${x('Dónde estás hoy', 'Where you are today', 'Onde você está hoje', 'Dove sei oggi')}</h3><p>${d.reuniones_mes_hoy == null
     ? x('Reuniones nuevas al mes: sin dato previo', 'New meetings per month: no prior data', 'Novas reuniões por mês: sem dado prévio', 'Nuovi incontri al mese: nessun dato precedente')
     : (d.reuniones_mes_hoy === 1 ? x('Consigues 1 reunión nueva al mes', 'You get 1 new meeting per month', 'Você consegue 1 nova reunião por mês', 'Ottieni 1 nuovo incontro al mese') : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`))}${cierran}.${fg && fg.realH ? ' ' + x(`Dedicas ${F(fg.h)} horas a la semana a buscar clientes.`, `You spend ${F(fg.h)} hours a week looking for clients.`, `Você dedica ${F(fg.h)} horas por semana a buscar clientes.`, `Dedichi ${F(fg.h)} ore a settimana a cercare clienti.`) : ''}</p></div>
-<div class="card rv" style="--d:4"><div class="n">04</div><h3>${x('Lo que vale cerrar', 'What a close is worth', 'Quanto vale fechar', 'Quanto vale chiudere')}</h3><p>${x(`Un cliente nuevo te deja ${valCli} el primer año y `, `A new client brings you ${valCli} in the first year and `, `Um novo cliente rende ${valCli} no primeiro ano e `, `Un nuovo cliente ti porta ${valCli} il primo anno e `)}${cicloTxt}${decide}.</p></div></div>
+<div class="card rv" style="--d:4"><div class="n">04</div><h3>${x('Lo que vale cerrar', 'What a close is worth', 'Quanto vale fechar', 'Quanto vale chiudere')}</h3><p>${x(`Cada cliente nuevo te deja ${valCli} y `, `Each new client brings you ${valCli} and `, `Cada novo cliente rende ${valCli} e `, `Ogni nuovo cliente ti porta ${valCli} e `)}${cicloTxt}${decide}.</p></div></div>
 ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}${qClose}</div>` : ''}</div></section>`);
 
   // 3 · la cuenta: lo que hoy se deja de ganar y lo que cuesta hacerlo a mano (cada fuga como una fórmula: factor × factor = resultado)

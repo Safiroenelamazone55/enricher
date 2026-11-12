@@ -43622,7 +43622,7 @@ const PlantillasModule = (() => {
           <div class="pl-row"><div>${f('contacto', 'Nombre', 'text', 'Nombre y apellido')}</div><div>${f('clienteCargo', 'Cargo', 'text', 'Ej. Director')}</div></div>${f('correo', 'Correo (opcional)', 'email', 'nombre@empresa.com')}</div>
         <div class="pl-box"><div class="pl-box__t">Lo que te contó en la llamada</div>
           ${dvf('oferta_cliente', 'Qué vende, en una línea', 'text', 'Ej. Software de gestión de flotas')}${dvf('cliente_ideal', 'A quién quiere venderle', 'text', 'Ej. Empresas de transporte de 20 a 200 camiones, en España')}
-          <div class="pl-row3"><div>${f('moneda', 'Moneda', 'text', 'US$ o €')}</div><div>${dvf('valor_cliente', 'Vale un cliente nuevo (1.er año)', 'number')}</div><div>${dvf('reuniones_mes_hoy', 'Reuniones nuevas al mes hoy (opcional)', 'number')}</div></div>
+          <div class="pl-row3"><div>${f('moneda', 'Moneda', 'text', 'US$ o €')}</div><div>${dvf('valor_cliente', 'Lo que te deja un cliente nuevo', 'number')}</div><div>${dvf('reuniones_mes_hoy', 'Reuniones nuevas al mes hoy (opcional)', 'number')}</div></div>
           <div class="pl-row"><div><label class="pl-l">De cada 10 reuniones, cuántas cierran</label><input class="pl-in" type="number" min="0" max="10" step="any" value="${E(c10)}" ${p.dev.cierre_sin_dato ? 'disabled' : ''} oninput="PlantillasModule.setCierre10(this.value)"></div><div>${dvf('ciclo_dias', 'Días desde la 1.ª reunión hasta firmar (opcional)', 'number')}</div></div>
           ${dvc('cierre_sin_dato', 'No sabe su cierre: usar el supuesto (se marca «supuesto» en el documento)')}
           ${dvt('dolor_cliente', 'Su frase de la llamada (opcional)', 'Ej. Mando propuestas y nadie contesta')}
