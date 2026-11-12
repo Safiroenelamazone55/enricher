@@ -41,6 +41,7 @@ function cleanDev(d) {
   o.usar_supuesto_horas = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
+  o.estilo_oscuro = d.estilo_oscuro === true || d.estilo_oscuro === 'true';   // por defecto la propuesta es clara y sobria; con esto se vuelven a usar las diapositivas oscuras
   return o;
 }
 
@@ -126,6 +127,10 @@ const EXTRA = `
 .cf .card{padding:18px 24px}.cf .card h3{margin-top:8px;font-size:18px}.cf .card p{margin-top:6px;font-size:14.5px;line-height:1.45}
 .dolor{margin-top:18px}
 .disc{font-size:14px}
+.s-light .sim .tot,.s-soft .sim .tot{color:var(--hd)}
+.s-light .sim .k,.s-soft .sim .k,.s-light .facts small,.s-soft .facts small,.s-light .steps i,.s-soft .steps i{color:var(--teal)}
+.s-light .cap,.s-soft .cap{color:var(--mute);font-size:13.5px}
+.s-light .portal{box-shadow:0 12px 34px rgba(15,23,42,.12);border:1px solid var(--ln)}
 h2+.fuga{margin-top:26px}h2+.fm{margin-top:12px}
 .calc.c3{grid-template-columns:repeat(3,1fr);margin-top:10px}.calc.c3 .r{padding:10px 18px}.calc.c3 .r b{font-size:26px}
 .calc.c4{grid-template-columns:repeat(4,1fr);margin-top:12px;gap:10px}.calc.c4 .r{padding:12px 16px;font-size:15px}.calc.c4 .r b{font-size:27px}
@@ -402,7 +407,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
 <div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
 <div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ ${x('Presentar', 'Present', 'Apresentar', 'Presenta')}</button></div></div>
-${S.join('\n')}
+${S.map((sec, i) => (i === 0 || d.estilo_oscuro ? sec : sec.replace(/class="slide( close)? s-dark"/, 'class="slide$1 s-light"').replace(/data-th="dark"/, 'data-th="light"').replace(/<div class="bgph"[^>]*><\/div>/g, '').replace(/<div class="bg">(?:<div class="[^"]*"><\/div>)+<\/div>/g, ''))).join('\n')}
 <button class="arr l" id="prev" aria-label="←">‹</button><button class="arr r" id="next" aria-label="→">›</button>
 <div class="nav">${dots}</div>
 </div></div>
