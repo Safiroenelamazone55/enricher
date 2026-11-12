@@ -88,7 +88,11 @@
     $('m').oninput = e => ent(e); $('m').onchange = e => ent(e);
     $('m').onfocusout = e => { const f = e.target.closest && e.target.closest('.f'); if (f) { S.shown.add(f.dataset.id); const c = campos().find(x => x.id === f.dataset.id); if (c) marca(c); } guardar(); };
     $('go').onclick = enviar;
-    if (window.GEO) GEO.attach($('f-pais'), S.lang, v => { S.vals.pais = v; });   // país / ciudad: desplegable con buscador
+    if (window.GEO) {   // país / ciudad: desplegable con buscador; WhatsApp: prefijo desplegable que sigue al país
+      const ph = GEO.phone($('f-wpp'), S.lang, v => { S.vals.wpp = v; });
+      GEO.attach($('f-pais'), S.lang, (v, x) => { S.vals.pais = v; if (ph && x) ph.setCountry(x.cc); });
+      if (ph && S.vals.pais && !S.vals.wpp) ph.setCountry(GEO.ccDe(S.vals.pais));
+    }
     S.shown.forEach(id => { const c = campos().find(x => x.id === id); if (c) marca(c); });
     progreso();
   }

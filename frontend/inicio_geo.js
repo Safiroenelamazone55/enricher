@@ -35,6 +35,7 @@
     ['TH','Bangkok','Bangkok','Asia/Bangkok'],['VN','Ho Chi Minh','Ho Chi Minh City','Asia/Ho_Chi_Minh'],['VN','Hanói','Hanoi','Asia/Bangkok'],['ID','Yakarta','Jakarta','Asia/Jakarta'],['PH','Manila','Manila','Asia/Manila'],
     ['AU','Sídney','Sydney','Australia/Sydney'],['AU','Melbourne','Melbourne','Australia/Melbourne'],['AU','Brisbane','Brisbane','Australia/Brisbane'],['AU','Perth','Perth','Australia/Perth'],['AU','Adelaida','Adelaide','Australia/Adelaide'],['NZ','Auckland','Auckland','Pacific/Auckland'],
   ];
+  const DIAL = { PE:'51',ES:'34',MX:'52',CO:'57',AR:'54',CL:'56',UY:'598',PY:'595',BO:'591',EC:'593',VE:'58',PA:'507',CR:'506',GT:'502',SV:'503',HN:'504',NI:'505',DO:'1',PR:'1',CU:'53',JM:'1',BR:'55',US:'1',CA:'1',GB:'44',IE:'353',PT:'351',FR:'33',DE:'49',IT:'39',NL:'31',BE:'32',CH:'41',AT:'43',LU:'352',SE:'46',NO:'47',DK:'45',FI:'358',IS:'354',PL:'48',CZ:'420',HU:'36',RO:'40',BG:'359',GR:'30',TR:'90',UA:'380',RU:'7',RS:'381',HR:'385',EE:'372',LV:'371',LT:'370',MT:'356',CY:'357',AE:'971',SA:'966',QA:'974',KW:'965',BH:'973',OM:'968',IL:'972',JO:'962',LB:'961',IR:'98',IQ:'964',EG:'20',MA:'212',DZ:'213',TN:'216',NG:'234',GH:'233',KE:'254',ET:'251',ZA:'27',TZ:'255',UG:'256',PK:'92',IN:'91',BD:'880',LK:'94',NP:'977',AF:'93',UZ:'998',KZ:'7',CN:'86',HK:'852',TW:'886',JP:'81',KR:'82',SG:'65',MY:'60',TH:'66',VN:'84',ID:'62',PH:'63',AU:'61',NZ:'64' };
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   const names = {};
   function pais(cc, lang) {
@@ -50,7 +51,7 @@
   }
   const items = lang => D.map(([cc, ces, cen, tz]) => {
     const city = lang === 'en' ? cen : ces, pn = pais(cc, lang), g = gmt(tz);
-    return { label: `${pn}, ${city} (${g})`, p: pn, c: city, g, key: norm(pais(cc, 'es') + ' ' + pais(cc, 'en') + ' ' + ces + ' ' + cen + ' ' + tz.replace(/_/g, ' ')) };
+    return { cc, label: `${pn}, ${city} (${g})`, p: pn, c: city, g, key: norm(pais(cc, 'es') + ' ' + pais(cc, 'en') + ' ' + ces + ' ' + cen + ' ' + tz.replace(/_/g, ' ')) };
   });
 
   // Convierte un <input> en el selector desplegable. onValue(valor) avisa del cambio.
@@ -80,7 +81,7 @@
     }
     function abrir() { box.hidden = false; filtrar(); }
     function cerrar() { box.hidden = true; }
-    function elegir(x) { input.value = x.label; cerrar(); onValue(input.value); input.dispatchEvent(new Event('change', { bubbles: true })); }
+    function elegir(x) { input.value = x.label; cerrar(); onValue(input.value, x); input.dispatchEvent(new Event('change', { bubbles: true })); }
     input.addEventListener('focus', abrir); input.addEventListener('click', () => { if (box.hidden) abrir(); });
     input.addEventListener('input', () => { box.hidden = false; filtrar(); });
     input.addEventListener('keydown', e => {
@@ -98,5 +99,48 @@
     caret.addEventListener('mousedown', e => { e.preventDefault(); if (box.hidden) { input.focus(); abrir(); } else cerrar(); });
     document.addEventListener('mousedown', e => { if (!wrap.contains(e.target)) cerrar(); });
   }
-  window.GEO = { attach };
+
+  // Prefijo telefónico: botón desplegable con buscador + número. Guarda «+51 987654321» en el campo original (oculto).
+  function phone(hidden, lang, onValue) {
+    if (!hidden || hidden.dataset.geo) return null; hidden.dataset.geo = '1';
+    const en = lang === 'en', paises = [...new Set(D.map(x => x[0]))].map(cc => ({ cc, n: pais(cc, lang), d: DIAL[cc], key: norm(pais(cc, 'es') + ' ' + pais(cc, 'en') + ' +' + DIAL[cc]) })).filter(x => x.d).sort((a, b) => a.n.localeCompare(b.n, lang));
+    const val = hidden.value || '';
+    let dial = '', num = val, manual = false;
+    const m = val.match(/^\+(\d{1,3})\s*(.*)$/);
+    if (m) { const cand = [m[1], m[1].slice(0, 2), m[1].slice(0, 1)].find(c => paises.some(p => p.d === c)); if (cand) { dial = cand; num = (m[1].slice(cand.length) + ' ' + m[2]).trim(); manual = true; } }
+    const wrap = document.createElement('div'); wrap.className = 'geo geo--ph'; hidden.parentNode.insertBefore(wrap, hidden);
+    hidden.type = 'hidden'; wrap.appendChild(hidden);
+    const row = document.createElement('div'); row.className = 'geo__row'; wrap.appendChild(row);
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'geo__pre'; row.appendChild(btn);
+    const inp = document.createElement('input'); inp.type = 'text'; inp.inputMode = 'tel'; inp.maxLength = 30; inp.value = num; inp.placeholder = en ? 'Phone number' : 'Número'; inp.setAttribute('autocomplete', 'off'); row.appendChild(inp);
+    const pop = document.createElement('div'); pop.className = 'geo__l geo__pop'; pop.hidden = true; wrap.appendChild(pop);
+    const q = document.createElement('input'); q.type = 'text'; q.className = 'geo__q'; q.placeholder = en ? 'Search country or code' : 'Busca país o prefijo'; q.setAttribute('autocomplete', 'off'); pop.appendChild(q);
+    const ul = document.createElement('div'); pop.appendChild(ul);
+    const pintaBtn = () => { btn.innerHTML = (dial ? '+' + dial : (en ? 'Code' : 'Prefijo')) + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'; };
+    const sync = () => {
+      const n = inp.value.trim(), nuevo = n ? (dial ? '+' + dial + ' ' : '') + n : '';
+      if (hidden.value !== nuevo) { hidden.value = nuevo; onValue(nuevo); hidden.dispatchEvent(new Event('change', { bubbles: true })); }
+    };
+    ['input', 'change'].forEach(t => inp.addEventListener(t, e => { e.stopPropagation(); sync(); }));
+    let sel = [];
+    const lista = () => {
+      const w = norm(q.value).split(/\s+/).filter(Boolean).map(s => s.replace(/^\+/, ''));
+      sel = w.length ? paises.filter(p => w.every(s => p.key.includes(s))) : paises;
+      ul.innerHTML = sel.map((p, i) => `<div class="geo__o${p.d === dial ? ' on' : ''}" data-i="${i}"><b>${p.n}</b> <span>+${p.d}</span></div>`).join('') || `<div class="geo__e">${en ? 'No matches' : 'Sin coincidencias'}</div>`;
+    };
+    const abrir = () => { pop.hidden = false; q.value = ''; lista(); q.focus(); const a = ul.querySelector('.on'); if (a) a.scrollIntoView({ block: 'nearest' }); };
+    const cerrar = () => { pop.hidden = true; };
+    const elegir = d => { dial = d; manual = true; pintaBtn(); cerrar(); sync(); inp.focus(); };
+    btn.addEventListener('click', () => (pop.hidden ? abrir() : cerrar()));
+    q.addEventListener('input', lista);
+    q.addEventListener('keydown', e => { if (e.key === 'Escape') { cerrar(); btn.focus(); } else if (e.key === 'Enter') { e.preventDefault(); if (sel[0]) elegir(sel[0].d); } });
+    ul.addEventListener('mousedown', e => { e.preventDefault(); const o = e.target.closest('.geo__o'); if (o && sel[+o.dataset.i]) elegir(sel[+o.dataset.i].d); });
+    document.addEventListener('mousedown', e => { if (!wrap.contains(e.target)) cerrar(); });
+    pintaBtn();
+    return {
+      // al elegir el país en el campo de zona horaria: pone su prefijo, salvo que la persona ya haya elegido uno a mano
+      setCountry(cc) { const d = DIAL[cc]; if (!d || manual) return; dial = d; pintaBtn(); sync(); },
+    };
+  }
+  window.GEO = { attach, phone, ccDe: label => { const x = items('es').concat(items('en')).find(i => i.label === label); return x && x.cc; } };
 })();
