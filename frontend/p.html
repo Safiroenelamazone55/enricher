@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Propuesta · NovaCentrax</title><link rel="icon" href="/logo-nova.svg">
+<style>html,body{margin:0;height:100%;background:#0B1220;color:#fff;font-family:system-ui,sans-serif}.m{display:flex;height:100%;align-items:center;justify-content:center;font-size:15px;opacity:.8}</style></head>
+<body><div class="m" id="m">Cargando propuesta…</div>
+<script>
+(async function () {
+  var API = /^(localhost|127\.)/.test(location.hostname) ? 'http://localhost:3000/api' : 'https://api.novacentrax.com/api';
+  var k = location.pathname.replace(/^\/p\//, '').replace(/\/.*$/, '');
+  try {
+    var r = await fetch(API + '/tpl/public/' + encodeURIComponent(k));
+    if (!r.ok) throw 0;
+    var h = await r.text();
+    document.open(); document.write(h); document.close();
+  } catch (e) { document.getElementById('m').textContent = 'Esta propuesta no está disponible.'; }
+})();
+</script></body></html>

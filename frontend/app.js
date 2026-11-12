@@ -43883,14 +43883,14 @@ const PlantillasModule = (() => {
   function _viewCopias() {
     const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || DVL[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
       <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Abre el acuerdo con los datos de este cliente">Crear acuerdo</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
-        <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
+        <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.slug || c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
     return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
   }
   async function _htmlCopia(id) { const r = await apiFetch(`${API}/tpl/copies/${id}/html`); if (!r.ok) throw new Error('No se pudo abrir la copia'); return r.text(); }
   async function verCopia(id) { try { const h = await _htmlCopia(id); const w = window.open(URL.createObjectURL(new Blob([h], { type: 'text/html;charset=utf-8' })), '_blank'); if (!w) showBanner('Permite las ventanas emergentes', 'error'); } catch (e) { showBanner(e.message, 'error'); } }
   async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.archivo || c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
   function enlace(token) {
-    const u = `${API}/tpl/public/${token}`;
+    const u = /^[a-f0-9]{36}$/.test(token) ? `${API}/tpl/public/${token}` : `https://app.novacentrax.com/p/${token}`;
     (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => showBanner('Enlace copiado: cualquiera con él puede ver el documento', 'success')).catch(() => prompt('Copia el enlace:', u));
   }
   async function renCopia(id) {
