@@ -81,8 +81,8 @@ const InicioModule = (() => {
   async function nuevo() {
     let cl = []; try { cl = await _j('/mgmt/clients'); } catch (_) {}
     const opts = (Array.isArray(cl) ? cl : []).map(c => `<option value="${c.id}">${E(c.empresa || c.nombre)}${c.empresa && c.nombre ? ' · ' + E(c.nombre) : ''}</option>`).join('');
-    modal(`<h3 class="ini-mh">Crear enlace de inicio</h3><label class="ini-l">Cliente</label><select class="ini-in" id="ini-nc" onchange="InicioModule._nuevoCambio()"><option value="">— Cliente que aún no existe —</option>${opts}</select>
-      <div id="ini-nn"><label class="ini-l">Empresa</label><input class="ini-in" id="ini-ne"><label class="ini-l">Contacto <span class="ini-opt">(opcional)</span></label><input class="ini-in" id="ini-nco"><label class="ini-l">Correo <span class="ini-opt">(opcional)</span></label><input class="ini-in" id="ini-nm" type="email"></div>
+    modal(`<h3 class="ini-mh">Crear enlace de inicio</h3><label class="ini-l">Cliente</label><select class="ini-in" id="ini-nc" onchange="InicioModule._nuevoCambio()"><option value="">+ Crear cliente nuevo (en Operaciones)</option>${opts}</select>
+      <div id="ini-nn"><p class="ini-hint" style="margin:6px 0 0">Se guarda como cliente en <b>Operaciones → Clientes</b> y queda listo para proyectos y facturación.</p><label class="ini-l">Empresa</label><input class="ini-in" id="ini-ne"><label class="ini-l">Nombre del contacto</label><input class="ini-in" id="ini-nco"><label class="ini-l">Correo <span class="ini-opt">(opcional)</span></label><input class="ini-in" id="ini-nm" type="email"></div>
       <label class="ini-l">Idioma del formulario</label><select class="ini-in" id="ini-ni"><option value="es">Español</option><option value="en">English</option></select>
       <p class="ini-hint">El enlace es único para este cliente, caduca a los 30 días y no pide cuenta ni contraseña. Se precarga con lo que ya sabemos del cliente.</p>
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" onclick="InicioModule._nuevoCrear()">Crear enlace</button></div>`);
@@ -90,8 +90,16 @@ const InicioModule = (() => {
   function _nuevoCambio() { const v = $('ini-nc').value; $('ini-nn').style.display = v ? 'none' : ''; }
   async function _nuevoCrear() {
     const cid = parseInt($('ini-nc').value, 10) || null, data = { cliente_id: cid, idioma: $('ini-ni').value };
-    if (!cid) { data.empresa = $('ini-ne').value; data.contacto = $('ini-nco').value; data.correo = $('ini-nm').value; }
-    try { const r = await _post('/inicios', data); mostrarEnlace(r); if (_host && !_f) cargar(); } catch (e) { msg(e.message, 'error'); }
+    try {
+      if (!cid) {
+        const emp = $('ini-ne').value.trim(), con = $('ini-nco').value.trim(), mail = $('ini-nm').value.trim();
+        if (!emp && !con) return msg('Escribe la empresa o el nombre del contacto', 'error');
+        let c;
+        try { c = await _post('/mgmt/clients', { nombre: con || emp, empresa: emp, email: mail, tipo: 'cliente' }); }
+        catch (e) { if (e.data && e.data.existing) c = e.data.existing; else throw e; }   // ya existía: se usa ese
+        data.cliente_id = c.id;
+      }
+      const r = await _post('/inicios', data); mostrarEnlace(r); if (_host && !_f) cargar(); } catch (e) { msg(e.message, 'error'); }
   }
   // Desde la ficha del cliente (Operaciones → Clientes)
   async function crearParaCliente(cid) {
