@@ -87,7 +87,7 @@ function validate(p) {
   const d = (p && p.dev) || cleanDev({}), faltan = [], avisos = [];
   for (const [k, l, get] of REQ) if (!String(get(p || {}, d) || '').trim()) faltan.push({ k, l });
   const c = calc(p), valor = d.valor_cliente || 0;
-  if (!d.ciclo_dias) avisos.push({ nivel: 'amarillo', k: 'sin_ciclo', txt: 'Sin dato previo: no pusiste los días que tarda en firmar. Las diapositivas 2 y 4 dirán «sin dato previo» y no se calcula el mes de la primera venta.' });
+  if (!d.ciclo_dias) avisos.push({ nivel: 'amarillo', k: 'sin_ciclo', txt: 'No pusiste los días que tarda en firmar: se usa un estimado de 30 a 60 días y las diapositivas 2 y 3 lo muestran como estimado («depende de tu ciclo de venta»). Si el cliente te lo da, escríbelo y se sustituye.' });
   if (d.reuniones_mes_hoy == null) avisos.push({ nivel: 'amarillo', k: 'sin_reuniones', txt: 'Sin dato previo: no pusiste cuántas reuniones nuevas al mes tiene hoy. La diapositiva 2 dirá «sin dato previo». Los cálculos no cambian: usan la meta de 3 reuniones.' });
   const debil = !!valor && c.veces_mensual < 3;
   if (debil) avisos.push({ nivel: 'rojo', k: 'debil', txt: 'Caso débil: no ofrezcas el mensual. Con estos números el ingreso mensual no llega a 3 veces su precio; la propuesta queda solo con el piloto.' });
@@ -226,7 +226,7 @@ function render(brand, p, langIn) {
     : '';
   const cicloTxt = d.ciclo_dias
     ? x(`tardas ${d.ciclo_dias} días en firmar`, `it takes you ${d.ciclo_dias} days to sign`, `você leva ${d.ciclo_dias} dias para fechar`, `impieghi ${d.ciclo_dias} giorni per firmare`)
-    : x('el tiempo hasta firmar: sin dato previo', 'time to sign: no prior data', 'o tempo até fechar: sem dado prévio', 'il tempo per firmare: nessun dato precedente');
+    : x('tu ciclo de venta (lo estimamos entre 30 y 60 días) marca cuándo llega la primera venta', 'your sales cycle (we estimate 30 to 60 days) sets when the first sale lands', 'o seu ciclo de vendas (estimamos entre 30 e 60 dias) define quando chega a primeira venda', 'il tuo ciclo di vendita (lo stimiamo tra 30 e 60 giorni) determina quando arriva la prima vendita');
   const valCli = d.valor_cliente ? m$(d.valor_cliente) : '—';
   const fg = fuga(p);
   const qOpen = lang === 'en' ? '“' : '«', qClose = lang === 'en' ? '”' : '»';
@@ -279,15 +279,24 @@ ${stripB}
   const unaVenta = c.ventas_para_cubrir_piloto != null && c.ventas_para_cubrir_piloto <= 1;
   const card3 = (t, v2, sub) => `<div class="r rv" style="--d:3">${t}<b>${v2}</b>${sub ? `<span class="rg">${sub}</span>` : ''}</div>`;
   const vz = n => (hayValor ? veces(n) : '—');
+  // Primera venta: nunca como promesa. Con el ciclo del cliente: «hacia el mes N». Sin él: un rango estimado (ciclo de 30 a 60 días) y se marca como estimado.
+  const mesDe = dd => Math.ceil(1 + dd / 30);
+  const m1 = mesDe(30), m2 = mesDe(60), mReal = d.ciclo_dias ? mesDe(d.ciclo_dias) : null;
+  const primeraTxt = mReal != null
+    ? x(`Hacia el mes ${mReal}`, `Around month ${mReal}`, `Por volta do mês ${mReal}`, `Verso il mese ${mReal}`)
+    : x(`Mes ${m1}–${m2}`, `Month ${m1}–${m2}`, `Mês ${m1}–${m2}`, `Mese ${m1}–${m2}`);
+  const primeraSub = x('depende de tu ciclo de venta', 'depends on your sales cycle', 'depende do seu ciclo de vendas', 'dipende dal tuo ciclo di vendita') + (mReal != null ? '' : ' · ' + x('estimado', 'estimate', 'estimativa', 'stima'));
+  const cicloVal = d.ciclo_dias ? dias(d.ciclo_dias) : `≈ 30–60 ${x('días', 'days', 'dias', 'giorni')}`;
+  const cicloSub = x('marca cuándo llega la primera venta', 'sets when the first sale lands', 'define quando chega a primeira venda', 'determina quando arriva la prima vendita') + (d.ciclo_dias ? '' : ' · ' + x('estimado', 'estimate', 'estimativa', 'stima'));
   S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${x('Recuperarlo', 'Payback', 'Recuperar', 'Recuperarlo')}</div>
 <h2 class="rv" style="--d:1">${x('Una inversión que <em>se recupera.</em>', 'An investment that <em>pays itself back.</em>', 'Um investimento que <em>se recupera.</em>', 'Un investimento che <em>si recupera.</em>')}</h2>
 <p class="fm rv" style="--d:2">${unaVenta && hayValor ? x('Con una sola venta nueva cubres el piloto. ', 'A single new sale covers the pilot. ', 'Uma única venda nova cobre o piloto. ', 'Una sola nuova vendita copre il progetto pilota. ') : ''}${x('Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.', 'Investment ÷ (meetings × close rate × value × margin) = sales you need to cover it.', 'Investimento ÷ (reuniões × fechamento × valor × margem) = vendas necessárias para cobri-lo.', 'Investimento ÷ (incontri × chiusura × valore × margine) = vendite necessarie per coprirlo.')}</p>
 ${vsHtml}
 <div class="calc c4">
-${card3(x('Primera venta esperada', 'Expected first sale', 'Primeira venda esperada', 'Prima vendita prevista'), c.mes_primera_venta == null ? sinDato : x('Mes ', 'Month ', 'Mês ', 'Mese ') + c.mes_primera_venta, '')}
+${card3(x('Primera venta posible', 'First sale could land', 'Primeira venda possível', 'Prima vendita possibile'), primeraTxt, primeraSub)}
 ${card3(x('Ventas para cubrir el piloto', 'Sales to cover the pilot', 'Vendas para cobrir o piloto', 'Vendite per coprire il progetto pilota'), hayValor ? F(c.ventas_para_cubrir_piloto) : '—', '')}
 ${card3(x(`El piloto se paga ${vz(c.veces_piloto)}`, `The pilot pays for itself ${vz(c.veces_piloto)}`, `O piloto se paga ${vz(c.veces_piloto)}`, `Il progetto pilota si ripaga ${vz(c.veces_piloto)}`), m$(piloto), '')}
-${debil ? card3(x('Tiempo medio hasta firmar', 'Average time to sign', 'Tempo médio até fechar', 'Tempo medio per firmare'), d.ciclo_dias ? dias(d.ciclo_dias) : '—', '') : card3(x(`El mensual se paga ${vz(c.veces_mensual)}`, `The monthly fee pays for itself ${vz(c.veces_mensual)}`, `A mensalidade se paga ${vz(c.veces_mensual)}`, `Il canone mensile si ripaga ${vz(c.veces_mensual)}`), m$(mensual), '')}</div>
+${debil ? card3(x('Tu ciclo de venta', 'Your sales cycle', 'Seu ciclo de vendas', 'Il tuo ciclo di vendita'), cicloVal, cicloSub) : card3(x(`El mensual se paga ${vz(c.veces_mensual)}`, `The monthly fee pays for itself ${vz(c.veces_mensual)}`, `A mensalidade se paga ${vz(c.veces_mensual)}`, `Il canone mensile si ripaga ${vz(c.veces_mensual)}`), m$(mensual), '')}</div>
 <table class="xt rv" style="--d:5"><tr><th>${x('Ejemplo con supuestos · valor de un cliente nuevo', 'Example with assumptions · value of a new client', 'Exemplo com suposições · valor de um novo cliente', 'Esempio con ipotesi · valore di un nuovo cliente')}</th>${ej.map(e => `<th>${m$(e.val)}</th>`).join('')}</tr>
 <tr><td>${x(`Ingreso nuevo al mes (${F(obj, 0)} reuniones, cierre ${F(cierre, 0)} %)`, `New revenue per month (${F(obj, 0)} meetings, ${F(cierre, 0)} % close rate)`, `Nova receita por mês (${F(obj, 0)} reuniões, fechamento de ${F(cierre, 0)} %)`, `Nuovo ricavo al mese (${F(obj, 0)} incontri, chiusura ${F(cierre, 0)} %)`)}</td>${ej.map(e => `<td><b>${m$(e.k.ingreso_mes)}</b></td>`).join('')}</tr>
 <tr><td>${x('Veces que cubre el piloto', 'Times it covers the pilot', 'Vezes que cobre o piloto', 'Volte che copre il progetto pilota')}</td>${ej.map(e => `<td><b>${F(e.k.veces_piloto)}</b></td>`).join('')}</tr></table>
