@@ -43612,6 +43612,7 @@ const PlantillasModule = (() => {
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
     } else if (g.t.tipo === 'propuesta2') {
       p.dev = p.dev || {};
+      if (p.dev.cliente_ideal == null) p.dev.cliente_ideal = 'Tenemos en cuenta lo aprendido en proyectos anteriores, pero no lo damos por hecho: lo validamos con inteligencia comercial y definimos tu cliente ideal (ICP) contigo.';   // de fábrica: se ajusta con lo que cuente el cliente; si se borra, queda vacío
       const dvf = (k, l, type, ph, opt) => `<label class="pl-l">${l}${opt ? ' <span class="pl-opt">(opcional)</span>' : ''}</label><input class="pl-in" type="${type || 'text'}" ${type === 'number' ? 'step="any" min="0"' : ''} value="${E(p.dev[k] == null ? '' : p.dev[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">`;
       const dvt = (k, l, ph) => `<label class="pl-l">${l}</label><textarea class="pl-in" rows="2" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">${E(p.dev[k] || '')}</textarea>`;
       const dvc = (k, l) => `<label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" ${p.dev[k] ? 'checked' : ''} onchange="PlantillasModule.setDevB('${k}',this.checked)"> ${l}</label>`;

@@ -5,6 +5,8 @@
 const base = require('./presentationTemplate');
 
 const LANGS = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };
+// Texto por defecto de «A quién quiere venderle»: si se deja tal cual, en el documento sale en el idioma elegido.
+const ICP_DEFAULT = { es: 'Tenemos en cuenta lo aprendido en proyectos anteriores, pero no lo damos por hecho: lo validamos con inteligencia comercial y definimos tu cliente ideal (ICP) contigo.', en: "We take into account what we learned in previous projects, but we don't take it for granted: we validate it with commercial intelligence and define your ideal client (ICP) together with you.", pt: 'Levamos em conta o que aprendemos em projetos anteriores, mas não o damos por certo: validamos com inteligência comercial e definimos seu cliente ideal (ICP) junto com você.', it: 'Teniamo conto di quanto appreso nei progetti precedenti, ma non lo diamo per scontato: lo convalidiamo con intelligence commerciale e definiamo il tuo cliente ideale (ICP) insieme a te.' };
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : d);
@@ -229,7 +231,7 @@ function render(brand, p, langIn) {
 <h2 class="rv" style="--d:1">${x('Lo que me <em>contaste.</em>', 'What you <em>told me.</em>', 'O que você <em>me contou.</em>', 'Quello che <em>mi hai detto.</em>')}</h2></div>
 <div class="cf">
 <div class="card rv" style="--d:1"><div class="n">01</div><h3>${x('Qué vendes', 'What you sell', 'O que você vende', 'Cosa vendi')}</h3><p>${esc(d.oferta_cliente) || '—'}</p></div>
-<div class="card rv" style="--d:2"><div class="n">02</div><h3>${x('A quién quieres venderle', 'Who you want to sell to', 'Para quem você quer vender', 'A chi vuoi vendere')}</h3><p>${esc(d.cliente_ideal) || '—'}</p></div>
+<div class="card rv" style="--d:2"><div class="n">02</div><h3>${x('A quién quieres venderle', 'Who you want to sell to', 'Para quem você quer vender', 'A chi vuoi vendere')}</h3><p>${esc(String(d.cliente_ideal || '').trim() === ICP_DEFAULT.es ? ICP_DEFAULT[lang] : d.cliente_ideal) || '—'}</p></div>
 <div class="card rv" style="--d:3"><div class="n">03</div><h3>${x('Dónde estás hoy', 'Where you are today', 'Onde você está hoje', 'Dove sei oggi')}</h3><p>${d.reuniones_mes_hoy == null
     ? x('Reuniones nuevas al mes: sin dato previo', 'New meetings per month: no prior data', 'Novas reuniões por mês: sem dado prévio', 'Nuovi incontri al mese: nessun dato precedente')
     : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`)}${cierran}.${fg && fg.realH ? ' ' + x(`Dedicas ${F(fg.h)} horas a la semana a buscar clientes.`, `You spend ${F(fg.h)} hours a week looking for clients.`, `Você dedica ${F(fg.h)} horas por semana a buscar clientes.`, `Dedichi ${F(fg.h)} ore a settimana a cercare clienti.`) : ''}</p></div>
