@@ -126,6 +126,7 @@ const EXTRA = `
 .cf .card{padding:18px 24px}.cf .card h3{margin-top:8px;font-size:18px}.cf .card p{margin-top:6px;font-size:14.5px;line-height:1.45}
 .dolor{margin-top:18px}
 .calc.c3{grid-template-columns:repeat(3,1fr);margin-top:10px}.calc.c3 .r{padding:10px 18px}.calc.c3 .r b{font-size:26px}
+.calc.c4{grid-template-columns:repeat(4,1fr);margin-top:12px;gap:10px}.calc.c4 .r{padding:10px 16px;font-size:13.5px}.calc.c4 .r b{font-size:24px}
 .calc .r .rg{display:block;margin-top:2px;font-size:11.5px;color:var(--mute)}
 .fuga{margin-top:14px;font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
 .formula{display:flex;align-items:stretch;gap:8px;margin-top:8px;flex-wrap:wrap}
@@ -241,6 +242,7 @@ ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.
   // 3 · la cuenta: lo que hoy se deja de ganar y lo que cuesta hacerlo a mano (cada fuga como una fórmula: factor × factor = resultado)
   const Fd = n => F(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1);
   const mg = (d.margen_pct || 100) / 100, valNeto = d.valor_cliente ? d.valor_cliente * mg : 0;
+  const hayValor = !!d.valor_cliente;   // sin el valor de un cliente nuevo no se puede calcular el ingreso: se muestra «sin dato previo», no ceros
   const fac = (val, lbl, rg, cls) => `<div class="fac${cls ? ' ' + cls : ''}"><b>${val}</b><span>${lbl}</span>${rg ? `<span class="rg">${rg}</span>` : ''}</div>`;
   const opx = t => `<div class="op">${t}</div>`;
   const supR = r => `${x('supuesto', 'assumption', 'suposto', 'ipotesi')} · ${r}`;
@@ -249,8 +251,8 @@ ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.
 <div class="formula rv" style="--d:2">${fac(F(obj, 0), x('reuniones nuevas al mes con nosotros', 'new meetings per month with us', 'novas reuniões por mês conosco', 'nuovi incontri al mese con noi'), supR(rangoTxt(2, 5)), '')}${opx('×')}
 ${fac(F(cierre, 0) + ' %', x('de las reuniones acaban en cliente', 'of meetings end up as a client', 'das reuniões viram cliente', 'degli incontri diventano cliente'), real ? '' : supR(rangoTxt('10', '30', true)), '')}${opx('×')}
 ${fac(valNeto ? m$(valNeto) : '—', x('lo que vale un cliente nuevo', 'what a new client is worth', 'quanto vale um novo cliente', 'quanto vale un nuovo cliente') + ((d.margen_pct || 100) < 100 ? x(` (con tu margen del ${F(d.margen_pct, 0)} %)`, ` (at your ${F(d.margen_pct, 0)} % margin)`, ` (com sua margem de ${F(d.margen_pct, 0)} %)`, ` (con il tuo margine del ${F(d.margen_pct, 0)} %)`) : ''), '', '')}${opx('=')}
-${fac(m$(c.ingreso_mes), alMes, x('ingreso nuevo', 'new revenue', 'nova receita', 'nuovo ricavo'), 'res')}</div>
-<p class="fm rv" style="--d:3">${F(obj, 0)} × ${F(cierre, 0)} % = ${F(c.ventas_mes)} ${x('ventas nuevas al mes', 'new sales per month', 'novas vendas por mês', 'nuove vendite al mese')}; ${F(c.ventas_mes)} × ${valNeto ? m$(valNeto) : '—'} = ${m$(c.ingreso_mes)} ${alMes}. <b>${alAnio}: ${m$(c.ingreso_mes * 12)}.</b></p>`;
+${fac(hayValor ? m$(c.ingreso_mes) : '—', hayValor ? alMes : sinDato, x('ingreso nuevo', 'new revenue', 'nova receita', 'nuovo ricavo'), 'res')}</div>
+<p class="fm rv" style="--d:3">${F(obj, 0)} × ${F(cierre, 0)} % = ${F(c.ventas_mes)} ${x('ventas nuevas al mes', 'new sales per month', 'novas vendas por mês', 'nuove vendite al mese')}${hayValor ? `; ${F(c.ventas_mes)} × ${m$(valNeto)} = ${m$(c.ingreso_mes)} ${alMes}. <b>${alAnio}: ${m$(c.ingreso_mes * 12)}.</b>` : '.'}</p>`;
   const stripB = !fg ? '' : `<p class="fuga rv" style="--d:4">${x('Tu tiempo, o el de tu equipo, buscando clientes a mano', 'Your time, or your team’s, looking for clients by hand', 'Seu tempo, ou o da sua equipe, buscando clientes à mão', 'Il tuo tempo, o quello del tuo team, per cercare clienti a mano')} · ${x('lo que cuesta hacerlo tú', 'what it costs to do it yourself', 'quanto custa fazer você mesmo', 'quanto costa farlo tu')}</p>
 <div class="formula rv" style="--d:4">${fac(F(fg.h) + ' h', x('horas a la semana: buscar, escribir, seguimientos y reuniones previas', 'hours a week: searching, writing, follow-ups and prep meetings', 'horas por semana: buscar, escrever, acompanhamentos e reuniões prévias', 'ore a settimana: ricerca, scrittura, follow-up e incontri preliminari'), fg.supH ? supR(rangoTxt(5, 20) + ' h') : '', '')}${opx('×')}
 ${fac(F(FUGA_SEM, 1), x('semanas que tiene un mes', 'weeks in a month', 'semanas que tem um mês', 'settimane in un mese'), '', '')}${opx('×')}
@@ -268,23 +270,22 @@ ${fac(m$(fg.coste_tiempo_mes), alMes, x('coste en tiempo', 'cost in time', 'cust
 <h2 class="rv" style="--d:1">${x('Lo que hoy <em>dejas de ganar.</em>', 'What you <em>miss out on</em> today.', 'O que você <em>deixa de ganhar</em> hoje.', 'Quello che oggi <em>non guadagni.</em>')}</h2>
 ${stripA}
 ${stripB}
-${vsHtml}
-<p class="fm rv" style="--d:7;margin-top:10px;font-size:12.5px">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste. No es una promesa de resultado.', 'Figures marked “assumption” are our estimates; the rest is what you gave us. Not a promise of results.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou. Não é uma promessa de resultado.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito. Non è una promessa di risultato.')}</p></div></section>`);
+<p class="fm rv" style="--d:7;margin-top:14px;font-size:12.5px">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste. No es una promesa de resultado.', 'Figures marked “assumption” are our estimates; the rest is what you gave us. Not a promise of results.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou. Não é uma promessa de resultado.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito. Non è una promessa di risultato.')}</p></div></section>`);
 
   // 4 · recuperarlo: la inversión se recupera, y hacerlo a mano cuesta más
   const ej = [2000, 4000, 8000, 15000].map(val => ({ val, k: build(val, mg, cierre / 100, obj, mensual, piloto, null, real) }));
   const unaVenta = c.ventas_para_cubrir_piloto != null && c.ventas_para_cubrir_piloto <= 1;
   const card3 = (t, v2, sub) => `<div class="r rv" style="--d:3">${t}<b>${v2}</b>${sub ? `<span class="rg">${sub}</span>` : ''}</div>`;
+  const vz = n => (hayValor ? veces(n) : '—');
   S.push(`<section class="slide s-soft" data-th="light"><div class="content"><div class="eyebrow rv">03 · ${x('Recuperarlo', 'Payback', 'Recuperar', 'Recuperarlo')}</div>
 <h2 class="rv" style="--d:1">${x('Una inversión que <em>se recupera.</em>', 'An investment that <em>pays itself back.</em>', 'Um investimento que <em>se recupera.</em>', 'Un investimento che <em>si recupera.</em>')}</h2>
-<p class="fm rv" style="--d:2">${unaVenta ? x('Con una sola venta nueva cubres el piloto. ', 'A single new sale covers the pilot. ', 'Uma única venda nova cobre o piloto. ', 'Una sola nuova vendita copre il progetto pilota. ') : ''}${x('Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.', 'Investment ÷ (meetings × close rate × value × margin) = sales you need to cover it.', 'Investimento ÷ (reuniões × fechamento × valor × margem) = vendas necessárias para cobri-lo.', 'Investimento ÷ (incontri × chiusura × valore × margine) = vendite necessarie per coprirlo.')}</p>
-<div class="calc c3">
+<p class="fm rv" style="--d:2">${unaVenta && hayValor ? x('Con una sola venta nueva cubres el piloto. ', 'A single new sale covers the pilot. ', 'Uma única venda nova cobre o piloto. ', 'Una sola nuova vendita copre il progetto pilota. ') : ''}${x('Inversión ÷ (reuniones × cierre × valor × margen) = ventas que necesitas para cubrirla.', 'Investment ÷ (meetings × close rate × value × margin) = sales you need to cover it.', 'Investimento ÷ (reuniões × fechamento × valor × margem) = vendas necessárias para cobri-lo.', 'Investimento ÷ (incontri × chiusura × valore × margine) = vendite necessarie per coprirlo.')}</p>
+${vsHtml}
+<div class="calc c4">
 ${card3(x('Primera venta esperada', 'Expected first sale', 'Primeira venda esperada', 'Prima vendita prevista'), c.mes_primera_venta == null ? sinDato : x('Mes ', 'Month ', 'Mês ', 'Mese ') + c.mes_primera_venta, '')}
-${card3(x('Ventas para cubrir el piloto', 'Sales to cover the pilot', 'Vendas para cobrir o piloto', 'Vendite per coprire il progetto pilota'), F(c.ventas_para_cubrir_piloto), '')}
-${card3(x(`El piloto se paga ${veces(c.veces_piloto)}`, `The pilot pays for itself ${veces(c.veces_piloto)}`, `O piloto se paga ${veces(c.veces_piloto)}`, `Il progetto pilota si ripaga ${veces(c.veces_piloto)}`), m$(piloto), '')}
-${debil ? card3(x('Tiempo medio hasta firmar', 'Average time to sign', 'Tempo médio até fechar', 'Tempo medio per firmare'), d.ciclo_dias ? dias(d.ciclo_dias) : '—', '') : card3(x(`El mensual se paga ${veces(c.veces_mensual)}`, `The monthly fee pays for itself ${veces(c.veces_mensual)}`, `A mensalidade se paga ${veces(c.veces_mensual)}`, `Il canone mensile si ripaga ${veces(c.veces_mensual)}`), m$(mensual), '')}
-${fg ? card3(x('Hacerlo a mano, al mes', 'Doing it by hand, per month', 'Fazer à mão, por mês', 'Farlo a mano, al mese'), m$(aMano), x('tu tiempo o el de tu equipo', 'your time or your team’s', 'seu tempo ou o da sua equipe', 'il tuo tempo o quello del tuo team') + (fg.supH || fg.supV ? ' · ' + x('supuesto', 'assumption', 'suposto', 'ipotesi') : '')) : ''}
-${cuestaMas ? card3(x('Hacerlo a mano cuesta', 'Doing it by hand costs', 'Fazer à mão custa', 'Farlo a mano costa'), `≈ ${veces(aMano / ofrecido)} ${x('más', 'more', 'mais', 'in più')}`, x(`que ${debil ? 'el piloto' : 'nuestro mensual'}`, `than ${debil ? 'the pilot' : 'our monthly fee'}`, `do que ${debil ? 'o piloto' : 'nossa mensalidade'}`, `del ${debil ? 'progetto pilota' : 'nostro canone mensile'}`)) : ''}</div>
+${card3(x('Ventas para cubrir el piloto', 'Sales to cover the pilot', 'Vendas para cobrir o piloto', 'Vendite per coprire il progetto pilota'), hayValor ? F(c.ventas_para_cubrir_piloto) : '—', '')}
+${card3(x(`El piloto se paga ${vz(c.veces_piloto)}`, `The pilot pays for itself ${vz(c.veces_piloto)}`, `O piloto se paga ${vz(c.veces_piloto)}`, `Il progetto pilota si ripaga ${vz(c.veces_piloto)}`), m$(piloto), '')}
+${debil ? card3(x('Tiempo medio hasta firmar', 'Average time to sign', 'Tempo médio até fechar', 'Tempo medio per firmare'), d.ciclo_dias ? dias(d.ciclo_dias) : '—', '') : card3(x(`El mensual se paga ${vz(c.veces_mensual)}`, `The monthly fee pays for itself ${vz(c.veces_mensual)}`, `A mensalidade se paga ${vz(c.veces_mensual)}`, `Il canone mensile si ripaga ${vz(c.veces_mensual)}`), m$(mensual), '')}</div>
 <table class="xt rv" style="--d:5"><tr><th>${x('Ejemplo con supuestos · valor de un cliente nuevo', 'Example with assumptions · value of a new client', 'Exemplo com suposições · valor de um novo cliente', 'Esempio con ipotesi · valore di un nuovo cliente')}</th>${ej.map(e => `<th>${m$(e.val)}</th>`).join('')}</tr>
 <tr><td>${x(`Ingreso nuevo al mes (${F(obj, 0)} reuniones, cierre ${F(cierre, 0)} %)`, `New revenue per month (${F(obj, 0)} meetings, ${F(cierre, 0)} % close rate)`, `Nova receita por mês (${F(obj, 0)} reuniões, fechamento de ${F(cierre, 0)} %)`, `Nuovo ricavo al mese (${F(obj, 0)} incontri, chiusura ${F(cierre, 0)} %)`)}</td>${ej.map(e => `<td><b>${m$(e.k.ingreso_mes)}</b></td>`).join('')}</tr>
 <tr><td>${x('Veces que cubre el piloto', 'Times it covers the pilot', 'Vezes que cobre o piloto', 'Volte che copre il progetto pilota')}</td>${ej.map(e => `<td><b>${F(e.k.veces_piloto)}</b></td>`).join('')}</tr></table>
