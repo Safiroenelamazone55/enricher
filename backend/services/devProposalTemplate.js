@@ -158,7 +158,7 @@ h2+.fuga{margin-top:26px}h2+.fm{margin-top:12px}
 
 
 const SUIZO = `
-:root{--teal:#2563EB;--teal-l:#7AA5FF;--tl-rgb:122,165,255;--pr-rgb:37,99,235;--sans:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
+:root{--sans:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
 body,.deck,.slide{font-family:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
 h1,h2,h3,.fac b,.vs b,.calc .r b,.sim .tot,.facts b,.bn,.edb b{font-family:'Archivo','Manrope','Segoe UI',sans-serif}
 .slide:not(.cover) h2{font-weight:800;letter-spacing:-.045em;line-height:1;padding-top:16px;border-top:6px solid var(--hd)}
@@ -166,16 +166,16 @@ h1,h2,h3,.fac b,.vs b,.calc .r b,.sim .tot,.facts b,.bn,.edb b{font-family:'Arch
 .slide h2 em,.cover h1 em{font-style:normal}
 .cover h1{font-family:'Archivo','Manrope',sans-serif;font-weight:800;letter-spacing:-.045em}
 .eyebrow{font-weight:800;letter-spacing:.14em}
-.slide.s-light,.slide.s-soft{background:#F4F6FB;--hd:#0B1530;--tx:#33405E;--ln:#0B1530;--cd:#fff;--cdb:#0B1530;--mute:#5B6785}
-.s-light .formula .fac,.s-soft .formula .fac,.s-light .calc .r,.s-soft .calc .r,.s-light .card,.s-soft .card,.s-light .vs>div,.s-soft .vs>div,.s-light .steps div,.s-soft .steps div,.s-light .facts>div,.s-soft .facts>div,.s-light .sim,.s-soft .sim,.s-light .tile,.s-soft .tile{border:2px solid #0B1530;border-radius:8px;box-shadow:none;background:#fff}
-.s-light .formula .fac.res,.s-soft .formula .fac.res,.s-light .calc .r.big,.s-soft .calc .r.big,.s-light .vs>div.vs-b,.s-soft .vs>div.vs-b{background:#2563EB;border-color:#2563EB;box-shadow:none}
-.s-light .top .brand,.s-soft .top .brand,.s-light .cnt,.s-soft .cnt{color:#0B1530}.s-light .cnt i,.s-soft .cnt i{color:#5B6785}
-.s-light .btn-fs,.s-soft .btn-fs{color:#0B1530;border-color:#0B153055;background:transparent}
+.slide.s-light,.slide.s-soft{background:#F4F6FB;--hd:var(--navy);--tx:#33405E;--ln:var(--navy);--cd:#fff;--cdb:var(--navy);--mute:#5B6785}
+.s-light .formula .fac,.s-soft .formula .fac,.s-light .calc .r,.s-soft .calc .r,.s-light .card,.s-soft .card,.s-light .vs>div,.s-soft .vs>div,.s-light .steps div,.s-soft .steps div,.s-light .facts>div,.s-soft .facts>div,.s-light .sim,.s-soft .sim,.s-light .tile,.s-soft .tile{border:2px solid var(--navy);border-radius:8px;box-shadow:none;background:#fff}
+.s-light .formula .fac.res,.s-soft .formula .fac.res,.s-light .calc .r.big,.s-soft .calc .r.big,.s-light .vs>div.vs-b,.s-soft .vs>div.vs-b{background:var(--teal);border-color:var(--teal);box-shadow:none}
+.s-light .top .brand,.s-soft .top .brand,.s-light .cnt,.s-soft .cnt{color:var(--navy)}.s-light .cnt i,.s-soft .cnt i{color:#5B6785}
+.s-light .btn-fs,.s-soft .btn-fs{color:var(--navy);border-color:var(--navy)55;background:transparent}
 .s-light .formula .fac.res b,.s-soft .formula .fac.res b,.s-light .formula .fac.res span,.s-soft .formula .fac.res span,.s-light .vs-b b,.s-soft .vs-b b,.s-light .vs-b i,.s-soft .vs-b i,.s-light .vs-b small,.s-soft .vs-b small,.s-light .vs-b span,.s-soft .vs-b span,.s-light .calc .r.big b,.s-soft .calc .r.big b{color:#fff}
-.s-light .formula .fac.res .rg,.s-soft .formula .fac.res .rg{color:#DCE7FF}
-.s-light .xt th,.s-soft .xt th{color:#0B1530}.s-light .xt td,.s-soft .xt td{border-bottom-color:#0B153033}
-.s-light .chip,.s-soft .chip{border:2px solid #0B1530;background:#fff;color:#0B1530}
-.s-light::before,.s-soft::before{content:"";position:absolute;left:0;top:0;bottom:0;width:14px;background:#2563EB}
+.s-light .formula .fac.res .rg,.s-soft .formula .fac.res .rg{color:rgba(255,255,255,.85)}
+.s-light .xt th,.s-soft .xt th{color:var(--navy)}.s-light .xt td,.s-soft .xt td{border-bottom-color:rgba(var(--dk-rgb),.2)}
+.s-light .chip,.s-soft .chip{border:2px solid var(--navy);background:#fff;color:var(--navy)}
+.s-light::before,.s-soft::before{content:"";position:absolute;left:0;top:0;bottom:0;width:14px;background:var(--teal)}
 `;
 function render(brand, p, langIn) {
   const lang = LANGS[langIn] ? langIn : 'es';
