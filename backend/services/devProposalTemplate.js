@@ -125,23 +125,25 @@ const EXTRA = `
 .cf{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .cf .card{padding:18px 24px}.cf .card h3{margin-top:8px;font-size:18px}.cf .card p{margin-top:6px;font-size:14.5px;line-height:1.45}
 .dolor{margin-top:18px}
+.disc{font-size:14px}
+h2+.fuga{margin-top:26px}h2+.fm{margin-top:12px}
 .calc.c3{grid-template-columns:repeat(3,1fr);margin-top:10px}.calc.c3 .r{padding:10px 18px}.calc.c3 .r b{font-size:26px}
-.calc.c4{grid-template-columns:repeat(4,1fr);margin-top:12px;gap:10px}.calc.c4 .r{padding:10px 16px;font-size:13.5px}.calc.c4 .r b{font-size:24px}
-.calc .r .rg{display:block;margin-top:2px;font-size:11.5px;color:var(--mute)}
-.fuga{margin-top:14px;font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.calc.c4{grid-template-columns:repeat(4,1fr);margin-top:12px;gap:10px}.calc.c4 .r{padding:12px 16px;font-size:15px}.calc.c4 .r b{font-size:27px}
+.calc .r .rg{display:block;margin-top:2px;font-size:13px;color:var(--mute)}
+.fuga{margin-top:14px;font-size:13px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
 .formula{display:flex;align-items:stretch;gap:8px;margin-top:8px;flex-wrap:wrap}
 .formula .fac{flex:1 1 150px;background:var(--cd);border:1px solid var(--cdb);border-radius:16px;padding:8px 14px}
-.formula .fac b{display:block;font-size:24px;font-weight:600;letter-spacing:-.035em;color:var(--hd);line-height:1.15}
-.formula .fac span{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:var(--tx)}
-.formula .fac .rg{font-size:10.5px;color:#B45309;font-weight:600;letter-spacing:.03em}
+.formula .fac b{display:block;font-size:28px;font-weight:600;letter-spacing:-.035em;color:var(--hd);line-height:1.15}
+.formula .fac span{display:block;margin-top:2px;font-size:14px;line-height:1.3;color:var(--tx)}
+.formula .fac .rg{font-size:12.5px;color:#B45309;font-weight:600;letter-spacing:.03em}
 .formula .fac.res{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal) inset}
 .formula .op{align-self:center;font-size:24px;color:var(--mute);font-weight:300}
 .vs{margin-top:14px;display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch}
 .vs>div{border-radius:18px;padding:10px 20px;border:1px solid var(--cdb);background:var(--cd)}
-.vs small{display:block;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-weight:700}
-.vs b{display:block;margin-top:2px;font-size:28px;font-weight:600;letter-spacing:-.035em;color:var(--hd)}
+.vs small{display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-weight:700}
+.vs b{display:block;margin-top:2px;font-size:32px;font-weight:600;letter-spacing:-.035em;color:var(--hd)}
 .vs b span{margin-left:6px;font-size:14px;font-weight:500;color:var(--mute);letter-spacing:0}
-.vs i{display:block;margin-top:4px;font-size:13px;font-style:normal;color:var(--tx)}
+.vs i{display:block;margin-top:4px;font-size:15px;font-style:normal;color:var(--tx)}
 .vs-b{border-color:var(--teal)!important}.vs-b i{color:var(--hd);font-weight:600}
 .vs .vs-x{display:flex;align-items:center;border:0!important;background:none!important;padding:0!important;font-size:14px;font-weight:700;color:var(--mute);text-transform:uppercase}
 @media(max-width:760px){.vs{grid-template-columns:1fr}.vs .vs-x{justify-content:center}.formula .op{width:100%;text-align:center}}
@@ -173,7 +175,7 @@ function render(brand, p, langIn) {
   const de10 = F(cierre / 10, cierre % 10 ? 1 : 0);
   const sinDato = x('sin dato previo', 'no prior data', 'sem dado prévio', 'nessun dato precedente');
   const dias = n => `${n} ${x('días', 'days', 'dias', 'giorni')}`;
-  const veces = n => `${F(n)} ${x('veces', 'times', 'vezes', 'volte')}`;
+  const veces = n => (Math.abs(n - 1) < 1e-9 ? `1 ${x('vez', 'time', 'vez', 'volta')}` : `${F(n)} ${x('veces', 'times', 'vezes', 'volte')}`);
   const pilotLbl = x('Piloto de 30 días', '30-day pilot', 'Piloto de 30 dias', 'Progetto progetto pilota di 30 giorni');
   const perMes = x('/mes', '/month', '/mês', '/mese');
 
@@ -235,7 +237,7 @@ function render(brand, p, langIn) {
 <div class="card rv" style="--d:2"><div class="n">02</div><h3>${x('A quién quieres venderle', 'Who you want to sell to', 'Para quem você quer vender', 'A chi vuoi vendere')}</h3><p>${esc(String(d.cliente_ideal || '').trim() === ICP_DEFAULT.es ? ICP_DEFAULT[lang] : d.cliente_ideal) || '—'}</p></div>
 <div class="card rv" style="--d:3"><div class="n">03</div><h3>${x('Dónde estás hoy', 'Where you are today', 'Onde você está hoje', 'Dove sei oggi')}</h3><p>${d.reuniones_mes_hoy == null
     ? x('Reuniones nuevas al mes: sin dato previo', 'New meetings per month: no prior data', 'Novas reuniões por mês: sem dado prévio', 'Nuovi incontri al mese: nessun dato precedente')
-    : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`)}${cierran}.${fg && fg.realH ? ' ' + x(`Dedicas ${F(fg.h)} horas a la semana a buscar clientes.`, `You spend ${F(fg.h)} hours a week looking for clients.`, `Você dedica ${F(fg.h)} horas por semana a buscar clientes.`, `Dedichi ${F(fg.h)} ore a settimana a cercare clienti.`) : ''}</p></div>
+    : (d.reuniones_mes_hoy === 1 ? x('Consigues 1 reunión nueva al mes', 'You get 1 new meeting per month', 'Você consegue 1 nova reunião por mês', 'Ottieni 1 nuovo incontro al mese') : x(`Consigues ${F(d.reuniones_mes_hoy, 0)} reuniones nuevas al mes`, `You get ${F(d.reuniones_mes_hoy, 0)} new meetings per month`, `Você consegue ${F(d.reuniones_mes_hoy, 0)} novas reuniões por mês`, `Ottieni ${F(d.reuniones_mes_hoy, 0)} nuovi incontri al mese`))}${cierran}.${fg && fg.realH ? ' ' + x(`Dedicas ${F(fg.h)} horas a la semana a buscar clientes.`, `You spend ${F(fg.h)} hours a week looking for clients.`, `Você dedica ${F(fg.h)} horas por semana a buscar clientes.`, `Dedichi ${F(fg.h)} ore a settimana a cercare clienti.`) : ''}</p></div>
 <div class="card rv" style="--d:4"><div class="n">04</div><h3>${x('Lo que vale cerrar', 'What a close is worth', 'Quanto vale fechar', 'Quanto vale chiudere')}</h3><p>${x(`Un cliente nuevo te deja ${valCli} el primer año y `, `A new client brings you ${valCli} in the first year and `, `Um novo cliente rende ${valCli} no primeiro ano e `, `Un nuovo cliente ti porta ${valCli} il primo anno e `)}${cicloTxt}${decide}.</p></div></div>
 ${d.dolor_cliente ? `<div class="quote rv" style="--d:5">${qOpen}${esc(String(d.dolor_cliente).replace(/^["«»“”]+|["«»“”]+$/g, ''))}${qClose}</div>` : ''}</div></section>`);
 
@@ -270,7 +272,7 @@ ${fac(m$(fg.coste_tiempo_mes), alMes, x('coste en tiempo', 'cost in time', 'cust
 <h2 class="rv" style="--d:1">${x('Lo que hoy <em>dejas de ganar.</em>', 'What you <em>miss out on</em> today.', 'O que você <em>deixa de ganhar</em> hoje.', 'Quello che oggi <em>non guadagni.</em>')}</h2>
 ${stripA}
 ${stripB}
-<p class="fm rv" style="--d:7;margin-top:14px;font-size:12.5px">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste. No es una promesa de resultado.', 'Figures marked “assumption” are our estimates; the rest is what you gave us. Not a promise of results.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou. Não é uma promessa de resultado.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito. Non è una promessa di risultato.')}</p></div></section>`);
+<p class="fm rv" style="--d:7;margin-top:12px;font-size:14px">${x('Los datos marcados «supuesto» son estimaciones nuestras; el resto es lo que tú nos diste. No es una promesa de resultado.', 'Figures marked “assumption” are our estimates; the rest is what you gave us. Not a promise of results.', 'Os dados marcados como «suposto» são estimativas nossas; o resto é o que você nos passou. Não é uma promessa de resultado.', 'I dati contrassegnati «ipotesi» sono nostre stime; il resto è quello che ci hai fornito. Non è una promessa di risultato.')}</p></div></section>`);
 
   // 4 · recuperarlo: la inversión se recupera, y hacerlo a mano cuesta más
   const ej = [2000, 4000, 8000, 15000].map(val => ({ val, k: build(val, mg, cierre / 100, obj, mensual, piloto, null, real) }));
