@@ -213,7 +213,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
         }
       }
       const prefill = cli
-        ? { empresa: cli.empresa || cli.nombre || '', contacto: [cli.nombre, cli.cargo].filter(Boolean).join(', '), mailInf: cli.email || '', web: cli.sitio_web || '', pais: cli.pais_empresa || cli.pais || '', razon: cli.razon_social || cli.empresa || '' }
+        ? { empresa: cli.empresa || cli.nombre || '', contacto: cli.nombre || '', mailInf: cli.email || '', web: cli.sitio_web || '', pais: cli.pais_empresa || cli.pais || '', razon: cli.razon_social || cli.empresa || '' }
         : { empresa: String(b.empresa).trim().slice(0, 200), contacto: String(b.contacto || '').trim().slice(0, 200), mailInf: String(b.correo || '').trim().slice(0, 200) };
       const pre = { ...prefill }; if (!pre.razon) pre.razon = pre.empresa;
       for (const k of Object.keys(pre)) if (!pre[k]) delete pre[k];

@@ -12,7 +12,7 @@ const SECCIONES = [
       { id: 'nif', tipo: 'text', req: true, es: 'NIF / CIF / VAT', en: 'Tax ID / VAT number' },
       { id: 'dir', tipo: 'long', req: true, es: 'Dirección fiscal', en: 'Billing address' },
       { id: 'pais', tipo: 'text', req: true, es: 'País y zona horaria', en: 'Country and time zone', ej: T('Ejemplo: España, Madrid (GMT+1)', 'Example: Spain, Madrid (GMT+1)') },
-      { id: 'contacto', tipo: 'text', req: true, es: 'Persona de contacto (nombre y cargo)', en: 'Contact person (name and role)' },
+      { id: 'contacto', tipo: 'text', req: true, es: 'Persona de contacto (nombre)', en: 'Contact person (name)' },
       { id: 'web', tipo: 'url', req: false, es: 'Web de la empresa', en: 'Company website', ph: 'https://' },
       { id: 'logo', tipo: 'url', req: false, es: 'Enlace al logo', en: 'Link to your logo', ph: 'https://',
         ayuda: T('Un enlace de descarga (Drive, Dropbox, tu web). Si prefieres, envíalo adjunto por el mismo canal donde mandes este formulario.', 'A download link (Drive, Dropbox, your website). If you prefer, send it as an attachment through the same channel you use for this form.') },
