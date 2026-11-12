@@ -88,6 +88,7 @@
     $('m').oninput = e => ent(e); $('m').onchange = e => ent(e);
     $('m').onfocusout = e => { const f = e.target.closest && e.target.closest('.f'); if (f) { S.shown.add(f.dataset.id); const c = campos().find(x => x.id === f.dataset.id); if (c) marca(c); } guardar(); };
     $('go').onclick = enviar;
+    if (window.GEO) GEO.attach($('f-pais'), S.lang, v => { S.vals.pais = v; });   // país / ciudad: desplegable con buscador
     S.shown.forEach(id => { const c = campos().find(x => x.id === id); if (c) marca(c); });
     progreso();
   }
