@@ -295,6 +295,11 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     await pool.query(`UPDATE inicio_cliente SET revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id]);
     await audit(r.id, req, r.revocado ? 'enlace_renovado_nuevo' : 'enlace_renovado', ''); const n = await own(req, r.id); res.json({ ...fila(n), url: urlDe(n) });
   });
+  simple('idioma', async (req, res, r) => {   // idioma del formulario que verá el cliente
+    const l = (req.body || {}).idioma === 'en' ? 'en' : 'es';
+    await pool.query("UPDATE inicio_cliente SET idioma=$2, prefill=COALESCE(prefill,'{}'::jsonb) || jsonb_build_object('idioma',$2::text) WHERE id=$1", [r.id, l]);
+    await audit(r.id, req, 'idioma_cambiado', l); res.json({ ok: true, idioma: l });
+  });
   simple('revocar', async (req, res, r) => { await pool.query('UPDATE inicio_cliente SET revocado=TRUE WHERE id=$1', [r.id]); await audit(r.id, req, 'enlace_revocado', ''); res.json({ ok: true }); });
   simple('marcar-enviado', async (req, res, r) => {
     await pool.query(`UPDATE inicio_cliente SET enlace_enviado_en=NOW(), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);

@@ -9,7 +9,7 @@ const InicioModule = (() => {
   const CANAL = { linkedin: 'LinkedIn', linkedin_whatsapp: 'LinkedIn · WhatsApp', whatsapp: 'WhatsApp', email: 'Correo' };
   const SN = { tengo: 'Sí, ya tiene', anadir: 'Quiere añadirlo', no: 'No lo quiere' };
   const MAILE = { creado: 'Creado', despues: 'Lo enviará después' };
-  const ACC = { creado: 'Enlace creado', enlace_renovado: 'Enlace renovado', enlace_renovado_nuevo: 'Enlace renovado (token nuevo)', enlace_revocado: 'Enlace revocado', enlace_enviado: 'Enlace marcado como enviado', recordatorio_enviado: 'Recordatorio enviado',
+  const ACC = { creado: 'Enlace creado', enlace_renovado: 'Enlace renovado', enlace_renovado_nuevo: 'Enlace renovado (token nuevo)', enlace_revocado: 'Enlace revocado', idioma_cambiado: 'Idioma del formulario cambiado', enlace_enviado: 'Enlace marcado como enviado', recordatorio_enviado: 'Recordatorio enviado',
     mostrar_secreto: 'Mostró una contraseña', copiar_secreto: 'Copió una contraseña', editar_secreto: 'Editó una contraseña', exportar_accesos: 'Exportó accesos (CSV)', revisado: 'Marcó como revisado', portal_activado: 'Dio acceso al portal', accesos_borrados: 'Borró los accesos', accesos_borrados_auto: 'Accesos borrados automáticamente' };
 
   async function _j(url, opts) {
@@ -47,9 +47,9 @@ const InicioModule = (() => {
     return r;
   }
   function pintarLista() {
-    const r = filtradas(), th = COLS.map(([k, l]) => `<th class="ini-th" onclick="InicioModule.ordenar('${k}')">${l}${_sort.k === k ? (_sort.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('');
+    const r = filtradas(), th = COLS.map(([k, l]) => `<th class="ini-th" onclick="InicioModule.ordenar('${k}')">${l}${_sort.k === k ? (_sort.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '<th class="ini-th ini-gearc"></th>';
     const tr = r.map(x => `<tr onclick="InicioModule.abrirFicha(${x.id})"><td><b>${E(x.empresa || '—')}</b></td><td>${E(x.contacto || '—')}</td><td>${chip(x.estado)}</td><td>${fdate(x.enviado_en)}</td><td>${E(CANAL[x.canal] || '—')}</td><td>${E(x.mailInf || '—')}</td><td>${E(SN[x.salesnav] || '—')}</td><td>${E(MAILE[x.mailEstado] || '—')}</td><td>${E(x.atiende || '—')}</td>
-      <td><div class="ini-bar" title="${x.progreso} %"><i style="width:${x.progreso}%"></i></div><small>${x.progreso} %</small></td><td>${x.revisado ? '✓ ' + fdate(x.revisado_en) : '—'}</td></tr>`).join('');
+      <td><div class="ini-bar" title="${x.progreso} %"><i style="width:${x.progreso}%"></i></div><small>${x.progreso} %</small></td><td>${x.revisado ? '✓ ' + fdate(x.revisado_en) : '—'}</td><td class="ini-gearc"><button class="ini-gear" title="Opciones" onclick="event.stopPropagation();InicioModule.menuFila(${x.id},this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></td></tr>`).join('');
     const opts = `<option value="">Todos los estados</option>` + Object.entries(ESTADOS).map(([k, v]) => `<option value="${k}"${_fe === k ? ' selected' : ''}>${v[0]}</option>`).join('');
     _host.innerHTML = `<div class="ini-wrap"><div class="ini-head"><div><h1 class="ini-h1">Inicios de cliente</h1><p class="ini-sub">Lo que cada cliente completó en su formulario de inicio. Es la base de datos previa al acceso al portal.</p></div>
       <div class="ini-tools"><input class="ini-in" id="ini-q" placeholder="Buscar…" value="${E(_q)}" oninput="InicioModule.buscar(this.value)"><select class="ini-in" onchange="InicioModule.filtrar(this.value)">${opts}</select>
@@ -112,6 +112,27 @@ const InicioModule = (() => {
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cerrar</button><button class="btn btn-ghost" onclick="window.open('${E(r.url)}','_blank','noopener')">Abrir</button>
       <button class="btn btn-ghost" onclick="InicioModule.cerrar();InicioModule.ir(${r.id})">Ver ficha</button><button class="btn btn-primary" onclick="InicioModule.copiarEnlace(${r.id})">Copiar enlace y marcar como enviado</button></div>`);
   }
+  // ══ Menú de opciones de cada fila (ruedita) ══
+  function cerrarMenu() { const m = $('ini-gmenu'); if (m) m.remove(); document.removeEventListener('click', cerrarMenu, true); }
+  function menuFila(id, btn) {
+    cerrarMenu(); const x = _rows.find(r => r.id === id); if (!x) return;
+    const m = document.createElement('div'); m.id = 'ini-gmenu'; m.className = 'ini-gmenu';
+    const it = (fn, t, cls) => `<button class="ini-gm${cls ? ' ' + cls : ''}" onclick="InicioModule.cerrarMenu();InicioModule.${fn}">${t}</button>`;
+    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
+      + it(`idiomaFila(${id},'es')`, (x.idioma !== 'en' ? '✓ ' : '') + 'Español') + it(`idiomaFila(${id},'en')`, (x.idioma === 'en' ? '✓ ' : '') + 'English')
+      + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 30 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
+    document.body.appendChild(m);
+    const b = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(b.right - w, innerWidth - w - 8)) + 'px';
+    m.style.top = (b.bottom + h + 8 > innerHeight ? Math.max(8, b.top - h - 4) : b.bottom + 4) + 'px';
+    setTimeout(() => document.addEventListener('click', cerrarMenu, true), 0);
+  }
+  async function _url(id) { const f = await _j('/inicios/' + id); return f.url; }
+  async function copiarFila(id) { try { await copiar(await _url(id), 'Enlace copiado'); try { await _post(`/inicios/${id}/marcar-enviado`); } catch (_) {} cargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function abrirForm(id) { try { window.open(await _url(id), '_blank', 'noopener'); } catch (e) { msg(e.message, 'error'); } }
+  async function idiomaFila(id, l) { try { await _post(`/inicios/${id}/idioma`, { idioma: l }); msg(l === 'en' ? 'Formulario en English' : 'Formulario en español', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function renovarFila(id) { try { await _post(`/inicios/${id}/renovar`); msg('Enlace renovado 30 días', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function revocarFila(id) { if (!confirm('El enlace dejará de funcionar de inmediato. ¿Revocarlo?')) return; try { await _post(`/inicios/${id}/revocar`); msg('Enlace revocado', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
   async function copiarEnlace(id) {
     const u = $('ini-url') ? $('ini-url').value : (_f && _f.url);
     await copiar(u, 'Enlace copiado');
@@ -211,6 +232,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    menuFila, cerrarMenu, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;

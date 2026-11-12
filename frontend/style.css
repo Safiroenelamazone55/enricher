@@ -21266,3 +21266,14 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .lm-fix-hd .lm-fix-seg, .lm-fix-hd .lm-tsec-h { flex: 1 1 auto; margin: 0; min-width: 0; }
 .lm-fix-kb { flex: none; width: 40px; border: 1px solid #ECE9E4; background: #fff; color: #5C6862; cursor: pointer; display: grid; place-items: center; padding: 0; }
 .lm-fix-kb:hover { background: #F1EFEB; color: #14211B; }
+
+/* Inicios de cliente: ruedita de opciones al final de cada fila */
+.ini-tbl th.ini-gearc, .ini-tbl td.ini-gearc { position: sticky; right: 0; width: 44px; min-width: 44px; padding: 4px 8px; text-align: center; background: var(--surface); box-shadow: -8px 0 8px -8px rgba(20,33,27,.12); }
+.ini-gear { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted, #6B7770); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s; }
+.ini-gear:hover { background: var(--surface-2, #F1F4F2); color: var(--text, #14211B); }
+.ini-gmenu { position: fixed; z-index: 10000; min-width: 210px; padding: 6px; background: var(--surface, #fff); border: 1px solid var(--border2, #E3E8E5); border-radius: 12px; box-shadow: 0 12px 32px rgba(20,33,27,.16); }
+.ini-gm { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; background: transparent; border-radius: 8px; font: inherit; font-size: .85rem; color: var(--text, #14211B); cursor: pointer; }
+.ini-gm:hover { background: var(--surface-2, #F1F4F2); }
+.ini-gm--bad { color: #B42318; }
+.ini-gsep { height: 1px; margin: 5px 4px; background: var(--border2, #E3E8E5); }
+.ini-gl { padding: 4px 12px 2px; font-size: .7rem; color: var(--text-muted, #6B7770); }
