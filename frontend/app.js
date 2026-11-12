@@ -43612,7 +43612,7 @@ const PlantillasModule = (() => {
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
     } else if (g.t.tipo === 'propuesta2') {
       p.dev = p.dev || {};
-      if (p.dev.cliente_ideal == null) p.dev.cliente_ideal = 'Tenemos en cuenta lo aprendido en proyectos anteriores, pero no lo damos por hecho: lo validamos con inteligencia comercial y definimos tu cliente ideal (ICP) contigo.';   // de fábrica: se ajusta con lo que cuente el cliente; si se borra, queda vacío
+      if (!p.dev._icp_set) { if (!String(p.dev.cliente_ideal || '').trim()) p.dev.cliente_ideal = 'Tenemos en cuenta lo aprendido en proyectos anteriores, pero no lo damos por hecho: lo validamos con inteligencia comercial y definimos tu cliente ideal (ICP) contigo.'; p.dev._icp_set = true; }   // de fábrica (también cuando llega vacío del servidor); si luego lo borras, se respeta
       const dvf = (k, l, type, ph, opt) => `<label class="pl-l">${l}${opt ? ' <span class="pl-opt">(opcional)</span>' : ''}</label><input class="pl-in" type="${type || 'text'}" ${type === 'number' ? 'step="any" min="0"' : ''} value="${E(p.dev[k] == null ? '' : p.dev[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">`;
       const dvt = (k, l, ph) => `<label class="pl-l">${l}</label><textarea class="pl-in" rows="2" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">${E(p.dev[k] || '')}</textarea>`;
       const dvc = (k, l) => `<label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" ${p.dev[k] ? 'checked' : ''} onchange="PlantillasModule.setDevB('${k}',this.checked)"> ${l}</label>`;
@@ -43800,7 +43800,7 @@ const PlantillasModule = (() => {
   }
   function set(k, v) { _gen.p[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
   // ── Propuesta comercial v2: campos propios, cálculos y reglas ──
-  function setDev(k, v) { const p = _gen.p; p.dev = p.dev || {}; p.dev[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  function setDev(k, v) { const p = _gen.p; p.dev = p.dev || {}; p.dev[k] = v; if (k === 'cliente_ideal') p.dev._icp_set = true; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
   function setDevB(k, on) { setDev(k, !!on); if (k === 'cierre_sin_dato') _redrawKeep(); }
   function setCierre10(v) { setDev('cierre_pct', v === '' ? null : Math.min(10, Math.max(0, parseFloat(v) || 0)) * 10); }
   const _nf = (n, d) => { if (n == null || !isFinite(n)) return '—'; const x = Math.abs(n).toFixed(d == null ? (Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1) : d).split('.'); return (n < 0 ? '-' : '') + x[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (x[1] ? ',' + x[1] : ''); };
