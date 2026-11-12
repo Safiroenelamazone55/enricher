@@ -41,7 +41,7 @@ function cleanDev(d) {
   o.usar_supuesto_horas = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
-  o.estilo_oscuro = d.estilo_oscuro === true || d.estilo_oscuro === 'true';   // por defecto la propuesta es clara y sobria; con esto se vuelven a usar las diapositivas oscuras
+  o.estilo_sobrio = d.estilo_sobrio === true || d.estilo_sobrio === 'true';   // opcional: diapositivas claras y lisas, sin fondos oscuros (por defecto se usa el diseño original)
   return o;
 }
 
@@ -407,7 +407,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
 <div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
 <div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ ${x('Presentar', 'Present', 'Apresentar', 'Presenta')}</button></div></div>
-${S.map((sec, i) => (i === 0 || d.estilo_oscuro ? sec : sec.replace(/class="slide( close)? s-dark"/, 'class="slide$1 s-light"').replace(/data-th="dark"/, 'data-th="light"').replace(/<div class="bgph"[^>]*><\/div>/g, '').replace(/<div class="bg">(?:<div class="[^"]*"><\/div>)+<\/div>/g, ''))).join('\n')}
+${S.map((sec, i) => (i === 0 || !d.estilo_sobrio ? sec : sec.replace(/class="slide( close)? s-dark"/, 'class="slide$1 s-light"').replace(/data-th="dark"/, 'data-th="light"').replace(/<div class="bgph"[^>]*><\/div>/g, '').replace(/<div class="bg">(?:<div class="[^"]*"><\/div>)+<\/div>/g, ''))).join('\n')}
 <button class="arr l" id="prev" aria-label="←">‹</button><button class="arr r" id="next" aria-label="→">›</button>
 <div class="nav">${dots}</div>
 </div></div>
