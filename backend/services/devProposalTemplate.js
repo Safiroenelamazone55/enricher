@@ -378,7 +378,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
   S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">06 · ${x('Alcance', 'Scope', 'Escopo', 'Ambito')}</div>
 <h2 class="rv" style="--d:1">${x('Qué incluye y <em>qué no.</em>', 'What is included and <em>what is not.</em>', 'O que inclui e <em>o que não.</em>', 'Cosa include e <em>cosa no.</em>')}</h2>
 <div class="terms"><div class="in rv" style="--d:2"><h3>${x('Incluye', 'Included', 'Inclui', 'Incluso')}</h3><ul>${li_(inc.map(esc))}</ul></div><div class="ex rv" style="--d:3"><h3>${x('No incluye', 'Not included', 'Não inclui', 'Non incluso')}</h3><ul>${li_(exc.map(esc))}</ul></div></div>
-<p class="disc rv" style="--d:4"><b>${x('No garantizamos respuestas, reuniones ni ventas; el cliente lleva las reuniones, propuestas y cierre.', 'We do not guarantee replies, meetings or sales; the client handles the meetings, proposals and closing.', 'Não garantimos respostas, reuniões nem vendas; o cliente conduz as reuniões, propostas e o fechamento.', 'Non garantiamo risposte, incontri né vendite; il cliente gestisce gli incontri, le proposte e la chiusura.')}</b></p></div></section>`);
+</div></section>`);
 
   // 8 · quién hace qué
   const tu = [
