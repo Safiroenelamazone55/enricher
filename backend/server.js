@@ -8009,7 +8009,7 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.to_email, m.estado,
              m.error, m.sent_at, m.replied_at, m.created_at, m.scheduled_at,
-             k.nombre, k.apellido, s.nombre AS seq_nombre, s.timezone AS seq_timezone,
+             k.nombre, k.apellido, s.nombre AS seq_nombre, s.timezone AS seq_timezone, COALESCE(s.outbound_client_id, k.outbound_client_id) AS outbound_client_id,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')  AS opens,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click') AS clicks
         FROM lm_messages m
@@ -8026,6 +8026,23 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
     }
     res.json(rows);
   } catch (err) { console.error('[lm-msgs] GET', err.message); res.status(500).json({ error: 'Error al cargar mensajes' }); }
+});
+
+// Envíos de WhatsApp de TODAS las secuencias (pestaña Envíos del Inbox): cola con ritmo + enviados.
+app.get('/api/lm/wa-sends', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.contact_id, m.sequence_id, m.estado, m.scheduled_at, m.ts, m.ultimo_error, LEFT(m.texto, 160) AS texto,
+             k.nombre, k.apellido, COALESCE(NULLIF(k.movil,''), k.telefono, '') AS telefono,
+             s.timezone AS seq_timezone, s.nombre AS seq_nombre, COALESCE(s.outbound_client_id, k.outbound_client_id) AS outbound_client_id
+        FROM wa_messages m
+        JOIN wa_connections c ON c.id = m.connection_id AND c.user_id = $1
+        LEFT JOIN sequences s ON s.id = m.sequence_id AND s.user_id = $1
+        LEFT JOIN lm_contacts k ON k.id = m.contact_id
+       WHERE m.from_me AND m.via_cola AND m.estado IN ('programado','enviando','error_programado','enviado')
+       ORDER BY m.ts DESC LIMIT 400`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-wa-sends-all] GET', err.message); res.status(500).json({ error: 'Error al cargar envíos de WhatsApp' }); }
 });
 
 // Envíos de WhatsApp de una secuencia (cola con ritmo + enviados), para la pestaña Envíos junto a los emails.

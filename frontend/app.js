@@ -25145,39 +25145,7 @@ ${rhead}${foot}
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
       if (!_seqMsgs.length && !(_seqWa || []).length) return `<div class="cp-empty2" style="padding:22px">Aún no hay envíos en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
       const _sq = (_sequences || []).find(x => x.id === id) || {};
-      const _tzs = _sq.timezone || '';
-      const _cityS = String(_tzs).split('/').pop().replace(/_/g, ' ');
-      const _waItems = (_seqWa || []).map(w => {
-        const q = w.estado === 'programado' || w.estado === 'enviando';
-        return { _ch: 'whatsapp', id: 'wa' + w.id, contact_id: w.contact_id, nombre: w.nombre, apellido: w.apellido, to_email: w.telefono ? '+' + String(w.telefono).replace(/^\+/, '') : '', asunto: String(w.texto || '').replace(/\s+/g, ' ').slice(0, 90) + (String(w.texto || '').length > 90 ? '…' : ''),
-          estado: q ? 'approved' : (w.estado === 'enviado' ? 'sent' : 'failed'), sent_at: w.estado === 'enviado' ? w.ts : null, created_at: w.ts, est_send_at: q ? w.scheduled_at : null,
-          seq_timezone: w.seq_timezone, error: w.estado === 'error_programado' ? w.ultimo_error : '', opens: 0, clicks: 0, seq_nombre: '' };
-      });
-      const _all = [..._seqMsgs.map(m => { m._ch = 'email'; return m; }), ..._waItems];
-      const _byEst = (a, b) => new Date(a.est_send_at) - new Date(b.est_send_at);
-      _all.forEach(m => { m._pos = 0; });
-      ['email', 'whatsapp'].forEach(ch => _all.filter(m => m._ch === ch && m.estado === 'approved' && m.est_send_at).sort(_byEst).forEach((m, i) => { m._pos = i + 1; }));
-      const _dk = m => new Date(m.est_send_at).toLocaleDateString('en-CA', _tzs ? { timeZone: _tzs } : {});
-      const _dl = m => new Date(m.est_send_at).toLocaleDateString('es-PE', _tzs ? { timeZone: _tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
-      const _stK = m => m.estado === 'approved' ? 'queued' : m.estado === 'awaiting' ? 'awaiting' : m.estado === 'sent' ? 'sent' : m.estado === 'replied' ? 'replied' : 'failed';
-      const _queued = _all.filter(m => m.estado === 'approved' && m.est_send_at);
-      const _days = []; _queued.slice().sort(_byEst).forEach(m => { const k = _dk(m); if (!_days.find(d => d.k === k)) _days.push({ k, l: _dl(m), n: 0 }); _days.find(d => d.k === k).n++; });
-      const _chip = (k, v, lbl, n) => n ? `<button type="button" class="lm-q-chip${_envF[k] === v ? ' is-on' : ''}" onclick="LeadManagerModule.envFilter('${k}','${v}')">${lbl} <b>${n}</b></button>` : '';
-      const _cnt = f => _all.filter(f).length;
-      const _stOpts = [['queued', 'En cola'], ['awaiting', 'Por aprobar'], ['sent', 'Enviados'], ['replied', 'Respondieron'], ['failed', 'Fallaron']];
-      const _items = _all.filter(m => (!_envF.canal || m._ch === _envF.canal) && (!_envF.estado || _stK(m) === _envF.estado) && (!_envF.dia || (m.est_send_at && _dk(m) === _envF.dia)));
-      const _iq = _items.filter(m => m.estado === 'approved' && m.est_send_at).sort(_byEst);
-      const _ir = _items.filter(m => !_iq.includes(m)).sort((a, b) => new Date(b.sent_at || b.created_at || 0) - new Date(a.sent_at || a.created_at || 0));
-      const _sel = (k, ph, opts) => `<select class="lm-q-sel${_envF[k] ? ' is-on' : ''}" onchange="LeadManagerModule.envFilter('${k}',this.value)"><option value="">${ph}</option>${opts.filter(o => o[2]).map(([v, l, n]) => `<option value="${esc(v)}"${_envF[k] === v ? ' selected' : ''}>${l} (${n})</option>`).join('')}</select>`;
-      const _sum = `<div class="lm-q-sum">
-        <div class="lm-q-sum__r"><b class="lm-q-sum__t">${_queued.length} en cola</b>
-          ${_sel('canal', 'Canal: todos', [['email', 'Email', _cnt(m => m._ch === 'email')], ['whatsapp', 'WhatsApp', _cnt(m => m._ch === 'whatsapp')]])}
-          ${_sel('dia', 'Día de envío: todos', _days.map(d => [d.k, esc(d.l), d.n]))}
-          ${_sel('estado', 'Estado: todos', _stOpts.map(([v, l]) => [v, l, _cnt(m => _stK(m) === v)]))}
-          ${(_envF.canal || _envF.dia || _envF.estado) ? `<button type="button" class="lm-q-clr" onclick="LeadManagerModule.envFilter('canal','');LeadManagerModule.envFilter('dia','');LeadManagerModule.envFilter('estado','')">Limpiar</button>` : ''}</div>
-        <div class="lm-q-sum__n">Salen en este orden, según el límite diario${_sq.daily_limit > 0 ? ` (${_sq.daily_limit} por día)` : ''}, la ventana horaria y el tope del buzón.${_cityS ? ` Horarios en hora de ${esc(_cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ''} LinkedIn es manual: se gestiona desde Tareas.</div></div>`;
-      const _rows = [..._iq, ..._ir].map(m => _msgRow(m)).join('') || `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--muted)">Sin envíos con estos filtros</td></tr>`;
-      return `${_sum}<div class="clients-table-wrap"><table class="clients-table lm-dt lm-dt--env"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_rows}</tbody></table></div>`;
+      return _envHtml({ msgs: _seqMsgs, wa: _seqWa, F: _envF, fn: "envFilter", tzs: _sq.timezone || "", limit: _sq.daily_limit });
     }
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null || _seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
@@ -30153,7 +30121,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibWrapHtml() {
     const n = _ibCounts();
     const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
-    const TABS = [['todos', 'Todos', n.todos], ['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
+    const TABS = [['todos', 'Todos', n.todos], ['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb], ['envios', 'Envíos', 0]];
     return `<div id="ibx-wrap">
       <div class="ibx-top">
         <div class="ibx-tabs">${TABS.map(([k, l, c]) => `<button class="ibx-tab${_ibTab === k ? ' active' : ''}${k === 'reb' && c ? ' ibx-tab--warn' : ''}" onclick="LeadManagerModule.ibTab('${k}')">${l}${c ? ` <span class="ibx-tab__n">${c}</span>` : ''}</button>`).join('')}</div>
@@ -30168,7 +30136,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibToggleEnvVista()">${_ibEnvShowTable ? '💬 Ver conversaciones' : '📊 Ver tabla de tracking'}</button>` : ''}
         <button class="btn btn--primary btn--sm ibx-newmail-btn" title="Nuevo correo" onclick="LeadManagerModule.composeAbrir()">＋</button>
       </div>
-      ${_ibTab === 'env' && _ibEnvShowTable
+      ${_ibTab === 'envios'
+        ? `<div id="ibx-envios" style="padding:10px 4px">${_ibEnvHtml()}</div>`
+        : _ibTab === 'env' && _ibEnvShowTable
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
         : `<div class="ibx-grid">
              <div class="ibx-list">${_ibListHtml()}</div>
@@ -30196,7 +30166,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _ibMsgIdx = Math.max(0, (_ibThread.messages || []).length - 1);
     if (_section === 'inbox' && _ibActive === cid) _ibPaint();
   }
-  function ibTab(k) { _ibTab = k; _ibEnvShowTable = false; _ibPaint(); }
+  function ibTab(k) { _ibTab = k; _ibEnvShowTable = false; _ibPaint(); if (k === 'envios') _ibEnvLoad(); }
   function ibToggleEnvVista() { _ibEnvShowTable = !_ibEnvShowTable; if (_ibEnvShowTable && _lmMsgs === null) _loadLmMsgs(); _ibPaint(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
   function ibDisp(v) { _ibDisp = v || ''; _ibPaint(); }
@@ -39149,6 +39119,59 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _lmMsgs = null;       // mensajes enviados (inbox real, lazy)
   let _seqMsgs = null;      // mensajes de la secuencia activa (tab Envíos, lazy)
   let _seqWa = [];          // envíos de WhatsApp de la secuencia activa (tab Envíos)
+  // Vista de Envíos compartida: pestaña Envíos de una secuencia y pestaña Envíos del Inbox (todas las secuencias).
+  // o = { msgs, wa, F (filtros), fn (función de filtro en LeadManagerModule), tzs (zona para agrupar días), limit, seqOpts }
+  function _envHtml(o) {
+    const { msgs, wa, F, fn, tzs, limit } = o;
+    const cityS = String(tzs || '').split('/').pop().replace(/_/g, ' ');
+    const waItems = (wa || []).map(w => {
+      const q = w.estado === 'programado' || w.estado === 'enviando';
+      return { _ch: 'whatsapp', id: 'wa' + w.id, contact_id: w.contact_id, sequence_id: w.sequence_id, outbound_client_id: w.outbound_client_id, nombre: w.nombre, apellido: w.apellido, to_email: w.telefono ? '+' + String(w.telefono).replace(/^\+/, '') : '', asunto: String(w.texto || '').replace(/\s+/g, ' ').slice(0, 90) + (String(w.texto || '').length > 90 ? '…' : ''),
+        estado: q ? 'approved' : (w.estado === 'enviado' ? 'sent' : 'failed'), sent_at: w.estado === 'enviado' ? w.ts : null, created_at: w.ts, est_send_at: q ? w.scheduled_at : null,
+        seq_timezone: w.seq_timezone, error: w.estado === 'error_programado' ? w.ultimo_error : '', opens: 0, clicks: 0, seq_nombre: w.seq_nombre || '' };
+    });
+    const all = [...msgs.map(m => { m._ch = 'email'; return m; }), ...waItems];
+    const byEst = (a, b) => new Date(a.est_send_at) - new Date(b.est_send_at);
+    all.forEach(m => { m._pos = 0; });
+    ['email', 'whatsapp'].forEach(ch => all.filter(m => m._ch === ch && m.estado === 'approved' && m.est_send_at).sort(byEst).forEach((m, i) => { m._pos = i + 1; }));
+    const dk = m => new Date(m.est_send_at).toLocaleDateString('en-CA', tzs ? { timeZone: tzs } : {});
+    const dl = m => new Date(m.est_send_at).toLocaleDateString('es-PE', tzs ? { timeZone: tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
+    const stK = m => m.estado === 'approved' ? 'queued' : m.estado === 'awaiting' ? 'awaiting' : m.estado === 'sent' ? 'sent' : m.estado === 'replied' ? 'replied' : 'failed';
+    const queued = all.filter(m => m.estado === 'approved' && m.est_send_at);
+    const days = []; queued.slice().sort(byEst).forEach(m => { const k = dk(m); if (!days.find(d => d.k === k)) days.push({ k, l: dl(m), n: 0 }); days.find(d => d.k === k).n++; });
+    const cnt = f => all.filter(f).length;
+    const stOpts = [['queued', 'En cola'], ['awaiting', 'Por aprobar'], ['sent', 'Enviados'], ['replied', 'Respondieron'], ['failed', 'Fallaron']];
+    const items = all.filter(m => (!F.canal || m._ch === F.canal) && (!F.estado || stK(m) === F.estado) && (!F.dia || (m.est_send_at && dk(m) === F.dia)) && (!F.seq || String(m.sequence_id) === String(F.seq)));
+    const iq = items.filter(m => m.estado === 'approved' && m.est_send_at).sort(byEst);
+    const ir = items.filter(m => !iq.includes(m)).sort((a, b) => new Date(b.sent_at || b.created_at || 0) - new Date(a.sent_at || a.created_at || 0));
+    const sel = (k, ph, opts) => `<select class="lm-q-sel${F[k] ? ' is-on' : ''}" onchange="LeadManagerModule.${fn}('${k}',this.value)"><option value="">${ph}</option>${opts.filter(x => x[2]).map(([v, l, n]) => `<option value="${esc(String(v))}"${String(F[k]) === String(v) ? ' selected' : ''}>${l} (${n})</option>`).join('')}</select>`;
+    const clr = ['canal', 'dia', 'estado', 'seq'].filter(k => F[k] !== undefined).map(k => `LeadManagerModule.${fn}('${k}','')`).join(';');
+    const sum = `<div class="lm-q-sum">
+      <div class="lm-q-sum__r"><b class="lm-q-sum__t">${queued.length} en cola</b>
+        ${sel('canal', 'Canal: todos', [['email', 'Email', cnt(m => m._ch === 'email')], ['whatsapp', 'WhatsApp', cnt(m => m._ch === 'whatsapp')]])}
+        ${o.seqOpts ? sel('seq', 'Secuencia: todas', o.seqOpts.map(s => [s.id, esc(s.nombre), cnt(m => String(m.sequence_id) === String(s.id))])) : ''}
+        ${sel('dia', 'Día de envío: todos', days.map(d => [d.k, esc(d.l), d.n]))}
+        ${sel('estado', 'Estado: todos', stOpts.map(([v, l]) => [v, l, cnt(m => stK(m) === v)]))}
+        ${(F.canal || F.dia || F.estado || F.seq) ? `<button type="button" class="lm-q-clr" onclick="${clr}">Limpiar</button>` : ''}</div>
+      <div class="lm-q-sum__n">Salen en este orden, según el límite diario${limit > 0 ? ` (${limit} por día)` : ''}, la ventana horaria y el tope del buzón.${cityS ? ` Horarios en hora de ${esc(cityS)} (la del prospecto); debajo de cada uno, tu hora.` : ' Cada horario va en la hora del prospecto; debajo, tu hora.'} LinkedIn es manual: se gestiona desde Tareas.</div></div>`;
+    const rows = [...iq, ...ir].map(m => _msgRow(m)).join('') || `<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--muted)">Sin envíos con estos filtros</td></tr>`;
+    return `${sum}<div class="clients-table-wrap"><table class="clients-table lm-dt lm-dt--env"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  // Envíos del Inbox (todas las secuencias de los clientes)
+  let _ibEnv = null, _ibEnvF = { canal: '', dia: '', estado: '', seq: '' };
+  async function _ibEnvLoad() {
+    try { const r = await apiFetch(API + '/lm/messages?limit=500'); const m = (r && r.ok) ? await r.json() : []; let w = []; try { const r2 = await apiFetch(API + '/lm/wa-sends'); w = (r2 && r2.ok) ? await r2.json() : []; } catch (_) {} _ibEnv = { msgs: m, wa: w }; } catch (_) { _ibEnv = { msgs: [], wa: [] }; }
+    if (_section === 'inbox' && _ibTab === 'envios') _ibPaint();
+  }
+  function ibEnvFilter(k, v) { _ibEnvF[k] = (_ibEnvF[k] === v ? '' : v); _ibPaint(); }
+  function _ibEnvHtml() {
+    if (_ibEnv === null) return '<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>';
+    const okC = x => !_ibCli || Number(x.outbound_client_id) === _ibCli;
+    const msgs = _ibEnv.msgs.filter(okC), wa = _ibEnv.wa.filter(okC);
+    const seqs = (_sequences || []).filter(s => !_ibCli || Number(s.outbound_client_id) === _ibCli);
+    if (!msgs.length && !wa.length) return '<div class="cp-empty2" style="padding:22px">Sin envíos para mostrar.</div>';
+    return _envHtml({ msgs, wa, F: _ibEnvF, fn: 'ibEnvFilter', tzs: '', seqOpts: seqs });
+  }
   let _envF = { canal: '', dia: '', estado: '' };   // filtros de la pestaña Envíos
   function envFilter(k, v) { _envF[k] = (_envF[k] === v ? '' : v); const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); }
 
@@ -40322,7 +40345,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
