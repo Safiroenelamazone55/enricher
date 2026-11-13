@@ -20714,7 +20714,7 @@ button.lm-q-chip { font: inherit; font-size: .76rem; cursor: pointer; } button.l
 .pl-wrap .pl-card { padding: 14px 16px 14px; }
 
 /* ── Plantillas: contenedor a todo el ancho (como Operaciones), selector Galería/Lista y miniaturas del documento ── */
-.content-wrap:has(> #pane-herramientas.active), .content-wrap:has(> #pane-plantillas.active) { max-width: none; padding-left: 28px; padding-right: 28px; }
+.content-wrap:has(> #pane-herramientas.active), .content-wrap:has(> #pane-plantillas.active), .content-wrap:has(> #pane-inicios.active) { max-width: none; padding-left: 28px; padding-right: 28px; }
 .pl-seg { display: inline-flex; border: 1px solid var(--border2); border-radius: 4px; overflow: hidden; background: var(--surface); }
 .pl-seg button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text2); cursor: pointer; }
 .pl-seg button + button { border-left: 1px solid var(--border2); }
@@ -21277,3 +21277,5 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ini-gm--bad { color: #B42318; }
 .ini-gsep { height: 1px; margin: 5px 4px; background: var(--border2, #E3E8E5); }
 .ini-gl { padding: 4px 12px 2px; font-size: .7rem; color: var(--text-muted, #6B7770); }
+/* Inicios de cliente: ocupa todo el ancho como el resto de módulos anchos */
+.ini-wrap { max-width: none; margin: 0; padding: 4px 0 60px; }
