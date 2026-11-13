@@ -183,6 +183,23 @@ const InicioModule = (() => {
   }
   async function _url(id) { const f = await _j('/inicios/' + id); return f.url; }
   async function copiarFila(id) { try { await copiar(await _url(id), 'Enlace copiado'); try { await _post(`/inicios/${id}/marcar-enviado`); } catch (_) {} cargar(); } catch (e) { msg(e.message, 'error'); } }
+  // ══ Configuración → Integraciones: envío principal ══
+  async function cargarEnvio() {
+    const host = $('cfg-envio-body'); if (!host) return;
+    try {
+      const d = await _j('/workspace/envio');
+      const sel = (id, arr, cur, vacio) => `<select class="form-input" id="${id}" style="max-width:420px" onchange="InicioModule.guardarEnvio()"><option value="">${vacio}</option>${arr.map(x => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${E(x.label)}</option>`).join('')}</select>`;
+      host.innerHTML = `<div class="ini-cfg"><label>Buzón de correo principal</label>${sel('cfg-envio-bz', d.buzones, d.buzon_id, 'Sin elegir (se propone el primero)')}
+        <label>WhatsApp principal</label>${sel('cfg-envio-wa', d.lineas, d.wa_id, 'Sin elegir (se propone el primero)')}
+        <p class="fin-cfg-hint" id="cfg-envio-msg">Es el que se propone al enviar formularios y recordatorios a tus clientes; siempre puedes cambiarlo en cada envío.</p></div>`;
+    } catch (e) { host.textContent = e.message; }
+  }
+  async function guardarEnvio() {
+    const m = $('cfg-envio-msg');
+    try { await _post('/workspace/envio', { buzon_id: $('cfg-envio-bz').value || null, wa_id: $('cfg-envio-wa').value || null }, 'PUT'); if (m) { m.textContent = 'Guardado ✓'; setTimeout(cargarEnvio, 1200); } }
+    catch (e) { if (m) m.textContent = e.message; }
+  }
+
   // ══ Enviar el formulario / recordar lo pendiente (correo o WhatsApp, plantilla ES/EN editable) ══
   let _msg = { canal: 'correo', idioma: '', lista: true, remitente: '' };
   async function msgFila(id, tipo, nuevo) {
@@ -327,6 +344,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    msgFila, _msgCanal, _msgRem, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    cargarEnvio, guardarEnvio, msgFila, _msgCanal, _msgRem, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;

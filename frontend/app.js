@@ -40493,7 +40493,7 @@ const WorkspaceModule = (() => {
       .forEach(b => b.classList.toggle('active', b.dataset.sec === sec));
     document.querySelectorAll('#pane-mgmt-empresa .cfg__sec')
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
-    if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
+    if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); if (typeof InicioModule !== 'undefined') InicioModule.cargarEnvio(); }
     if (sec === 'uso') _loadUsage();
     if (sec === 'permisos' && typeof PermsUI !== 'undefined') PermsUI.load();
     if (sec === 'agentes' && typeof AgentesModule !== 'undefined') AgentesModule.load();

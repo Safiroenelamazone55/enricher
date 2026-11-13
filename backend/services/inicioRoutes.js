@@ -55,6 +55,9 @@ async function init(pool) {
     outbound_client_id INTEGER, portal_account_id INTEGER, portal_activado_en TIMESTAMPTZ, ultimo_recordatorio TIMESTAMPTZ)`);
   await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS token_enc TEXT');
   // enlace legible: /formulario/<empresa>-<código largo al azar> (el enlace largo antiguo /inicio/<token> sigue funcionando)
+  // envío principal del espacio de trabajo: buzón y línea de WhatsApp desde los que salen los formularios y recordatorios
+  await pool.query('ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS envio_buzon_id INTEGER');
+  await pool.query('ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS envio_wa_id INTEGER');
   await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS slug TEXT');
   // el correo con que se creó al cliente ya no se rellena en el formulario: pasa a una clave interna
   await pool.query("UPDATE inicio_cliente SET prefill = (prefill - 'mailInf') || jsonb_build_object('mailContacto', prefill->>'mailInf') WHERE prefill ? 'mailInf'");
@@ -361,12 +364,13 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   };
   const soloDigitos = t => String(t || '').replace(/[^\d]/g, '');
   async function remitentesDe(req, canal) {
+    let pr = {}; try { const { rows: [w] } = await pool.query('SELECT envio_buzon_id, envio_wa_id FROM workspaces WHERE owner_id=$1', [uidOf(req)]); pr = w || {}; } catch (_) {}
     if (canal === 'wa') {
-      const { rows } = await pool.query(`SELECT id, nombre, numero FROM wa_connections WHERE user_id=$1 AND estado='conectado' ORDER BY id`, [uidOf(req)]);
-      return rows.map(x => ({ id: x.id, label: `${x.nombre}${x.numero ? ' · +' + soloDigitos(x.numero) : ''}` }));
+      const { rows } = await pool.query(`SELECT id, nombre, numero FROM wa_connections WHERE user_id=$1 AND estado='conectado' ORDER BY (id=$2) DESC, id`, [uidOf(req), pr.envio_wa_id || 0]);
+      return rows.map(x => ({ id: x.id, label: `${x.nombre}${x.numero ? ' · +' + soloDigitos(x.numero) : ''}${x.id === pr.envio_wa_id ? ' (principal)' : ''}` }));
     }
-    const { rows } = await pool.query(`SELECT m.id, m.email, c.nombre AS cliente FROM lm_mailboxes m LEFT JOIN outbound_clients c ON c.id=m.outbound_client_id WHERE m.user_id=$1 AND m.estado IN ('conectado','solo_envio') ORDER BY (m.email ILIKE '%novacentrax%') DESC, m.id`, [uidOf(req)]);
-    return rows.map(x => ({ id: x.id, label: x.email + (x.cliente ? ' · ' + x.cliente : '') }));
+    const { rows } = await pool.query(`SELECT m.id, m.email, c.nombre AS cliente FROM lm_mailboxes m LEFT JOIN outbound_clients c ON c.id=m.outbound_client_id WHERE m.user_id=$1 AND m.estado IN ('conectado','solo_envio') ORDER BY (m.id=$2) DESC, (m.email ILIKE '%novacentrax%') DESC, m.id`, [uidOf(req), pr.envio_buzon_id || 0]);
+    return rows.map(x => ({ id: x.id, label: x.email + (x.cliente ? ' · ' + x.cliente : '') + (x.id === pr.envio_buzon_id ? ' (principal)' : '') }));
   }
   app.get('/api/inicios/:id/mensaje', requireAuth, async (req, res) => {
     try {
@@ -381,6 +385,24 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       res.json({ canal, tipo, to, idioma: en ? 'en' : 'es', asunto: pl.asunto, cuerpo: pl.cuerpo, pendientes: pl.pend, enviado: pl.enviado, gracias: !!pl.gracias, vigente: vigente(r),
         remitentes: await remitentesDe(req, canal), cuando: 'inmediato' });
     } catch (e) { console.error('[inicios] mensaje plantilla:', e.message); res.status(500).json({ error: 'No se pudo preparar el mensaje' }); }
+  });
+  // Configuración → Integraciones: elegir el buzón y la línea de WhatsApp principales del espacio
+  app.get('/api/workspace/envio', requireAuth, async (req, res) => {
+    try {
+      const { rows: [w] } = await pool.query('SELECT envio_buzon_id, envio_wa_id FROM workspaces WHERE owner_id=$1', [uidOf(req)]);
+      const bz = await remitentesDe(req, 'correo'), wa = await remitentesDe(req, 'wa');
+      res.json({ buzon_id: (w || {}).envio_buzon_id || null, wa_id: (w || {}).envio_wa_id || null, buzones: bz.map(x => ({ id: x.id, label: x.label.replace(' (principal)', '') })), lineas: wa.map(x => ({ id: x.id, label: x.label.replace(' (principal)', '') })) });
+    } catch (e) { console.error('[inicios] envio:', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
+  });
+  app.put('/api/workspace/envio', requireAuth, async (req, res) => {
+    try {
+      if (req.user.workspace_id) return res.status(403).json({ error: 'Solo el admin puede cambiar el envío principal' });
+      const b = req.body || {}, bz = parseInt(b.buzon_id, 10) || null, wa = parseInt(b.wa_id, 10) || null;
+      if (bz) { const { rows } = await pool.query('SELECT 1 FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [bz, uidOf(req)]); if (!rows.length) return res.status(404).json({ error: 'Ese buzón no existe' }); }
+      if (wa) { const { rows } = await pool.query('SELECT 1 FROM wa_connections WHERE id=$1 AND user_id=$2', [wa, uidOf(req)]); if (!rows.length) return res.status(404).json({ error: 'Esa línea no existe' }); }
+      await pool.query('UPDATE workspaces SET envio_buzon_id=$2, envio_wa_id=$3 WHERE owner_id=$1', [uidOf(req), bz, wa]);
+      res.json({ ok: true });
+    } catch (e) { console.error('[inicios] envio guardar:', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
   });
   simple('enviar-mensaje', async (req, res, r) => {
     if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });

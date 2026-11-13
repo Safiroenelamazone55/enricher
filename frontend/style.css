@@ -21307,3 +21307,6 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 .ini-seg button { border: 0; background: transparent; padding: 6px 16px; border-radius: 8px; font: inherit; font-size: .85rem; cursor: pointer; color: var(--text-muted, #6B7770); }
 .ini-seg button.on { background: var(--surface, #fff); color: var(--text, #14211B); font-weight: 600; box-shadow: 0 1px 3px rgba(20,33,27,.12); }
 .ini-warn { padding: 9px 12px; border-radius: 8px; background: #FEF3E2; color: #8A4B00; font-size: .8rem; }
+
+.ini-cfg { display: grid; gap: 6px; }
+.ini-cfg label { font-size: .8rem; font-weight: 600; margin-top: 6px; }
