@@ -135,8 +135,11 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   app.post('/api/inicio/public/abrir', pub, async (req, res) => {
     try {
       const r = await porToken(req); if (!r) return nada(req, res);
-      if (yaEnviado(r)) return res.json({ enviado: true, ...marca(r) });
-      res.json({ enviado: false, ...marca(r), secciones: SC.publico(), respuestas: respuestasParaCliente(r), secretos: Object.fromEntries(SC.SENSIBLES.map(id => [id, !!(r.respuestas || {})[id]])),
+      // logo y nombre de la empresa del espacio de trabajo (los de «Plantillas → Empresas»), para que el formulario no muestre un logo desactualizado
+      let empresa = null;
+      try { const { rows: [b] } = await pool.query('SELECT nombre, logo_white, logo_color FROM tpl_brands WHERE user_id=$1 ORDER BY id LIMIT 1', [r.user_id]); if (b) empresa = { nombre: b.nombre, logo: b.logo_white || b.logo_color || null }; } catch (_) {}
+      if (yaEnviado(r)) return res.json({ enviado: true, ...marca(r), empresa });
+      res.json({ enviado: false, ...marca(r), empresa, secciones: SC.publico(), respuestas: respuestasParaCliente(r), secretos: Object.fromEntries(SC.SENSIBLES.map(id => [id, !!(r.respuestas || {})[id]])),
         acuerdos: Object.fromEntries(Object.keys(r.acuerdos || {}).map(k => [k, true])), expira_en: r.expira_en });
     } catch (e) { console.error('[inicio] get público:', e.message); res.status(500).json({ error: 'error' }); }
   });

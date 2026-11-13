@@ -216,6 +216,11 @@
       if (!r.ok) return noDisponible();
       const d = await r.json();
       S.lang = d.idioma === 'en' ? 'en' : 'es';
+      if (d.empresa) {   // logo del espacio de trabajo (si lo tiene), en lugar del archivo fijo
+        const im = document.querySelector('.hd img');
+        if (im && d.empresa.logo && /^data:image\//.test(d.empresa.logo)) im.src = d.empresa.logo;
+        if (im && d.empresa.nombre) im.alt = d.empresa.nombre;
+      }
       if (d.enviado) { $('l-es').classList.toggle('on', S.lang === 'es'); $('l-en').classList.toggle('on', S.lang === 'en'); return pantalla('✓', t('doneT'), t('doneP')); }
       S.secs = d.secciones || []; S.vals = d.respuestas || {}; S.acs = d.acuerdos || {}; S.sec = d.secretos || {};
       S.last = JSON.stringify(cuerpo()); paint();
