@@ -46,7 +46,7 @@ const SECCIONES = [
       { id: 'mailProv', tipo: 'select', req: false, es: 'Proveedor del correo', en: 'Mailbox provider',
         opts: [o('google', 'Google Workspace', 'Google Workspace'), o('microsoft', 'Microsoft 365', 'Microsoft 365'), o('otro', 'Otro', 'Other')] },
       { id: 'mailNotas', tipo: 'long', req: false, es: 'Notas del correo', en: 'Mailbox notes', ayuda: T('Verificación en dos pasos, servidor, límites de envío u otro dato útil.', 'Two-step verification, server, sending limits or anything useful.') },
-      { id: 'calendario', tipo: 'url', req: true, es: 'Enlace para agendar reuniones contigo', en: 'Link to book meetings with you', ph: 'https://', ayuda: T('Calendly, Google Calendar u otro.', 'Calendly, Google Calendar or similar.') },
+      { id: 'calendario', tipo: 'url', req: false, es: 'Enlace para agendar reuniones contigo', en: 'Link to book meetings with you', ph: 'https://', ayuda: T('Calendly, Google Calendar u otro.', 'Calendly, Google Calendar or similar.') },
     ] },
   { id: 's4', titulo: T('Quién atiende las reuniones', 'Who takes the meetings'),
     campos: [
