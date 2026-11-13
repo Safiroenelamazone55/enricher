@@ -11,12 +11,12 @@
       prog: 'Campos obligatorios', req: 'Obligatorio', opt: 'Opcional', choose: 'Elige una opción…', send: 'Enviar', sending: 'Enviando…', saved: 'Guardado', saving: 'Guardando…', saveErr: 'No se pudo guardar. Reintentando…', secSaved: 'Guardada de forma segura. Escribe solo si quieres cambiarla.',
       eReq: 'Este campo es obligatorio.', eReqCk: 'Marca esta casilla para continuar.', eEmail: 'Escribe un correo válido (nombre@empresa.com).', eUrl: 'El enlace debe empezar por http:// o https://',
       sum: 'Faltan campos obligatorios. Revisa los marcados en rojo.', sumSrv: 'No se pudo enviar: revisa los campos marcados en rojo.',
-      doneT: 'Recibido', doneP: 'Te escribo en las próximas 48 horas para la reunión de arranque de 30 minutos.', noT: 'Enlace no disponible', noP: 'Este enlace no está disponible. Si crees que es un error, pídeme uno nuevo.', netErr: 'Sin conexión con el servidor. Reintenta en un momento.' },
+      doneT: '¡Gracias, lo recibimos!', doneP: 'Revisamos tus respuestas y, en las próximas 48 horas, te escribimos por el canal que elegiste para confirmar los siguientes pasos.', noT: 'Enlace no disponible', noP: 'Este enlace no está disponible. Si crees que es un error, pídeme uno nuevo.', netErr: 'Sin conexión con el servidor. Reintenta en un momento.' },
     en: { title: 'Start form', intro: 'A few details to start your pilot. It takes about 10 minutes: it saves automatically and you can close the page and come back to this same link anytime.',
       prog: 'Required fields', req: 'Required', opt: 'Optional', choose: 'Choose an option…', send: 'Submit', sending: 'Sending…', saved: 'Saved', saving: 'Saving…', saveErr: 'Could not save. Retrying…', secSaved: 'Saved securely. Type only if you want to change it.',
       eReq: 'This field is required.', eReqCk: 'Tick this box to continue.', eEmail: 'Enter a valid email (name@company.com).', eUrl: 'The link must start with http:// or https://',
       sum: 'Some required fields are missing. Check the ones marked in red.', sumSrv: 'Could not submit: check the fields marked in red.',
-      doneT: 'Received', doneP: 'I will write to you within 48 hours to set up the 30-minute kick-off meeting.', noT: 'Link unavailable', noP: 'This link is not available. If you think this is a mistake, ask me for a new one.', netErr: 'No connection to the server. Please try again in a moment.' },
+      doneT: 'Thank you, we got it!', doneP: 'We will review your answers and, within 48 hours, write to you through the channel you chose to confirm the next steps.', noT: 'Link unavailable', noP: 'This link is not available. If you think this is a mistake, ask me for a new one.', netErr: 'No connection to the server. Please try again in a moment.' },
   };
   const S = { lang: 'es', secs: [], vals: {}, acs: {}, sec: {}, chg: new Set(), shown: new Set(), timer: null, busy: false, last: '' };
   const t = k => TX[S.lang][k];
