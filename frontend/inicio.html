@@ -50,6 +50,10 @@
   .ackmore svg { transition: transform .15s; }
   .ackmore.open svg { transform: rotate(180deg); }
   .ackl { margin-top: 8px; }
+  .dd-btn { width: 100%; min-width: 0; justify-content: space-between; text-align: left; font-weight: 400; padding: 0 14px; }
+  .dd-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-btn.dd-ph span { color: var(--mute, #6B7770); }
+  .geo--dd + textarea { margin-top: 8px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
   .chip { padding: 9px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
   .chip:hover { border-color: var(--pri, #00804C); }
@@ -102,6 +106,6 @@
 <main id="m"><div class="load">…</div></main>
 <div class="save" id="sv" role="status"></div>
 <script src="/inicio_geo.js?v=2"></script>
-<script src="/inicio.js?v=6"></script>
+<script src="/inicio.js?v=7"></script>
 </body>
 </html>

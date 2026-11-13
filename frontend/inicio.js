@@ -67,17 +67,30 @@
     en: ['Monday to Friday, mornings (9:00–13:00)', 'Monday to Friday, afternoons (14:00–18:00)', 'Monday to Friday, all day (9:00–18:00)', 'Tuesday to Thursday, 10:00–13:00', 'Always coordinate first (each meeting is scheduled with you beforehand)'],
   };
   const dispHtml = (id, v, off) => {
-    const L = DISP[S.lang] || DISP.es, custom = (S.dispCustom || (v && !L.includes(v))) ? true : false, cu = S.lang === 'en' ? 'Custom' : 'Personalizado';
-    return `<div class="chips" id="${id}-chips">${L.map((x, i) => `<button type="button" class="chip${x === v ? ' on' : ''}" data-d="${i}">${E(x)}</button>`).join('')}<button type="button" class="chip${custom ? ' on' : ''}" data-d="c">${cu}</button></div>`
-      + `<textarea id="${id}" maxlength="2000" ${off} ${custom ? '' : 'hidden'} placeholder="${E(S.lang === 'en' ? 'Write your days and hours (and time zone)' : 'Escribe tus días y horas (y zona horaria)')}">${E(v)}</textarea>`;
+    const L = DISP[S.lang] || DISP.es, en = S.lang === 'en', custom = !!(S.dispCustom || (v && !L.includes(v)));
+    const cu = en ? 'Custom…' : 'Personalizado…', ph = en ? 'Choose an option…' : 'Elige una opción…';
+    const lab = custom ? (en ? 'Custom' : 'Personalizado') : (v || ph);
+    const caret = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+    return `<div class="geo geo--dd" id="${id}-dd"><button type="button" class="geo__pre dd-btn${lab === ph ? ' dd-ph' : ''}" id="${id}-btn" aria-haspopup="listbox"><span>${E(lab)}</span>${caret}</button>
+      <div class="geo__l" id="${id}-list" role="listbox" hidden>${L.map((x, i) => `<div class="geo__o${!custom && x === v ? ' on' : ''}" role="option" data-d="${i}">${E(x)}</div>`).join('')}<div class="geo__o${custom ? ' on' : ''}" role="option" data-d="c">${cu}</div></div></div>`
+      + `<textarea id="${id}" maxlength="2000" ${off} ${custom ? '' : 'hidden'} placeholder="${E(en ? 'Write your days and hours (and time zone)' : 'Escribe tus días y horas (y zona horaria)')}">${E(v)}</textarea>`;
   };
-  document.addEventListener('click', e => {
-    const b = e.target.closest && e.target.closest('#f-disp-chips .chip'); if (!b) return;
-    const ta = $('f-disp'), L = DISP[S.lang] || DISP.es;
-    if (b.dataset.d === 'c') { S.dispCustom = true; if (L.includes(ta.value)) ta.value = ''; ta.hidden = false; ta.focus(); }
-    else { S.dispCustom = false; ta.value = L[+b.dataset.d]; ta.hidden = true; }
-    [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b));
-    ta.dispatchEvent(new Event('input', { bubbles: true })); ta.dispatchEvent(new Event('change', { bubbles: true }));
+  document.addEventListener('mousedown', e => {
+    const dd = $('f-disp-dd'); if (!dd) return;
+    const btn = e.target.closest && e.target.closest('#f-disp-btn'), opt = e.target.closest && e.target.closest('#f-disp-list .geo__o');
+    const list = $('f-disp-list');
+    if (btn) { e.preventDefault(); list.hidden = !list.hidden; return; }
+    if (opt) {
+      e.preventDefault();
+      const ta = $('f-disp'), L = DISP[S.lang] || DISP.es, en = S.lang === 'en';
+      if (opt.dataset.d === 'c') { S.dispCustom = true; if (L.includes(ta.value)) ta.value = ''; ta.hidden = false; $('f-disp-btn').firstElementChild.textContent = en ? 'Custom' : 'Personalizado'; setTimeout(() => ta.focus(), 0); }
+      else { S.dispCustom = false; ta.value = L[+opt.dataset.d]; ta.hidden = true; $('f-disp-btn').firstElementChild.textContent = ta.value; }
+      $('f-disp-btn').classList.remove('dd-ph');
+      [...list.children].forEach(x => x.classList.toggle('on', x === opt)); list.hidden = true;
+      ta.dispatchEvent(new Event('input', { bubbles: true })); ta.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    if (!dd.contains(e.target)) list.hidden = true;
   });
 
   // ── acuerdos: una sola casilla «acepto» y el detalle plegado (cada acuerdo sigue guardándose por separado) ──
