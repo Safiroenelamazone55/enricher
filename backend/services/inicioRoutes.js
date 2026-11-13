@@ -56,6 +56,8 @@ async function init(pool) {
   await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS token_enc TEXT');
   // enlace legible: /formulario/<empresa>-<código largo al azar> (el enlace largo antiguo /inicio/<token> sigue funcionando)
   await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS slug TEXT');
+  // el correo con que se creó al cliente ya no se rellena en el formulario: pasa a una clave interna
+  await pool.query("UPDATE inicio_cliente SET prefill = (prefill - 'mailInf') || jsonb_build_object('mailContacto', prefill->>'mailInf') WHERE prefill ? 'mailInf'");
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS inicio_cliente_slug ON inicio_cliente (slug)');
   try {
     const { rows: sin } = await pool.query('SELECT id, prefill, respuestas FROM inicio_cliente WHERE slug IS NULL');
@@ -128,6 +130,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   function respuestasParaCliente(r) {
     const o = { ...(r.prefill || {}), ...(r.respuestas || {}) };
     for (const id of SC.SENSIBLES) delete o[id];   // nunca se devuelven al navegador, ni siquiera al dueño del enlace
+    delete o.mailContacto;   // el correo con que creamos al cliente es interno: no se rellena en el formulario
     return o;
   }
   const yaEnviado = r => ['recibido', 'revisado', 'portal'].includes(r.estado);
@@ -243,8 +246,8 @@ function mount(app, { pool, requireAuth, permsSvc }) {
         }
       }
       const prefill = cli
-        ? { empresa: cli.empresa || cli.nombre || '', contacto: cli.nombre || '', mailInf: cli.email || '', web: cli.sitio_web || '', pais: cli.pais_empresa || cli.pais || '', razon: cli.razon_social || cli.empresa || '' }
-        : { empresa: String(b.empresa).trim().slice(0, 200), contacto: String(b.contacto || '').trim().slice(0, 200), mailInf: String(b.correo || '').trim().slice(0, 200) };
+        ? { empresa: cli.empresa || cli.nombre || '', contacto: cli.nombre || '', mailContacto: cli.email || '', web: cli.sitio_web || '', pais: cli.pais_empresa || cli.pais || '', razon: cli.razon_social || cli.empresa || '' }
+        : { empresa: String(b.empresa).trim().slice(0, 200), contacto: String(b.contacto || '').trim().slice(0, 200), mailContacto: String(b.correo || '').trim().slice(0, 200) };
       const pre = { ...prefill }; if (!pre.razon) pre.razon = pre.empresa;
       for (const k of Object.keys(pre)) if (!pre[k]) delete pre[k];
       const idioma = b.idioma === 'en' ? 'en' : 'es'; if (idioma === 'en') pre.idioma = 'en'; else pre.idioma = 'es';
@@ -344,7 +347,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });
     const en = r.idioma === 'en', pend = pendientesDe(r, en), enviado = yaEnviado(r);
     if (enviado && !pend.length) return res.status(409).json({ error: 'El cliente ya envió el formulario y no tiene puntos pendientes' });
-    const to = String((req.body || {}).to || (r.respuestas || {}).mailInf || (r.prefill || {}).mailInf || '').trim();
+    const to = String((req.body || {}).to || (r.respuestas || {}).mailInf || (r.prefill || {}).mailContacto || (r.prefill || {}).mailInf || '').trim();
     if (!SC.EMAIL_RE.test(to)) return res.status(400).json({ error: 'Falta el correo del cliente (escríbelo en el campo o en la ficha)' });
     const url = urlDe(r), pct = SC.progreso(plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }), acuerdosBool(r.acuerdos));
     const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, nombre = String(R.contacto || '').trim().split(/[\s,]+/)[0];
@@ -372,7 +375,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     const nombreDe = (R.contacto || '').split(',')[0].trim();
     let cid = r.cliente_id;
     if (!cid) {   // buscar una existente por correo o empresa antes de crear
-      const { rows: [ex] } = await pool.query(`SELECT id FROM clients WHERE user_id=$1 AND ((LOWER(email)=LOWER($2) AND $2<>'') OR LOWER(empresa)=LOWER($3) OR LOWER(razon_social)=LOWER($3)) ORDER BY id LIMIT 1`, [uid, R.mailInf || '', R.razon || '']);
+      const { rows: [ex] } = await pool.query(`SELECT id FROM clients WHERE user_id=$1 AND ((LOWER(email)=LOWER($2) AND $2<>'') OR LOWER(empresa)=LOWER($3) OR LOWER(razon_social)=LOWER($3)) ORDER BY id LIMIT 1`, [uid, R.mailInf || R.mailContacto || '', R.razon || '']);
       cid = ex ? ex.id : null;
     }
     if (!cid) {
@@ -393,7 +396,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     const p = plano(r.respuestas), v = SC.validar({ ...(r.prefill || {}), ...p }, acuerdosBool(r.acuerdos));
     if (r.estado === 'portal') return res.status(409).json({ error: 'El acceso al portal ya está activo' });
     if (r.estado !== 'revisado' || !v.ok) return res.status(409).json({ error: 'Primero marca el formulario como «Revisado» (con todos los obligatorios completos)' });
-    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req), email = String(R.mailInf || '').trim().toLowerCase();
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req), email = String(R.mailInf || R.mailContacto || '').trim().toLowerCase();
     const portal = require('./portalRoutes');
     const empresa = R.razon || (r.prefill || {}).empresa || 'Cliente';
     let { rows: [oc] } = await pool.query('SELECT id FROM outbound_clients WHERE user_id=$1 AND LOWER(nombre)=LOWER($2) ORDER BY id LIMIT 1', [uid, empresa]);
