@@ -514,4 +514,4 @@ function archivo(brand, p, lang, opts) {
   return `${w} ${(brand && brand.nombre) || 'NovaCentrax'} – ${(p && p.empresa) || (lang === 'en' ? 'Client' : 'Cliente')} – ${d.fecha_propuesta || today()}`;
 }
 
-module.exports = { render, cleanDev, calc, fuga, validate, archivo, REQ, LANGS };
+module.exports = { render, cleanDev, calc, fuga, validate, archivo, REQ, LANGS, fmt, fechaLarga, sumDays, build, ICP_DEFAULT };

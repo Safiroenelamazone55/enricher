@@ -9,6 +9,7 @@ const deck = require('./presentationTemplate');
 const ov = require('./overviewTemplate');
 const ag = require('./agreementTemplate');
 const dv = require('./devProposalTemplate');
+const ad = require('./acuerdoDocTemplate');
 
 const SEEDLOGOS = require('./tplSeedLogos');
 const hexOk = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? v : d);
@@ -267,7 +268,7 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' || t.tipo === 'acuerdo' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
-    if (t.tipo === 'propuesta2' || t.tipo === 'acuerdo') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es', o = t.tipo === 'acuerdo' ? { acuerdo: true } : undefined; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, dl, o), archivo: dv.archivo(b, p, dl, o) }; }
+    if (t.tipo === 'propuesta2' || t.tipo === 'acuerdo') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es', o = t.tipo === 'acuerdo' ? { acuerdo: true } : undefined; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: t.tipo === 'acuerdo' ? ad.render(b, p, dl) : dv.render(b, p, dl, o), archivo: dv.archivo(b, p, dl, o) }; }
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };

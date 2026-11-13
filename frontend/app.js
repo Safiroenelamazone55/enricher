@@ -43333,7 +43333,7 @@ const PlantillasModule = (() => {
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
   const DVL = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };   // idiomas de la propuesta post-llamada
   const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo comercial (PDF para firmar)', pago: 'Métodos de pago', propuesta2: 'Presentación interactiva' };
-  const _isDeck = t => t === 'presentacion' || t === 'propuesta2' || t === 'acuerdo';
+  const _isDeck = t => t === 'presentacion' || t === 'propuesta2';
   const _isDev = t => t === 'propuesta2' || t === 'acuerdo';   // la propuesta post-llamada y su versión para firmar comparten el mismo formulario
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
@@ -43820,14 +43820,6 @@ const PlantillasModule = (() => {
   }
   function _fit() {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
-    if (_gen && _gen.t && _gen.t.tipo === 'acuerdo') {   // propuesta y acuerdo: se ve como un PDF (páginas apiladas, con desplazamiento), no como presentación
-      const W = 1330, avail = Math.max(440, Math.round(window.innerHeight - box.getBoundingClientRect().top - 24)), k = Math.max(0.25, Math.min(1, (box.clientWidth - 4) / W));   // el marco mide 1330 px (el documento se maqueta como página) y se reduce para caber
-      fr.setAttribute('sandbox', 'allow-scripts'); fr.removeAttribute('allow'); fr.removeAttribute('allowfullscreen');
-      fr.style.width = W + 'px'; fr.style.height = Math.round(avail / k) + 'px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${k})`;
-      inn.style.width = Math.round(W * k) + 'px'; inn.style.height = avail + 'px'; fr.onload = null;
-      if (_gen && _gen.html) fr.srcdoc = _gen.html;
-      return;
-    }
     if (_gen && _gen.t && _isDeck(_gen.t.tipo)) {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
       const w = Math.max(320, box.clientWidth - 4), h = Math.round(w * 9 / 16);
       fr.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
@@ -43835,7 +43827,7 @@ const PlantillasModule = (() => {
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
     }
-    if (_gen && _gen.t && (_gen.t.tipo === 'overview')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
+    if (_gen && _gen.t && (_gen.t.tipo === 'overview' || _gen.t.tipo === 'acuerdo')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
       fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
       const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;   // la hoja entera cabe a la vista
       wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0';
