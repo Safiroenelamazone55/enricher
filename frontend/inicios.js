@@ -91,13 +91,10 @@ const InicioModule = (() => {
   async function _nuevoCrear() {
     const cid = parseInt($('ini-nc').value, 10) || null, data = { cliente_id: cid, idioma: $('ini-ni').value };
     try {
-      if (!cid) {
-        const emp = $('ini-ne').value.trim(), con = $('ini-nco').value.trim(), mail = $('ini-nm').value.trim();
+      if (!cid) {   // el servidor crea el cliente en Operaciones (o reutiliza el que ya existe)
+        const emp = $('ini-ne').value.trim(), con = $('ini-nco').value.trim();
         if (!emp && !con) return msg('Escribe la empresa o el nombre del contacto', 'error');
-        let c;
-        try { c = await _post('/mgmt/clients', { nombre: con || emp, empresa: emp, email: mail, tipo: 'cliente' }); }
-        catch (e) { if (e.data && e.data.existing) c = e.data.existing; else throw e; }   // ya existía: se usa ese
-        data.cliente_id = c.id;
+        Object.assign(data, { crear_cliente: true, empresa: emp, contacto: con, correo: $('ini-nm').value.trim() });
       }
       const r = await _post('/inicios', data); mostrarEnlace(r); if (_host && !_f) cargar(); } catch (e) { msg(e.message, 'error'); }
   }

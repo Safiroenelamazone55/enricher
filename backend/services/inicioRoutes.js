@@ -199,8 +199,19 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   // Crear enlace: un enlace por cliente. Si ya hay uno vigente se devuelve; si caducó o se revocó, se emite uno nuevo.
   app.post('/api/inicios', requireAuth, async (req, res) => {
     try {
-      const b = req.body || {}, uid = uidOf(req), cid = parseInt(b.cliente_id, 10) || null;
+      const b = req.body || {}, uid = uidOf(req); let cid = parseInt(b.cliente_id, 10) || null;
       let cli = null;
+      // «Crear cliente nuevo»: se crea (o se reutiliza si ya existe) en Operaciones → Clientes, con el permiso de Inicios (no exige el de Clientes)
+      if (!cid && b.crear_cliente) {
+        const emp = String(b.empresa || '').trim().slice(0, 200), con = String(b.contacto || '').trim().slice(0, 200), mail = String(b.correo || '').trim().toLowerCase().slice(0, 200);
+        if (!emp && !con) return res.status(400).json({ error: 'Escribe la empresa o el nombre del contacto' });
+        const nombre = con || emp;
+        const { rows: [dup] } = mail
+          ? await pool.query("SELECT * FROM clients WHERE user_id=$1 AND LOWER(TRIM(email))=$2 LIMIT 1", [uid, mail])
+          : await pool.query("SELECT * FROM clients WHERE user_id=$1 AND LOWER(TRIM(nombre))=LOWER($2) AND LOWER(TRIM(COALESCE(empresa,'')))=LOWER($3) LIMIT 1", [uid, nombre, emp]);
+        if (dup) cid = dup.id;
+        else { const { rows: [nc] } = await pool.query("INSERT INTO clients (user_id, nombre, empresa, email, estado, tipo) VALUES ($1,$2,$3,$4,'activo','cliente') RETURNING id", [uid, nombre, emp, mail]); cid = nc.id; }
+      }
       if (cid) { const { rows: [c] } = await pool.query('SELECT * FROM clients WHERE id=$1 AND user_id=$2', [cid, uid]); if (!c) return res.status(404).json({ error: 'Cliente no encontrado' }); cli = c; }
       else if (!String(b.empresa || '').trim()) return res.status(400).json({ error: 'Elige un cliente o escribe el nombre de la empresa' });
       if (cid) {
