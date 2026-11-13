@@ -21302,3 +21302,8 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ini-det summary { display: inline; cursor: pointer; color: var(--primary, #1d6ff2); }
 .ini-det ul { margin: 6px 0 0; padding-left: 18px; max-height: 120px; overflow-y: auto; }
 textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
+
+.ini-seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2, #F1F4F2); border-radius: 10px; margin-bottom: 4px; }
+.ini-seg button { border: 0; background: transparent; padding: 6px 16px; border-radius: 8px; font: inherit; font-size: .85rem; cursor: pointer; color: var(--text-muted, #6B7770); }
+.ini-seg button.on { background: var(--surface, #fff); color: var(--text, #14211B); font-weight: 600; box-shadow: 0 1px 3px rgba(20,33,27,.12); }
+.ini-warn { padding: 9px 12px; border-radius: 8px; background: #FEF3E2; color: #8A4B00; font-size: .8rem; }
