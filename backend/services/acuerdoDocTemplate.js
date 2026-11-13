@@ -20,6 +20,8 @@ body{background:#E7EBF1;padding:24px 0}
 .hd .r{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);text-align:right;line-height:1.5}
 .ft{position:absolute;left:64px;right:64px;bottom:30px;display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line);font-size:9.5px;color:var(--mute)}
 .body{position:absolute;left:64px;right:64px;top:96px;bottom:74px;display:flex;flex-direction:column;gap:20px}
+.body>*{flex:0 0 auto}
+#flow{width:794px;margin:0 auto;background:#fff;padding:24px 64px;display:flex;flex-direction:column;gap:20px}
 h2{display:flex;gap:10px;align-items:baseline;font-size:15px;font-weight:800;letter-spacing:-.01em;color:var(--navy);padding-bottom:6px;border-bottom:1px solid var(--line)}
 h2 i{font-style:normal;color:var(--teal);font-weight:800;font-size:13px}
 p,li{font-size:12px;line-height:1.62;color:var(--text)}
@@ -106,15 +108,23 @@ function render(brand, p, langIn) {
       `${m$(piloto)} suddivisi nelle 4 settimane del mese: ${m$d(cuota)} a settimana, da pagare il venerdì della stessa settimana lavorata (settimana lavorata, settimana pagata).`)
     : x(`${m$(piloto)} en un solo pago, para comenzar.`, `${m$(piloto)} in a single payment, to get started.`, `${m$(piloto)} em um único pagamento, para começar.`, `${m$(piloto)} in un unico pagamento, per iniziare.`);
   const navTxt = x('LinkedIn Sales Navigator: US$50/mes con 60 % de descuento, se suma a la factura.', 'LinkedIn Sales Navigator: US$50/month at 60% off, added to the invoice.', 'LinkedIn Sales Navigator: US$50/mês com 60 % de desconto, somado à fatura.', 'LinkedIn Sales Navigator: US$50/mese con il 60 % di sconto, aggiunto alla fattura.');
-  const payInfo = [b.pago_email || mail, b.pago_telefono].filter(Boolean).join(' · ');
+  const payInfo = [b.pago_email, b.pago_telefono].filter(Boolean).join(' · ');
   const bonus = d.bonus_reunion == null ? 100 : d.bonus_reunion, umbral = F(d.umbral_bonus == null ? 3 : d.umbral_bonus, 0);
 
-  // ── firmante de la empresa: el escrito en el documento o el cargado en «Empresas y logos»
-  const f0 = (Array.isArray(b.firmantes) ? b.firmantes : [])[0] || {};
-  const fNom = d.firmante_nombre || f0.nombre || '', fCar = d.firmante_cargo || f0.cargo || '', fImg = imgOk(f0.firma) && !d.firmante_nombre ? f0.firma : '';
+  // ── quién firma por la empresa: uno de los firmantes cargados en «Empresas y logos», todos, o uno escrito a mano
+  const fl = Array.isArray(b.firmantes) ? b.firmantes : [], sel = String(d.firmantes_sel || '');
+  let signers = [];
+  if (sel === 'otro' || (!sel && d.firmante_nombre)) signers = [{ nombre: d.firmante_nombre, cargo: d.firmante_cargo, firma: '' }];
+  else if (sel === 'all') signers = fl;
+  else if (sel) signers = fl.filter(f => f.id === sel);
+  if (!signers.length) signers = fl.length ? [fl[0]] : [{ nombre: '', cargo: '', firma: '' }];
+  const sigBlock = (h, who, cg, img) => `<div><h3>${esc(h)}</h3><div class="who">${esc(who)}</div><div class="cg">${esc(cg)}</div><div class="ln">${img ? `<img alt="" src="${img}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>`;
 
-  const pages = [];
-  const page = (inner, cover) => pages.push({ inner, cover: !!cover });
+  let coverInner = ''; const flow = [];   // la portada es fija; el resto son secciones que se reparten por las hojas según lo que quepa
+  const page = (inner, cover) => {
+    if (cover) { coverInner = inner; return; }
+    String(inner).split(/(?=<div class="sec">)/).map(s => s.trim()).filter(Boolean).forEach(pt => { if (pt.startsWith('<div class="sec">')) flow.push(pt); else if (flow.length) flow[flow.length - 1] += pt; });
+  };
 
   // ── Portada
   page(`<div class="cv"><div class="k">${x('Propuesta y acuerdo comercial', 'Commercial proposal and agreement', 'Proposta e acordo comercial', 'Proposta e accordo commerciale')}</div>
@@ -123,7 +133,7 @@ function render(brand, p, langIn) {
 <div class="meta">
 <div><b>${x('Cliente', 'Client', 'Cliente', 'Cliente')}</b><span>${clLogo ? `<img alt="${esc(empresa)}" src="${clLogo}">` : esc(empresa)}</span></div>
 ${contacto ? `<div><b>${x('Contacto', 'Contact', 'Contato', 'Contatto')}</b><span>${esc(contacto)}${cargo ? ', ' + esc(cargo) : ''}</span></div>` : ''}
-<div><b>${x('Preparado por', 'Prepared by', 'Preparado por', 'Preparato da')}</b><span>${esc(marca)}${mail ? ' · ' + esc(mail) : ''}${web ? ' · ' + esc(web) : ''}</span></div>
+<div><b>${x('Preparado por', 'Prepared by', 'Preparado por', 'Preparato da')}</b><span>${esc(marca)}</span></div>
 <div><b>${x('Fecha', 'Date', 'Data', 'Data')}</b><span>${esc(fechaTxt)}</span></div>
 <div><b>${x('Válida hasta', 'Valid until', 'Válida até', 'Valida fino al')}</b><span>${esc(hasta)}</span></div>
 </div>`, true);
@@ -200,20 +210,27 @@ ${hayV ? sec(fg ? 'C' : 'B', x('Ejemplo con supuestos', 'Example with assumption
   // ── Hoja de firma
   const hoyTxt = '';
   page(`${sec('9', x('Aceptación y firma', 'Acceptance and signature', 'Aceitação e assinatura', 'Accettazione e firma'), `<p>${x(`Las partes aceptan esta propuesta y acuerdo comercial, que incluye la modalidad de pago indicada en la cláusula 6${nav ? ' y el servicio opcional de LinkedIn Sales Navigator' : ''}.`, `The parties accept this commercial proposal and agreement, which includes the payment method set out in clause 6${nav ? ' and the optional LinkedIn Sales Navigator service' : ''}.`, `As partes aceitam esta proposta e acordo comercial, que inclui a forma de pagamento indicada na cláusula 6${nav ? ' e o serviço opcional de LinkedIn Sales Navigator' : ''}.`, `Le parti accettano questa proposta e accordo commerciale, che include la modalità di pagamento indicata nella clausola 6${nav ? ' e il servizio opzionale di LinkedIn Sales Navigator' : ''}.`)}</p>
-<div class="sig" style="margin-top:34px"><div><h3>${esc(marca)}</h3><div class="who">${esc(fNom)}</div><div class="cg">${esc(fCar)}</div><div class="ln">${fImg ? `<img alt="" src="${fImg}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>
-<div><h3>${esc(empresa)}</h3><div class="who">${esc(contacto)}</div><div class="cg">${esc(cargo)}</div><div class="ln"></div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div></div>`)}`);
+<div class="sig" style="margin-top:34px;grid-template-columns:repeat(${signers.length + 1},1fr)">${signers.map(f => sigBlock(marca, f.nombre, f.cargo, imgOk(f.firma) ? f.firma : '')).join('')}${sigBlock(empresa, contacto, cargo, '')}</div>`)}`);
 
-  const N = pages.length, titulo = x('Propuesta y acuerdo comercial', 'Commercial proposal and agreement', 'Proposta e acordo comercial', 'Proposta e accordo commerciale');
-  const html = pages.map((pg, i) => `<section class="page">${pg.cover ? `<div class="hd">${brandH}<span class="r">${esc(titulo)}</span></div>` : `<div class="hd">${brandH}<span class="r">${esc(titulo)}<br>${esc(empresa)}</span></div>`}
-<div class="body"${pg.cover ? ' style="position:static"' : ''}>${pg.cover ? '' : pg.inner}</div>${pg.cover ? pg.inner : ''}
-<div class="ft"><span>${x('Confidencial · preparada para ', 'Confidential · prepared for ', 'Confidencial · preparada para ', 'Riservato · preparata per ')}${esc(empresa)}</span><span>${x('Página', 'Page', 'Página', 'Pagina')} ${i + 1} / ${N}</span></div></section>`).join('\n');
+  const titulo = x('Propuesta y acuerdo comercial', 'Commercial proposal and agreement', 'Proposta e acordo comercial', 'Proposta e accordo commerciale');
+  const hdr = `${brandH}<span class="r">${esc(titulo)}<br>${esc(empresa)}</span>`;
+  const ftr = `<span>${x('Confidencial · preparada para ', 'Confidential · prepared for ', 'Confidencial · preparada para ', 'Riservato · preparata per ')}${esc(empresa)}</span><span class="pn"></span>`;
+  const html = `<section class="page"><div class="hd">${brandH}<span class="r">${esc(titulo)}</span></div>${coverInner}<div class="ft">${ftr}</div></section>
+<div id="flow">${flow.join('\n')}</div>
+<template id="tpl-hd">${hdr}</template><template id="tpl-ft">${ftr}</template>`;
+  const PAG = `(function(){var PG=${JSON.stringify(x('Página', 'Page', 'Página', 'Pagina'))};function run(){var flow=document.getElementById('flow');if(!flow)return;var secs=[].slice.call(flow.children),hd=document.getElementById('tpl-hd').innerHTML,ft=document.getElementById('tpl-ft').innerHTML;
+function np(){var pg=document.createElement('section');pg.className='page';pg.innerHTML='<div class="hd">'+hd+'</div><div class="body"></div><div class="ft">'+ft+'</div>';flow.parentNode.insertBefore(pg,flow);return pg.querySelector('.body')}
+var body=np();secs.forEach(function(s){body.appendChild(s);if(body.scrollHeight>body.clientHeight+1&&body.children.length>1){body.removeChild(s);body=np();body.appendChild(s)}});
+flow.parentNode.removeChild(flow);var all=document.querySelectorAll('.page');[].forEach.call(all,function(p,i){var n=p.querySelector('.pn');if(n)n.textContent=PG+' '+(i+1)+' / '+all.length});
+document.body.classList.add('ready');try{parent.postMessage({acuerdoH:document.documentElement.scrollHeight},'*')}catch(e){}}
+(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(run);addEventListener('load',function(){setTimeout(function(){try{parent.postMessage({acuerdoH:document.documentElement.scrollHeight},'*')}catch(e){}},300)})})();`;
   const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#7C8AA0;--line:#E2E8F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--pr-rgb:${rgb(prim)}}`;
   const title = dv.archivo(b, p, lang, { acuerdo: true });
   return `<!DOCTYPE html>\n<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>${rootVars}${CSS}</style></head><body>
 ${html}
-</body></html>`;
+<script>${PAG}</script></body></html>`;
 }
 
 module.exports = { render };

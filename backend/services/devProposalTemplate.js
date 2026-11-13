@@ -43,7 +43,9 @@ function cleanDev(d) {
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
   o.modalidad_pago = d.modalidad_pago === 'semanal' ? 'semanal' : 'unico';   // «unico»: todo para comenzar · «semanal»: semana trabajada, semana pagada (el viernes de esa semana)
   o.incluir_salesnav = d.incluir_salesnav === true || d.incluir_salesnav === 'true';   // servicio opcional de LinkedIn Sales Navigator
-  o.firmante_nombre = Sx(d.firmante_nombre, 80); o.firmante_cargo = Sx(d.firmante_cargo, 80);   // quién firma por la empresa (si va vacío, el firmante cargado en la empresa)
+  o.firmante_nombre = Sx(d.firmante_nombre, 80); o.firmante_cargo = Sx(d.firmante_cargo, 80);
+  o.firmantes_sel = Sx(d.firmantes_sel, 40);   // '' (el primero de la empresa) · 'all' (todos) · id de un firmante · 'otro' (el escrito a mano)
+  o.pago_template_id = parseInt(d.pago_template_id, 10) || null;   // plantilla «Pagos – …» de la que salen los datos de pago   // quién firma por la empresa (si va vacío, el firmante cargado en la empresa)
   o.diseno_anterior = d.diseno_anterior === true || d.diseno_anterior === 'true';   // por defecto: diseño «Suizo-Estudio»; con esto se usa el anterior
   o.estilo_sobrio = d.estilo_sobrio === true || d.estilo_sobrio === 'true';   // opcional: diapositivas claras y lisas, sin fondos oscuros (por defecto se usa el diseño original)
   return o;

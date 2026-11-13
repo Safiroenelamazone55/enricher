@@ -252,6 +252,13 @@ function mount(app, { pool, requireAuth }) {
     res.json({ ok: true });
   }));
 
+  // «Propuesta y acuerdo comercial»: los datos de pago salen de la plantilla «Pagos – …» elegida (correo y teléfono de cobro de esa persona)
+  async function withPago(req, b, p) {
+    const id = p && p.dev && p.dev.pago_template_id; if (!id) return { ...b, pago_email: '', pago_telefono: '' };
+    const { rows: [t] } = await pool.query("SELECT nombre, defaults FROM tpl_templates WHERE id=$1 AND user_id=$2 AND tipo='pago'", [id, uid(req)]);
+    const d = (t && t.defaults) || {};
+    return { ...b, pago_email: S(d.pagoEmail, 120), pago_telefono: S(d.pagoTel, 60), pago_nombre: t ? t.nombre : '' };
+  }
   // ---- generar
   async function build(req, tplId, params, lang) {
     const { rows: [t] } = await pool.query('SELECT * FROM tpl_templates WHERE id=$1 AND user_id=$2', [tplId, uid(req)]);
@@ -268,7 +275,7 @@ function mount(app, { pool, requireAuth }) {
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
     const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' || t.tipo === 'acuerdo' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
-    if (t.tipo === 'propuesta2' || t.tipo === 'acuerdo') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es', o = t.tipo === 'acuerdo' ? { acuerdo: true } : undefined; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: t.tipo === 'acuerdo' ? ad.render(b, p, dl) : dv.render(b, p, dl, o), archivo: dv.archivo(b, p, dl, o) }; }
+    if (t.tipo === 'propuesta2' || t.tipo === 'acuerdo') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es', o = t.tipo === 'acuerdo' ? { acuerdo: true } : undefined; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: t.tipo === 'acuerdo' ? ad.render(await withPago(req, b, p), p, dl) : dv.render(b, p, dl, o), archivo: dv.archivo(b, p, dl, o) }; }
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };

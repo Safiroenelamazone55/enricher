@@ -43674,7 +43674,18 @@ const PlantillasModule = (() => {
           ${g.t.tipo === 'acuerdo' ? `<label class="pl-l">Modalidad de pago del piloto</label><select class="pl-in" onchange="PlantillasModule.setDev('modalidad_pago',this.value)"><option value="unico"${p.dev.modalidad_pago !== 'semanal' ? ' selected' : ''}>Pago único: todo para comenzar</option><option value="semanal"${p.dev.modalidad_pago === 'semanal' ? ' selected' : ''}>Semana trabajada, semana pagada: en 4 pagos, cada viernes</option></select>
           <p class="hrm-card__meta">Solo cambia lo que dice el documento: con «semanal», el precio del piloto se reparte entre las 4 semanas del mes (por ejemplo 500 → 125 por semana, pagado el viernes de la misma semana).</p>
           ${dvc('incluir_salesnav', 'Añadir el servicio opcional de LinkedIn Sales Navigator (US$50/mes con 60 % de descuento, se suma a la factura)')}` : ''}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
-        ${g.t.tipo === 'acuerdo' ? `<div class="pl-box"><div class="pl-box__t">Quién firma por ${E((_brands.find(x => x.id === g.t.brand_id) || {}).nombre || 'tu empresa')} <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div><p class="hrm-card__meta">Es quien firma por tu empresa. Por el cliente firma el contacto de la sección «Cliente» (nombre y cargo).</p></div>` : ''}
+        ${g.t.tipo === 'acuerdo' ? (() => {
+          const br = _brands.find(x => x.id === g.t.brand_id) || {}, fm = Array.isArray(br.firmantes) ? br.firmantes : [], sel = p.dev.firmantes_sel || (p.dev.firmante_nombre ? 'otro' : (fm[0] ? fm[0].id : ''));
+          const pagos = _tpls.filter(t => t.tipo === 'pago');
+          return `<div class="pl-box"><div class="pl-box__t">Firma y datos de pago</div>
+            <label class="pl-l">Quién firma por ${E(br.nombre || 'tu empresa')}</label>
+            <select class="pl-in" onchange="PlantillasModule.setDev('firmantes_sel',this.value)">${fm.map(f => `<option value="${E(f.id)}"${sel === f.id ? ' selected' : ''}>${E(f.nombre)}${f.cargo ? ' · ' + E(f.cargo) : ''}</option>`).join('')}${fm.length > 1 ? `<option value="all"${sel === 'all' ? ' selected' : ''}>Ambos (${fm.map(f => E((f.nombre || '').split(' ')[0])).join(' y ')})</option>` : ''}<option value="otro"${sel === 'otro' ? ' selected' : ''}>Otra persona (escribir)</option></select>
+            ${sel === 'otro' ? `<div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div>` : ''}
+            <p class="hrm-card__meta">Por el cliente firma el contacto de la sección «Cliente» (nombre y cargo). Los firmantes se cargan en «Empresas y logos».</p>
+            <label class="pl-l">Datos de pago que verá el cliente</label>
+            <select class="pl-in" onchange="PlantillasModule.setDev('pago_template_id',this.value)"><option value="">Sin datos de pago</option>${pagos.map(t => `<option value="${t.id}"${String(p.dev.pago_template_id || '') === String(t.id) ? ' selected' : ''}>${E(t.nombre.replace(/^Pagos\s*[–-]\s*/, ''))}${(t.defaults || {}).pagoEmail ? ' · ' + E(t.defaults.pagoEmail) : ''}</option>`).join('')}</select>
+            <p class="hrm-card__meta">Salen el correo y el teléfono de cobro de esa persona (de sus plantillas «Pagos – …»).</p></div>`;
+        })() : ''}
         <div class="pl-box"><div class="pl-box__t">La fuga de tiempo del fundador <span class="pl-opt">(opcional)</span></div>
           <div class="pl-row3"><div>${dvf('horas_semana_prospeccion', 'Horas a la semana buscando clientes', 'number', 'Ej. 20')}</div><div>${dvf('valor_hora', 'Lo que vale su hora', 'number', 'Ej. 15')}</div><div><label class="pl-l">Esas cifras son</label><select class="pl-in" onchange="PlantillasModule.setDev('horas_origen',this.value)"><option value="supuesto"${p.dev.horas_origen === 'real' ? '' : ' selected'}>Supuesto (estimación)</option><option value="real"${p.dev.horas_origen === 'real' ? ' selected' : ''}>Real (lo dijo el cliente)</option></select></div></div>
           ${dvc('usar_supuesto_horas', 'Usar el supuesto si están vacías (20 h a la semana y 15 por hora, marcado «supuesto»)')}
@@ -43748,6 +43759,10 @@ const PlantillasModule = (() => {
     _tab = 'plantillas'; _gen = null; generar(t.id); await cargarCliente(copyId);
   }
   function fotosSet(on) { _gen.p.fotos = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
+  window.addEventListener('message', e => {   // la «Propuesta y acuerdo» avisa de su altura al repartirse en hojas
+    const fr = $('pl-frame'); if (!fr || !e.data || !e.data.acuerdoH || e.source !== fr.contentWindow) return;
+    const h = Math.round(e.data.acuerdoH) + 20, s = fr._s || 1, inn = $('pl-prev-in'); fr.style.height = h + 'px'; if (inn) inn.style.height = Math.round(h * s) + 'px';
+  });
   window.addEventListener('message', e => {   // «Presentar» dentro de la vista previa: el marco pide pantalla completa y la página lo concede
     const fr = $('pl-frame'); if (!fr || !e.data || !e.data.deckFs || e.source !== fr.contentWindow) return;
     _deckFull(e.data.deckFs === 2 ? false : !(document.fullscreenElement === fr || fr.dataset.ov === '1'));
@@ -43827,12 +43842,22 @@ const PlantillasModule = (() => {
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
     }
-    if (_gen && _gen.t && (_gen.t.tipo === 'overview' || _gen.t.tipo === 'acuerdo')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
+    if (_gen && _gen.t && _gen.t.tipo === 'acuerdo') {   // propuesta y acuerdo: hojas A4 que se reparten solas; el documento avisa de su altura
+      fr.setAttribute('sandbox', 'allow-scripts'); fr.removeAttribute('allow');
+      const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;
+      wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0'; wrap.style.height = Math.round(1159 * s + 20) + 'px'; inn.style.margin = '0 auto';
+      fr._s = s; fr.style.width = W + 'px'; fr.style.height = '1200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
+      inn.style.width = (W * s) + 'px'; inn.style.height = (1200 * s) + 'px'; fr.onload = null;
+      if (_gen && _gen.html) fr.srcdoc = _gen.html;
+      return;
+    }
+    if (_gen && _gen.t && (_gen.t.tipo === 'overview')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
       fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
       const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;   // la hoja entera cabe a la vista
       wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0';
       wrap.style.height = Math.round(1159 * s + 20) + 'px'; inn.style.margin = '0 auto';
       const size = () => { try { const h = fr.contentDocument.documentElement.scrollHeight + 20; fr.style.height = h + 'px'; inn.style.height = (h * s) + 'px'; } catch (_) {} };
+      fr._s = s;
       fr.style.width = W + 'px'; fr.style.height = '1200px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${s})`;
       inn.style.width = (W * s) + 'px'; inn.style.height = (1200 * s) + 'px';
       fr.onload = () => { size(); setTimeout(size, 400); };
@@ -43849,7 +43874,7 @@ const PlantillasModule = (() => {
   }
   function set(k, v) { _gen.p[k] = v; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
   // ── Propuesta comercial v2: campos propios, cálculos y reglas ──
-  function setDev(k, v) { const p = _gen.p; p.dev = p.dev || {}; p.dev[k] = v; if (k === 'cliente_ideal') p.dev._icp_set = true; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
+  function setDev(k, v) { const p = _gen.p; p.dev = p.dev || {}; p.dev[k] = v; if (k === 'firmantes_sel') setTimeout(_redrawKeep, 0); if (k === 'cliente_ideal') p.dev._icp_set = true; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 350); }
   function setDevB(k, on) { setDev(k, !!on); if (k === 'cierre_sin_dato') _redrawKeep(); }
   function setCierre10(v) { setDev('cierre_pct', v === '' ? null : Math.min(10, Math.max(0, parseFloat(v) || 0)) * 10); }
   const _nf = (n, d) => { if (n == null || !isFinite(n)) return '—'; const x = Math.abs(n).toFixed(d == null ? (Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1) : d).split('.'); return (n < 0 ? '-' : '') + x[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (x[1] ? ',' + x[1] : ''); };
