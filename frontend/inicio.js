@@ -52,6 +52,7 @@
     const box = document.querySelector(`.f[data-id="${c.id}"]`); if (!box) return;
     const e = S.shown.has(c.id) ? errDe(c) : '';
     box.classList.toggle('err', !!e); box.querySelector('.em').textContent = e;
+    if (c.tipo === 'check') updAck();
   }
   function progreso() {
     const req = campos().filter(c => c.req); let n = 0;
@@ -79,6 +80,29 @@
     ta.dispatchEvent(new Event('input', { bubbles: true })); ta.dispatchEvent(new Event('change', { bubbles: true }));
   });
 
+  // ── acuerdos: una sola casilla «acepto» y el detalle plegado (cada acuerdo sigue guardándose por separado) ──
+  const ackT = () => (S.lang === 'en'
+    ? { all: 'I have read and accept the pilot terms', more: n => `View the ${n} terms`, less: 'Hide the terms', err: 'Check this box to continue.' }
+    : { all: 'He leído y acepto los acuerdos del piloto', more: n => `Ver los ${n} acuerdos`, less: 'Ocultar los acuerdos', err: 'Marca esta casilla para continuar.' });
+  const acuerdosHtml = s => {
+    const a = ackT(), todos = s.campos.every(c => S.acs[c.id]);
+    return `<div class="f" data-id="ack-all"><label class="ck"><input type="checkbox" id="ack-all" ${todos ? 'checked' : ''}><span>${E(a.all)}</span></label><div class="em"></div></div>
+      <button type="button" class="ackmore" id="ack-more" aria-expanded="false">${E(a.more(s.campos.length))} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <div class="ackl" id="ack-list" hidden>${s.campos.map(campo).join('')}</div>`;
+  };
+  function updAck() {
+    const cs = campos().filter(c => c.tipo === 'check'), all = $('ack-all'); if (!all) return;
+    const ok = cs.every(c => S.acs[c.id]); all.checked = ok;
+    const bad = !ok && cs.some(c => S.shown.has(c.id)), box = all.closest('.f');
+    box.classList.toggle('err', bad); box.querySelector('.em').textContent = bad ? ackT().err : '';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('#ack-more'); if (!b) return;
+    const l = $('ack-list'), open = l.hidden; l.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const cs = campos().filter(c => c.tipo === 'check'), a = ackT();
+    b.firstChild.textContent = (open ? a.less : a.more(cs.length)) + ' '; b.classList.toggle('open', open);
+  });
+
   // ── pintado ──
   function campo(c) {
     const id = 'f-' + c.id, l = `<label class="l" for="${id}">${E(lb(c))}${c.req ? '<span class="rq" title="' + E(t('req')) + '"> *</span>' : ''}</label>`;
@@ -103,7 +127,7 @@
     $('l-es').classList.toggle('on', S.lang === 'es'); $('l-en').classList.toggle('on', S.lang === 'en');
     $('prog').hidden = false;
     $('m').innerHTML = `<div class="hero"><h1>${E(t('title'))}</h1><p>${E(t('intro'))}</p></div>
-      ${S.secs.map((s, i) => `<section class="sec"><h2><b>${i + 1}</b>${E(tx(s.titulo))}</h2>${s.intro ? `<p class="intro">${E(tx(s.intro))}</p>` : ''}${s.campos.map(campo).join('')}</section>`).join('')}
+      ${S.secs.map((s, i) => `<section class="sec"><h2><b>${i + 1}</b>${E(tx(s.titulo))}</h2>${s.intro && !s.campos.every(c => c.tipo === 'check') ? `<p class="intro">${E(tx(s.intro))}</p>` : ''}${s.campos.length && s.campos.every(c => c.tipo === 'check') ? acuerdosHtml(s) : s.campos.map(campo).join('')}</section>`).join('')}
       <div class="go"><div class="sum" id="sum"></div><button class="btn" id="go" type="button">${E(t('send'))}</button></div>`;
     $('m').oninput = e => ent(e); $('m').onchange = e => ent(e);
     $('m').onfocusout = e => { const f = e.target.closest && e.target.closest('.f'); if (f) { S.shown.add(f.dataset.id); const c = campos().find(x => x.id === f.dataset.id); if (c) marca(c); } guardar(); };
@@ -117,6 +141,11 @@
     progreso();
   }
   function ent(e) {
+    if (e.target && e.target.id === 'ack-all') {   // casilla única: marca o desmarca todos los acuerdos
+      const cs = campos().filter(c => c.tipo === 'check');
+      cs.forEach(c => { S.acs[c.id] = e.target.checked; S.shown.add(c.id); const i = $('f-' + c.id); if (i) i.checked = e.target.checked; });
+      cs.forEach(marca); updAck(); progreso(); programar(); return;
+    }
     const f = e.target.closest && e.target.closest('.f'); if (!f) return;
     const c = campos().find(x => x.id === f.dataset.id); if (!c) return;
     if (c.tipo === 'check') S.acs[c.id] = e.target.checked; else { S.vals[c.id] = e.target.value; if (c.sensible) S.chg.add(c.id); }
