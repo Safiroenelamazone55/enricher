@@ -86,13 +86,13 @@ function plano(r) {
 const acuerdosBool = a => Object.fromEntries(Object.keys(a || {}).map(k => [k, !!a[k]]));
 
 // ── correo del sistema (Amazon SES, igual que el resto de avisos) ──
-async function correoSistema(to, subject, html, text) {
+async function correoSistema(to, subject, html, text, cc) {
   const from = process.env.SES_FROM_EMAIL;
   if (!from || !process.env.AWS_ACCESS_KEY_ID) return { sent: false, error: 'El correo del sistema no está configurado' };
   try {
     const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
     const ses = new SESClient({ region: process.env.AWS_REGION || 'us-east-1', credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID || '', secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '' } });
-    await ses.send(new SendEmailCommand({ Source: from, Destination: { ToAddresses: [to] }, Message: { Subject: { Data: subject }, Body: { Html: { Data: html }, Text: { Data: text } } } }));
+    await ses.send(new SendEmailCommand({ Source: from, Destination: { ToAddresses: [to], ...(cc && cc.length ? { CcAddresses: cc } : {}) }, Message: { Subject: { Data: subject }, Body: { Html: { Data: html }, Text: { Data: text } } } }));
     return { sent: true };
   } catch (e) { console.warn('[inicio] correo no enviado:', e.message); return { sent: false, error: 'No se pudo enviar el correo' }; }
 }
@@ -430,6 +430,9 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       const to = String(b.to || '').trim(), asunto = String(b.asunto || '').trim().slice(0, 200);
       if (!SC.EMAIL_RE.test(to)) return res.status(400).json({ error: 'Escribe un correo válido para el destinatario' });
       if (!asunto) return res.status(400).json({ error: 'Falta el asunto' });
+      const cc = [...new Set(String(b.cc || '').split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean))];
+      if (cc.length > 5) return res.status(400).json({ error: 'Máximo 5 correos en copia (CC)' });
+      const ccMal = cc.find(x => !SC.EMAIL_RE.test(x)); if (ccMal) return res.status(400).json({ error: `El correo en copia «${ccMal}» no es válido` });
       const html = texto.split(/\n{2,}/).map(par => {
         const ls = par.split('\n'), items = ls.filter(l => /^\s*-\s+/.test(l)), pre = ls.filter(l => !/^\s*-\s+/.test(l));
         return (pre.length ? `<p style="margin:0 0 12px;color:#374151">${esc(pre.join('\n')).replace(/\n/g, '<br>')}</p>` : '')
@@ -441,13 +444,13 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
         const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [remId, uidOf(req)]);
         if (!mb) return res.status(404).json({ error: 'Ese buzón no existe' });
         if ((await nivelDe(req, 'outreach')) < 2) return res.status(403).json({ error: 'Tu nivel no permite enviar desde buzones' });
-        try { const mbSvc = require('./mailboxService'); const auth = await mbSvc.getMailboxAuth(pool, mb); await mbSvc.sendFromMailbox(mb, auth, { to, subject: asunto, html: cuerpoHtml, text: plano_, fromName: 'NovaCentrax' }); }
+        try { const mbSvc = require('./mailboxService'); const auth = await mbSvc.getMailboxAuth(pool, mb); await mbSvc.sendFromMailbox(mb, auth, { to, cc: cc.length ? cc : undefined, subject: asunto, html: cuerpoHtml, text: plano_, fromName: 'NovaCentrax' }); }
         catch (e) { console.warn('[inicio] buzón no envió:', e.message); return res.status(502).json({ error: 'No se pudo enviar desde ese buzón: ' + String(e.message || 'error').slice(0, 140) }); }
       } else {
-        const out = await correoSistema(to, asunto, cuerpoHtml, plano_);
+        const out = await correoSistema(to, asunto, cuerpoHtml, plano_, cc);
         if (!out.sent) return res.status(503).json({ error: (out.error || 'No se pudo enviar') + '. Prueba eligiendo un buzón conectado.', url });
       }
-      destino = to;
+      destino = to + (cc.length ? ' (CC ' + cc.join(', ') + ')' : '');
     }
     await pool.query(`UPDATE inicio_cliente SET ultimo_recordatorio=NOW(), enlace_enviado_en=COALESCE(enlace_enviado_en,NOW()), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
     await audit(r.id, req, 'mensaje_enviado', (canal === 'wa' ? 'WhatsApp ' : 'Correo ') + destino); res.json({ ok: true });

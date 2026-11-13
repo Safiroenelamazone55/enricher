@@ -201,9 +201,9 @@ const InicioModule = (() => {
   }
 
   // ══ Enviar el formulario / recordar lo pendiente (correo o WhatsApp, plantilla ES/EN editable) ══
-  let _msg = { canal: 'correo', idioma: '', lista: true, remitente: '' };
+  let _msg = { canal: 'correo', idioma: '', lista: true, remitente: '', cc: '' };
   async function msgFila(id, tipo, nuevo) {
-    if (nuevo) _msg = { canal: 'correo', idioma: '', lista: true, remitente: '' };
+    if (nuevo) _msg = { canal: 'correo', idioma: '', lista: true, remitente: '', cc: '' };
     let d; try { d = await _j(`/inicios/${id}/mensaje?canal=${_msg.canal}&tipo=${tipo}&idioma=${_msg.idioma}&lista=${_msg.lista ? 1 : 0}`); } catch (e) { return msg(e.message, 'error'); }
     if (tipo === 'recordatorio' && !d.pendientes.length) return msg('Este cliente no tiene datos pendientes.', 'success');
     _msg.idioma = d.idioma; const wa = d.canal === 'wa', en = d.idioma === 'en', pend = d.pendientes || [];
@@ -211,6 +211,7 @@ const InicioModule = (() => {
     modal(`<h3 class="ini-mh">${tipo === 'recordatorio' ? 'Recordar datos faltantes' : 'Enviar el formulario'}</h3>
       <div class="ini-seg" role="tablist"><button class="${!wa ? 'on' : ''}" onclick="InicioModule._msgCanal(${id},'${tipo}','correo')">Correo</button><button class="${wa ? 'on' : ''}" onclick="InicioModule._msgCanal(${id},'${tipo}','wa')">WhatsApp</button></div>
       <label class="ini-l">${wa ? 'Número de WhatsApp del cliente' : 'Para'}</label><input class="ini-in" id="ini-mto" ${wa ? 'type="tel"' : 'type="email"'} value="${E(d.to)}" placeholder="${wa ? '+51 987654321' : 'correo del cliente'}">
+      ${wa ? '' : `<label class="ini-l">CC <span class="ini-opt">(opcional · separa varios con coma)</span></label><input class="ini-in" id="ini-mcc" type="text" value="${E(_msg.cc || '')}" placeholder="equipo@empresa.com, otra@empresa.com" oninput="InicioModule._msgCc(this.value)">`}
       <label class="ini-l">${wa ? 'Se envía desde (línea de WhatsApp)' : 'Se envía desde (buzón)'}</label>
       ${rem.length ? `<select class="ini-in" id="ini-mrm" onchange="InicioModule._msgRem(this.value)">${rem.map(r => `<option value="${r.id}"${String(r.id) === String(remSel) ? ' selected' : ''}>${E(r.label)}</option>`).join('')}</select>`
         : `<div class="ini-warn">${wa ? 'No tienes líneas de WhatsApp disponibles: no hay ninguna conectada o tu nivel de acceso no te permite usarlas.' : 'No tienes buzones disponibles: no hay ninguno conectado o tu nivel de acceso no te permite enviar desde ellos.'}</div>`}
@@ -224,11 +225,12 @@ const InicioModule = (() => {
   }
   const _msgCanal = (id, tipo, c) => { _msg.canal = c; _msg.remitente = ''; msgFila(id, tipo); };
   const _msgRem = v => { _msg.remitente = v; };
+  const _msgCc = v => { _msg.cc = v; };
   const _msgRecarga = (id, tipo) => { _msg.idioma = $('ini-mid').value; _msg.lista = $('ini-mls') ? $('ini-mls').checked : true; msgFila(id, tipo); };
   async function _msgEnviar(id, tipo) {
     const b = $('ini-menv'); b.disabled = true; b.textContent = 'Enviando…';
     try {
-      await _post(`/inicios/${id}/enviar-mensaje`, { canal: _msg.canal, to: $('ini-mto').value.trim(), idioma: $('ini-mid').value, asunto: $('ini-mas') ? $('ini-mas').value : '', cuerpo: $('ini-mcu').value, remitente_id: $('ini-mrm') ? $('ini-mrm').value : '' });
+      await _post(`/inicios/${id}/enviar-mensaje`, { canal: _msg.canal, to: $('ini-mto').value.trim(), idioma: $('ini-mid').value, asunto: $('ini-mas') ? $('ini-mas').value : '', cc: $('ini-mcc') ? $('ini-mcc').value : '', cuerpo: $('ini-mcu').value, remitente_id: $('ini-mrm') ? $('ini-mrm').value : '' });
       cerrar(); msg(_msg.canal === 'wa' ? 'Enviado por WhatsApp' : 'Correo enviado', 'success'); cargar();
     } catch (e) { b.disabled = false; b.textContent = 'Enviar'; msg(e.message, 'error'); }
   }
@@ -344,6 +346,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    cargarEnvio, guardarEnvio, msgFila, _msgCanal, _msgRem, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    cargarEnvio, guardarEnvio, msgFila, _msgCanal, _msgRem, _msgCc, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;
