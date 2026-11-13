@@ -93,6 +93,71 @@
     if (!dd.contains(e.target)) list.hidden = true;
   });
 
+  // ── «Quién atiende» y su correo: desplegable (yo / otra persona; mismo correo / otro) y solo en «otro» se abre el campo ──
+  const DDF = {
+    atiende: { src: 'contacto', otro: 'otro', opts: {
+      es: [['yo', 'Yo (la persona de contacto)'], ['otro', 'Otra persona de mi equipo']],
+      en: [['yo', 'Me (the contact person)'], ['otro', 'Someone else on my team']] }, ph: { es: 'Nombre de esa persona', en: 'Name of that person' } },
+    atiendeEmail: { src: 'mailInf', otro: 'otro', opts: {
+      es: [['mismo', 'Usar mi mismo correo (el de informes)'], ['otro', 'Otro correo']],
+      en: [['mismo', 'Use my same email (the reports one)'], ['otro', 'Another email']] }, ph: { es: 'correo@empresa.com', en: 'name@company.com' } },
+  };
+  S.dd = {};
+  const ddModo = (id, v) => {
+    if (S.dd[id]) return S.dd[id];
+    if (!v) return '';
+    return v === (S.vals[DDF[id].src] || '') ? DDF[id].opts.es[0][0] : 'otro';
+  };
+  const ddHtml = (id, v, off, c) => {
+    const cfg = DDF[id], en = S.lang === 'en', L = cfg.opts[S.lang] || cfg.opts.es, modo = ddModo(id, v), otro = modo === 'otro';
+    const ph = en ? 'Choose an option…' : 'Elige una opción…', f = L.find(x => x[0] === modo), lab = f ? f[1] : ph;
+    const caret = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+    return `<div class="geo geo--dd" data-dd="${id}"><button type="button" class="geo__pre dd-btn${f ? '' : ' dd-ph'}" aria-haspopup="listbox"><span>${E(lab)}</span>${caret}</button>
+      <div class="geo__l" role="listbox" hidden>${L.map(x => `<div class="geo__o${x[0] === modo ? ' on' : ''}" role="option" data-k="${x[0]}">${E(x[1])}</div>`).join('')}</div></div>`
+      + `<input id="f-${id}" type="${c.tipo === 'email' ? 'email' : 'text'}" inputmode="${c.tipo === 'email' ? 'email' : 'text'}" maxlength="300" value="${E(v)}" placeholder="${E(cfg.ph[S.lang] || cfg.ph.es)}" ${off} ${otro ? '' : 'hidden'}>`;
+  };
+  // Si quien atiende es «otra persona», el correo queda libre para escribirlo (sin desplegable); si es «yo», vuelve el desplegable
+  function emailUI() {
+    const g = document.querySelector('.geo--dd[data-dd="atiendeEmail"]'), inp = $('f-atiendeEmail'); if (!g || !inp) return;
+    const otra = S.dd.atiende === 'otro' || (!S.dd.atiende && S.vals.atiende && S.vals.atiende !== (S.vals.contacto || ''));
+    g.style.display = otra ? 'none' : '';
+    if (otra) {
+      if (S.dd.atiendeEmail !== 'otro') { S.dd.atiendeEmail = 'otro'; S.ddForced = true; if (inp.value === (S.vals.mailInf || '')) { inp.value = ''; S.vals.atiendeEmail = ''; } }
+      inp.hidden = false;
+    } else if (S.ddForced) {   // volvió a «yo»: se restablece el desplegable del correo
+      S.ddForced = false; S.dd.atiendeEmail = ''; inp.hidden = true; inp.value = ''; S.vals.atiendeEmail = '';
+      const bt = g.querySelector('.dd-btn'); bt.firstElementChild.textContent = S.lang === 'en' ? 'Choose an option…' : 'Elige una opción…'; bt.classList.add('dd-ph');
+      g.querySelectorAll('.geo__o').forEach(x => x.classList.remove('on'));
+    }
+  }
+  // mantiene al día los campos que copian a otro (mismo nombre / mismo correo) mientras la persona no elija «otro»
+  function syncDD() {
+    for (const id of Object.keys(DDF)) {
+      const modo = S.dd[id] || ddModo(id, S.vals[id]);
+      if (!modo || modo === 'otro') continue;
+      const nv = S.vals[DDF[id].src] || '', inp = $('f-' + id);
+      if ((S.vals[id] || '') !== nv) { S.vals[id] = nv; if (inp) inp.value = nv; const c = campos().find(x => x.id === id); if (c && S.shown.has(id)) marca(c); }
+    }
+  }
+  document.addEventListener('mousedown', e => {
+    const open = document.querySelectorAll('.geo--dd[data-dd] .geo__l:not([hidden])');
+    const g = e.target.closest && e.target.closest('.geo--dd[data-dd]');
+    open.forEach(l => { if (!g || !g.contains(l)) l.hidden = true; });
+    if (!g) return;
+    const id = g.dataset.dd, list = g.querySelector('.geo__l'), btn = e.target.closest('.dd-btn'), opt = e.target.closest('.geo__o');
+    if (btn) { e.preventDefault(); list.hidden = !list.hidden; return; }
+    if (!opt) return;
+    e.preventDefault();
+    const cfg = DDF[id], k = opt.dataset.k, inp = $('f-' + id), L = cfg.opts[S.lang] || cfg.opts.es;
+    S.dd[id] = k; S.shown.add(id);
+    g.querySelector('.dd-btn').firstElementChild.textContent = L.find(x => x[0] === k)[1]; g.querySelector('.dd-btn').classList.remove('dd-ph');
+    [...list.children].forEach(x => x.classList.toggle('on', x === opt)); list.hidden = true;
+    if (k === 'otro') { if (inp.value === (S.vals[cfg.src] || '')) inp.value = ''; inp.hidden = false; setTimeout(() => inp.focus(), 0); }
+    else { inp.hidden = true; inp.value = S.vals[cfg.src] || ''; }
+    inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true }));
+    if (id === 'atiende') emailUI();
+  });
+
   // ── acuerdos: una sola casilla «acepto» y el detalle plegado (cada acuerdo sigue guardándose por separado) ──
   const ackT = () => (S.lang === 'en'
     ? { all: 'I have read and accept the pilot terms', more: n => `View the ${n} terms`, less: 'Hide the terms', err: 'Check this box to continue.' }
@@ -126,6 +191,7 @@
     if (c.tipo === 'check') {
       return `<div class="f" data-id="${c.id}"><label class="ck"><input type="checkbox" id="${id}" ${S.acs[c.id] ? 'checked' : ''}><span>${E(lb(c))}</span></label><div class="em"></div></div>`;
     } else if (c.id === 'disp') ctl = dispHtml(id, v, off);
+    else if (DDF[c.id]) ctl = ddHtml(c.id, v, off, c);
     else if (c.tipo === 'long') ctl = `<textarea id="${id}" maxlength="2000" ${off}>${E(v)}</textarea>`;
     else if (c.tipo === 'select') ctl = `<select id="${id}"><option value="">${E(t('choose'))}</option>${c.opts.map(o => `<option value="${E(o.v)}"${o.v === v ? ' selected' : ''}>${E(o[S.lang] || o.es)}</option>`).join('')}</select>`;
     else {
@@ -145,6 +211,7 @@
     $('m').oninput = e => ent(e); $('m').onchange = e => ent(e);
     $('m').onfocusout = e => { const f = e.target.closest && e.target.closest('.f'); if (f) { S.shown.add(f.dataset.id); const c = campos().find(x => x.id === f.dataset.id); if (c) marca(c); } guardar(); };
     $('go').onclick = enviar;
+    emailUI();
     if (window.GEO) {   // país / ciudad: desplegable con buscador; WhatsApp: prefijo desplegable que sigue al país
       const ph = GEO.phone($('f-wpp'), S.lang, v => { S.vals.wpp = v; });
       GEO.attach($('f-pais'), S.lang, (v, x) => { S.vals.pais = v; if (ph && x) ph.setCountry(x.cc); });
@@ -163,7 +230,7 @@
     const c = campos().find(x => x.id === f.dataset.id); if (!c) return;
     if (c.tipo === 'check') S.acs[c.id] = e.target.checked; else { S.vals[c.id] = e.target.value; if (c.sensible) S.chg.add(c.id); }
     if (e.type === 'change' || S.shown.has(c.id)) { S.shown.add(c.id); marca(c); }
-    progreso(); programar();
+    syncDD(); progreso(); programar();
   }
 
   // ── guardado automático del borrador en el servidor ──
