@@ -8,7 +8,7 @@ const SC = require('./inicioSchema');
 
 const BASE = () => (process.env.PUBLIC_APP_URL || 'https://app.novacentrax.com').replace(/\/$/, '');
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;                      // 32 bytes aleatorios en base64url = 43 caracteres (256 bits)
-const DIAS_VALIDEZ = 30, DIAS_ACCESOS = 45;
+const DIAS_VALIDEZ = 15, DIAS_ACCESOS = 45;
 const ESTADOS = ['sin_enviar', 'enviado', 'en_curso', 'recibido', 'revisado', 'portal'];
 const ESTADO_L = { sin_enviar: 'Sin enviar', enviado: 'Enviado', en_curso: 'En curso', recibido: 'Recibido', revisado: 'Revisado', portal: 'Portal activo' };
 const nuevoToken = () => crypto.randomBytes(32).toString('base64url');
@@ -326,7 +326,7 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
     try { const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' }); await fn(req, res, r); }
     catch (e) { console.error('[inicios] ' + ruta + ':', e.message); if (!res.headersSent) res.status(500).json({ error: 'No se pudo completar la acción' }); }
   });
-  simple('renovar', async (req, res, r) => {   // amplía 30 días; si estaba revocado se emite un token nuevo
+  simple('renovar', async (req, res, r) => {   // amplía 15 días; si estaba revocado se emite un token nuevo
     if (r.revocado || !r.token_enc) { const t = nuevoToken(); await pool.query('UPDATE inicio_cliente SET token=$2, token_enc=$3, slug=$4 WHERE id=$1', [r.id, huella(t), cifrar(t), mkSlug(((r.respuestas || {}).razon) || (r.prefill || {}).empresa)]); }
     await pool.query(`UPDATE inicio_cliente SET revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id]);
     await audit(r.id, req, r.revocado ? 'enlace_renovado_nuevo' : 'enlace_renovado', ''); const n = await own(req, r.id); res.json({ ...fila(n), url: urlDe(n) });

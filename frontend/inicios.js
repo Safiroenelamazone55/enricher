@@ -114,7 +114,7 @@ const InicioModule = (() => {
     modal(`<h3 class="ini-mh">Crear enlace de inicio</h3><label class="ini-l">Cliente</label><select class="ini-in" id="ini-nc" onchange="InicioModule._nuevoCambio()"><option value="">+ Crear cliente nuevo (en Operaciones)</option>${opts}</select>
       <div id="ini-nn"><p class="ini-hint" style="margin:6px 0 0">Se guarda como cliente en <b>Operaciones → Clientes</b> y queda listo para proyectos y facturación.</p><label class="ini-l">Empresa</label><input class="ini-in" id="ini-ne"><label class="ini-l">Nombre del contacto</label><input class="ini-in" id="ini-nco"><label class="ini-l">Correo <span class="ini-opt">(opcional)</span></label><input class="ini-in" id="ini-nm" type="email"></div>
       <label class="ini-l">Idioma del formulario</label><select class="ini-in" id="ini-ni"><option value="es">Español</option><option value="en">English</option></select>
-      <p class="ini-hint">El enlace es único para este cliente, caduca a los 30 días y no pide cuenta ni contraseña. Se precarga con lo que ya sabemos del cliente.</p>
+      <p class="ini-hint">El enlace es único para este cliente, caduca a los 15 días y no pide cuenta ni contraseña. Se precarga con lo que ya sabemos del cliente.</p>
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" onclick="InicioModule._nuevoCrear()">Crear enlace</button></div>`);
   }
   function _nuevoCambio() { const v = $('ini-nc').value; $('ini-nn').style.display = v ? 'none' : ''; }
@@ -134,7 +134,7 @@ const InicioModule = (() => {
   }
   function mostrarEnlace(r) {
     modal(`<h3 class="ini-mh">${r.existente ? 'Este cliente ya tiene un enlace' : 'Enlace de inicio listo'}</h3>
-      <p class="ini-hint" style="margin-top:0">${r.existente ? 'Sigue vigente: es el mismo enlace.' : 'Envíaselo al cliente. Caduca a los 30 días.'}</p>
+      <p class="ini-hint" style="margin-top:0">${r.existente ? 'Sigue vigente: es el mismo enlace.' : 'Envíaselo al cliente. Caduca a los 15 días.'}</p>
       <input class="ini-in" id="ini-url" readonly value="${E(r.url)}" onfocus="this.select()">
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cerrar</button><button class="btn btn-ghost" onclick="window.open('${E(r.url)}','_blank','noopener')">Abrir</button>
       <button class="btn btn-ghost" onclick="InicioModule.cerrar();InicioModule.ir(${r.id})">Ver ficha</button><button class="btn btn-primary" onclick="InicioModule.copiarEnlace(${r.id})">Copiar enlace y marcar como enviado</button></div>`);
@@ -174,7 +174,7 @@ const InicioModule = (() => {
     const it = (fn, t, cls) => `<button class="ini-gm${cls ? ' ' + cls : ''}" onclick="InicioModule.cerrarMenu();InicioModule.${fn}">${t}</button>`;
     m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`msgFila(${id},'formulario',true)`, 'Enviar el formulario…') + it(`msgFila(${id},'recordatorio',true)`, 'Recordar datos faltantes…') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
       + it(`idiomaFila(${id},'es')`, (x.idioma !== 'en' ? '✓ ' : '') + 'Español') + it(`idiomaFila(${id},'en')`, (x.idioma === 'en' ? '✓ ' : '') + 'English')
-      + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 30 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
+      + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 15 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
     document.body.appendChild(m);
     const b = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
     m.style.left = Math.max(8, Math.min(b.right - w, innerWidth - w - 8)) + 'px';
@@ -243,7 +243,7 @@ const InicioModule = (() => {
   }
   async function abrirForm(id) { try { window.open(await _url(id), '_blank', 'noopener'); } catch (e) { msg(e.message, 'error'); } }
   async function idiomaFila(id, l) { try { await _post(`/inicios/${id}/idioma`, { idioma: l }); msg(l === 'en' ? 'Formulario en English' : 'Formulario en español', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
-  async function renovarFila(id) { try { await _post(`/inicios/${id}/renovar`); msg('Enlace renovado 30 días', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function renovarFila(id) { try { await _post(`/inicios/${id}/renovar`); msg('Enlace renovado 15 días', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
   async function revocarFila(id) { if (!confirm('El enlace dejará de funcionar de inmediato. ¿Revocarlo?')) return; try { await _post(`/inicios/${id}/revocar`); msg('Enlace revocado', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
   async function copiarEnlace(id) {
     const u = $('ini-url') ? $('ini-url').value : (_f && _f.url);
@@ -328,7 +328,7 @@ const InicioModule = (() => {
 
   async function accion(ruta, ok, data) { try { const r = await _post(`/inicios/${_f.id}/${ruta}`, data); if (ok) msg(ok); await recargar(); return r; } catch (e) { msg(e.message, 'error'); } }
   const marcarEnviado = () => accion('marcar-enviado', 'Marcado como enviado');
-  const renovar = () => accion('renovar', 'Enlace renovado 30 días');
+  const renovar = () => accion('renovar', 'Enlace renovado 15 días');
   function revocar() { if (confirm('El enlace dejará de funcionar de inmediato. ¿Revocarlo?')) accion('revocar', 'Enlace revocado'); }
   async function recordatorio() {
     const to = prompt('¿A qué correo envío el recordatorio?', (_f.respuestas.mailInf || '').trim()); if (to == null) return;
