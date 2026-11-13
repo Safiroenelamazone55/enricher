@@ -60,6 +60,25 @@
     $('pg-b').style.width = pct + '%'; $('pg-n').textContent = `${n}/${req.length} · ${pct} %`; $('pg-t').textContent = t('prog');
   }
 
+  // ── disponibilidad para reuniones: opciones rápidas + personalizado (el valor sigue siendo el texto) ──
+  const DISP = {
+    es: ['Lunes a viernes, por la mañana (9:00–13:00)', 'Lunes a viernes, por la tarde (14:00–18:00)', 'Lunes a viernes, todo el día (9:00–18:00)', 'Martes a jueves, 10:00–13:00', 'Siempre coordinar antes (cada reunión se agenda previamente contigo)'],
+    en: ['Monday to Friday, mornings (9:00–13:00)', 'Monday to Friday, afternoons (14:00–18:00)', 'Monday to Friday, all day (9:00–18:00)', 'Tuesday to Thursday, 10:00–13:00', 'Always coordinate first (each meeting is scheduled with you beforehand)'],
+  };
+  const dispHtml = (id, v, off) => {
+    const L = DISP[S.lang] || DISP.es, custom = (S.dispCustom || (v && !L.includes(v))) ? true : false, cu = S.lang === 'en' ? 'Custom' : 'Personalizado';
+    return `<div class="chips" id="${id}-chips">${L.map((x, i) => `<button type="button" class="chip${x === v ? ' on' : ''}" data-d="${i}">${E(x)}</button>`).join('')}<button type="button" class="chip${custom ? ' on' : ''}" data-d="c">${cu}</button></div>`
+      + `<textarea id="${id}" maxlength="2000" ${off} ${custom ? '' : 'hidden'} placeholder="${E(S.lang === 'en' ? 'Write your days and hours (and time zone)' : 'Escribe tus días y horas (y zona horaria)')}">${E(v)}</textarea>`;
+  };
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('#f-disp-chips .chip'); if (!b) return;
+    const ta = $('f-disp'), L = DISP[S.lang] || DISP.es;
+    if (b.dataset.d === 'c') { S.dispCustom = true; if (L.includes(ta.value)) ta.value = ''; ta.hidden = false; ta.focus(); }
+    else { S.dispCustom = false; ta.value = L[+b.dataset.d]; ta.hidden = true; }
+    [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b));
+    ta.dispatchEvent(new Event('input', { bubbles: true })); ta.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
   // ── pintado ──
   function campo(c) {
     const id = 'f-' + c.id, l = `<label class="l" for="${id}">${E(lb(c))}${c.req ? '<span class="rq" title="' + E(t('req')) + '"> *</span>' : ''}</label>`;
@@ -69,7 +88,8 @@
     let ctl;
     if (c.tipo === 'check') {
       return `<div class="f" data-id="${c.id}"><label class="ck"><input type="checkbox" id="${id}" ${S.acs[c.id] ? 'checked' : ''}><span>${E(lb(c))}</span></label><div class="em"></div></div>`;
-    } else if (c.tipo === 'long') ctl = `<textarea id="${id}" maxlength="2000" ${off}>${E(v)}</textarea>`;
+    } else if (c.id === 'disp') ctl = dispHtml(id, v, off);
+    else if (c.tipo === 'long') ctl = `<textarea id="${id}" maxlength="2000" ${off}>${E(v)}</textarea>`;
     else if (c.tipo === 'select') ctl = `<select id="${id}"><option value="">${E(t('choose'))}</option>${c.opts.map(o => `<option value="${E(o.v)}"${o.v === v ? ' selected' : ''}>${E(o[S.lang] || o.es)}</option>`).join('')}</select>`;
     else {
       const type = c.tipo === 'email' ? 'email' : c.tipo === 'url' ? 'url' : 'text';   // las contraseñas son texto visible a propósito

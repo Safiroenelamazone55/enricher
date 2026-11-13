@@ -46,6 +46,10 @@
   .geo input { padding-right: 36px !important; }
   .geo__c { position: absolute; right: 12px; top: 0; height: 48px; display: flex; align-items: center; color: var(--mute, #6B7770); cursor: pointer; }
   .geo__l { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 280px; overflow-y: auto; background: #fff; border: 1.5px solid var(--line); border-radius: 12px; box-shadow: 0 14px 34px rgba(20,33,27,.16); padding: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .chip { padding: 9px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+  .chip:hover { border-color: var(--pri, #00804C); }
+  .chip.on { background: rgba(0,128,76,.1); border-color: var(--pri, #00804C); color: var(--pri, #00804C); font-weight: 600; }
   .geo__row { display: flex; gap: 8px; }
   .geo__row input { flex: 1; min-width: 0; }
   .geo__pre { flex: none; min-width: 92px; height: 48px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--field); color: var(--ink); border: 1.5px solid var(--line); border-radius: 12px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
@@ -94,6 +98,6 @@
 <main id="m"><div class="load">…</div></main>
 <div class="save" id="sv" role="status"></div>
 <script src="/inicio_geo.js?v=2"></script>
-<script src="/inicio.js?v=4"></script>
+<script src="/inicio.js?v=5"></script>
 </body>
 </html>
