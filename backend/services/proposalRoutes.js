@@ -257,7 +257,7 @@ function mount(app, { pool, requireAuth }) {
     if (!t) return null;
     const { rows: [b] } = await pool.query('SELECT * FROM tpl_brands WHERE id=$1 AND user_id=$2', [t.brand_id, uid(req)]);
     if (!b) return null;
-    if (t.tipo !== 'propuesta2' && !LANGS[lang]) lang = 'es';   // «it» solo existe en la propuesta post-llamada
+    if (t.tipo !== 'propuesta2' && t.tipo !== 'acuerdo' && !LANGS[lang]) lang = 'es';   // «it» solo existe en la propuesta post-llamada
     if (t.tipo === 'pago') {
       const pr = params || {}, d = payDefaults({ ...(t.defaults || {}), ...(Array.isArray(pr.metodos) ? { metodos: pr.metodos } : {}), ...(pr.pasos ? { pasos: pr.pasos } : {}), ...(pr.plazoHoras ? { plazoHoras: pr.plazoHoras } : {}) });
       const { rows } = d.metodos.length ? await pool.query('SELECT * FROM tpl_pay_methods WHERE user_id=$1 AND template_id=$3 AND id = ANY($2::int[])', [uid(req), d.metodos, t.id]) : { rows: [] };
@@ -266,9 +266,8 @@ function mount(app, { pool, requireAuth }) {
       return { t, p: { ...p, empresa: p.cliente }, html: pay.render(b, p, lang, ms), archivo: docName(b.nombre, p.cliente, lang, 'pago') };
     }
     const given = {}; for (const k of Object.keys(params || {})) if (params[k] !== '' && params[k] != null) given[k] = params[k];
-    const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
-    if (t.tipo === 'propuesta2') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es'; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, dl), archivo: dv.archivo(b, p, dl) }; }
-    if (t.tipo === 'acuerdo') return { t, p, html: ag.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'acuerdo') };
+    const p = cleanParams({ ...(t.defaults || {}), ...given, ...(t.tipo === 'propuesta2' || t.tipo === 'acuerdo' ? { dev: { ...((t.defaults || {}).dev || {}), ...(given.dev || {}) } } : {}) });
+    if (t.tipo === 'propuesta2' || t.tipo === 'acuerdo') { const v = dv.validate(p), dl = dv.LANGS[lang] ? lang : 'es', o = t.tipo === 'acuerdo' ? { acuerdo: true } : undefined; return { t, p, v: { faltan: v.faltan, avisos: v.avisos, debil: v.debil, c: v.c }, html: dv.render(b, p, dl, o), archivo: dv.archivo(b, p, dl, o) }; }
     if (t.tipo === 'overview') return { t, p, html: ov.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'overview') };
     if (t.tipo === 'presentacion') return { t, p, html: deck.render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'presentacion') };
     return { t, p, html: render(b, p, lang), archivo: docName(b.nombre, p.empresa, lang, 'propuesta') };

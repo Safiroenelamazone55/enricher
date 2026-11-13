@@ -199,7 +199,8 @@ h1,h2,h3,.fac b,.vs b,.calc .r b,.sim .tot,.facts b,.bn,.edb b{font-family:'Arch
 .s-light .chip,.s-soft .chip{border:2px solid var(--navy);background:#fff;color:var(--navy)}
 .s-light::before,.s-soft::before{content:"";position:absolute;left:0;top:0;bottom:0;width:14px;background:var(--teal)}
 `;
-function render(brand, p, langIn) {
+function render(brand, p, langIn, opts) {
+  const AC = !!(opts && opts.acuerdo);   // «Propuesta y acuerdo comercial»: la misma propuesta + modalidad de pago + hoja de firma
   const lang = LANGS[langIn] ? langIn : 'es';
   // x(es, en, pt, it): el texto en el idioma del documento
   const x = (es, en, pt, it) => (lang === 'en' ? en : lang === 'pt' ? pt : lang === 'it' ? it : es);
@@ -226,7 +227,7 @@ function render(brand, p, langIn) {
   const dias = n => `${n} ${x('días', 'days', 'dias', 'giorni')}`;
   const veces = n => (Math.abs(n - 1) < 1e-9 ? `1 ${x('vez', 'time', 'vez', 'volta')}` : `${F(n)} ${x('veces', 'times', 'vezes', 'volte')}`);
   // modalidad de pago elegida (solo cambia lo que se muestra en el documento)
-  const semanal = d.modalidad_pago === 'semanal', cuota = piloto / 4, nav = !!d.incluir_salesnav;
+  const semanal = AC && d.modalidad_pago === 'semanal', cuota = piloto / 4, nav = AC && !!d.incluir_salesnav;
   const m$d = n => sym + F(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 2);
   const pagoCorto = semanal ? x('4 pagos semanales', '4 weekly payments', '4 pagamentos semanais', '4 pagamenti settimanali') : x('Pago único', 'One-time payment', 'Pagamento único', 'Pagamento unico');
   const pagoLargo = semanal
@@ -426,7 +427,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
 <div class="rp lt rv" style="--d:3"><div class="k">${x('Tú', 'You', 'Você', 'Tu')} (${esc(empresa)})</div><ul>${li_(tu)}</ul></div></div></div></section>`);
 
   // 9 · inversión
-  const sim = `<div class="sim rv" style="--d:2"><div class="k">${pilotLbl}</div><div class="tot">${esc(m$(piloto))}<small>${semanal ? x('en 4 pagos', 'in 4 payments', 'em 4 pagamentos', 'in 4 pagamenti') : x('pago único', 'one-time payment', 'pagamento único', 'pagamento unico')}</small></div><div class="eq">${x(`Unos 450 contactos · objetivo: ${F(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.`, `About 450 contacts · goal: ${F(obj, 0)} qualified meetings.<br>If we do not reach 2, we repeat the pilot at no cost.`, `Cerca de 450 contatos · meta: ${F(obj, 0)} reuniões qualificadas.<br>Se não chegarmos a 2, repetimos o piloto sem custo.`, `Circa 450 contatti · obiettivo: ${F(obj, 0)} incontri qualificati.<br>Se non arriviamo a 2, ripetiamo il progetto pilota senza costi.`)}</div><div class="eq" style="margin-top:10px"><b>${x('Forma de pago', 'Payment', 'Forma de pagamento', 'Modalità di pagamento')}:</b> ${esc(pagoLargo)}</div></div>`;
+  const sim = `<div class="sim rv" style="--d:2"><div class="k">${pilotLbl}</div><div class="tot">${esc(m$(piloto))}<small>${semanal ? x('en 4 pagos', 'in 4 payments', 'em 4 pagamentos', 'in 4 pagamenti') : x('pago único', 'one-time payment', 'pagamento único', 'pagamento unico')}</small></div><div class="eq">${x(`Unos 450 contactos · objetivo: ${F(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.`, `About 450 contacts · goal: ${F(obj, 0)} qualified meetings.<br>If we do not reach 2, we repeat the pilot at no cost.`, `Cerca de 450 contatos · meta: ${F(obj, 0)} reuniões qualificadas.<br>Se não chegarmos a 2, repetimos o piloto sem custo.`, `Circa 450 contatti · obiettivo: ${F(obj, 0)} incontri qualificati.<br>Se non arriviamo a 2, ripetiamo il progetto pilota senza costi.`)}</div>${AC ? `<div class="eq" style="margin-top:10px"><b>${x('Forma de pago', 'Payment', 'Forma de pagamento', 'Modalità di pagamento')}:</b> ${esc(pagoLargo)}</div>` : ''}</div>`;
   const facts = debil
     ? `<div class="facts"><div class="rv" style="--d:3"><small>${x('Después del piloto', 'After the pilot', 'Depois do piloto', 'Dopo il progetto pilota')}</small><b style="font-size:21px">${x('Lo decidimos juntos', 'We decide together', 'Decidimos juntos', 'Decidiamo insieme')}</b><p>${x('Con los resultados a la vista.', 'With the results in front of us.', 'Com os resultados à vista.', 'Con i risultati sotto gli occhi.')}</p></div></div>`
     : `<div class="facts"><div class="rv" style="--d:3"><small>${x('Mensual', 'Monthly', 'Mensal', 'Mensile')}</small><b>${esc(m$(mensual))}${perMes}</b><p>${x('Desde el mes 2, sin permanencia.', 'From month 2, no lock-in.', 'A partir do mês 2, sem fidelidade.', 'Dal mese 2, senza vincoli.')}</p></div>
@@ -441,7 +442,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
   const fAll = Array.isArray(b.firmantes) ? b.firmantes : [], f0 = fAll[0] || {};
   const fNom = d.firmante_nombre || f0.nombre || '', fCar = d.firmante_cargo || f0.cargo || '', fImg = imgOk(f0.firma) && !d.firmante_nombre ? f0.firma : '';
   const rowA = (k, v) => `<div class="agr__row"><small>${k}</small><div>${v}</div></div>`;
-  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">09 · ${x('Acuerdo', 'Agreement', 'Acordo', 'Accordo')}</div>
+  if (AC) S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">09 · ${x('Acuerdo', 'Agreement', 'Acordo', 'Accordo')}</div>
 <h2 class="rv" style="--d:1">${x('Aceptación y <em>firma.</em>', 'Acceptance and <em>signature.</em>', 'Aceitação e <em>assinatura.</em>', 'Accettazione e <em>firma.</em>')}</h2>
 <div class="agr rv" style="--d:2">
 ${rowA(x('Servicio', 'Service', 'Serviço', 'Servizio'), x(`Piloto de 30 días de adquisición comercial B2B para ${esc(empresa)}, tal como se describe en este documento.`, `30-day B2B commercial acquisition pilot for ${esc(empresa)}, as described in this document.`, `Piloto de 30 dias de aquisição comercial B2B para ${esc(empresa)}, conforme descrito neste documento.`, `Progetto pilota di 30 giorni di acquisizione commerciale B2B per ${esc(empresa)}, come descritto in questo documento.`))}
@@ -465,7 +466,7 @@ ${rowA(x('Vigencia', 'Validity', 'Vigência', 'Validità'), x(`Esta propuesta es
 <h2 class="rv" style="--d:1">${x('Confirmemos el <em>piloto.</em>', 'Let us confirm the <em>pilot.</em>', 'Vamos confirmar o <em>piloto.</em>', 'Confermiamo il <em>progetto pilota.</em>')}</h2>
 <p class="lead rv" style="--d:2">${x('Una sola cosa: confirma que arrancamos. Esta propuesta es válida hasta el ', 'Just one thing: confirm that we start. This proposal is valid until ', 'Apenas uma coisa: confirme que começamos. Esta proposta é válida até ', 'Una sola cosa: conferma che partiamo. Questa proposta è valida fino al ')}${esc(fechaLarga(sumDays(fecha, validez), lang))}.</p>
 <a class="cta rv" style="--d:3" target="_blank" rel="noopener noreferrer" href="${esc(mailto)}">${x('Confirmar el piloto', 'Confirm the pilot', 'Confirmar o piloto', 'Confermare il progetto pilota')} <span>↗</span></a></div>
-<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>${x('Firmas el acuerdo y confirmas el piloto', 'You sign the agreement and confirm the pilot', 'Você assina o acordo e confirma o piloto', 'Firmi l\'accordo e confermi il progetto pilota')}${decideP}.</span></div>
+<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>${AC ? x('Firmas el acuerdo y confirmas el piloto', 'You sign the agreement and confirm the pilot', 'Você assina o acordo e confirma o piloto', 'Firmi l\'accordo e confermi il progetto pilota') : x('Confirmas el piloto', 'You confirm the pilot', 'Você confirma o piloto', 'Confermi il progetto pilota')}${decideP}.</span></div>
 <div class="rv" style="--d:4"><i>02</i><span>${x('Pago del piloto: ', 'Pilot payment: ', 'Pagamento do piloto: ', 'Pagamento del progetto pilota: ')}${esc(semanal ? x(`4 pagos semanales de ${m$d(cuota)}, cada viernes de la semana trabajada`, `4 weekly payments of ${m$d(cuota)}, each Friday of the week worked`, `4 pagamentos semanais de ${m$d(cuota)}, toda sexta-feira da semana trabalhada`, `4 pagamenti settimanali da ${m$d(cuota)}, ogni venerdì della settimana lavorata`) : m$(piloto))}.${payInfo ? ' ' + x('Datos de pago: ', 'Payment details: ', 'Dados de pagamento: ', 'Dati di pagamento: ') + esc(payInfo) + '.' : ''}</span></div>
 <div class="rv" style="--d:5"><i>03</i><span>${x('Fecha de inicio: ', 'Start date: ', 'Data de início: ', 'Data di inizio: ')}${p.inicio ? esc(p.inicio) : x('la acordamos al confirmar', 'we agree on it when you confirm', 'combinamos ao confirmar', 'la concordiamo alla conferma')}.</span></div></div></div>
 <div class="foot"><span>${esc(marca)}${mail ? ' · ' + esc(mail) : ''}${web ? ' · ' + esc(web) : ''}</span><span>${x('Confidencial · preparada para ', 'Confidential · prepared for ', 'Confidencial · preparada para ', 'Riservato · preparata per ')}${esc(empresa)}</span></div></section>`);
@@ -473,7 +474,7 @@ ${rowA(x('Vigencia', 'Validity', 'Vigência', 'Validità'), x(`Esta propuesta es
   const total = S.length;
   const dots = S.map((_, i) => `<button class="dot" aria-label="${i + 1}"></button>`).join('');
   const rootVars = `:root{--ink:#0B1220;--navy:${dark};--text:#475569;--mute:#94A3B8;--line:#E5E9F0;--soft:#F6F8FB;--teal:${prim};--teal-l:${light};--tl-rgb:${rgb(light)};--pr-rgb:${rgb(prim)};--dk-rgb:${rgb(dark)};--sans:'Inter','Segoe UI',system-ui,sans-serif}`;
-  const title = archivo(b, p, lang);
+  const title = archivo(b, p, lang, opts);
   return `<!DOCTYPE html>\n<html lang="${lang}" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 ${d.diseno_anterior ? '' : '<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">'}
@@ -490,9 +491,10 @@ ${S.map((sec, i) => (i === 0 || !d.estilo_sobrio ? sec : sec.replace(/class="sli
 }
 
 // «Propuesta NovaCentrax – Empresa – 2026-11-07»: nombre del PDF (el navegador lo toma del título del documento)
-function archivo(brand, p, lang) {
+function archivo(brand, p, lang, opts) {
   const d = (p && p.dev) || {};
-  const w = lang === 'en' ? 'Proposal' : (lang === 'pt' || lang === 'it') ? 'Proposta' : 'Propuesta';
+  const ac = !!(opts && opts.acuerdo);
+  const w = ac ? (lang === 'en' ? 'Commercial proposal and agreement' : lang === 'pt' ? 'Proposta e acordo comercial' : lang === 'it' ? 'Proposta e accordo commerciale' : 'Propuesta y acuerdo comercial') : (lang === 'en' ? 'Proposal' : (lang === 'pt' || lang === 'it') ? 'Proposta' : 'Propuesta');
   return `${w} ${(brand && brand.nombre) || 'NovaCentrax'} – ${(p && p.empresa) || (lang === 'en' ? 'Client' : 'Cliente')} – ${d.fecha_propuesta || today()}`;
 }
 

@@ -43332,8 +43332,9 @@ const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
   const DVL = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };   // idiomas de la propuesta post-llamada
-  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago', propuesta2: 'Propuesta y acuerdo comercial (firma)' };
-  const _isDeck = t => t === 'presentacion' || t === 'propuesta2';
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo comercial (PDF para firmar)', pago: 'Métodos de pago', propuesta2: 'Presentación interactiva' };
+  const _isDeck = t => t === 'presentacion' || t === 'propuesta2' || t === 'acuerdo';
+  const _isDev = t => t === 'propuesta2' || t === 'acuerdo';   // la propuesta post-llamada y su versión para firmar comparten el mismo formulario
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
   let _host = null, _tab = 'plantillas', _brands = [], _tpls = [], _copies = [], _methods = [], _gen = null, _prevTimer = null, _prevSeq = 0, _logoDraft = {}, _md = null, _mdLang = 'es';
@@ -43380,8 +43381,8 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     return t.tipo === 'pago' ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
       : t.tipo === 'overview' ? 'Documento A4'
-      : t.tipo === 'propuesta2' ? `11 diapositivas · con acuerdo y firma · piloto ${E((d.moneda || 'US$') + ((d.dev || {}).precio_piloto || 500))}, luego ${E((d.moneda || 'US$') + ((d.dev || {}).precio_mensual || 750))}/mes`
-      : t.tipo === 'acuerdo' ? `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · con firma`
+      : t.tipo === 'propuesta2' ? `10 diapositivas · piloto ${E((d.moneda || 'US$') + ((d.dev || {}).precio_piloto || 500))}, luego ${E((d.moneda || 'US$') + ((d.dev || {}).precio_mensual || 750))}/mes`
+      : t.tipo === 'acuerdo' ? `Propuesta post-llamada para firmar · modalidad de pago y hoja de firma`
       : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
   }
   // Plantillas fijadas con la estrella: salen primero (en Galería y en Lista). Se guardan en este navegador, como los favoritos de Espacios.
@@ -43507,7 +43508,7 @@ const PlantillasModule = (() => {
   function generar(id) {
     const t = _tpls.find(x => x.id === id); if (!t) return;
     const d = t.defaults || {};
-    _gen = t.tipo === 'propuesta2'
+    _gen = _isDev(t.tipo)
       ? { t, langs: ['es'], vista: 'es', p: { empresa: '', logoCliente: {}, contacto: '', correo: '', clienteCargo: '', moneda: d.moneda || 'US$', inicio: '', fotos: d.fotos !== false, fotoPortada: '', referencias: Array.isArray(d.referencias) ? d.referencias.map(r => ({ ...r })) : [], dev: { horas_semana_prospeccion: 20, valor_hora: 15, horas_origen: 'supuesto', usar_supuesto_horas: true, ...(d.dev || {}), fecha_propuesta: new Date().toISOString().slice(0, 10), cierre_pct: null, valor_cliente: null, reuniones_mes_hoy: null, ciclo_dias: null } } }
       : t.tipo === 'pago'
       ? { t, langs: [t.lang], vista: t.lang, p: { cliente: '', logoCliente: {}, monto: '', ref: '', extra: '', metodos: [...(d.metodos || [])], pasos: { comprobante: true, referencia: false, plazo: false, ...(d.pasos || {}) }, plazoHoras: d.plazoHoras || 24 } }
@@ -43523,7 +43524,7 @@ const PlantillasModule = (() => {
       if (!t) { showBanner('La plantilla de esta copia ya no existe: no se puede editar. Genera una nueva.', 'error'); return; }
       const pr = cp.params || {};
       const lc = pr.logoCliente && typeof pr.logoCliente === 'object' ? pr.logoCliente : {};
-      const p = t.tipo === 'propuesta2'
+      const p = _isDev(t.tipo)
         ? { empresa: pr.empresa || '', logoCliente: lc, contacto: pr.contacto || '', correo: pr.correo || '', clienteCargo: pr.clienteCargo || '', moneda: pr.moneda || 'US$', inicio: pr.inicio || '', fotos: pr.fotos !== false, fotoPortada: pr.fotoPortada || '', referencias: Array.isArray(pr.referencias) ? pr.referencias : [], dev: { ...(pr.dev || {}) } }
         : t.tipo === 'pago'
         ? { cliente: pr.cliente || '', logoCliente: lc, monto: pr.monto || '', ref: pr.ref || '', extra: Array.isArray(pr.extra) ? pr.extra.join('\n') : (pr.extra || ''), metodos: pr.metodos || [], pasos: { comprobante: true, referencia: false, plazo: false, ...(pr.pasos || {}) }, plazoHoras: pr.plazoHoras || 24 }
@@ -43580,7 +43581,7 @@ const PlantillasModule = (() => {
       <label class="pl-ck" style="display:flex;gap:8px;align-items:center;margin:2px 0 4px"><input type="checkbox" ${p.fotos !== false ? 'checked' : ''} onchange="PlantillasModule.fotosSet(this.checked)"> Usar fotografías profesionales (necesita internet al abrirlo)</label>
       <p class="hrm-card__meta">Documento de 5 hojas A4 con la presentación de la empresa, igual para todos los clientes.</p></div>`;
     let campos;
-    if (g.t.tipo === 'acuerdo') {
+    if (false && g.t.tipo === 'acuerdo') {
       const OFS = [['', 'Adquisición comercial B2B (prospección de clientes)'], ['estudio', 'Estudio de mercado'], ['redes', 'Redes sociales'], ['publicidad', 'Publicidad online'], ['crm', 'CRM y ventas']];
       const cls = []; const vistos = new Set(); (_copies || []).forEach(cp => { const k = (cp.cliente || '').trim().toLowerCase(); if (k && !vistos.has(k)) { vistos.add(k); cls.push(cp); } });
       const brd = _brands.find(x => x.id === g.t.brand_id) || {}, fms = Array.isArray(brd.firmantes) ? brd.firmantes : [];
@@ -43610,7 +43611,7 @@ const PlantillasModule = (() => {
         <label class="pl-l">Métodos que verá el cliente</label><div class="pl-ckw">${_mios(g.t.id).map(m => `<label class="pl-ck"><input type="checkbox" ${p.metodos.includes(m.id) ? 'checked' : ''} onchange="PlantillasModule.toggleMetodo(${m.id},this.checked)"> ${E(m.nombre)}${m.preferido ? ' ★' : ''}</label>`).join('') || '<span class="hrm-card__meta">Esta plantilla aún no tiene cuentas: agrégalas en «Editar».</span>'}</div>
         <label class="pl-l">Pasos después de pagar</label><div class="pl-ckw">${_pasosChecks('plg', p.pasos, p.plazoHoras)}</div>
         <label class="pl-l">Pasos extra (uno por línea, sin traducir)</label><textarea class="pl-in" rows="2" data-k="extra" oninput="PlantillasModule.set('extra',this.value)">${E(p.extra)}</textarea>${_faltan()}`;
-    } else if (g.t.tipo === 'propuesta2') {
+    } else if (_isDev(g.t.tipo)) {
       p.dev = p.dev || {};
       if (!p.dev._icp_set) { if (!String(p.dev.cliente_ideal || '').trim()) p.dev.cliente_ideal = 'Tenemos en cuenta lo aprendido en proyectos anteriores, pero no lo damos por hecho: lo validamos con inteligencia comercial y definimos tu cliente ideal (ICP) contigo.'; p.dev._icp_set = true; }   // de fábrica (también cuando llega vacío del servidor); si luego lo borras, se respeta
       const dvf = (k, l, type, ph, opt) => `<label class="pl-l">${l}${opt ? ' <span class="pl-opt">(opcional)</span>' : ''}</label><input class="pl-in" type="${type || 'text'}" ${type === 'number' ? 'step="any" min="0"' : ''} value="${E(p.dev[k] == null ? '' : p.dev[k])}" placeholder="${E(ph || '')}" oninput="PlantillasModule.setDev('${k}',this.value)">`;
@@ -43632,10 +43633,10 @@ const PlantillasModule = (() => {
           <div class="pl-row3"><div>${dvf('precio_piloto', 'Precio del piloto', 'number')}</div><div>${dvf('precio_mensual', 'Precio mensual', 'number')}</div><div>${dvf('margen_pct', 'Margen % (100 = sin margen)', 'number')}</div></div>
           <div class="pl-row3"><div>${dvf('bonus_reunion', 'Bonus por reunión', 'number')}</div><div>${dvf('umbral_bonus', 'Bonus desde la reunión n.º', 'number')}</div><div>${dvf('reuniones_objetivo', 'Reuniones objetivo', 'number')}</div></div>
           ${dvf('cierre_supuesto_pct', 'Cierre supuesto % (solo si no dio el suyo)', 'number')}${dvc('incluir_whatsapp', 'Incluir WhatsApp')}
-          <label class="pl-l">Modalidad de pago del piloto</label><select class="pl-in" onchange="PlantillasModule.setDev('modalidad_pago',this.value)"><option value="unico"${p.dev.modalidad_pago !== 'semanal' ? ' selected' : ''}>Pago único: todo para comenzar</option><option value="semanal"${p.dev.modalidad_pago === 'semanal' ? ' selected' : ''}>Semana trabajada, semana pagada: en 4 pagos, cada viernes</option></select>
+          ${g.t.tipo === 'acuerdo' ? `<label class="pl-l">Modalidad de pago del piloto</label><select class="pl-in" onchange="PlantillasModule.setDev('modalidad_pago',this.value)"><option value="unico"${p.dev.modalidad_pago !== 'semanal' ? ' selected' : ''}>Pago único: todo para comenzar</option><option value="semanal"${p.dev.modalidad_pago === 'semanal' ? ' selected' : ''}>Semana trabajada, semana pagada: en 4 pagos, cada viernes</option></select>
           <p class="hrm-card__meta">Solo cambia lo que dice el documento: con «semanal», el precio del piloto se reparte entre las 4 semanas del mes (por ejemplo 500 → 125 por semana, pagado el viernes de la misma semana).</p>
-          ${dvc('incluir_salesnav', 'Añadir el servicio opcional de LinkedIn Sales Navigator (US$50/mes con 60 % de descuento, se suma a la factura)')}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
-        <div class="pl-box"><div class="pl-box__t">Quién firma por la empresa <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div></div>
+          ${dvc('incluir_salesnav', 'Añadir el servicio opcional de LinkedIn Sales Navigator (US$50/mes con 60 % de descuento, se suma a la factura)')}` : ''}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
+        ${g.t.tipo === 'acuerdo' ? `<div class="pl-box"><div class="pl-box__t">Quién firma por la empresa <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div></div>` : ''}
         <div class="pl-box"><div class="pl-box__t">La fuga de tiempo del fundador <span class="pl-opt">(opcional)</span></div>
           <div class="pl-row3"><div>${dvf('horas_semana_prospeccion', 'Horas a la semana buscando clientes', 'number', 'Ej. 20')}</div><div>${dvf('valor_hora', 'Lo que vale su hora', 'number', 'Ej. 15')}</div><div><label class="pl-l">Esas cifras son</label><select class="pl-in" onchange="PlantillasModule.setDev('horas_origen',this.value)"><option value="supuesto"${p.dev.horas_origen === 'real' ? '' : ' selected'}>Supuesto (estimación)</option><option value="real"${p.dev.horas_origen === 'real' ? ' selected' : ''}>Real (lo dijo el cliente)</option></select></div></div>
           ${dvc('usar_supuesto_horas', 'Usar el supuesto si están vacías (20 h a la semana y 15 por hora, marcado «supuesto»)')}
@@ -43653,10 +43654,10 @@ const PlantillasModule = (() => {
     }
     _host.innerHTML = `<div class="pl-wrap"><div class="pl-gh"><button class="hrm-lnk" onclick="PlantillasModule.salir()">← Plantillas</button><h1 class="pl-h1">${E(g.copiaId ? g.titulo : g.t.nombre)}</h1>${g.copiaId ? '<span class="hrm-chip">Editando una copia guardada</span>' : ''}</div>
       <div class="pl-gen"><div class="pl-form">${campos}
-        ${g.t.tipo === 'propuesta2' ? `<label class="pl-l">Idioma de la propuesta</label><div class="pl-chks">${Object.entries(DVL).map(([k, v]) => g.copiaId ? (g.langs[0] === k ? `<span class="pl-chk on">${v}</span>` : '') : `<label class="pl-chk${g.langs[0] === k ? ' on' : ''}"><input type="radio" name="pl-dvl" ${g.langs[0] === k ? 'checked' : ''} onchange="PlantillasModule.setLang('${k}')">${v}</label>`).join('')}</div><p class="hrm-card__meta">Cambia el idioma de todo el documento que verá el cliente. Los datos que escribes arriba (qué vende, su frase…) se muestran tal cual: escríbelos en el mismo idioma.</p>` : g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
-        <div class="pl-acts">${g.t.tipo === 'propuesta2' ? `<button class="btn btn-primary" id="pl-bsave" onclick="PlantillasModule.guardar()">${g.copiaId ? 'Guardar cambios' : 'Guardar copia'}</button><button class="btn btn-ghost" onclick="PlantillasModule.guardar(true)" title="Guarda los datos aunque falte algo, para seguir después">Guardar borrador</button>` : ''}${g.t.tipo === 'propuesta2' ? '' : g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
+        ${_isDev(g.t.tipo) ? `<label class="pl-l">Idioma de la propuesta</label><div class="pl-chks">${Object.entries(DVL).map(([k, v]) => g.copiaId ? (g.langs[0] === k ? `<span class="pl-chk on">${v}</span>` : '') : `<label class="pl-chk${g.langs[0] === k ? ' on' : ''}"><input type="radio" name="pl-dvl" ${g.langs[0] === k ? 'checked' : ''} onchange="PlantillasModule.setLang('${k}')">${v}</label>`).join('')}</div><p class="hrm-card__meta">Cambia el idioma de todo el documento que verá el cliente. Los datos que escribes arriba (qué vende, su frase…) se muestran tal cual: escríbelos en el mismo idioma.</p>` : g.copiaId ? `<label class="pl-l">Idioma de esta copia</label><div class="pl-chks"><span class="pl-chk on">${LANGS[g.langs[0]]}</span></div>` : `<label class="pl-l">Idiomas a exportar</label><div class="pl-chks">${chips}</div>`}
+        <div class="pl-acts">${_isDev(g.t.tipo) ? `<button class="btn btn-primary" id="pl-bsave" onclick="PlantillasModule.guardar()">${g.copiaId ? 'Guardar cambios' : 'Guardar copia'}</button><button class="btn btn-ghost" onclick="PlantillasModule.guardar(true)" title="Guarda los datos aunque falte algo, para seguir después">Guardar borrador</button>` : ''}${_isDev(g.t.tipo) ? '' : g.copiaId ? `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar cambios</button><button class="btn btn-ghost" onclick="PlantillasModule.guardarNueva()">Guardar como copia nueva</button>` : `<button class="btn btn-primary" onclick="PlantillasModule.guardar()">Guardar copia${g.langs.length > 1 ? 's (' + g.langs.length + ')' : ''}</button>`}
           <button class="btn btn-ghost" onclick="PlantillasModule.exportar('html')">Descargar HTML</button>
-          <button class="btn btn-ghost" id="pl-bpdf" onclick="PlantillasModule.exportar('pdf')">${g.t.tipo === 'propuesta2' ? 'Exportar PDF' : 'PDF / Imprimir'}</button></div>
+          <button class="btn btn-ghost" id="pl-bpdf" onclick="PlantillasModule.exportar('pdf')">${_isDev(g.t.tipo) ? 'Exportar PDF' : 'PDF / Imprimir'}</button></div>
         <p class="hrm-card__meta">${g.copiaId ? '«Guardar cambios» actualiza esta copia y conserva su enlace para compartir.' : '«Guardar copia» deja una versión fija en <b>Copias generadas</b>, con enlace para compartir.'} En PDF elige «Guardar como PDF» en la ventana de impresión.</p>
       </div><div class="pl-prevcol">${vista}<div class="pl-prevwrap"><div class="pl-prev" id="pl-prev"><div class="pl-prev__in" id="pl-prev-in"><iframe id="pl-frame" title="Vista previa" sandbox="allow-same-origin"></iframe></div></div></div></div></div></div>`;
     if (pago) document.querySelectorAll('#plg-comp,#plg-ref,#plg-plazo,#plg-horas').forEach(i => i.addEventListener('change', _readPagoPasos));
@@ -43694,12 +43695,18 @@ const PlantillasModule = (() => {
       const keep = ['empresa', 'contacto', 'correo', 'fee', 'plazo', 'moneda', 'inicio'];
       keep.forEach(k => { if (pr[k] !== undefined && pr[k] !== null && pr[k] !== '') g.p[k] = pr[k]; });
       if (pr.logoCliente && typeof pr.logoCliente === 'object') g.p.logoCliente = JSON.parse(JSON.stringify(pr.logoCliente));
+      if (_isDev(g.t.tipo) && pr.dev && typeof pr.dev === 'object') {   // propuesta post-llamada de ese cliente: se trae TODO (llamada, cifras, referencias, fotos, idioma)
+        g.p.dev = { ...(g.p.dev || {}), ...JSON.parse(JSON.stringify(pr.dev)) };
+        ['clienteCargo', 'fotos', 'fotoPortada', 'simulador'].forEach(k => { if (pr[k] !== undefined) g.p[k] = pr[k]; });
+        if (Array.isArray(pr.referencias)) g.p.referencias = JSON.parse(JSON.stringify(pr.referencias));
+        if (cp.lang && DVL[cp.lang]) { g.langs = [cp.lang]; g.vista = cp.lang; }
+      }
       _redrawKeep(); _preview(); showBanner('Datos del cliente cargados', 'success');
     } catch (e) { showBanner(e.message, 'error'); }
   }
   // Desde «Copias generadas»: abre el acuerdo con los datos de esa copia ya puestos, para solo elegir la oferta
   async function crearAcuerdo(copyId) {
-    const t = _tpls.find(x => x.tipo === 'acuerdo'); if (!t) { showBanner('Primero crea una plantilla de tipo «Propuesta y acuerdo (firma)»', 'error'); return; }
+    const t = _tpls.find(x => x.tipo === 'acuerdo'); if (!t) { showBanner('No hay una plantilla «Propuesta y acuerdo comercial»', 'error'); return; }
     _tab = 'plantillas'; _gen = null; generar(t.id); await cargarCliente(copyId);
   }
   function fotosSet(on) { _gen.p.fotos = !!on; clearTimeout(_prevTimer); _prevTimer = setTimeout(_preview, 200); }
@@ -43782,7 +43789,7 @@ const PlantillasModule = (() => {
       if (_gen && _gen.html) fr.srcdoc = _gen.html;
       return;
     }
-    if (_gen && _gen.t && (_gen.t.tipo === 'overview' || _gen.t.tipo === 'acuerdo')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
+    if (_gen && _gen.t && (_gen.t.tipo === 'overview')) {   // hoja A4 vertical: el recuadro tiene la proporción de una hoja y se desplaza de una hoja a la siguiente
       fr.setAttribute('sandbox', 'allow-same-origin'); fr.removeAttribute('allow');
       const W = 842, s = Math.max(0.25, Math.min(1, (box.clientWidth - 18) / W, (window.innerHeight * 0.9 - 20) / 1159)), wrap = box.parentElement;   // la hoja entera cabe a la vista
       wrap.style.flex = '0 0 auto'; wrap.style.minHeight = '0';
@@ -43809,7 +43816,7 @@ const PlantillasModule = (() => {
   function setCierre10(v) { setDev('cierre_pct', v === '' ? null : Math.min(10, Math.max(0, parseFloat(v) || 0)) * 10); }
   const _nf = (n, d) => { if (n == null || !isFinite(n)) return '—'; const x = Math.abs(n).toFixed(d == null ? (Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 1) : d).split('.'); return (n < 0 ? '-' : '') + x[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (x[1] ? ',' + x[1] : ''); };
   function _paintV() {
-    const g = _gen, box = $('pl-v'); if (!g || g.t.tipo !== 'propuesta2') return;
+    const g = _gen, box = $('pl-v'); if (!g || !_isDev(g.t.tipo)) return;
     const v = g.v; const pdf = $('pl-bpdf'), sv = $('pl-bsave');
     if (!v) { if (box) box.innerHTML = ''; return; }
     if (pdf) pdf.disabled = v.faltan.length > 0;
@@ -43824,7 +43831,7 @@ const PlantillasModule = (() => {
   }
   // Antes de guardar/exportar: obligatorios completos y confirmación en los casos débiles o con [corchetes] sin rellenar
   function _gate(borrador) {
-    const g = _gen; if (!g || g.t.tipo !== 'propuesta2' || borrador || !g.v) return true;
+    const g = _gen; if (!g || !_isDev(g.t.tipo) || borrador || !g.v) return true;
     if (g.v.faltan.length) { showBanner('Faltan campos obligatorios: ' + g.v.faltan.map(f => f.l).join(', '), 'error'); return false; }
     const rojos = g.v.avisos.filter(a => a.k === 'debil' || a.k === 'valor');
     if (rojos.length && !confirm(rojos.map(a => a.txt).join('\n\n') + '\n\n¿Exportar de todos modos?')) return false;
@@ -43886,7 +43893,7 @@ const PlantillasModule = (() => {
   // ── Copias ──
   function _viewCopias() {
     const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || DVL[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Abre el acuerdo con los datos de este cliente">Crear acuerdo</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
+      <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Propuesta y acuerdo comercial de este cliente: eliges la modalidad de pago y exportas el PDF para firmar">Propuesta y acuerdo (PDF)</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
         <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.slug || c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
     return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
   }
