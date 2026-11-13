@@ -65,9 +65,10 @@ table.kv.ej td:not(:first-child){width:16.5%;text-align:right;white-space:nowrap
 .sig h3{font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--teal)}
 .sig .who{margin-top:6px;font-size:14px;font-weight:800;color:var(--navy);min-height:20px}
 .sig .cg{font-size:11.5px;color:var(--text);min-height:17px}
-.sig .ln{margin-top:64px;border-bottom:1.5px solid var(--ink);position:relative;height:1px}
+.sig .ln{margin-top:80px;border-bottom:1.5px solid var(--ink);position:relative;height:1px}
 .sig .ln.s{margin-top:34px}
-.sig .ln img{position:absolute;left:4px;bottom:3px;max-height:60px;max-width:220px;object-fit:contain}
+.sig .ln img{position:absolute;left:4px;bottom:3px;max-height:78px;max-width:210px;object-fit:contain}
+.sig .ln span{position:absolute;left:4px;bottom:4px;font-size:12px;color:var(--ink)}
 .sig .cap{margin-top:5px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
 @page{size:210mm 297mm;margin:0}
 @media print{body{background:#fff;padding:0}.page{width:210mm;height:296.6mm;margin:0;box-shadow:none}}
@@ -121,7 +122,7 @@ function render(brand, p, langIn) {
   else if (sel === 'all') signers = fl;
   else if (sel) signers = fl.filter(f => f.id === sel);
   if (!signers.length) signers = fl.length ? [fl[0]] : [{ nombre: '', cargo: '', firma: '' }];
-  const sigBlock = (h, who, cg, img) => `<div><h3>${esc(h)}</h3><div class="who">${esc(who)}</div><div class="cg">${esc(cg)}</div><div class="ln">${img ? `<img alt="" src="${img}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>`;
+  const sigBlock = (h, who, cg, img) => `<div><h3>${esc(h)}</h3><div class="who">${esc(who)}</div><div class="cg">${esc(cg)}</div><div class="ln">${img ? `<img alt="" src="${img}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"><span>${esc(fechaTxt)}</span></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>`;
 
   let coverInner = ''; const flow = [];   // la portada es fija; el resto son secciones que se reparten por las hojas según lo que quepa
   const page = (inner, cover) => {
