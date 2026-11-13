@@ -43388,6 +43388,7 @@ const PlantillasModule = (() => {
   // Plantillas fijadas con la estrella: salen primero (en Galería y en Lista). Se guardan en este navegador, como los favoritos de Espacios.
   const _favs = () => { try { return JSON.parse(localStorage.getItem('nova_pl_fav') || '[]'); } catch (_) { return []; } };
   const _starSvg = '<svg width="16" height="16" viewBox="0 0 24 24" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+  const _dotsBtn = t => `<button type="button" class="pl-dots" onclick="event.stopPropagation();PlantillasModule.menuTpl(${t.id},this)" title="Más opciones" aria-label="Más opciones" aria-haspopup="menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>`;
   const _starBtn = t => { const on = _favs().includes(t.id); return `<button type="button" class="pl-star${on ? ' on' : ''}" onclick="event.stopPropagation();PlantillasModule.fijar(${t.id})" title="${on ? 'Quitar de fijadas' : 'Fijar al inicio'}" aria-pressed="${on}">${_starSvg}</button>`; };
   function fijar(id) {
     const f = _favs(), i = f.indexOf(id); if (i >= 0) f.splice(i, 1); else f.push(id);
@@ -43403,7 +43404,7 @@ const PlantillasModule = (() => {
     if (_view === 'gal') {
       return list.map(t => {
         const b = _brands.find(x => x.id === t.brand_id);
-        return `<div class="pl-gc"><div class="pl-thumb${_isDeck(t.tipo) ? ' is-deck' : ''}" data-id="${t.id}" onclick="PlantillasModule.generar(${t.id})" title="Abrir">${_starBtn(t)}<iframe tabindex="-1" scrolling="no" aria-hidden="true" title="Vista previa de ${E(t.nombre)}"></iframe></div>
+        return `<div class="pl-gc"><div class="pl-thumb${_isDeck(t.tipo) ? ' is-deck' : ''}" data-id="${t.id}" onclick="PlantillasModule.generar(${t.id})" title="Abrir">${_dotsBtn(t)}${_starBtn(t)}<iframe tabindex="-1" scrolling="no" aria-hidden="true" title="Vista previa de ${E(t.nombre)}"></iframe></div>
           <div class="pl-gc__b"><div class="pl-card__top"><span class="hrm-chip">${TIPOS[t.tipo] || TIPOS.propuesta}</span><span class="hrm-card__meta">${t.copias} copia${t.copias === 1 ? '' : 's'}</span></div>
           <h3 class="pl-gc__t">${E(t.nombre)}</h3><p class="pl-gc__m">${E(b ? b.nombre : 'Sin empresa')} · ${_tplMeta(t)} · ${LANGS[t.lang] || 'Español'}</p>
           <div class="pl-gc__a">${acts(t)}</div></div></div>`;
@@ -43416,7 +43417,7 @@ const PlantillasModule = (() => {
         <div class="pl-td pl-td--m">${E(b ? b.nombre : 'Sin empresa')}</div>
         <div class="pl-td pl-td--m">${_tplMeta(t)} · ${LANGS[t.lang] || 'Español'}</div>
         <div class="pl-td pl-td--m">${t.copias}</div>
-        <div class="pl-td pl-td--a">${acts(t)}</div></div>`;
+        <div class="pl-td pl-td--a">${acts(t)}${_dotsBtn(t)}</div></div>`;
     }).join('');
   }
   function buscar(v) { _q = v || ''; const el = document.getElementById('pl-rows'); if (el) { el.innerHTML = _tplList(); if (_view === 'gal') _loadThumbs(); } }
@@ -43499,6 +43500,43 @@ const PlantillasModule = (() => {
     } catch (e) { showBanner(e.message, 'error'); }
   }
   async function dupTpl(id) { try { await _j(`/tpl/templates/${id}/duplicate`, { method: 'POST' }); showBanner('Plantilla duplicada: edítala para cambiar el nombre', 'success'); render(_host.id); } catch (e) { showBanner(e.message, 'error'); } }
+  // ── Menú de tres puntos de cada plantilla: duplicar y eliminar permanentemente (con 2 pasos de verificación) ──
+  function cerrarMenuTpl() { const m = $('pl-dotmenu'); if (m) m.remove(); document.removeEventListener('mousedown', _fueraMenuTpl, true); }
+  function _fueraMenuTpl(e) { const m = $('pl-dotmenu'); if (m && !m.contains(e.target) && !(e.target.closest && e.target.closest('.pl-dots'))) cerrarMenuTpl(); }
+  function menuTpl(id, btn) {
+    const abierto = $('pl-dotmenu') && $('pl-dotmenu').dataset.id === String(id); cerrarMenuTpl(); if (abierto) return;
+    const m = document.createElement('div'); m.id = 'pl-dotmenu'; m.className = 'pl-dotmenu'; m.dataset.id = id;
+    m.innerHTML = `<button class="pl-dm" onclick="PlantillasModule.cerrarMenuTpl();PlantillasModule.dupTpl(${id})">Duplicar</button><div class="pl-dm-sep"></div><button class="pl-dm pl-dm--bad" onclick="PlantillasModule.cerrarMenuTpl();PlantillasModule.elimPaso1(${id})">Eliminar permanentemente</button>`;
+    document.body.appendChild(m);
+    const b = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(b.right - w, innerWidth - w - 8)) + 'px';
+    m.style.top = (b.bottom + h + 8 > innerHeight ? Math.max(8, b.top - h - 4) : b.bottom + 4) + 'px';
+    setTimeout(() => document.addEventListener('mousedown', _fueraMenuTpl, true), 0);
+  }
+  function elimPaso1(id) {
+    const t = _tpls.find(x => x.id === id); if (!t) return;
+    _modal('Eliminar plantilla · paso 1 de 2', `<p style="margin:0 0 10px">Vas a eliminar <b>«${E(t.nombre)}»</b> de forma <b>permanente</b>. No se puede deshacer.</p>
+      <p class="hrm-card__meta" style="margin:0">${t.copias ? `Sus ${t.copias} copia${t.copias === 1 ? '' : 's'} ya generada${t.copias === 1 ? '' : 's'} se conserva${t.copias === 1 ? '' : 'n'} y los enlaces compartidos siguen funcionando, pero no podrás volver a editarlas con esta plantilla.` : 'No tiene copias generadas.'}</p>`,
+      [`<button class="btn btn-ghost" onclick="PlantillasModule.closeModal()">Cancelar</button>`, `<button class="btn btn-ghost pl-danger" onclick="PlantillasModule.elimPaso2(${id})">Continuar</button>`]);
+  }
+  function elimPaso2(id) {
+    const t = _tpls.find(x => x.id === id); if (!t) return;
+    _modal('Eliminar plantilla · paso 2 de 2', `<p style="margin:0 0 10px">Para confirmar, escribe el nombre exacto de la plantilla:</p>
+      <p style="margin:0 0 8px"><b>${E(t.nombre)}</b></p>
+      <input class="pl-in" id="pl-del-in" autocomplete="off" placeholder="Escribe el nombre aquí" oninput="PlantillasModule.elimInput(${id})">`,
+      [`<button class="btn btn-ghost" onclick="PlantillasModule.closeModal()">Cancelar</button>`, `<button class="btn btn-ghost pl-danger" id="pl-del-ok" disabled onclick="PlantillasModule.elimConfirmar(${id})">Eliminar permanentemente</button>`]);
+    setTimeout(() => { const i = $('pl-del-in'); if (i) i.focus(); }, 50);
+  }
+  function elimInput(id) {
+    const t = _tpls.find(x => x.id === id), i = $('pl-del-in'), b = $('pl-del-ok'); if (!t || !i || !b) return;
+    b.disabled = i.value.trim() !== t.nombre.trim();
+  }
+  async function elimConfirmar(id) {
+    const t = _tpls.find(x => x.id === id), i = $('pl-del-in'); if (!t || !i || i.value.trim() !== t.nombre.trim()) return;
+    const b = $('pl-del-ok'); if (b) { b.disabled = true; b.textContent = 'Eliminando…'; }
+    try { await _j(`/tpl/templates/${id}`, { method: 'DELETE' }); _closeModal(); showBanner('Plantilla eliminada', 'success'); render(_host.id); }
+    catch (e) { showBanner(e.message, 'error'); if (b) { b.disabled = false; b.textContent = 'Eliminar permanentemente'; } }
+  }
   async function delTpl(id) {
     if (!confirm('¿Eliminar esta plantilla? Las copias ya generadas se conservan.')) return;
     try { await _j(`/tpl/templates/${id}`, { method: 'DELETE' }); _closeModal(); render(_host.id); } catch (e) { showBanner(e.message, 'error'); }
@@ -44064,7 +44102,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, setLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, menuTpl, cerrarMenuTpl, elimPaso1, elimPaso2, elimInput, elimConfirmar, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, setLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

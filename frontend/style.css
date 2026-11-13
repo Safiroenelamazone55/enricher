@@ -21310,3 +21310,17 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 
 .ini-cfg { display: grid; gap: 6px; }
 .ini-cfg label { font-size: .8rem; font-weight: 600; margin-top: 6px; }
+
+/* Plantillas: botón de tres puntos (duplicar / eliminar permanentemente) */
+.pl-dots { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: rgba(255,255,255,.92); color: var(--text, #14211B); cursor: pointer; box-shadow: 0 1px 3px rgba(16,24,20,.12); transition: background .15s; }
+.pl-dots:hover { background: #fff; }
+.pl-thumb .pl-dots { position: absolute; top: 10px; right: 10px; z-index: 4; }
+.pl-thumb .pl-dots ~ .pl-star { right: 48px; }
+.pl-td--a .pl-dots { margin-left: 6px; width: 28px; height: 28px; box-shadow: none; background: transparent; border-color: transparent; }
+.pl-td--a .pl-dots:hover { background: var(--surface-secondary, #F1F4F2); }
+.pl-dotmenu { position: fixed; z-index: 100001; min-width: 230px; padding: 6px; background: var(--surface, #fff); border: 1px solid var(--border, #E3E8E5); border-radius: 10px; box-shadow: 0 12px 30px rgba(20,33,27,.18); }
+.pl-dm { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; background: transparent; border-radius: 7px; font: inherit; font-size: .85rem; color: var(--text, #14211B); cursor: pointer; }
+.pl-dm:hover { background: var(--surface-secondary, #F1F4F2); }
+.pl-dm--bad { color: #B42318; }
+.pl-dm-sep { height: 1px; margin: 5px 4px; background: var(--border, #E3E8E5); }
+#pl-del-ok:disabled { opacity: .45; cursor: not-allowed; }
