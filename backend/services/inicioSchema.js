@@ -53,7 +53,6 @@ const SECCIONES = [
       { id: 'atiende', tipo: 'text', req: true, es: 'Nombre de quien atenderá las reuniones', en: 'Name of the person who will take the meetings' },
       { id: 'atiendeEmail', tipo: 'email', req: true, es: 'Correo de esa persona', en: 'That person email' },
       { id: 'disp', tipo: 'long', req: true, es: 'Días y horas en que se pueden atender reuniones', en: 'Days and hours when meetings can be taken', ej: T('Ejemplo: Martes a jueves, 10:00–13:00', 'Example: Tuesday to Thursday, 10:00–13:00') },
-      { id: 'excluir', tipo: 'long', req: false, es: 'Empresas que NO debemos contactar', en: 'Companies we must NOT contact', ayuda: T('Clientes actuales, competidores o cualquier empresa que prefieras dejar fuera.', 'Current clients, competitors or any company you prefer to leave out.') },
     ] },
   { id: 's5', titulo: T('Acuerdos', 'Agreements'),
     intro: T('Marca cada punto para confirmar que lo entiendes.', 'Tick each point to confirm you understand it.'),
