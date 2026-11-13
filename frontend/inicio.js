@@ -34,6 +34,7 @@
     $('m').innerHTML = `<div class="center"><div class="ic ${cls || ''}">${ic}</div><h1>${E(titulo)}</h1><p>${E(texto)}</p></div>`;
   }
   function noDisponible() {
+    const lg = $('logo'); if (lg && !lg.src) { lg.src = '/logo-white.png'; lg.alt = 'NovaCentrax'; lg.style.visibility = 'visible'; lg.style.minWidth = ''; }
     const es = /^es/i.test(navigator.language || 'es'), a = TX[es ? 'es' : 'en'], b = TX[es ? 'en' : 'es'];
     $('prog').hidden = true; document.title = 'NovaCentrax';
     $('m').innerHTML = `<div class="center"><div class="ic no">!</div><h1>${E(a.noT)}</h1><p>${E(a.noP)}</p><p style="margin-top:10px;font-size:14px;opacity:.8">${E(b.noT)} · ${E(b.noP)}</p></div>`;
@@ -277,6 +278,9 @@
   $('l-es').onclick = () => idioma('es'); $('l-en').onclick = () => idioma('en');
 
   (async function init() {
+    const logo = $('logo'), mostrarLogo = src => { if (!logo) return; logo.onload = logo.onerror = () => { logo.style.visibility = 'visible'; logo.style.minWidth = ''; }; logo.alt = 'NovaCentrax'; logo.src = src; };
+    const respaldo = () => { if (logo && !logo.src) mostrarLogo('/logo-white.png'); };
+    setTimeout(respaldo, 2500);   // si el servidor tarda, no se queda sin logo
     if (!/^[A-Za-z0-9_-]{43}$/.test(token) && !/^[a-z0-9]+(?:-[a-z0-9]+)*-[a-z0-9]{14}$/.test(token)) return noDisponible();
     try {
       const r = await fetch(`${API}/inicio/public/abrir`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), credentials: 'omit', cache: 'no-store' });
@@ -285,9 +289,10 @@
       S.lang = d.idioma === 'en' ? 'en' : 'es';
       if (d.empresa) {   // logo del espacio de trabajo (si lo tiene), en lugar del archivo fijo
         const im = document.querySelector('.hd img');
-        if (im && d.empresa.logo && /^data:image\//.test(d.empresa.logo)) im.src = d.empresa.logo;
+        if (d.empresa.logo && /^data:image\//.test(d.empresa.logo)) mostrarLogo(d.empresa.logo);
         if (im && d.empresa.nombre) im.alt = d.empresa.nombre;
       }
+      respaldo();   // sin logo del espacio: el de siempre, ya sin esperar
       if (d.enviado) { $('l-es').classList.toggle('on', S.lang === 'es'); $('l-en').classList.toggle('on', S.lang === 'en'); return pantalla('✓', t('doneT'), t('doneP')); }
       S.secs = d.secciones || []; S.vals = d.respuestas || {}; S.acs = d.acuerdos || {}; S.sec = d.secretos || {};
       S.last = JSON.stringify(cuerpo()); paint();
