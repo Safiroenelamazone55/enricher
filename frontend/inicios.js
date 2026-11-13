@@ -9,7 +9,7 @@ const InicioModule = (() => {
   const CANAL = { linkedin: 'LinkedIn', linkedin_whatsapp: 'LinkedIn · WhatsApp', whatsapp: 'WhatsApp', email: 'Correo' };
   const SN = { tengo: 'Sí, ya tiene', anadir: 'Quiere añadirlo', no: 'No lo quiere' };
   const MAILE = { creado: 'Creado', despues: 'Lo enviará después' };
-  const ACC = { creado: 'Enlace creado', enlace_renovado: 'Enlace renovado', enlace_renovado_nuevo: 'Enlace renovado (token nuevo)', enlace_revocado: 'Enlace revocado', idioma_cambiado: 'Idioma del formulario cambiado', enlace_enviado: 'Enlace marcado como enviado', recordatorio_enviado: 'Recordatorio enviado',
+  const ACC = { creado: 'Enlace creado', enlace_renovado: 'Enlace renovado', enlace_renovado_nuevo: 'Enlace renovado (token nuevo)', enlace_revocado: 'Enlace revocado', idioma_cambiado: 'Idioma del formulario cambiado', correo_enviado: 'Formulario enviado por correo', enlace_enviado: 'Enlace marcado como enviado', recordatorio_enviado: 'Recordatorio enviado',
     mostrar_secreto: 'Mostró una contraseña', copiar_secreto: 'Copió una contraseña', editar_secreto: 'Editó una contraseña', exportar_accesos: 'Exportó accesos (CSV)', revisado: 'Marcó como revisado', portal_activado: 'Dio acceso al portal', accesos_borrados: 'Borró los accesos', accesos_borrados_auto: 'Accesos borrados automáticamente' };
 
   async function _j(url, opts) {
@@ -172,7 +172,7 @@ const InicioModule = (() => {
     cerrarMenu(); const x = _rows.find(r => r.id === id); if (!x) return;
     const m = document.createElement('div'); m.id = 'ini-gmenu'; m.className = 'ini-gmenu';
     const it = (fn, t, cls) => `<button class="ini-gm${cls ? ' ' + cls : ''}" onclick="InicioModule.cerrarMenu();InicioModule.${fn}">${t}</button>`;
-    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`pendientesFila(${id})`, 'Enviar correo con lo pendiente') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
+    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`correoFila(${id})`, 'Enviar formulario por correo') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
       + it(`idiomaFila(${id},'es')`, (x.idioma !== 'en' ? '✓ ' : '') + 'Español') + it(`idiomaFila(${id},'en')`, (x.idioma === 'en' ? '✓ ' : '') + 'English')
       + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 30 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
     document.body.appendChild(m);
@@ -183,6 +183,27 @@ const InicioModule = (() => {
   }
   async function _url(id) { const f = await _j('/inicios/' + id); return f.url; }
   async function copiarFila(id) { try { await copiar(await _url(id), 'Enlace copiado'); try { await _post(`/inicios/${id}/marcar-enviado`); } catch (_) {} cargar(); } catch (e) { msg(e.message, 'error'); } }
+  // ══ Enviar el formulario por correo (plantilla ES/EN editable) ══
+  async function correoFila(id, idioma, lista) {
+    let d; try { d = await _j(`/inicios/${id}/correo?idioma=${idioma || ''}&lista=${lista === false ? 0 : 1}`); } catch (e) { return msg(e.message, 'error'); }
+    const en = d.idioma === 'en', pend = d.pendientes || [];
+    modal(`<h3 class="ini-mh">Enviar el formulario por correo</h3>
+      <label class="ini-l">Para</label><input class="ini-in" id="ini-mto" type="email" value="${E(d.to)}" placeholder="correo del cliente">
+      <div class="ini-two"><div><label class="ini-l">Idioma de la plantilla</label><select class="ini-in" id="ini-mid" onchange="InicioModule._correoRecarga(${id})"><option value="es"${!en ? ' selected' : ''}>Español</option><option value="en"${en ? ' selected' : ''}>English</option></select></div>
+        ${d.gracias ? '' : `<label class="ini-chk"><input type="checkbox" id="ini-mls" ${pend.length && d.cuerpo.includes('- ') ? 'checked' : ''} onchange="InicioModule._correoRecarga(${id})"><span>Incluir lo pendiente</span></label>`}</div>
+      <label class="ini-l">Asunto</label><input class="ini-in" id="ini-mas" value="${E(d.asunto)}">
+      <label class="ini-l">Mensaje <span class="ini-opt">(puedes editarlo; el botón con el enlace se añade solo)</span></label><textarea class="ini-in" id="ini-mcu" rows="9">${E(d.cuerpo)}</textarea>
+      <div class="ini-minfo"><div><b>Sale desde:</b> ${E(d.desde || 'el correo del sistema (no configurado)')} <span class="ini-opt">· las respuestas no llegan a esa dirección</span></div>
+        <div><b>Cuándo sale:</b> al instante, al pulsar «Enviar».</div>
+        <div><b>Le falta responder${pend.length ? ` (${pend.length})` : ''}:</b> ${pend.length ? `<details class="ini-det"><summary>ver lista</summary><ul>${pend.map(x => `<li>${E(x)}</li>`).join('')}</ul></details>` : 'nada, está completo. Se envía solo el correo de agradecimiento.'}</div></div>
+      <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" id="ini-menv" onclick="InicioModule._correoEnviar(${id})">Enviar</button></div>`);
+  }
+  const _correoRecarga = id => correoFila(id, $('ini-mid').value, $('ini-mls') ? $('ini-mls').checked : true);
+  async function _correoEnviar(id) {
+    const b = $('ini-menv'); b.disabled = true; b.textContent = 'Enviando…';
+    try { await _post(`/inicios/${id}/enviar-correo`, { to: $('ini-mto').value.trim(), idioma: $('ini-mid').value, asunto: $('ini-mas').value, cuerpo: $('ini-mcu').value }); cerrar(); msg('Correo enviado', 'success'); cargar(); }
+    catch (e) { b.disabled = false; b.textContent = 'Enviar'; msg(e.message, 'error'); }
+  }
   async function pendientesFila(id) {
     try {
       let to = '';
@@ -295,6 +316,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    correoFila, _correoRecarga, _correoEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;

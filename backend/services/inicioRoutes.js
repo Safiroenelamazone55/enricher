@@ -343,6 +343,54 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     const P = plano({ ...(r.prefill || {}), ...(r.respuestas || {}) });
     return SC.CAMPOS.filter(c => c.tipo !== 'check' && !String(P[c.id] == null ? '' : P[c.id]).trim()).map(c => (en ? c.en : c.es) + (c.req ? '' : (en ? ' (optional)' : ' (opcional)')));
   };
+  // ── Enviar el formulario por correo: plantilla ES/EN editable, con lo pendiente, remitente y momento de envío a la vista ──
+  const plantillaCorreo = (r, en, conLista) => {
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, nombre = String(R.contacto || '').trim().split(/[\s,]+/)[0];
+    const pend = pendientesDe(r, en), enviado = yaEnviado(r), lista = conLista && pend.length ? pend.map(x => '- ' + x).join('\n') : '';
+    const f = new Date(r.expira_en).toISOString().slice(0, 10);
+    const cuerpo = en
+      ? `Hi${nombre ? ' ' + nombre : ''},\n\nWe are happy to get started. ${enviado ? 'Thank you for sending your form.' : 'To start your pilot we need a few details: it takes about 10 minutes, it saves itself and you can come back to the same link anytime.'}${lista ? '\n\nWe still have the following points pending:\n' + lista : ''}\n\n${enviado ? 'Please send the pending points through the communication channel you chose.' : 'Please send it soon.'}${enviado ? '' : `\n\nThe link is personal and works until ${f}.`}`
+      : `Hola${nombre ? ' ' + nombre : ''},\n\nEstamos felices de comenzar. ${enviado ? 'Gracias por enviar tu formulario.' : 'Para arrancar tu piloto necesitamos unos datos del formulario: son unos 10 minutos, se guarda solo y puedes volver al mismo enlace cuando quieras.'}${lista ? '\n\nTenemos pendientes los siguientes puntos:\n' + lista : ''}\n\n${enviado ? 'Envíanos los puntos pendientes por el canal de comunicación que elegiste.' : 'Recuerda enviarlo pronto.'}${enviado ? '' : `\n\nEl enlace es personal y funciona hasta el ${f}.`}`;
+    if (enviado && !pend.length) {   // todo completo: solo un correo de agradecimiento, sin mencionar nada pendiente
+      const gracias = en
+        ? `Hi${nombre ? ' ' + nombre : ''},
+
+Thank you for completing your form: we now have everything we need to get started. Within 48 hours we will write to you through the channel you chose to confirm the next steps.`
+        : `Hola${nombre ? ' ' + nombre : ''},
+
+Gracias por completar tu formulario: ya tenemos todo lo que necesitamos para comenzar. En las próximas 48 horas te escribimos por el canal que elegiste para confirmar los siguientes pasos.`;
+      return { asunto: en ? 'Thank you for completing your form' : 'Gracias por completar tu formulario', cuerpo: gracias, pend, enviado, gracias: true };
+    }
+    return { asunto: en ? 'Your start form with NovaCentrax' : 'Tu formulario de inicio con NovaCentrax', cuerpo, pend, enviado };
+  };
+  app.get('/api/inicios/:id/correo', requireAuth, async (req, res) => {
+    try {
+      const r = await own(req, parseInt(req.params.id, 10)); if (!r) return res.status(404).json({ error: 'No encontrado' });
+      const en = (req.query.idioma || r.idioma) === 'en', conLista = req.query.lista !== '0';
+      const pl = plantillaCorreo(r, en, conLista);
+      const to = String((r.respuestas || {}).mailInf || (r.prefill || {}).mailContacto || (r.prefill || {}).mailInf || '').trim();
+      res.json({ to, idioma: en ? 'en' : 'es', asunto: pl.asunto, cuerpo: pl.cuerpo, pendientes: pl.pend, enviado: pl.enviado, gracias: !!pl.gracias, vigente: vigente(r),
+        desde: process.env.SES_FROM_EMAIL || '', cuando: 'inmediato' });
+    } catch (e) { console.error('[inicios] correo plantilla:', e.message); res.status(500).json({ error: 'No se pudo preparar el correo' }); }
+  });
+  simple('enviar-correo', async (req, res, r) => {
+    if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });
+    const b = req.body || {}, en = b.idioma === 'en', to = String(b.to || '').trim(), asunto = String(b.asunto || '').trim().slice(0, 200), texto = String(b.cuerpo || '').trim().slice(0, 6000);
+    if (!SC.EMAIL_RE.test(to)) return res.status(400).json({ error: 'Escribe un correo válido para el destinatario' });
+    if (!asunto || !texto) return res.status(400).json({ error: 'Faltan el asunto o el mensaje' });
+    const url = urlDe(r), enviado = yaEnviado(r);
+    // texto → HTML: párrafos y listas con guion
+    const html = texto.split(/\n{2,}/).map(par => {
+      const ls = par.split('\n'), items = ls.filter(l => /^\s*-\s+/.test(l)), pre = ls.filter(l => !/^\s*-\s+/.test(l)).join('<br>');
+      return (pre ? `<p style="margin:0 0 12px;color:#374151">${esc(ls.filter(l => !/^\s*-\s+/.test(l)).join('\n')).replace(/\n/g, '<br>')}</p>` : '')
+        + (items.length ? `<ul style="margin:0 0 12px;padding-left:20px;color:#374151">${items.map(l => `<li style="margin:3px 0">${esc(l.replace(/^\s*-\s+/, ''))}</li>`).join('')}</ul>` : '');
+    }).join('');
+    const out = await correoSistema(to, asunto, marco(en ? 'Your start form' : 'Tu formulario de inicio', html, enviado ? null : { url, txt: en ? 'Complete the form' : 'Completar el formulario' }), `${texto}${enviado ? '' : '\n\n' + url}`);
+    if (!out.sent) return res.status(503).json({ error: out.error || 'No se pudo enviar el correo', url });
+    await pool.query(`UPDATE inicio_cliente SET ultimo_recordatorio=NOW(), enlace_enviado_en=COALESCE(enlace_enviado_en,NOW()), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
+    await audit(r.id, req, 'correo_enviado', to); res.json({ ok: true });
+  });
+
   simple('recordatorio', async (req, res, r) => {   // correo al cliente con su enlace y lo que falta
     if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });
     const en = r.idioma === 'en', pend = pendientesDe(r, en), enviado = yaEnviado(r);

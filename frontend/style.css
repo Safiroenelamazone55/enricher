@@ -21293,3 +21293,12 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ini-ci input { accent-color: var(--primary, #1d6ff2); }
 .ini-ce { padding: 10px; color: var(--text-muted, #6B7770); font-size: .84rem; }
 .ini-cf { border-top: 1px solid var(--border2, #E3E8E5); margin-top: 6px; padding-top: 6px; }
+
+/* Inicios: ventana «Enviar formulario por correo» */
+.ini-two { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.ini-two > div { flex: 1; min-width: 160px; }
+.ini-chk { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; font-size: .85rem; cursor: pointer; }
+.ini-minfo { margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, #F1F4F2); font-size: .8rem; display: grid; gap: 5px; }
+.ini-det summary { display: inline; cursor: pointer; color: var(--primary, #1d6ff2); }
+.ini-det ul { margin: 6px 0 0; padding-left: 18px; max-height: 120px; overflow-y: auto; }
+textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
