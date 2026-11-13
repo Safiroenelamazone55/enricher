@@ -122,7 +122,7 @@ function render(brand, p, langIn) {
   else if (sel === 'all') signers = fl;
   else if (sel) signers = fl.filter(f => f.id === sel);
   if (!signers.length) signers = fl.length ? [fl[0]] : [{ nombre: '', cargo: '', firma: '' }];
-  const sigBlock = (h, who, cg, img) => `<div><h3>${esc(h)}</h3><div class="who">${esc(who)}</div><div class="cg">${esc(cg)}</div><div class="ln">${img ? `<img alt="" src="${img}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s"><span>${esc(fechaTxt)}</span></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>`;
+  const sigBlock = (h, who, cg, img, conFecha) => `<div><h3>${esc(h)}</h3><div class="who">${esc(who)}</div><div class="cg">${esc(cg)}</div><div class="ln">${img ? `<img alt="" src="${img}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln s">${conFecha ? `<span>${esc(fechaTxt)}</span>` : ''}</div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>`;
 
   let coverInner = ''; const flow = [];   // la portada es fija; el resto son secciones que se reparten por las hojas según lo que quepa
   const page = (inner, cover) => {
@@ -214,7 +214,7 @@ ${hayV ? sec(fg ? 'C' : 'B', x('Ejemplo con supuestos', 'Example with assumption
   // ── Hoja de firma
   const hoyTxt = '';
   page(`${sec('9', x('Aceptación y firma', 'Acceptance and signature', 'Aceitação e assinatura', 'Accettazione e firma'), `<p>${x(`Las partes aceptan esta propuesta y acuerdo comercial, que incluye la modalidad de pago indicada en la cláusula 6${nav ? ' y el servicio opcional de LinkedIn Sales Navigator' : ''}.`, `The parties accept this commercial proposal and agreement, which includes the payment method set out in clause 6${nav ? ' and the optional LinkedIn Sales Navigator service' : ''}.`, `As partes aceitam esta proposta e acordo comercial, que inclui a forma de pagamento indicada na cláusula 6${nav ? ' e o serviço opcional de LinkedIn Sales Navigator' : ''}.`, `Le parti accettano questa proposta e accordo commerciale, che include la modalità di pagamento indicata nella clausola 6${nav ? ' e il servizio opzionale di LinkedIn Sales Navigator' : ''}.`)}</p>
-<div class="sig" style="margin-top:34px;grid-template-columns:repeat(${signers.length + 1},1fr)">${signers.map(f => sigBlock(marca, f.nombre, f.cargo, imgOk(f.firma) ? f.firma : '')).join('')}${sigBlock(empresa, contacto, cargo, '')}</div>`)}`);
+<div class="sig" style="margin-top:34px;grid-template-columns:repeat(${signers.length + 1},1fr)">${signers.map(f => sigBlock(marca, f.nombre, f.cargo, imgOk(f.firma) ? f.firma : '', true)).join('')}${sigBlock(empresa, contacto, cargo, '', false)}</div>`)}`);
 
   const titulo = x('Propuesta y acuerdo comercial', 'Commercial proposal and agreement', 'Proposta e acordo comercial', 'Proposta e accordo commerciale');
   const hdr = `${brandH}<span class="r">${esc(titulo)}<br>${esc(empresa)}</span>`;
