@@ -43332,7 +43332,7 @@ const PlantillasModule = (() => {
   const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const LANGS = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
   const DVL = { es: 'Español', en: 'English', pt: 'Português', it: 'Italiano' };   // idiomas de la propuesta post-llamada
-  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago', propuesta2: 'Presentación interactiva' };
+  const TIPOS = { propuesta: 'Propuesta comercial', presentacion: 'Presentación interactiva', overview: 'Company Overview (PDF)', acuerdo: 'Propuesta y acuerdo (firma)', pago: 'Métodos de pago', propuesta2: 'Propuesta y acuerdo comercial (firma)' };
   const _isDeck = t => t === 'presentacion' || t === 'propuesta2';
   const FL = { holder: 'Titular de la cuenta', account: 'Número de cuenta', accountSimple: 'Cuenta simple', cci: 'CCI', type: 'Tipo de cuenta', routing: 'Número de ruta ACH', iban: 'IBAN', swift: 'SWIFT / BIC', bank: 'Banco', address: 'Dirección del banco', user: 'Usuario', phone: 'Teléfono', email: 'Correo', link: 'Enlace', custom: 'Otro (escribo la etiqueta)' };
   const MON = { '': 'Sin moneda', USD: 'Dólares (USD)', EUR: 'Euros (EUR)', PEN: 'Soles (PEN)', GBP: 'Libras (GBP)' };
@@ -43380,7 +43380,7 @@ const PlantillasModule = (() => {
     const d = t.defaults || {};
     return t.tipo === 'pago' ? `${(d.metodos || []).length} método${(d.metodos || []).length === 1 ? '' : 's'}`
       : t.tipo === 'overview' ? 'Documento A4'
-      : t.tipo === 'propuesta2' ? `10 diapositivas · piloto ${E((d.moneda || 'US$') + ((d.dev || {}).precio_piloto || 500))}, luego ${E((d.moneda || 'US$') + ((d.dev || {}).precio_mensual || 750))}/mes`
+      : t.tipo === 'propuesta2' ? `11 diapositivas · con acuerdo y firma · piloto ${E((d.moneda || 'US$') + ((d.dev || {}).precio_piloto || 500))}, luego ${E((d.moneda || 'US$') + ((d.dev || {}).precio_mensual || 750))}/mes`
       : t.tipo === 'acuerdo' ? `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses · con firma`
       : `${d.fee ? E((d.moneda || 'US$') + d.fee) + ' / mes · ' : ''}${d.plazo || 3} meses`;
   }
@@ -43461,7 +43461,7 @@ const PlantillasModule = (() => {
     const t = _tpls.find(x => x.id === id) || { tipo: 'propuesta', nombre: '', oferta: '', brand_id: (_brands[0] || {}).id, lang: 'es', defaults: { fee: 0, plazo: 3, moneda: 'US$' } };
     const d = t.defaults || {};
     _modal(id ? 'Editar plantilla' : 'Nueva plantilla', `
-      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="overview">Company Overview (PDF)</option><option value="acuerdo">Propuesta y acuerdo (firma)</option><option value="pago">Métodos de pago</option></select>`}
+      ${id ? `<p class="hrm-card__meta" style="margin-top:10px">Tipo: <b>${TIPOS[t.tipo]}</b></p>` : `<label class="pl-l">Tipo de documento</label><select class="pl-in" id="plt-tipo" onchange="PlantillasModule.tipoChange(this.value)"><option value="propuesta">Propuesta comercial</option><option value="presentacion">Presentación interactiva</option><option value="overview">Company Overview (PDF)</option><option value="pago">Métodos de pago</option></select>`}
       <label class="pl-l">Nombre de la plantilla</label><input class="pl-in" id="plt-nombre" value="${E(t.nombre)}" placeholder="Ej. Adquisición comercial B2B">
       <label class="pl-l">Descripción (para ti, opcional)</label><input class="pl-in" id="plt-oferta" value="${E(t.oferta)}" placeholder="Qué oferta o documento es">
       <div class="pl-row"><div><label class="pl-l">Empresa que envía</label><select class="pl-in" id="plt-brand">${_brands.map(b => `<option value="${b.id}"${b.id === t.brand_id ? ' selected' : ''}>${E(b.nombre)}</option>`).join('')}</select></div>
@@ -43631,7 +43631,11 @@ const PlantillasModule = (() => {
           <div class="pl-row3"><div>${dvf('fecha_propuesta', 'Fecha', 'date')}</div><div>${dvf('validez_dias', 'Válida (días)', 'number')}</div><div>${f('inicio', 'Inicio (opcional)', 'text', 'Ej. 3 de noviembre')}</div></div>
           <div class="pl-row3"><div>${dvf('precio_piloto', 'Precio del piloto', 'number')}</div><div>${dvf('precio_mensual', 'Precio mensual', 'number')}</div><div>${dvf('margen_pct', 'Margen % (100 = sin margen)', 'number')}</div></div>
           <div class="pl-row3"><div>${dvf('bonus_reunion', 'Bonus por reunión', 'number')}</div><div>${dvf('umbral_bonus', 'Bonus desde la reunión n.º', 'number')}</div><div>${dvf('reuniones_objetivo', 'Reuniones objetivo', 'number')}</div></div>
-          ${dvf('cierre_supuesto_pct', 'Cierre supuesto % (solo si no dio el suyo)', 'number')}${dvc('incluir_whatsapp', 'Incluir WhatsApp')}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
+          ${dvf('cierre_supuesto_pct', 'Cierre supuesto % (solo si no dio el suyo)', 'number')}${dvc('incluir_whatsapp', 'Incluir WhatsApp')}
+          <label class="pl-l">Modalidad de pago del piloto</label><select class="pl-in" onchange="PlantillasModule.setDev('modalidad_pago',this.value)"><option value="unico"${p.dev.modalidad_pago !== 'semanal' ? ' selected' : ''}>Pago único: todo para comenzar</option><option value="semanal"${p.dev.modalidad_pago === 'semanal' ? ' selected' : ''}>Semana trabajada, semana pagada: en 4 pagos, cada viernes</option></select>
+          <p class="hrm-card__meta">Solo cambia lo que dice el documento: con «semanal», el precio del piloto se reparte entre las 4 semanas del mes (por ejemplo 500 → 125 por semana, pagado el viernes de la misma semana).</p>
+          ${dvc('incluir_salesnav', 'Añadir el servicio opcional de LinkedIn Sales Navigator (US$50/mes con 60 % de descuento, se suma a la factura)')}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
+        <div class="pl-box"><div class="pl-box__t">Quién firma por la empresa <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div></div>
         <div class="pl-box"><div class="pl-box__t">La fuga de tiempo del fundador <span class="pl-opt">(opcional)</span></div>
           <div class="pl-row3"><div>${dvf('horas_semana_prospeccion', 'Horas a la semana buscando clientes', 'number', 'Ej. 20')}</div><div>${dvf('valor_hora', 'Lo que vale su hora', 'number', 'Ej. 15')}</div><div><label class="pl-l">Esas cifras son</label><select class="pl-in" onchange="PlantillasModule.setDev('horas_origen',this.value)"><option value="supuesto"${p.dev.horas_origen === 'real' ? '' : ' selected'}>Supuesto (estimación)</option><option value="real"${p.dev.horas_origen === 'real' ? ' selected' : ''}>Real (lo dijo el cliente)</option></select></div></div>
           ${dvc('usar_supuesto_horas', 'Usar el supuesto si están vacías (20 h a la semana y 15 por hora, marcado «supuesto»)')}

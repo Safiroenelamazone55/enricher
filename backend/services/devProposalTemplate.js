@@ -41,6 +41,9 @@ function cleanDev(d) {
   o.usar_supuesto_horas = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
+  o.modalidad_pago = d.modalidad_pago === 'semanal' ? 'semanal' : 'unico';   // «unico»: todo para comenzar · «semanal»: semana trabajada, semana pagada (el viernes de esa semana)
+  o.incluir_salesnav = d.incluir_salesnav === true || d.incluir_salesnav === 'true';   // servicio opcional de LinkedIn Sales Navigator
+  o.firmante_nombre = Sx(d.firmante_nombre, 80); o.firmante_cargo = Sx(d.firmante_cargo, 80);   // quién firma por la empresa (si va vacío, el firmante cargado en la empresa)
   o.diseno_anterior = d.diseno_anterior === true || d.diseno_anterior === 'true';   // por defecto: diseño «Suizo-Estudio»; con esto se usa el anterior
   o.estilo_sobrio = d.estilo_sobrio === true || d.estilo_sobrio === 'true';   // opcional: diapositivas claras y lisas, sin fondos oscuros (por defecto se usa el diseño original)
   return o;
@@ -157,6 +160,25 @@ h2+.fuga{margin-top:26px}h2+.fm{margin-top:12px}
 `;
 
 
+
+// Propuesta y acuerdo comercial: bloque «Acuerdo y firma» (página que se imprime o se exporta a PDF para firmar)
+const AGR = `
+.agr{margin-top:10px;display:grid;gap:9px;max-width:1080px}
+.agr__row{display:grid;grid-template-columns:210px 1fr;gap:14px;padding:6px 0;border-bottom:1px solid rgba(120,130,150,.35);font-size:14.5px;line-height:1.4;color:var(--tx)}
+.agr__row small{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--mute);padding-top:2px}
+.agr__row b{color:var(--hd)}
+.agr__t{font-size:13.5px;line-height:1.45;color:var(--tx)}
+.agr__sig{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:2px}
+.agr__sig h4{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:800}
+.agr__sig .who{margin-top:3px;font-size:16px;font-weight:700;color:var(--hd);min-height:21px}
+.agr__sig .cg{font-size:13px;color:var(--tx);min-height:18px}
+.agr__sig .ln{margin-top:26px;border-bottom:1.5px solid var(--hd);position:relative;height:1px}
+.agr__sig .ln img{position:absolute;left:4px;bottom:2px;max-height:52px;max-width:220px;object-fit:contain}
+.agr__sig .cap{margin-top:4px;font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.09em}
+@media(max-width:760px){.agr__row{grid-template-columns:1fr}.agr__sig{grid-template-columns:1fr;gap:22px}}
+@media print{.agr__sig .ln{margin-top:36px}}
+`;
+
 const SUIZO = `
 :root{--sans:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
 body,.deck,.slide{font-family:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
@@ -203,6 +225,17 @@ function render(brand, p, langIn) {
   const sinDato = x('sin dato previo', 'no prior data', 'sem dado prévio', 'nessun dato precedente');
   const dias = n => `${n} ${x('días', 'days', 'dias', 'giorni')}`;
   const veces = n => (Math.abs(n - 1) < 1e-9 ? `1 ${x('vez', 'time', 'vez', 'volta')}` : `${F(n)} ${x('veces', 'times', 'vezes', 'volte')}`);
+  // modalidad de pago elegida (solo cambia lo que se muestra en el documento)
+  const semanal = d.modalidad_pago === 'semanal', cuota = piloto / 4, nav = !!d.incluir_salesnav;
+  const m$d = n => sym + F(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 2);
+  const pagoCorto = semanal ? x('4 pagos semanales', '4 weekly payments', '4 pagamentos semanais', '4 pagamenti settimanali') : x('Pago único', 'One-time payment', 'Pagamento único', 'Pagamento unico');
+  const pagoLargo = semanal
+    ? x(`${m$(piloto)} repartidos en las 4 semanas del mes: ${m$d(cuota)} por semana, que se paga el viernes de la misma semana trabajada (semana trabajada, semana pagada).`,
+      `${m$(piloto)} split across the 4 weeks of the month: ${m$d(cuota)} per week, paid on the Friday of the same week worked (week worked, week paid).`,
+      `${m$(piloto)} divididos nas 4 semanas do mês: ${m$d(cuota)} por semana, pago na sexta-feira da mesma semana trabalhada (semana trabalhada, semana paga).`,
+      `${m$(piloto)} suddivisi nelle 4 settimane del mese: ${m$d(cuota)} a settimana, da pagare il venerdì della stessa settimana lavorata (settimana lavorata, settimana pagata).`)
+    : x(`${m$(piloto)} en un solo pago, para comenzar.`, `${m$(piloto)} in a single payment, to get started.`, `${m$(piloto)} em um único pagamento, para começar.`, `${m$(piloto)} in un unico pagamento, per iniziare.`);
+  const navTxt = x('LinkedIn Sales Navigator: US$50/mes con 60 % de descuento, se suma a la factura.', 'LinkedIn Sales Navigator: US$50/month at 60% off, added to the invoice.', 'LinkedIn Sales Navigator: US$50/mês com 60 % de desconto, somado à fatura.', 'LinkedIn Sales Navigator: US$50/mese con il 60 % di sconto, aggiunto alla fattura.');
   const pilotLbl = x('Piloto de 30 días', '30-day pilot', 'Piloto de 30 dias', 'Progetto progetto pilota di 30 giorni');
   const perMes = x('/mes', '/month', '/mês', '/mese');
 
@@ -242,7 +275,7 @@ function render(brand, p, langIn) {
 <div class="edm"><h1 class="rv${empLen > 14 ? ' long' : ''}" style="--d:1">${propPara} <em>${esc(empresa)}</em></h1>
 <p class="sub rv" style="--d:2">${esc(precios)}</p></div>
 <div class="edb rv" style="--d:4"><div><small>${x('Para', 'For', 'Para', 'Per')}</small><b>${clLogo ? `<img class="cl-${esc(p.logoCliente.usar)}" alt="${esc(empresa)}" src="${clLogo}">` : esc(contacto || '—')}<span>${esc([contacto && clLogo ? contacto : '', cargo].filter(Boolean).join(', ') || (clLogo ? '' : cargo))}</span></b></div>
-<div><small>${pilotLbl}</small><b>${m$(piloto)}<span>${x('Pago único', 'One-time payment', 'Pagamento único', 'Pagamento unico')}</span></b></div>
+<div><small>${pilotLbl}</small><b>${m$(piloto)}<span>${pagoCorto}</span></b></div>
 <div><small>${debil ? x('Válida', 'Valid', 'Válida', 'Valida') : x('Después', 'Then', 'Depois', 'Poi')}</small><b>${debil ? dias(validez) : m$(mensual) + perMes}<span>${debil ? x('desde la fecha de envío', 'from the date sent', 'a partir da data de envio', 'dalla data di invio') : validaN(validez)}</span></b></div></div>
 </div></section>`);
 
@@ -294,7 +327,7 @@ ${fac(m$(fg.coste_tiempo_mes), alMes, x('coste en tiempo', 'cost in time', 'cust
   const cuestaMas = !!fg && aMano > ofrecido;
   const vsHtml = !cuestaMas ? '' : `<div class="vs rv" style="--d:6"><div class="vs-a"><small>${x('Hacerlo tú o tu equipo', 'Doing it yourself or with your team', 'Fazer você ou sua equipe', 'Farlo tu o il tuo team')}</small><b>${m$(aMano)}<span>${alMes}</span></b><i>${x('en tiempo, y sin que nadie te asegure reuniones', 'in time, with no one assuring meetings', 'em tempo, sem que ninguém garanta reuniões', 'in tempo, senza che nessuno assicuri incontri')}</i></div>
 <div class="vs-x">${x('vs', 'vs', 'vs', 'vs')}</div>
-<div class="vs-b"><small>${x('Con', 'With', 'Com', 'Con')} ${esc(marca)}</small><b>${m$(ofrecido)}<span>${debil ? x('piloto, pago único', 'pilot, one-time', 'piloto, pagamento único', 'pilota, pagamento unico') : alMes}</span></b><i>${x(`Hacerlo a mano te cuesta ≈ ${veces(aMano / ofrecido)} más`, `Doing it by hand costs you ≈ ${veces(aMano / ofrecido)} more`, `Fazer à mão custa ≈ ${veces(aMano / ofrecido)} mais`, `Farlo a mano ti costa ≈ ${veces(aMano / ofrecido)} in più`)}</i></div></div>`;
+<div class="vs-b"><small>${x('Con', 'With', 'Com', 'Con')} ${esc(marca)}</small><b>${m$(ofrecido)}<span>${debil ? (semanal ? x('piloto, 4 pagos semanales', 'pilot, 4 weekly payments', 'piloto, 4 pagamentos semanais', 'pilota, 4 pagamenti settimanali') : x('piloto, pago único', 'pilot, one-time', 'piloto, pagamento único', 'pilota, pagamento unico')) : alMes}</span></b><i>${x(`Hacerlo a mano te cuesta ≈ ${veces(aMano / ofrecido)} más`, `Doing it by hand costs you ≈ ${veces(aMano / ofrecido)} more`, `Fazer à mão custa ≈ ${veces(aMano / ofrecido)} mais`, `Farlo a mano ti costa ≈ ${veces(aMano / ofrecido)} in più`)}</i></div></div>`;
   S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">02 · ${x('La cuenta', 'The numbers', 'A conta', 'Il conto')}</div>
 <h2 class="rv" style="--d:1">${x('Lo que hoy <em>dejas de ganar.</em>', 'What you <em>miss out on</em> today.', 'O que você <em>deixa de ganhar</em> hoje.', 'Quello che oggi <em>non guadagni.</em>')}</h2>
 ${stripA}
@@ -393,14 +426,33 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
 <div class="rp lt rv" style="--d:3"><div class="k">${x('Tú', 'You', 'Você', 'Tu')} (${esc(empresa)})</div><ul>${li_(tu)}</ul></div></div></div></section>`);
 
   // 9 · inversión
-  const sim = `<div class="sim rv" style="--d:2"><div class="k">${pilotLbl}</div><div class="tot">${esc(m$(piloto))}<small>${x('pago único', 'one-time payment', 'pagamento único', 'pagamento unico')}</small></div><div class="eq">${x(`Unos 450 contactos · objetivo: ${F(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.`, `About 450 contacts · goal: ${F(obj, 0)} qualified meetings.<br>If we do not reach 2, we repeat the pilot at no cost.`, `Cerca de 450 contatos · meta: ${F(obj, 0)} reuniões qualificadas.<br>Se não chegarmos a 2, repetimos o piloto sem custo.`, `Circa 450 contatti · obiettivo: ${F(obj, 0)} incontri qualificati.<br>Se non arriviamo a 2, ripetiamo il progetto pilota senza costi.`)}</div></div>`;
+  const sim = `<div class="sim rv" style="--d:2"><div class="k">${pilotLbl}</div><div class="tot">${esc(m$(piloto))}<small>${semanal ? x('en 4 pagos', 'in 4 payments', 'em 4 pagamentos', 'in 4 pagamenti') : x('pago único', 'one-time payment', 'pagamento único', 'pagamento unico')}</small></div><div class="eq">${x(`Unos 450 contactos · objetivo: ${F(obj, 0)} reuniones cualificadas.<br>Si no llegamos a 2, repetimos el piloto sin coste.`, `About 450 contacts · goal: ${F(obj, 0)} qualified meetings.<br>If we do not reach 2, we repeat the pilot at no cost.`, `Cerca de 450 contatos · meta: ${F(obj, 0)} reuniões qualificadas.<br>Se não chegarmos a 2, repetimos o piloto sem custo.`, `Circa 450 contatti · obiettivo: ${F(obj, 0)} incontri qualificati.<br>Se non arriviamo a 2, ripetiamo il progetto pilota senza costi.`)}</div><div class="eq" style="margin-top:10px"><b>${x('Forma de pago', 'Payment', 'Forma de pagamento', 'Modalità di pagamento')}:</b> ${esc(pagoLargo)}</div></div>`;
   const facts = debil
     ? `<div class="facts"><div class="rv" style="--d:3"><small>${x('Después del piloto', 'After the pilot', 'Depois do piloto', 'Dopo il progetto pilota')}</small><b style="font-size:21px">${x('Lo decidimos juntos', 'We decide together', 'Decidimos juntos', 'Decidiamo insieme')}</b><p>${x('Con los resultados a la vista.', 'With the results in front of us.', 'Com os resultados à vista.', 'Con i risultati sotto gli occhi.')}</p></div></div>`
     : `<div class="facts"><div class="rv" style="--d:3"><small>${x('Mensual', 'Monthly', 'Mensal', 'Mensile')}</small><b>${esc(m$(mensual))}${perMes}</b><p>${x('Desde el mes 2, sin permanencia.', 'From month 2, no lock-in.', 'A partir do mês 2, sem fidelidade.', 'Dal mese 2, senza vincoli.')}</p></div>
 <div class="rv" style="--d:4"><small>Bonus</small><b>${esc(m$(d.bonus_reunion == null ? 100 : d.bonus_reunion))} ${x('por reunión', 'per meeting', 'por reunião', 'per incontro')}</b><p>${(() => { const u = F(d.umbral_bonus == null ? 3 : d.umbral_bonus, 0); return x(`Por cada reunión cualificada por encima de ${u}. Sin otra comisión.`, `For each qualified meeting above ${u}. No other commission.`, `Por cada reunião qualificada acima de ${u}. Sem outra comissão.`, `Per ogni incontro qualificato oltre ${u}. Nessun'altra commissione.`); })()}</p></div></div>`;
+  const navCard = nav ? `<div class="rv" style="--d:5"><small>LinkedIn Sales Navigator</small><b>US$50${perMes}</b><p>${x('Servicio opcional: con 60 % de descuento, se suma a la factura.', 'Optional service: 60% off, added to the invoice.', 'Serviço opcional: com 60 % de desconto, somado à fatura.', 'Servizio opzionale: sconto del 60 %, aggiunto alla fattura.')}</p></div>` : '';
+  const factsAll = nav ? facts.replace(/<\/div><\/div>$/, '</div>' + navCard + '</div>') : facts;
   S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1500632907344-a073709b2448', ovV(.92, .8))}<div class="content"><div class="eyebrow rv">08 · ${x('Inversión', 'Investment', 'Investimento', 'Investimento')}</div>
 <h2 class="rv" style="--d:1">${x('Una inversión <em>clara.</em>', 'A <em>clear</em> investment.', 'Um investimento <em>claro.</em>', 'Un investimento <em>chiaro.</em>')}</h2>
-<div class="inv">${sim}${facts}</div></div></section>`);
+<div class="inv">${sim}${factsAll}</div></div></section>`);
+
+  // 9b · acuerdo y firma (se imprime / exporta a PDF y lo firman las dos partes)
+  const fAll = Array.isArray(b.firmantes) ? b.firmantes : [], f0 = fAll[0] || {};
+  const fNom = d.firmante_nombre || f0.nombre || '', fCar = d.firmante_cargo || f0.cargo || '', fImg = imgOk(f0.firma) && !d.firmante_nombre ? f0.firma : '';
+  const rowA = (k, v) => `<div class="agr__row"><small>${k}</small><div>${v}</div></div>`;
+  S.push(`<section class="slide s-light" data-th="light"><div class="content"><div class="eyebrow rv">09 · ${x('Acuerdo', 'Agreement', 'Acordo', 'Accordo')}</div>
+<h2 class="rv" style="--d:1">${x('Aceptación y <em>firma.</em>', 'Acceptance and <em>signature.</em>', 'Aceitação e <em>assinatura.</em>', 'Accettazione e <em>firma.</em>')}</h2>
+<div class="agr rv" style="--d:2">
+${rowA(x('Servicio', 'Service', 'Serviço', 'Servizio'), x(`Piloto de 30 días de adquisición comercial B2B para ${esc(empresa)}, tal como se describe en este documento.`, `30-day B2B commercial acquisition pilot for ${esc(empresa)}, as described in this document.`, `Piloto de 30 dias de aquisição comercial B2B para ${esc(empresa)}, conforme descrito neste documento.`, `Progetto pilota di 30 giorni di acquisizione commerciale B2B per ${esc(empresa)}, come descritto in questo documento.`))}
+${rowA(x('Inversión y pago', 'Investment and payment', 'Investimento e pagamento', 'Investimento e pagamento'), `<b>${esc(pagoLargo)}</b>`)}
+${nav ? rowA(x('Servicio opcional', 'Optional service', 'Serviço opcional', 'Servizio opzionale'), esc(navTxt)) : ''}
+${rowA(x('Después del piloto', 'After the pilot', 'Depois do piloto', 'Dopo il progetto pilota'), debil ? x('Lo decidimos juntos, con los resultados a la vista.', 'We decide together, with the results in front of us.', 'Decidimos juntos, com os resultados à vista.', 'Decidiamo insieme, con i risultati sotto gli occhi.') : x(`${esc(m$(mensual))}${perMes} desde el mes 2, sin permanencia.`, `${esc(m$(mensual))}${perMes} from month 2, no lock-in.`, `${esc(m$(mensual))}${perMes} a partir do mês 2, sem fidelidade.`, `${esc(m$(mensual))}${perMes} dal mese 2, senza vincoli.`))}
+${rowA(x('Vigencia', 'Validity', 'Vigência', 'Validità'), x(`Esta propuesta es válida hasta el ${esc(fechaLarga(sumDays(fecha, validez), lang))}.`, `This proposal is valid until ${esc(fechaLarga(sumDays(fecha, validez), lang))}.`, `Esta proposta é válida até ${esc(fechaLarga(sumDays(fecha, validez), lang))}.`, `Questa proposta è valida fino al ${esc(fechaLarga(sumDays(fecha, validez), lang))}.`))}
+<p class="agr__t">${x('Al firmar, las dos partes aceptan lo descrito en este documento: el alcance (06), las responsabilidades (07) y la inversión con su forma de pago (08).', 'By signing, both parties accept what is described in this document: the scope (06), the responsibilities (07) and the investment with its payment method (08).', 'Ao assinar, as duas partes aceitam o descrito neste documento: o escopo (06), as responsabilidades (07) e o investimento com a forma de pagamento (08).', 'Firmando, le due parti accettano quanto descritto in questo documento: l\'ambito (06), le responsabilità (07) e l\'investimento con la modalità di pagamento (08).')}</p>
+<div class="agr__sig"><div><h4>${esc(marca)}</h4><div class="who">${esc(fNom)}</div><div class="cg">${esc(fCar)}</div><div class="ln">${fImg ? `<img alt="" src="${fImg}">` : ''}</div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln" style="margin-top:22px"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div>
+<div><h4>${esc(empresa)}</h4><div class="who">${esc(contacto)}</div><div class="cg">${esc(cargo)}</div><div class="ln"></div><div class="cap">${x('Firma', 'Signature', 'Assinatura', 'Firma')}</div><div class="ln" style="margin-top:22px"></div><div class="cap">${x('Fecha', 'Date', 'Data', 'Data')}</div></div></div>
+</div></div></section>`);
 
   // 10 · próximo paso
   const subj = x('Confirmo el piloto de 30 días', 'I confirm the 30-day pilot', 'Confirmo o piloto de 30 dias', 'Confermo il progetto pilota di 30 giorni');
@@ -413,8 +465,8 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
 <h2 class="rv" style="--d:1">${x('Confirmemos el <em>piloto.</em>', 'Let us confirm the <em>pilot.</em>', 'Vamos confirmar o <em>piloto.</em>', 'Confermiamo il <em>progetto pilota.</em>')}</h2>
 <p class="lead rv" style="--d:2">${x('Una sola cosa: confirma que arrancamos. Esta propuesta es válida hasta el ', 'Just one thing: confirm that we start. This proposal is valid until ', 'Apenas uma coisa: confirme que começamos. Esta proposta é válida até ', 'Una sola cosa: conferma che partiamo. Questa proposta è valida fino al ')}${esc(fechaLarga(sumDays(fecha, validez), lang))}.</p>
 <a class="cta rv" style="--d:3" target="_blank" rel="noopener noreferrer" href="${esc(mailto)}">${x('Confirmar el piloto', 'Confirm the pilot', 'Confirmar o piloto', 'Confermare il progetto pilota')} <span>↗</span></a></div>
-<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>${x('Confirmas el piloto', 'You confirm the pilot', 'Você confirma o piloto', 'Confermi il progetto pilota')}${decideP}.</span></div>
-<div class="rv" style="--d:4"><i>02</i><span>${x('Pago del piloto: ', 'Pilot payment: ', 'Pagamento do piloto: ', 'Pagamento del progetto pilota: ')}${esc(m$(piloto))}.${payInfo ? ' ' + x('Datos de pago: ', 'Payment details: ', 'Dados de pagamento: ', 'Dati di pagamento: ') + esc(payInfo) + '.' : ''}</span></div>
+<div class="steps"><div class="rv" style="--d:3"><i>01</i><span>${x('Firmas el acuerdo y confirmas el piloto', 'You sign the agreement and confirm the pilot', 'Você assina o acordo e confirma o piloto', 'Firmi l\'accordo e confermi il progetto pilota')}${decideP}.</span></div>
+<div class="rv" style="--d:4"><i>02</i><span>${x('Pago del piloto: ', 'Pilot payment: ', 'Pagamento do piloto: ', 'Pagamento del progetto pilota: ')}${esc(semanal ? x(`4 pagos semanales de ${m$d(cuota)}, cada viernes de la semana trabajada`, `4 weekly payments of ${m$d(cuota)}, each Friday of the week worked`, `4 pagamentos semanais de ${m$d(cuota)}, toda sexta-feira da semana trabalhada`, `4 pagamenti settimanali da ${m$d(cuota)}, ogni venerdì della settimana lavorata`) : m$(piloto))}.${payInfo ? ' ' + x('Datos de pago: ', 'Payment details: ', 'Dados de pagamento: ', 'Dati di pagamento: ') + esc(payInfo) + '.' : ''}</span></div>
 <div class="rv" style="--d:5"><i>03</i><span>${x('Fecha de inicio: ', 'Start date: ', 'Data de início: ', 'Data di inizio: ')}${p.inicio ? esc(p.inicio) : x('la acordamos al confirmar', 'we agree on it when you confirm', 'combinamos ao confirmar', 'la concordiamo alla conferma')}.</span></div></div></div>
 <div class="foot"><span>${esc(marca)}${mail ? ' · ' + esc(mail) : ''}${web ? ' · ' + esc(web) : ''}</span><span>${x('Confidencial · preparada para ', 'Confidential · prepared for ', 'Confidencial · preparada para ', 'Riservato · preparata per ')}${esc(empresa)}</span></div></section>`);
 
@@ -425,7 +477,7 @@ ${refs.length ? `<p class="cap rv" style="--d:6;margin-top:22px;font-size:13px">
   return `<!DOCTYPE html>\n<html lang="${lang}" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 ${d.diseno_anterior ? '' : '<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">'}
-<style>${rootVars}${base.CSS}${EXTRA}${d.diseno_anterior ? '' : SUIZO}</style></head><body>
+<style>${rootVars}${base.CSS}${EXTRA}${AGR}${d.diseno_anterior ? '' : SUIZO}</style></head><body>
 <div class="hint">${x('Gira el teléfono para ver mejor la presentación', 'Rotate your phone for a better view', 'Gire o telefone para ver melhor a apresentação', 'Ruota il telefono per vedere meglio la presentazione')}</div>
 <div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
