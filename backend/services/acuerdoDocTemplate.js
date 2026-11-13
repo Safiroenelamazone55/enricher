@@ -36,6 +36,9 @@ table.kv td{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;lin
 table.kv td:first-child{width:170px;padding-right:14px;font-weight:700;color:var(--navy)}
 table.kv td b{color:var(--ink)}
 table.kv.num td:last-child{text-align:right;white-space:nowrap}
+table.kv.ej{table-layout:fixed}
+table.kv.ej td:first-child{width:34%}
+table.kv.ej td:not(:first-child){width:16.5%;text-align:right;white-space:nowrap;padding-left:0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:22px}
 .two h3{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
 .two .box{padding:14px 16px;background:var(--soft);border-left:3px solid var(--teal)}
@@ -198,7 +201,7 @@ ${sec('8', x('Vigencia', 'Validity', 'Vigência', 'Validità'), `<p>${x(`Esta pr
       [x('Horas a la semana buscando clientes', 'Hours a week looking for clients', 'Horas por semana buscando clientes', 'Ore a settimana a cercare clienti'), `${F(fg.h)} h${fg.supH ? ` <span class="note">(${supuesto} · ${x('rango 10–25 h', 'range 10–25 h', 'faixa 10–25 h', 'intervallo 10–25 h')})</span>` : ''}`],
       [x('Lo que vale una hora', 'What an hour is worth', 'Quanto vale uma hora', 'Quanto vale un\'ora'), `${esc(m$(fg.v))}${fg.supV ? ` <span class="note">(${supuesto})</span>` : ''}`],
       [x('Coste de hacerlo a mano', 'Cost of doing it by hand', 'Custo de fazer à mão', 'Costo di farlo a mano'), `<b>${esc(m$(fg.coste_tiempo_mes))}</b> ${alMes} · ${esc(m$(fg.coste_tiempo_anio))} ${alAnio}`]]) : '';
-    const tC = hayV ? `<table class="kv num"><tr><td>${x('Valor de un cliente nuevo', 'Value of a new client', 'Valor de um novo cliente', 'Valore di un nuovo cliente')}</td>${ej.map(e => `<td><b>${esc(m$(e.val))}</b></td>`).join('')}</tr>
+    const tC = hayV ? `<table class="kv ej"><tr><td>${x('Valor de un cliente nuevo', 'Value of a new client', 'Valor de um novo cliente', 'Valore di un nuovo cliente')}</td>${ej.map(e => `<td><b>${esc(m$(e.val))}</b></td>`).join('')}</tr>
 <tr><td>${x('Ingreso nuevo al mes', 'New revenue per month', 'Nova receita por mês', 'Nuovo ricavo al mese')}</td>${ej.map(e => `<td>${esc(m$(e.k.ingreso_mes))}</td>`).join('')}</tr>
 <tr><td>${x('Veces que cubre el piloto', 'Times it covers the pilot', 'Vezes que cobre o piloto', 'Volte che copre il progetto pilota')}</td>${ej.map(e => `<td>${F(e.k.veces_piloto)}</td>`).join('')}</tr></table>` : '';
     page(`${hayV ? sec('A', x('Lo que hoy deja de ganar', 'What you miss out on today', 'O que deixa de ganhar hoje', 'Quello che oggi non guadagna'), tA) : ''}
