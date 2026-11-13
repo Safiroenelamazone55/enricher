@@ -218,7 +218,7 @@ const InicioModule = (() => {
       <div class="ini-two"><div><label class="ini-l">Idioma de la plantilla</label><select class="ini-in" id="ini-mid" onchange="InicioModule._msgRecarga(${id},'${tipo}')"><option value="es"${!en ? ' selected' : ''}>Español</option><option value="en"${en ? ' selected' : ''}>English</option></select></div>
         ${(d.gracias || tipo === 'recordatorio') ? '' : `<label class="ini-chk"><input type="checkbox" id="ini-mls" ${_msg.lista ? 'checked' : ''} onchange="InicioModule._msgRecarga(${id},'${tipo}')"><span>Incluir lo pendiente</span></label>`}</div>
       ${wa ? '' : `<label class="ini-l">Asunto</label><input class="ini-in" id="ini-mas" value="${E(d.asunto)}">`}
-      <label class="ini-l">Mensaje <span class="ini-opt">(puedes editarlo; ${wa ? 'el enlace se añade al final' : 'el botón con el enlace se añade solo'})</span></label><textarea class="ini-in" id="ini-mcu" rows="9">${E(d.cuerpo)}</textarea>
+      <label class="ini-l">Mensaje <span class="ini-opt">(puedes editarlo; el enlace del formulario va dentro del mensaje)</span></label><textarea class="ini-in" id="ini-mcu" rows="9">${E(d.cuerpo)}</textarea>
       <div class="ini-minfo"><div><b>Cuándo sale:</b> al instante, al pulsar «Enviar».</div>
         <div><b>Le falta responder${pend.length ? ` (${pend.length})` : ''}:</b> ${pend.length ? `<details class="ini-det"><summary>ver lista</summary><ul>${pend.map(x => `<li>${E(x)}</li>`).join('')}</ul></details>` : 'nada, está completo. Se envía solo el agradecimiento.'}</div></div>
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" id="ini-menv" onclick="InicioModule._msgEnviar(${id},'${tipo}')">Enviar</button></div>`);

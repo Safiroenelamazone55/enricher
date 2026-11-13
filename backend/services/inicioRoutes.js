@@ -347,7 +347,13 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
     return SC.CAMPOS.filter(c => c.tipo !== 'check' && !String(P[c.id] == null ? '' : P[c.id]).trim()).map(c => (en ? c.en : c.es) + (c.req ? '' : (en ? ' (optional)' : ' (opcional)')));
   };
   // ── Enviar el formulario / recordar lo pendiente, por correo o WhatsApp: plantilla ES/EN editable, remitente y momento a la vista ──
+  // el enlace del formulario va VISIBLE dentro del mensaje (si el cliente aún no lo ha enviado)
   const plantilla = (r, en, tipo, conLista) => {
+    const o = plantillaBase(r, en, tipo, conLista);
+    if (!o.enviado) o.cuerpo += '\n\n' + (en ? 'Complete the form here: ' : 'Completa el formulario aquí: ') + urlDe(r);
+    return o;
+  };
+  const plantillaBase = (r, en, tipo, conLista) => {
     const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, nombre = String(R.contacto || '').trim().split(/[\s,]+/)[0];
     const pend = pendientesDe(r, en), enviado = yaEnviado(r), f = new Date(r.expira_en).toISOString().slice(0, 10), hola = (en ? 'Hi' : 'Hola') + (nombre ? ' ' + nombre : '');
     const L = pend.map(x => '- ' + x).join('\n');
@@ -423,7 +429,7 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       if (!cx) return res.status(404).json({ error: 'Esa línea de WhatsApp no existe' });
       if ((await nivelDe(req, 'whatsapp')) < 2 || (puedeVerWa && !(await puedeVerWa(req, cx)))) return res.status(403).json({ error: 'No tienes acceso a ese WhatsApp' });
       if (cx.estado !== 'conectado') return res.status(409).json({ error: 'Esa línea de WhatsApp no está conectada' });
-      try { await require('./waService').enviar(pool, cx.id, num, texto + (enviado ? '' : '\n\n' + url)); }
+      try { await require('./waService').enviar(pool, cx.id, num, texto + (enviado || texto.includes(url) ? '' : '\n\n' + url)); }
       catch (e) { console.warn('[inicio] WhatsApp no enviado:', e.message); return res.status(502).json({ error: 'No se pudo enviar por WhatsApp: ' + String(e.message || 'error').slice(0, 140) }); }
       destino = '+' + num;
     } else {
@@ -435,11 +441,12 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       const ccMal = cc.find(x => !SC.EMAIL_RE.test(x)); if (ccMal) return res.status(400).json({ error: `El correo en copia «${ccMal}» no es válido` });
       const html = texto.split(/\n{2,}/).map(par => {
         const ls = par.split('\n'), items = ls.filter(l => /^\s*-\s+/.test(l)), pre = ls.filter(l => !/^\s*-\s+/.test(l));
-        return (pre.length ? `<p style="margin:0 0 12px;color:#374151">${esc(pre.join('\n')).replace(/\n/g, '<br>')}</p>` : '')
+        return (pre.length ? `<p style="margin:0 0 12px;color:#374151">${esc(pre.join('\n')).replace(/\n/g, '<br>').split(esc(url)).join('<a href="' + esc(url) + '" style="color:#0b6bcb">' + esc(url) + '</a>')}</p>` : '')
           + (items.length ? `<ul style="margin:0 0 12px;padding-left:20px;color:#374151">${items.map(l => `<li style="margin:3px 0">${esc(l.replace(/^\s*-\s+/, ''))}</li>`).join('')}</ul>` : '');
       }).join('');
-      const cuerpoHtml = marco(en ? 'Your start form' : 'Tu formulario de inicio', html, enviado ? null : { url, txt: en ? 'Complete the form' : 'Completar el formulario' });
-      const plano_ = `${texto}${enviado ? '' : '\n\n' + url}`;
+      const conUrl = texto.includes(url);   // si el mensaje ya trae el enlace a la vista, no se repite como botón
+      const cuerpoHtml = marco(en ? 'Your start form' : 'Tu formulario de inicio', html, enviado || conUrl ? null : { url, txt: en ? 'Complete the form' : 'Completar el formulario' });
+      const plano_ = `${texto}${enviado || conUrl ? '' : '\n\n' + url}`;
       if (remId) {   // desde un buzón conectado (SMTP): sale con la firma y queda en su carpeta Enviados
         const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [remId, uidOf(req)]);
         if (!mb) return res.status(404).json({ error: 'Ese buzón no existe' });
