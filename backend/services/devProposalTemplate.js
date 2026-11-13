@@ -179,6 +179,20 @@ const AGR = `
 @media print{.agr__sig .ln{margin-top:36px}}
 `;
 
+// «Propuesta y acuerdo comercial» se ve como un PDF (páginas apiladas, sin navegación de presentación); al imprimir sale una diapositiva por página
+const PDFV = `
+@media screen{
+html,body{height:auto!important;overflow:auto!important;background:#E7EBF1!important}
+.deck.pdf{position:static!important;inset:auto!important;overflow:visible!important;background:#E7EBF1!important;padding:18px 0 4px}
+.deck.pdf .stage{position:static!important;width:1280px!important;height:auto!important;margin:0 auto!important;transform:none!important;box-shadow:none!important;overflow:visible!important;background:none!important}
+.deck.pdf .slide{position:relative!important;inset:auto!important;width:1280px;height:720px;opacity:1!important;visibility:visible!important;transform:none!important;transition:none!important;margin:0 auto 18px;box-shadow:0 10px 40px rgba(15,23,42,.22);overflow:hidden}
+}
+.deck.pdf .top,.deck.pdf .nav,.deck.pdf .arr,.deck.pdf .bar,.hint,.btn-fs{display:none!important}
+.deck.pdf .rv{animation:none!important;opacity:1!important;transform:none!important}
+@media print{#stage{zoom:1!important}}
+`;
+const PDFJS = "(function(){var st=document.getElementById('stage');document.querySelectorAll('.slide').forEach(function(e){e.classList.add('on')});function fit(){st.style.zoom=Math.min(1,(window.innerWidth-24)/1280)}fit();addEventListener('resize',fit);addEventListener('beforeprint',function(){st.style.zoom=1});addEventListener('afterprint',fit)})();";
+
 const SUIZO = `
 :root{--sans:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
 body,.deck,.slide{font-family:'Manrope','Inter','Segoe UI',system-ui,sans-serif}
@@ -478,16 +492,16 @@ ${rowA(x('Vigencia', 'Validity', 'Vigência', 'Validità'), x(`Esta propuesta es
   return `<!DOCTYPE html>\n<html lang="${lang}" data-deck="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 ${d.diseno_anterior ? '' : '<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">'}
-<style>${rootVars}${base.CSS}${EXTRA}${AGR}${d.diseno_anterior ? '' : SUIZO}</style></head><body>
+<style>${rootVars}${base.CSS}${EXTRA}${AGR}${d.diseno_anterior ? '' : SUIZO}${AC ? PDFV : ''}</style></head><body>
 <div class="hint">${x('Gira el teléfono para ver mejor la presentación', 'Rotate your phone for a better view', 'Gire o telefone para ver melhor a apresentação', 'Ruota il telefono per vedere meglio la presentazione')}</div>
-<div class="deck" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
+<div class="deck${AC ? ' pdf' : ''}" id="deck" data-th="dark" data-tt="dark"><div class="stage" id="stage">
 <div class="bar" id="bar"></div>
 <div class="top"><div class="brand"><span class="bw">${brandW}</span><span class="bc">${brandC}</span></div><div class="r"><span class="cnt"><b id="cur">01</b> <i>/ ${pn(total)}</i></span><button class="btn-fs" id="fs" type="button">⛶ ${x('Presentar', 'Present', 'Apresentar', 'Presenta')}</button></div></div>
 ${S.map((sec, i) => (i === 0 || !d.estilo_sobrio ? sec : sec.replace(/class="slide( close)? s-dark"/, 'class="slide$1 s-light"').replace(/data-th="dark"/, 'data-th="light"').replace(/<div class="bgph"[^>]*><\/div>/g, '').replace(/<div class="bg">(?:<div class="[^"]*"><\/div>)+<\/div>/g, ''))).join('\n')}
 <button class="arr l" id="prev" aria-label="←">‹</button><button class="arr r" id="next" aria-label="→">›</button>
 <div class="nav">${dots}</div>
 </div></div>
-<script>${base.JS}</script></body></html>`;
+<script>${AC ? PDFJS : base.JS}</script></body></html>`;
 }
 
 // «Propuesta NovaCentrax – Empresa – 2026-11-07»: nombre del PDF (el navegador lo toma del título del documento)

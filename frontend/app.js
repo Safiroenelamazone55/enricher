@@ -43674,7 +43674,7 @@ const PlantillasModule = (() => {
           ${g.t.tipo === 'acuerdo' ? `<label class="pl-l">Modalidad de pago del piloto</label><select class="pl-in" onchange="PlantillasModule.setDev('modalidad_pago',this.value)"><option value="unico"${p.dev.modalidad_pago !== 'semanal' ? ' selected' : ''}>Pago único: todo para comenzar</option><option value="semanal"${p.dev.modalidad_pago === 'semanal' ? ' selected' : ''}>Semana trabajada, semana pagada: en 4 pagos, cada viernes</option></select>
           <p class="hrm-card__meta">Solo cambia lo que dice el documento: con «semanal», el precio del piloto se reparte entre las 4 semanas del mes (por ejemplo 500 → 125 por semana, pagado el viernes de la misma semana).</p>
           ${dvc('incluir_salesnav', 'Añadir el servicio opcional de LinkedIn Sales Navigator (US$50/mes con 60 % de descuento, se suma a la factura)')}` : ''}${dvc('diseno_anterior', 'Usar el diseño anterior (por defecto: Suizo-Estudio)')}</div>
-        ${g.t.tipo === 'acuerdo' ? `<div class="pl-box"><div class="pl-box__t">Quién firma por la empresa <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div></div>` : ''}
+        ${g.t.tipo === 'acuerdo' ? `<div class="pl-box"><div class="pl-box__t">Quién firma por ${E((_brands.find(x => x.id === g.t.brand_id) || {}).nombre || 'tu empresa')} <span class="pl-opt">(opcional)</span></div><div class="pl-row"><div>${dvf('firmante_nombre', 'Nombre', 'text', 'Por defecto, el firmante cargado en la empresa')}</div><div>${dvf('firmante_cargo', 'Cargo', 'text')}</div></div><p class="hrm-card__meta">Es quien firma por tu empresa. Por el cliente firma el contacto de la sección «Cliente» (nombre y cargo).</p></div>` : ''}
         <div class="pl-box"><div class="pl-box__t">La fuga de tiempo del fundador <span class="pl-opt">(opcional)</span></div>
           <div class="pl-row3"><div>${dvf('horas_semana_prospeccion', 'Horas a la semana buscando clientes', 'number', 'Ej. 20')}</div><div>${dvf('valor_hora', 'Lo que vale su hora', 'number', 'Ej. 15')}</div><div><label class="pl-l">Esas cifras son</label><select class="pl-in" onchange="PlantillasModule.setDev('horas_origen',this.value)"><option value="supuesto"${p.dev.horas_origen === 'real' ? '' : ' selected'}>Supuesto (estimación)</option><option value="real"${p.dev.horas_origen === 'real' ? ' selected' : ''}>Real (lo dijo el cliente)</option></select></div></div>
           ${dvc('usar_supuesto_horas', 'Usar el supuesto si están vacías (20 h a la semana y 15 por hora, marcado «supuesto»)')}
@@ -43820,6 +43820,14 @@ const PlantillasModule = (() => {
   }
   function _fit() {
     const box = $('pl-prev'), inn = $('pl-prev-in'), fr = $('pl-frame'); if (!box || !fr) return;
+    if (_gen && _gen.t && _gen.t.tipo === 'acuerdo') {   // propuesta y acuerdo: se ve como un PDF (páginas apiladas, con desplazamiento), no como presentación
+      const W = 1330, avail = Math.max(440, Math.round(window.innerHeight - box.getBoundingClientRect().top - 24)), k = Math.max(0.25, Math.min(1, (box.clientWidth - 4) / W));   // el marco mide 1330 px (el documento se maqueta como página) y se reduce para caber
+      fr.setAttribute('sandbox', 'allow-scripts'); fr.removeAttribute('allow'); fr.removeAttribute('allowfullscreen');
+      fr.style.width = W + 'px'; fr.style.height = Math.round(avail / k) + 'px'; fr.style.transformOrigin = '0 0'; fr.style.transform = `scale(${k})`;
+      inn.style.width = Math.round(W * k) + 'px'; inn.style.height = avail + 'px'; fr.onload = null;
+      if (_gen && _gen.html) fr.srcdoc = _gen.html;
+      return;
+    }
     if (_gen && _gen.t && _isDeck(_gen.t.tipo)) {   // presentación: marco 16:9 con scripts (navegación, simulador); sin acceso al resto de la app
       const w = Math.max(320, box.clientWidth - 4), h = Math.round(w * 9 / 16);
       fr.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox'); fr.setAttribute('allow', 'fullscreen'); fr.setAttribute('allowfullscreen', '');
