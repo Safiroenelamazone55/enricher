@@ -43746,6 +43746,7 @@ const PlantillasModule = (() => {
       if (pr.logoCliente && typeof pr.logoCliente === 'object') g.p.logoCliente = JSON.parse(JSON.stringify(pr.logoCliente));
       if (_isDev(g.t.tipo) && pr.dev && typeof pr.dev === 'object') {   // propuesta post-llamada de ese cliente: se trae TODO (llamada, cifras, referencias, fotos, idioma)
         g.p.dev = { ...(g.p.dev || {}), ...JSON.parse(JSON.stringify(pr.dev)) };
+        if (g.t.tipo === 'acuerdo') { const h = new Date(); g.p.dev.fecha_propuesta = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`; }   // el acuerdo lleva la fecha del día en que se genera, no la de la propuesta post-llamada
         ['clienteCargo', 'fotos', 'fotoPortada', 'simulador'].forEach(k => { if (pr[k] !== undefined) g.p[k] = pr[k]; });
         if (Array.isArray(pr.referencias)) g.p.referencias = JSON.parse(JSON.stringify(pr.referencias));
         if (cp.lang && DVL[cp.lang]) { g.langs = [cp.lang]; g.vista = cp.lang; }
