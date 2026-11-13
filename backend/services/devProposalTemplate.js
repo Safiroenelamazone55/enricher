@@ -189,6 +189,8 @@ html,body{height:auto!important;overflow:auto!important;background:#E7EBF1!impor
 }
 .deck.pdf .top,.deck.pdf .nav,.deck.pdf .arr,.deck.pdf .bar,.hint,.btn-fs{display:none!important}
 .deck.pdf .rv{animation:none!important;opacity:1!important;transform:none!important}
+.deck.pdf .bg .blob,.deck.pdf .bg .grid{display:none!important}
+.deck.pdf .slide.s-dark{background:var(--navy)!important}
 @media print{#stage{zoom:1!important}}
 `;
 const PDFJS = "(function(){var st=document.getElementById('stage');document.querySelectorAll('.slide').forEach(function(e){e.classList.add('on')});function fit(){st.style.zoom=Math.min(1,(window.innerWidth-24)/1280)}fit();addEventListener('resize',fit);addEventListener('beforeprint',function(){st.style.zoom=1});addEventListener('afterprint',fit)})();";
@@ -232,8 +234,8 @@ function render(brand, p, langIn, opts) {
   const fecha = d.fecha_propuesta || today();
   const validez = d.validez_dias || 10;
   const clLogo = p.logoCliente && typeof p.logoCliente === 'object' && imgOk(p.logoCliente[p.logoCliente.usar]) ? p.logoCliente[p.logoCliente.usar] : '';
-  const fotos = p.fotos !== false;
-  const foto = imgOk(p.fotoPortada) ? p.fotoPortada : '';
+  const fotos = !AC && p.fotos !== false;   // la «Propuesta y acuerdo comercial» va siempre sin fotos: solo el color de la marca
+  const foto = !AC && imgOk(p.fotoPortada) ? p.fotoPortada : '';
   const obj = d.reuniones_objetivo || 3, piloto = d.precio_piloto || 500, mensual = d.precio_mensual || 750;
   const real = c.cierre_real, cierre = c.cierre_usado;
   const de10 = F(cierre / 10, cierre % 10 ? 1 : 0);
