@@ -43954,12 +43954,33 @@ const PlantillasModule = (() => {
   function salir() { const volver = _gen && _gen.copiaId; _gen = null; if (volver) { _tab = 'copias'; render(_host.id); } else _draw(); }
 
   // ── Copias ──
-  function _viewCopias() {
-    const rows = _copies.map(c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${E(LANGS[c.lang] || DVL[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+  let _cf = { tpl: '', quien: '', desde: '', hasta: '' };   // filtros de «Copias generadas»
+  const _cfFila = c => `<div class="pl-crow"><div class="pl-crow__main"><b>${E(c.titulo)}</b><span class="hrm-card__meta">${E(c.plantilla || 'plantilla eliminada')} · ${c.creador ? E(c.creador) + ' · ' : ''}${E(LANGS[c.lang] || DVL[c.lang] || c.lang)} · ${new Date(c.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
       <div class="hrm-card__acts" style="margin:0"><button class="hrm-lnk" onclick="PlantillasModule.verCopia(${c.id})">Ver</button><button class="hrm-lnk" onclick="PlantillasModule.editCopia(${c.id})">Editar</button>${c.cliente && /presentaci|propuesta|adquisici/i.test((c.plantilla || '') + ' ' + c.titulo) ? `<button class="hrm-lnk" onclick="PlantillasModule.crearAcuerdo(${c.id})" title="Propuesta y acuerdo comercial de este cliente: eliges la modalidad de pago y exportas el PDF para firmar">Crear acuerdo</button>` : ''}<button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'html')">HTML</button><button class="hrm-lnk" onclick="PlantillasModule.bajarCopia(${c.id},'pdf')">PDF</button>
-        <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.slug || c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`).join('');
-    return `<div class="pl-crows">${rows || '<p class="hrm-sub">Todavía no has guardado ninguna copia.</p>'}</div>`;
+        <button class="hrm-lnk" onclick="PlantillasModule.enlace('${c.slug || c.token}')">Copiar enlace</button><button class="hrm-lnk" onclick="PlantillasModule.renCopia(${c.id})">Renombrar</button><button class="hrm-lnk pl-danger" onclick="PlantillasModule.delCopia(${c.id})">Eliminar</button></div></div>`;
+  const _cfLista = () => _copies.filter(c => {
+    if (_cf.tpl && (c.plantilla || '__elim') !== _cf.tpl) return false;
+    if (_cf.quien && String(c.creado_por == null ? '__sin' : c.creado_por) !== _cf.quien) return false;
+    const d = String(c.created_at || '').slice(0, 10), loc = new Date(c.created_at), f = `${loc.getFullYear()}-${String(loc.getMonth() + 1).padStart(2, '0')}-${String(loc.getDate()).padStart(2, '0')}`;
+    if (_cf.desde && f < _cf.desde) return false;
+    if (_cf.hasta && f > _cf.hasta) return false;
+    return !!d || true;
+  });
+  const _cfFilas = () => { const l = _cfLista(); return l.map(_cfFila).join('') || `<p class="hrm-sub">${_copies.length ? 'Ninguna copia coincide con los filtros.' : 'Todavía no has guardado ninguna copia.'}</p>`; };
+  function _viewCopias() {
+    const tpls = [...new Set(_copies.map(c => c.plantilla || '__elim'))];
+    const quienes = new Map(); _copies.forEach(c => quienes.set(String(c.creado_por == null ? '__sin' : c.creado_por), c.creador || 'Sin registrar'));
+    const opt = (v, l, cur) => `<option value="${E(v)}"${cur === v ? ' selected' : ''}>${E(l)}</option>`;
+    const hay = _cf.tpl || _cf.quien || _cf.desde || _cf.hasta;
+    return `<div class="pl-cf"><select class="pl-in" onchange="PlantillasModule.cfSet('tpl',this.value)" title="Plantilla usada"><option value="">Todas las plantillas</option>${tpls.map(t => opt(t, t === '__elim' ? 'Plantilla eliminada' : t, _cf.tpl)).join('')}</select>
+      <select class="pl-in" onchange="PlantillasModule.cfSet('quien',this.value)" title="Generado por"><option value="">Todos los miembros</option>${[...quienes].map(([id, n]) => opt(id, n, _cf.quien)).join('')}</select>
+      <label class="pl-cf__d">Desde <input class="pl-in" type="date" value="${E(_cf.desde)}" onchange="PlantillasModule.cfSet('desde',this.value)"></label>
+      <label class="pl-cf__d">Hasta <input class="pl-in" type="date" value="${E(_cf.hasta)}" onchange="PlantillasModule.cfSet('hasta',this.value)"></label>
+      <span class="hrm-card__meta" id="pl-cf-n">${_cfLista().length} de ${_copies.length}</span>${hay ? '<button class="hrm-lnk" onclick="PlantillasModule.cfLimpiar()">Limpiar filtros</button>' : '<button class="hrm-lnk" style="visibility:hidden">Limpiar filtros</button>'}</div>
+      <div class="pl-crows" id="pl-crows">${_cfFilas()}</div>`;
   }
+  function cfSet(k, v) { _cf[k] = v; _draw(); }
+  function cfLimpiar() { _cf = { tpl: '', quien: '', desde: '', hasta: '' }; _draw(); }
   async function _htmlCopia(id) { const r = await apiFetch(`${API}/tpl/copies/${id}/html`); if (!r.ok) throw new Error('No se pudo abrir la copia'); return r.text(); }
   async function verCopia(id) { try { const h = await _htmlCopia(id); const w = window.open(URL.createObjectURL(new Blob([h], { type: 'text/html;charset=utf-8' })), '_blank'); if (!w) showBanner('Permite las ventanas emergentes', 'error'); } catch (e) { showBanner(e.message, 'error'); } }
   async function bajarCopia(id, fmt) { try { const c = _copies.find(x => x.id === id); _abrir(await _htmlCopia(id), c.archivo || c.titulo, fmt); } catch (e) { showBanner(e.message, 'error'); } }
@@ -44127,7 +44148,7 @@ const PlantillasModule = (() => {
 
   function tab(k) { _gen = null; _tab = k; render(_host.id); }
   window.addEventListener('resize', () => { if (_gen && $('pl-frame')) _fit(); });
-  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, menuTpl, cerrarMenuTpl, elimPaso1, elimPaso2, elimInput, elimConfirmar, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, setLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
+  return { render, tab, buscar, verComo, fijar, firmAdd, firmDel, firmSet, firmImg, firmaSet, cargarCliente, crearAcuerdo, cfSet, cfLimpiar, menuTpl, cerrarMenuTpl, elimPaso1, elimPaso2, elimInput, elimConfirmar, editTpl, tipoChange, setDev, setDevB, setCierre10, saveTpl, dupTpl, delTpl, generar, editCopia, guardarNueva, set, logoCliente, usarLogoCliente, refAdd, refDel, refSet, refLogo, simSet, fotosSet, fotoPortada, toggleLang, setLang, toggleMetodo, vista, guardar, exportar, salir, verCopia, bajarCopia, enlace, renCopia, delCopia,
     editMetodo, mdRefresh, mdLang, mdAddAcc, mdDelAcc, mdAddFld, mdDelFld, mdTraducir, saveMetodo, delMetodo,
     editBrand, logo, quitarLogo, saveBrand, delBrand, closeModal: _closeModal };
 })();

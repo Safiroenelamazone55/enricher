@@ -42,6 +42,7 @@ async function init(pool) {
   await pool.query('ALTER TABLE tpl_copies ADD COLUMN IF NOT EXISTS archivo TEXT');
   // enlace corto y legible para compartir (p. ej. synaptrix-solution-k7x2mqa); el token largo antiguo sigue funcionando
   await pool.query('ALTER TABLE tpl_copies ADD COLUMN IF NOT EXISTS slug TEXT');
+  await pool.query('ALTER TABLE tpl_copies ADD COLUMN IF NOT EXISTS creado_por INTEGER');   // el miembro que generó la copia (las anteriores a esta columna quedan sin registrar)
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS tpl_copies_slug ON tpl_copies (slug)');
   const mkSlug = base => {
     const b = String(base || 'propuesta').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28).replace(/-+$/, '') || 'propuesta';
@@ -295,14 +296,14 @@ function mount(app, { pool, requireAuth }) {
       if (!r) return res.status(404).json({ error: 'Plantilla o empresa no encontrada' });
       if (r.v && r.v.faltan.length && !req.body.borrador) return res.status(400).json({ error: 'Faltan campos obligatorios: ' + r.v.faltan.map(f => f.l).join(', ') });
       const titulo = [r.t.nombre, r.p.empresa || (r.t.tipo === 'pago' ? '' : 'Cliente'), lang.toUpperCase(), (r.v && req.body.borrador && r.v.faltan.length) ? 'Borrador' : ''].filter(Boolean).join(' · ');
-      const { rows: [c] } = await pool.query('INSERT INTO tpl_copies (user_id,template_id,titulo,cliente,lang,params,html,token,archivo,slug) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,titulo,cliente,lang,token,slug,created_at,archivo',
-        [uid(req), r.t.id, titulo, r.p.empresa || '', lang, JSON.stringify(r.p), r.html, crypto.randomBytes(18).toString('hex'), r.archivo, global.__tplMkSlug(r.p.empresa || r.t.nombre)]);
+      const { rows: [c] } = await pool.query('INSERT INTO tpl_copies (user_id,template_id,titulo,cliente,lang,params,html,token,archivo,slug,creado_por) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,titulo,cliente,lang,token,slug,created_at,archivo',
+        [uid(req), r.t.id, titulo, r.p.empresa || '', lang, JSON.stringify(r.p), r.html, crypto.randomBytes(18).toString('hex'), r.archivo, global.__tplMkSlug(r.p.empresa || r.t.nombre), (req.user && req.user.id) || null]);
       out.push(c);
     }
     res.json(out);
   }));
   app.get('/api/tpl/copies', A, wrap(async (req, res) => {
-    const { rows } = await pool.query(`SELECT c.id,c.titulo,c.archivo,c.cliente,c.lang,c.token,c.slug,c.created_at,c.template_id,t.nombre AS plantilla FROM tpl_copies c LEFT JOIN tpl_templates t ON t.id=c.template_id WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 300`, [uid(req)]);
+    const { rows } = await pool.query(`SELECT c.id,c.titulo,c.archivo,c.cliente,c.lang,c.token,c.slug,c.created_at,c.template_id,c.creado_por,u.name AS creador,t.nombre AS plantilla FROM tpl_copies c LEFT JOIN tpl_templates t ON t.id=c.template_id LEFT JOIN users u ON u.id=c.creado_por WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 300`, [uid(req)]);
     res.json(rows);
   }));
   app.get('/api/tpl/copies/:id', A, wrap(async (req, res) => {
