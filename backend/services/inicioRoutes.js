@@ -12,6 +12,13 @@ const DIAS_VALIDEZ = 30, DIAS_ACCESOS = 45;
 const ESTADOS = ['sin_enviar', 'enviado', 'en_curso', 'recibido', 'revisado', 'portal'];
 const ESTADO_L = { sin_enviar: 'Sin enviar', enviado: 'Enviado', en_curso: 'En curso', recibido: 'Recibido', revisado: 'Revisado', portal: 'Portal activo' };
 const nuevoToken = () => crypto.randomBytes(32).toString('base64url');
+const mkSlug = base => {   // «empresa-» + 14 caracteres al azar (~69 bits): legible y no adivinable
+  const b = String(base || 'cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '') || 'cliente';
+  const al = 'abcdefghjkmnpqrstuvwxyz23456789'; let r = '';
+  for (const x of crypto.randomBytes(14)) r += al[x % al.length];
+  return b + '-' + r;
+};
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-z0-9]{14}$/;
 const huella = t => crypto.createHash('sha256').update(String(t)).digest('hex');   // en la base de datos NO queda el token en claro
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -47,6 +54,13 @@ async function init(pool) {
     enviado_en TIMESTAMPTZ, revisado_por INTEGER, revisado_en TIMESTAMPTZ, accesos_borrados_en TIMESTAMPTZ,
     outbound_client_id INTEGER, portal_account_id INTEGER, portal_activado_en TIMESTAMPTZ, ultimo_recordatorio TIMESTAMPTZ)`);
   await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS token_enc TEXT');
+  // enlace legible: /formulario/<empresa>-<código largo al azar> (el enlace largo antiguo /inicio/<token> sigue funcionando)
+  await pool.query('ALTER TABLE inicio_cliente ADD COLUMN IF NOT EXISTS slug TEXT');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS inicio_cliente_slug ON inicio_cliente (slug)');
+  try {
+    const { rows: sin } = await pool.query('SELECT id, prefill, respuestas FROM inicio_cliente WHERE slug IS NULL');
+    for (const r of sin) await pool.query('UPDATE inicio_cliente SET slug=$1 WHERE id=$2', [mkSlug(((r.respuestas || {}).razon) || ((r.prefill || {}).empresa)), r.id]);
+  } catch (e) { console.error('[inicio] slugs:', e.message); }
   await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_user ON inicio_cliente (user_id, creado_en DESC)');
   await pool.query('CREATE INDEX IF NOT EXISTS inicio_cliente_cliente ON inicio_cliente (cliente_id)');
   await pool.query(`CREATE TABLE IF NOT EXISTS inicio_auditoria (
@@ -86,7 +100,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   const uidOf = req => req.workspaceOwnerId;
   const quienDe = req => String((req.user && (req.user.name || req.user.email)) || 'usuario').slice(0, 120);
   const audit = (inicioId, req, accion, campo) => { const u = req && req.user; return pool.query('INSERT INTO inicio_auditoria (inicio_id,user_id,quien,accion,campo) VALUES ($1,$2,$3,$4,$5)', [inicioId, u ? u.id : null, u ? quienDe(req) : 'sistema', accion, campo || '']).catch(() => {}); };
-  const urlDe = r => { try { return `${BASE()}/inicio/${descifrar(r.token_enc)}`; } catch (_) { return ''; } };
+  const urlDe = r => { if (r.slug) return `${BASE()}/formulario/${r.slug}`; try { return `${BASE()}/inicio/${descifrar(r.token_enc)}`; } catch (_) { return ''; } };
   // Datos sensibles (ver/copiar/exportar/borrar accesos, activar portal): solo administración (nivel 3), no managers
   async function soloAdmin(req, res) {
     try { const c = await permsSvc.ctx(req); if (c.perms.inicios && c.perms.inicios.n >= 3) return true; } catch (_) {}
@@ -104,8 +118,10 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   const pub = [tamano, limGeneral, limFallos, (req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' }); next(); }];
   async function porToken(req) {
     const tk = req.body && typeof req.body.token === 'string' ? req.body.token : '';
-    if (!TOKEN_RE.test(tk)) return null;
-    const { rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE token=$1', [huella(tk)]);
+    let r;
+    if (TOKEN_RE.test(tk)) ({ rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE token=$1', [huella(tk)]));
+    else if (SLUG_RE.test(tk)) ({ rows: [r] } = await pool.query('SELECT * FROM inicio_cliente WHERE slug=$1', [tk]));
+    else return null;
     return r && vigente(r) ? r : null;
   }
   const marca = r => ({ idioma: r.idioma });
@@ -219,7 +235,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
         if (ex && vigente(ex)) return res.json({ ...fila(ex), url: urlDe(ex), existente: true });
         if (ex) { // caducado o revocado: se renueva con un token nuevo
           const t = nuevoToken();
-          await pool.query(`UPDATE inicio_cliente SET token=$2, token_enc=$3, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [ex.id, huella(t), cifrar(t)]);
+          await pool.query(`UPDATE inicio_cliente SET token=$2, token_enc=$3, slug=$4, revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [ex.id, huella(t), cifrar(t), mkSlug((ex.prefill || {}).empresa)]);
           await audit(ex.id, req, 'enlace_renovado', ''); const r2 = await own(req, ex.id); return res.json({ ...fila(r2), url: urlDe(r2), renovado: true });
         }
       }
@@ -230,7 +246,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       for (const k of Object.keys(pre)) if (!pre[k]) delete pre[k];
       const idioma = b.idioma === 'en' ? 'en' : 'es'; if (idioma === 'en') pre.idioma = 'en'; else pre.idioma = 'es';
       const t0 = nuevoToken();
-      const { rows: [r] } = await pool.query(`INSERT INTO inicio_cliente (user_id, cliente_id, token, token_enc, idioma, prefill, expira_en) VALUES ($1,$2,$3,$4,$5,$6, NOW()+interval '${DIAS_VALIDEZ} days') RETURNING *`, [uid, cid, huella(t0), cifrar(t0), idioma, JSON.stringify(pre)]);
+      const { rows: [r] } = await pool.query(`INSERT INTO inicio_cliente (user_id, cliente_id, token, token_enc, idioma, prefill, expira_en, slug) VALUES ($1,$2,$3,$4,$5,$6, NOW()+interval '${DIAS_VALIDEZ} days', $7) RETURNING *`, [uid, cid, huella(t0), cifrar(t0), idioma, JSON.stringify(pre), mkSlug(pre.empresa)]);
       await audit(r.id, req, 'enlace_creado', '');
       res.json({ ...fila(r), url: urlDe(r) });
     } catch (e) { console.error('[inicios] crear:', e.message); res.status(500).json({ error: 'No se pudo crear el enlace' }); }
@@ -302,7 +318,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     catch (e) { console.error('[inicios] ' + ruta + ':', e.message); if (!res.headersSent) res.status(500).json({ error: 'No se pudo completar la acción' }); }
   });
   simple('renovar', async (req, res, r) => {   // amplía 30 días; si estaba revocado se emite un token nuevo
-    if (r.revocado || !r.token_enc) { const t = nuevoToken(); await pool.query('UPDATE inicio_cliente SET token=$2, token_enc=$3 WHERE id=$1', [r.id, huella(t), cifrar(t)]); }
+    if (r.revocado || !r.token_enc) { const t = nuevoToken(); await pool.query('UPDATE inicio_cliente SET token=$2, token_enc=$3, slug=$4 WHERE id=$1', [r.id, huella(t), cifrar(t), mkSlug(((r.respuestas || {}).razon) || (r.prefill || {}).empresa)]); }
     await pool.query(`UPDATE inicio_cliente SET revocado=FALSE, expira_en=NOW()+interval '${DIAS_VALIDEZ} days' WHERE id=$1`, [r.id]);
     await audit(r.id, req, r.revocado ? 'enlace_renovado_nuevo' : 'enlace_renovado', ''); const n = await own(req, r.id); res.json({ ...fila(n), url: urlDe(n) });
   });

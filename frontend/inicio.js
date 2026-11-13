@@ -140,7 +140,7 @@
     $('l-es').classList.toggle('on', S.lang === 'es'); $('l-en').classList.toggle('on', S.lang === 'en');
     $('prog').hidden = false;
     $('m').innerHTML = `<div class="hero"><h1>${E(t('title'))}</h1><p>${E(t('intro'))}</p></div>
-      ${S.secs.map((s, i) => `<section class="sec"><h2><b>${i + 1}</b>${E(tx(s.titulo))}</h2>${s.intro && !s.campos.every(c => c.tipo === 'check') ? `<p class="intro">${E(tx(s.intro))}</p>` : ''}${s.campos.length && s.campos.every(c => c.tipo === 'check') ? acuerdosHtml(s) : s.campos.map(campo).join('')}</section>`).join('')}
+      ${S.secs.map((s, i) => `<section class="sec"><h2><b>${i + 1}</b>${E(tx(s.titulo))}</h2>${s.intro && !s.campos.some(c => c.tipo === 'check') ? `<p class="intro">${E(tx(s.intro))}</p>` : ''}${s.campos.some(c => c.tipo === 'check') ? acuerdosHtml({ campos: s.campos.filter(c => c.tipo === 'check') }) + s.campos.filter(c => c.tipo !== 'check').map(campo).join('') : s.campos.map(campo).join('')}</section>`).join('')}
       <div class="go"><div class="sum" id="sum"></div><button class="btn" id="go" type="button">${E(t('send'))}</button></div>`;
     $('m').oninput = e => ent(e); $('m').onchange = e => ent(e);
     $('m').onfocusout = e => { const f = e.target.closest && e.target.closest('.f'); if (f) { S.shown.add(f.dataset.id); const c = campos().find(x => x.id === f.dataset.id); if (c) marca(c); } guardar(); };
@@ -210,7 +210,7 @@
   $('l-es').onclick = () => idioma('es'); $('l-en').onclick = () => idioma('en');
 
   (async function init() {
-    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return noDisponible();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token) && !/^[a-z0-9]+(?:-[a-z0-9]+)*-[a-z0-9]{14}$/.test(token)) return noDisponible();
     try {
       const r = await fetch(`${API}/inicio/public/abrir`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), credentials: 'omit', cache: 'no-store' });
       if (!r.ok) return noDisponible();
