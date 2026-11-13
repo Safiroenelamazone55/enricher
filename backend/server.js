@@ -8395,7 +8395,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
 });
 app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
-require('./services/inicioRoutes').mount(app, { pool, requireAuth, permsSvc });   // Formulario de inicio del cliente + modulo Inicios de cliente
+require('./services/inicioRoutes').mount(app, { pool, requireAuth, permsSvc, puedeVerWa: _puedeVerWa });   // Formulario de inicio del cliente + modulo Inicios de cliente
 require('./services/translateRoutes').mount(app, { requireAuth });
 require('./services/inboxAi').mount(app, { pool, requireAuth });   // Inbox · «Sugerir con IA» (Cloudflare Workers AI, plan gratuito)
 require('./services/accessRoutes').mount(app, { pool, requireAuth, rateLimit, findUserById, mailboxSvc });

@@ -99,7 +99,7 @@ async function correoSistema(to, subject, html, text) {
 const marco = (titulo, cuerpo, btn) => `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1f2937"><div style="background:#0b2a5b;color:#fff;border-radius:12px 12px 0 0;padding:16px 22px;font-weight:700;letter-spacing:.02em">NovaCentrax</div>
 <div style="border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:22px"><h2 style="margin:0 0 12px;font-size:18px;color:#0b2a5b">${esc(titulo)}</h2>${cuerpo}${btn ? `<p style="margin:22px 0 4px"><a href="${esc(btn.url)}" style="background:#00b8ab;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">${esc(btn.txt)}</a></p>` : ''}</div></div>`;
 
-function mount(app, { pool, requireAuth, permsSvc }) {
+function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
   init(pool).then(() => { setTimeout(borrarVencidos, 60000); setInterval(borrarVencidos, 3600000); }).catch(e => console.error('[inicio] init:', e.message));
 
   const uidOf = req => req.workspaceOwnerId;
@@ -363,12 +363,17 @@ function mount(app, { pool, requireAuth, permsSvc }) {
         : `${hola},\n\nEstamos felices de comenzar. Para arrancar tu piloto necesitamos unos datos del formulario: son unos 10 minutos, se guarda solo y puedes volver al mismo enlace cuando quieras.${lista ? '\n\nTenemos pendientes los siguientes puntos:\n' + lista : ''}\n\nRecuerda enviarlo pronto. El enlace es personal y funciona hasta el ${f}.` };
   };
   const soloDigitos = t => String(t || '').replace(/[^\d]/g, '');
+  // Quién puede usar qué remitente depende de su nivel: buzones = nivel de Outreach ≥ 2; WhatsApp = nivel de WhatsApp ≥ 2 y que la línea sea visible para esa persona
+  async function nivelDe(req, mod) { try { const c = await permsSvc.ctx(req); return (c.perms[mod] && c.perms[mod].n) || 0; } catch (_) { return 0; } }
   async function remitentesDe(req, canal) {
     let pr = {}; try { const { rows: [w] } = await pool.query('SELECT envio_buzon_id, envio_wa_id FROM workspaces WHERE owner_id=$1', [uidOf(req)]); pr = w || {}; } catch (_) {}
     if (canal === 'wa') {
-      const { rows } = await pool.query(`SELECT id, nombre, numero FROM wa_connections WHERE user_id=$1 AND estado='conectado' ORDER BY (id=$2) DESC, id`, [uidOf(req), pr.envio_wa_id || 0]);
+      if ((await nivelDe(req, 'whatsapp')) < 2) return [];
+      const { rows: todas } = await pool.query(`SELECT id, nombre, numero, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros FROM wa_connections WHERE user_id=$1 AND estado='conectado' ORDER BY (id=$2) DESC, id`, [uidOf(req), pr.envio_wa_id || 0]);
+      const rows = []; for (const c of todas) { try { if (!puedeVerWa || await puedeVerWa(req, c)) rows.push(c); } catch (_) {} }
       return rows.map(x => ({ id: x.id, label: `${x.nombre}${x.numero ? ' · +' + soloDigitos(x.numero) : ''}${x.id === pr.envio_wa_id ? ' (principal)' : ''}` }));
     }
+    if ((await nivelDe(req, 'outreach')) < 2) return [];
     const { rows } = await pool.query(`SELECT m.id, m.email, c.nombre AS cliente FROM lm_mailboxes m LEFT JOIN outbound_clients c ON c.id=m.outbound_client_id WHERE m.user_id=$1 AND m.estado IN ('conectado','solo_envio') ORDER BY (m.id=$2) DESC, (m.email ILIKE '%novacentrax%') DESC, m.id`, [uidOf(req), pr.envio_buzon_id || 0]);
     return rows.map(x => ({ id: x.id, label: x.email + (x.cliente ? ' · ' + x.cliente : '') + (x.id === pr.envio_buzon_id ? ' (principal)' : '') }));
   }
@@ -414,8 +419,9 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       const num = soloDigitos(b.to);
       if (num.length < 8 || num.length > 15) return res.status(400).json({ error: 'Escribe el número con el prefijo del país (por ejemplo +51 987654321)' });
       if (!remId) return res.status(400).json({ error: 'Elige desde qué WhatsApp se envía' });
-      const { rows: [cx] } = await pool.query(`SELECT id, estado FROM wa_connections WHERE id=$1 AND user_id=$2`, [remId, uidOf(req)]);
+      const { rows: [cx] } = await pool.query(`SELECT id, estado, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros FROM wa_connections WHERE id=$1 AND user_id=$2`, [remId, uidOf(req)]);
       if (!cx) return res.status(404).json({ error: 'Esa línea de WhatsApp no existe' });
+      if ((await nivelDe(req, 'whatsapp')) < 2 || (puedeVerWa && !(await puedeVerWa(req, cx)))) return res.status(403).json({ error: 'No tienes acceso a ese WhatsApp' });
       if (cx.estado !== 'conectado') return res.status(409).json({ error: 'Esa línea de WhatsApp no está conectada' });
       try { await require('./waService').enviar(pool, cx.id, num, texto + (enviado ? '' : '\n\n' + url)); }
       catch (e) { console.warn('[inicio] WhatsApp no enviado:', e.message); return res.status(502).json({ error: 'No se pudo enviar por WhatsApp: ' + String(e.message || 'error').slice(0, 140) }); }
@@ -434,6 +440,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
       if (remId) {   // desde un buzón conectado (SMTP): sale con la firma y queda en su carpeta Enviados
         const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [remId, uidOf(req)]);
         if (!mb) return res.status(404).json({ error: 'Ese buzón no existe' });
+        if ((await nivelDe(req, 'outreach')) < 2) return res.status(403).json({ error: 'Tu nivel no permite enviar desde buzones' });
         try { const mbSvc = require('./mailboxService'); const auth = await mbSvc.getMailboxAuth(pool, mb); await mbSvc.sendFromMailbox(mb, auth, { to, subject: asunto, html: cuerpoHtml, text: plano_, fromName: 'NovaCentrax' }); }
         catch (e) { console.warn('[inicio] buzón no envió:', e.message); return res.status(502).json({ error: 'No se pudo enviar desde ese buzón: ' + String(e.message || 'error').slice(0, 140) }); }
       } else {
