@@ -187,7 +187,7 @@ function mount(app, { pool, requireAuth, permsSvc }) {
   }
   app.get('/api/inicios/schema', requireAuth, (req, res) => res.json({ secciones: SC.publico(), estados: ESTADOS.map(k => ({ k, l: ESTADO_L[k] })), sensibles: SC.SENSIBLES, acuerdos: SC.ACUERDOS }));
   app.get('/api/inicios', requireAuth, async (req, res) => {
-    try { const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC LIMIT 1000', [uidOf(req)]); res.json(rows.map(r => fila(r))); }
+    try { const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC LIMIT 1000', [uidOf(req)]); res.json(rows.map(r => { const P = plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }); for (const k of SC.SENSIBLES) delete P[k]; return fila(r, { v: P }); })); }
     catch (e) { console.error('[inicios] lista:', e.message); res.status(500).json({ error: 'Error al cargar' }); }
   });
   // Cliente (si existe) por inicio, para el botón «Crear enlace de inicio» en su ficha

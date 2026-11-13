@@ -38,18 +38,48 @@ const InicioModule = (() => {
     try { _rows = await _j('/inicios'); } catch (e) { _host.innerHTML = `<div class="ini-empty">${E(e.message)}</div>`; _loading = false; return; }
     _loading = false; pintarLista();
   }
-  const COLS = [['empresa', 'Empresa'], ['contacto', 'Contacto'], ['estado', 'Estado'], ['enviado_en', 'Enviado'], ['canal', 'Canal preferido'], ['mailInf', 'Correo de informes'], ['salesnav', 'Sales Navigator'], ['mailEstado', 'Correo asignado'], ['atiende', 'Atiende las reuniones'], ['progreso', 'Progreso'], ['revisado', 'Revisado']];
+  // Columnas: las fijas del seguimiento + cualquier campo del formulario (todos los clientes tienen la misma estructura).
+  // Lo que elijas se guarda en este navegador y aplica a todas las filas.
+  const COLS_DEF = ['empresa', 'contacto', 'estado', 'enviado_en', 'canal', 'mailInf', 'salesnav', 'mailEstado', 'atiende', 'progreso', 'revisado'];
+  const META = [['empresa', 'Empresa'], ['estado', 'Estado'], ['enviado_en', 'Enviado'], ['progreso', 'Progreso'], ['revisado', 'Revisado']];
+  let _cols = (() => { try { const a = JSON.parse(localStorage.getItem('ini_cols_v1')); if (Array.isArray(a) && a.length) return a; } catch (_) {} return COLS_DEF.slice(); })();
+  const guardaCols = () => { try { localStorage.setItem('ini_cols_v1', JSON.stringify(_cols)); } catch (_) {} };
+  function catalogo() {   // [{ sec, items: [[key, etiqueta]] }]
+    const out = [{ sec: 'Seguimiento', items: META }];
+    if (_schema) for (const s of _schema.secciones) {
+      const items = s.campos.filter(c => c.tipo !== 'check' && !c.sensible && c.id !== 'razon').map(c => [c.id, c.es]);
+      if (items.length) out.push({ sec: (s.titulo && s.titulo.es) || '', items });
+    }
+    return out;
+  }
+  const etiqueta = k => { for (const g of catalogo()) { const f = g.items.find(i => i[0] === k); if (f) return f[1]; } return k; };
+  const MAPAS = () => ({ canal: CANAL, salesnav: SN, mailEstado: MAILE });
+  function texto(x, k) {   // texto de una celda de campo del formulario
+    const raw = x.v && x.v[k] != null ? x.v[k] : x[k];
+    if (raw == null || raw === '') return '';
+    const m = MAPAS()[k]; if (m && m[raw]) return m[raw];
+    const c = campoDe(k); if (c && c.opts) { const o = c.opts.find(o => o.v === raw); if (o) return o.es; }
+    return String(raw);
+  }
+  function celda(x, k) {
+    if (k === 'empresa') return `<td><b>${E(x.empresa || '—')}</b></td>`;
+    if (k === 'estado') return `<td>${chip(x.estado)}</td>`;
+    if (k === 'enviado_en') return `<td>${fdate(x.enviado_en)}</td>`;
+    if (k === 'progreso') return `<td><div class="ini-bar" title="${x.progreso} %"><i style="width:${x.progreso}%"></i></div><small>${x.progreso} %</small></td>`;
+    if (k === 'revisado') return `<td>${x.revisado ? '✓ ' + fdate(x.revisado_en) : '—'}</td>`;
+    const t = texto(x, k); return `<td title="${E(t)}">${E(t || '—')}</td>`;
+  }
+  const valorOrden = (x, k) => (k === 'empresa' || k === 'estado' || k === 'enviado_en' || k === 'progreso' || k === 'revisado') ? x[k] : texto(x, k);
   function filtradas() {
     const q = _q.trim().toLowerCase();
     let r = _rows.filter(x => (!_fe || x.estado === _fe) && (!q || [x.empresa, x.contacto, x.mailInf, x.atiende, x.canal].join(' ').toLowerCase().includes(q)));
     const k = _sort.k, d = _sort.d;
-    r.sort((a, b) => { const A = a[k], B = b[k]; if (typeof A === 'number' || typeof B === 'number' || typeof A === 'boolean') return ((+A || 0) - (+B || 0)) * d; return String(A || '').localeCompare(String(B || ''), 'es') * d; });
+    r.sort((a, b) => { const A = valorOrden(a, k), B = valorOrden(b, k); if (typeof A === 'number' || typeof B === 'number' || typeof A === 'boolean') return ((+A || 0) - (+B || 0)) * d; return String(A || '').localeCompare(String(B || ''), 'es') * d; });
     return r;
   }
   function pintarLista() {
-    const r = filtradas(), th = COLS.map(([k, l]) => `<th class="ini-th" onclick="InicioModule.ordenar('${k}')">${l}${_sort.k === k ? (_sort.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '<th class="ini-th ini-gearc"></th>';
-    const tr = r.map(x => `<tr onclick="InicioModule.abrirFicha(${x.id})"><td><b>${E(x.empresa || '—')}</b></td><td>${E(x.contacto || '—')}</td><td>${chip(x.estado)}</td><td>${fdate(x.enviado_en)}</td><td>${E(CANAL[x.canal] || '—')}</td><td>${E(x.mailInf || '—')}</td><td>${E(SN[x.salesnav] || '—')}</td><td>${E(MAILE[x.mailEstado] || '—')}</td><td>${E(x.atiende || '—')}</td>
-      <td><div class="ini-bar" title="${x.progreso} %"><i style="width:${x.progreso}%"></i></div><small>${x.progreso} %</small></td><td>${x.revisado ? '✓ ' + fdate(x.revisado_en) : '—'}</td><td class="ini-gearc"><button class="ini-gear" title="Opciones" onclick="event.stopPropagation();InicioModule.menuFila(${x.id},this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></td></tr>`).join('');
+    const r = filtradas(), th = _cols.map(k => [k, etiqueta(k)]).map(([k, l]) => `<th class="ini-th" onclick="InicioModule.ordenar('${k}')">${l}${_sort.k === k ? (_sort.d > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('') + '<th class="ini-th ini-gearc"><button class="ini-plus" title="Agregar o quitar columnas" onclick="event.stopPropagation();InicioModule.menuCols(this)">+</button></th>';
+    const tr = r.map(x => `<tr onclick="InicioModule.abrirFicha(${x.id})">${_cols.map(k => celda(x, k)).join('')}<td class="ini-gearc"><button class="ini-gear" title="Opciones" onclick="event.stopPropagation();InicioModule.menuFila(${x.id},this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></td></tr>`).join('');
     const opts = `<option value="">Todos los estados</option>` + Object.entries(ESTADOS).map(([k, v]) => `<option value="${k}"${_fe === k ? ' selected' : ''}>${v[0]}</option>`).join('');
     _host.innerHTML = `<div class="ini-wrap"><div class="ini-head"><div><h1 class="ini-h1">Inicios de cliente</h1><p class="ini-sub">Lo que cada cliente completó en su formulario de inicio. Es la base de datos previa al acceso al portal.</p></div>
       <div class="ini-tools"><input class="ini-in" id="ini-q" placeholder="Buscar…" value="${E(_q)}" oninput="InicioModule.buscar(this.value)"><select class="ini-in" onchange="InicioModule.filtrar(this.value)">${opts}</select>
@@ -109,6 +139,33 @@ const InicioModule = (() => {
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cerrar</button><button class="btn btn-ghost" onclick="window.open('${E(r.url)}','_blank','noopener')">Abrir</button>
       <button class="btn btn-ghost" onclick="InicioModule.cerrar();InicioModule.ir(${r.id})">Ver ficha</button><button class="btn btn-primary" onclick="InicioModule.copiarEnlace(${r.id})">Copiar enlace y marcar como enviado</button></div>`);
   }
+  // ══ Selector de columnas (botón «+» al final de la cabecera) ══
+  function cerrarCols() { const m = $('ini-cmenu'); if (m) m.remove(); document.removeEventListener('mousedown', fueraCols, true); }
+  function fueraCols(e) { const m = $('ini-cmenu'); if (m && !m.contains(e.target) && !(e.target.closest && e.target.closest('.ini-plus'))) cerrarCols(); }
+  function pintaCols(q) {
+    const w = String(q || '').toLowerCase().trim(), box = $('ini-clist'); if (!box) return;
+    box.innerHTML = catalogo().map(g => {
+      const its = g.items.filter(([k, l]) => !w || l.toLowerCase().includes(w));
+      return its.length ? `<div class="ini-cg">${E(g.sec)}</div>` + its.map(([k, l]) => `<label class="ini-ci"><input type="checkbox" ${_cols.includes(k) ? 'checked' : ''} onchange="InicioModule.alternaCol('${k}',this.checked)"><span>${E(l)}</span></label>`).join('') : '';
+    }).join('') || '<div class="ini-ce">Sin coincidencias</div>';
+  }
+  function menuCols(btn) {
+    if ($('ini-cmenu')) return cerrarCols();
+    const m = document.createElement('div'); m.id = 'ini-cmenu'; m.className = 'ini-gmenu ini-cmenu';
+    m.innerHTML = `<div class="ini-ch">Columnas</div><input class="ini-in ini-cq" placeholder="Buscar campo…" oninput="InicioModule._buscaCol(this.value)"><div id="ini-clist" class="ini-clist"></div><div class="ini-cf"><button class="ini-gm" onclick="InicioModule.restauraCols()">Restablecer</button></div>`;
+    document.body.appendChild(m); pintaCols('');
+    const b = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(b.right - w, innerWidth - w - 8)) + 'px';
+    m.style.top = (b.bottom + h + 8 > innerHeight ? Math.max(8, innerHeight - h - 8) : b.bottom + 4) + 'px';
+    setTimeout(() => document.addEventListener('mousedown', fueraCols, true), 0);
+  }
+  function alternaCol(k, on) {
+    _cols = on ? (_cols.includes(k) ? _cols : _cols.concat(k)) : _cols.filter(x => x !== k);
+    if (!_cols.length) _cols = ['empresa'];
+    guardaCols(); pintarLista();
+  }
+  function restauraCols() { _cols = COLS_DEF.slice(); guardaCols(); pintarLista(); pintaCols(($('ini-cmenu') && $('ini-cmenu').querySelector('.ini-cq').value) || ''); }
+
   // ══ Menú de opciones de cada fila (ruedita) ══
   function cerrarMenu() { const m = $('ini-gmenu'); if (m) m.remove(); document.removeEventListener('click', cerrarMenu, true); }
   function menuFila(id, btn) {
@@ -238,6 +295,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;

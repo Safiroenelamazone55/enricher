@@ -21279,3 +21279,17 @@ main.app-main:has(#pane-lead-manager.active) { padding-bottom: 0 !important; }
 .ini-gl { padding: 4px 12px 2px; font-size: .7rem; color: var(--text-muted, #6B7770); }
 /* Inicios de cliente: ocupa todo el ancho como el resto de módulos anchos */
 .ini-wrap { max-width: none; margin: 0; padding: 4px 0 60px; }
+
+/* Inicios de cliente: botón «+» de columnas y su selector */
+.ini-plus { width: 24px; height: 24px; border: 0; border-radius: 50%; background: #2563EB; background: var(--primary, #1d6ff2); color: #fff; font-size: 16px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: transform .15s, filter .15s; }
+.ini-plus:hover { transform: scale(1.1); filter: brightness(1.08); }
+.ini-cmenu { width: 290px; padding: 8px; }
+.ini-ch { padding: 4px 8px 6px; font-weight: 700; font-size: .85rem; }
+.ini-cq { width: 100%; margin-bottom: 6px; }
+.ini-clist { max-height: 340px; overflow-y: auto; }
+.ini-cg { padding: 8px 8px 3px; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted, #6B7770); }
+.ini-ci { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; font-size: .84rem; cursor: pointer; }
+.ini-ci:hover { background: var(--surface-2, #F1F4F2); }
+.ini-ci input { accent-color: var(--primary, #1d6ff2); }
+.ini-ce { padding: 10px; color: var(--text-muted, #6B7770); font-size: .84rem; }
+.ini-cf { border-top: 1px solid var(--border2, #E3E8E5); margin-top: 6px; padding-top: 6px; }
