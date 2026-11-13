@@ -305,16 +305,29 @@ function mount(app, { pool, requireAuth, permsSvc }) {
     await pool.query(`UPDATE inicio_cliente SET enlace_enviado_en=NOW(), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
     await audit(r.id, req, 'enlace_enviado', ''); res.json({ ok: true });
   });
-  simple('recordatorio', async (req, res, r) => {   // correo al cliente con su enlace (mensaje de recordatorio del formulario)
+  // Recordatorio con los puntos pendientes: saluda por el nombre y lista lo que aún no está contestado (obligatorio u opcional)
+  const pendientesDe = (r, en) => {
+    const P = plano({ ...(r.prefill || {}), ...(r.respuestas || {}) });
+    return SC.CAMPOS.filter(c => c.tipo !== 'check' && !String(P[c.id] == null ? '' : P[c.id]).trim()).map(c => (en ? c.en : c.es) + (c.req ? '' : (en ? ' (optional)' : ' (opcional)')));
+  };
+  simple('recordatorio', async (req, res, r) => {   // correo al cliente con su enlace y lo que falta
     if (!vigente(r)) return res.status(409).json({ error: 'El enlace está caducado o revocado: renuévalo primero' });
-    if (yaEnviado(r)) return res.status(409).json({ error: 'El cliente ya envió el formulario' });
+    const en = r.idioma === 'en', pend = pendientesDe(r, en), enviado = yaEnviado(r);
+    if (enviado && !pend.length) return res.status(409).json({ error: 'El cliente ya envió el formulario y no tiene puntos pendientes' });
     const to = String((req.body || {}).to || (r.respuestas || {}).mailInf || (r.prefill || {}).mailInf || '').trim();
     if (!SC.EMAIL_RE.test(to)) return res.status(400).json({ error: 'Falta el correo del cliente (escríbelo en el campo o en la ficha)' });
-    const en = r.idioma === 'en', url = urlDe(r), pct = SC.progreso(plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }), acuerdosBool(r.acuerdos));
-    const asunto = en ? 'Reminder: your NovaCentrax start form' : 'Recordatorio: tu formulario de inicio con NovaCentrax';
-    const cuerpo = en ? `<p style="margin:0 0 12px;color:#374151">A quick reminder: we need a few details to start your pilot. It takes about 10 minutes and you can save and come back anytime${pct ? ` (you are at ${pct}%)` : ''}.</p><p style="margin:0;color:#6b7280;font-size:13px">The link is personal and works until ${esc(new Date(r.expira_en).toISOString().slice(0, 10))}.</p>`
-      : `<p style="margin:0 0 12px;color:#374151">Un recordatorio rápido: necesitamos unos datos para arrancar tu piloto. Son unos 10 minutos y puedes guardar y volver cuando quieras${pct ? ` (llevas un ${pct} %)` : ''}.</p><p style="margin:0;color:#6b7280;font-size:13px">El enlace es personal y funciona hasta el ${esc(new Date(r.expira_en).toISOString().slice(0, 10))}.</p>`;
-    const out = await correoSistema(to, asunto, marco(en ? 'Your start form' : 'Tu formulario de inicio', cuerpo, { url, txt: en ? 'Complete the form' : 'Completar el formulario' }), `${asunto}\n${url}`);
+    const url = urlDe(r), pct = SC.progreso(plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }), acuerdosBool(r.acuerdos));
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, nombre = String(R.contacto || '').trim().split(/[\s,]+/)[0];
+    const lista = pend.length ? `<ul style="margin:0 0 12px;padding-left:20px;color:#374151">${pend.slice(0, 30).map(x => `<li style="margin:3px 0">${esc(x)}</li>`).join('')}</ul>` : '';
+    const asunto = en ? 'Pending points for your NovaCentrax start' : 'Puntos pendientes para tu inicio con NovaCentrax';
+    const hola = en ? `<p style="margin:0 0 12px;color:#374151">We are happy to get started${nombre ? ', ' + esc(nombre) : ''}.</p>` : `<p style="margin:0 0 12px;color:#374151">Estamos felices de comenzar${nombre ? ', ' + esc(nombre) : ''}.</p>`;
+    const cuerpo = hola + (pend.length
+      ? `<p style="margin:0 0 8px;color:#374151">${en ? 'We still have the following points pending:' : 'Tenemos pendientes los siguientes puntos:'}</p>${lista}`
+      : `<p style="margin:0 0 12px;color:#374151">${en ? 'We need a few details to start your pilot.' : 'Necesitamos unos datos para arrancar tu piloto.'}</p>`)
+      + `<p style="margin:0 0 12px;color:#374151">${en ? 'Please send them soon' : 'Recuerda enviarlo pronto'}${enviado ? (en ? ' through the communication channel you chose.' : ' por el canal de comunicación que elegiste.') : (en ? `; you can save and come back anytime${pct ? ` (you are at ${pct}%)` : ''}.` : `; puedes guardar y volver cuando quieras${pct ? ` (llevas un ${pct} %)` : ''}.`)}</p>`
+      + (enviado ? '' : `<p style="margin:0;color:#6b7280;font-size:13px">${en ? 'The link is personal and works until' : 'El enlace es personal y funciona hasta el'} ${esc(new Date(r.expira_en).toISOString().slice(0, 10))}.</p>`);
+    const texto = `${asunto}\n${pend.join('\n')}${enviado ? '' : '\n' + url}`;
+    const out = await correoSistema(to, asunto, marco(en ? 'Your start form' : 'Tu formulario de inicio', cuerpo, enviado ? null : { url, txt: en ? 'Complete the form' : 'Completar el formulario' }), texto);
     if (!out.sent) return res.status(503).json({ error: out.error || 'No se pudo enviar', url });
     await pool.query(`UPDATE inicio_cliente SET ultimo_recordatorio=NOW(), enlace_enviado_en=COALESCE(enlace_enviado_en,NOW()), estado=CASE WHEN estado='sin_enviar' THEN 'enviado' ELSE estado END WHERE id=$1`, [r.id]);
     await audit(r.id, req, 'recordatorio_enviado', ''); res.json({ ok: true });

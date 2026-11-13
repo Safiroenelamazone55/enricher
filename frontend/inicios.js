@@ -118,7 +118,7 @@ const InicioModule = (() => {
     cerrarMenu(); const x = _rows.find(r => r.id === id); if (!x) return;
     const m = document.createElement('div'); m.id = 'ini-gmenu'; m.className = 'ini-gmenu';
     const it = (fn, t, cls) => `<button class="ini-gm${cls ? ' ' + cls : ''}" onclick="InicioModule.cerrarMenu();InicioModule.${fn}">${t}</button>`;
-    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
+    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`pendientesFila(${id})`, 'Enviar correo con lo pendiente') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
       + it(`idiomaFila(${id},'es')`, (x.idioma !== 'en' ? '✓ ' : '') + 'Español') + it(`idiomaFila(${id},'en')`, (x.idioma === 'en' ? '✓ ' : '') + 'English')
       + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 30 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
     document.body.appendChild(m);
@@ -129,6 +129,15 @@ const InicioModule = (() => {
   }
   async function _url(id) { const f = await _j('/inicios/' + id); return f.url; }
   async function copiarFila(id) { try { await copiar(await _url(id), 'Enlace copiado'); try { await _post(`/inicios/${id}/marcar-enviado`); } catch (_) {} cargar(); } catch (e) { msg(e.message, 'error'); } }
+  async function pendientesFila(id) {
+    try {
+      let to = '';
+      for (let i = 0; i < 2; i++) {
+        try { await _post(`/inicios/${id}/recordatorio`, to ? { to } : {}); msg('Correo enviado al cliente con los puntos pendientes', 'success'); cargar(); return; }
+        catch (e) { if (!/Falta el correo/.test(e.message) || i) throw e; to = (prompt('¿A qué correo se lo enviamos?') || '').trim(); if (!to) return; }
+      }
+    } catch (e) { msg(e.message, 'error'); }
+  }
   async function abrirForm(id) { try { window.open(await _url(id), '_blank', 'noopener'); } catch (e) { msg(e.message, 'error'); } }
   async function idiomaFila(id, l) { try { await _post(`/inicios/${id}/idioma`, { idioma: l }); msg(l === 'en' ? 'Formulario en English' : 'Formulario en español', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
   async function renovarFila(id) { try { await _post(`/inicios/${id}/renovar`); msg('Enlace renovado 30 días', 'success'); cargar(); } catch (e) { msg(e.message, 'error'); } }
@@ -232,6 +241,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    menuFila, cerrarMenu, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;
