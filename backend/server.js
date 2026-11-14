@@ -5521,6 +5521,13 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
       ).catch(() => {});
     }
 
+    // ── Quien ya respondió / salió: NO debe quedar ningún email por aprobar ni programado a su nombre ──
+    // (las listas ya lo filtran con _RESPONDED_M, pero el borrador seguía vivo en la base y podía reaparecer; se cierra de verdad).
+    if (_STOP_DISP_LIST.includes(disp)) {
+      await pool.query(
+        `UPDATE lm_messages SET estado='omitido', error='No enviado a propósito: el contacto ya respondió o salió de la secuencia'
+          WHERE user_id=$1 AND contact_id=$2 AND estado IN ('awaiting','approved')`, [uid, cid]).catch(e => console.warn('[disposition] cierre de borradores', e.message));
+    }
     // ── RESPONDIO (real o marcado a mano): pausar siempre + crear tarea de revisión ──
     if (disp === 'respondio' || disp === 'interesado') {
       // 1. Pausar TODOS los enrolamientos activos con paused_reason claro.
@@ -7693,6 +7700,7 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
 // Lista GLOBAL de borradores por aprobar (para la lista de Tareas comerciales).
 // Quien ya respondió (o salió de la secuencia) NO debe aparecer en «Por aprobar» ni poder aprobarse: es un riesgo escribirle de nuevo.
 const _STOP_DISP = "('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar')";
+const _STOP_DISP_LIST = ['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
 const _RESPONDED_M = `(k.disposition IN ${_STOP_DISP}
    OR EXISTS (SELECT 1 FROM lm_contact_sequences csr WHERE csr.user_id=m.user_id AND csr.contact_id=m.contact_id AND csr.sequence_id=m.sequence_id AND csr.estado IN ('respondido','terminado'))
    OR EXISTS (SELECT 1 FROM lm_inbox_messages imr WHERE imr.contact_id=m.contact_id AND imr.tipo='reply' AND imr.received_at > m.created_at))`;

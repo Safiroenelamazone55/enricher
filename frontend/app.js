@@ -25575,6 +25575,23 @@ ${rhead}${foot}
       <span class="cp-deriv-banner__txt"><b>Derivado de ${esc(nom)}</b>${c.referred_note ? ` — ${esc(c.referred_note)}` : ''}</span>
     </div>`;
   }
+  // Quien ya respondió (o salió de la secuencia) no debe tener NINGÚN email por aprobar: en cuanto se marca, su borrador se quita
+  // de las listas en memoria (el servidor ya lo descarta); si la ficha estaba abierta para revisarlo, pasa al siguiente o sale.
+  const _STOP_DISPS = ['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
+  function _purgeApprovals(cid) {
+    try {
+      if (Array.isArray(_seqApprovals)) _seqApprovals = _seqApprovals.filter(a => a.contact_id !== cid);
+      if (Array.isArray(_apList)) _apList = _apList.filter(a => a.contact_id !== cid);
+      if (_apQ) { _apQ = _apQ.filter(a => a.contact_id !== cid); if (!_apQ.length) _apQ = null; else _apQi = Math.min(_apQi, _apQ.length - 1); }
+    } catch (_) {}
+  }
+  function _approveAdvanceAfterStop(cid) {
+    if (!_cpTaskCtx || !_cpTaskCtx.approve) return false;
+    if (_apQ && _apQ.length) { _apQOpen(); return true; }
+    const pend = (_seqApprovals || []).filter(a => a.estado === 'awaiting');
+    if (pend.length) { _seqAppIdx = Math.min(_seqAppIdx, pend.length - 1); openContactPage(pend[_seqAppIdx].contact_id, { seqId: _cpTaskCtx.seqId, approve: true }); return true; }
+    showBanner('Listo: no quedan emails por aprobar', 'success'); seqDoExit(); return true;
+  }
   async function _lmSetDispositionCore(cid, disp, seqId, nota, canal) {
     const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '', canal: canal || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -25583,6 +25600,7 @@ ${rhead}${foot}
     // un cambio exitoso, no importa desde qué flujo se haya llamado (task-runner,
     // ficha, Pendientes de aceptación, botones inline). Await para que los renders
     // posteriores usen datos ya frescos y no muestren estado optimista viejo.
+    if (_STOP_DISPS.includes(disp)) _purgeApprovals(cid);   // ya respondió: su email por aprobar deja de existir
     _ibSyncAfterChange(cid, disp);   // la lista del Inbox cambia al instante
     await Promise.all([_reloadContacts(), _reloadActivities()]);
     return out;
@@ -25598,6 +25616,7 @@ ${rhead}${foot}
       await _reloadContacts();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
       showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.stage ? ` · Estado → ${STAGE_LABELS[r.stage] || r.stage}` : ''}${r.rerouted ? ` · → Ruta A (LinkedIn) en ${r.rerouted} secuencia${r.rerouted === 1 ? '' : 's'}` : ''}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
+      if (_section === 'contact-view' && _STOP_DISPS.includes(disp) && _approveAdvanceAfterStop(cid)) return;
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); } else _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -37875,6 +37894,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const r = await _lmSetDispositionCore(cid, resultado, seqId || null, `[${chanLbl}]${nota ? ' ' + nota : ''}`, ({ email: 'email', email_manual: 'email', whatsapp: 'whatsapp', linkedin: 'linkedin', llamada: 'llamada' })[canal] || '');
       document.getElementById('lm-reply-modal')?.remove();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
+      if (_section === 'contact-view' && _STOP_DISPS.includes(resultado) && _approveAdvanceAfterStop(cid)) { showBanner(`✓ Respuesta registrada · ${_dispoLabel(resultado)}${r.paused ? ' · pausado en secuencias' : ''}`, 'success'); return; }
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); }
       else if (_section === 'inbox') { if (_ibActive === cid) await ibOpen(cid); else _ibPaint(); }
       else _renderBody();
