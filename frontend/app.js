@@ -37910,6 +37910,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // secuencia, se cree la tarea de revisión y quede registrada la respuesta (embudo, portal…).
     // Antes la barra cambiaba solo la etapa y dejaba la disposición vacía → dos caminos distintos.
     if (!force && estado === 'respondio' && !['respondio', 'interesado', 'reunion', 'mas_adelante'].includes(c.disposition || '')) return lmSetDisposition(id, 'respondio');
+    // Volver a NUEVO / CONTACTADO desde «Respondió»: la respuesta se deshace también (si no, seguía en Leads · «Por calificar» con la secuencia pausada)
+    if (!force && (estado === 'nuevo' || estado === 'contactado') && c.disposition === 'respondio') {
+      try { await _lmSetDispositionCore(id, '', null, ''); } catch (e) { showBanner('Error: ' + e.message, 'error'); return; }
+    }
     // PROPUESTA / NEGOCIACIÓN = es un DEAL: se abre el deal (valor, probabilidad, fecha de reunión) con esa etapa.
     if (!force && (estado === 'propuesta' || estado === 'negociacion') && !c.deal_valor && !c.deal_cierre) return dlOpen(id, estado);
     try {

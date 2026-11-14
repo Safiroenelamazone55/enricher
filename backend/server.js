@@ -5521,6 +5521,19 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
       ).catch(() => {});
     }
 
+    // ── DESHACER «Respondió» (se marcó por error y se quita): se cierra la tarea de revisión y se reanuda la secuencia que se pausó por esa marca ──
+    // Solo se reanuda si NO hay una respuesta real del contacto (correo recibido): con respuesta real la decisión de reanudar sigue siendo manual.
+    let reanudadas = 0;
+    if (oldDisp === 'respondio' && disp === '') {
+      await pool.query(`UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente'`, [uid, cid]).catch(() => {});
+      const { rows: [rr] } = await pool.query(`SELECT EXISTS (SELECT 1 FROM lm_inbox_messages WHERE contact_id=$1 AND tipo='reply') AS real`, [cid]).catch(() => ({ rows: [{ real: true }] }));
+      if (!(rr && rr.real)) {
+        const q = await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW() WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason='reply_received'`, [uid, cid]);
+        reanudadas = q.rowCount;
+        if (reanudadas > 0) await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'reanudacion_secuencia',$4,NOW(),'hecha')`, [uid, cid, obcId, `Secuencia reanudada (${reanudadas}) al quitar la marca «Respondió».`]).catch(() => {});
+      }
+    }
+
     // ── Quien ya respondió / salió: NO debe quedar ningún email por aprobar ni programado a su nombre ──
     // (las listas ya lo filtran con _RESPONDED_M, pero el borrador seguía vivo en la base y podía reaparecer; se cierra de verdad).
     if (_STOP_DISP_LIST.includes(disp)) {
@@ -5615,7 +5628,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     }
     // La disposición alimenta el pipeline (solo hacia adelante).
     const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;
-    res.json({ ok: true, disposition: disp, paused, rerouted, stage, review_task_id });
+    res.json({ ok: true, disposition: disp, paused, rerouted, stage, review_task_id, resumed: reanudadas });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
 // ── Reanudar manualmente una secuencia pausada (Bloque B: decisión humana) ─────
