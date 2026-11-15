@@ -119,6 +119,7 @@
     const pintaBtn = () => { btn.innerHTML = (dial ? '+' + dial : (en ? 'Code' : 'Prefijo')) + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'; };
     const sync = () => {
       const n = inp.value.trim(), nuevo = n ? (dial ? '+' + dial + ' ' : '') + n : '';
+      btn.classList.toggle('geo__pre--need', !!n && !dial); btn.title = (n && !dial) ? (en ? 'Choose the country code' : 'Elige el prefijo del país') : '';
       if (hidden.value !== nuevo) { hidden.value = nuevo; onValue(nuevo); hidden.dispatchEvent(new Event('change', { bubbles: true })); }
     };
     ['input', 'change'].forEach(t => inp.addEventListener(t, e => { e.stopPropagation(); sync(); }));
@@ -136,7 +137,7 @@
     q.addEventListener('keydown', e => { if (e.key === 'Escape') { cerrar(); btn.focus(); } else if (e.key === 'Enter') { e.preventDefault(); if (sel[0]) elegir(sel[0].d); } });
     ul.addEventListener('mousedown', e => { e.preventDefault(); const o = e.target.closest('.geo__o'); if (o && sel[+o.dataset.i]) elegir(sel[+o.dataset.i].d); });
     document.addEventListener('mousedown', e => { if (!wrap.contains(e.target)) cerrar(); });
-    pintaBtn();
+    pintaBtn(); btn.classList.toggle('geo__pre--need', !!num.trim() && !dial);
     return {
       // al elegir el país en el campo de zona horaria: pone su prefijo, salvo que la persona ya haya elegido uno a mano
       setCountry(cc) { const d = DIAL[cc]; if (!d || manual) return; dial = d; pintaBtn(); sync(); },
