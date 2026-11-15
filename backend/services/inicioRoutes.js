@@ -211,6 +211,15 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       vigente: vigente(r), revocado: r.revocado, expira_en: r.expira_en, accesos_borrados: !!r.accesos_borrados_en, actualizado_en: r.actualizado_en, ...(extra || {}) };
   }
   app.get('/api/inicios/schema', requireAuth, (req, res) => res.json({ secciones: SC.publico(), estados: ESTADOS.map(k => ({ k, l: ESTADO_L[k] })), sensibles: SC.SENSIBLES, acuerdos: SC.ACUERDOS }));
+  // Lo que el cliente dejó en su formulario sobre dónde está y cuándo atiende (para la franja de hora local del cliente en Outreach).
+  app.get('/api/lm/clients/:id/inicio-resumen', requireAuth, async (req, res) => {
+    try {
+      const { rows: [r] } = await pool.query('SELECT prefill, respuestas, estado FROM inicio_cliente WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY actualizado_en DESC LIMIT 1', [uidOf(req), parseInt(req.params.id, 10)]);
+      if (!r) return res.json({ existe: false });
+      const P = plano({ ...(r.prefill || {}), ...(r.respuestas || {}) });
+      res.json({ existe: true, estado: r.estado, pais: String(P.pais || '').slice(0, 120), disp: String(P.disp || '').slice(0, 300) });
+    } catch (e) { console.error('[inicios] resumen:', e.message); res.status(500).json({ error: 'Error al cargar' }); }
+  });
   app.get('/api/inicios', requireAuth, async (req, res) => {
     try { const { rows } = await pool.query('SELECT * FROM inicio_cliente WHERE user_id=$1 ORDER BY actualizado_en DESC LIMIT 1000', [uidOf(req)]); res.json(rows.map(r => { const P = plano({ ...(r.prefill || {}), ...(r.respuestas || {}) }); for (const k of SC.SENSIBLES) delete P[k]; return fila(r, { v: P }); })); }
     catch (e) { console.error('[inicios] lista:', e.message); res.status(500).json({ error: 'Error al cargar' }); }
@@ -521,7 +530,7 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
     const razon = S('razon') || S('empresa'), empresa = razon || nombreDe || 'Cliente';
     const mail = S('mailContacto') || S('mailInf'), mailInf = S('mailInf') || S('mailContacto'), tel = S('wpp');
     // «Bangladesh» o «Emiratos Árabes Unidos, Dubái (GMT+4)» → país, ciudad y zona horaria
-    const pp = S('pais').split(','), paisE = (pp.shift() || '').trim(), ciudad = pp.join(',').replace(/\([^)]*\)/g, '').trim(), tz = (ciudad || paisE).slice(0, 60);
+    const pp = S('pais').split(','), paisE = (pp.shift() || '').trim(), ciudad = pp.join(',').replace(/\([^)]*\)/g, '').trim(), tz = (require('./tzResolve').resolveTz(S('pais')) || ciudad || paisE).slice(0, 60);
     const canalL = CANAL_L[S('canal')] || S('canal');
     const lineas = [
       S('atiende') ? `Quién atiende las reuniones: ${S('atiende')}${S('atiendeEmail') ? ' (' + S('atiendeEmail') + ')' : ''}` : '',

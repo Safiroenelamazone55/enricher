@@ -21345,3 +21345,4 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 .cl-clock__s { width: 100%; font-size: .72rem; font-weight: 700; color: #6C6862; }
 .cl-clock.is-on { background: #E6F3EA; border-left-color: #1F8A4C; } .cl-clock.is-on .cl-clock__dot { background: #1F8A4C; } .cl-clock.is-on .cl-clock__s { color: #1F6B3E; }
 .cl-clock a { font-weight: 700; color: #1F4FA8; }
+.cl-clock__d { width: 100%; font-size: .72rem; color: #5C5851; }

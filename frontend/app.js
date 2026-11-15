@@ -32126,7 +32126,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const st = _clientClockState(tz); if (!st) return `<span class="cl-clock__t">Zona horaria no válida</span> <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">Corregir</a>`;
     let hora = ''; try { hora = new Intl.DateTimeFormat('es-ES', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: false }).format(new Date()); } catch (_) {}
     const city = String(tz).split('/').pop().replace(/_/g, ' ');
-    return `<span class="cl-clock__dot"></span><b>${esc(hora)}</b> <span class="cl-clock__t">hora en ${esc(city)}</span><span class="cl-clock__s">${st.ok ? 'Puedes escribirle ahora' : (st.weekend ? 'Fin de semana' : 'Fuera de horario (8–17 h)')}</span>`;
+    const disp = (_clInicio[cid] || {}).disp;
+    return `<span class="cl-clock__dot"></span><b>${esc(hora)}</b> <span class="cl-clock__t">hora en ${esc(city)}</span><span class="cl-clock__s">${st.ok ? 'Puedes escribirle ahora' : (st.weekend ? 'Fin de semana' : 'Fuera de horario (8–17 h)')}</span>${disp ? `<span class="cl-clock__d" title="Lo que el cliente indicó en su formulario de inicio">Atiende reuniones: ${esc(disp)}</span>` : ''}`;
+  }
+  const _clInicio = {};
+  async function _clientClockLoad(cid) {
+    if (_clInicio[cid]) return;
+    try { const r = await apiFetch(`${API}/lm/clients/${cid}/inicio-resumen`); _clInicio[cid] = (r && r.ok) ? await r.json() : {}; } catch (_) { _clInicio[cid] = {}; }
+    _clientClockTick();
   }
   function _clientClockTick() {
     const el = document.getElementById('cl-clock');
@@ -32137,7 +32144,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   setInterval(_clientClockTick, 30000);
   function _vClientDetail(id) {
-    setTimeout(_clientClockTick, 0);
+    setTimeout(() => { _clientClockTick(); _clientClockLoad(id); }, 0);
     const c = _clients.find(x => x.id === id);
     if (!c) return _vClients();
     const leads = _clientLeads(id);

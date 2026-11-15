@@ -881,6 +881,20 @@ async function initDb() {
                GROUP BY outbound_client_id, timezone ORDER BY outbound_client_id, COUNT(*) DESC) x
        WHERE oc.id = x.outbound_client_id AND COALESCE(oc.timezone,'') = ''`);
     } catch (e) { console.warn('[db] migración zona horaria de clientes:', e.message); }
+    // Zona horaria que el cliente dejó en su formulario de inicio («País y zona horaria»): se traduce a zona válida.
+    // Rellena los clientes sin zona y corrige los que quedaron con texto suelto («Madrid», «India») que el reloj no entiende.
+    try {
+      const { resolveTz, valid } = require('./services/tzResolve');
+      const { rows } = await pool.query(`SELECT oc.id, oc.timezone, (SELECT COALESCE(i.respuestas->>'pais', i.prefill->>'pais') FROM inicio_cliente i WHERE i.outbound_client_id = oc.id ORDER BY i.actualizado_en DESC LIMIT 1) AS pais_form FROM outbound_clients oc`);
+      let n = 0;
+      for (const r of rows) {
+        const cur = String(r.timezone || '').trim();
+        if (cur && valid(cur)) continue;
+        const tz = resolveTz(r.pais_form) || resolveTz(cur);
+        if (tz && tz !== cur) { await pool.query('UPDATE outbound_clients SET timezone=$1 WHERE id=$2', [tz, r.id]); n++; }
+      }
+      if (n) console.log(`[db] zona horaria de clientes outbound: ${n} actualizados desde su formulario`);
+    } catch (e) { console.warn('[db] zona horaria desde formulario:', e.message); }
     // Idioma del contacto (según su ubicación): base para mensajes por idioma en las secuencias
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS idioma TEXT NOT NULL DEFAULT ''`);
     // Borrador por aprobar que ya editaste a mano: no se vuelve a redactar solo (solo se le actualiza el nombre/email corregido)
