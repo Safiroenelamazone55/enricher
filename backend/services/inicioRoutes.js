@@ -510,26 +510,61 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
     await audit(r.id, req, 'revisado', ''); res.json({ ok: true, cliente_id: cid });
   });
 
-  // «Crear cliente» desde la fila: crea (o reutiliza) el cliente de Operaciones y/o de Outreach con todos los datos útiles que ya hay (sin exigir que el formulario esté completo ni cambiar su estado)
+  // «Crear cliente» desde la fila: crea (o reutiliza) el cliente de Operaciones y/o de Outreach y le pasa TODO lo útil del formulario (sin exigir que esté completo ni cambiar su estado).
+  // Regla: nunca pisa lo que ya tiene la ficha; solo rellena lo vacío. Las contraseñas y accesos NO se copian.
+  const CANAL_L = { linkedin_whatsapp: 'LinkedIn y WhatsApp', linkedin_email: 'LinkedIn y correo', whatsapp: 'WhatsApp', email: 'Correo', linkedin: 'LinkedIn', correo: 'Correo' };
   simple('crear-cliente', async (req, res, r) => {
     const b = req.body || {}, ops = b.operaciones !== false, out = b.outreach !== false;
     if (!ops && !out) return res.status(400).json({ error: 'Elige al menos un tipo de cliente' });
-    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req);
-    const nombreDe = String(R.contacto || '').split(',')[0].trim();
-    const empresa = String(R.razon || R.empresa || '').trim() || nombreDe || 'Cliente';
-    const mail = String(R.mailInf || R.mailContacto || '').trim();
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req), S = k => String(R[k] == null ? '' : R[k]).trim();
+    const nombreDe = S('contacto').split(',')[0].trim();
+    const razon = S('razon') || S('empresa'), empresa = razon || nombreDe || 'Cliente';
+    const mail = S('mailContacto') || S('mailInf'), mailInf = S('mailInf') || S('mailContacto'), tel = S('wpp');
+    // «Bangladesh» o «Emiratos Árabes Unidos, Dubái (GMT+4)» → país, ciudad y zona horaria
+    const pp = S('pais').split(','), paisE = (pp.shift() || '').trim(), ciudad = pp.join(',').replace(/\([^)]*\)/g, '').trim(), tz = (ciudad || paisE).slice(0, 60);
+    const canalL = CANAL_L[S('canal')] || S('canal');
+    const lineas = [
+      S('atiende') ? `Quién atiende las reuniones: ${S('atiende')}${S('atiendeEmail') ? ' (' + S('atiendeEmail') + ')' : ''}` : '',
+      S('disp') ? `Disponibilidad para reuniones: ${S('disp')}` : '',
+      S('calendario') ? `Enlace para agendar: ${S('calendario')}` : '',
+      canalL ? `Canal de comunicación preferido: ${canalL}${tel ? ' · WhatsApp ' + tel : ''}` : '',
+      S('salesnav') ? `LinkedIn Sales Navigator: ${({ si: 'sí lo tiene', no: 'no', anadir: 'quiere añadirlo' })[S('salesnav')] || S('salesnav')}` : '',
+      S('mailEstado') ? `Correo de envío asignado: ${({ listo: 'ya asignado', despues: 'lo enviará más adelante' })[S('mailEstado')] || S('mailEstado')}${S('mailUser') ? ' · ' + S('mailUser') : ''}${S('mailProv') ? ' · ' + S('mailProv') : ''}` : '',
+      S('mailNotas') ? `Notas del correo: ${S('mailNotas')}` : '',
+      S('liUrl') ? `LinkedIn: ${S('liUrl')}` : '',
+      S('comentarios') ? `Comentarios del cliente: ${S('comentarios')}` : '',
+    ].filter(Boolean);
+    const MARCA = '— Del formulario de inicio —';
+    const bloque = lineas.length ? MARCA + '\n' + lineas.join('\n') : '';
+    const unirNotas = prev => { prev = String(prev || ''); const i = prev.indexOf(MARCA); const base = (i >= 0 ? prev.slice(0, i) : prev).trim(); return bloque ? (base ? base + '\n\n' : '') + bloque : base; };
     const hecho = {};
     let cid = r.cliente_id;
     if (ops) {
       if (!cid) { const { rows: [ex] } = await pool.query(`SELECT id FROM clients WHERE user_id=$1 AND ((LOWER(email)=LOWER($2) AND $2<>'') OR LOWER(empresa)=LOWER($3) OR LOWER(razon_social)=LOWER($3)) ORDER BY id LIMIT 1`, [uid, mail, empresa]); cid = ex ? ex.id : null; hecho.operaciones = ex ? 'vinculado' : 'creado'; }
       else hecho.operaciones = 'vinculado';
       if (!cid) { const { rows: [c] } = await pool.query(`INSERT INTO clients (user_id, nombre, empresa, email, estado, tipo) VALUES ($1,$2,$3,$4,'activo','cliente') RETURNING id`, [uid, nombreDe || empresa, empresa, mail]); cid = c.id; }
-      await pool.query(`UPDATE clients SET razon_social=CASE WHEN $2<>'' THEN $2 ELSE razon_social END, nif=CASE WHEN $3<>'' THEN $3 ELSE nif END, direccion_fiscal=CASE WHEN $4<>'' THEN $4 ELSE direccion_fiscal END,
-        email_informes=CASE WHEN $5<>'' THEN $5 ELSE email_informes END, canal_preferido=CASE WHEN $6<>'' THEN $6 ELSE canal_preferido END, whatsapp=CASE WHEN $7<>'' THEN $7 ELSE whatsapp END,
-        idioma_preferido=$8, logo_url=CASE WHEN $9<>'' THEN $9 ELSE logo_url END, sales_navigator=CASE WHEN $10<>'' THEN $10 ELSE sales_navigator END,
-        empresa=CASE WHEN COALESCE(empresa,'')='' THEN $11 ELSE empresa END, email=CASE WHEN COALESCE(email,'')='' THEN $5 ELSE email END, sitio_web=CASE WHEN COALESCE(sitio_web,'')='' THEN $12 ELSE sitio_web END,
-        pais=CASE WHEN COALESCE(pais,'')='' THEN $13 ELSE pais END, nombre=CASE WHEN COALESCE(nombre,'')='' THEN $14 ELSE nombre END, updated_at=NOW() WHERE id=$1 AND user_id=$15`,
-        [cid, R.razon || '', R.nif || '', R.dir || '', R.mailInf || '', R.canal || '', R.wpp || '', R.idioma || r.idioma, R.logo || '', R.salesnav || '', empresa, R.web || '', R.pais || '', nombreDe, uid]);
+      const { rows: [cur] } = await pool.query('SELECT notas FROM clients WHERE id=$1 AND user_id=$2', [cid, uid]);
+      if (!cur) return res.status(404).json({ error: 'Cliente no encontrado' });
+      // lo vacío se rellena; la empresa también reemplaza a un nombre de persona que se hubiera puesto como empresa
+      const f = c => `CASE WHEN COALESCE(${c},'')='' THEN`;
+      await pool.query(`UPDATE clients SET
+        razon_social=${f('razon_social')} $2 ELSE razon_social END, nif=${f('nif')} $3 ELSE nif END, direccion_fiscal=${f('direccion_fiscal')} $4 ELSE direccion_fiscal END,
+        email_informes=${f('email_informes')} $5 ELSE email_informes END, canal_preferido=${f('canal_preferido')} $6 ELSE canal_preferido END, whatsapp=${f('whatsapp')} $7 ELSE whatsapp END,
+        telefono=${f('telefono')} $7 ELSE telefono END, idioma_preferido=${f('idioma_preferido')} $8 ELSE idioma_preferido END, logo_url=${f('logo_url')} $9 ELSE logo_url END,
+        sales_navigator=${f('sales_navigator')} $10 ELSE sales_navigator END, sitio_web=${f('sitio_web')} $12 ELSE sitio_web END, linkedin=${f('linkedin')} $16 ELSE linkedin END,
+        email=${f('email')} $5 ELSE email END, nombre=${f('nombre')} $14 ELSE nombre END,
+        empresa=CASE WHEN COALESCE(empresa,'')='' OR (LOWER(TRIM(empresa))=LOWER(TRIM(nombre)) AND $11<>'' AND LOWER(TRIM($11))<>LOWER(TRIM(nombre))) THEN $11 ELSE empresa END,
+        pais=${f('pais')} $13 ELSE pais END, pais_empresa=${f('pais_empresa')} $13 ELSE pais_empresa END, ciudad=${f('ciudad')} $17 ELSE ciudad END,
+        notas=$18, updated_at=NOW() WHERE id=$1 AND user_id=$15`,
+        [cid, razon, S('nif'), S('dir'), mailInf, S('canal'), tel, S('idioma') || r.idioma || '', S('logo'), S('salesnav'), empresa, S('web'), paisE, nombreDe, uid, S('liUrl'), ciudad, unirNotas(cur.notas)]);
+      // personas de contacto: quien rellenó el formulario y quien atiende las reuniones (sin duplicar)
+      const pers = [{ n: nombreDe, e: mail, t: tel, c: 'Contacto principal' }];
+      if (S('atiende') && S('atiende').toLowerCase() !== nombreDe.toLowerCase()) pers.push({ n: S('atiende'), e: S('atiendeEmail'), t: '', c: 'Atiende las reuniones' });
+      for (const x of pers) {
+        if (!x.n) continue;
+        const { rows: [d] } = await pool.query(`SELECT id FROM client_contacts WHERE client_id=$1 AND (LOWER(nombre)=LOWER($2) OR (LOWER(email)=LOWER($3) AND $3<>'')) LIMIT 1`, [cid, x.n, x.e]);
+        if (!d) await pool.query('INSERT INTO client_contacts (client_id, nombre, email, telefono, cargo) VALUES ($1,$2,$3,$4,$5)', [cid, x.n, x.e, x.t, x.c]);
+      }
     }
     let oid = r.outbound_client_id;
     if (out) {
@@ -537,9 +572,16 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       else {
         let { rows: [oc] } = await pool.query('SELECT id FROM outbound_clients WHERE user_id=$1 AND LOWER(nombre)=LOWER($2) ORDER BY id LIMIT 1', [uid, empresa]);
         hecho.outreach = oc ? 'vinculado' : 'creado';
-        if (!oc) ({ rows: [oc] } = await pool.query(`INSERT INTO outbound_clients (user_id, nombre, estado, website) VALUES ($1,$2,'preparacion',$3) RETURNING id`, [uid, empresa, R.web || '']));
+        if (!oc) ({ rows: [oc] } = await pool.query(`INSERT INTO outbound_clients (user_id, nombre, estado, website) VALUES ($1,$2,'preparacion',$3) RETURNING id`, [uid, empresa, S('web')]));
         oid = oc.id;
       }
+      const { rows: [oc0] } = await pool.query('SELECT notas FROM outbound_clients WHERE id=$1 AND user_id=$2', [oid, uid]);
+      if (!oc0) return res.status(404).json({ error: 'Cliente de Outreach no encontrado' });
+      const g = c => `CASE WHEN COALESCE(${c},'')='' THEN`;
+      await pool.query(`UPDATE outbound_clients SET website=${g('website')} $2 ELSE website END, canal=${g('canal')} $3 ELSE canal END, timezone=${g('timezone')} $4 ELSE timezone END,
+        from_email=${g('from_email')} $5 ELSE from_email END, cc_email=${g('cc_email')} $6 ELSE cc_email END, li_empresa=${g('li_empresa')} $7 ELSE li_empresa END,
+        mercado=${g('mercado')} $8 ELSE mercado END, client_id=COALESCE(client_id, $9), notas=$10, updated_at=NOW() WHERE id=$1 AND user_id=$11`,
+        [oid, S('web'), canalL, tz, S('mailUser'), S('atiendeEmail') && S('atiendeEmail').toLowerCase() !== mail.toLowerCase() ? S('atiendeEmail') : '', empresa, paisE, ops ? cid : null, unirNotas(oc0.notas), uid]);
     }
     await pool.query('UPDATE inicio_cliente SET cliente_id=COALESCE($2,cliente_id), outbound_client_id=COALESCE($3,outbound_client_id) WHERE id=$1', [r.id, ops ? cid : null, out ? oid : null]);
     await audit(r.id, req, 'cliente_creado', Object.keys(hecho).join('+'));
