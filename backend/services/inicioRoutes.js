@@ -510,6 +510,42 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
     await audit(r.id, req, 'revisado', ''); res.json({ ok: true, cliente_id: cid });
   });
 
+  // «Crear cliente» desde la fila: crea (o reutiliza) el cliente de Operaciones y/o de Outreach con todos los datos útiles que ya hay (sin exigir que el formulario esté completo ni cambiar su estado)
+  simple('crear-cliente', async (req, res, r) => {
+    const b = req.body || {}, ops = b.operaciones !== false, out = b.outreach !== false;
+    if (!ops && !out) return res.status(400).json({ error: 'Elige al menos un tipo de cliente' });
+    const R = { ...(r.prefill || {}), ...(r.respuestas || {}) }, uid = uidOf(req);
+    const nombreDe = String(R.contacto || '').split(',')[0].trim();
+    const empresa = String(R.razon || R.empresa || '').trim() || nombreDe || 'Cliente';
+    const mail = String(R.mailInf || R.mailContacto || '').trim();
+    const hecho = {};
+    let cid = r.cliente_id;
+    if (ops) {
+      if (!cid) { const { rows: [ex] } = await pool.query(`SELECT id FROM clients WHERE user_id=$1 AND ((LOWER(email)=LOWER($2) AND $2<>'') OR LOWER(empresa)=LOWER($3) OR LOWER(razon_social)=LOWER($3)) ORDER BY id LIMIT 1`, [uid, mail, empresa]); cid = ex ? ex.id : null; hecho.operaciones = ex ? 'vinculado' : 'creado'; }
+      else hecho.operaciones = 'vinculado';
+      if (!cid) { const { rows: [c] } = await pool.query(`INSERT INTO clients (user_id, nombre, empresa, email, estado, tipo) VALUES ($1,$2,$3,$4,'activo','cliente') RETURNING id`, [uid, nombreDe || empresa, empresa, mail]); cid = c.id; }
+      await pool.query(`UPDATE clients SET razon_social=CASE WHEN $2<>'' THEN $2 ELSE razon_social END, nif=CASE WHEN $3<>'' THEN $3 ELSE nif END, direccion_fiscal=CASE WHEN $4<>'' THEN $4 ELSE direccion_fiscal END,
+        email_informes=CASE WHEN $5<>'' THEN $5 ELSE email_informes END, canal_preferido=CASE WHEN $6<>'' THEN $6 ELSE canal_preferido END, whatsapp=CASE WHEN $7<>'' THEN $7 ELSE whatsapp END,
+        idioma_preferido=$8, logo_url=CASE WHEN $9<>'' THEN $9 ELSE logo_url END, sales_navigator=CASE WHEN $10<>'' THEN $10 ELSE sales_navigator END,
+        empresa=CASE WHEN COALESCE(empresa,'')='' THEN $11 ELSE empresa END, email=CASE WHEN COALESCE(email,'')='' THEN $5 ELSE email END, sitio_web=CASE WHEN COALESCE(sitio_web,'')='' THEN $12 ELSE sitio_web END,
+        pais=CASE WHEN COALESCE(pais,'')='' THEN $13 ELSE pais END, nombre=CASE WHEN COALESCE(nombre,'')='' THEN $14 ELSE nombre END, updated_at=NOW() WHERE id=$1 AND user_id=$15`,
+        [cid, R.razon || '', R.nif || '', R.dir || '', R.mailInf || '', R.canal || '', R.wpp || '', R.idioma || r.idioma, R.logo || '', R.salesnav || '', empresa, R.web || '', R.pais || '', nombreDe, uid]);
+    }
+    let oid = r.outbound_client_id;
+    if (out) {
+      if (oid) hecho.outreach = 'vinculado';
+      else {
+        let { rows: [oc] } = await pool.query('SELECT id FROM outbound_clients WHERE user_id=$1 AND LOWER(nombre)=LOWER($2) ORDER BY id LIMIT 1', [uid, empresa]);
+        hecho.outreach = oc ? 'vinculado' : 'creado';
+        if (!oc) ({ rows: [oc] } = await pool.query(`INSERT INTO outbound_clients (user_id, nombre, estado, website) VALUES ($1,$2,'preparacion',$3) RETURNING id`, [uid, empresa, R.web || '']));
+        oid = oc.id;
+      }
+    }
+    await pool.query('UPDATE inicio_cliente SET cliente_id=COALESCE($2,cliente_id), outbound_client_id=COALESCE($3,outbound_client_id) WHERE id=$1', [r.id, ops ? cid : null, out ? oid : null]);
+    await audit(r.id, req, 'cliente_creado', Object.keys(hecho).join('+'));
+    res.json({ ok: true, cliente_id: ops ? cid : null, outbound_client_id: out ? oid : null, ...hecho });
+  });
+
   // Compuerta del portal: solo con estado «Revisado» y todos los obligatorios completos
   simple('portal', async (req, res, r) => {
     if (!(await soloAdmin(req, res))) return;

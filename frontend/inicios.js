@@ -172,7 +172,7 @@ const InicioModule = (() => {
     cerrarMenu(); const x = _rows.find(r => r.id === id); if (!x) return;
     const m = document.createElement('div'); m.id = 'ini-gmenu'; m.className = 'ini-gmenu';
     const it = (fn, t, cls) => `<button class="ini-gm${cls ? ' ' + cls : ''}" onclick="InicioModule.cerrarMenu();InicioModule.${fn}">${t}</button>`;
-    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`msgFila(${id},'formulario',true)`, 'Enviar el formulario…') + it(`msgFila(${id},'recordatorio',true)`, 'Recordar datos faltantes…') + it(`abrirFicha(${id})`, 'Ver ficha') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
+    m.innerHTML = it(`copiarFila(${id})`, 'Copiar enlace') + it(`abrirForm(${id})`, 'Abrir el formulario') + it(`msgFila(${id},'formulario',true)`, 'Enviar el formulario…') + it(`msgFila(${id},'recordatorio',true)`, 'Recordar datos faltantes…') + it(`abrirFicha(${id})`, 'Ver ficha') + it(`crearCliente(${id})`, 'Crear cliente…') + '<div class="ini-gsep"></div><div class="ini-gl">Idioma del formulario</div>'
       + it(`idiomaFila(${id},'es')`, (x.idioma !== 'en' ? '✓ ' : '') + 'Español') + it(`idiomaFila(${id},'en')`, (x.idioma === 'en' ? '✓ ' : '') + 'English')
       + '<div class="ini-gsep"></div>' + it(`renovarFila(${id})`, 'Renovar 15 días') + it(`revocarFila(${id})`, 'Revocar enlace', 'ini-gm--bad');
     document.body.appendChild(m);
@@ -222,6 +222,25 @@ const InicioModule = (() => {
       <div class="ini-minfo"><div><b>Cuándo sale:</b> al instante, al pulsar «Enviar».</div>
         <div><b>Le falta responder${pend.length ? ` (${pend.length})` : ''}:</b> ${pend.length ? `<details class="ini-det"><summary>ver lista</summary><ul>${pend.map(x => `<li>${E(x)}</li>`).join('')}</ul></details>` : 'nada, está completo. Se envía solo el agradecimiento.'}</div></div>
       <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" id="ini-menv" onclick="InicioModule._msgEnviar(${id},'${tipo}')">Enviar</button></div>`);
+  }
+  // ══ Crear cliente (Outreach y/o Operaciones) con los datos del formulario ══
+  function crearCliente(id) {
+    const x = _rows.find(r => r.id === id) || {};
+    modal(`<h3 class="ini-mh">Crear cliente</h3>
+      <p class="ini-sub" style="margin:0 0 10px">Se crea con todos los datos útiles que ya hay${x.empresa ? ' de <b>' + E(x.empresa) + '</b>' : ''} (empresa, contacto, correos, web, país, facturación, canal…). Si ya existe uno, se vincula en vez de duplicarlo.</p>
+      <label class="ini-chk"><input type="checkbox" id="ini-cc-out" checked><span><b>Cliente de Outreach</b> · para prospectar (campañas, secuencias, buzones)</span></label>
+      <label class="ini-chk"><input type="checkbox" id="ini-cc-ops" checked><span><b>Cliente de Operaciones</b> · proyectos, tareas y finanzas</span></label>
+      <div class="ini-acts"><button class="btn btn-ghost" onclick="InicioModule.cerrar()">Cancelar</button><button class="btn btn-primary" id="ini-cc-go" onclick="InicioModule._crearCliente(${id})">Crear cliente</button></div>`);
+  }
+  async function _crearCliente(id) {
+    const ops = $('ini-cc-ops').checked, out = $('ini-cc-out').checked;
+    if (!ops && !out) return msg('Elige al menos un tipo de cliente', 'error');
+    const b = $('ini-cc-go'); b.disabled = true; b.textContent = 'Creando…';
+    try {
+      const r = await _post(`/inicios/${id}/crear-cliente`, { operaciones: ops, outreach: out });
+      cerrar(); const t = k => r[k] === 'creado' ? 'creado' : 'ya existía y se vinculó';
+      msg('Cliente ' + [r.outreach ? 'de Outreach ' + t('outreach') : '', r.operaciones ? 'de Operaciones ' + t('operaciones') : ''].filter(Boolean).join(' · '), 'success'); cargar();
+    } catch (e) { b.disabled = false; b.textContent = 'Crear cliente'; msg(e.message, 'error'); }
   }
   const _msgCanal = (id, tipo, c) => { _msg.canal = c; _msg.remitente = ''; msgFila(id, tipo); };
   const _msgRem = v => { _msg.remitente = v; };
@@ -346,6 +365,6 @@ const InicioModule = (() => {
   }
 
   return { render, ordenar, buscar, filtrar, csv, nuevo, _nuevoCambio, _nuevoCrear, crearParaCliente, copiarEnlace, abrirFicha, ir, volver, cerrar, copiar, guardarCampo, guardarNota, copiarCampo, mostrar, copiarSecreto, cambiarSecreto, _guardarSecreto,
-    cargarEnvio, guardarEnvio, msgFila, _msgCanal, _msgRem, _msgCc, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
+    cargarEnvio, guardarEnvio, msgFila, _msgCanal, _msgRem, _msgCc, _msgRecarga, _msgEnviar, menuCols, cerrarCols, alternaCol, restauraCols, _buscaCol: pintaCols, menuFila, cerrarMenu, crearCliente, _crearCliente, pendientesFila, copiarFila, abrirForm, idiomaFila, renovarFila, revocarFila, marcarEnviado, renovar, revocar, recordatorio, revisar, borrarAccesos, portal };
 })();
 window.InicioModule = InicioModule;
