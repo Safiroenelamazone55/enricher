@@ -34274,6 +34274,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
         ${cols.map(k => cell[k.k] || '<td></td>').join('')}
         <td class="ldh-acts" onclick="event.stopPropagation()">
+          <button class="ldh-act" title="Copiar todos los datos del lead y de su empresa (estado, canal, paso…)" onclick="LeadManagerModule.ldCopy(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
           <button class="ldh-act" title="No es la persona → registrar al contacto correcto de la misma empresa" onclick="LeadManagerModule.ldRefer(${c.id},'derivado')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
@@ -34281,11 +34282,53 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
-    const totW = cols.reduce((n, x) => n + x.w, 0) + 150;   // anchos fijos: nada se estira de más
+    const totW = cols.reduce((n, x) => n + x.w, 0) + 186;   // anchos fijos: nada se estira de más
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table" style="width:100%;min-width:${totW}px">
-      <colgroup>${cols.map(x => `<col style="width:${x.w}px">`).join('')}<col style="width:150px"></colgroup>
+      <colgroup>${cols.map(x => `<col style="width:${x.w}px">`).join('')}<col style="width:186px"></colgroup>
       <thead><tr>${cols.map(x => `<th>${x.l}</th>`).join('')}<th class="ldh-addth"><button type="button" class="ldh-addcol" onclick="LeadManagerModule.ldColsOpen(event)" title="Agregar o quitar columnas">＋</button></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
+  }
+  // Copia al portapapeles TODO lo del lead y de su empresa, ordenado: datos, empresa, estado (resultado, etapa, por qué canal y cuándo respondió, paso de la secuencia), reunión/deal
+  async function ldCopy(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || {};
+    const cli = (_clients || []).find(x => x.id === c.outbound_client_id);
+    const d = _DISPOS.find(x => x[0] === c.disposition);
+    const canalLbl = { email: 'Correo', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: 'Llamada', call: 'Llamada', email_manual: 'Correo' };
+    const fmtD = v => { const x = new Date(v); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }); };
+    const acts = (_activities || []).filter(a => a.contact_id === cid);
+    const resp = acts.find(a => a.tipo === 'respuesta');
+    const info = _ldActInfo()[cid] || {};
+    // último mensaje recibido (correo) si lo hay
+    let snip = (_ldSnips && _ldSnips[cid]) || null;
+    if (!snip && c.disposition === 'respondio') { try { const r = await apiFetch(`${API}/lm/por-calificar`); if (r.ok) snip = (await r.json())[cid] || null; } catch (_) { /* sin snippet */ } }
+    const L = (k, v) => (v == null || String(v).trim() === '' ? null : `${k}: ${String(v).trim()}`);
+    const blk = (t, arr) => { const a = arr.filter(Boolean); return a.length ? `${t}\n${a.join('\n')}` : null; };
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
+    const ub = (x, y, z) => [x, y, z].filter(Boolean).join(', ');
+    const seqs = c.sequences || [];
+    const seqTxt = seqs.map(sq => { const st = _seqSteps(sq.id) || []; const n = sq.paso || 1, t = st[n - 1]; return `${sq.nombre || ('#' + sq.id)} — paso ${n}${st.length ? ' de ' + st.length : ''}${t && t.titulo ? ' (' + t.titulo + ')' : ''}${sq.estado ? ' · ' + sq.estado : ''}${sq.paused_reason ? ' (' + sq.paused_reason + ')' : ''}`; });
+    const camps = [...new Set((c.campaigns || []).map(x => x.nombre || x.codigo).filter(Boolean))];
+    const web = co.website || co.dominio || '';
+    const dealV = c.deal_valor ? `${c.deal_moneda || '$'}${c.deal_valor}${c.deal_prob != null && c.deal_prob !== '' ? ' · probabilidad ' + c.deal_prob + ' %' : ''}${c.deal_cierre ? ' · cierre ' + fmtD(c.deal_cierre) : ''}` : '';
+    const parts = [
+      `${full.toUpperCase() || 'LEAD'}${c.cargo ? ' · ' + c.cargo : ''}${c.company_nombre || co.nombre ? ' · ' + (c.company_nombre || co.nombre) : ''}`,
+      blk('LEAD', [L('Nombre', full), L('Cargo', c.cargo), L('Seniority', c.seniority), L('Departamento', c.departamento), L('Rol de compra', c.buyer_role),
+        L('Email', c.email), L('Email personal', c.email_personal), L('Teléfono', c.telefono), L('Móvil', c.movil),
+        L('LinkedIn', c.linkedin), L('Sales Navigator', c.linkedin_sales_nav), L('Ubicación', ub(c.ciudad, c.region, c.pais)), L('Idioma', c.idioma_ef || c.idioma),
+        L('Aceptó la conexión de LinkedIn', c.li_aceptado_at ? fmtD(c.li_aceptado_at) : '')]),
+      blk('EMPRESA', [L('Nombre', c.company_nombre || co.nombre || c.empresa_nombre), L('Web', web), L('LinkedIn', co.linkedin), L('Industria', co.industria),
+        L('Tamaño', co.tamano), L('Ingresos', co.ingresos), L('Teléfono', co.telefono), L('Ubicación', ub(co.ciudad, co.region, co.pais)), L('Fundada', co.fundada), L('Tier', co.target_tier)]),
+      blk('ESTADO', [L('Resultado', d ? d[1] : ''), L('Etapa', STAGE_LABELS[c.estado] || c.estado), L('Fecha del resultado', info.fecha ? fmtD(info.fecha) : ''),
+        L('Respondió por', (resp && resp.canal && canalLbl[resp.canal]) || (snip && snip.canal && canalLbl[snip.canal]) || ''), L('Fecha de la respuesta', (resp && resp.fecha && fmtD(resp.fecha)) || (snip && snip.fecha && fmtD(snip.fecha)) || ''),
+        L('Respuesta', (snip && snip.snippet) || (resp && String(resp.nota || '').replace(/^Respondió a ".*?" — /, '')) || ''), L('Última nota', info.nota),
+        L('Cliente', cli && cli.nombre), L('Campaña', camps.join(' · ')), ...seqTxt.map((t, i) => L(seqTxt.length > 1 ? `Secuencia ${i + 1}` : 'Secuencia', t))]),
+      blk('REUNIÓN / DEAL', [L('Reunión', c.reunion_fecha ? fmtD(c.reunion_fecha) : ''), L('Deal', dealV)]),
+    ].filter(Boolean);
+    const text = parts.join('\n\n') + '\n';
+    try { await navigator.clipboard.writeText(text); }
+    catch (_) { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) { /* nada */ } ta.remove(); }
+    showBanner(`✓ Datos de ${full || 'este lead'} copiados al portapapeles`, 'success');
   }
   function ldSetResult(k) { _ldSel = k || ''; if (_ldSel === 'respondio') _ldLoadSnips(); else _ldPaint(); }
   // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
@@ -40356,7 +40399,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
-    ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ldSetResult, ldCopy, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
