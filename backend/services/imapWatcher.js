@@ -221,11 +221,16 @@ async function _onReply(pool, mb, contact, parsed, snippet) {
     [mb.user_id, contact.id]
   );
   // disposition='respondio' solo si estaba vacía (no pisa una decisión humana previa).
-  await pool.query(
+  const setDisp = await pool.query(
     `UPDATE lm_contacts SET disposition='respondio', updated_at=NOW()
       WHERE id=$1 AND (disposition='' OR disposition IS NULL)`,
     [contact.id]
   );
+  // el cambio automático de estado queda en el historial (con la fecha real de la respuesta), igual que los cambios hechos a mano
+  if (setDisp.rowCount) await pool.query(
+    `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+     VALUES ($1,$2,$3,'disposition_change','Estado: (sin estado) → Respondió (sin calificar)',$4,'hecha')`,
+    [mb.user_id, contact.id, mb.outbound_client_id, parsed.date || new Date()]).catch(() => {});
   // Pipeline automático: solo hacia adelante (nuevo/contactado → respondio).
   await pool.query(
     `UPDATE lm_contacts SET estado='respondio', updated_at=NOW()
