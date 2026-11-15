@@ -260,7 +260,10 @@ function _textToHtml(text) {
 // Envía desde el buzón y garantiza la copia en "Enviados" del proveedor
 // (append por IMAP cuando el proveedor no la guarda solo, p. ej. Microsoft/Zoho).
 async function sendFromMailbox(mb, pass, msg) {
+  // Message-ID propio y explícito: el que va dentro del correo es el mismo que se devuelve y se guarda (así las respuestas se enlazan al hilo aunque vengan de otra dirección)
+  const mid = msg.messageId || `<${crypto.randomUUID()}@${String(mb.email).split('@')[1] || 'localhost'}>`;
   const mail = {
+    messageId: mid,
     from: msg.fromName ? `"${msg.fromName.replace(/"/g, '')}" <${mb.email}>` : mb.email,
     to: msg.to, cc: msg.cc || undefined,
     subject: msg.subject || '', text: msg.text || undefined,
@@ -286,7 +289,7 @@ async function sendFromMailbox(mb, pass, msg) {
       } finally { await client.logout().catch(() => {}); }
     } catch (e) { console.warn('[mailbox] append Enviados falló (el envío SÍ salió):', _friendlyErr(e)); }
   }
-  return { messageId: info.messageId || '' };
+  return { messageId: mid };
 }
 
 module.exports = { PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, getMailboxAuth, _friendlyErr };

@@ -31,6 +31,7 @@ let _timer = null;
 let _running = false;
 
 const TICK_MS        = 60 * 1000;  // cada minuto: las respuestas llegan a Nova casi al instante
+const _FREE_DOMAINS = new Set(['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'msn.com', 'protonmail.com', 'yahoo.es', 'hotmail.es', 'googlemail.com']);
 const MAX_PER_TICK   = 50;             // máx mensajes nuevos procesados por buzón por tick
 const MAX_SOURCE     = 512 * 1024;     // no descargar cuerpos gigantes (512 KB)
 const BODY_MAX_CHARS = 20000;          // texto guardado en DB (suficiente para el Inbox)
@@ -335,8 +336,9 @@ async function _checkMailbox(pool, mb) {
     // `${lastUid+1}:*` devuelve al menos el último mensaje aunque su UID sea menor → filtrar.
     for await (const msg of client.fetch(`${lastUid + 1}:*`, { uid: true, source: { maxLength: MAX_SOURCE } }, { uid: true })) {
       if (msg.uid <= lastUid) continue;
+      // Tope por pasada: el cursor NO avanza más allá de lo procesado (antes se saltaba el resto y esos correos —posibles respuestas— se perdían para siempre); el resto se lee en la siguiente pasada.
+      if (procesados >= MAX_PER_TICK) break;
       if (msg.uid > maxUid) maxUid = msg.uid;
-      if (procesados >= MAX_PER_TICK) continue; // avanzar cursor igual; lo no procesado ya quedó atrás
       procesados++;
 
       try {
@@ -389,6 +391,25 @@ async function _checkMailbox(pool, mb) {
                     // la nueva dirección queda guardada para reconocerla directamente la próxima vez
                     await pool.query(`UPDATE lm_contacts SET email_personal=$2 WHERE id=$1 AND COALESCE(email_personal,'')='' AND LOWER(email) <> $2`, [contact.id, fromAddr]).catch(() => {});
                   } else if (tipo !== 'ooo') tipo = 'equipo';
+                }
+              }
+            }
+            // 1b) Sin hilo reconocible (correos enviados antes de guardar el Message-ID real): por DOMINIO del remitente + ASUNTO de lo que Nova envió
+            //     (60 días). Solo si identifica a un único contacto; así una respuesta de otra dirección de la misma empresa no se pierde.
+            if (!contact && tipo === 'reply') {
+              const dm = fromAddr.split('@')[1] || '', subj = String(parsed.subject || '').replace(/^\s*((re|fw|fwd|rv|enc|res)\s*:\s*)+/i, '').trim().toLowerCase();
+              if (subj && dm && !_FREE_DOMAINS.has(dm) && !(await _isTeamAddr(pool, mb.user_id, fromAddr))) {
+                const { rows: srows } = await pool.query(
+                  `SELECT DISTINCT m.contact_id FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
+                    WHERE m.user_id=$1 AND m.estado IN ('sent','replied') AND m.sent_at > NOW() - interval '60 days'
+                      AND lower(btrim(regexp_replace(m.asunto, '^\\s*((re|fw|fwd|rv|enc|res)\\s*:\\s*)+', '', 'i'))) = $2
+                      AND split_part(lower(k.email), '@', 2) = $3`, [mb.user_id, subj, dm]);
+                if (srows.length === 1) {
+                  const { rows: crows } = await pool.query(`SELECT id, email, nombre, apellido FROM lm_contacts WHERE id=$1`, [srows[0].contact_id]);
+                  if (crows[0]) {
+                    contact = crows[0];
+                    await pool.query(`UPDATE lm_contacts SET email_personal=$2 WHERE id=$1 AND COALESCE(email_personal,'')='' AND LOWER(email) <> $2`, [contact.id, fromAddr]).catch(() => {});
+                  }
                 }
               }
             }
