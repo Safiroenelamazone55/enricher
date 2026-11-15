@@ -11598,6 +11598,18 @@ app.get('/api/lm/contacts/:id/activities', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-act] GET', err.message); res.status(500).json({ error: 'Error al cargar actividades' }); }
 });
 // Historial completo de un contacto: cada paso enviado (con el copy exacto, secuencia, cliente y fecha), sus respuestas, notas y cambios de estado, en orden cronológico.
+app.get('/api/lm/contacts/:id/respuestas', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  if (!cid) return res.status(400).json({ error: 'Contacto inválido' });
+  try {
+    const [r, c] = await Promise.all([
+      pool.query(`SELECT received_at, from_email, asunto, cuerpo FROM lm_inbox_messages WHERE user_id=$1 AND contact_id=$2 AND tipo='reply' ORDER BY received_at`, [uid, cid]),
+      pool.query(`SELECT fecha, nota FROM activities WHERE user_id=$1 AND contact_id=$2 AND tipo='disposition_change' ORDER BY fecha`, [uid, cid]),
+    ]);
+    const limpia = t => String(t || '').split(/\r?\n/).filter(l => !/^\s*>/.test(l)).join(' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+    res.json({ respuestas: r.rows.map(x => ({ recibida: x.received_at, de: x.from_email, asunto: x.asunto, texto: limpia(x.cuerpo) })), cambios: c.rows.map(x => ({ fecha: x.fecha, nota: x.nota })) });
+  } catch (e) { console.error('[lm-respuestas]', e.message); res.status(500).json({ error: 'Error al cargar' }); }
+});
 app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
   if (!cid) return res.status(400).json({ error: 'Contacto inválido' });

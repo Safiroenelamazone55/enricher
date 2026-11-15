@@ -34288,7 +34288,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <thead><tr>${cols.map(x => `<th>${x.l}</th>`).join('')}<th class="ldh-addth"><button type="button" class="ldh-addcol" onclick="LeadManagerModule.ldColsOpen(event)" title="Agregar o quitar columnas">＋</button></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
-  // Copia al portapapeles TODO lo del lead y de su empresa, ordenado: datos, empresa, estado (resultado, etapa, por qué canal y cuándo respondió, paso de la secuencia), reunión/deal
+  // Copia al portapapeles TODO lo del lead y de su empresa, ordenado: datos, empresa, estado (resultado, etapa, por qué canal y CUÁNDO respondió de verdad, historial de cambios, paso de la secuencia), reunión/deal
   async function ldCopy(cid) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || {};
@@ -34296,12 +34296,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const d = _DISPOS.find(x => x[0] === c.disposition);
     const canalLbl = { email: 'Correo', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: 'Llamada', call: 'Llamada', email_manual: 'Correo' };
     const fmtD = v => { const x = new Date(v); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }); };
+    const fmtDH = v => { const x = new Date(v); return isNaN(x) ? '' : fmtD(v) + ', ' + x.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); };
+    const sinTag = t => String(t || '').replace(/^\s*Disposición:[^—]*(—\s*)?/, '').replace(/^\s*(\[[^\]]+\]\s*)+/, '').trim();
     const acts = (_activities || []).filter(a => a.contact_id === cid);
     const resp = acts.find(a => a.tipo === 'respuesta');
     const info = _ldActInfo()[cid] || {};
-    // último mensaje recibido (correo) si lo hay
-    let snip = (_ldSnips && _ldSnips[cid]) || null;
-    if (!snip && c.disposition === 'respondio') { try { const r = await apiFetch(`${API}/lm/por-calificar`); if (r.ok) snip = (await r.json())[cid] || null; } catch (_) { /* sin snippet */ } }
+    // respuestas reales (correos recibidos, con su fecha de llegada) y cambios de estado con su fecha
+    let rr = { respuestas: [], cambios: [] };
+    try { const r = await apiFetch(`${API}/lm/contacts/${cid}/respuestas`); if (r.ok) rr = await r.json(); } catch (_) { /* sin historial */ }
+    const reps = rr.respuestas || [], prim = reps[0], ult = reps[reps.length - 1];
     const L = (k, v) => (v == null || String(v).trim() === '' ? null : `${k}: ${String(v).trim()}`);
     const blk = (t, arr) => { const a = arr.filter(Boolean); return a.length ? `${t}\n${a.join('\n')}` : null; };
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
@@ -34311,6 +34314,19 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const camps = [...new Set((c.campaigns || []).map(x => x.nombre || x.codigo).filter(Boolean))];
     const web = co.website || co.dominio || '';
     const dealV = c.deal_valor ? `${c.deal_moneda || '$'}${c.deal_valor}${c.deal_prob != null && c.deal_prob !== '' ? ' · probabilidad ' + c.deal_prob + ' %' : ''}${c.deal_cierre ? ' · cierre ' + fmtD(c.deal_cierre) : ''}` : '';
+    const cambios = (rr.cambios || []).map(x => `${fmtD(x.fecha)} — ${String(x.nota || '').replace(/^Estado:\s*/, '')}`);
+    const estado = [
+      L('Resultado actual', d ? d[1] : ''), L('Etapa', STAGE_LABELS[c.estado] || c.estado),
+      // fecha REAL en que respondió (llegada del correo), no la fecha en que se le asignó el resultado
+      L('Respondió por', reps.length ? 'Correo' : ((resp && resp.canal && canalLbl[resp.canal]) || '')),
+      prim ? L(reps.length > 1 ? 'Primera respuesta' : 'Respondió el', fmtDH(prim.recibida)) : (resp ? L('Respuesta registrada el', fmtD(resp.fecha)) : null),
+      prim ? L('Su mensaje', prim.texto) : L('Respuesta', sinTag(resp && resp.nota)),
+      reps.length > 1 ? L('Última respuesta', fmtDH(ult.recibida)) : null,
+      reps.length > 1 ? L('Su último mensaje', ult.texto) : null,
+      reps.length > 1 ? L('Respuestas recibidas', reps.length) : null,
+      L('Resultado asignado el', info.fecha ? fmtD(info.fecha) : ''), L('Última nota', sinTag(info.nota)),
+      ...(cambios.length ? ['Cambios de estado:', ...cambios.map(t => '  · ' + t)] : []),
+      L('Cliente', cli && cli.nombre), L('Campaña', camps.join(' · ')), ...seqTxt.map((t, i) => L(seqTxt.length > 1 ? `Secuencia ${i + 1}` : 'Secuencia', t))];
     const parts = [
       `${full.toUpperCase() || 'LEAD'}${c.cargo ? ' · ' + c.cargo : ''}${c.company_nombre || co.nombre ? ' · ' + (c.company_nombre || co.nombre) : ''}`,
       blk('LEAD', [L('Nombre', full), L('Cargo', c.cargo), L('Seniority', c.seniority), L('Departamento', c.departamento), L('Rol de compra', c.buyer_role),
@@ -34319,10 +34335,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         L('Aceptó la conexión de LinkedIn', c.li_aceptado_at ? fmtD(c.li_aceptado_at) : '')]),
       blk('EMPRESA', [L('Nombre', c.company_nombre || co.nombre || c.empresa_nombre), L('Web', web), L('LinkedIn', co.linkedin), L('Industria', co.industria),
         L('Tamaño', co.tamano), L('Ingresos', co.ingresos), L('Teléfono', co.telefono), L('Ubicación', ub(co.ciudad, co.region, co.pais)), L('Fundada', co.fundada), L('Tier', co.target_tier)]),
-      blk('ESTADO', [L('Resultado', d ? d[1] : ''), L('Etapa', STAGE_LABELS[c.estado] || c.estado), L('Fecha del resultado', info.fecha ? fmtD(info.fecha) : ''),
-        L('Respondió por', (resp && resp.canal && canalLbl[resp.canal]) || (snip && snip.canal && canalLbl[snip.canal]) || ''), L('Fecha de la respuesta', (resp && resp.fecha && fmtD(resp.fecha)) || (snip && snip.fecha && fmtD(snip.fecha)) || ''),
-        L('Respuesta', (snip && snip.snippet) || (resp && String(resp.nota || '').replace(/^Respondió a ".*?" — /, '')) || ''), L('Última nota', info.nota),
-        L('Cliente', cli && cli.nombre), L('Campaña', camps.join(' · ')), ...seqTxt.map((t, i) => L(seqTxt.length > 1 ? `Secuencia ${i + 1}` : 'Secuencia', t))]),
+      blk('ESTADO', estado),
       blk('REUNIÓN / DEAL', [L('Reunión', c.reunion_fecha ? fmtD(c.reunion_fecha) : ''), L('Deal', dealV)]),
     ].filter(Boolean);
     const text = parts.join('\n\n') + '\n';
