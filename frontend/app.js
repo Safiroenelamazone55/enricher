@@ -37603,6 +37603,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_derivBanner(c)}
       ${_cpTaskBar(id)}
       <div class="cp-head">
+        <button type="button" class="cp-copy" title="Copiar todos los datos del contacto y de su empresa (estado, canal, paso…)" aria-label="Copiar datos" onclick="LeadManagerModule.ldCopy(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
         <img class="cp-ava" src="${_av(full)}" alt="">
         <div class="cp-id">
           <h2 class="cp-name">${esc(full)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</h2>

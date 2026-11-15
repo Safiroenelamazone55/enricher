@@ -21334,3 +21334,8 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 /* Outreach · Tareas comerciales: el botón «Hacer tarea» con la forma de los botones de Operaciones (rectangular, radio 6 px, 30 px de alto, sin sombra ni desplazamiento); los colores se mantienen */
 .seq-task__go { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 14px; border: 1px solid transparent; border-radius: 6px; font-size: 12.5px; font-weight: 600; line-height: 1; box-shadow: none; }
 .seq-task:hover .seq-task__go { transform: none; border-color: transparent; background: rgba(0,122,255,.16); }
+
+/* Ficha del contacto: botón «copiar datos» arriba a la derecha (el mismo del listado de Leads) */
+.cp-head { position: relative; }
+.cp-copy { position: absolute; top: 0; right: 0; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border, #E3E8E5); border-radius: 6px; background: var(--surface, #fff); color: var(--text-muted, #6B7770); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.cp-copy:hover { background: var(--surface-2, #F1F4F2); color: var(--text, #14211B); border-color: var(--border2, #D5DBD8); }
