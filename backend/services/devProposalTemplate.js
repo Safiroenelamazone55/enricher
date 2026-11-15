@@ -30,7 +30,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 // Campos propios de esta plantilla (los datos del cliente —empresa, contacto, cargo, correo, moneda— viven en los campos habituales del documento).
 function cleanDev(d) {
   d = d || {}; const o = {};
-  for (const [k, n] of [['oferta_cliente', 200], ['cliente_ideal', 200], ['dolor_cliente', 240], ['decision_quien', 80], ['decision_plazo', 60], ['resultados_referencia', 300]]) o[k] = Sx(d[k], n);
+  for (const [k, n] of [['oferta_cliente', 700], ['cliente_ideal', 700], ['dolor_cliente', 700], ['decision_quien', 120], ['decision_plazo', 80], ['resultados_referencia', 600], ['reunion_def_texto', 500], ['fact_datos', 300]]) o[k] = Sx(d[k], n);
   o.fecha_propuesta = /^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha_propuesta || '')) ? d.fecha_propuesta : today();
   const N = (k, def, lo, hi) => { const v = num(d[k]); o[k] = v == null ? (def === undefined ? null : def) : Math.min(hi, Math.max(lo, v)); };
   N('reuniones_mes_hoy', null, 0, 10000); N('valor_cliente', null, 0, 1e9); N('cierre_pct', null, 0, 100); N('ciclo_dias', null, 0, 1000);
@@ -42,6 +42,11 @@ function cleanDev(d) {
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
   o.incluir_whatsapp = d.incluir_whatsapp === true || d.incluir_whatsapp === 'true';
   o.modalidad_pago = d.modalidad_pago === 'semanal' ? 'semanal' : 'unico';   // «unico»: todo para comenzar · «semanal»: semana trabajada, semana pagada (el viernes de esa semana)
+  // Modelo de negocio del cliente (opcionales; sin ellos el documento queda como siempre)
+  o.modelo_negocio = d.modelo_negocio === 'dos_lados' ? 'dos_lados' : 'directo';      // «dos_lados»: marketplace (nos reunimos con compradores; pagan los proveedores)
+  o.cobro_cliente = ['anual', 'mensual'].includes(d.cobro_cliente) ? d.cobro_cliente : 'unico';   // cómo cobra el cliente a los suyos
+  o.reunion_def = ['decisor', 'comprador', 'proveedor', 'descubrimiento', 'personalizada'].includes(d.reunion_def) ? d.reunion_def : '';
+  o.incluir_factura = d.incluir_factura === true || d.incluir_factura === 'true';
   o.incluir_salesnav = d.incluir_salesnav === true || d.incluir_salesnav === 'true';   // servicio opcional de LinkedIn Sales Navigator
   o.firmante_nombre = Sx(d.firmante_nombre, 80); o.firmante_cargo = Sx(d.firmante_cargo, 80);
   o.firmantes_sel = Sx(d.firmantes_sel, 40);   // '' (el primero de la empresa) · 'all' (todos) · id de un firmante · 'otro' (el escrito a mano)
