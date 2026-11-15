@@ -580,8 +580,8 @@ function mount(app, { pool, requireAuth, permsSvc, puedeVerWa }) {
       const g = c => `CASE WHEN COALESCE(${c},'')='' THEN`;
       await pool.query(`UPDATE outbound_clients SET website=${g('website')} $2 ELSE website END, canal=${g('canal')} $3 ELSE canal END, timezone=${g('timezone')} $4 ELSE timezone END,
         from_email=${g('from_email')} $5 ELSE from_email END, cc_email=${g('cc_email')} $6 ELSE cc_email END, li_empresa=${g('li_empresa')} $7 ELSE li_empresa END,
-        mercado=${g('mercado')} $8 ELSE mercado END, client_id=COALESCE(client_id, $9), notas=$10, updated_at=NOW() WHERE id=$1 AND user_id=$11`,
-        [oid, S('web'), canalL, tz, S('mailUser'), S('atiendeEmail') && S('atiendeEmail').toLowerCase() !== mail.toLowerCase() ? S('atiendeEmail') : '', empresa, paisE, ops ? cid : null, unirNotas(oc0.notas), uid]);
+        client_id=COALESCE(client_id, $8), notas=$9, updated_at=NOW() WHERE id=$1 AND user_id=$10`,
+        [oid, S('web'), canalL, tz, S('mailUser'), S('atiendeEmail') && S('atiendeEmail').toLowerCase() !== mail.toLowerCase() ? S('atiendeEmail') : '', empresa, ops ? cid : null, unirNotas(oc0.notas), uid]);
     }
     await pool.query('UPDATE inicio_cliente SET cliente_id=COALESCE($2,cliente_id), outbound_client_id=COALESCE($3,outbound_client_id) WHERE id=$1', [r.id, ops ? cid : null, out ? oid : null]);
     await audit(r.id, req, 'cliente_creado', Object.keys(hecho).join('+'));
