@@ -873,6 +873,14 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_avisos INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS opp_snooze_until DATE`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT ''`);
+    // Migración automática: un cliente sin zona horaria toma la que ya completaste en sus secuencias (la más usada). Solo rellena vacíos.
+    try {
+      await pool.query(`UPDATE outbound_clients oc SET timezone = x.tz
+        FROM (SELECT DISTINCT ON (outbound_client_id) outbound_client_id, timezone AS tz FROM sequences
+               WHERE COALESCE(timezone,'') <> '' AND outbound_client_id IS NOT NULL
+               GROUP BY outbound_client_id, timezone ORDER BY outbound_client_id, COUNT(*) DESC) x
+       WHERE oc.id = x.outbound_client_id AND COALESCE(oc.timezone,'') = ''`);
+    } catch (e) { console.warn('[db] migración zona horaria de clientes:', e.message); }
     // Idioma del contacto (según su ubicación): base para mensajes por idioma en las secuencias
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS idioma TEXT NOT NULL DEFAULT ''`);
     // Borrador por aprobar que ya editaste a mano: no se vuelve a redactar solo (solo se le actualiza el nombre/email corregido)

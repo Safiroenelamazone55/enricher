@@ -32113,7 +32113,31 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // Franja de hora local del cliente: verde si ahora es horario laboral (lun–vie, 8:00–17:00 allá), gris si no. Se actualiza sola.
+  function _clientClockState(tz) {
+    try {
+      const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false, weekday: 'short' }).formatToParts(new Date());
+      const h = parseInt(p.find(x => x.type === 'hour').value, 10) % 24, wd = p.find(x => x.type === 'weekday').value;
+      return { ok: h >= 8 && h < 17 && wd !== 'Sat' && wd !== 'Sun', weekend: wd === 'Sat' || wd === 'Sun' };
+    } catch (_) { return null; }
+  }
+  function _clientClockInner(tz, cid) {
+    if (!tz) return `<span class="cl-clock__t">Sin zona horaria</span> <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">Definir</a>`;
+    const st = _clientClockState(tz); if (!st) return `<span class="cl-clock__t">Zona horaria no válida</span> <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">Corregir</a>`;
+    let hora = ''; try { hora = new Intl.DateTimeFormat('es-ES', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: false }).format(new Date()); } catch (_) {}
+    const city = String(tz).split('/').pop().replace(/_/g, ' ');
+    return `<span class="cl-clock__dot"></span><b>${esc(hora)}</b> <span class="cl-clock__t">hora en ${esc(city)}</span><span class="cl-clock__s">${st.ok ? 'Puedes escribirle ahora' : (st.weekend ? 'Fin de semana' : 'Fuera de horario (8–17 h)')}</span>`;
+  }
+  function _clientClockTick() {
+    const el = document.getElementById('cl-clock');
+    if (!el) return;
+    el.innerHTML = _clientClockInner(el.dataset.tz, el.dataset.cid);
+    const st = el.dataset.tz ? _clientClockState(el.dataset.tz) : null;
+    el.classList.toggle('is-on', !!(st && st.ok)); el.classList.toggle('is-off', !!(st && !st.ok));
+  }
+  setInterval(_clientClockTick, 30000);
   function _vClientDetail(id) {
+    setTimeout(_clientClockTick, 0);
     const c = _clients.find(x => x.id === id);
     if (!c) return _vClients();
     const leads = _clientLeads(id);
@@ -32128,6 +32152,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="lm-ws">
         <aside class="lm-ws-side">
           <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><div class="lm-ws-side__nm">${esc(c.nombre)}<span id="cu-ws">${_cuBadge(c.id)}</span></div>${_obcBadge(c.estado)}</div><button class="seq-more-btn" onclick="LeadManagerModule.clientQuickMenu(event,${c.id})" title="Más acciones">⋮</button></div>
+          <div class="cl-clock" id="cl-clock" data-tz="${esc(c.timezone || '')}" data-cid="${c.id}">${_clientClockInner(c.timezone, c.id)}</div>
           <div class="lm-ws-side__acts">
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
             <button class="btn btn--ghost btn--sm cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>

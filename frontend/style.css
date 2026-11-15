@@ -21339,3 +21339,9 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 .cp-head { position: relative; }
 .cp-copy { position: absolute; top: 0; right: 0; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border, #E3E8E5); border-radius: 6px; background: var(--surface, #fff); color: var(--text-muted, #6B7770); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .cp-copy:hover { background: var(--surface-2, #F1F4F2); color: var(--text, #14211B); border-color: var(--border2, #D5DBD8); }
+.cl-clock { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 12px; padding: 8px 10px; background: #F3F1EC; border-left: 3px solid #C9C4BB; font-size: .78rem; color: #3D3A36; }
+.cl-clock__dot { width: 8px; height: 8px; border-radius: 50%; background: #A19D95; flex-shrink: 0; }
+.cl-clock__t { color: #8F8B83; }
+.cl-clock__s { width: 100%; font-size: .72rem; font-weight: 700; color: #6C6862; }
+.cl-clock.is-on { background: #E6F3EA; border-left-color: #1F8A4C; } .cl-clock.is-on .cl-clock__dot { background: #1F8A4C; } .cl-clock.is-on .cl-clock__s { color: #1F6B3E; }
+.cl-clock a { font-weight: 700; color: #1F4FA8; }
