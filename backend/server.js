@@ -5043,7 +5043,7 @@ async function _lmAddMembership(req, res, kind) {
     await pool.query(`UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2 AND estado='completada'`, [targetId, uid]).catch(() => {});
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
     const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on, rotacion_empresa FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
-    const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
+    let drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
     const mask = _sanSendDays(sq.send_days);
     // Solo contactos que existen y que NO estén ya enrolados (para no gastar cupos ni reiniciar su reloj).
     const already = new Set((await pool.query(`SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`, [uid, targetId, ids])).rows.map(r => r.contact_id));
@@ -5151,6 +5151,14 @@ async function _lmAddMembership(req, res, kind) {
       const so = new Date(Date.UTC(y, mo - 1, d));
       if (so > base) base = so;
     }
+    // Salvaguarda: si la secuencia NO tiene arranque escalonado y se enrolan muchos contactos de una vez, TODOS tendrían tarea el mismo día
+    // (miles de tareas hoy). Se activa un escalonado de 35 por día y queda guardado en la secuencia (visible y editable en su configuración).
+    // Para enrolar muchos de golpe a propósito, pon un valor alto en «Arranque escalonado».
+    let autoDrip = 0;
+    if (kind === 'sequence' && !drip && toAdd.length > 60) {
+      drip = autoDrip = 35;
+      await pool.query(`UPDATE sequences SET drip_per_day=$3, updated_at=NOW() WHERE id=$1 AND user_id=$2 AND COALESCE(drip_per_day,0)=0`, [targetId, uid, autoDrip]).catch(() => {});
+    }
     const perDay = drip > 0 ? drip : Infinity;
     const dates = [];
     let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = usedByDate[curStr] || 0;
@@ -5175,7 +5183,7 @@ async function _lmAddMembership(req, res, kind) {
       }
     }
     const spreadDays = new Set(dates).size;
-    res.json({ added: r.rowCount + queueIds.size, requested: ids.length, spread_days: spreadDays, per_day: drip, misma_empresa: mismaEmpresa, en_espera_rotacion: queueIds.size });
+    res.json({ added: r.rowCount + queueIds.size, requested: ids.length, spread_days: spreadDays, per_day: drip, auto_drip: autoDrip, misma_empresa: mismaEmpresa, en_espera_rotacion: queueIds.size });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
 // Re-ancla start_date/next_action_at de los enrolamientos que AÚN NO empiezan (paso 1,

@@ -28483,6 +28483,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
     const seqFuture = all.filter(t => t.due > today);
+    const _lim7 = new Date(today.getTime() + 7 * 864e5), seqNext7 = seqFuture.filter(t => t.due <= _lim7);   // «Próximas» = los próximos 7 días; el resto sigue programado (escalonado)
     // Opciones de filtro: solo campañas/secuencias con tareas presentes (de allRaw, para no perder opciones al filtrar)
     const seqMap = new Map(), campMap = new Map();
     allRaw.forEach(t => {
@@ -28573,7 +28574,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const _isSysNote = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && ((String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #')) || String(a.nota || '').startsWith('Rebote:')));
     const acts = _activities.filter(a => a.estado === 'pendiente' && !_ofInactiveSeq(a) && !_isSysNote(a)).sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
-    const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
+    const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqNext7.length > 1 ? ` · +${seqNext7.length - 1} más esta semana` : ''}${seqFuture.length > seqNext7.length ? ` · ${seqFuture.length - seqNext7.length} programadas más adelante (escalonado)` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apAll().length) || _fixList().length;
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
@@ -28583,7 +28584,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const statStrip = anything ? `<div class="lm-stat-strip">
       <button type="button" class="lm-stat lm-stat--btn lm-stat--all${!_taskStat ? ' on' : ''}" onclick="LeadManagerModule.taskStat('all')" title="Todo junto: vencidas, de hoy, por aprobar y por corregir"><span class="lm-stat__l">Todas</span><span class="lm-stat__n">${seqOver.length + seqHoy.length + actToday.length + _aprN + (hasFilter ? _fixF() : _fixList()).length}</span></button>
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
-      ${stat('next', 'Próximas', seqFuture.length, false)}
+      ${stat('next', 'Próximas', seqNext7.length, false, seqFuture.length > seqNext7.length ? 'próx. 7 días · ' + seqFuture.length + ' en total' : '')}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
       ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return stat('fix', 'Por corregir', n, true); })() : ''}
       ${_aprN ? stat('approve', 'Por aprobar', _aprN, true) : ''}
@@ -28600,7 +28601,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (!sel || sel === 'fix') blocks.push(_fixSectionHtml());
     if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
     if (showHoy && seqHoy.length) blocks.push(hdr(' lm-tsec-h--today', 'Hoy', seqHoy.length) + '<div class="seq-tasks">' + seqHoy.map(x => _allTaskRow(x, today)).join('') + '</div>');
-    if (sel === 'next' && seqFuture.length) blocks.push(hdr('', 'Próximas', seqFuture.length) + '<div class="seq-tasks">' + seqFuture.map(x => _allTaskRow(x, today)).join('') + '</div>');
+    if (sel === 'next' && seqFuture.length) blocks.push(hdr('', 'Próximas · 7 días', seqNext7.length) + '<div class="seq-tasks">' + seqNext7.map(x => _allTaskRow(x, today)).join('') + '</div>' + (seqFuture.length > seqNext7.length ? '<div class="seq-next">' + NI('calendar', 12) + ' ' + (seqFuture.length - seqNext7.length) + ' tareas más están programadas después, repartidas por días (arranque escalonado de la secuencia). Se irán sumando a medida que llegue su fecha.</div>' : ''));
     if (!sel && !seqToday.length && all.length) blocks.push('<div class="lm-task-empty"><span class="lm-task-empty__i">' + NI('check', 13) + '</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>');
     if (!sel && hasFilter && !all.length) blocks.push('<div class="lm-task-empty"><span class="lm-task-empty__i">' + NI('check', 13) + '</span>Sin tareas de secuencia para este filtro.</div>');
     if (!sel) blocks.push(nextLine);
@@ -37606,7 +37607,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const mismaEmpresa = (kind === 'sequence' && d.misma_empresa) ? d.misma_empresa.length : 0;
       const omit = d.omitidos_respondieron || 0;
       const dup = (d.requested || ids.length) - added - omit;
-      const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
+      const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)${d.auto_drip ? ' — la secuencia no tenía arranque escalonado y se activó solo' : ''}` : '';
       // Ya NO bloquea por "misma empresa" (pedido explícito 2026-09-04) — solo informa,
       // de forma que quede claro que el sistema sí lo detectó aunque los haya enrolado igual.
       showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${mismaEmpresa > 0 ? ` · ${mismaEmpresa} comparten empresa con otro contacto ya activo` : ''}${omit > 0 ? ` · ${omit} omitido(s): ya respondieron y tienen su propio seguimiento (${(d.omitidos_nombres || []).join(', ')})` : ''}${spread}`, (added || !omit) ? (added ? 'success' : 'info') : 'info');

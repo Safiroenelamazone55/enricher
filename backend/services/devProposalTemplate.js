@@ -388,7 +388,7 @@ ${debil ? card3(x('Tu ciclo de venta', 'Your sales cycle', 'Seu ciclo de vendas'
 
   // 5 · qué hacemos
   const refs = (Array.isArray(p.referencias) ? p.referencias : []).filter(r => r && r.nombre).slice(0, 3);
-  const refTxt = r => esc(r.nombre) + (r.descripcion ? ' · ' + esc(String(r.descripcion).slice(0, 90)) : '');
+  const refTxt = r => esc(r.nombre) + (r.descripcion ? ' · ' + esc((t => { const f = t.match(/^[^.]{20,150}\./); return f ? f[0].replace(/\.$/, '') : (t.length > 130 ? t.slice(0, t.lastIndexOf(' ', 130)).replace(/[ ,.;:]+$/, '') + '…' : t); })(String(r.descripcion))) : '');
   S.push(`<section class="slide s-dark" data-th="dark">${bgFoto('1684610529682-553625a1ffed', ovV(.88, .55))}<div class="content"><div class="eyebrow rv">04 · ${x('Qué hacemos', 'What we do', 'O que fazemos', 'Cosa facciamo')}</div>
 <h2 class="rv" style="--d:1">${x('Qué hacemos, <em>paso a paso.</em>', 'What we do, <em>step by step.</em>', 'O que fazemos, <em>passo a passo.</em>', 'Cosa facciamo, <em>passo dopo passo.</em>')}</h2>
 <div class="tl">
