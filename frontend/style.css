@@ -21377,3 +21377,8 @@ body.ibx-lb-open{overflow:hidden}
 .ibx-lb__nav:hover{background:rgba(0,0,0,.6)}
 .ibx-lb__nav--p{left:12px}.ibx-lb__nav--n{right:12px}
 @media(max-width:640px){.ibx-lb__btn{padding:0 8px;font-size:0}.ibx-lb__btn svg{margin:0}.ibx-lb__name{max-width:30vw}}
+
+/* Inbox · el correo recibido ocupa el ancho disponible (antes se encogía a ~330 px y quedaba cortado, con scroll interno) */
+.ibx-msgs .ibx-m:has(.ibx-m__frame){align-self:stretch;width:100%;max-width:1000px;box-sizing:border-box;min-width:0}
+.ibx-m__frame{display:block;width:100%;max-width:100%}
+.ibx-m:has(.ibx-m__frame) .ibx-m__body{min-width:0}

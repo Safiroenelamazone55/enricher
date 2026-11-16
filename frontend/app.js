@@ -29145,7 +29145,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><base target="_blank"><style>html,body{margin:0;padding:0;background:transparent}'
       + 'body{font:13px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto;cursor:zoom-in}table{max-width:100%}a{color:#1D4ED8}'
       // Cada correo trae su propio tamaño/tipografía (Outlook 11pt, Gmail 12.8px, plantillas con <font size>…): se unifica a UN tamaño para que todos los mensajes se lean igual.
-      + 'body *{font-size:inherit!important;font-family:inherit!important;line-height:inherit!important}sup,sub{font-size:75%!important}'
+      + 'body *{font-size:inherit!important;font-family:inherit!important;line-height:inherit!important}sup,sub{font-size:75%!important}html{overflow-y:hidden}body{overflow-x:auto}'
       + 'blockquote{margin:8px 0 8px 2px;padding-left:12px;border-left:3px solid #CBD5E1;color:#475569}pre{white-space:pre-wrap}</style></head><body>' + html + '</body></html>';
   }
   function _ibMailFrame(m) {
@@ -29157,7 +29157,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function ibFrameFit(f) {
     try {
       const d = f.contentDocument; if (!d) return;
-      f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px';
+      const fit = () => { try { const h = Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4; if (Math.abs((parseInt(f.style.height) || 0) - h) > 1) f.style.height = h + 'px'; } catch (_) {} };
+      fit();
+      if (window.ResizeObserver) { if (f._ro) f._ro.disconnect(); f._ro = new ResizeObserver(fit); f._ro.observe(d.documentElement); }   // imágenes que cargan después, cambio de ancho…
       // Clic en una imagen del correo → vista completa (como Outlook). El marco no ejecuta scripts del correo: el clic lo engancha esta página.
       const imgs = [...d.querySelectorAll('img')].filter(i => i.getAttribute('src'));
       imgs.forEach(im => im.addEventListener('click', e => {
@@ -29166,8 +29168,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const srcs = imgs.filter(i => !(i.naturalWidth && i.naturalWidth < 24 && i.naturalHeight < 24)).map(i => ({ src: i.currentSrc || i.src, alt: i.getAttribute('alt') || '' }));
         ibImgOpen(srcs, Math.max(0, srcs.findIndex(x => x.src === (im.currentSrc || im.src))));
       }));
-      // imágenes que terminan de cargar después: el alto del marco se reajusta
-      imgs.forEach(im => { if (!im.complete) im.addEventListener('load', () => { try { f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px'; } catch (_) {} }, { once: true }); });
+      imgs.forEach(im => { if (!im.complete) im.addEventListener('load', fit, { once: true }); });
     } catch (_) {}
   }
   // ── Vista completa de una imagen del correo ──
