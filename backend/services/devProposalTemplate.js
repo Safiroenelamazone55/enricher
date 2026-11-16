@@ -36,7 +36,7 @@ function cleanDev(d) {
   N('reuniones_mes_hoy', null, 0, 10000); N('valor_cliente', null, 0, 1e9); N('cierre_pct', null, 0, 100); N('ciclo_dias', null, 0, 1000);
   N('validez_dias', 10, 1, 180); N('margen_pct', 100, 1, 100); N('reuniones_objetivo', 3, 1, 100); N('cierre_supuesto_pct', 20, 1, 100);
   N('precio_piloto', 500, 1, 1e8); N('precio_mensual', 750, 1, 1e8); N('bonus_reunion', 100, 0, 1e8); N('umbral_bonus', 3, 0, 1000);
-  N('horas_semana_prospeccion', null, 0, 168); N('valor_hora', null, 0, 1e6);
+  N('horas_semana_prospeccion', null, 0, 168); N('eq_eur', null, 0, 100); N('valor_hora', null, 0, 1e6);
   o.horas_origen = d.horas_origen === 'real' ? 'real' : 'supuesto';
   o.usar_supuesto_horas = d.usar_supuesto_horas === true || d.usar_supuesto_horas === 'true';
   o.cierre_sin_dato = d.cierre_sin_dato === true || d.cierre_sin_dato === 'true';
