@@ -7608,46 +7608,84 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
 async function _armarReenvio(uid, cid, modo, msgDir, msgId) {
   const { rows: all } = await pool.query(`
     SELECT * FROM (
-      SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, COALESCE(mb.email,'') AS quien, COALESCE(m.firma_html,'') AS html
+      SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, COALESCE(mb.email,'') AS quien, COALESCE(m.firma_html,'') AS html, 0 AS mbid, 0 AS uid, '' AS mid
         FROM lm_messages m LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
        WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied')
       UNION ALL
-      SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, TRIM(COALESCE(NULLIF(im.from_name,''),'') || ' <' || im.from_email || '>'), COALESCE(im.cuerpo_html,'')
+      SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, TRIM(COALESCE(NULLIF(im.from_name,''),'') || ' <' || im.from_email || '>'), COALESCE(im.cuerpo_html,''),
+             COALESCE(im.mailbox_id,0), COALESCE(im.imap_uid,0), COALESCE(im.message_id,'')
         FROM lm_inbox_messages im WHERE im.user_id=$1 AND im.contact_id=$2 AND im.tipo <> 'bounce'
     ) t ORDER BY at ASC NULLS FIRST`, [uid, cid]);
   let msgs = all;
   if (modo === 'mensaje') msgs = all.filter(m => m.dir === msgDir && Number(m.id) === Number(msgId));
   if (!msgs.length) return null;
+  // Originales del buzón (adjuntos e imágenes a tamaño completo): un solo viaje por buzón.
+  const origs = new Map(); let sinOriginal = 0;
+  try {
+    const porBuzon = new Map();
+    msgs.filter(m => m.dir === 'in' && Number(m.mbid) > 0 && (Number(m.uid) > 0 || m.mid)).forEach(m => { if (!porBuzon.has(m.mbid)) porBuzon.set(m.mbid, []); porBuzon.get(m.mbid).push({ id: m.id, uid: m.uid, mid: m.mid }); });
+    for (const [mbid, items] of porBuzon) (await require('./services/imapWatcher').fetchOriginals(pool, mbid, items)).forEach((v, k) => origs.set(k, v));
+    sinOriginal = msgs.filter(m => m.dir === 'in' && !origs.has(m.id)).length;
+  } catch (e) { console.warn('[forward] originales:', e.message); sinOriginal = msgs.filter(m => m.dir === 'in').length; }
+
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const fecha = d => { const x = d ? new Date(d) : null; return x && !isNaN(x) ? x.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; };
-  const atts = []; let bytes = 0, nImg = 0;
+  const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const LIM = 20 * 1024 * 1024;               // la mayoría de servidores rechaza correos de más de ~25 MB
+  const atts = [], omitidos = []; let bytes = 0, nImg = 0, nAdj = 0;
   const limpia = h => String(h || '')
     .replace(/<head\b[\s\S]*?<\/head\s*>/gi, '').replace(/<style\b[\s\S]*?<\/style\s*>/gi, '')
     .replace(/<(script|iframe|object|embed|applet|noscript)\b[\s\S]*?<\/\1\s*>/gi, '')
     .replace(/<\/?(html|body|!doctype)[^>]*>/gi, '').replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-  // data:image → imagen en línea (cid): los clientes de correo no muestran data: en el HTML
-  const imagenes = h => h.replace(/src\s*=\s*(["'])data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)\1/gi, (m, q, tipo, b64) => {
+  const nuevoCid = () => 'img' + (++nImg) + '.' + require('crypto').randomBytes(5).toString('hex') + '@nova';
+  // imagen incrustada como data:image (lo que se guardó al recibir el correo) → imagen en línea (cid)
+  const desdeData = h => h.replace(/src\s*=\s*(["'])data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)\1/gi, (m, q, tipo, b64) => {
     try {
       const buf = Buffer.from(b64.replace(/\s+/g, ''), 'base64');
-      if (!buf.length || bytes + buf.length > 15 * 1024 * 1024) return m;
-      bytes += buf.length; nImg++;
-      const ext = tipo.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'png';
-      const cidv = 'img' + nImg + '.' + require('crypto').randomBytes(5).toString('hex') + '@nova';
-      atts.push({ filename: 'imagen-' + nImg + '.' + ext, content: buf, cid: cidv, contentType: tipo, contentDisposition: 'inline' });
-      return 'src=' + q + 'cid:' + cidv + q;
+      if (!buf.length || bytes + buf.length > LIM) return m;
+      bytes += buf.length; const c = nuevoCid();
+      atts.push({ filename: 'imagen-' + nImg + '.' + (tipo.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'png'), content: buf, cid: c, contentType: tipo, contentDisposition: 'inline' });
+      return 'src=' + q + 'cid:' + c + q;
     } catch (_) { return m; }
   });
   const bloques = msgs.map(m => {
     const quien = m.dir === 'out' ? 'Tú' + (m.quien ? ' (' + m.quien + ')' : '') : (m.quien || 'Contacto');
-    const cabecera = `<div style="font:12px Arial,Helvetica,sans-serif;color:#555;margin-bottom:8px;line-height:1.5"><b>${m.dir === 'out' ? 'Enviado por' : 'De'}:</b> ${esc(quien)}${fecha(m.at) ? ` &nbsp;·&nbsp; <b>Fecha:</b> ${esc(fecha(m.at))}` : ''}${m.asunto ? `<br><b>Asunto:</b> ${esc(m.asunto)}` : ''}</div>`;
-    let cuerpoHtml;
-    if (m.dir === 'in' && String(m.html || '').trim()) cuerpoHtml = imagenes(limpia(m.html));
-    else cuerpoHtml = `<div style="font:14px/1.55 Arial,Helvetica,sans-serif;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>` + (m.dir === 'out' && String(m.html || '').trim() ? `<div style="margin-top:10px">${imagenes(limpia(m.html))}</div>` : '');
+    const orig = origs.get(m.id);
+    let cuerpoHtml = '', adjuntosTxt = '';
+    if (orig && String(orig.html || '').trim()) {
+      // el correo original completo: imágenes en línea a tamaño completo + archivos adjuntos
+      const porCid = new Map((orig.attachments || []).filter(a => a.cid || a.contentId).map(a => [String(a.cid || a.contentId).replace(/[<>]/g, ''), a]));
+      const usados = new Set();
+      let h = limpia(orig.html).replace(/cid:([^"'\s)>]+)/gi, (mm, c) => {
+        let k = c; try { k = decodeURIComponent(c); } catch (_) {}
+        const a = porCid.get(k) || porCid.get(c);
+        if (!a || !a.content || !/^image\//i.test(a.contentType || '')) return mm;
+        if (usados.has(a)) return 'cid:' + a._nuevoCid;
+        if (bytes + a.content.length > LIM) { omitidos.push(a.filename || 'imagen'); return mm; }
+        bytes += a.content.length; usados.add(a); a._nuevoCid = nuevoCid();
+        atts.push({ filename: a.filename || ('imagen-' + nImg + '.png'), content: a.content, cid: a._nuevoCid, contentType: a.contentType, contentDisposition: 'inline' });
+        return 'cid:' + a._nuevoCid;
+      });
+      cuerpoHtml = desdeData(h);   // y las imágenes que vengan como data: dentro del propio HTML
+      const lista = [];
+      for (const a of (orig.attachments || [])) {
+        if (usados.has(a) || !a.content || !a.content.length) continue;
+        const nombre = a.filename || 'adjunto';
+        if (bytes + a.content.length > LIM) { omitidos.push(nombre); continue; }
+        bytes += a.content.length; nAdj++;
+        atts.push({ filename: nombre, content: a.content, contentType: a.contentType || 'application/octet-stream' });
+        lista.push(nombre + ' (' + kb(a.content.length) + ')');
+      }
+      if (lista.length) adjuntosTxt = `<br><b>Adjuntos:</b> ${esc(lista.join(', '))}`;
+    } else if (m.dir === 'in' && String(m.html || '').trim()) cuerpoHtml = desdeData(limpia(m.html));
+    else cuerpoHtml = `<div style="font:14px/1.55 Arial,Helvetica,sans-serif;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>` + (m.dir === 'out' && String(m.html || '').trim() ? `<div style="margin-top:10px">${desdeData(limpia(m.html))}</div>` : '');
+    const cabecera = `<div style="font:12px Arial,Helvetica,sans-serif;color:#555;margin-bottom:8px;line-height:1.5"><b>${m.dir === 'out' ? 'Enviado por' : 'De'}:</b> ${esc(quien)}${fecha(m.at) ? ` &nbsp;·&nbsp; <b>Fecha:</b> ${esc(fecha(m.at))}` : ''}${m.asunto ? `<br><b>Asunto:</b> ${esc(m.asunto)}` : ''}${adjuntosTxt}</div>`;
     return `<div style="margin:0 0 16px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#fff">${cabecera}${cuerpoHtml}</div>`;
   });
   const texto = msgs.map(m => `${m.dir === 'out' ? 'Enviado por' : 'De'}: ${m.dir === 'out' ? 'Tú' + (m.quien ? ' (' + m.quien + ')' : '') : (m.quien || 'Contacto')}\n${fecha(m.at) ? 'Fecha: ' + fecha(m.at) + '\n' : ''}${m.asunto ? 'Asunto: ' + m.asunto + '\n' : ''}\n${m.cuerpo || ''}`).join('\n\n----------------------------------------\n\n');
   const base = [...msgs].reverse().map(m => String(m.asunto || '').replace(/^\s*((re|fw|fwd|rv|enc)\s*:\s*)+/i, '').trim()).find(Boolean) || '(sin asunto)';
-  return { asunto: 'Fwd: ' + base, htmlBloques: bloques.join(''), texto, atts, n: msgs.length, nImg };
+  const aviso = omitidos.length ? `<div style="margin:0 0 12px;padding:8px 12px;border:1px solid #f3d9a4;background:#fff8e6;border-radius:8px;font:13px Arial,sans-serif;color:#7a5a00">No se incluyeron por tamaño (el correo superaría los 20 MB): ${esc([...new Set(omitidos)].join(', '))}.</div>` : '';
+  return { asunto: 'Fwd: ' + base, htmlBloques: aviso + bloques.join(''), texto, atts, n: msgs.length, nImg, nAdj, omitidos: [...new Set(omitidos)], sinOriginal };
 }
 app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
   const b = req.body || {};
@@ -7671,7 +7709,7 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
       const R = await _armarReenvio(req.workspaceOwnerId, cid, modo, b.msg_dir, b.msg_id);
       if (R) {
         const e2 = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const titulo = modo === 'hilo' ? `Conversación reenviada (${R.n} correo${R.n === 1 ? '' : 's'}${R.nImg ? ', ' + R.nImg + ' imagen' + (R.nImg === 1 ? '' : 'es') : ''})` : 'Correo reenviado';
+        const titulo = modo === 'hilo' ? `Conversación reenviada (${R.n} correo${R.n === 1 ? '' : 's'}${R.nImg ? ', ' + R.nImg + ' imagen' + (R.nImg === 1 ? '' : 'es') : ''}${R.nAdj ? ', ' + R.nAdj + ' adjunto' + (R.nAdj === 1 ? '' : 's') : ''})` : 'Correo reenviado';
         const html2 = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${texto ? `<div>${e2(texto).replace(/\n/g, '<br>')}</div>` : ''}`
           + `<div style="margin:16px 0 10px;color:#555;font-size:13px"><b>---------- ${titulo} ----------</b></div>${R.htmlBloques}</div>`;
         const text2 = `${texto}${texto ? '\n\n' : ''}---------- ${titulo} ----------\n\n${R.texto}`;
@@ -7682,7 +7720,7 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
           `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, to_email, asunto, cuerpo, sent_at`,
           [req.workspaceOwnerId, cid, mb.id, to, R.asunto, guardado, sent2.messageId || '']);
-        return res.status(201).json({ ok: true, fwd: fwd2, correos: R.n, imagenes: R.nImg });
+        return res.status(201).json({ ok: true, fwd: fwd2, correos: R.n, imagenes: R.nImg, adjuntos: R.nAdj, omitidos: R.omitidos, sin_original: R.sinOriginal });
       }
     }
     const origAsunto = String(b.orig_asunto || '').trim();

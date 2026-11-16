@@ -563,6 +563,39 @@ async function backfillTables(pool, days) {
   return { scanned, fixed };
 }
 
+// Trae del buzón los correos ORIGINALES (con adjuntos e imágenes a tamaño completo) para reenviarlos. items: [{id, uid, mid}] de UN buzón.
+// Devuelve Map(id de lm_inbox_messages → correo ya analizado). Lo que no se encuentre (movido o borrado del buzón) simplemente no aparece.
+const FWD_MAX = 30 * 1024 * 1024;
+async function fetchOriginals(pool, mailboxId, items) {
+  const out = new Map(); if (!items || !items.length) return out;
+  const { rows: [mb] } = await pool.query('SELECT * FROM lm_mailboxes WHERE id=$1', [mailboxId]);
+  if (!mb || !mb.imap_host) return out;
+  const norm = x => String(x || '').replace(/[<>\s]/g, '').toLowerCase();
+  let client;
+  try {
+    const authBlock = await getMailboxAuth(pool, mb);
+    const auth = authBlock.accessToken ? { user: authBlock.user, accessToken: authBlock.accessToken } : { user: authBlock.user, pass: authBlock.pass };
+    client = new ImapFlow({ host: mb.imap_host, port: mb.imap_port, secure: true, auth, logger: false, emitLogs: false });
+    client.on('error', () => {});
+    await client.connect();
+    await client.mailboxOpen('INBOX', { readOnly: true });
+    for (const it of items) {
+      try {
+        const mid = norm(it.mid), q = { uid: true, envelope: true, source: { maxLength: FWD_MAX } };
+        let msg = Number(it.uid) > 0 ? await client.fetchOne(String(Number(it.uid)), q, { uid: true }) : null;
+        if (msg && mid && norm(msg.envelope && msg.envelope.messageId) !== mid) msg = null;   // el UID ya no es ese correo (cambió el buzón): se busca por su Message-ID
+        if (!msg && mid) {
+          const found = await client.search({ header: { 'message-id': String(it.mid).trim() } }, { uid: true });
+          if (found && found.length) msg = await client.fetchOne(String(found[0]), q, { uid: true });
+        }
+        if (msg && msg.source) out.set(it.id, await simpleParser(msg.source, { skipImageLinks: true }));   // deja las imágenes incrustadas como cid: (a tamaño completo) en vez de convertirlas a data:
+      } catch (e) { console.log('[fetchOriginals] correo ' + it.id + ': ' + e.message); }
+    }
+  } catch (e) { console.log('[fetchOriginals] buzón ' + mailboxId + ': ' + e.message); }
+  finally { try { if (client) await client.logout(); } catch (_) {} }
+  return out;
+}
+
 // Vuelve a leer de IMAP los correos YA guardados y les añade su HTML (para ver los anteriores con formato).
 async function backfillHtml(pool, days) {
   const { rows: mbs } = await pool.query('SELECT * FROM lm_mailboxes');
@@ -595,4 +628,4 @@ async function backfillHtml(pool, days) {
   return { scanned, done };
 }
 
-module.exports = { backfillHtml, htmlOf, startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, onOoo: _onOoo, parseReturnDate, isTeamAddr: _isTeamAddr };
+module.exports = { fetchOriginals, backfillHtml, htmlOf, startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables, onReply: _onReply, onOoo: _onOoo, parseReturnDate, isTeamAddr: _isTeamAddr };

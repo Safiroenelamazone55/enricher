@@ -29593,7 +29593,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           const nCorreos = msgs.filter(m => (m.dir === 'in' && m.tipo !== 'bounce') || (m.dir === 'out' && ['sent', 'replied'].includes(m.estado))).length;
           const nImgs = msgs.filter(m => m.dir === 'in' && /src\s*=\s*["']?data:image/i.test(m.cuerpo_html || '')).length;
           return `<div class="ibx-fwd-scope" role="radiogroup" aria-label="Qué reenviar">
-            <label class="${_ibFwdScope === 'hilo' ? 'on' : ''}"><input type="radio" name="ibx-fwd-sc" ${_ibFwdScope === 'hilo' ? 'checked' : ''} onchange="LeadManagerModule.ibFwdScope('hilo')"><span><b>Toda la conversación</b><em>${nCorreos} correo${nCorreos === 1 ? '' : 's'}${nImgs ? ' · con las imágenes' : ''}</em></span></label>
+            <label class="${_ibFwdScope === 'hilo' ? 'on' : ''}"><input type="radio" name="ibx-fwd-sc" ${_ibFwdScope === 'hilo' ? 'checked' : ''} onchange="LeadManagerModule.ibFwdScope('hilo')"><span><b>Toda la conversación</b><em>${nCorreos} correo${nCorreos === 1 ? '' : 's'} · con imágenes y archivos adjuntos</em></span></label>
             <label class="${_ibFwdScope === 'uno' ? 'on' : ''}"><input type="radio" name="ibx-fwd-sc" ${_ibFwdScope === 'uno' ? 'checked' : ''} onchange="LeadManagerModule.ibFwdScope('uno')"><span><b>Solo este correo</b><em>el que estás viendo (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total})</em></span></label>
           </div>`;
         })() : ''}
@@ -30375,7 +30375,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       }
       _ibMode = 'reply'; // listo, vuelve solo a "Responder" — sin pestañas visibles, no hay otra forma de salir
       _ibPaint();
-      showBanner(d.correos ? `✓ Reenviada la conversación a ${to} (${d.correos} correo${d.correos === 1 ? '' : 's'}${d.imagenes ? ' · ' + d.imagenes + ' imagen' + (d.imagenes === 1 ? '' : 'es') : ''})` : `✓ Reenviado a ${to}`, 'success');
+      showBanner(d.correos ? `✓ Reenviada la conversación a ${to} (${d.correos} correo${d.correos === 1 ? '' : 's'}${d.imagenes ? ' · ' + d.imagenes + ' imagen' + (d.imagenes === 1 ? '' : 'es') : ''}${d.adjuntos ? ' · ' + d.adjuntos + ' adjunto' + (d.adjuntos === 1 ? '' : 's') : ''})${(d.omitidos || []).length ? ' — ' + d.omitidos.length + ' no cupieron (límite 20 MB): ' + d.omitidos.join(', ') : ''}${d.sin_original ? ' — ' + d.sin_original + ' correo(s) ya no están en el buzón: se reenvió lo guardado en Nova (sin adjuntos)' : ''}` : `✓ Reenviado a ${to}`, (d.omitidos || []).length || d.sin_original ? 'info' : 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Reenviar'; } }
   }
