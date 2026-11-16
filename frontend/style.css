@@ -21390,3 +21390,15 @@ body.ibx-lb-open{overflow:hidden}
 .ibx-fwd-scope input{margin-top:3px;accent-color:var(--primary)}
 .ibx-fwd-scope span{display:flex;flex-direction:column;gap:1px}
 .ibx-fwd-scope em{font-style:normal;color:var(--text-muted);font-size:.72rem}
+
+/* Inbox · «Ver lo que se envió» dentro de un reenvío */
+.ibx-fwd-det{margin-top:8px;border-top:1px solid rgba(99,102,241,.25);padding-top:6px}
+.ibx-fwd-det>summary{cursor:pointer;font-size:.74rem;color:#4F46E5;font-weight:600;list-style:none}
+.ibx-fwd-det>summary::-webkit-details-marker{display:none}
+.ibx-fwd-det>summary::before{content:'▸ ';}
+.ibx-fwd-det[open]>summary::before{content:'▾ ';}
+.ibx-fwd-det__adj{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.ibx-fwd-chip{display:inline-flex;gap:6px;align-items:center;padding:3px 9px;border-radius:999px;background:#fff;border:1px solid rgba(99,102,241,.25);font-size:.72rem}
+.ibx-fwd-chip em{font-style:normal;color:var(--text-muted)}
+.ibx-fwd-det__body{margin-top:8px;background:#fff;border-radius:8px;padding:6px 8px;max-width:100%}
+.ibx-msgs .ibx-m--fwd:has(.ibx-fwd-det[open]){align-self:stretch;max-width:1000px;width:100%;box-sizing:border-box}

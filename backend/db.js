@@ -1873,6 +1873,11 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_forwards_contact_idx ON lm_forwards (contact_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_forwards_user_idx    ON lm_forwards (user_id, sent_at DESC);`);
+    // Lo que realmente se envió (para verlo después en el Inbox): HTML con las imágenes, adjuntos, nº de correos y si llevó la firma.
+    await pool.query(`ALTER TABLE lm_forwards ADD COLUMN IF NOT EXISTS html TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE lm_forwards ADD COLUMN IF NOT EXISTS adjuntos JSONB NOT NULL DEFAULT '[]'`);
+    await pool.query(`ALTER TABLE lm_forwards ADD COLUMN IF NOT EXISTS n_correos INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`ALTER TABLE lm_forwards ADD COLUMN IF NOT EXISTS con_firma BOOLEAN NOT NULL DEFAULT FALSE`);
 
     // lm_messages: cada email real enviado por el motor (asunto/cuerpo ya renderizados).
     // estado: queued | sent | bounced | replied | failed

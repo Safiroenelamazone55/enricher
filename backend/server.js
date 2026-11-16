@@ -7414,21 +7414,22 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     const { rows: msgs } = await pool.query(`
       SELECT * FROM (
         SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, m.estado, '' AS tipo,
-               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails, COALESCE(m.firma_html,'') AS cuerpo_html
+               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails, COALESCE(m.firma_html,'') AS cuerpo_html, '' AS extra
           FROM lm_messages m
           LEFT JOIN sequences s ON s.id = m.sequence_id
           LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
          WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed','scheduled')
         UNION ALL
-        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email, '', COALESCE(im.cuerpo_html,'')
+        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email, '', COALESCE(im.cuerpo_html,''), ''
           FROM lm_inbox_messages im
          WHERE im.user_id=$1 AND im.contact_id=$2
         UNION ALL
-        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor, '', ''
+        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor, '', '', ''
           FROM lm_notes n
          WHERE n.user_id=$1 AND n.contact_id=$2
         UNION ALL
-        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email, '', ''
+        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email, '', COALESCE(f.html,''),
+               json_build_object('n', f.n_correos, 'adj', f.adjuntos, 'firma', f.con_firma)::text
           FROM lm_forwards f
          WHERE f.user_id=$1 AND f.contact_id=$2
       ) t ORDER BY at ASC NULLS FIRST
@@ -7690,7 +7691,7 @@ async function _armarReenvio(uid, cid, modo, msgDir, msgId) {
 app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
   const b = req.body || {};
   const cid = parseInt(b.contact_id);
-  const to = String(b.to || '').trim();
+  const to = String(b.to || '').split(/[,;\s]+/).filter(x => x.includes('@')).join(', ');
   const texto = String(b.texto || '').trim();
   if (!cid || !to) return res.status(400).json({ error: 'Falta el contacto o el destinatario' });
   try {
@@ -7703,6 +7704,11 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
     if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
     const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1`, [k.mb_id]);
 
+    // Firma del buzón (la misma de un correo nuevo): va debajo de tu nota, antes de lo reenviado. Antes el reenvío salía SIN firma.
+    const _se = require('./services/sendEngine');
+    const _firma = _se.pickSignature(mb.signature_html, mb.signatures, '');
+    const firmaHtml = _firma ? `<div style="margin-top:16px">${_se.responsiveSig(_firma)}</div>` : '';
+    const firmaTxt = _firma ? '\n\n-- \n' + String(_firma).replace(/<br\s*\/?>|<\/(p|div|tr)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim() : '';
     // Modo nuevo: la conversación completa (o un solo correo) armada desde la base de datos, con imágenes. Sin «modo», se usa el reenvío de siempre.
     const modo = b.modo === 'hilo' ? 'hilo' : (b.modo === 'mensaje' && ['in', 'out'].includes(b.msg_dir) ? 'mensaje' : '');
     if (modo) {
@@ -7710,17 +7716,21 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
       if (R) {
         const e2 = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const titulo = modo === 'hilo' ? `Conversación reenviada (${R.n} correo${R.n === 1 ? '' : 's'}${R.nImg ? ', ' + R.nImg + ' imagen' + (R.nImg === 1 ? '' : 'es') : ''}${R.nAdj ? ', ' + R.nAdj + ' adjunto' + (R.nAdj === 1 ? '' : 's') : ''})` : 'Correo reenviado';
-        const html2 = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${texto ? `<div>${e2(texto).replace(/\n/g, '<br>')}</div>` : ''}`
+        const html2 = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${texto ? `<div>${e2(texto).replace(/\n/g, '<br>')}</div>` : ''}${firmaHtml}`
           + `<div style="margin:16px 0 10px;color:#555;font-size:13px"><b>---------- ${titulo} ----------</b></div>${R.htmlBloques}</div>`;
-        const text2 = `${texto}${texto ? '\n\n' : ''}---------- ${titulo} ----------\n\n${R.texto}`;
+        const text2 = `${texto}${firmaTxt}${texto || firmaTxt ? '\n\n' : ''}---------- ${titulo} ----------\n\n${R.texto}`;
         const auth2 = await mailboxSvc.getMailboxAuth(pool, mb);
         const sent2 = await mailboxSvc.sendFromMailbox(mb, auth2, { to, subject: R.asunto, text: text2, html: html2, fromName: mb.from_name || undefined, attachments: R.atts });
         const guardado = `${texto}${texto ? '\n\n' : ''}[${titulo}]`;
+        // Para verlo después en el Inbox: el mismo HTML con las imágenes (cid → datos) y la lista de adjuntos
+        let vista = html2.replace(/cid:([^"'\s)>]+)/g, (m, c) => { const a = R.atts.find(x => x.cid === c); return a && a.content.length < 1500000 ? 'data:' + a.contentType + ';base64,' + a.content.toString('base64') : m; });
+        if (vista.length > 6000000) vista = html2;
+        const adjLista = R.atts.filter(a => a.contentDisposition !== 'inline').map(a => ({ n: a.filename, s: a.content.length }));
         const { rows: [fwd2] } = await pool.query(
-          `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, to_email, asunto, cuerpo, sent_at`,
-          [req.workspaceOwnerId, cid, mb.id, to, R.asunto, guardado, sent2.messageId || '']);
-        return res.status(201).json({ ok: true, fwd: fwd2, correos: R.n, imagenes: R.nImg, adjuntos: R.nAdj, omitidos: R.omitidos, sin_original: R.sinOriginal });
+          `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id, html, adjuntos, n_correos, con_firma)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11) RETURNING id, to_email, asunto, cuerpo, sent_at`,
+          [req.workspaceOwnerId, cid, mb.id, to, R.asunto, guardado, sent2.messageId || '', vista, JSON.stringify(adjLista), R.n, !!_firma]);
+        return res.status(201).json({ ok: true, fwd: { ...fwd2, html: vista, adjuntos: adjLista, n_correos: R.n, con_firma: !!_firma }, correos: R.n, imagenes: R.nImg, adjuntos: R.nAdj, omitidos: R.omitidos, sin_original: R.sinOriginal, firma: !!_firma });
       }
     }
     const origAsunto = String(b.orig_asunto || '').trim();
@@ -7730,11 +7740,11 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
     const origAtStr  = origAt && !isNaN(origAt) ? origAt.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
     const asunto = origAsunto ? (/^fwd:/i.test(origAsunto) ? origAsunto : `Fwd: ${origAsunto}`) : 'Fwd: (sin asunto)';
-    const cuerpo = `${texto}${texto ? '\n\n' : ''}---------- Mensaje reenviado ----------\n`
+    const cuerpo = `${texto}${firmaTxt}${texto || firmaTxt ? '\n\n' : ''}---------- Mensaje reenviado ----------\n`
       + `${origFrom ? `De: ${origFrom}\n` : ''}${origAtStr ? `Fecha: ${origAtStr}\n` : ''}${origAsunto ? `Asunto: ${origAsunto}\n` : ''}\n${origCuerpo}`;
 
     const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(texto).replace(/\n/g, '<br>')}`
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(texto).replace(/\n/g, '<br>')}${firmaHtml}`
       + `<div style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd;color:#555;font-size:13px">`
       + `<b>---------- Mensaje reenviado ----------</b><br>`
       + `${origFrom ? `De: ${esc(origFrom)}<br>` : ''}${origAtStr ? `Fecha: ${esc(origAtStr)}<br>` : ''}${origAsunto ? `Asunto: ${esc(origAsunto)}<br>` : ''}`
@@ -7746,10 +7756,10 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
       fromName: mb.from_name || undefined,
     });
     const { rows: [fwd] } = await pool.query(
-      `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, to_email, asunto, cuerpo, sent_at`,
-      [req.workspaceOwnerId, cid, mb.id, to, asunto, texto, sent.messageId || '']);
-    res.status(201).json({ ok: true, fwd });
+      `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id, html, n_correos, con_firma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,$9) RETURNING id, to_email, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, mb.id, to, asunto, texto, sent.messageId || '', html, !!_firma]);
+    res.status(201).json({ ok: true, fwd: { ...fwd, html, adjuntos: [], n_correos: 1, con_firma: !!_firma }, firma: !!_firma });
   } catch (err) {
     console.error('[inbox] FORWARD', err.message);
     res.status(500).json({ error: mailboxSvc._friendlyErr(err) });

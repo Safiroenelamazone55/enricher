@@ -29155,6 +29155,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return (remote && !on ? `<div class="ibx-m__imgs" id="ibf-n-${m.id}">Se bloquearon las imágenes externas (logos, fotos) · <a href="javascript:void(0)" onclick="LeadManagerModule.ibShowImgs(${m.id})">Mostrar imágenes</a></div>` : '')
       + `<iframe class="ibx-m__frame" id="ibf-${m.id}" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin" srcdoc="${esc(_ibFrameDoc(m, on))}" onload="LeadManagerModule.ibFrameFit(this)" style="width:100%;border:0;height:80px;display:block"></iframe>`;
   }
+  // Reenvío: al abrir «Ver lo que se envió» se dibuja lo guardado (nota, firma, conversación e imágenes) en un marco aislado
+  function ibFwdOpen(det, id) {
+    if (!det || !det.open || det.dataset.hecho) return; det.dataset.hecho = '1';
+    const m = ((_ibThread && _ibThread.messages) || []).find(x => x.dir === 'fwd' && x.id === id), box = document.getElementById('ibfw-' + id);
+    if (!m || !box) return;
+    box.innerHTML = '<iframe class="ibx-m__frame" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin" style="width:100%;border:0;height:80px;display:block" onload="LeadManagerModule.ibFrameFit(this)"></iframe>';
+    box.firstChild.srcdoc = _ibFrameDoc({ cuerpo_html: m.cuerpo_html }, true);
+  }
   function ibFrameFit(f) {
     try {
       const d = f.contentDocument; if (!d) return;
@@ -29260,9 +29268,16 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // Reenvío: SÍ es un email real (por eso lleva "buzón"), pero no es una
     // respuesta al prospecto — va marcado aparte para no confundirlo con eso.
     if (m.dir === 'fwd') {
+      let ex = {}; try { ex = JSON.parse(m.extra || '{}') || {}; } catch (_) {}
+      const adj = Array.isArray(ex.adj) ? ex.adj : [];
+      const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((n || 0) / 1024)) + ' KB';
+      const detalle = m.cuerpo_html ? `<details class="ibx-fwd-det" ontoggle="LeadManagerModule.ibFwdOpen(this, ${m.id})"><summary>Ver lo que se envió${ex.n ? ' · ' + ex.n + ' correo' + (ex.n === 1 ? '' : 's') : ''}${adj.length ? ' · ' + adj.length + ' adjunto' + (adj.length === 1 ? '' : 's') : ''}${ex.firma ? ' · con firma' : ''}</summary>`
+        + (adj.length ? `<div class="ibx-fwd-det__adj">${adj.map(a => `<span class="ibx-fwd-chip">📎 ${esc(a.n || 'adjunto')} <em>${kb(a.s)}</em></span>`).join('')}</div>` : '')
+        + `<div class="ibx-fwd-det__body" id="ibfw-${m.id}"></div></details>` : '';
       return `<div class="ibx-m ibx-m--fwd">
         <div class="ibx-m__meta">↗ Reenviado a ${esc(m.buzon || '')} · ${when}</div>
         ${_ibBodyHtml(m.cuerpo)}
+        ${detalle}
       </div>`;
     }
     const inMsg = m.dir === 'in';
@@ -30371,7 +30386,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'No se pudo reenviar');
       if (_ibThread) {
-        _ibThread.messages.push({ dir: 'fwd', id: d.fwd?.id, cuerpo: texto, at: d.fwd?.sent_at || new Date().toISOString(), tipo: 'fwd', buzon: to });
+        _ibThread.messages.push({ dir: 'fwd', id: d.fwd?.id, cuerpo: d.fwd?.cuerpo || texto, at: d.fwd?.sent_at || new Date().toISOString(), tipo: 'fwd', buzon: to, cuerpo_html: d.fwd?.html || '', extra: JSON.stringify({ n: d.fwd?.n_correos || 0, adj: d.fwd?.adjuntos || [], firma: !!d.fwd?.con_firma }) });
         _ibMsgIdx = _ibThread.messages.length - 1;
       }
       _ibMode = 'reply'; // listo, vuelve solo a "Responder" — sin pestañas visibles, no hay otra forma de salir
@@ -40594,7 +40609,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibFwdScope, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
