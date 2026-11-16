@@ -86,8 +86,9 @@ function render(brand, p, langIn) {
   const v = dv.validate(p), c = v.c, debil = v.debil;
   const empresa = String(p.empresa || '').trim() || x('Cliente', 'Client', 'Cliente', 'Cliente'), contacto = String(p.contacto || '').trim(), cargo = String(p.clienteCargo || '').trim();
   const sym = p.moneda || 'US$';
-  const m$ = n => sym + F(n, 0);
-  const m$d = n => sym + F(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 2);
+  const eur = sym === '€', put = (n, dec) => (eur ? F(n, dec) + ' €' : sym + F(n, dec));
+  const m$ = n => put(n, 0);
+  const m$d = n => put(n, Math.abs(n - Math.round(n)) < 1e-9 ? 0 : 2);
   const fecha = d.fecha_propuesta || new Date().toISOString().slice(0, 10), validez = d.validez_dias || 10;
   const hasta = dv.fechaLarga(dv.sumDays(fecha, validez), lang), fechaTxt = dv.fechaLarga(fecha, lang);
   const piloto = d.precio_piloto || 500, mensual = d.precio_mensual || 750, obj = d.reuniones_objetivo || 3;
