@@ -6017,6 +6017,7 @@ const CanteraModule = (() => {
     });
   }
   function _paint() {
+    if (_step === 6 && _deCf === null && !_deLoading) _deLoadCf();   // los campos del CRM se cargan al abrir «Datos a investigar»
     _saveViewState();
     const el = document.getElementById(_containerId); if (!el) return;
     // El scroll horizontal de la tabla se perdía en cada repintado (ej. al
@@ -6500,7 +6501,9 @@ const CanteraModule = (() => {
 
           ${(_current.datos_extra || []).map((d, i) => `
             <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
-              <label style="width:200px;position:relative"><span class="cant-hint">Nombre del dato</span><input class="form-input" autocomplete="off" value="${esc(d.nombre || '')}" placeholder="Elige uno usado antes o escribe uno nuevo" onfocus="CanteraModule.showDeNames(${i})" onblur="CanteraModule.hideDeNames(${i})" oninput="CanteraModule.setDatoExtra(${i},'nombre',this.value);CanteraModule.showDeNames(${i})"><div id="cant-de-menu-${i}" style="display:none;position:absolute;left:0;right:0;top:56px;z-index:30;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-l);padding:4px;max-height:200px;overflow:auto"></div><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></label>
+              <div style="width:270px;position:relative"><span class="cant-hint">Campo (variable del mensaje)</span>${_deNew[i]
+                ? `<div style="display:flex;gap:6px"><input class="form-input" id="cant-de-new-${i}" autocomplete="off" placeholder="Nombre, ej. cliente_ideal" onkeydown="if(event.key==='Enter'){event.preventDefault();CanteraModule.deCreate(${i})}"><button type="button" class="btn btn--primary btn--sm" onclick="CanteraModule.deCreate(${i})">Crear</button><button type="button" class="btn btn--ghost btn--sm" onclick="CanteraModule.deNewCancel(${i})" title="Cancelar">✕</button></div>`
+                : `<button type="button" class="form-input cant-de-btn" onclick="CanteraModule.showDeNames(${i})" onblur="CanteraModule.hideDeNames(${i})"><span>${d.nombre ? esc(d.nombre) : '<em class="cant-hint">Elige un campo…</em>'}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>`}<div id="cant-de-menu-${i}" class="cant-de-menu" style="display:none"></div><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></div>
               <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="5" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
               <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
               <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
@@ -6983,7 +6986,7 @@ const CanteraModule = (() => {
       ${nav(1, _cantPageIdx >= pages - 1, '›')}
     </div>`;
   }
-  function setStep(n) { _step = n; _paint(); if (n === 8) _ntLoad(); }
+  function setStep(n) { _step = n; if (n === 6) _deLoadCf(); _paint(); if (n === 8) _ntLoad(); }
 
   // ── Notas del borrador: documento libre + hilo de comentarios / notas / bloqueos con etiquetas ──
   let _nt = null, _ntTipo = 'comentario', _ntTags = [], _ntFiltro = 'todo', _ntTimer = null, _ntFor = null;
@@ -8061,26 +8064,59 @@ const CanteraModule = (() => {
     (_batches || []).forEach(b => (b.datos_extra || []).forEach(x => { const n = (x.nombre || '').trim(); if (n && !m.has(n.toLowerCase())) m.set(n.toLowerCase(), { nombre: n, pregunta: x.pregunta || '', solo: x.solo_si_califica !== false }); }));
     return [...m.values()];
   }
-  function showDeNames(i) {
+  // Campos personalizados de EMPRESA que ya existen en el CRM (Campo 1..10): son las variables que luego se usan en los mensajes.
+  let _deCf = null, _deLoading = false; const _deNew = {};
+  async function _deLoadCf(force) {
+    if (_deLoading || (_deCf && !force)) return; _deLoading = true;
+    try { const r = await apiFetch(API + '/lm/custom-fields'); if (r && r.ok) { const j = await r.json(); _deCf = j.company || []; } else _deCf = _deCf || []; }
+    catch (_) { _deCf = _deCf || []; }
+    finally { _deLoading = false; }
+    if (_step === 6) _paint();
+  }
+  function showDeNames(i) {   // abre / cierra el desplegable
     const m = document.getElementById('cant-de-menu-' + i); if (!m) return;
-    const cur = ((_current.datos_extra || [])[i] || {}).nombre || '';
-    const q = cur.trim().toLowerCase();
+    if (m.style.display === 'block') { m.style.display = 'none'; return; }
+    _deLoadCf();
     const usados = new Set((_current.datos_extra || []).map((x, j) => j === i ? '' : (x.nombre || '').trim().toLowerCase()));
-    const items = _knownDeNames().filter(k => !q || k.nombre.toLowerCase().includes(q));
-    if (!items.length) { m.style.display = 'none'; return; }
-    m.innerHTML = '<div style="padding:4px 10px 6px;font-size:.72rem;color:var(--text-3,#8a867f)">Datos ya usados en tus borradores</div>' + items.map(k => {
-      const ya = usados.has(k.nombre.toLowerCase());
-      return '<div ' + (ya ? '' : 'onmousedown="event.preventDefault();CanteraModule.pickDeName(' + i + ',this.dataset.n)" onmouseover="this.style.background=&quot;#F4F2EE&quot;" onmouseout="this.style.background=&quot;&quot;"') + ' data-n="' + esc(k.nombre) + '" style="padding:7px 10px;border-radius:6px;font-size:.88rem;display:flex;justify-content:space-between;gap:8px;' + (ya ? 'color:#a8a49d;cursor:default' : 'color:var(--text);cursor:pointer') + '"><span>' + esc(k.nombre) + '</span>' + (ya ? '<span style="font-size:.72rem">ya está en este borrador</span>' : '') + '</div>';
-    }).join('');
-    m.style.display = 'block';
+    const crm = (_deCf || []).filter(f => (f.label || '').trim());
+    const crmNames = new Set(crm.map(f => f.label.trim().toLowerCase()));
+    const otros = _knownDeNames().filter(k => !crmNames.has(k.nombre.toLowerCase()));
+    const libres = (_deCf || []).filter(f => !(f.label || '').trim()).length;
+    const row = (n, sub) => { const ya = usados.has(n.toLowerCase()); return '<div class="cant-de-opt' + (ya ? ' off' : '') + '" ' + (ya ? '' : 'onmousedown="event.preventDefault();CanteraModule.pickDeName(' + i + ',this.dataset.n)"') + ' data-n="' + esc(n) + '"><span><b>' + esc(n) + '</b> <code>{{' + esc(_slugVar(n)) + '}}</code></span><span class="cant-hint">' + (ya ? 'ya elegido aquí' : esc(sub)) + '</span></div>'; };
+    let h = '<div class="cant-de-hd">Campos de empresa en tu CRM</div>';
+    h += crm.length ? crm.map(f => row(f.label.trim(), (f.n ? 'en ' + f.n + ' empresa' + (f.n === 1 ? '' : 's') : 'sin datos aún') + ' · Campo ' + String(f.field_key).replace('campo', ''))).join('') : '<div class="cant-de-hd" style="font-style:italic">' + (_deCf ? 'Aún no hay ninguno.' : 'Cargando…') + '</div>';
+    if (otros.length) h += '<div class="cant-de-hd">Usados en otros borradores</div>' + otros.map(k => row(k.nombre, 'solo en borradores')).join('');
+    h += '<div class="cant-de-sep"></div><div class="cant-de-opt" onmousedown="event.preventDefault();CanteraModule.deNewStart(' + i + ')"><span><b>＋ Crear campo nuevo…</b></span><span class="cant-hint">' + (_deCf ? (libres ? 'quedan ' + libres + ' de 10' : 'sin espacio libre') : '') + '</span></div>';
+    m.innerHTML = h; m.style.display = 'block';
   }
   function hideDeNames(i) { const m = document.getElementById('cant-de-menu-' + i); if (m) m.style.display = 'none'; }
   function pickDeName(i, n) {
     const known = _knownDeNames().find(k => k.nombre === n);
     setDatoExtra(i, 'nombre', n);
     const d = _current.datos_extra[i];
-    if (known && !(d.pregunta || '').trim()) { d.pregunta = known.pregunta; d.solo_si_califica = known.solo; _paint(); return; }
-    const m = document.getElementById('cant-de-menu-' + i); if (m) { m.style.display = 'none'; const inp = m.parentNode.querySelector('input'); if (inp) inp.value = n; }
+    if (known && !(d.pregunta || '').trim()) { d.pregunta = known.pregunta; d.solo_si_califica = known.solo; }
+    _paint();
+  }
+  function deNewStart(i) { _deNew[i] = true; _paint(); setTimeout(() => { const e = document.getElementById('cant-de-new-' + i); if (e) e.focus(); }, 30); }
+  function deNewCancel(i) { _deNew[i] = false; _paint(); }
+  // Crea el campo en el CRM al momento (primer Campo libre de empresa), así ya existe como variable para los mensajes y para importar.
+  async function deCreate(i) {
+    const inp = document.getElementById('cant-de-new-' + i), nombre = ((inp && inp.value) || '').trim();
+    if (!nombre) { showBanner('Escribe el nombre del campo', 'error'); return; }
+    await _deLoadCf(true);
+    const same = (_deCf || []).find(f => (f.label || '').trim() && (f.label.trim().toLowerCase() === nombre.toLowerCase() || _slugVar(f.label) === _slugVar(nombre)));
+    let key = same ? same.field_key : null;
+    if (!key) {
+      const libre = (_deCf || []).find(f => !(f.label || '').trim());
+      if (!libre) { showBanner('No quedan campos de empresa libres (los 10 están en uso). Libera uno renombrándolo en Configuración → Campos personalizados.', 'error'); return; }
+      try {
+        const r = await apiFetch(API + '/lm/custom-fields', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'company', field_key: libre.field_key, label: nombre }) });
+        const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'No se pudo crear el campo');
+        key = libre.field_key; libre.label = nombre;
+      } catch (e) { showBanner(e.message, 'error'); return; }
+    }
+    _deNew[i] = false; setDatoExtra(i, 'nombre', same ? same.label : nombre); _paint();
+    showBanner(same ? 'Ese campo ya existía: lo elegí.' : '✓ Campo creado: {{' + _slugVar(nombre) + '}} (Campo ' + String(key).replace('campo', '') + ')', 'success');
   }
   function addDatoExtra() { _current.datos_extra = [...(_current.datos_extra || []), { nombre: '', pregunta: '', solo_si_califica: true }]; _paint(); }
   function removeDatoExtra(i) { (_current.datos_extra || []).splice(i, 1); _paint(); }
@@ -8634,7 +8670,7 @@ const CanteraModule = (() => {
   // Filtro de cliente de Outreach (barra «Viendo sólo …»): también acota esta pantalla
   let _extC = false;
   function setExtClient(id) { if (id) { _bdFiltro.cliente = String(id); _extC = true; } else if (_extC) { _bdFiltro.cliente = ''; _extC = false; } }
-  return { ntPaste, ntFmt, ntDocInput, ntTipo, ntFiltro, ntTagAdd, ntTagDel, ntSend, ntPatch, ntDel, setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName,
+  return { ntPaste, ntFmt, ntDocInput, ntTipo, ntFiltro, ntTagAdd, ntTagDel, ntSend, ntPatch, ntDel, setExtClient, renombrarBorrador, render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleNContFiltro, toggleNContExcl, setNContMin, toggleSinPrioridad, setAuditoriaFiltro, showDeNames, hideDeNames, pickDeName, deNewStart, deNewCancel, deCreate,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,

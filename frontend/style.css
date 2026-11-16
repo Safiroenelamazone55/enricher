@@ -21346,3 +21346,13 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 .cl-clock.is-on { background: #E6F3EA; border-left-color: #1F8A4C; } .cl-clock.is-on .cl-clock__dot { background: #1F8A4C; } .cl-clock.is-on .cl-clock__s { color: #1F6B3E; }
 .cl-clock a { font-weight: 700; color: #1F4FA8; }
 .cl-clock__d { width: 100%; font-size: .72rem; color: #5C5851; }
+
+/* Cantera · datos a investigar: desplegable de campos del CRM */
+.cant-de-btn{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer}
+.cant-de-menu{position:absolute;left:0;min-width:320px;top:56px;z-index:30;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-l);padding:6px;max-height:300px;overflow:auto}
+.cant-de-hd{padding:6px 10px 4px;font-size:.72rem;color:var(--text-3,#8a867f)}
+.cant-de-opt{padding:8px 10px;border-radius:7px;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}
+.cant-de-opt:hover{background:#F4F2EE}
+.cant-de-opt.off{color:#a8a49d;cursor:default}.cant-de-opt.off:hover{background:none}
+.cant-de-opt code{font-size:.78rem;color:var(--text-3,#8a867f)}
+.cant-de-sep{height:1px;background:var(--border);margin:6px 4px}
