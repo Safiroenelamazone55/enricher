@@ -21402,3 +21402,10 @@ body.ibx-lb-open{overflow:hidden}
 .ibx-fwd-chip em{font-style:normal;color:var(--text-muted)}
 .ibx-fwd-det__body{margin-top:8px;background:#fff;border-radius:8px;padding:6px 8px;max-width:100%}
 .ibx-msgs .ibx-m--fwd:has(.ibx-fwd-det[open]){align-self:stretch;max-width:1000px;width:100%;box-sizing:border-box}
+
+/* Ficha del contacto · descargar PDF (junto al botón de copiar) */
+.cp-pdf { position: absolute; top: 0; right: 42px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border, #E3E8E5); border-radius: 6px; background: var(--surface, #fff); color: var(--text-muted, #6B7770); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.cp-pdf:hover { background: var(--surface-2, #F1F4F2); color: var(--text, #14211B); border-color: var(--border2, #D5DBD8); }
+.cp-pdf:disabled { cursor: progress; }
+.cp-pdf.is-busy svg { animation: cpPdfSpin .9s linear infinite; }
+@keyframes cpPdfSpin { to { transform: rotate(360deg); } }

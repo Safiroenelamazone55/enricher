@@ -34525,6 +34525,225 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     catch (_) { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) { /* nada */ } ta.remove(); }
     showBanner(`✓ Datos de ${full || 'este lead'} copiados al portapapeles`, 'success');
   }
+  // ══ Ficha del lead en PDF: un clic y se descarga, presentable para compartir con el cliente ══
+  // Solo datos del lead, su empresa, su estado y lo que él mismo contestó. No incluye notas internas del equipo, buzones ni enlaces privados (Sales Navigator).
+  const _PDF_FUERA = /[^\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC\u2122]/g;
+  function _pdfT(v) {   // el PDF usa tipografía estándar (Latin-1): lo que no cabe se transcribe (ł→l) o se quita (emojis)
+    return String(v == null ? '' : v).replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim().replace(_PDF_FUERA, ch => {
+      if (/\p{Extended_Pictographic}/u.test(ch)) return '';
+      const b = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return /^[\x20-\x7E]$/.test(b) ? b : '?';
+    });
+  }
+  function _pdfRaster(uri) {   // PNG/JPG/SVG → PNG para jsPDF
+    return new Promise(res => {
+      if (!uri) return res(null);
+      const im = new Image();
+      im.onload = () => { try { const w = im.naturalWidth || 400, h = im.naturalHeight || 100, k = Math.min(1, 900 / Math.max(w, h)); const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k)); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); res({ png: cv.toDataURL('image/png'), w: cv.width, h: cv.height }); } catch (_) { res(null); } };
+      im.onerror = () => res(null); im.src = uri;
+    });
+  }
+  async function _pdfBrandNova() {   // logo y colores de NovaCentrax (los mismos de las propuestas); si no se pueden leer, se usa el nombre en texto
+    const out = { nombre: 'NovaCentrax', por: 'NovaCentrax', dark: [11, 18, 32], accent: [0, 128, 76], logo: null, plate: false };
+    try {
+      const r = await apiFetch(`${API}/tpl/brands`);
+      if (r.ok) {
+        const bs = await r.json(), b = (Array.isArray(bs) ? bs : []).find(x => /novacentrax/i.test(x.nombre || '')) || (Array.isArray(bs) ? bs[0] : null);
+        if (b) {
+          const hex = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
+          out.nombre = b.nombre || out.nombre; out.accent = hex(b.color_primary) || out.accent; out.dark = hex(b.color_dark) || out.dark;
+          out.logo = await _pdfRaster((b.prev || {}).blanco);
+        }
+      }
+    } catch (_) { /* sin marca: texto */ }
+    return out;
+  }
+  // Cabecera del PDF = el CLIENTE outbound: su logo (versión para fondo oscuro; si no la hay, la de color sobre una placa blanca) y su color; sin logo, su nombre.
+  async function _pdfBrand(clienteId, clienteNombre) {
+    if (!clienteId) return _pdfBrandNova();
+    const out = { nombre: clienteNombre || 'Cliente', por: 'NovaCentrax', dark: [11, 18, 32], accent: [0, 128, 76], logo: null, plate: false };
+    const hex = h => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); return m ? [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16)) : null; };
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding?client=${clienteId}`), b = r.ok ? await r.json() : null;
+      if (b) {
+        const bg = hex(b.header_bg); if (bg) out.dark = bg;
+        const lum = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+        out.accent = lum(out.dark) < 0.55 ? out.dark.slice() : out.accent;   // títulos con el color de la marca del cliente (si es lo bastante oscuro para leerse)
+        for (const v of ['dark', 'light', 'color']) {
+          if (!b.has || !b.has[v]) continue;
+          try {
+            const f = await apiFetch(`${API}/lm/portal/branding/${clienteId}/file/${v}?v=${b.v || 0}`); if (!f.ok) continue;
+            const blob = await f.blob(); if (!blob.size) continue;
+            const uri = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(blob); });
+            const lg = await _pdfRaster(uri); if (lg) { out.logo = lg; out.plate = v !== 'dark'; break; }
+          } catch (_) { /* siguiente versión */ }
+        }
+      }
+    } catch (_) { /* sin marca del cliente: su nombre en texto */ }
+    return out;
+  }
+  async function _ldPdfData(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) throw new Error('Contacto no encontrado');
+    const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || {};
+    const cli = (_clients || []).find(x => x.id === c.outbound_client_id);
+    const dis = _DISPOS.find(x => x[0] === c.disposition);
+    const canalLbl = { email: 'Correo', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: 'Llamada', call: 'Llamada', email_manual: 'Correo' };
+    const fmtD = v => { const x = new Date(v); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }); };
+    const fmtDH = v => { const x = new Date(v); return isNaN(x) ? '' : fmtD(v) + ', ' + x.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); };
+    const sinTag = t => String(t || '').replace(/^\s*Disposición:[^—]*(—\s*)?/, '').replace(/^\s*(\[[^\]]+\]\s*)+/, '').trim();
+    const acts = (_activities || []).filter(a => a.contact_id === cid), resp = acts.find(a => a.tipo === 'respuesta'), info = _ldActInfo()[cid] || {};
+    let rr = { respuestas: [], cambios: [] };
+    try { const r = await apiFetch(`${API}/lm/contacts/${cid}/respuestas`); if (r.ok) rr = await r.json(); } catch (_) { /* sin historial */ }
+    const reps = rr.respuestas || [];
+    const ub = (...a) => a.filter(Boolean).join(', ');
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Lead';
+    const web = co.website || co.dominio || '';
+    const seqs = (c.sequences || []).map(sq => { const st = _seqSteps(sq.id) || [], n = sq.paso || 1, t = st[n - 1]; return `${sq.nombre || ('#' + sq.id)} · paso ${n}${st.length ? ' de ' + st.length : ''}${t && t.titulo ? ' (' + t.titulo + ')' : ''}`; });
+    const camps = [...new Set((c.campaigns || []).map(x => x.nombre || x.codigo).filter(Boolean))];
+    const dealV = c.deal_valor ? `${c.deal_moneda || '$'}${c.deal_valor}${c.deal_prob != null && c.deal_prob !== '' ? ' · probabilidad ' + c.deal_prob + ' %' : ''}${c.deal_cierre ? ' · cierre estimado ' + fmtD(c.deal_cierre) : ''}` : '';
+    const nota = sinTag(info.nota);
+    return {
+      fecha: new Date(), nombre: full, cargo: c.cargo || '', empresa: c.company_nombre || co.nombre || c.empresa_nombre || '', cliente: (cli && cli.nombre) || '', clienteId: (cli && cli.id) || 0,
+      resultado: dis ? dis[1] : '', etapa: STAGE_LABELS[c.estado] || c.estado || '', ubicacion: ub(c.ciudad, c.region, c.pais),
+      contacto: [
+        { k: 'Email', v: c.email }, { k: 'Email personal', v: c.email_personal }, { k: 'Teléfono', v: c.telefono }, { k: 'Móvil', v: c.movil },
+        { k: 'LinkedIn', v: String(c.linkedin || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: c.linkedin || '' },
+        { k: 'Idioma', v: c.idioma_ef || c.idioma }, { k: 'Aceptó la conexión de LinkedIn', v: c.li_aceptado_at ? fmtD(c.li_aceptado_at) : '' }],
+      empresaRows: [
+        { k: 'Empresa', v: c.company_nombre || co.nombre || c.empresa_nombre }, { k: 'Sitio web', v: String(web).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: /^https?:/i.test(web) ? web : (web ? 'https://' + web : '') },
+        { k: 'Industria', v: co.industria }, { k: 'Tamaño', v: co.tamano }, { k: 'Ingresos', v: co.ingresos }, { k: 'Teléfono', v: co.telefono },
+        { k: 'Ubicación', v: ub(co.ciudad, co.region, co.pais) }, { k: 'Fundada', v: co.fundada },
+        { k: 'LinkedIn de la empresa', v: String(co.linkedin || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: co.linkedin || '' }],
+      seguimiento: [
+        { k: 'Resultado', v: dis ? dis[1] : '' }, { k: 'Etapa comercial', v: STAGE_LABELS[c.estado] || c.estado },
+        { k: 'Respondió por', v: reps.length ? 'Correo' : ((resp && resp.canal && canalLbl[resp.canal]) || '') },
+        { k: reps.length > 1 ? 'Primera respuesta' : 'Fecha de respuesta', v: reps.length ? fmtDH(reps[0].recibida) : (resp ? fmtD(resp.fecha) : '') },
+        { k: 'Respuestas recibidas', v: reps.length > 1 ? String(reps.length) : '' },
+        { k: 'Campaña', v: camps.join(' · '), full: true }, ...seqs.map((t, i) => ({ k: seqs.length > 1 ? 'Secuencia ' + (i + 1) : 'Secuencia', v: t, full: true })),
+        { k: 'Nota del seguimiento', v: nota, full: true }],
+      respuestas: reps.map(r => ({ fecha: fmtDH(r.recibida), texto: r.texto || '' })).filter(r => r.texto),
+      cambios: (rr.cambios || []).map(x => ({ fecha: fmtD(x.fecha), texto: String(x.nota || '').replace(/^Estado:\s*/, '') })).filter(x => x.texto),
+      reunionDeal: [{ k: 'Reunión', v: c.reunion_fecha ? fmtD(c.reunion_fecha) : '' }, { k: 'Deal', v: dealV, full: true }],
+    };
+  }
+  function _ldPdfBuild(d, brand) {
+    const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297, M = 16, CW = W - 2 * M;
+    const INK = [20, 33, 27], MUTE = [107, 119, 112], LINE = [227, 232, 229], CARD = [244, 246, 245];
+    const ACC = brand.accent, DARK = brand.dark, SOFT = ACC.map(v => Math.round(v + (255 - v) * .86));
+    let y = 0;
+    const font = (size, style, col) => { doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size); doc.setTextColor(...(col || INK)); };
+    const lh = size => size * 0.3528 * 1.38;
+    const wrap = (txt, w, size, style) => { font(size, style); return doc.splitTextToSize(_pdfT(txt), w); };
+    const ensure = h => { if (y + h > H - 18) { doc.addPage(); y = 24; } };
+    const fechaTxt = d.fecha.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // ── Banda superior con la marca ──
+    doc.setFillColor(...DARK); doc.rect(0, 0, W, 34, 'F');
+    doc.setFillColor(...ACC); doc.rect(0, 34, W, 1.2, 'F');
+    const nombreBanda = () => { font(brand.nombre.length > 26 ? 14 : 17, 'bold', [255, 255, 255]); doc.text(_pdfT(brand.nombre), M, 21.5); };
+    if (brand.logo) {
+      const maxH = 12, maxW = 58, k = Math.min(maxH / brand.logo.h, maxW / brand.logo.w), ww = brand.logo.w * k, hh = brand.logo.h * k, ly = 17 - hh / 2;
+      try {
+        if (brand.plate) { doc.setFillColor(255, 255, 255); doc.roundedRect(M - 3, ly - 3, ww + 6, hh + 6, 2, 2, 'F'); }
+        doc.addImage(brand.logo.png, 'PNG', M, ly, ww, hh);
+      } catch (_) { nombreBanda(); }
+    } else nombreBanda();
+    font(11, 'bold', [255, 255, 255]); doc.text('Ficha de lead', W - M, 15, { align: 'right' });
+    font(8.5, 'normal', [210, 218, 226]); doc.text(_pdfT(fechaTxt), W - M, 21, { align: 'right' });
+
+    // ── Quién es ──
+    y = 49;
+    wrap(d.nombre, CW, 22, 'bold').forEach(t => { font(22, 'bold'); doc.text(t, M, y); y += lh(22); });
+    const sub = [d.cargo, d.empresa].filter(Boolean).join('  ·  ');
+    if (sub) wrap(sub, CW, 11.5).forEach(t => { font(11.5, 'normal', MUTE); doc.text(t, M, y); y += lh(11.5); });
+    y += 2.5;
+    let cx = M;
+    const chip = (txt, fill, col, bold) => { if (!txt) return; font(8.5, bold ? 'bold' : 'normal', col); const t = _pdfT(txt), w = doc.getTextWidth(t) + 7; if (cx + w > W - M) { cx = M; y += 8; } doc.setFillColor(...fill); doc.roundedRect(cx, y - 4.2, w, 6.4, 3.2, 3.2, 'F'); doc.text(t, cx + 3.5, y); cx += w + 3; };
+    chip(d.resultado, SOFT, ACC, true); if (d.etapa && d.etapa !== d.resultado) chip(d.etapa, CARD, INK, false); chip(d.ubicacion, CARD, MUTE, false);
+    y += 11;
+
+    // ── Bloques ──
+    const section = (title, rows) => {
+      rows = (rows || []).filter(r => r && r.v != null && String(r.v).trim() !== '');
+      if (!rows.length) return;
+      ensure(24);
+      font(8, 'bold', ACC); doc.text(_pdfT(title).toUpperCase(), M, y);
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
+      const colW = (CW - 8) / 2;
+      const celda = (r, w, x, yy) => {
+        font(6.8, 'bold', MUTE); doc.text(_pdfT(r.k).toUpperCase(), x, yy);
+        const ls = wrap(r.v, w, 10);
+        ls.forEach((t, n) => { const ty = yy + 4.3 + n * lh(10); if (r.url && n === 0) { font(10, 'normal', [29, 78, 216]); doc.textWithLink(t, x, ty, { url: r.url }); } else { font(10, 'normal', INK); doc.text(t, x, ty); } });
+      };
+      const alto = (r, w) => 4.3 + wrap(r.v, w, 10).length * lh(10) + 2.6;
+      let i = 0;
+      while (i < rows.length) {
+        const r = rows[i];
+        if (r.full) { const h = alto(r, CW); ensure(h); celda(r, CW, M, y); y += h; i++; continue; }
+        const nx = rows[i + 1] && !rows[i + 1].full ? rows[i + 1] : null;
+        const h = Math.max(alto(r, colW), nx ? alto(nx, colW) : 0); ensure(h);
+        celda(r, colW, M, y); if (nx) celda(nx, colW, M + colW + 8, y);
+        y += h; i += nx ? 2 : 1;
+      }
+      y += 3.5;
+    };
+    section('Contacto', d.contacto);
+    section('Empresa', d.empresaRows);
+    section('Estado y seguimiento', d.seguimiento);
+
+    // ── Lo que respondió (sus propias palabras) ──
+    if (d.respuestas.length) {
+      ensure(30);
+      font(8, 'bold', ACC); doc.text('LO QUE RESPONDIÓ', M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
+      d.respuestas.slice(-4).forEach(r => {
+        let ls = wrap(r.texto, CW - 11, 10); if (ls.length > 9) ls = ls.slice(0, 9).concat(['…']);
+        const h = 5.5 + ls.length * lh(10) + 4; ensure(h);
+        doc.setFillColor(...CARD); doc.roundedRect(M, y - 1, CW, h, 1.5, 1.5, 'F'); doc.setFillColor(...ACC); doc.rect(M, y - 1, 1.3, h, 'F');
+        font(7.8, 'bold', ACC); doc.text(_pdfT(r.fecha), M + 6, y + 3.4);
+        ls.forEach((t, n) => { font(10, 'normal', INK); doc.text(t, M + 6, y + 8.4 + n * lh(10)); });
+        y += h + 3;
+      });
+      y += 2;
+    }
+    // ── Cómo ha evolucionado ──
+    if (d.cambios.length) {
+      ensure(24);
+      font(8, 'bold', ACC); doc.text('HISTORIAL DE ESTADO', M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
+      d.cambios.forEach(x => {
+        const ls = wrap(x.texto, CW - 42, 9.5); const h = Math.max(5, ls.length * lh(9.5)) + 1.6; ensure(h);
+        doc.setFillColor(...ACC); doc.circle(M + 1.2, y - 1, 0.9, 'F');
+        font(9, 'bold', MUTE); doc.text(_pdfT(x.fecha), M + 5, y);
+        ls.forEach((t, n) => { font(9.5, 'normal', INK); doc.text(t, M + 40, y + n * lh(9.5)); });
+        y += h;
+      });
+      y += 3;
+    }
+    section('Reunión y oportunidad', d.reunionDeal);
+
+    // ── Cabecera de páginas siguientes y pie ──
+    const nPag = doc.getNumberOfPages();
+    for (let pg = 1; pg <= nPag; pg++) {
+      doc.setPage(pg);
+      if (pg > 1) { font(8, 'normal', MUTE); doc.text(_pdfT([d.nombre, d.empresa].filter(Boolean).join('  ·  ')), M, 12); doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, 15, W - M, 15); }
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, H - 13, W - M, H - 13);
+      font(7.5, 'normal', MUTE);
+      doc.text(_pdfT('Preparado por ' + (brand.por || 'NovaCentrax') + ' el ' + fechaTxt + '  ·  Documento confidencial'), M, H - 8.5);
+      doc.text('Página ' + pg + ' de ' + nPag, W - M, H - 8.5, { align: 'right' });
+    }
+    return doc;
+  }
+  async function ldPdf(cid) {
+    if (!window.jspdf) { showBanner('No se pudo cargar el generador de PDF. Recarga la página e inténtalo de nuevo.', 'error'); return; }
+    const btn = document.querySelector('.cp-pdf'); if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
+    try {
+      const data = await _ldPdfData(cid), brand = await _pdfBrand(data.clienteId, data.cliente);
+      const doc = _ldPdfBuild(data, brand);
+      const nombre = ('Ficha - ' + [data.nombre, data.empresa].filter(Boolean).join(' - ') + ' - ' + data.fecha.toISOString().slice(0, 10)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      doc.save(nombre + '.pdf');
+      showBanner('✓ PDF descargado: ' + nombre + '.pdf', 'success');
+    } catch (e) { showBanner('No se pudo crear el PDF: ' + e.message, 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); } }
+  }
   function ldSetResult(k) { _ldSel = k || ''; if (_ldSel === 'respondio') _ldLoadSnips(); else _ldPaint(); }
   // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
   async function ldEditNote(cid, actId) {
@@ -37786,6 +38005,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_cpTaskBar(id)}
       <div class="cp-head">
         <button type="button" class="cp-copy" title="Copiar todos los datos del contacto y de su empresa (estado, canal, paso…)" aria-label="Copiar datos" onclick="LeadManagerModule.ldCopy(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button type="button" class="cp-pdf" title="Descargar la ficha en PDF, lista para compartir con tu cliente" aria-label="Descargar ficha en PDF" onclick="LeadManagerModule.ldPdf(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5"/></svg></button>
         <img class="cp-ava" src="${_av(full)}" alt="">
         <div class="cp-id">
           <h2 class="cp-name">${esc(full)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</h2>
@@ -40595,7 +40815,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
-    ldSetResult, ldCopy, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ldSetResult, ldCopy, ldPdf, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ibImgOpen, ibImgClose, ibImgNav, ibImgZoom, ibImgDl, ibImgFull, ibImgPrint,
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
