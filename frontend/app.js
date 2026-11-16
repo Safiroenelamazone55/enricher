@@ -23888,7 +23888,8 @@ const LeadManagerModule = (() => {
     const s = _sequences.find(x => x.id === seqId); if (!s) return;
     document.getElementById('lm-dup-modal')?.remove();
     const nsteps = _seqSteps(seqId).length;
-    const cliOpts = (_clients || []).map(c => '<option value="' + c.id + '"' + (c.id === s.outbound_client_id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+    const cliOpts = ((_gcAll && _gcAll.length ? _gcAll : _clients) || []).map(c => '<option value="' + c.id + '"' + (c.id === s.outbound_client_id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+    _dupCamps = null;
     const m = document.createElement('div'); m.id = 'lm-dup-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = '<div class="fin-pi-box dup-box">' +
@@ -23905,12 +23906,14 @@ const LeadManagerModule = (() => {
     setTimeout(() => { const i = $('dup-nombre'); if (i) { i.focus(); i.select(); } }, 40);
   }
   // Campañas del cliente elegido (la campaña pertenece a un cliente): la original queda marcada si el cliente no cambia.
+  let _dupCamps = null;   // todas las campañas (del servidor), por si el filtro «Viendo sólo…» recortó _campaigns
   function _dupCampOpts(cid, cur) {
-    const list = cid ? _campaignsByClient(Number(cid)) : [];
+    const list = cid ? (_dupCamps || _campaigns).filter(c => c.outbound_client_id === Number(cid)) : [];
     return '<option value="">Sin campaña</option>' + list.map(c => '<option value="' + c.id + '"' + (cur && c.id === cur ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
   }
-  function seqDupCli() {
+  async function seqDupCli() {
     const sel = $('dup-camp'), cli = $('dup-cli'); if (!sel || !cli) return;
+    if (!_dupCamps) { try { const r = await apiFetch(API + '/campaigns'); if (r && r.ok) { const j = await r.json(); if (Array.isArray(j)) _dupCamps = j; } } catch (_) { /* usa las que ya hay */ } }
     sel.innerHTML = _dupCampOpts(cli.value, null);
   }
   async function seqDuplicateDo(seqId) {
