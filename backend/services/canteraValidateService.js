@@ -177,7 +177,21 @@ ${formato}`;
 // El prompt de usuario (los datos crudos de la empresa) es igual sin importar
 // qué modelo investigue — solo cambia el "cerebro" y quién ejecuta la
 // búsqueda, nunca el criterio ni los datos que se le entregan.
-function _buildUserPrompt(company, contactos) {
+// Idioma principal de la empresa para los DATOS EXTRA que se investigan (los que luego entran en los mensajes como {{variable}}).
+// Misma regla que usa la secuencia para elegir la variante de idioma de cada contacto: el idioma principal importado («idioma principal nativo»),
+// o el que prioriza por nivel, o el deducido de su país. Si la empresa tiene varios contactos, gana el idioma más repetido. Sin ninguno: español.
+const { effectiveLanguage } = require('./geoService');
+function _idiomaDatos(company, contactos) {
+  const cnt = new Map();
+  for (const c of contactos || []) {
+    const e = effectiveLanguage({ idioma: c.idioma, idiomas: c.idiomas, pais: c.pais || company.pais, ciudad: c.ciudad || company.ciudad, region: c.region });
+    if (e && e.lang) cnt.set(e.lang, (cnt.get(e.lang) || 0) + 1);
+  }
+  if (cnt.size) return [...cnt.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const e = effectiveLanguage({ pais: company.pais, ciudad: company.ciudad });
+  return (e && e.lang) || 'Español';
+}
+function _buildUserPrompt(company, contactos, batch) {
   const datos = [
     `Nombre: ${company.nombre}`,
     company.dominio ? `Dominio: ${company.dominio}` : '',
@@ -188,7 +202,10 @@ function _buildUserPrompt(company, contactos) {
     company.linkedin ? `LinkedIn: ${company.linkedin}` : '',
   ].filter(Boolean).join('\n');
   const cargos = contactos.map(c => `- ${c.cargo || '(sin cargo)'}`).join('\n') || '(sin contactos importados para esta empresa)';
-  return `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y responde en el formato pedido arriba.`;
+  const hayExtra = Array.isArray(batch && batch.datos_extra) && batch.datos_extra.some(d => d && String(d.nombre || '').trim() && String(d.pregunta || '').trim());
+  const idiomaX = hayExtra ? _idiomaDatos(company, contactos) : '';
+  const bloqueIdioma = hayExtra ? `\n\nIDIOMA DE LOS DATOS ADICIONALES: escribe cada valor en ${idiomaX}, que es el idioma principal de los contactos de esta empresa (el mismo en que se le escribirá el mensaje). Esta regla manda sobre el idioma de la web: aunque la web sea multilingüe o esté en otro idioma, el valor va en ${idiomaX}. Los nombres propios no se traducen.` : '';
+  return `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}${bloqueIdioma}\n\nInvestiga y responde en el formato pedido arriba.`;
 }
 
 // Despachador — el motor de IA es una elección por borrador (batch.motor_ia,
@@ -239,7 +256,7 @@ async function _validateCompanyClaude(batch, company, contactos, apiKeyOverride,
   const model = modelOverride || MODEL;
 
   const system = _buildSystemPrompt(batch);
-  const user = _buildUserPrompt(company, contactos);
+  const user = _buildUserPrompt(company, contactos, batch);
 
   // Haiku no soporta "tool calling programático" — la versión nueva de
   // web_search exige declarar allowed_callers:["direct"] en ese caso
@@ -281,7 +298,7 @@ async function _nvidiaChat(messages, tools, apiKey) {
 async function _validateCompanyKimi(batch, company, contactos, apiKeyOverride) {
   const apiKey = apiKeyOverride || process.env.NVIDIA_API_KEY;
   const system = _buildSystemPrompt(batch);
-  const user = _buildUserPrompt(company, contactos);
+  const user = _buildUserPrompt(company, contactos, batch);
   const tools = [{
     type: 'function',
     function: {
@@ -343,7 +360,7 @@ async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride,
   if (!apiKey) throw new Error('Falta GEMINI_API_KEY (global o por cliente en Configuración)');
   const model = modelOverride || GEMINI_MODEL;
   const system = _buildSystemPrompt(batch);
-  const user = _buildUserPrompt(company, contactos);
+  const user = _buildUserPrompt(company, contactos, batch);
   const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
@@ -458,4 +475,4 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
   return { total: companies.length, done, errores, costoTotal };
 }
 
-module.exports = { runBatchValidation, validateCompany, _buildSystemPrompt, _buildUserPrompt };
+module.exports = { runBatchValidation, validateCompany, _buildSystemPrompt, _buildUserPrompt, _idiomaDatos };
