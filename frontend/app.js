@@ -30421,8 +30421,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
       delete _ibDrafts[cidSent];   // ya salió (o quedó programado): el borrador de esta conversación se limpia
       if (_ibThread) _ibThread.messages.push(d.scheduled
-        ? { dir: 'out', id: d.message?.id, asunto: d.message?.asunto || '', cuerpo, at: d.message?.scheduled_at || schedIso, estado: 'scheduled', buzon: _ibThread.contact?.buzon || '' }
-        : { dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
+        ? { dir: 'out', id: d.message?.id, asunto: d.message?.asunto || '', cuerpo, at: d.message?.scheduled_at || schedIso, estado: 'scheduled', buzon: _ibThread.contact?.buzon || '', cuerpo_html: d.message?.firma_html || '' }
+        : { dir: 'out', id: d.message?.id, asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '', cuerpo_html: d.message?.firma_html || '' });
       const t = (_ibThreads || []).find(x => x.contact_id === _ibActive);
       if (t && !d.scheduled) { t.last_out_at = new Date().toISOString(); }
       _ibMsgIdx = _ibThread.messages.length - 1; // pasa a la página del correo recién enviado
