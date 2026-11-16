@@ -29589,7 +29589,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
             onblur="setTimeout(()=>document.getElementById('ibx-fwd-drop')?.classList.add('hidden'),150)">
           <div class="lm-pick-list ibx-fwd-drop hidden" id="ibx-fwd-drop" style="position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--surface,#fff);border:1px solid var(--border,#EAE7E2);max-height:220px;overflow:auto"></div>
         </div>
-        ${total ? `<div class="ibx-fwd-hint">Se reenvía el correo que estás viendo ahora (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total}), citado debajo de lo que escribas.</div>` : ''}
+        ${total ? (() => {
+          const nCorreos = msgs.filter(m => (m.dir === 'in' && m.tipo !== 'bounce') || (m.dir === 'out' && ['sent', 'replied'].includes(m.estado))).length;
+          const nImgs = msgs.filter(m => m.dir === 'in' && /src\s*=\s*["']?data:image/i.test(m.cuerpo_html || '')).length;
+          return `<div class="ibx-fwd-scope" role="radiogroup" aria-label="Qué reenviar">
+            <label class="${_ibFwdScope === 'hilo' ? 'on' : ''}"><input type="radio" name="ibx-fwd-sc" ${_ibFwdScope === 'hilo' ? 'checked' : ''} onchange="LeadManagerModule.ibFwdScope('hilo')"><span><b>Toda la conversación</b><em>${nCorreos} correo${nCorreos === 1 ? '' : 's'}${nImgs ? ' · con las imágenes' : ''}</em></span></label>
+            <label class="${_ibFwdScope === 'uno' ? 'on' : ''}"><input type="radio" name="ibx-fwd-sc" ${_ibFwdScope === 'uno' ? 'checked' : ''} onchange="LeadManagerModule.ibFwdScope('uno')"><span><b>Solo este correo</b><em>el que estás viendo (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total})</em></span></label>
+          </div>`;
+        })() : ''}
         <div class="ibx-tawrap ibx-tawrap--wide">
           <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Tu mensaje para quien lo reciba…"></textarea>
           <div class="ibx-sendgrp">
@@ -29634,6 +29641,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
     </div>`;
   }
+  let _ibFwdScope = 'hilo';   // qué se reenvía: 'hilo' (toda la conversación, por defecto) | 'uno' (solo el correo que se está viendo)
+  function ibFwdScope(v) { _ibFwdScope = v === 'uno' ? 'uno' : 'hilo'; const t = document.getElementById('ibx-fwd-to'), ta = document.getElementById('ibx-ta'); const keep = { to: t ? t.value : '', ta: ta ? ta.value : '' }; _ibPaint(); const t2 = document.getElementById('ibx-fwd-to'), ta2 = document.getElementById('ibx-ta'); if (t2) t2.value = keep.to; if (ta2) ta2.value = keep.ta; }
   function ibSetMode(mode) {
     _ibMode = (mode === 'note' || mode === 'fwd') ? mode : 'reply';
     const rb = document.querySelector('.ibx-replybox');
@@ -30353,6 +30362,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const body = {
         contact_id: _ibActive, to, texto,
         orig_asunto: orig.asunto || '', orig_cuerpo: orig.cuerpo || '', orig_from: origFrom, orig_at: orig.at || '',
+        // el servidor arma el reenvío desde la base de datos (conversación completa o un solo correo), con las imágenes incrustadas
+        modo: _ibFwdScope === 'uno' ? (['in', 'out'].includes(orig.dir) ? 'mensaje' : '') : 'hilo',
+        msg_dir: orig.dir, msg_id: orig.id,
       };
       const res = await apiFetch(`${API}/lm/inbox/forward`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
@@ -30363,7 +30375,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       }
       _ibMode = 'reply'; // listo, vuelve solo a "Responder" — sin pestañas visibles, no hay otra forma de salir
       _ibPaint();
-      showBanner(`✓ Reenviado a ${to}`, 'success');
+      showBanner(d.correos ? `✓ Reenviada la conversación a ${to} (${d.correos} correo${d.correos === 1 ? '' : 's'}${d.imagenes ? ' · ' + d.imagenes + ' imagen' + (d.imagenes === 1 ? '' : 'es') : ''})` : `✓ Reenviado a ${to}`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Reenviar'; } }
   }
@@ -40581,7 +40593,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibFwdScope, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,

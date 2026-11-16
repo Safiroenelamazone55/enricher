@@ -7603,6 +7603,52 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
 // del MISMO buzón, así que si esa persona responde, el vigilante IMAP ya lo
 // captura solo en este mismo hilo (tipo='equipo'). Se guarda en lm_forwards,
 // separado de lm_messages, para no contar como "ya le respondí al prospecto".
+// Arma el reenvío desde la BASE DE DATOS (no desde lo que mande el navegador): la conversación completa del contacto, o un solo correo.
+// Las imágenes que el correo trae incrustadas (guardadas como data:image) se mandan como imágenes en línea (cid:) para que se vean en Gmail/Outlook.
+async function _armarReenvio(uid, cid, modo, msgDir, msgId) {
+  const { rows: all } = await pool.query(`
+    SELECT * FROM (
+      SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, COALESCE(mb.email,'') AS quien, COALESCE(m.firma_html,'') AS html
+        FROM lm_messages m LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
+       WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied')
+      UNION ALL
+      SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, TRIM(COALESCE(NULLIF(im.from_name,''),'') || ' <' || im.from_email || '>'), COALESCE(im.cuerpo_html,'')
+        FROM lm_inbox_messages im WHERE im.user_id=$1 AND im.contact_id=$2 AND im.tipo <> 'bounce'
+    ) t ORDER BY at ASC NULLS FIRST`, [uid, cid]);
+  let msgs = all;
+  if (modo === 'mensaje') msgs = all.filter(m => m.dir === msgDir && Number(m.id) === Number(msgId));
+  if (!msgs.length) return null;
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fecha = d => { const x = d ? new Date(d) : null; return x && !isNaN(x) ? x.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; };
+  const atts = []; let bytes = 0, nImg = 0;
+  const limpia = h => String(h || '')
+    .replace(/<head\b[\s\S]*?<\/head\s*>/gi, '').replace(/<style\b[\s\S]*?<\/style\s*>/gi, '')
+    .replace(/<(script|iframe|object|embed|applet|noscript)\b[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<\/?(html|body|!doctype)[^>]*>/gi, '').replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  // data:image → imagen en línea (cid): los clientes de correo no muestran data: en el HTML
+  const imagenes = h => h.replace(/src\s*=\s*(["'])data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)\1/gi, (m, q, tipo, b64) => {
+    try {
+      const buf = Buffer.from(b64.replace(/\s+/g, ''), 'base64');
+      if (!buf.length || bytes + buf.length > 15 * 1024 * 1024) return m;
+      bytes += buf.length; nImg++;
+      const ext = tipo.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'png';
+      const cidv = 'img' + nImg + '.' + require('crypto').randomBytes(5).toString('hex') + '@nova';
+      atts.push({ filename: 'imagen-' + nImg + '.' + ext, content: buf, cid: cidv, contentType: tipo, contentDisposition: 'inline' });
+      return 'src=' + q + 'cid:' + cidv + q;
+    } catch (_) { return m; }
+  });
+  const bloques = msgs.map(m => {
+    const quien = m.dir === 'out' ? 'Tú' + (m.quien ? ' (' + m.quien + ')' : '') : (m.quien || 'Contacto');
+    const cabecera = `<div style="font:12px Arial,Helvetica,sans-serif;color:#555;margin-bottom:8px;line-height:1.5"><b>${m.dir === 'out' ? 'Enviado por' : 'De'}:</b> ${esc(quien)}${fecha(m.at) ? ` &nbsp;·&nbsp; <b>Fecha:</b> ${esc(fecha(m.at))}` : ''}${m.asunto ? `<br><b>Asunto:</b> ${esc(m.asunto)}` : ''}</div>`;
+    let cuerpoHtml;
+    if (m.dir === 'in' && String(m.html || '').trim()) cuerpoHtml = imagenes(limpia(m.html));
+    else cuerpoHtml = `<div style="font:14px/1.55 Arial,Helvetica,sans-serif;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>` + (m.dir === 'out' && String(m.html || '').trim() ? `<div style="margin-top:10px">${imagenes(limpia(m.html))}</div>` : '');
+    return `<div style="margin:0 0 16px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#fff">${cabecera}${cuerpoHtml}</div>`;
+  });
+  const texto = msgs.map(m => `${m.dir === 'out' ? 'Enviado por' : 'De'}: ${m.dir === 'out' ? 'Tú' + (m.quien ? ' (' + m.quien + ')' : '') : (m.quien || 'Contacto')}\n${fecha(m.at) ? 'Fecha: ' + fecha(m.at) + '\n' : ''}${m.asunto ? 'Asunto: ' + m.asunto + '\n' : ''}\n${m.cuerpo || ''}`).join('\n\n----------------------------------------\n\n');
+  const base = [...msgs].reverse().map(m => String(m.asunto || '').replace(/^\s*((re|fw|fwd|rv|enc)\s*:\s*)+/i, '').trim()).find(Boolean) || '(sin asunto)';
+  return { asunto: 'Fwd: ' + base, htmlBloques: bloques.join(''), texto, atts, n: msgs.length, nImg };
+}
 app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
   const b = req.body || {};
   const cid = parseInt(b.contact_id);
@@ -7619,6 +7665,26 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
     if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
     const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1`, [k.mb_id]);
 
+    // Modo nuevo: la conversación completa (o un solo correo) armada desde la base de datos, con imágenes. Sin «modo», se usa el reenvío de siempre.
+    const modo = b.modo === 'hilo' ? 'hilo' : (b.modo === 'mensaje' && ['in', 'out'].includes(b.msg_dir) ? 'mensaje' : '');
+    if (modo) {
+      const R = await _armarReenvio(req.workspaceOwnerId, cid, modo, b.msg_dir, b.msg_id);
+      if (R) {
+        const e2 = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const titulo = modo === 'hilo' ? `Conversación reenviada (${R.n} correo${R.n === 1 ? '' : 's'}${R.nImg ? ', ' + R.nImg + ' imagen' + (R.nImg === 1 ? '' : 'es') : ''})` : 'Correo reenviado';
+        const html2 = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${texto ? `<div>${e2(texto).replace(/\n/g, '<br>')}</div>` : ''}`
+          + `<div style="margin:16px 0 10px;color:#555;font-size:13px"><b>---------- ${titulo} ----------</b></div>${R.htmlBloques}</div>`;
+        const text2 = `${texto}${texto ? '\n\n' : ''}---------- ${titulo} ----------\n\n${R.texto}`;
+        const auth2 = await mailboxSvc.getMailboxAuth(pool, mb);
+        const sent2 = await mailboxSvc.sendFromMailbox(mb, auth2, { to, subject: R.asunto, text: text2, html: html2, fromName: mb.from_name || undefined, attachments: R.atts });
+        const guardado = `${texto}${texto ? '\n\n' : ''}[${titulo}]`;
+        const { rows: [fwd2] } = await pool.query(
+          `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, to_email, asunto, cuerpo, sent_at`,
+          [req.workspaceOwnerId, cid, mb.id, to, R.asunto, guardado, sent2.messageId || '']);
+        return res.status(201).json({ ok: true, fwd: fwd2, correos: R.n, imagenes: R.nImg });
+      }
+    }
     const origAsunto = String(b.orig_asunto || '').trim();
     const origCuerpo = String(b.orig_cuerpo || '');
     const origFrom   = String(b.orig_from || '').trim();

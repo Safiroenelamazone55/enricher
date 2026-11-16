@@ -21382,3 +21382,11 @@ body.ibx-lb-open{overflow:hidden}
 .ibx-msgs .ibx-m:has(.ibx-m__frame){align-self:stretch;width:100%;max-width:1000px;box-sizing:border-box;min-width:0}
 .ibx-m__frame{display:block;width:100%;max-width:100%}
 .ibx-m:has(.ibx-m__frame) .ibx-m__body{min-width:0}
+
+/* Inbox · reenviar: toda la conversación o solo un correo */
+.ibx-fwd-scope{display:flex;gap:8px;padding:2px 2px 8px;flex-wrap:wrap}
+.ibx-fwd-scope label{display:flex;align-items:flex-start;gap:8px;flex:1 1 240px;padding:8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;font-size:.8rem}
+.ibx-fwd-scope label.on{border-color:var(--primary);background:var(--primary-soft)}
+.ibx-fwd-scope input{margin-top:3px;accent-color:var(--primary)}
+.ibx-fwd-scope span{display:flex;flex-direction:column;gap:1px}
+.ibx-fwd-scope em{font-style:normal;color:var(--text-muted);font-size:.72rem}
