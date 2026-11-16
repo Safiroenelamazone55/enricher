@@ -11,6 +11,7 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
 // página, en vez de quedar invisible. Quitar cuando ese caso quede resuelto.
 window.addEventListener('error', function (ev) {
   try {
+    if (/ResizeObserver loop/i.test(ev.message || '')) { ev.stopImmediatePropagation(); return; }   // aviso benigno del navegador al reajustar tamaños: no es un error de la aplicación
     if (document.getElementById('nova-diag-banner')) return; // solo el primer error
     const b = document.createElement('div');
     b.id = 'nova-diag-banner';
@@ -29159,7 +29160,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const d = f.contentDocument; if (!d) return;
       const fit = () => { try { const h = Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4; if (Math.abs((parseInt(f.style.height) || 0) - h) > 1) f.style.height = h + 'px'; } catch (_) {} };
       fit();
-      if (window.ResizeObserver) { if (f._ro) f._ro.disconnect(); f._ro = new ResizeObserver(fit); f._ro.observe(d.documentElement); }   // imágenes que cargan después, cambio de ancho…
+      if (window.ResizeObserver) { if (f._ro) f._ro.disconnect(); f._ro = new ResizeObserver(() => requestAnimationFrame(fit)); f._ro.observe(d.documentElement); }   // imágenes que cargan después, cambio de ancho…
       // Clic en una imagen del correo → vista completa (como Outlook). El marco no ejecuta scripts del correo: el clic lo engancha esta página.
       const imgs = [...d.querySelectorAll('img')].filter(i => i.getAttribute('src'));
       imgs.forEach(im => im.addEventListener('click', e => {
