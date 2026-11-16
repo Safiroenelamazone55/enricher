@@ -21409,3 +21409,12 @@ body.ibx-lb-open{overflow:hidden}
 .cp-pdf:disabled { cursor: progress; }
 .cp-pdf.is-busy svg { animation: cpPdfSpin .9s linear infinite; }
 @keyframes cpPdfSpin { to { transform: rotate(360deg); } }
+
+/* Ficha del contacto · PDF: [icono][ES][EN] (el último idioma usado queda marcado) */
+.cp-pdfg { position: absolute; top: 0; right: 42px; height: 34px; display: inline-flex; align-items: stretch; border: 1px solid var(--border, #E3E8E5); border-radius: 6px; background: var(--surface, #fff); overflow: hidden; }
+.cp-pdfg .cp-pdf { position: static; width: 34px; height: auto; border: 0; border-radius: 0; background: transparent; }
+.cp-pdfg .cp-pdf:hover, .cp-pdfg .cp-pdfl:hover { background: var(--surface-2, #F1F4F2); color: var(--text, #14211B); }
+.cp-pdfl { width: 30px; border: 0; border-left: 1px solid var(--border, #E3E8E5); background: transparent; color: var(--text-muted, #6B7770); font: inherit; font-size: .68rem; font-weight: 700; letter-spacing: .02em; cursor: pointer; }
+.cp-pdfl.on { color: var(--primary, #00804C); background: var(--primary-soft, #E8F5EE); }
+.cp-pdfg.is-busy { opacity: .6; pointer-events: none; }
+.cp-pdfg.is-busy .cp-pdf svg { animation: cpPdfSpin .9s linear infinite; }

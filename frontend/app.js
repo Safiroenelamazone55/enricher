@@ -34538,7 +34538,23 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return new Promise(res => {
       if (!uri) return res(null);
       const im = new Image();
-      im.onload = () => { try { const w = im.naturalWidth || 400, h = im.naturalHeight || 100, k = Math.min(1, 900 / Math.max(w, h)); const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k)); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); res({ png: cv.toDataURL('image/png'), w: cv.width, h: cv.height }); } catch (_) { res(null); } };
+      im.onload = () => {
+        try {
+          const w = im.naturalWidth || 400, h = im.naturalHeight || 100, k = Math.min(2, 1400 / Math.max(w, h));
+          const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+          const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, cv.width, cv.height);
+          // caja del contenido visible: se recorta el aire transparente (o blanco) alrededor
+          let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
+          try {
+            const px = cx.getImageData(0, 0, cv.width, cv.height).data;
+            for (let yy = 0; yy < cv.height; yy++) for (let xx = 0; xx < cv.width; xx++) { const a = px[(yy * cv.width + xx) * 4 + 3]; if (a > 10) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; } }
+          } catch (_) { x1 = -1; }
+          if (x1 < 0 || x1 - x0 < 4 || y1 - y0 < 4) { res({ png: cv.toDataURL('image/png'), w: cv.width, h: cv.height }); return; }
+          const cw = x1 - x0 + 1, ch = y1 - y0 + 1, c2 = document.createElement('canvas'); c2.width = cw; c2.height = ch;
+          c2.getContext('2d').drawImage(cv, x0, y0, cw, ch, 0, 0, cw, ch);
+          res({ png: c2.toDataURL('image/png'), w: cw, h: ch });
+        } catch (_) { res(null); }
+      };
       im.onerror = () => res(null); im.src = uri;
     });
   }
@@ -34581,48 +34597,74 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     } catch (_) { /* sin marca del cliente: su nombre en texto */ }
     return out;
   }
-  async function _ldPdfData(cid) {
+  const _PDF_LG = {
+    es: { loc: 'es', ficha: 'Ficha de lead', sContacto: 'Contacto', sEmpresa: 'Empresa', sSeg: 'Estado y seguimiento', sResp: 'Lo que respondió', sHist: 'Historial de estado', sReu: 'Reunión y oportunidad',
+      email: 'Email', emailP: 'Email personal', tel: 'Teléfono', movil: 'Móvil', linkedin: 'LinkedIn', idioma: 'Idioma', aceptoLi: 'Aceptó la conexión de LinkedIn',
+      emp: 'Empresa', web: 'Sitio web', industria: 'Industria', tamano: 'Tamaño', ingresos: 'Ingresos', ubic: 'Ubicación', fundada: 'Fundada', liEmp: 'LinkedIn de la empresa',
+      resultado: 'Resultado', etapa: 'Etapa comercial', porCanal: 'Respondió por', fechaResp: 'Fecha de respuesta', primeraResp: 'Primera respuesta', nResp: 'Respuestas recibidas',
+      campana: 'Campaña', secuencia: 'Secuencia', nota: 'Nota del seguimiento', reunion: 'Reunión', deal: 'Deal', paso: 'paso', de: 'de', prob: 'probabilidad', cierre: 'cierre estimado',
+      correo: 'Correo', pie: 'Preparado por {por} el {f}  ·  Documento confidencial', pag: 'Página {n} de {N}', sinEstado: '(sin estado)', archivo: 'Ficha' },
+    en: { loc: 'en', ficha: 'Lead profile', sContacto: 'Contact', sEmpresa: 'Company', sSeg: 'Status and follow-up', sResp: 'What they replied', sHist: 'Status history', sReu: 'Meeting and opportunity',
+      email: 'Email', emailP: 'Personal email', tel: 'Phone', movil: 'Mobile', linkedin: 'LinkedIn', idioma: 'Language', aceptoLi: 'Accepted the LinkedIn connection',
+      emp: 'Company', web: 'Website', industria: 'Industry', tamano: 'Size', ingresos: 'Revenue', ubic: 'Location', fundada: 'Founded', liEmp: 'Company LinkedIn',
+      resultado: 'Outcome', etapa: 'Sales stage', porCanal: 'Replied via', fechaResp: 'Reply date', primeraResp: 'First reply', nResp: 'Replies received',
+      campana: 'Campaign', secuencia: 'Sequence', nota: 'Follow-up note', reunion: 'Meeting', deal: 'Deal', paso: 'step', de: 'of', prob: 'probability', cierre: 'expected close',
+      correo: 'Email', pie: 'Prepared by {por} on {f}  ·  Confidential document', pag: 'Page {n} of {N}', sinEstado: '(no status)', archivo: 'Profile' },
+  };
+  const _PDF_DISPO_EN = { respondio: 'Replied', interesado: 'Interested', reunion: 'Meeting', mas_adelante: 'Later', derivado: 'Referred to someone else', no_es_persona: 'Not the right person', no_interesado: 'Not interested', no_califica: 'Does not qualify', no_contactar: 'Do not contact' };
+  const _PDF_STAGE_EN = { nuevo: 'New', contactado: 'Contacted', respondio: 'Replied', propuesta: 'Proposal', negociacion: 'Negotiation', ganado: 'Won', perdido: 'Lost' };
+  const _PDF_IDIOMA_EN = { 'español': 'Spanish', 'inglés': 'English', 'portugués': 'Portuguese', 'francés': 'French', 'italiano': 'Italian', 'alemán': 'German', 'catalán': 'Catalan', 'neerlandés': 'Dutch', 'polaco': 'Polish', 'sueco': 'Swedish', 'vasco': 'Basque', 'gallego': 'Galician' };
+  let _pdfLangSel = 'es'; try { const v = localStorage.getItem('nova_pdf_lang'); if (v === 'en' || v === 'es') _pdfLangSel = v; } catch (_) { /* sin almacenamiento */ }
+  async function _ldPdfData(cid, lang) {
+    const L = _PDF_LG[lang] || _PDF_LG.es, en = L.loc === 'en', loc = en ? 'en-US' : 'es';
     const c = _contacts.find(x => x.id === cid); if (!c) throw new Error('Contacto no encontrado');
     const co = (_companies || []).find(x => String(x.id) === String(c.company_id)) || {};
     const cli = (_clients || []).find(x => x.id === c.outbound_client_id);
     const dis = _DISPOS.find(x => x[0] === c.disposition);
-    const canalLbl = { email: 'Correo', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: 'Llamada', call: 'Llamada', email_manual: 'Correo' };
-    const fmtD = v => { const x = new Date(v); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }); };
-    const fmtDH = v => { const x = new Date(v); return isNaN(x) ? '' : fmtD(v) + ', ' + x.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); };
+    const dispoTxt = en ? (dis ? (_PDF_DISPO_EN[dis[0]] || dis[1]) : '') : (dis ? dis[1] : '');
+    const etapaTxt = k => en ? (_PDF_STAGE_EN[k] || STAGE_LABELS[k] || k || '') : (STAGE_LABELS[k] || k || '');
+    const canalLbl = { email: L.correo, linkedin: 'LinkedIn', whatsapp: 'WhatsApp', llamada: en ? 'Call' : 'Llamada', call: en ? 'Call' : 'Llamada', email_manual: L.correo };
+    const fmtD = v => { const x = new Date(v); return isNaN(x) ? '' : x.toLocaleDateString(loc, { day: 'numeric', month: 'long', year: 'numeric' }); };
+    const fmtDH = v => { const x = new Date(v); return isNaN(x) ? '' : fmtD(v) + ', ' + x.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }); };
     const sinTag = t => String(t || '').replace(/^\s*Disposición:[^—]*(—\s*)?/, '').replace(/^\s*(\[[^\]]+\]\s*)+/, '').trim();
     const acts = (_activities || []).filter(a => a.contact_id === cid), resp = acts.find(a => a.tipo === 'respuesta'), info = _ldActInfo()[cid] || {};
     let rr = { respuestas: [], cambios: [] };
     try { const r = await apiFetch(`${API}/lm/contacts/${cid}/respuestas`); if (r.ok) rr = await r.json(); } catch (_) { /* sin historial */ }
     const reps = rr.respuestas || [];
-    const ub = (...a) => a.filter(Boolean).join(', ');
-    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Lead';
+    const ub = (...a) => { const seen = new Set(); return a.filter(Boolean).join(',').split(',').map(x => x.trim()).filter(x => { const k = x.toLowerCase(); if (!x || seen.has(k)) return false; seen.add(k); return true; }).join(', '); };
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || (en ? 'Lead' : 'Lead');
     const web = co.website || co.dominio || '';
-    const seqs = (c.sequences || []).map(sq => { const st = _seqSteps(sq.id) || [], n = sq.paso || 1, t = st[n - 1]; return `${sq.nombre || ('#' + sq.id)} · paso ${n}${st.length ? ' de ' + st.length : ''}${t && t.titulo ? ' (' + t.titulo + ')' : ''}`; });
+    const sinUrl = u => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
+    const seqs = (c.sequences || []).map(sq => { const st = _seqSteps(sq.id) || [], n = sq.paso || 1, t = st[n - 1]; return `${sq.nombre || ('#' + sq.id)} · ${L.paso} ${n}${st.length ? ' ' + L.de + ' ' + st.length : ''}${t && t.titulo ? ' (' + t.titulo + ')' : ''}`; });
     const camps = [...new Set((c.campaigns || []).map(x => x.nombre || x.codigo).filter(Boolean))];
-    const dealV = c.deal_valor ? `${c.deal_moneda || '$'}${c.deal_valor}${c.deal_prob != null && c.deal_prob !== '' ? ' · probabilidad ' + c.deal_prob + ' %' : ''}${c.deal_cierre ? ' · cierre estimado ' + fmtD(c.deal_cierre) : ''}` : '';
+    const dealV = c.deal_valor ? `${c.deal_moneda || '$'}${c.deal_valor}${c.deal_prob != null && c.deal_prob !== '' ? ' · ' + L.prob + ' ' + c.deal_prob + ' %' : ''}${c.deal_cierre ? ' · ' + L.cierre + ' ' + fmtD(c.deal_cierre) : ''}` : '';
+    // historial: los nombres de estado que escribió el sistema (en español) se pasan al idioma del PDF
+    const mapEst = {}; _DISPOS.forEach(x => { mapEst[x[1]] = en ? (_PDF_DISPO_EN[x[0]] || x[1]) : x[1]; }); mapEst['(sin estado)'] = L.sinEstado;
+    const traduce = t => String(t || '').replace(/^Estado:\s*/, '').split(' → ').map(x => mapEst[x.trim()] || x.trim()).join(' → ');
+    const idiomaTxt = v => en ? (_PDF_IDIOMA_EN[String(v || '').toLowerCase()] || v) : v;
     const nota = sinTag(info.nota);
     return {
-      fecha: new Date(), nombre: full, cargo: c.cargo || '', empresa: c.company_nombre || co.nombre || c.empresa_nombre || '', cliente: (cli && cli.nombre) || '', clienteId: (cli && cli.id) || 0,
-      resultado: dis ? dis[1] : '', etapa: STAGE_LABELS[c.estado] || c.estado || '', ubicacion: ub(c.ciudad, c.region, c.pais),
+      L, fecha: new Date(), nombre: full, cargo: c.cargo || '', empresa: c.company_nombre || co.nombre || c.empresa_nombre || '', cliente: (cli && cli.nombre) || '', clienteId: (cli && cli.id) || 0,
+      resultado: dispoTxt, etapa: etapaTxt(c.estado), ubicacion: ub(c.ciudad, c.region, c.pais),
       contacto: [
-        { k: 'Email', v: c.email }, { k: 'Email personal', v: c.email_personal }, { k: 'Teléfono', v: c.telefono }, { k: 'Móvil', v: c.movil },
-        { k: 'LinkedIn', v: String(c.linkedin || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: c.linkedin || '' },
-        { k: 'Idioma', v: c.idioma_ef || c.idioma }, { k: 'Aceptó la conexión de LinkedIn', v: c.li_aceptado_at ? fmtD(c.li_aceptado_at) : '' }],
+        { k: L.email, v: c.email }, { k: L.emailP, v: c.email_personal }, { k: L.tel, v: c.telefono }, { k: L.movil, v: c.movil },
+        { k: L.linkedin, v: sinUrl(c.linkedin), url: c.linkedin || '' },
+        { k: L.idioma, v: idiomaTxt(c.idioma_ef || c.idioma) }, { k: L.aceptoLi, v: c.li_aceptado_at ? fmtD(c.li_aceptado_at) : '' }],
       empresaRows: [
-        { k: 'Empresa', v: c.company_nombre || co.nombre || c.empresa_nombre }, { k: 'Sitio web', v: String(web).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: /^https?:/i.test(web) ? web : (web ? 'https://' + web : '') },
-        { k: 'Industria', v: co.industria }, { k: 'Tamaño', v: co.tamano }, { k: 'Ingresos', v: co.ingresos }, { k: 'Teléfono', v: co.telefono },
-        { k: 'Ubicación', v: ub(co.ciudad, co.region, co.pais) }, { k: 'Fundada', v: co.fundada },
-        { k: 'LinkedIn de la empresa', v: String(co.linkedin || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''), url: co.linkedin || '' }],
+        { k: L.emp, v: c.company_nombre || co.nombre || c.empresa_nombre }, { k: L.web, v: sinUrl(web), url: /^https?:/i.test(web) ? web : (web ? 'https://' + web : '') },
+        { k: L.industria, v: co.industria }, { k: L.tamano, v: co.tamano }, { k: L.ingresos, v: co.ingresos }, { k: L.tel, v: co.telefono },
+        { k: L.ubic, v: ub(co.ciudad, co.region, co.pais) }, { k: L.fundada, v: co.fundada },
+        { k: L.liEmp, v: sinUrl(co.linkedin), url: co.linkedin || '' }],
       seguimiento: [
-        { k: 'Resultado', v: dis ? dis[1] : '' }, { k: 'Etapa comercial', v: STAGE_LABELS[c.estado] || c.estado },
-        { k: 'Respondió por', v: reps.length ? 'Correo' : ((resp && resp.canal && canalLbl[resp.canal]) || '') },
-        { k: reps.length > 1 ? 'Primera respuesta' : 'Fecha de respuesta', v: reps.length ? fmtDH(reps[0].recibida) : (resp ? fmtD(resp.fecha) : '') },
-        { k: 'Respuestas recibidas', v: reps.length > 1 ? String(reps.length) : '' },
-        { k: 'Campaña', v: camps.join(' · '), full: true }, ...seqs.map((t, i) => ({ k: seqs.length > 1 ? 'Secuencia ' + (i + 1) : 'Secuencia', v: t, full: true })),
-        { k: 'Nota del seguimiento', v: nota, full: true }],
+        { k: L.resultado, v: dispoTxt }, { k: L.etapa, v: etapaTxt(c.estado) },
+        { k: L.porCanal, v: reps.length ? L.correo : ((resp && resp.canal && canalLbl[resp.canal]) || '') },
+        { k: reps.length > 1 ? L.primeraResp : L.fechaResp, v: reps.length ? fmtDH(reps[0].recibida) : (resp ? fmtD(resp.fecha) : '') },
+        { k: L.nResp, v: reps.length > 1 ? String(reps.length) : '' },
+        { k: L.campana, v: camps.join(' · '), full: true }, ...seqs.map((t, i) => ({ k: seqs.length > 1 ? L.secuencia + ' ' + (i + 1) : L.secuencia, v: t, full: true })),
+        { k: L.nota, v: nota, full: true }],
       respuestas: reps.map(r => ({ fecha: fmtDH(r.recibida), texto: r.texto || '' })).filter(r => r.texto),
-      cambios: (rr.cambios || []).map(x => ({ fecha: fmtD(x.fecha), texto: String(x.nota || '').replace(/^Estado:\s*/, '') })).filter(x => x.texto),
-      reunionDeal: [{ k: 'Reunión', v: c.reunion_fecha ? fmtD(c.reunion_fecha) : '' }, { k: 'Deal', v: dealV, full: true }],
+      cambios: (rr.cambios || []).map(x => ({ fecha: fmtD(x.fecha), texto: traduce(x.nota) })).filter(x => x.texto),
+      reunionDeal: [{ k: L.reunion, v: c.reunion_fecha ? fmtD(c.reunion_fecha) : '' }, { k: L.deal, v: dealV, full: true }],
     };
   }
   function _ldPdfBuild(d, brand) {
@@ -34635,20 +34677,21 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const lh = size => size * 0.3528 * 1.38;
     const wrap = (txt, w, size, style) => { font(size, style); return doc.splitTextToSize(_pdfT(txt), w); };
     const ensure = h => { if (y + h > H - 18) { doc.addPage(); y = 24; } };
-    const fechaTxt = d.fecha.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+    const L = d.L || _PDF_LG.es;
+    const fechaTxt = d.fecha.toLocaleDateString(L.loc === 'en' ? 'en-US' : 'es', { day: 'numeric', month: 'long', year: 'numeric' });
 
     // ── Banda superior con la marca ──
     doc.setFillColor(...DARK); doc.rect(0, 0, W, 34, 'F');
     doc.setFillColor(...ACC); doc.rect(0, 34, W, 1.2, 'F');
     const nombreBanda = () => { font(brand.nombre.length > 26 ? 14 : 17, 'bold', [255, 255, 255]); doc.text(_pdfT(brand.nombre), M, 21.5); };
     if (brand.logo) {
-      const maxH = 12, maxW = 58, k = Math.min(maxH / brand.logo.h, maxW / brand.logo.w), ww = brand.logo.w * k, hh = brand.logo.h * k, ly = 17 - hh / 2;
+      const maxH = brand.plate ? 15 : 17, maxW = 75, k = Math.min(maxH / brand.logo.h, maxW / brand.logo.w), ww = brand.logo.w * k, hh = brand.logo.h * k, ly = 17 - hh / 2;
       try {
         if (brand.plate) { doc.setFillColor(255, 255, 255); doc.roundedRect(M - 3, ly - 3, ww + 6, hh + 6, 2, 2, 'F'); }
         doc.addImage(brand.logo.png, 'PNG', M, ly, ww, hh);
       } catch (_) { nombreBanda(); }
     } else nombreBanda();
-    font(11, 'bold', [255, 255, 255]); doc.text('Ficha de lead', W - M, 15, { align: 'right' });
+    font(11, 'bold', [255, 255, 255]); doc.text(_pdfT(L.ficha), W - M, 15, { align: 'right' });
     font(8.5, 'normal', [210, 218, 226]); doc.text(_pdfT(fechaTxt), W - M, 21, { align: 'right' });
 
     // ── Quién es ──
@@ -34687,14 +34730,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       }
       y += 3.5;
     };
-    section('Contacto', d.contacto);
-    section('Empresa', d.empresaRows);
-    section('Estado y seguimiento', d.seguimiento);
+    section(L.sContacto, d.contacto);
+    section(L.sEmpresa, d.empresaRows);
+    section(L.sSeg, d.seguimiento);
 
     // ── Lo que respondió (sus propias palabras) ──
     if (d.respuestas.length) {
       ensure(30);
-      font(8, 'bold', ACC); doc.text('LO QUE RESPONDIÓ', M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
+      font(8, 'bold', ACC); doc.text(_pdfT(L.sResp).toUpperCase(), M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
       d.respuestas.slice(-4).forEach(r => {
         let ls = wrap(r.texto, CW - 11, 10); if (ls.length > 9) ls = ls.slice(0, 9).concat(['…']);
         const h = 5.5 + ls.length * lh(10) + 4; ensure(h);
@@ -34708,7 +34751,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // ── Cómo ha evolucionado ──
     if (d.cambios.length) {
       ensure(24);
-      font(8, 'bold', ACC); doc.text('HISTORIAL DE ESTADO', M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
+      font(8, 'bold', ACC); doc.text(_pdfT(L.sHist).toUpperCase(), M, y); doc.setDrawColor(...LINE); doc.line(M, y + 2, W - M, y + 2); y += 7.5;
       d.cambios.forEach(x => {
         const ls = wrap(x.texto, CW - 42, 9.5); const h = Math.max(5, ls.length * lh(9.5)) + 1.6; ensure(h);
         doc.setFillColor(...ACC); doc.circle(M + 1.2, y - 1, 0.9, 'F');
@@ -34718,7 +34761,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       });
       y += 3;
     }
-    section('Reunión y oportunidad', d.reunionDeal);
+    section(L.sReu, d.reunionDeal);
 
     // ── Cabecera de páginas siguientes y pie ──
     const nPag = doc.getNumberOfPages();
@@ -34727,22 +34770,25 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (pg > 1) { font(8, 'normal', MUTE); doc.text(_pdfT([d.nombre, d.empresa].filter(Boolean).join('  ·  ')), M, 12); doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, 15, W - M, 15); }
       doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, H - 13, W - M, H - 13);
       font(7.5, 'normal', MUTE);
-      doc.text(_pdfT('Preparado por ' + (brand.por || 'NovaCentrax') + ' el ' + fechaTxt + '  ·  Documento confidencial'), M, H - 8.5);
-      doc.text('Página ' + pg + ' de ' + nPag, W - M, H - 8.5, { align: 'right' });
+      doc.text(_pdfT(L.pie.replace('{por}', brand.por || 'NovaCentrax').replace('{f}', fechaTxt)), M, H - 8.5);
+      doc.text(_pdfT(L.pag.replace('{n}', pg).replace('{N}', nPag)), W - M, H - 8.5, { align: 'right' });
     }
     return doc;
   }
-  async function ldPdf(cid) {
+  async function ldPdf(cid, lang) {
+    const lg = lang === 'en' ? 'en' : lang === 'es' ? 'es' : _pdfLangSel;
     if (!window.jspdf) { showBanner('No se pudo cargar el generador de PDF. Recarga la página e inténtalo de nuevo.', 'error'); return; }
-    const btn = document.querySelector('.cp-pdf'); if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
+    _pdfLangSel = lg; try { localStorage.setItem('nova_pdf_lang', lg); } catch (_) { /* sin almacenamiento */ }
+    document.querySelectorAll('.cp-pdfg [data-lg]').forEach(b => b.classList.toggle('on', b.dataset.lg === lg));
+    const grp = document.querySelector('.cp-pdfg'); if (grp) grp.classList.add('is-busy');
     try {
-      const data = await _ldPdfData(cid), brand = await _pdfBrand(data.clienteId, data.cliente);
+      const data = await _ldPdfData(cid, lg), brand = await _pdfBrand(data.clienteId, data.cliente);
       const doc = _ldPdfBuild(data, brand);
-      const nombre = ('Ficha - ' + [data.nombre, data.empresa].filter(Boolean).join(' - ') + ' - ' + data.fecha.toISOString().slice(0, 10)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const nombre = (data.L.archivo + ' - ' + [data.nombre, data.empresa].filter(Boolean).join(' - ') + ' - ' + data.fecha.toISOString().slice(0, 10)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
       doc.save(nombre + '.pdf');
-      showBanner('✓ PDF descargado: ' + nombre + '.pdf', 'success');
+      showBanner((lg === 'en' ? '✓ PDF downloaded: ' : '✓ PDF descargado: ') + nombre + '.pdf', 'success');
     } catch (e) { showBanner('No se pudo crear el PDF: ' + e.message, 'error'); }
-    finally { if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); } }
+    finally { if (grp) grp.classList.remove('is-busy'); }
   }
   function ldSetResult(k) { _ldSel = k || ''; if (_ldSel === 'respondio') _ldLoadSnips(); else _ldPaint(); }
   // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
@@ -38005,7 +38051,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_cpTaskBar(id)}
       <div class="cp-head">
         <button type="button" class="cp-copy" title="Copiar todos los datos del contacto y de su empresa (estado, canal, paso…)" aria-label="Copiar datos" onclick="LeadManagerModule.ldCopy(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-        <button type="button" class="cp-pdf" title="Descargar la ficha en PDF, lista para compartir con tu cliente" aria-label="Descargar ficha en PDF" onclick="LeadManagerModule.ldPdf(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5"/></svg></button>
+        <div class="cp-pdfg" role="group" aria-label="Descargar ficha en PDF">
+          <button type="button" class="cp-pdf" title="Descargar la ficha en PDF, lista para compartir con tu cliente" aria-label="Descargar ficha en PDF" onclick="LeadManagerModule.ldPdf(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5"/></svg></button>
+          <button type="button" class="cp-pdfl${_pdfLangSel === 'es' ? ' on' : ''}" data-lg="es" title="Descargar PDF en español" onclick="LeadManagerModule.ldPdf(${id}, 'es')">ES</button>
+          <button type="button" class="cp-pdfl${_pdfLangSel === 'en' ? ' on' : ''}" data-lg="en" title="Download PDF in English" onclick="LeadManagerModule.ldPdf(${id}, 'en')">EN</button>
+        </div>
         <img class="cp-ava" src="${_av(full)}" alt="">
         <div class="cp-id">
           <h2 class="cp-name">${esc(full)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</h2>
