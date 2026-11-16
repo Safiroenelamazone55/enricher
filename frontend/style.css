@@ -21356,3 +21356,24 @@ textarea.ini-in { resize: vertical; font: inherit; line-height: 1.45; }
 .cant-de-opt.off{color:#a8a49d;cursor:default}.cant-de-opt.off:hover{background:none}
 .cant-de-opt code{font-size:.78rem;color:var(--text-3,#8a867f)}
 .cant-de-sep{height:1px;background:var(--border);margin:6px 4px}
+
+/* Inbox · imagen del correo en vista completa (estilo Outlook) */
+body.ibx-lb-open{overflow:hidden}
+.ibx-lb{position:fixed;inset:0;z-index:10050;background:#2b2b2b;color:#f3f4f6;display:flex;flex-direction:column;animation:ibxLb .14s ease-out}
+@keyframes ibxLb{from{opacity:0}to{opacity:1}}
+.ibx-lb__bar{display:flex;align-items:center;gap:6px;padding:8px 14px;background:#1f1f1f;border-bottom:1px solid rgba(255,255,255,.08);flex:none}
+.ibx-lb__name{font-size:.84rem;font-weight:600;margin-right:14px;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx-lb__btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:.82rem;cursor:pointer}
+.ibx-lb__btn:hover{background:rgba(255,255,255,.10)}
+.ibx-lb__sp{flex:1}
+.ibx-lb__cnt{font-size:.8rem;opacity:.7;margin-right:6px}
+.ibx-lb__x{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:inherit;cursor:pointer}
+.ibx-lb__x:hover{background:rgba(255,255,255,.12)}
+.ibx-lb__stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:18px}
+.ibx-lb__stage.is-zoom{overflow:auto;align-items:flex-start;justify-content:flex-start}
+.ibx-lb__stage img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;background:#fff;box-shadow:0 8px 40px rgba(0,0,0,.45);border-radius:2px}
+.ibx-lb__stage img.is-zoom{max-width:none;max-height:none;object-fit:none;cursor:zoom-out;margin:auto}
+.ibx-lb__nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border:0;border-radius:10px;background:rgba(0,0,0,.35);color:#fff;font-size:2rem;line-height:1;cursor:pointer}
+.ibx-lb__nav:hover{background:rgba(0,0,0,.6)}
+.ibx-lb__nav--p{left:12px}.ibx-lb__nav--n{right:12px}
+@media(max-width:640px){.ibx-lb__btn{padding:0 8px;font-size:0}.ibx-lb__btn svg{margin:0}.ibx-lb__name{max-width:30vw}}

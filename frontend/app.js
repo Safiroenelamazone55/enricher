@@ -29143,7 +29143,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const html = String(m.cuerpo_html || '');
     const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:" + (showImg ? ' https: http:' : '');
     return '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><base target="_blank"><style>html,body{margin:0;padding:0;background:transparent}'
-      + 'body{font:13px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1D4ED8}'
+      + 'body{font:13px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111827;word-break:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto;cursor:zoom-in}table{max-width:100%}a{color:#1D4ED8}'
       // Cada correo trae su propio tamaño/tipografía (Outlook 11pt, Gmail 12.8px, plantillas con <font size>…): se unifica a UN tamaño para que todos los mensajes se lean igual.
       + 'body *{font-size:inherit!important;font-family:inherit!important;line-height:inherit!important}sup,sub{font-size:75%!important}'
       + 'blockquote{margin:8px 0 8px 2px;padding-left:12px;border-left:3px solid #CBD5E1;color:#475569}pre{white-space:pre-wrap}</style></head><body>' + html + '</body></html>';
@@ -29154,7 +29154,88 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return (remote && !on ? `<div class="ibx-m__imgs" id="ibf-n-${m.id}">Se bloquearon las imágenes externas (logos, fotos) · <a href="javascript:void(0)" onclick="LeadManagerModule.ibShowImgs(${m.id})">Mostrar imágenes</a></div>` : '')
       + `<iframe class="ibx-m__frame" id="ibf-${m.id}" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin" srcdoc="${esc(_ibFrameDoc(m, on))}" onload="LeadManagerModule.ibFrameFit(this)" style="width:100%;border:0;height:80px;display:block"></iframe>`;
   }
-  function ibFrameFit(f) { try { const d = f.contentDocument; if (d) f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px'; } catch (_) {} }
+  function ibFrameFit(f) {
+    try {
+      const d = f.contentDocument; if (!d) return;
+      f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px';
+      // Clic en una imagen del correo → vista completa (como Outlook). El marco no ejecuta scripts del correo: el clic lo engancha esta página.
+      const imgs = [...d.querySelectorAll('img')].filter(i => i.getAttribute('src'));
+      imgs.forEach(im => im.addEventListener('click', e => {
+        if (im.naturalWidth && im.naturalWidth < 24 && im.naturalHeight < 24) return;   // píxeles de seguimiento / iconos diminutos
+        e.preventDefault(); e.stopPropagation();
+        const srcs = imgs.filter(i => !(i.naturalWidth && i.naturalWidth < 24 && i.naturalHeight < 24)).map(i => ({ src: i.currentSrc || i.src, alt: i.getAttribute('alt') || '' }));
+        ibImgOpen(srcs, Math.max(0, srcs.findIndex(x => x.src === (im.currentSrc || im.src))));
+      }));
+      // imágenes que terminan de cargar después: el alto del marco se reajusta
+      imgs.forEach(im => { if (!im.complete) im.addEventListener('load', () => { try { f.style.height = (Math.max(d.documentElement.scrollHeight, d.body ? d.body.scrollHeight : 0) + 4) + 'px'; } catch (_) {} }, { once: true }); });
+    } catch (_) {}
+  }
+  // ── Vista completa de una imagen del correo ──
+  let _ibLb = null;
+  function _ibLbName(it) {
+    if (it.alt && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(it.alt)) return it.alt;
+    const m = String(it.src).match(/^data:image\/([a-z0-9.+-]+);/i);
+    if (m) return 'imagen.' + (m[1] === 'jpeg' ? 'jpg' : m[1].replace('svg+xml', 'svg'));
+    const last = decodeURIComponent((String(it.src).split('?')[0].split('/').pop() || '')).slice(0, 60);
+    return /\.[a-z0-9]{2,4}$/i.test(last) ? last : 'imagen.png';
+  }
+  function ibImgOpen(items, i) {
+    ibImgClose();
+    if (!items || !items.length) return;
+    _ibLb = { items, i: Math.min(Math.max(0, i || 0), items.length - 1), zoom: false };
+    const el = document.createElement('div'); el.id = 'ibx-lb'; el.className = 'ibx-lb';
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Imagen en vista completa');
+    el.innerHTML = '<div class="ibx-lb__bar">'
+      + '<span class="ibx-lb__name" id="ibx-lb-name"></span>'
+      + '<button type="button" class="ibx-lb__btn" onclick="LeadManagerModule.ibImgDl()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Descargar</button>'
+      + '<button type="button" class="ibx-lb__btn" onclick="LeadManagerModule.ibImgFull()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>Pantalla completa</button>'
+      + '<button type="button" class="ibx-lb__btn" onclick="LeadManagerModule.ibImgPrint()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Imprimir</button>'
+      + '<span class="ibx-lb__sp"></span><span class="ibx-lb__cnt" id="ibx-lb-cnt"></span>'
+      + '<button type="button" class="ibx-lb__x" aria-label="Cerrar" onclick="LeadManagerModule.ibImgClose()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>'
+      + '<div class="ibx-lb__stage" id="ibx-lb-stage" onclick="if(event.target===this)LeadManagerModule.ibImgClose()"><img id="ibx-lb-img" alt="" onclick="LeadManagerModule.ibImgZoom()"></div>'
+      + '<button type="button" class="ibx-lb__nav ibx-lb__nav--p" id="ibx-lb-p" aria-label="Anterior" onclick="LeadManagerModule.ibImgNav(-1)">‹</button>'
+      + '<button type="button" class="ibx-lb__nav ibx-lb__nav--n" id="ibx-lb-n" aria-label="Siguiente" onclick="LeadManagerModule.ibImgNav(1)">›</button>';
+    document.body.appendChild(el);
+    _ibLb.key = e => { if (e.key === 'Escape') { if (document.fullscreenElement) return; ibImgClose(); } else if (e.key === 'ArrowLeft') ibImgNav(-1); else if (e.key === 'ArrowRight') ibImgNav(1); };
+    document.addEventListener('keydown', _ibLb.key, true);
+    document.body.classList.add('ibx-lb-open');
+    _ibLbShow();
+  }
+  function _ibLbShow() {
+    if (!_ibLb) return; const it = _ibLb.items[_ibLb.i], img = $('ibx-lb-img'); if (!img) return;
+    _ibLb.zoom = false; img.classList.remove('is-zoom'); $('ibx-lb-stage')?.classList.remove('is-zoom');
+    img.src = it.src; $('ibx-lb-name').textContent = _ibLbName(it);
+    const many = _ibLb.items.length > 1;
+    $('ibx-lb-cnt').textContent = many ? (_ibLb.i + 1) + ' de ' + _ibLb.items.length : '';
+    $('ibx-lb-p').style.display = many ? '' : 'none'; $('ibx-lb-n').style.display = many ? '' : 'none';
+  }
+  function ibImgNav(d) { if (!_ibLb || _ibLb.items.length < 2) return; _ibLb.i = (_ibLb.i + d + _ibLb.items.length) % _ibLb.items.length; _ibLbShow(); }
+  function ibImgZoom() { if (!_ibLb) return; _ibLb.zoom = !_ibLb.zoom; $('ibx-lb-img')?.classList.toggle('is-zoom', _ibLb.zoom); $('ibx-lb-stage')?.classList.toggle('is-zoom', _ibLb.zoom); }
+  function ibImgClose() {
+    const el = $('ibx-lb'); if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    if (el) el.remove(); document.body.classList.remove('ibx-lb-open');
+    if (_ibLb && _ibLb.key) document.removeEventListener('keydown', _ibLb.key, true); _ibLb = null;
+  }
+  function ibImgFull() {
+    const el = $('ibx-lb'); if (!el) return;
+    if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => showBanner('Tu navegador no permitió la pantalla completa', 'info'));
+  }
+  async function ibImgDl() {
+    if (!_ibLb) return; const it = _ibLb.items[_ibLb.i], name = _ibLbName(it);
+    const save = href => { const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+    if (String(it.src).startsWith('data:')) { save(it.src); return; }
+    try { const r = await fetch(it.src); if (!r.ok) throw new Error('HTTP ' + r.status); const u = URL.createObjectURL(await r.blob()); save(u); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+    catch (_) { window.open(it.src, '_blank', 'noopener'); showBanner('El sitio de la imagen no permite descargarla desde aquí: se abrió en una pestaña nueva.', 'info'); }
+  }
+  function ibImgPrint() {
+    if (!_ibLb) return; const it = _ibLb.items[_ibLb.i];
+    const w = window.open('', '_blank'); if (!w) { showBanner('Permite las ventanas emergentes para imprimir', 'info'); return; }
+    w.document.write('<!doctype html><title>' + esc(_ibLbName(it)) + '</title><style>html,body{margin:0}body{display:flex;align-items:center;justify-content:center;min-height:100vh}img{max-width:100%;max-height:100vh}</style><img src="' + esc(it.src) + '">');
+    w.document.close(); const im = w.document.querySelector('img');
+    const go = () => { try { w.focus(); w.print(); } catch (_) {} };
+    if (im.complete) setTimeout(go, 150); else { im.onload = () => setTimeout(go, 150); im.onerror = () => {}; }
+  }
   function ibShowImgs(id) {
     _ibImgOk[id] = true;
     const m = ((_ibThread && _ibThread.messages) || []).find(x => x.dir === 'in' && x.id === id);
@@ -40486,6 +40567,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldCopy, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ibImgOpen, ibImgClose, ibImgNav, ibImgZoom, ibImgDl, ibImgFull, ibImgPrint,
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
