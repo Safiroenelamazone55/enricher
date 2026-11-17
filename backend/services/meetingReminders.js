@@ -92,18 +92,20 @@ async function clientNameOf(pool, contactId) {
 
 // A dónde va el correo de un contacto: su email profesional (si no está marcado como inválido); si no tiene, el personal; si tampoco,
 // la dirección desde la que respondió. Misma regla que el Inbox y el motor de envío (antes aquí solo se miraba el profesional).
+// Prioridad: lo fijado en la reunión (dest_email) → la dirección desde la que el lead RESPONDIÓ → profesional (si no es inválido) → personal.
 function destinoEmail(k) {
   const ok = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '').trim());
+  if (ok(k.dest_email)) return String(k.dest_email).trim();
+  if (ok(k.reply_from)) return String(k.reply_from).trim();
   if (ok(k.email) && k.email_status !== 'invalid') return String(k.email).trim();
   if (ok(k.email_personal)) return String(k.email_personal).trim();
-  if (ok(k.reply_from)) return String(k.reply_from).trim();
   return ok(k.email) ? String(k.email).trim() : '';
 }
 async function _contactCtx(pool, m) {
   const { rows: [k] } = await pool.query(`SELECT k.id, k.nombre, k.apellido, k.email, k.email_personal, k.email_status, k.outbound_client_id,
       (SELECT im.from_email FROM lm_inbox_messages im WHERE im.contact_id=k.id AND im.user_id=k.user_id AND im.tipo='reply' ORDER BY im.received_at DESC LIMIT 1) AS reply_from
       FROM lm_contacts k WHERE k.id=$1 AND k.user_id=$2`, [m.contact_id, m.user_id]);
-  if (k) k.dest = destinoEmail(k);
+  if (k) { k.dest_email = m.dest_email || ''; k.dest = destinoEmail(k); }
   return k;
 }
 

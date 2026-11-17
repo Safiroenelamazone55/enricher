@@ -6108,6 +6108,10 @@ app.get('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
         WHERE cs.contact_id=$1 AND cs.user_id=$2 AND COALESCE(s.timezone,'')<>'' ORDER BY cs.id DESC LIMIT 1`, [cid, uid]);
     const tz = sq ? sq.timezone : '';
     const inherit = { tz, seq: sq ? sq.nombre : '', idioma: /^(America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Toronto|Vancouver|Halifax)|Europe\/London|Australia\/|Pacific\/(Honolulu|Auckland))/.test(tz) ? 'en' : (tz ? 'es' : '') };
+    const { rows: [ad] } = await pool.query(`SELECT k.email, k.email_status, k.email_personal,
+        (SELECT im.from_email FROM lm_inbox_messages im WHERE im.contact_id=k.id AND im.user_id=k.user_id AND im.tipo='reply' ORDER BY im.received_at DESC LIMIT 1) AS reply_from
+        FROM lm_contacts k WHERE k.id=$1 AND k.user_id=$2`, [cid, uid]);
+    inherit.addrs = { reply: (ad && ad.reply_from) || '', pro: (ad && ad.email_status !== 'invalid' && ad.email) || '', personal: (ad && ad.email_personal) || '' };
     res.json({ meeting: await _mtView(pool, uid, cid), inherit });
   }
   catch (e) { res.status(500).json({ error: 'No se pudo leer la reunión' }); }
@@ -6138,7 +6142,8 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
          rem2_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $17 WHEN lm_meetings.rem2_estado IN ('enviado') THEN 'enviado' ELSE $17 END`,
       [uid, cid, start.toISOString(), tz, tipo, f(b.enlace).slice(0, 500), f(b.anfitrion).slice(0, 120), idioma, canal, modo, f(b.cc).slice(0, 300),
        f(b.msg1).slice(0, 3000), f(b.msg2).slice(0, 3000), t.rem1_at ? t.rem1_at.toISOString() : null, t.rem2_at.toISOString(), r1, r2]);
-    await pool.query('UPDATE lm_meetings SET subj1=$3, subj2=$4 WHERE contact_id=$1 AND user_id=$2', [cid, uid, f(b.subj1).slice(0, 200), f(b.subj2).slice(0, 200)]);
+    const destOk = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(f(b.dest)) ? f(b.dest).slice(0, 200) : '';
+    await pool.query('UPDATE lm_meetings SET subj1=$3, subj2=$4, dest_email=$5 WHERE contact_id=$1 AND user_id=$2', [cid, uid, f(b.subj1).slice(0, 200), f(b.subj2).slice(0, 200), destOk]);
     await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()), reunion_fecha=($2::timestamptz AT TIME ZONE $3)::date, updated_at=NOW() WHERE id=$1`, [cid, start.toISOString(), tz]);
     res.json({ ok: true, meeting: await _mtView(pool, uid, cid) });
   } catch (e) { console.error('[meeting]', e.message); res.status(500).json({ error: 'No se pudo guardar la reunión' }); }

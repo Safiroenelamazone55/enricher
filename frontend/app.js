@@ -35705,6 +35705,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     el.dataset.v = v; if (id === 'mt-idioma') mtPreview(); el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
   }
   // A dónde va el recordatorio: email profesional (si no es inválido); si no, el personal (suele ser desde donde respondió).
+  function _mtAddrs(c) { const a = (_mt.inherit && _mt.inherit.addrs) || {}; const ok = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '').trim()); const l = []; [['reply', a.reply, 'respondió desde'], ['pro', a.pro || c.email, 'profesional'], ['personal', a.personal || c.email_personal, 'personal']].forEach(x => { const v = String(x[1] || '').trim(); if (ok(v) && !l.some(y => y[0].toLowerCase() === v.toLowerCase())) l.push([v, x[2]]); }); return l; }
+  function mtPara(v) { const i = document.getElementById('mt-para'); if (i) i.value = v; }
   function _mtDest(c) { const ok = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '').trim()); if (ok(c.email) && c.email_status !== 'invalid') return String(c.email).trim(); if (ok(c.email_personal)) return String(c.email_personal).trim(); return ok(c.email) ? String(c.email).trim() : ''; }
   function _mtPaint(c) {
     mtClose();
@@ -35759,7 +35761,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           '<div class="mt-row">' +
           fld('Quién toma la reunión', '<input class="mt-i" id="mt-host" placeholder="Nombre (opcional)" value="' + esc(m ? m.anfitrion : '') + '">') +
           fld('Con copia (CC)', '<input class="mt-i" id="mt-cc" placeholder="correo@…, correo@…" value="' + esc(m ? m.cc : ((_clients.find(z => z.id === c.outbound_client_id) || {}).cc_email || '')) + '" oninput="LeadManagerModule.mtChips()"><div class="mt-chips" id="mt-chips"></div>', 'g2') + '</div></div>' +
-        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para', _mtDest(c) ? '<div class="mt-to">' + esc(_mtDest(c)) + (c.email && c.email_status !== 'invalid' ? '' : ' <span class="mt-to__n">· correo personal (desde donde respondió)</span>') + '</div>' : '<div class="mt-to mt-to--warn">Este lead no tiene email — agrégalo en su ficha (o envía por WhatsApp)</div>') + '</div><div class="mt-row">' +
+        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para', (() => { const ad = _mtAddrs(c), cur = (m && m.dest_email) || (ad[0] && ad[0][0]) || ''; return '<input class="mt-i" id="mt-para" type="email" placeholder="correo del lead (déjalo vacío para no enviar por email)" value="' + esc(cur) + '">' + (ad.length ? '<div class="mt-chips">' + ad.map(x => '<button type="button" class="mt-chip" onclick="LeadManagerModule.mtPara(\'' + esc(x[0]) + '\')">' + esc(x[0]) + ' <span class="mt-to__n">· ' + x[1] + '</span></button>').join('') + '</div>' : '<div class="mt-hint">Este lead no tiene email guardado — escríbelo aquí (o envía por WhatsApp)</div>'); })(), 'g2') + '</div><div class="mt-row">' +
           fld('Idioma', seg('mt-idioma', [['es', 'Español'], ['en', 'English']], idiomaDef)) +
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           '</div>' +
@@ -35773,7 +35775,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _mtBody() {
     const g = id => document.getElementById(id);
     const b = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(),
-      cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: (_mt.m && _mt.m.modo) || 'revision' };
+      cc: g('mt-cc').value.trim(), dest: ((g('mt-para') || {}).value || '').trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: (_mt.m && _mt.m.modo) || 'revision' };
     // mensajes: solo se guardan los que la persona editó; si no, se regeneran solos con los datos vigentes
     if (_mt.m && _mtLocalVal(_mt.m) === b.local && _mt.m.tz === b.tz) { b.rem1_local = (g('mt-r1') || {}).value || ''; b.rem2_local = (g('mt-r2') || {}).value || ''; }
     b.subj1 = (g('mt-subj1') && g('mt-subj1').dataset.d) ? g('mt-subj1').value : ((_mt.m && _mt.m.subj1) || '');
@@ -40872,7 +40874,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldAplazar, ldAplazarSave, cnMark, cnCommentNew, cnMarkClick, cnFilter, cnAdd, cnSet, cnEdit, cnEditSave, cnDel, cnCurFilter: () => _cnFilter, ibFrameFit, ibShowImgs, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleDd, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleDd, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtPara, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
