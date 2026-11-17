@@ -90,8 +90,20 @@ async function clientNameOf(pool, contactId) {
   return r ? r.nombre : '';
 }
 
+// A dónde va el correo de un contacto: su email profesional (si no está marcado como inválido); si no tiene, el personal; si tampoco,
+// la dirección desde la que respondió. Misma regla que el Inbox y el motor de envío (antes aquí solo se miraba el profesional).
+function destinoEmail(k) {
+  const ok = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '').trim());
+  if (ok(k.email) && k.email_status !== 'invalid') return String(k.email).trim();
+  if (ok(k.email_personal)) return String(k.email_personal).trim();
+  if (ok(k.reply_from)) return String(k.reply_from).trim();
+  return ok(k.email) ? String(k.email).trim() : '';
+}
 async function _contactCtx(pool, m) {
-  const { rows: [k] } = await pool.query(`SELECT id, nombre, apellido, email, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [m.contact_id, m.user_id]);
+  const { rows: [k] } = await pool.query(`SELECT k.id, k.nombre, k.apellido, k.email, k.email_personal, k.email_status, k.outbound_client_id,
+      (SELECT im.from_email FROM lm_inbox_messages im WHERE im.contact_id=k.id AND im.user_id=k.user_id AND im.tipo='reply' ORDER BY im.received_at DESC LIMIT 1) AS reply_from
+      FROM lm_contacts k WHERE k.id=$1 AND k.user_id=$2`, [m.contact_id, m.user_id]);
+  if (k) k.dest = destinoEmail(k);
   return k;
 }
 
@@ -108,7 +120,7 @@ async function sendReminder(pool, m, n) {
     if (!lk) throw new Error('Este contacto no tiene un WhatsApp conectado y vinculado. Usa email o vincula su chat primero.');
     await require('./waService').enviar(pool, lk.connection_id, lk.chat_jid, texto);
   } else {
-    if (!k.email) throw new Error('El contacto no tiene email');
+    if (!k.dest) throw new Error('El contacto no tiene email');
     const { rows: [mb] } = await pool.query(
       `SELECT * FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 AND estado IN ('conectado','solo_envio') ORDER BY id LIMIT 1`, [m.user_id, k.outbound_client_id]);
     if (!mb) throw new Error('El cliente de este contacto no tiene buzón conectado');
@@ -116,11 +128,11 @@ async function sendReminder(pool, m, n) {
     const auth = await mailboxSvc.getMailboxAuth(pool, mb);
     const cc = String(m.cc || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(x => x.includes('@'));
     if (mb.cc_email && !cc.includes(String(mb.cc_email).toLowerCase())) cc.push(String(mb.cc_email).toLowerCase());
-    const sent = await mailboxSvc.sendFromMailbox(mb, auth, { to: k.email, cc: cc.length ? cc.join(', ') : undefined, subject: asunto, text: texto, fromName: mb.from_name || undefined });
+    const sent = await mailboxSvc.sendFromMailbox(mb, auth, { to: k.dest, cc: cc.length ? cc.join(', ') : undefined, subject: asunto, text: texto, fromName: mb.from_name || undefined });
     await pool.query(
       `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails, track_token)
        VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8,$9)`,
-      [m.user_id, k.id, asunto, texto, k.email, mb.id, sent.messageId || '', cc.join(', '), crypto.randomBytes(12).toString('hex')]);
+      [m.user_id, k.id, asunto, texto, k.dest, mb.id, sent.messageId || '', cc.join(', '), crypto.randomBytes(12).toString('hex')]);
   }
   await pool.query(`UPDATE lm_meetings SET rem${n}_estado='enviado', rem${n}_sent_at=NOW(), updated_at=NOW() WHERE id=$1`, [m.id]);
   await pool.query(`UPDATE activities SET estado='hecha' WHERE contact_id=$1 AND user_id=$2 AND tipo='tarea' AND estado='pendiente' AND nota LIKE $3`, [k.id, m.user_id, `[Reunión #${m.id}·${n}]%`]);

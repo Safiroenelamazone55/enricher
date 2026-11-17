@@ -35704,6 +35704,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const el = document.getElementById(id); if (!el) return;
     el.dataset.v = v; if (id === 'mt-idioma') mtPreview(); el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
   }
+  // A dónde va el recordatorio: email profesional (si no es inválido); si no, el personal (suele ser desde donde respondió).
+  function _mtDest(c) { const ok = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '').trim()); if (ok(c.email) && c.email_status !== 'invalid') return String(c.email).trim(); if (ok(c.email_personal)) return String(c.email_personal).trim(); return ok(c.email) ? String(c.email).trim() : ''; }
   function _mtPaint(c) {
     mtClose();
     const m = _mt.m, full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
@@ -35757,7 +35759,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           '<div class="mt-row">' +
           fld('Quién toma la reunión', '<input class="mt-i" id="mt-host" placeholder="Nombre (opcional)" value="' + esc(m ? m.anfitrion : '') + '">') +
           fld('Con copia (CC)', '<input class="mt-i" id="mt-cc" placeholder="correo@…, correo@…" value="' + esc(m ? m.cc : ((_clients.find(z => z.id === c.outbound_client_id) || {}).cc_email || '')) + '" oninput="LeadManagerModule.mtChips()"><div class="mt-chips" id="mt-chips"></div>', 'g2') + '</div></div>' +
-        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para', c.email ? '<div class="mt-to">' + esc(c.email) + '</div>' : '<div class="mt-to mt-to--warn">Este lead no tiene email — agrégalo en su ficha (o envía por WhatsApp)</div>') + '</div><div class="mt-row">' +
+        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para', _mtDest(c) ? '<div class="mt-to">' + esc(_mtDest(c)) + (c.email && c.email_status !== 'invalid' ? '' : ' <span class="mt-to__n">· correo personal (desde donde respondió)</span>') + '</div>' : '<div class="mt-to mt-to--warn">Este lead no tiene email — agrégalo en su ficha (o envía por WhatsApp)</div>') + '</div><div class="mt-row">' +
           fld('Idioma', seg('mt-idioma', [['es', 'Español'], ['en', 'English']], idiomaDef)) +
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           '</div>' +

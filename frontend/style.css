@@ -21418,3 +21418,6 @@ body.ibx-lb-open{overflow:hidden}
 .cp-pdfl.on { color: var(--primary, #00804C); background: var(--primary-soft, #E8F5EE); }
 .cp-pdfg.is-busy { opacity: .6; pointer-events: none; }
 .cp-pdfg.is-busy .cp-pdf svg { animation: cpPdfSpin .9s linear infinite; }
+
+/* Reunión: aviso de que el recordatorio irá al correo personal */
+.mt-to__n{font-weight:400;color:var(--text-muted,#6B7770);font-size:.78rem}
