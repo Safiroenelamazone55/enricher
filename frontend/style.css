@@ -21421,3 +21421,10 @@ body.ibx-lb-open{overflow:hidden}
 
 /* Reunión: aviso de que el recordatorio irá al correo personal */
 .mt-to__n{font-weight:400;color:var(--text-muted,#6B7770);font-size:.78rem}
+
+/* Importador: barra de progreso en segundo plano */
+.lm-prog{height:10px;background:#E4E7DD;border-radius:99px;overflow:hidden;margin:18px 0 8px}
+.lm-prog>i{display:block;height:100%;width:0;background:#00804C;border-radius:99px;transition:width .6s ease}
+.lm-prog__t{font-size:.86rem;color:#0A2540}
+.lm-prog__t b{font-weight:700}
+.lm-prog__n{margin:10px 0 0;font-size:.78rem;color:#45586A;line-height:1.45}

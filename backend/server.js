@@ -8769,6 +8769,15 @@ app.post('/api/lm/ai/comment/log', requireAuth, async (req, res) => {
 
 // ── Importación con mapeo (Excel/CSV → empresas + contactos) ───────
 const LM_IMPORT_MAX = 5000;
+// Importaciones en segundo plano: el POST responde al instante (202) y la pantalla consulta el avance.
+// Antes la petición duraba lo que durara la importación y, con cientos de filas, el proxy la cortaba
+// ("Failed to fetch") aunque el servidor siguiera trabajando; al volver a pulsar se lanzaba otra encima.
+const _impJobs = new Map();   // uid -> { id, state: running|done|error, total, done, summary, error }
+app.get('/api/lm/import/job', requireAuth, (req, res) => {
+  const j = _impJobs.get(req.workspaceOwnerId);
+  if (!j) return res.json({ state: 'none' });
+  res.json({ id: j.id, state: j.state, total: j.total, done: j.done, target: j.target, error: j.error || '', summary: j.state === 'done' ? j.summary : undefined });
+});
 app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
   const uid       = req.workspaceOwnerId;
@@ -8806,6 +8815,14 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
 
   const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [] };
   const coCache = new Map();
+  // Una sola importación a la vez por usuaria: una segunda encima duplicaría filas.
+  const _prevJob = _impJobs.get(uid);
+  if (_prevJob && _prevJob.state === 'running') {
+    return res.status(409).json({ error: `Ya hay una importación en curso (${_prevJob.done} de ${_prevJob.total} filas). Espera a que termine; no hace falta volver a pulsar Importar.`, job_id: _prevJob.id });
+  }
+  const job = { id: require('crypto').randomBytes(6).toString('hex'), state: 'running', total: dataRows.length, done: 0, summary, target, error: '' };
+  _impJobs.set(uid, job);
+  res.status(202).json({ job_id: job.id, total: job.total });   // responde ya; el resto corre en segundo plano
   async function _co(f) {
     // Identidad CRUZADA (mismo criterio que Cantera): dominio, LinkedIn y nombre se
     // consultan los tres, no en cascada estricta — una misma empresa real puede traer
@@ -8854,7 +8871,9 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     keys.forEach(k => coCache.set(k, ins.rows[0].id)); summary.companiesCreated++; return ins.rows[0].id;
   }
 
+  try {
   for (const row of dataRows) {
+    job.done++;
     if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
     summary.rows++;
     const f = {}; const raw = {};
@@ -8964,7 +8983,9 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
       if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`);
     }
   }
-  res.json(summary);
+  job.state = 'done';
+  } catch (e) { console.error('[lm-import] job', e.message); job.state = 'error'; job.error = e.message; }
+  setTimeout(() => { if (_impJobs.get(uid) === job) _impJobs.delete(uid); }, 60 * 60 * 1000).unref();
 });
 
 // ═══════════════════════════════════════════════════════════════════

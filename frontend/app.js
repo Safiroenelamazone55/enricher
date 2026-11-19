@@ -39044,7 +39044,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _imp = null;
   function openImport(target, withCompanies) {
     const t = target === 'companies' ? 'companies' : 'contacts';
-    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, updateExisting: true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
+    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, updateExisting: true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: _gcli ? String(_gcli) : '' };
     document.getElementById('lm-imp-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'lm-imp-modal'; m.className = 'fin-pi-backdrop';
@@ -39241,12 +39241,52 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function cbxBlur(idx) { setTimeout(() => document.getElementById('lm-cbx-menu-' + idx)?.classList.remove('open'), 160); }
 
+  // Importación en segundo plano: el servidor responde al instante y aquí se muestra el avance.
+  // Nunca se enseña un error por un corte de red mientras la importación sigue viva en el servidor.
+  async function _impJobGet() {
+    try { const r = await apiFetch(`${API}/lm/import/job`); if (!r.ok) return null; return await r.json(); } catch (_) { return null; }
+  }
+  function _impProgressHtml(done, total, state) {
+    const pct = total ? Math.min(100, Math.round(done * 100 / total)) : 0;
+    return `${_impHd('Importando ' + _impWord())}
+      <div class="lm-imp-body">
+        ${_impSteps(2)}
+        <div class="lm-prog" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+        <div class="lm-prog__t"><b>${pct} %</b> · ${done} de ${total} filas${state === 'wait' ? ' · reconectando…' : ''}</div>
+        <p class="lm-prog__n">No pulses «Importar» otra vez ni cierres sesión. Si cierras esta ventana, la importación sigue en el servidor y la lista se actualiza sola al terminar.</p>
+      </div>`;
+  }
+  async function _impWatch(first) {
+    let j = first || await _impJobGet(), fails = 0;
+    const target = _imp ? _imp.target : '';
+    while (true) {
+      if (!j) { fails++; if (fails > 40) { throw new Error('No se pudo consultar el avance. Revisa la lista antes de volver a importar.'); } }
+      else fails = 0;
+      if (!_imp) {   // cerró la ventana: se sigue en segundo plano y se avisa al final
+        if (j && j.state === 'done') { showBanner('✓ Importación terminada', 'success'); await load(); return; }
+        if (j && (j.state === 'error' || j.state === 'none')) return;
+      } else if (j && j.state === 'done') { _impStepDone(j.summary || {}); await load(); return; }
+      else if (j && j.state === 'error') throw new Error(j.error || 'La importación falló');
+      else if (j && j.state === 'none') throw new Error('La importación se interrumpió (el servidor se reinició). Revisa la lista antes de volver a importar: lo ya cargado no se duplica.');
+      else _impInner(_impProgressHtml(j ? j.done : 0, j ? j.total : 0, j ? '' : 'wait'));
+      await new Promise(r => setTimeout(r, 1200));
+      j = await _impJobGet();
+    }
+  }
   async function impRun() {
-    if (!_imp || !_imp.file) return;
+    if (!_imp || !_imp.file || _imp.running) return;
     if (_imp.target === 'contacts' && !_imp.obc) { const m = $('lm-imp-msg'); if (m) { m.textContent = '⚠️ Elige un cliente outbound antes de importar.'; m.style.color = '#C4342B'; } return; }
+    if (_imp.target === 'companies' && !_imp.obc && !confirm('No elegiste un cliente outbound: estas empresas quedarán SIN cliente y no saldrán al filtrar por cliente. ¿Importar así?')) return;
     const mapping = {};
     document.querySelectorAll('#lm-imp-modal .lm-cbx-input').forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; });
     const go = $('lm-imp-go'); if (go) { go.disabled = true; go.textContent = 'Importando…'; }
+    _imp.running = true;
+    const fail = (e) => {
+      if (_imp) _imp.running = false;
+      const g = $('lm-imp-go'); if (g) { g.disabled = false; g.textContent = 'Importar ' + (_imp ? _impWord() : ''); }
+      const msg = $('lm-imp-msg'); if (msg) { msg.textContent = '⚠️ ' + e.message; msg.style.color = '#C4342B'; }
+      else if (_imp) _impStepFail(e.message);
+    };
     try {
       const fd = new FormData();
       fd.append('file', _imp.file);
@@ -39255,15 +39295,25 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       fd.append('hasHeader', _imp.hasHeader ? '1' : '0');
       fd.append('updateExisting', _imp.updateExisting !== false ? '1' : '0');
       if (_imp.obc) fd.append('outbound_client_id', _imp.obc);
-      const res = await apiFetch(`${API}/lm/import`, { method: 'POST', body: fd });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
-      _impStepDone(d);
-      await load();
-    } catch (e) {
-      if (go) { go.disabled = false; go.textContent = 'Importar ' + _impWord(); }
-      const msg = $('lm-imp-msg'); if (msg) { msg.textContent = '⚠️ ' + e.message; msg.style.color = '#C4342B'; }
-    }
+      let first = null;
+      try {
+        const res = await apiFetch(`${API}/lm/import`, { method: 'POST', body: fd });
+        const d = await res.json().catch(() => ({}));
+        if (res.status === 409 && d.job_id) first = await _impJobGet();   // ya había una en curso: nos enganchamos a ella
+        else if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
+        else first = { state: 'running', done: 0, total: d.total || 0 };
+      } catch (e) {
+        // Sin respuesta (corte de red): puede que el servidor ya la haya empezado; se comprueba antes de hablar de error.
+        const j = await _impJobGet();
+        if (j && j.state === 'running') first = j; else throw e;
+      }
+      _impInner(_impProgressHtml(first ? first.done || 0 : 0, first ? first.total || 0 : 0));
+      await _impWatch(first);
+      if (_imp) _imp.running = false;
+    } catch (e) { fail(e); }
+  }
+  function _impStepFail(msg) {
+    _impInner(`${_impHd('No se pudo completar')}<div class="lm-imp-body"><div class="lm-imp-err">${esc(msg)}</div></div><div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.closeImport()">Cerrar</button></div></div>`);
   }
 
   function _impStepDone(d) {
