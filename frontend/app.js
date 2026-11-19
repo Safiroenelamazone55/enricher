@@ -39320,6 +39320,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const d = await res.json().catch(() => ({}));
         if (res.status === 409 && d.job_id) first = await _impJobGet();   // ya había una en curso: nos enganchamos a ella
         else if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
+        else if (res.status === 200 && d && d.rows != null) first = { state: 'done', summary: d };   // terminó enseguida: ya trae el resumen
         else first = { state: 'running', done: 0, total: d.total || 0 };
       } catch (e) {
         // Sin respuesta (corte de red): puede que el servidor ya la haya empezado; se comprueba antes de hablar de error.

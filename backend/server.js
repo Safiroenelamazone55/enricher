@@ -8826,7 +8826,6 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   }
   const job = { id: require('crypto').randomBytes(6).toString('hex'), state: 'running', total: dataRows.length, done: 0, summary, target, error: '' };
   _impJobs.set(uid, job);
-  res.status(202).json({ job_id: job.id, total: job.total });   // responde ya; el resto corre en segundo plano
   async function _co(f) {
     // Identidad CRUZADA (mismo criterio que Cantera): dominio, LinkedIn y nombre se
     // consultan los tres, no en cascada estricta — una misma empresa real puede traer
@@ -8875,6 +8874,9 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     keys.forEach(k => coCache.set(k, ins.rows[0].id)); summary.companiesCreated++; return ins.rows[0].id;
   }
 
+  // El trabajo corre en segundo plano. Si termina pronto (≤ 20 s) se responde con el resumen (200), como siempre;
+  // si tarda más, se responde 202 y la pantalla consulta el avance. Así tampoco falla una pantalla con la versión vieja en caché.
+  const _work = (async () => {
   try {
   for (const row of dataRows) {
     job.done++;
@@ -8990,6 +8992,11 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   job.state = 'done';
   } catch (e) { console.error('[lm-import] job', e.message); job.state = 'error'; job.error = e.message; }
   setTimeout(() => { if (_impJobs.get(uid) === job) _impJobs.delete(uid); }, 60 * 60 * 1000).unref();
+  })();
+  await Promise.race([_work, new Promise(r => setTimeout(r, 20000))]);
+  if (job.state === 'done') return res.json(summary);
+  if (job.state === 'error') return res.status(500).json({ error: job.error || 'La importación falló' });
+  res.status(202).json({ job_id: job.id, total: job.total });
 });
 
 // ═══════════════════════════════════════════════════════════════════
