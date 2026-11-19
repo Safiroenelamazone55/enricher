@@ -5477,13 +5477,17 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
           const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
           const pref = (sqRow[0]?.preferred_channel) || '';
           const seqName = sqRow[0]?.nombre || `#${sq}`;
-          const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
+          const steps = (await pool.query(`SELECT id, cond, canal, titulo, dia FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
           let fr = -1;
           if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
           if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
           const { rows: prevRow } = await pool.query(`SELECT paso, estado FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
           const pasoPrev = prevRow[0]?.paso || null;
-          if (fr >= 0 && (pasoPrev == null || fr + 1 > pasoPrev)) {
+          // Normalmente solo se avanza. Excepción: si el contacto está en el paso «solo si NO aceptó» (p. ej. el InMail) y el paso «aceptó»
+          // (el mensaje) es del MISMO día, vuelve a él: ya no toca el InMail, toca el mensaje.
+          const _cur = pasoPrev ? steps[pasoPrev - 1] : null;
+          const _backSameDay = !!(fr >= 0 && _cur && _cur.cond === 'no_reply' && steps[fr].dia === _cur.dia && fr + 1 < pasoPrev);
+          if (fr >= 0 && (pasoPrev == null || fr + 1 > pasoPrev || _backSameDay)) {
             const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
             rerouted += r.rowCount;
             if (r.rowCount) {

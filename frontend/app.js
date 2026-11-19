@@ -27985,6 +27985,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
         ${chanHtml}
+        ${st.canal === 'linkedin' ? _cpAcceptBtn(cid) : ''}
         <span class="cp-taskbar__sp"></span>
         <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}','${st.accion || ''}',${st.id},${cid})" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
@@ -27992,6 +27993,24 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
       </div>
     </div>`;
+  }
+  // Botón «Ya aceptó mi conexión» en las tareas de LinkedIn: registra la aceptación (métricas, en tiempo real) y, si la secuencia
+  // tiene una ruta para quien acepta (mensaje en vez de InMail), la tarea se adapta al instante sin recargar.
+  function _cpAcceptBtn(cid) {
+    const c = (_contacts || []).find(x => x.id === cid);
+    if (c && c.li_aceptado_at) return `<span class="cp-acc cp-acc--ok" title="Ya está registrada su aceptación">${NI('check', 13)} Aceptó la conexión</span>`;
+    return `<button class="cp-acc" id="cp-acc-btn" onclick="LeadManagerModule.seqMarkAccepted()" title="Ábrelo en LinkedIn: si ya aceptó tu conexión, márcalo aquí y la tarea cambia sola al mensaje">${NI('check', 13)} Ya aceptó mi conexión</button>`;
+  }
+  async function seqMarkAccepted() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const b = document.getElementById('cp-acc-btn'); if (b) { b.disabled = true; b.textContent = 'Registrando…'; }
+    try {
+      const r = await _lmSetDispositionCore(cid, 'aceptado', seqId, '');
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      showBanner('✓ Aceptó la conexión' + (r.rerouted ? ' · la tarea pasó al mensaje' : ''), 'success');
+      openContactPage(cid, { seqId });   // la misma ficha, ahora con su tarea actual (mensaje en vez de InMail)
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (b) { b.disabled = false; b.innerHTML = NI('check', 13) + ' Ya aceptó mi conexión'; } }
   }
   // InMail de LinkedIn: título (asunto) + mensaje, y cada uno se copia por separado.
   const _isInmailStep = st => !!st && st.canal === 'linkedin' && st.accion === 'inmail';
@@ -40915,7 +40934,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     fmsToggle, fmsFilter, fmsPick,
     reportPause, reportSkip, openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalSub, portalFlag, portalPreviewAviso, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
-    lmSetDisposition, seqDoDisposition, cpSetStage,
+    lmSetDisposition, seqDoDisposition, seqMarkAccepted, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSetLang, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,

@@ -21428,3 +21428,9 @@ body.ibx-lb-open{overflow:hidden}
 .lm-prog__t{font-size:.86rem;color:#0A2540}
 .lm-prog__t b{font-weight:700}
 .lm-prog__n{margin:10px 0 0;font-size:.78rem;color:#45586A;line-height:1.45}
+
+/* Tarea de LinkedIn: botón «Ya aceptó mi conexión» */
+.cp-acc{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #BFE0CC;background:#EAF5EE;color:#00804C;font:inherit;font-size:.82rem;font-weight:600;border-radius:8px;cursor:pointer;transition:background .15s,border-color .15s}
+.cp-acc:hover{background:#DCEFE3;border-color:#00804C}
+.cp-acc:disabled{opacity:.6;cursor:default}
+.cp-acc--ok{cursor:default;background:#F6F7ED;border-color:#E4E7DD;color:#45586A}
