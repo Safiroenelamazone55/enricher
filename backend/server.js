@@ -6283,6 +6283,13 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
   if (!prof && !pers) return res.status(400).json({ error: 'Escribe al menos un email (profesional o personal)' });
   const email = prof;
   try {
+    // Estado anterior, para poder deshacer este guardado (se devuelve al cliente).
+    const { rows: [prevK] } = await pool.query(`SELECT email, email_personal, email_status, email_score, email_verified_at, data_issue FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    const { rows: prevEnr } = await pool.query(
+      `SELECT id, paused_reason, next_action_at FROM lm_contact_sequences
+        WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')
+          AND NOT EXISTS (SELECT 1 FROM lm_contacts kx WHERE kx.id=$2 AND kx.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar'))`, [uid, cid]);
+    const prevMsgs = (await pool.query(`SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting'`, [uid, cid])).rows.map(x => x.id);
     const r = await pool.query(
       `UPDATE lm_contacts SET email=CASE WHEN $1<>'' THEN $1 ELSE email END, email_personal=COALESCE(NULLIF($4,''), email_personal),
               email_status=CASE WHEN $1<>'' THEN '' ELSE email_status END, email_score=CASE WHEN $1<>'' THEN NULL ELSE email_score END, email_verified_at=CASE WHEN $1<>'' THEN NULL ELSE email_verified_at END,
@@ -6293,11 +6300,11 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
       `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=COALESCE(next_action_at, NOW())
         WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')
           AND NOT EXISTS (SELECT 1 FROM lm_contacts kx WHERE kx.id=$2 AND kx.disposition IN ('respondio','interesado','mas_adelante','reunion','derivado','no_es_persona','no_interesado','no_califica','no_contactar'))`, [uid, cid]);   // quien ya respondió NO se reanuda al corregir su email
-    await pool.query(
+    const closed = await pool.query(
       `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND estado='pendiente' AND tipo='tarea'
-          AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%')`, [uid, cid]);
-    await pool.query(
-      `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+          AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%') RETURNING id`, [uid, cid]);
+    const noteIns = await pool.query(
+      `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha') RETURNING id`,
       [uid, cid, r.rows[0].outbound_client_id || null, (prof ? 'Email corregido: ' + prof + (pers ? ' · personal: ' + pers : '') : 'Email personal guardado: ' + pers + ' (se usará solo si no hay profesional disponible)') + (p.rowCount ? ' — ' + p.rowCount + ' secuencia(s) reanudada(s)' : '')]);
     // Con el email ya corregido, su borrador se redacta AHORA (no aprobado): aparece al instante en "Emails por aprobar" para previsualizarlo.
     let drafted = 0;
@@ -6306,8 +6313,30 @@ app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
       await require('./services/sendEngine').draftNowForContact(pool, cid);
       drafted = (await pool.query(`SELECT count(*)::int n FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting'`, [uid, cid])).rows[0].n - before;
     } catch (e) { console.warn('[fix-email] borrador inmediato:', e.message); }
-    res.json({ ok: true, email: r.rows[0].email || '', email_personal: r.rows[0].email_personal || '', usado_personal: !prof, resumed: p.rowCount, drafted });
+    const nuevosMsgs = (await pool.query(`SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting' AND NOT (id = ANY($3::int[]))`, [uid, cid, prevMsgs])).rows.map(x => x.id);
+    res.json({ ok: true, email: r.rows[0].email || '', email_personal: r.rows[0].email_personal || '', usado_personal: !prof, resumed: p.rowCount, drafted,
+      undo: { prev: prevK || {}, enr: prevEnr, msgs: nuevosMsgs, acts: closed.rows.map(x => x.id), note: noteIns.rows[0] && noteIns.rows[0].id } });
   } catch (err) { console.error('[fix-email]', err.message); res.status(500).json({ error: 'No se pudo guardar el email' }); }
+});
+// Deshace un «guardar email»: restaura el contacto, vuelve a pausar lo que se reanudó, quita los borradores que se redactaron y reabre las tareas que se cerraron.
+app.post('/api/lm/contacts/:id/undo-fix-email', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id, 10);
+  const u = (req.body || {}).undo || {}, pv = u.prev || {};
+  const ints = a => (Array.isArray(a) ? a : []).map(x => parseInt(x, 10)).filter(Number.isFinite);
+  try {
+    const r = await pool.query(
+      `UPDATE lm_contacts SET email=$1, email_personal=$2, email_status=$3, email_score=$4, email_verified_at=$5, data_issue=$6, updated_at=NOW() WHERE id=$7 AND user_id=$8`,
+      [pv.email || '', pv.email_personal || '', pv.email_status || '', pv.email_score == null ? null : pv.email_score, pv.email_verified_at || null, pv.data_issue || '', cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    for (const e of (Array.isArray(u.enr) ? u.enr : [])) {
+      await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$1, next_action_at=$2 WHERE id=$3 AND user_id=$4 AND contact_id=$5`,
+        [String(e.paused_reason || 'sin_email'), e.next_action_at || null, parseInt(e.id, 10), uid, cid]);
+    }
+    const dm = await pool.query(`DELETE FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND estado='awaiting' AND id = ANY($3::int[])`, [uid, cid, ints(u.msgs)]);
+    await pool.query(`UPDATE activities SET estado='pendiente' WHERE user_id=$1 AND contact_id=$2 AND id = ANY($3::int[])`, [uid, cid, ints(u.acts)]);
+    if (u.note) await pool.query(`DELETE FROM activities WHERE user_id=$1 AND contact_id=$2 AND id=$3`, [uid, cid, parseInt(u.note, 10)]);
+    res.json({ ok: true, borradores_quitados: dm.rowCount });
+  } catch (err) { console.error('[undo-fix-email]', err.message); res.status(500).json({ error: 'No se pudo deshacer' }); }
 });
 app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;

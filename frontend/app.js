@@ -1163,13 +1163,14 @@ function _gateNote(d) {
   if (yc) p.push(`${yc} contacto(s) no se repitieron: ya fueron contactados por este cliente o están en otra de sus secuencias`);
   return p.length ? ' — ' + p.join(' · ') : '';
 }
-function showBanner(msg, type) {
+function showBanner(msg, type, opts) {
   msg = String(msg == null ? '' : msg).replace(/^[\s✓✔✅⚠️❌ℹ️•·]+/u, '');
   const el = document.createElement('div');
   el.className = `nova-toast nova-toast--${type || 'info'}`;
-  el.innerHTML = `<span class="nova-toast__ico">${_NOVA_TOAST_ICO[type] || _NOVA_TOAST_ICO.info}</span><span class="nova-toast__msg">${msg}</span><button class="nova-toast__x" onclick="this.parentElement.remove()" aria-label="Cerrar">✕</button>`;
+  el.innerHTML = `<span class="nova-toast__ico">${_NOVA_TOAST_ICO[type] || _NOVA_TOAST_ICO.info}</span><span class="nova-toast__msg">${msg}</span>${opts && opts.action ? `<button class="nova-toast__act">${opts.action.label}</button>` : ''}<button class="nova-toast__x" onclick="this.parentElement.remove()" aria-label="Cerrar">✕</button>`;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  if (opts && opts.action) { const b = el.querySelector('.nova-toast__act'); b.addEventListener('click', () => { b.disabled = true; el.remove(); try { opts.action.fn(); } catch (_) {} }); }
+  setTimeout(() => el.remove(), (opts && opts.ms) || 4000);
 }
 
 // Confirmación estilizada (reemplaza el confirm() nativo del navegador).
@@ -26140,7 +26141,8 @@ ${rhead}${foot}
       try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
       try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
       _renderBody(); _restoreScroll(snap);
-      showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — se usará solo si no hay profesional disponible' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success');
+      showBanner('✓ Email ' + (d.usado_personal ? 'personal ' : '') + 'guardado' + (d.usado_personal ? ' — se usará solo si no hay profesional disponible' : '') + (d.drafted ? ' — su mensaje quedó en "Emails por aprobar" para que lo revises' : (d.resumed ? ' — secuencia reanudada' : '')), 'success',
+        d.undo ? { ms: 12000, action: { label: 'Deshacer', fn: () => fixEmailUndo(cid, d.undo) } } : undefined);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function fixRowMenu(ev, cid) {
@@ -26228,6 +26230,17 @@ ${rhead}${foot}
     if (!confirm('¿Marcar este lead como "No califica"?\n\nSe detienen todas sus secuencias y sale de las listas de trabajo.')) return;
     try { await _lmSetDispositionCore(cid, 'no_califica', null, ''); await _fixAfter(); showBanner('✓ Lead descalificado', 'success'); }
     catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fixEmailUndo(cid, undo) {
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + cid + '/undo-fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ undo }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      try { await _reloadContacts(); } catch (_) {}
+      try { if (typeof _apReload === 'function') await _apReload(); } catch (_) {}
+      try { if (_section === 'sequence' && _activeSeq) { await Promise.all([_seqLoadApprovals(_activeSeq), _seqLoadPendingNoEmail(_activeSeq)]); } } catch (_) {}
+      _renderBody();
+      showBanner('Cambio deshecho: el email volvió a como estaba', 'success');
+    } catch (e) { showBanner('No se pudo deshacer: ' + e.message, 'error'); }
   }
   // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
   // paso de EMAIL en una secuencia ACTIVA. En una secuencia solo de LinkedIn no tener email no es un problema, por eso no cuentan.

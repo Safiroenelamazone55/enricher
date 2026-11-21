@@ -21434,3 +21434,4 @@ body.ibx-lb-open{overflow:hidden}
 .cp-acc:disabled:hover { background: var(--surface); border-color: var(--border); }
 /* Historial del contacto: mensaje de una secuencia detenida */
 .cp-hist__st--off { background: #F1EFEB; color: #6C6862; }
+.nova-toast__act { margin-left: 10px; padding: 3px 10px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; } .nova-toast__act:hover { background: rgba(255,255,255,.18); } .nova-toast__act:disabled { opacity: .5; cursor: default; }
