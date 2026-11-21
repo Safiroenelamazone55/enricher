@@ -4924,11 +4924,13 @@ app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
     const { rows } = await pool.query(
-      `SELECT e.*, oc.nombre AS cliente_nombre, cp.nombre AS campana_nombre, sq.nombre AS secuencia_nombre
+      `SELECT e.*, COALESCE(oc.nombre, occ.nombre, ocs.nombre) AS cliente_nombre, cp.nombre AS campana_nombre, sq.nombre AS secuencia_nombre
          FROM lm_exclusions e
          LEFT JOIN outbound_clients oc ON oc.id = e.outbound_client_id
          LEFT JOIN campaigns cp ON cp.id = e.campaign_id
          LEFT JOIN sequences sq ON sq.id = e.sequence_id
+         LEFT JOIN outbound_clients occ ON occ.id = cp.outbound_client_id
+         LEFT JOIN outbound_clients ocs ON ocs.id = sq.outbound_client_id
         WHERE e.user_id=$1 ORDER BY e.created_at DESC, e.id DESC`, [uid]);
     await _excl._attachContacts(pool, rows);
     // Cuántas empresas del CRM coinciden hoy con cada exclusión (informativo).
@@ -8161,7 +8163,7 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.to_email, m.estado,
              m.error, m.sent_at, m.replied_at, m.created_at, m.scheduled_at,
-             k.nombre, k.apellido, s.nombre AS seq_nombre, s.timezone AS seq_timezone, COALESCE(s.outbound_client_id, k.outbound_client_id) AS outbound_client_id,
+             k.nombre, k.apellido, s.nombre AS seq_nombre, s.timezone AS seq_timezone, s.estado AS seq_estado, COALESCE(s.outbound_client_id, k.outbound_client_id) AS outbound_client_id,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')  AS opens,
              (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click') AS clicks
         FROM lm_messages m
@@ -11778,7 +11780,7 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
     const [msgs, acts, inbox, enr] = await Promise.all([
       pool.query(`
         SELECT m.id, m.estado, m.sent_at, m.scheduled_at, m.created_at, m.asunto, m.cuerpo, m.variant, m.to_email,
-               s.id AS seq_id, s.nombre AS seq, oc.nombre AS cliente, st.canal, st.accion, st.titulo,
+               s.id AS seq_id, s.nombre AS seq, s.estado AS seq_estado, oc.nombre AS cliente, st.canal, st.accion, st.titulo,
                (SELECT COUNT(*)::int FROM sequence_steps x WHERE x.sequence_id = st.sequence_id AND (x.dia, x.orden, x.id) <= (st.dia, st.orden, st.id)) AS paso,
                (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id = m.id AND e.tipo = 'open') AS opens,
                (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id = m.id AND e.tipo = 'click') AS clicks
@@ -11832,7 +11834,7 @@ app.get('/api/lm/contacts/:id/history', requireAuth, async (req, res) => {
     const ev = [];
     msgs.rows.forEach(m => {
       const futuro = ['approved', 'awaiting', 'scheduled'].includes(m.estado);
-      ev.push({ kind: 'sent', id: m.id, fecha: m.sent_at || m.scheduled_at || m.created_at, futuro, estado: m.estado, paso: m.paso || null, canal: m.canal || 'email', accion: m.accion || '', titulo: m.titulo || '', seq: m.seq || '', seq_id: m.seq_id || null, cliente: m.cliente || '', variante: m.variant || '', asunto: m.asunto || '', cuerpo: clip(m.cuerpo), opens: m.opens || 0, clicks: m.clicks || 0, to: m.to_email || '' });
+      ev.push({ kind: 'sent', id: m.id, fecha: m.sent_at || m.scheduled_at || m.created_at, futuro, estado: m.estado, paso: m.paso || null, canal: m.canal || 'email', accion: m.accion || '', titulo: m.titulo || '', seq: m.seq || '', seq_id: m.seq_id || null, seq_estado: m.seq_estado || '', cliente: m.cliente || '', variante: m.variant || '', asunto: m.asunto || '', cuerpo: clip(m.cuerpo), opens: m.opens || 0, clicks: m.clicks || 0, to: m.to_email || '' });
     });
     acts.rows.forEach(a => {
       const pm = /^Paso (\d+)/.exec(a.nota || '');

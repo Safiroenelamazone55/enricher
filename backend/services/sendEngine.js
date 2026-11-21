@@ -897,7 +897,7 @@ async function estimateSendTimes(pool, uid) {
               FROM lm_mailboxes mb WHERE mb.outbound_client_id = s.outbound_client_id LIMIT 1) b) AS mbx
       FROM lm_messages m JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
-     WHERE m.user_id=$1 AND m.estado='approved' ORDER BY COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC`, [uid]);
+     WHERE m.user_id=$1 AND m.estado='approved' AND s.estado='activa' ORDER BY COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC`, [uid]);
   const out = {}, cursor = {}, perDay = {}, clientDay = {};
   // Tope del buzón del cliente en una fecha (mismo criterio que _mailboxFull): límite propio, o calentamiento semanal.
   const mbCap = (mb, dk) => {
@@ -974,6 +974,7 @@ async function _flushApproved(pool, apiBase) {
       LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
       LEFT JOIN sequence_steps st ON st.id = m.step_id
      WHERE m.estado='approved'
+       AND s.estado = 'activa'   -- secuencia pausada/archivada/completada/borrador: lo aprobado NO sale (sale al reactivarla)
        AND btrim(regexp_replace(COALESCE(m.cuerpo,''), '<[^>]*>', ' ', 'g')) <> ''
        -- Respetar la fecha del paso: aprobar con anticipación NO adelanta el envío.
        AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW())

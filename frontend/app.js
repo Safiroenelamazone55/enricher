@@ -27998,8 +27998,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // tiene una ruta para quien acepta (mensaje en vez de InMail), la tarea se adapta al instante sin recargar.
   function _cpAcceptBtn(cid) {
     const c = (_contacts || []).find(x => x.id === cid);
-    if (c && c.li_aceptado_at) return `<span class="cp-acc cp-acc--ok" title="Ya está registrada su aceptación">${NI('check', 13)} Aceptó la conexión</span>`;
-    return `<button class="cp-acc" id="cp-acc-btn" onclick="LeadManagerModule.seqMarkAccepted()" title="Ábrelo en LinkedIn: si ya aceptó tu conexión, márcalo aquí y la tarea cambia sola al mensaje">${NI('check', 13)} Ya aceptó mi conexión</button>`;
+    if (c && c.li_aceptado_at) return `<button type="button" class="cp-mark-btn cp-acc cp-acc--ok" disabled title="La aceptación ya está registrada">${NI('check', 13)} Conexión aceptada</button>`;
+    return `<button type="button" class="cp-mark-btn cp-acc" id="cp-acc-btn" onclick="LeadManagerModule.seqMarkAccepted()" title="Registrar que aceptó la conexión en LinkedIn. La tarea pasa al mensaje.">${NI('check', 13)} Conexión aceptada</button>`;
   }
   async function seqMarkAccepted() {
     if (!_cpTaskCtx) return;
@@ -28010,7 +28010,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner('✓ Aceptó la conexión' + (r.rerouted ? ' · la tarea pasó al mensaje' : ''), 'success');
       openContactPage(cid, { seqId });   // la misma ficha, ahora con su tarea actual (mensaje en vez de InMail)
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (b) { b.disabled = false; b.innerHTML = NI('check', 13) + ' Ya aceptó mi conexión'; } }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (b) { b.disabled = false; b.innerHTML = NI('check', 13) + ' Conexión aceptada'; } }
   }
   // InMail de LinkedIn: título (asunto) + mensaje, y cada uno se copia por separado.
   const _isInmailStep = st => !!st && st.canal === 'linkedin' && st.accion === 'inmail';
@@ -33991,23 +33991,24 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function exFilter(k, v) { _exDraft.f = _exDraft.f || {}; _exDraft.f[k] = (k === 'lista' && v === '__all') ? null : v; _renderBody(); }
   function exClearFilters() { _exDraft.f = { lista: null, scope: '', estado: '', crm: '', cont: '', dom: '' }; _exDraft.q = ''; _renderBody(); }
   function exDeleteFiltered() { const ids = _exFiltered().map(e => e.id); if (ids.length) return _exDoDelete({ ids }, `¿Quitar las ${ids.length} empresa(s) que se ven con estos filtros?`); }
+  // Columna «Cliente»: solo el nombre del cliente, con el chip estándar de las tablas. El alcance exacto (campaña o secuencia) va en el tooltip.
   function _exScopeChip(e) {
-    if (e.scope === 'global') return '<span class="lm-obc-badge" style="background:#FEE2E2;color:#991B1B">Todo el workspace</span>';
-    if (e.scope === 'cliente') return `<span class="lm-obc-badge" style="background:#DBEAFE;color:#1E40AF">Cliente · ${esc(e.cliente_nombre || '—')}</span>`;
-    if (e.scope === 'campana') return `<span class="lm-obc-badge" style="background:#FEF3C7;color:#92400E">Campaña · ${esc(e.campana_nombre || '—')}</span>`;
-    return `<span class="lm-obc-badge" style="background:#E0E7FF;color:#3730A3">Secuencia · ${esc(e.secuencia_nombre || '—')}</span>`;
+    if (e.scope === 'global') return '<span class="lm-emp-chip cell-clip" title="Aplica a todos los clientes del workspace">Todos los clientes</span>';
+    const det = e.scope === 'campana' ? 'Solo en la campaña «' + (e.campana_nombre || '—') + '»' : e.scope === 'secuencia' ? 'Solo en la secuencia «' + (e.secuencia_nombre || '—') + '»' : 'Todas sus campañas y secuencias';
+    const nm = e.cliente_nombre || (e.scope === 'campana' ? e.campana_nombre : e.secuencia_nombre) || '—';
+    return `<span class="lm-emp-chip cell-clip" title="${esc(det)}">${esc(nm)}</span>`;
   }
   function _exDomsHtml(e) {
     const ds = [e.dominio].concat(e.dominios_extra || []).filter(Boolean);
-    if (!ds.length) return '—';
-    return ds.map(d => `<div style="font-size:.8rem">${esc(d)}</div>`).join('') + (e.match_dominio === false ? '<div style="font-size:.7rem;color:#B45309" title="Red/franquicia: se bloquea por nombre y contactos, no por el dominio">sin bloqueo por dominio</div>' : '');
+    if (!ds.length) return '<span class="lm-dim">—</span>';
+    const sin = e.match_dominio === false ? ' <span style="color:#B45309" title="Red/franquicia: se bloquea por nombre y contactos, no por el dominio">· sin bloqueo por dominio</span>' : '';
+    return `<span class="cell-clip" style="max-width:100%" title="${esc(ds.join(' | '))}">${esc(ds[0])}${ds.length > 1 ? ` <span style="color:#64748B">+${ds.length - 1}</span>` : ''}${sin}</span>`;
   }
   function _exContactsHtml(e) {
     const cs = e.contactos || [];
-    if (!cs.length) return '<span style="color:#94A3B8">—</span>';
+    if (!cs.length) return '<span class="lm-dim">—</span>';
     const plain = c => (c.nombre_completo || [c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.puesto ? ' · ' + c.puesto : '');
-    const first = cs.slice(0, 2).map(c => `<div style="font-size:.8rem">${esc(plain(c))}</div>`).join('');
-    return first + (cs.length > 2 ? `<div style="font-size:.72rem;color:#64748B" title="${esc(cs.map(plain).join(' | '))}">+${cs.length - 2} más</div>` : '');
+    return `<span class="cell-clip" style="max-width:100%" title="${esc(cs.map(plain).join(' | '))}">${esc(plain(cs[0]))}${cs.length > 1 ? ` <span style="color:#64748B">+${cs.length - 1}</span>` : ''}</span>`;
   }
   function _vExclusions() {
     if (_exList === null) { _exLoad(); return '<div class="cp-empty2" style="padding:22px">Cargando…</div>'; }
@@ -34022,12 +34023,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const f = d.f || {};
     const filtrosOn = !!(d.q || (f.lista !== null && f.lista !== undefined) || f.scope || f.estado || f.crm || f.cont || f.dom);
     const sel = (k, val, opts) => `<select class="form-input" style="width:auto;min-width:140px" onchange="LeadManagerModule.exFilter('${k}',this.value)">${opts.map(([v, l]) => `<option value="${esc(v)}"${String(val) === String(v) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-    const tbl = rows.length ? `<div class="lm-dt-wrap"><table class="clients-table"><thead><tr><th style="width:34px"><input type="checkbox" onchange="LeadManagerModule.exToggleAll(this.checked)" ${rows.length && rows.every(e => _exSel.has(e.id)) ? 'checked' : ''}></th><th>Empresa</th><th>Dominios</th><th>Contactos</th><th>Alcance</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
+    const tbl = rows.length ? `<div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto"><thead><tr><th style="width:34px"><input type="checkbox" onchange="LeadManagerModule.exToggleAll(this.checked)" ${rows.length && rows.every(e => _exSel.has(e.id)) ? 'checked' : ''}></th><th>Empresa</th><th>Ciudad</th><th>Estado</th><th>Dominios</th><th>Contactos</th><th>Cliente</th><th>Lista</th><th title="Empresas de tu CRM que coinciden hoy">En el CRM</th><th style="width:34px"></th></tr></thead><tbody>${rows.slice(0, 400).map(e => `<tr>
         <td><input type="checkbox" ${_exSel.has(e.id) ? 'checked' : ''} onchange="LeadManagerModule.exToggle(${e.id},this.checked)"></td>
-        <td>${esc(e.nombre || '—')}${(e.categoria || e.motivo) ? `<div style="font-size:.72rem;color:#64748B">Estado: ${esc(e.categoria || e.motivo)}${e.ciudad ? ' · ' + esc(e.ciudad) : ''}</div>` : ''}</td>
+        <td><span class="cell-clip client-nombre" title="${esc(e.nombre || '')}">${esc(e.nombre || '—')}</span></td>
+        <td>${e.ciudad ? `<span class="cell-clip" title="${esc(e.ciudad)}">${esc(e.ciudad)}</span>` : '<span class="lm-dim">—</span>'}</td>
+        <td>${(e.categoria || e.motivo) ? `<span class="cell-clip" title="${esc(e.categoria || e.motivo)}">${esc(e.categoria || e.motivo)}</span>` : '<span class="lm-dim">—</span>'}</td>
         <td>${_exDomsHtml(e)}</td>
         <td>${_exContactsHtml(e)}</td>
-        <td>${_exScopeChip(e)}</td><td>${esc(e.lista || '—')}</td><td>${e.coincidencias || 0}</td>
+        <td>${_exScopeChip(e)}</td><td>${e.lista ? `<span class="cell-clip" title="${esc(e.lista)}">${esc(e.lista)}</span>` : '<span class="lm-dim">—</span>'}</td><td>${e.coincidencias || 0}</td>
         <td><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exDelete([${e.id}])" title="Quitar de la lista">✕</button></td></tr>`).join('')}</tbody></table></div>${rows.length > 400 ? `<p class="lm-sec-sub">Mostrando 400 de ${rows.length}. Usa el buscador.</p>` : ''}`
       : '<div class="cp-empty2" style="padding:22px;text-align:center">Aún no hay empresas excluidas.</div>';
     return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Exclusiones</h2><p class="lm-sec-sub">Empresas a las que NO se escribe. Se reconocen por dominio, web, LinkedIn de empresa o nombre (sin tildes ni SL/SA), y se bloquean al inscribir, al enviar y en lo que ya está en marcha.</p></div></div>
@@ -38194,7 +38197,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const key = e.kind + e.id;
       if (e.kind === 'created') return `<div class="cp-hist__ev"><span class="cp-hist__ic" style="background:#14211B">+</span><div class="cp-hist__b"><div class="cp-hist__t"><b>Contacto creado</b>${e.fuente ? ` <span class="cp-hist__tag">${esc(e.fuente)}</span>` : ''}</div><div class="cp-hist__d">${esc(fd(e.fecha))}</div></div></div>`;
       if (e.kind === 'sent') {
-        const ic = ICO[e.canal] || ICO.email, st = ESTADO[e.estado] || ['', ''];
+        const ic = ICO[e.canal] || ICO.email, st = _msgSeqOff(e) ? [_msgSeqOff(e), 'off'] : (ESTADO[e.estado] || ['', '']);
         const cn = (_TOUCH[e.canal || 'email'] || ['Email'])[0];
         const an = _accionLabel(e.canal || 'email', e.accion) || e.titulo || '';
         const nombre = an ? `${cn} · ${an}` : cn;
@@ -39743,11 +39746,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     ['email', 'whatsapp'].forEach(ch => all.filter(m => m._ch === ch && m.estado === 'approved' && m.est_send_at).sort(byEst).forEach((m, i) => { m._pos = i + 1; }));
     const dk = m => new Date(m.est_send_at).toLocaleDateString('en-CA', tzs ? { timeZone: tzs } : {});
     const dl = m => new Date(m.est_send_at).toLocaleDateString('es-PE', tzs ? { timeZone: tzs, weekday: 'short', day: '2-digit', month: 'short' } : { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
-    const stK = m => m.estado === 'approved' ? 'queued' : m.estado === 'awaiting' ? 'awaiting' : m.estado === 'sent' ? 'sent' : m.estado === 'replied' ? 'replied' : 'failed';
+    const stK = m => _msgSeqOff(m) ? 'off' : m.estado === 'approved' ? 'queued' : m.estado === 'awaiting' ? 'awaiting' : m.estado === 'sent' ? 'sent' : m.estado === 'replied' ? 'replied' : 'failed';
     const queued = all.filter(m => m.estado === 'approved' && m.est_send_at);
     const days = []; queued.slice().sort(byEst).forEach(m => { const k = dk(m); if (!days.find(d => d.k === k)) days.push({ k, l: dl(m), n: 0 }); days.find(d => d.k === k).n++; });
     const cnt = f => all.filter(f).length;
-    const stOpts = [['queued', 'En cola'], ['awaiting', 'Por aprobar'], ['sent', 'Enviados'], ['replied', 'Respondieron'], ['failed', 'Fallaron']];
+    const stOpts = [['queued', 'En cola'], ['awaiting', 'Por aprobar'], ['off', 'Secuencia detenida'], ['sent', 'Enviados'], ['replied', 'Respondieron'], ['failed', 'Fallaron']];
     const items = all.filter(m => (!F.canal || m._ch === F.canal) && (!F.estado || stK(m) === F.estado) && (!F.dia || (m.est_send_at && dk(m) === F.dia)) && (!F.seq || String(m.sequence_id) === String(F.seq)));
     const iq = items.filter(m => m.estado === 'approved' && m.est_send_at).sort(byEst);
     const ir = items.filter(m => !iq.includes(m)).sort((a, b) => new Date(b.sent_at || b.created_at || 0) - new Date(a.sent_at || a.created_at || 0));
@@ -39938,10 +39941,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const el = document.getElementById(target || 'lm-real-inbox');
     if (el) el.innerHTML = _realInboxHtml();
   }
+  // Un mensaje por aprobar / aprobado / programado de una secuencia que NO está activa no está «por aprobar»: la secuencia está detenida.
+  const _SEQ_OFF_LBL = { pausada: 'Secuencia pausada', archivada: 'Secuencia archivada', completada: 'Secuencia completada', draft: 'Secuencia en borrador' };
+  function _msgSeqOff(m) { return (m && ['awaiting', 'approved', 'scheduled'].includes(m.estado) && m.seq_estado && m.seq_estado !== 'activa') ? (_SEQ_OFF_LBL[m.seq_estado] || 'Secuencia detenida') : ''; }
   function _msgRow(m) {
     const ST = { sent: ['Enviado', '#F1EFEB', '#1E5FA8'], replied: ['Respondió', '#F1EFEB', '#15803D'], failed: ['Falló', '#F1EFEB', '#C4342B'], queued: ['En cola', '#F1EFEB', '#6C6862'], bounced: ['Rebotó', '#F1EFEB', '#C4342B'] };
     ST.approved = ST.queued; ST.awaiting = ['Por aprobar', '#FEF3C7', '#92400E'];
-    const s = ST[m.estado] || ST.queued;
+    const _off = _msgSeqOff(m);
+    const s = _off ? [_off, '#F1EFEB', '#6C6862'] : (ST[m.estado] || ST.queued);
     const _city = tz => String(tz || '').split('/').pop().replace(/_/g, ' ');
     const _myTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) { return ''; } })();
     const _dt = (d, tz) => { const o = tz ? { timeZone: tz } : {}; return new Date(d).toLocaleDateString('es-PE', { ...o, weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '') + ' · ' + new Date(d).toLocaleTimeString('es-PE', { ...o, hour: '2-digit', minute: '2-digit', hour12: false }); };
