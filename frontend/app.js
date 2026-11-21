@@ -26194,6 +26194,8 @@ ${rhead}${foot}
       ['LinkedIn (Sales Navigator)', c => c.linkedin_sales_nav],
       ['Empresa', (c, co) => c.company_nombre || (co && co.nombre) || c.empresa_nombre],
       ['Empresa Website', (c, co) => (co && (co.website || co.dominio)) || ''],
+      // Dominio limpio (sin https://, www. ni rutas), listo para los buscadores de email que piden «nombre + dominio».
+      ['Empresa Dominio', (c, co) => String((co && (co.dominio || co.website)) || '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0]],
       ['Empresa LinkedIn', (c, co) => (co && co.linkedin) || ''],
       ['Email', () => ''],
       ['Email personal', () => ''],
