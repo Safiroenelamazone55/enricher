@@ -349,7 +349,8 @@ require('./services/canteraNotas').mount(app, { pool, requireAuth });
 require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // enlaces y relaciones/dependencias entre tareas
 require('./services/timesheetRoutes').mount(app, { pool, requireAuth });   // hojas de horas: cronograma de trabajo, equipo por semana, aprobaciones
 require('./services/notepadRoutes').mount(app, { pool, requireAuth });   // bloc de notas personal (barra superior)
-require('./services/agendaRoutes').mount(app, { pool, requireAuth });   // agenda del calendario: prioridades y tipo de bloque
+require('./services/agendaRoutes').mount(app, { pool, requireAuth });
+require('./services/linkedinExt').mount(app, { pool, requireAuth });   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
