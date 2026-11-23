@@ -23995,10 +23995,11 @@ const LeadManagerModule = (() => {
     const m = document.createElement('div'); m.id = 'li-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
   }
-  function liNew() {
+  function liConnectFor(clientId) { go('linkedin'); setTimeout(() => liNew(clientId), 350); }
+  function liNew(presetClient) {
     _liModal(`<div class="fin-pi-box__hd"><h3>Conectar una cuenta de LinkedIn</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
       <div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre de la cuenta</span><input class="form-input" id="li-n" placeholder="Ej. LinkedIn de Jenny"></label>
-      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound (opcional)</span><select class="form-input" id="li-c"><option value="">— Ninguno —</option>${_clients.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound (opcional)</span><select class="form-input" id="li-c"><option value="">— Ninguno —</option>${_clients.map(c => `<option value="${c.id}"${String(c.id) === String(presetClient) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
       <p class="li-p">Se crea <b>en pausa</b>, con los topes recomendados y calentamiento de 14 días. Después verás un token para pegar en la extensión de ese perfil de Chrome.</p><div class="ctu-err" id="li-e"></div></div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liCreate()">Crear cuenta</button></div></div>`);
   }
@@ -24054,6 +24055,119 @@ const LeadManagerModule = (() => {
   async function liDel(id) {
     if (!(await novaConfirm({ title: 'Eliminar la cuenta', message: 'Se borra la cuenta y su cola de acciones. No se puede deshacer.', ok: 'Eliminar', tone: 'danger' }))) return;
     await apiFetch(`${API}/li/accounts/${id}`, { method: 'DELETE' }); document.getElementById('li-modal')?.remove(); _li.acc = 0; _liLoad();
+  }
+  // ── Configuración de la campaña (como la de lemlist): automatización, tracking, remitentes, planificación, CRM y general ──
+  let _cc = null;
+  const _CC_SECC = [['auto', 'Automatización'], ['tracking', 'Tracking'], ['rem', 'Remitentes'], ['plan', 'Planificaciones de envío y lanzamiento'], ['crm', 'Integración con CRM'], ['gen', 'General']];
+  const _CC_SOON = '<span class="cc-soon">Próximamente</span>';
+  const _ccGet = (path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), _cc.cfg);
+  function ccSet(path, v) { const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((a, k) => a[k], _cc.cfg); o[last] = v; _cc.dirty = true; }
+  function ccSetRep(path, v) { ccSet(path, v); ccPaint(); }
+  const _ccSw = (path, label, o = {}) => `<label class="cc-row${o.soon ? ' is-off' : ''}"><span class="cc-sw"><input type="checkbox"${_ccGet(path) ? ' checked' : ''}${o.soon || o.lock ? ' disabled' : ''} onchange="LeadManagerModule.ccSet('${path}', this.checked)"><i></i></span><span class="cc-row__t"><b>${label}</b>${o.desc ? `<small>${o.desc}</small>` : ''}</span>${o.soon ? _CC_SOON : ''}</label>`;
+  const _ccSeg = (path, opts) => `<div class="cc-seg">${opts.map(([v, l]) => `<button type="button" class="${_ccGet(path) === v ? 'is-on' : ''}" onclick="LeadManagerModule.ccSetRep('${path}','${v}')">${l}</button>`).join('')}</div>`;
+  const _CC_PROG = [['continuar', 'Continuar'], ['pausar', 'Pausar prospecto'], ['finalizar', 'Finalizar prospecto']];
+  function _ccAuto() {
+    return `<div class="cc-card"><h4>Cuando las personas hacen clic en un enlace</h4>${_ccSw('automatizacion.clic.tarea', 'Crear una nueva tarea', { desc: 'Te avisa para que le escribas mientras está interesado.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.clic.progreso', _CC_PROG)}</div>
+      <div class="cc-card"><h4>Cuando las personas responden</h4>${_ccSw('automatizacion.respuesta.tarea', 'Crear una nueva tarea', { desc: 'Una tarea «Revisar respuesta» para decidir qué hacer.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.respuesta.progreso', _CC_PROG)}${_ccSw('automatizacion.respuesta.pausar_empresa', 'También pausar contactos de la misma empresa')}
+        <div class="cc-lbl" style="margin-top:14px">Cuando un contacto responda, utilizar IA para</div>${_ccSw('automatizacion.respuesta.ia_puntuar', 'Puntuar la respuesta en función del tono', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_fuera_oficina', 'Gestionar automáticamente las respuestas de «fuera de la oficina»', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_interesado', 'Marcar el prospecto como interesado', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_no_interesado', 'Marcar al prospecto como no interesado', { soon: 1 })}</div>
+      <div class="cc-card"><h4>Cuando se agenda una reunión</h4><div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.reunion.progreso', _CC_PROG)}${_ccSw('automatizacion.reunion.pausar_empresa', 'También pausar contactos de la misma empresa')}</div>`;
+  }
+  function _ccTracking() {
+    return `<div class="cc-card"><h4>Opciones de tracking</h4>${_ccSw('tracking.aperturas', 'Registrar aperturas de email', { desc: 'Detecta cuando un destinatario abre su email. Puede ser útil como señal, aunque no siempre es fiable. Es un elemento de tracking y puede perjudicar la entregabilidad.' })}${_ccSw('tracking.clics', 'Hacer seguimiento de clics en enlaces', { desc: 'Detecta cuando un destinatario hace clic en un enlace. Es lo más vigilado por los proveedores de correo y el que más puede perjudicar la entregabilidad.' })}${_ccSw('tracking.respuestas', 'Rastrear respuestas', { lock: 1, desc: 'Detecta respuestas automáticamente. Necesario para que los seguimientos se detengan en cuanto un prospecto responda (siempre activo).' })}</div>`;
+  }
+  function _ccSenderRow(tipo, x, nombre, sub, estadoTxt, ok) {
+    return `<label class="cc-snd"><span class="cc-sw"><input type="checkbox"${x.activo ? ' checked' : ''} onchange="LeadManagerModule.ccSender('${tipo}',${x.id},this.checked)"><i></i></span><span class="cc-snd__ic cc-snd__ic--${tipo}">${{ email: '✉', whatsapp: '✆', linkedin: 'in' }[tipo]}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(estadoTxt)}</span></label>`;
+  }
+  function _ccRem() {
+    const r = _cc.rem, cid = _cc.camp.outbound_client_id, n = r.email.length + r.whatsapp.length + r.linkedin.length, on = [...r.email, ...r.whatsapp, ...r.linkedin].filter(x => x.activo).length;
+    const grp = (titulo, arr, fn) => arr.length ? `<div class="cc-grp">${titulo}</div>${arr.map(fn).join('')}` : '';
+    return `<div class="cc-card"><h4>Configuración del remitente</h4>
+        <label class="cc-rad"><input type="radio" name="cc-modo"${_cc.cfg.remitentes.modo === 'equilibrado' ? ' checked' : ''} onchange="LeadManagerModule.ccSet('remitentes.modo','equilibrado')"><span><b>Distribuir remitentes de forma equilibrada</b><small>Tú eliges qué remitentes usar.</small></span></label>
+        <label class="cc-rad is-off"><input type="radio" name="cc-modo" disabled><span><b>Hacer coincidir dinámicamente el remitente con la propiedad</b><small>Asignado según la titularidad del contacto. ${_CC_SOON}</small></span></label></div>
+      <div class="cc-card"><div class="cc-hd2"><h4>Cuentas de envío para la campaña <small>${on}/${n}</small></h4>
+        <div class="cc-add"><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.ccAddMenu(event)">+ Añadir remitente</button></div></div>
+        <p class="cc-note">Las cuentas son las del cliente de esta campaña. La selección de LinkedIn ya se aplica: la extensión solo usa las cuentas marcadas. En email y WhatsApp la selección se guarda y se aplicará pronto.</p>
+        ${n ? '' : '<div class="cc-empty">Este cliente aún no tiene remitentes. Usa «+ Añadir remitente».</div>'}
+        ${grp('Email', r.email, x => _ccSenderRow('email', x, x.email, x.proveedor || '', x.estado === 'ok' || x.estado === 'conectado' || x.estado === 'activo' ? 'Conectado' : (x.estado || '—'), ['ok', 'conectado', 'activo'].includes(x.estado)))}
+        ${grp('WhatsApp', r.whatsapp, x => _ccSenderRow('whatsapp', x, x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado'))}
+        ${grp('LinkedIn', r.linkedin, x => _ccSenderRow('linkedin', x, x.nombre, x.slug ? 'linkedin.com/in/' + x.slug : 'sin identidad aún', x.estado === 'activa' ? (x.conectada ? 'Activa' : 'Extensión sin conexión') : ({ pausada: 'Pausada', restringida: 'Restringida', desconectada: 'Sin sesión' }[x.estado] || x.estado), x.estado === 'activa' && x.conectada))}
+        <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span>${_CC_SOON}</div></div>`;
+  }
+  const _CC_ZONAS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'Europe/London', 'UTC'];
+  function _ccPlan() {
+    const p = _cc.cfg.planificacion, g = _cc.global || {}, dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { soon: 1, desc: 'Enviará automáticamente la campaña a los nuevos prospectos añadidos.' })}</div>
+      <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
+        <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
+        <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
+          <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
+        <p class="cc-note">Horario de envío: de <b>${g.window_start != null ? g.window_start : 9}:00</b> a <b>${g.window_end != null ? g.window_end : 18}:00</b>${g.send_weekends ? ' (incluye fines de semana)' : ''}. Ese horario es global para todo Nova y se cambia en Configuración de envío.</p></div>
+      <div class="cc-card"><h4>Fecha de fin <small>(opcional)</small></h4><p class="cc-note">La campaña deja de enviar en esta fecha. Elige qué ocurre con los prospectos que siguen en la secuencia.</p>
+        <div class="cc-two"><label><span class="cc-lbl">Fecha</span><input class="form-input" type="date" value="${esc(p.fecha_fin)}" onchange="LeadManagerModule.ccSet('planificacion.fecha_fin', this.value)"></label>
+          <label><span class="cc-lbl">Con quien siga en la secuencia</span><select class="form-input" onchange="LeadManagerModule.ccSet('planificacion.al_finalizar', this.value)"><option value="terminar"${p.al_finalizar === 'terminar' ? ' selected' : ''}>Terminar su secuencia</option><option value="pausar"${p.al_finalizar === 'pausar' ? ' selected' : ''}>Pausarlo</option></select></label></div></div>
+      <div class="cc-card"><h4>Pausar durante las vacaciones ${_CC_SOON}</h4><p class="cc-note">Elige durante qué festivos pausar la campaña; se reanudará sola después.</p></div>`;
+  }
+  function _ccCrm() {
+    return `<div class="cc-card"><h4>Integración con CRM</h4>${['HubSpot', 'Salesforce', 'Pipedrive'].map(n => `<div class="cc-row is-off"><span class="cc-row__t"><b>${n}</b><small>No conectado</small></span>${_CC_SOON}</div>`).join('')}<p class="cc-note">Elige el CRM que quieras usar con esta campaña. Nova todavía no tiene integraciones de CRM.</p></div>`;
+  }
+  function _ccGen() {
+    const g = _cc.cfg.general;
+    return `<div class="cc-card"><h4>Etiquetas <small>(opcional)</small></h4><p class="cc-note">Añade etiquetas para organizar mejor tus campañas.</p><div class="cc-tags">${g.etiquetas.map((t, i) => `<span class="cc-tag">${esc(t)}<button type="button" onclick="LeadManagerModule.ccTagDel(${i})">×</button></span>`).join('')}<input class="cc-tagin" placeholder="Añadir etiqueta y pulsar Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.ccTagAdd(this.value);this.value=''}"></div></div>
+      <div class="cc-card"><h4>Compartir tu campaña</h4>${_ccSw('general.compartir', 'Activar el enlace compartible de la campaña', { soon: 1, desc: 'Solo las personas con el enlace podrán ver los pasos de tu campaña y duplicarlos en su cuenta.' })}</div>
+      <div class="cc-card"><h4>Cancelar suscripción del contacto</h4><p class="cc-note">Comportamiento cuando el contacto haga clic en el enlace de baja. ${_CC_SOON}</p>
+        <label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción del email del contacto</b></span></label><label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción de todo el contacto</b><small>Incluye otros canales.</small></span></label>
+        ${_ccSw('general.enlace_baja', 'Añadir un enlace de baja a los emails nuevos', { soon: 1 })}</div>
+      <div class="cc-card"><h4>Eliminar campaña</h4><p class="cc-note">Esta acción elimina la campaña de forma permanente.</p><button class="btn btn--ghost btn--danger btn--sm" onclick="document.getElementById('cc-modal')?.remove();LeadManagerModule.confirmDeleteCampaign(${_cc.camp.id})">Eliminar campaña</button></div>`;
+  }
+  function ccPaint() {
+    const r = document.getElementById('cc-body'); if (!r || !_cc) return;
+    r.innerHTML = { auto: _ccAuto, tracking: _ccTracking, rem: _ccRem, plan: _ccPlan, crm: _ccCrm, gen: _ccGen }[_cc.tab]();
+    document.querySelectorAll('#cc-modal .cc-nav button').forEach(b => b.classList.toggle('is-on', b.dataset.t === _cc.tab));
+  }
+  function ccTab(t) { _cc.tab = t; ccPaint(); }
+  async function openCampaignConfig(id, tab) {
+    document.getElementById('cc-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) ccClose(); };
+    m.innerHTML = '<div class="fin-pi-box cc-box"><div class="ctp-empty" style="padding:60px">Cargando…</div></div>'; document.body.appendChild(m);
+    let d; try { const r = await apiFetch(`${API}/campaigns/${id}/config`); d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); } catch (e) { m.remove(); return showBanner('No se pudo cargar la configuración: ' + e.message, 'error'); }
+    _cc = { id, camp: d.campana, cfg: d.config, rem: d.remitentes, global: d.global, seqs: d.secuencias, tab: tab || 'auto', dirty: false };
+    m.querySelector('.cc-box').innerHTML = `<div class="cc-side"><h3>Configuración de la campaña</h3><div class="cc-sub">${esc(d.campana.nombre)}</div><div class="cc-nav">${_CC_SECC.map(([k, l]) => `<button type="button" data-t="${k}" onclick="LeadManagerModule.ccTab('${k}')">${l}</button>`).join('')}</div></div>
+      <div class="cc-main"><button class="fin-pi-x" onclick="LeadManagerModule.ccClose()">✕</button><div class="cc-scroll" id="cc-body"></div>
+        <div class="cc-ft"><span class="cc-note" id="cc-msg">Los cambios afectan a toda la campaña y a sus ${_cc.seqs.length} secuencia(s).</span><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ccClose()">Cancelar</button> <button class="btn btn--primary btn--sm" id="cc-save" onclick="LeadManagerModule.ccSave()">Guardar</button></div></div></div>`;
+    ccPaint();
+  }
+  async function ccClose() {
+    if (_cc && _cc.dirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Tienes cambios sin guardar. ¿Cerrar de todas formas?', ok: 'Cerrar sin guardar', tone: 'danger' }))) return;
+    document.getElementById('cc-modal')?.remove(); _cc = null;
+  }
+  function ccDia(n) { const a = _cc.cfg.planificacion.dias, i = a.indexOf(n); if (i >= 0) { if (a.length > 1) a.splice(i, 1); } else a.push(n); a.sort(); _cc.dirty = true; ccPaint(); }
+  function ccTagAdd(v) { v = String(v || '').trim(); if (!v) return; const a = _cc.cfg.general.etiquetas; if (!a.includes(v) && a.length < 12) a.push(v); _cc.dirty = true; ccPaint(); }
+  function ccTagDel(i) { _cc.cfg.general.etiquetas.splice(i, 1); _cc.dirty = true; ccPaint(); }
+  function ccSender(tipo, id, on) { const x = (_cc.rem[tipo] || []).find(y => y.id === id); if (x) { x.activo = on; _cc.dirty = true; } }
+  function ccAddMenu(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const cid = _cc.camp.outbound_client_id, go2 = js => `document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());LeadManagerModule.ccGoConnect('${js}',${cid})`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
+    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${go2('email')}">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${go2('whatsapp')}">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${go2('linkedin')}">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
+  }
+  async function ccGoConnect(tipo, clientId) {
+    if (_cc && _cc.dirty) { const r = await novaConfirm({ title: 'Guardar antes de salir', message: 'Para conectar un remitente hay que salir de esta pantalla. ¿Guardo los cambios primero?', ok: 'Guardar y continuar', cancel: 'Descartar' }); if (r) await ccSave(true); }
+    document.getElementById('cc-modal')?.remove(); _cc = null;
+    if (tipo === 'email') mbManageOpen(clientId); else if (tipo === 'whatsapp') wamOpen(clientId); else liConnectFor(clientId);
+  }
+  async function ccSave(silent) {
+    const b = document.getElementById('cc-save'), msg = document.getElementById('cc-msg'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
+    const remitentes = [].concat(...['email', 'whatsapp', 'linkedin'].map(t => (_cc.rem[t] || []).map(x => ({ tipo: t, ref_id: x.id, activo: x.activo }))));
+    try {
+      const r = await apiFetch(`${API}/campaigns/${_cc.id}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: _cc.cfg, remitentes }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _cc.dirty = false; try { await load(); } catch (_) {}
+      if (!silent) { document.getElementById('cc-modal')?.remove(); showBanner('✓ Configuración de la campaña guardada', 'success'); _cc = null; }
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = '#B42318'; } if (b) { b.disabled = false; b.textContent = 'Guardar'; } }
   }
   // ── Vista de flujo (estilo Lemlist): los pasos como nodos a la izquierda y el contenido editable a la derecha ──
   let _sfl = { seq: 0, sel: 0, ver: 0 };
@@ -24148,6 +24262,7 @@ const LeadManagerModule = (() => {
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     let html = `<div class="cp-mark-menu__list">`
       + item('Ver como flujo (editar pasos)', `LeadManagerModule.seqFlowOpen(${seqId})`)
+      + (s && s.campaign_id ? item('⚙ Configuración de la campaña', `LeadManagerModule.openCampaignConfig(${s.campaign_id})`) : '')
       + item(s && s.linkedin_auto ? '⏸ Quitar «LinkedIn automático»' : '⚡ Activar «LinkedIn automático»', `LeadManagerModule.seqLiAuto(${seqId})`)
       + item('＋ Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
       + item('＋ Agregar contacto', `LeadManagerModule.seqAddContactOpen(${seqId})`)
@@ -33596,6 +33711,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     let html = `<div class="cp-mark-menu__list">`
       + item(mbYa ? 'Editar buzón' : 'Conectar buzón', `LeadManagerModule.mbManageOpen(${id})`)
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
+      + item('Conectar LinkedIn', `LeadManagerModule.liConnectFor(${id})`)
+      + `<button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Conectar SMS <span class="cc-soon">Próximamente</span></button>`
+      + `<button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Configurar llamadas <span class="cc-soon">Próximamente</span></button>`
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Portal del cliente', `LeadManagerModule.openClient(${id});setTimeout(()=>LeadManagerModule._clientGoTab('Portal'),80)`)
       + `</div>`;
@@ -36825,6 +36943,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <span class="fin-cfg-hint" id="cmp-hint"></span>
         <div class="fin-pi-ft-btns">
           ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.confirmDeleteCampaign(${c.id})">Eliminar</button>` : ''}
+          ${c ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-cmp-modal')?.remove();LeadManagerModule.openCampaignConfig(${c.id})">⚙ Configuración de la campaña</button>` : ''}
           ${c ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cmpReportOpen(${c.id})">${_ico('down')} Informe PDF</button>` : ''}
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCampaignDrawer()">Cancelar</button>
           <button class="btn btn--primary btn--sm" id="cmp-save" onclick="LeadManagerModule.saveCampaign(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear campaña'}</button>
@@ -41537,7 +41656,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liNew, liCreate, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccClose, liNew, liCreate, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

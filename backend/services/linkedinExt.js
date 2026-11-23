@@ -304,7 +304,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       }
       // (2b) Pasos de LinkedIn de secuencias con «LinkedIn automático»
       const { rows: pend } = await pool.query(`
-        SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, s.outbound_client_id, s.send_days, s.nombre AS seq_nombre,
+        SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, s.outbound_client_id, s.campaign_id, s.send_days, s.nombre AS seq_nombre,
                st.id AS step_id, st.accion, st.plantilla, st.asunto, st.variants, st.variant_mode, st.variant_field, st.canal, st.cond, st.cond_step_id,
                k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.idioma, k.idiomas, k.company_id, k.disposition, k.li_aceptado_at
           FROM lm_contact_sequences cs
@@ -321,7 +321,9 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         if (!(await se.condMatch(pool, { cond: e.cond, cond_step_id: e.cond_step_id }, { contact_id: e.contact_id, disposition: e.disposition, li_aceptado_at: e.li_aceptado_at }))) { await se.advancePastStep(pool, e.user_id, e.contact_id, e.sequence_id, e.step_id); continue; }
         const slug = slugDe(e.linkedin);
         if (!slug) { await pausarInscripcion(e, 'linkedin_sin_url', 'Secuencia pausada: este contacto no tiene un enlace de LinkedIn válido.'); continue; }
-        const { rows: cuentasC } = await pool.query(`SELECT a.*, (SELECT COUNT(*) FROM li_actions q WHERE q.account_id=a.id AND q.estado='queued')::int AS cola FROM li_accounts a WHERE a.user_id=$1 AND a.outbound_client_id=$2 AND a.estado IN ('activa','pausada') ORDER BY cola ASC LIMIT 1`, [e.user_id, e.outbound_client_id || 0]);
+        const { rows: cuentasC } = await pool.query(`SELECT a.*, (SELECT COUNT(*) FROM li_actions q WHERE q.account_id=a.id AND q.estado='queued')::int AS cola FROM li_accounts a WHERE a.user_id=$1 AND a.outbound_client_id=$2 AND a.estado IN ('activa','pausada')
+           AND (NOT EXISTS (SELECT 1 FROM campaign_senders c1 WHERE c1.campaign_id=$3 AND c1.tipo='linkedin') OR EXISTS (SELECT 1 FROM campaign_senders c2 WHERE c2.campaign_id=$3 AND c2.tipo='linkedin' AND c2.ref_id=a.id AND c2.activo))
+         ORDER BY cola ASC LIMIT 1`, [e.user_id, e.outbound_client_id || 0, e.campaign_id || 0]);
         if (!cuentasC.length) continue;   // sin cuenta ligada a este cliente: el paso sigue siendo manual
         const acc = cuentasC[0];
         const { rows: ex } = await pool.query(`SELECT 1 FROM lm_exclusions WHERE user_id=$1 AND linkedin_slug=$2 AND (scope='global' OR (scope='cliente' AND outbound_client_id=$3)) LIMIT 1`, [e.user_id, slug, e.outbound_client_id || 0]).catch(() => ({ rows: [] }));

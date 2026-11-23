@@ -356,7 +356,9 @@ const _liApplyDisposition = (uid, cid, body) => new Promise((resolve, reject) =>
   const res = { status() { return { json: resolve }; }, json: resolve };
   Promise.resolve(_lmDispositionHandler(fake, res)).catch(reject);
 });
-require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
+require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });
+const campaignCfg = require('./services/campaignConfig');
+campaignCfg.mount(app, { pool, requireAuth });   // configuración de la campaña: automatización, tracking, remitentes, planificación, general   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
@@ -5802,8 +5804,11 @@ const _lmDispositionHandler = async (req, res) => {
         [uid, cid]).catch(() => {});
     }
 
+    // La campaña decide qué pasa tras una respuesta (continuar / pausar / finalizar, tarea, misma empresa)
+    if (disp === 'respondio') await campaignCfg.trasRespuesta(pool, uid, cid);
     // Una reunión agendada ya es intención comercial clara: se sella la fecha para que entre a Deals (columna "Reunión").
     if (disp === 'reunion') {
+      await campaignCfg.trasReunion(pool, uid, cid);
       await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()) WHERE id=$1 AND user_id=$2`, [cid, uid]);
     }
     // Entrar a 'interesado' reinicia el seguimiento automático (interesadoWatcher.js).
@@ -8335,10 +8340,13 @@ app.get('/t/c/:token', async (req, res) => {
   res.redirect(302, safe);
   try {
     const { rows: [m] } = await pool.query(`SELECT id FROM lm_messages WHERE track_token=$1`, [req.params.token]);
-    if (m) await pool.query(
-      `INSERT INTO lm_message_events (message_id, tipo, url, ip, user_agent) VALUES ($1,'click',$2,$3,$4)`,
-      [m.id, safe.slice(0, 800), (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
-    );
+    if (m) {
+      await pool.query(
+        `INSERT INTO lm_message_events (message_id, tipo, url, ip, user_agent) VALUES ($1,'click',$2,$3,$4)`,
+        [m.id, safe.slice(0, 800), (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
+      );
+      campaignCfg.trasClic(pool, m.id);   // la campaña decide qué hacer con quien hace clic
+    }
   } catch (e) { /* tracking nunca rompe nada */ }
 });
 

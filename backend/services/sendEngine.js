@@ -471,7 +471,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
            k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma, k.idiomas,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
-           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id
+           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id, s.track_opens AS seq_track_opens, s.track_clicks AS seq_track_clicks
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -715,7 +715,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 
   const html = buildHtml({
     text: cuerpoTxt, firma: firmaEfectiva, trackToken: token, apiBase,
-    trackOpens: cfg.track_opens, trackClicks: cfg.track_clicks,
+    trackOpens: enr.seq_track_opens ?? cfg.track_opens, trackClicks: enr.seq_track_clicks ?? cfg.track_clicks,
   });
 
   // Reply threading: si el paso pide encadenar (reply_to_prev), buscar el último
@@ -815,8 +815,9 @@ async function _flushScheduled(pool, apiBase) {
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
            mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name, COALESCE(m.con_firma, FALSE) OR m.sequence_id IS NULL AS con_firma,
            mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, (SELECT k.idioma FROM lm_contacts k WHERE k.id = m.contact_id) AS k_idioma,
-           COALESCE(cfg.track_opens, true) AS track_opens, COALESCE(cfg.track_clicks, true) AS track_clicks
+           COALESCE(sq0.track_opens, cfg.track_opens, true) AS track_opens, COALESCE(sq0.track_clicks, cfg.track_clicks, true) AS track_clicks
       FROM lm_messages m
+      LEFT JOIN sequences sq0 ON sq0.id = m.sequence_id
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
      WHERE m.estado='scheduled' AND m.scheduled_at <= NOW()
@@ -960,7 +961,7 @@ async function _flushApproved(pool, apiBase) {
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
            mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, k.idioma AS k_idioma, mb.from_name AS mb_from_name,
-           cfg.from_name AS cfg_from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
+           cfg.from_name AS cfg_from_name, cfg.firma, COALESCE(s.track_opens, cfg.track_opens) AS track_opens, COALESCE(s.track_clicks, cfg.track_clicks) AS track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days, s.timezone AS seq_timezone,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
