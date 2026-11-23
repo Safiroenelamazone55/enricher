@@ -34214,6 +34214,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="ctp-gridwrap"><div class="ctp-grid${list && list.length ? '' : ' is-empty'}">${grid}</div></div>`;
   }
   function _vCmpTpl() {
+    if (_ct.list === null && !_ct.loading) { _ct.loading = true; setTimeout(() => _ctLoad().finally(() => { _ct.loading = false; }), 0); }
     return `<div class="ctp" onclick="LeadManagerModule.ctClose()">
       <h2 class="ctp-title">Plantillas</h2>
       <div class="ctp-tabs">${_CT_TABS.map(([k, l]) => `<button type="button" class="ctp-tab${k === 'campanas' ? ' is-on' : ''}" onclick="LeadManagerModule.ctTab('${k}')">${l}</button>`).join('')}</div>
