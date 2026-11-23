@@ -4975,6 +4975,15 @@ app.get('/api/lm/campaign-templates', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (e) { console.error('[campaign-templates]', e.message); res.status(500).json({ error: 'No se pudieron cargar los templates' }); }
 });
+// Detalle de un template: textos y el flujo completo (pasos, esperas, condiciones y ramas).
+app.get('/api/lm/campaign-templates/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: [t] } = await pool.query(
+      `SELECT * FROM lm_campaign_templates WHERE id=$1 AND (user_id IS NULL OR user_id=$2)`, [parseInt(req.params.id, 10) || 0, req.workspaceOwnerId]);
+    if (!t) return res.status(404).json({ error: 'Template no encontrado' });
+    res.json(t);
+  } catch (e) { console.error('[campaign-templates] detalle', e.message); res.status(500).json({ error: 'No se pudo cargar el template' }); }
+});
 app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {

@@ -1334,6 +1334,7 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_lm_campaign_templates_user ON lm_campaign_templates (user_id, scope)`);
+    await pool.query(`ALTER TABLE lm_campaign_templates ADD COLUMN IF NOT EXISTS descripcion TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);

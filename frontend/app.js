@@ -23462,7 +23462,7 @@ const LeadManagerModule = (() => {
     if (section === 'leads')     _reloadActivities();
     if (section === 'calls')     { _callsData = null; }
     if (section === 'exclusions') { _exList = null; _exLoad(); }
-    if (section === 'cmptpl') { _ct.list = null; _ctLoad(); }
+    if (section === 'cmptpl') { _ct.list = null; _ct.open = 0; _ct.det = null; _ctLoad(); }
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
@@ -34118,7 +34118,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
 
   // ── Plantillas → Campañas: biblioteca de templates de campaña (comunidad · equipo · propios) ──
-  const _ct = { col: 'comunidad', q: '', sort: 'relevante', sortOpen: false, dd: '', list: null, f: { tipo: [], idioma: [], para: [], objetivo: [] } };
+  const _ct = { open: 0, det: null, zoom: 1, col: 'comunidad', q: '', sort: 'relevante', sortOpen: false, dd: '', list: null, f: { tipo: [], idioma: [], para: [], objetivo: [] } };
   const _CT_TABS = [['campanas', 'Campañas'], ['emails', 'Emails'], ['envio', 'Planificaciones de envío'], ['fragmentos', 'Fragmentos'], ['imagenes', 'Imágenes'], ['landing', 'Landing pages']];
   const _CT_COLS = [['comunidad', 'Plantillas de la comunidad'], ['equipo', 'Plantillas del equipo'], ['mis', 'Mis templates']];
   const _CT_FILTERS = [
@@ -34160,7 +34160,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const multi = t.tipo !== 'solo_emails';
     const nm = t.autor_nombre || '';
     const av = t.autor_avatar ? `<img class="ctp-card__av" src="${esc(t.autor_avatar)}" alt="">` : `<span class="ctp-card__av ctp-card__av--i">${esc((nm.trim()[0] || '·').toUpperCase())}</span>`;
-    return `<div class="ctp-card" title="${esc(t.titulo || '')}">
+    return `<div class="ctp-card" title="${esc(t.titulo || '')}" onclick="LeadManagerModule.ctOpen(${t.id})">
       <div class="ctp-card__hd"><span class="ctp-type ${multi ? 'ctp-type--multi' : 'ctp-type--solo'}">${multi ? _CT_I.multi : _CT_I.solo}${multi ? 'Multicanal' : 'Solo emails'}</span><span class="ctp-copies" title="Veces que se usó">${_CT_I.copy}${t.copias || 0}</span></div>
       <div class="ctp-card__t">${esc(t.titulo || 'Sin título')}</div>
       <div class="ctp-card__ft"><span class="ctp-card__au">${av}<span>${esc(nm)}</span></span>
@@ -34192,13 +34192,83 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return `<div class="ctp" onclick="LeadManagerModule.ctClose()">
       <h2 class="ctp-title">Plantillas</h2>
       <div class="ctp-tabs">${_CT_TABS.map(([k, l]) => `<button type="button" class="ctp-tab${k === 'campanas' ? ' is-on' : ''}" onclick="LeadManagerModule.ctTab('${k}')">${l}</button>`).join('')}</div>
-      <div class="ctp-main" id="ctp-main">${_ctInner()}</div>
+      <div class="ctp-main" id="ctp-main">${_ct.open ? _ctDetailInner() : _ctInner()}</div>
     </div>`;
   }
+  // ── Detalle de un template: ficha a la izquierda y el flujo de la campaña a la derecha ──
+  const _CT_NODE = {
+    email:    ['Email',                 '#00804C', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>'],
+    invite:   ['Invitación',            '#1E488F', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M18 8v6M15 11h6"/></svg>'],
+    visit:    ['Visitar el perfil',     '#1E488F', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M21 21l-5-5"/><circle cx="11" cy="11" r="1.6"/></svg>'],
+    message:  ['Mensaje de LinkedIn',   '#1E488F', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>'],
+    inmail:   ['InMail',                '#1E488F', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>'],
+    whatsapp: ['WhatsApp',              '#15803D', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>'],
+    call:     ['Llamada',               '#B45309', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>'],
+    task:     ['Tarea manual',          '#64748B', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>'],
+  };
+  const _CT_COND = { email_opened: 'Email abierto', email_not_opened: 'Email no abierto', email_clicked: 'Clic en el email', email_replied: 'Respuesta al email', invite_accepted: 'Invitación aceptada', replied: 'Respuesta recibida', linkedin_replied: 'Respuesta en LinkedIn' };
+  const _ctDias = n => `${n} ${Number(n) === 1 ? 'día' : 'días'}`;
+  function _ctNode(it, first) {
+    const nd = _CT_NODE[it.tipo] || _CT_NODE.task;
+    const espera = it.espera ? Number(it.espera) : 0;
+    const hd = (first || !espera) ? `<span class="ctf-hd__l">Enviar inmediatamente</span>` : `<span class="ctf-hd__l">Esperar durante <b>${esc(_ctDias(espera))}</b></span>`;
+    const vers = Array.isArray(it.versiones) && it.versiones.length > 1
+      ? `<div class="ctf-vers">${it.versiones.map((v, i) => `<div class="ctf-ver"><span class="ctf-ver__k">${String.fromCharCode(65 + i)}</span>${esc(v.nombre || ('Versión ' + String.fromCharCode(65 + i)))}</div>`).join('')}</div>` : '';
+    return `<div class="ctf-node"><div class="ctf-hd">${hd}</div><div class="ctf-body"><span class="ctf-ic" style="color:${nd[1]};background:${nd[1]}14">${nd[2]}</span><span class="ctf-name">${esc(it.titulo || nd[0])}</span></div>${vers}</div>`;
+  }
+  function _ctFlow(items, first) {
+    return (items || []).map((it, i) => {
+      if (it.k === 'cond') {
+        const lbl = `Si ${esc(_CT_COND[it.cond] || it.cond || 'condición')}${it.dias ? ` en el plazo de ${esc(_ctDias(it.dias))}` : ''}`;
+        return `<div class="ctf-link"></div><div class="ctf-cond"><span class="ctf-cond__p">${lbl}</span></div>
+          <div class="ctf-branches"><div class="ctf-br"><span class="ctf-br__t ctf-br__t--si">Sí</span>${_ctFlow(it.si, false)}</div><div class="ctf-br"><span class="ctf-br__t ctf-br__t--no">No</span>${_ctFlow(it.no, false)}</div></div>`;
+      }
+      return `<div class="ctf-link"></div>${_ctNode(it, first && i === 0)}`;
+    }).join('');
+  }
+  function _ctDetailInner() {
+    const t = _ct.det;
+    if (!t) return '<div class="ctp-empty" style="grid-column:1/-1">Cargando…</div>';
+    const multi = t.tipo !== 'solo_emails';
+    const nm = t.autor_nombre || '';
+    const av = t.autor_avatar ? `<img class="ctp-card__av" src="${esc(t.autor_avatar)}" alt="">` : `<span class="ctp-card__av ctp-card__av--i">${esc((nm.trim()[0] || '·').toUpperCase())}</span>`;
+    const sec = (h, body) => body ? `<div class="ctd-sec"><h4>${h}</h4>${body}</div>` : '';
+    const pasos = Array.isArray(t.pasos) ? t.pasos : [];
+    return `<div class="ctd-left">
+        <button type="button" class="ctd-back" onclick="LeadManagerModule.ctBack()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg> Volver a templates</button>
+        <div class="ctd-scroll">
+          <div class="ctd-meta"><span class="ctp-type ${multi ? 'ctp-type--multi' : 'ctp-type--solo'}">${multi ? _CT_I.multi : _CT_I.solo}${multi ? 'Multicanal' : 'Solo emails'}</span><span class="ctp-card__au">${av}<span>${esc(nm)}</span></span></div>
+          <h3 class="ctd-title">${esc(t.titulo || 'Sin título')}</h3>
+          ${sec('Estadísticas', `<div class="ctd-stat"><span class="ctd-stat__ic" style="color:#5B8DEF">${_CT_I.users}</span>${t.prospectos || 0} prospectos contactados</div><div class="ctd-stat"><span class="ctd-stat__ic" style="color:#F59E6B">${_CT_I.mail}</span>${t.apertura || 0}% tasa de apertura</div><div class="ctd-stat"><span class="ctd-stat__ic" style="color:#8B93F0">${_CT_I.chat}</span>${t.respuesta || 0}% tasa de respuesta</div>`)}
+          ${sec('Categoría', (t.para || []).length ? `<p>${esc((t.para || []).join(', '))}</p>` : '')}
+          ${sec('Objetivo', (t.objetivo || []).length ? `<p>${esc((t.objetivo || []).join(', '))}</p>` : '')}
+          ${sec('Descripción', t.descripcion ? `<p>${esc(t.descripcion)}</p>` : '')}
+        </div>
+        <div class="ctd-ft"><span class="ctd-ft__c" title="Veces que se usó">${_CT_I.copy}${t.copias || 0}</span><button type="button" class="btn btn--primary ctd-use" onclick="LeadManagerModule.ctUse(${t.id})">Usar esta template</button></div>
+      </div>
+      <div class="ctd-canvas" id="ctd-canvas">
+        <div class="ctd-zoom"><button type="button" title="Acercar" onclick="LeadManagerModule.ctZoom(0.15)">+</button><button type="button" title="Alejar" onclick="LeadManagerModule.ctZoom(-0.15)">−</button><button type="button" title="Ajustar" onclick="LeadManagerModule.ctZoom(0)">⤢</button></div>
+        <div class="ctd-flow" id="ctd-flow" style="transform:scale(${_ct.zoom})">
+          <div class="ctf-pill">Iniciar</div>
+          ${pasos.length ? _ctFlow(pasos, true) : ''}
+          <div class="ctf-link"></div><div class="ctf-pill ctf-pill--end">${pasos.length ? 'Fin de la secuencia' : 'Este template aún no tiene pasos'}</div>
+        </div>
+      </div>`;
+  }
+  async function ctOpen(id) {
+    _ct.open = id; _ct.det = null; _ct.zoom = 1; _ct.dd = ''; _ct.sortOpen = false; _ctPaint();
+    try { const r = await apiFetch(`${API}/lm/campaign-templates/${id}`); _ct.det = r.ok ? await r.json() : null; } catch (_) { _ct.det = null; }
+    if (!_ct.det) { _ct.open = 0; showBanner('No se pudo abrir el template', 'error'); }
+    _ctPaint();
+  }
+  function ctBack() { _ct.open = 0; _ct.det = null; _ctPaint(); }
+  function ctZoom(d) { _ct.zoom = d === 0 ? 1 : Math.max(0.4, Math.min(1.6, +(_ct.zoom + d).toFixed(2))); const f = document.getElementById('ctd-flow'); if (f) f.style.transform = `scale(${_ct.zoom})`; }
+  function ctUse(id) { showBanner('«Usar esta template» crea una campaña con su secuencia: se conecta en el siguiente paso.', 'info'); }
   function _ctPaint() {
     const el = document.getElementById('ctp-main'); if (!el) return;
     const q = document.getElementById('ctp-q'), hadFocus = q && document.activeElement === q, pos = q ? q.selectionStart : 0;
-    el.innerHTML = _ctInner();
+    el.innerHTML = _ct.open ? _ctDetailInner() : _ctInner();
+    if (_ct.open && _ct.det) { const cv = document.getElementById('ctd-canvas'); if (cv) cv.scrollLeft = Math.max(0, (cv.scrollWidth - cv.clientWidth) / 2); }
     if (hadFocus) { const n = document.getElementById('ctp-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} } }
   }
   function ctCol(k) { _ct.col = k; _ct.dd = ''; _ct.sortOpen = false; _ctPaint(); }
@@ -41150,7 +41220,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
