@@ -350,7 +350,13 @@ require('./services/taskLinksRoutes').mount(app, { pool, requireAuth });   // en
 require('./services/timesheetRoutes').mount(app, { pool, requireAuth });   // hojas de horas: cronograma de trabajo, equipo por semana, aprobaciones
 require('./services/notepadRoutes').mount(app, { pool, requireAuth });   // bloc de notas personal (barra superior)
 require('./services/agendaRoutes').mount(app, { pool, requireAuth });
-require('./services/linkedinExt').mount(app, { pool, requireAuth });   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
+// Aplica una disposición (aceptó / respondió…) como si se marcara a mano: reutiliza TODA la lógica del endpoint (pausas, re-enrutado, actividad).
+const _liApplyDisposition = (uid, cid, body) => new Promise((resolve, reject) => {
+  const fake = { workspaceOwnerId: uid, user: { id: uid }, params: { id: cid }, body };
+  const res = { status() { return { json: resolve }; }, json: resolve };
+  Promise.resolve(_lmDispositionHandler(fake, res)).catch(reject);
+});
+require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
@@ -5630,7 +5636,7 @@ app.get('/api/lm/por-calificar', requireAuth, async (req, res) => {
     res.json(out);
   } catch (err) { console.error('[lm-por-calificar]', err.message); res.status(500).json({ error: 'Error al cargar' }); }
 });
-app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
+const _lmDispositionHandler = async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;
   const disp = _lmS((req.body || {}).disposition);
   const nota = _lmS((req.body || {}).nota);
@@ -5833,7 +5839,8 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;
     res.json({ ok: true, disposition: disp, paused, rerouted, stage, review_task_id, resumed: reanudadas });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
-});
+};
+app.post('/api/lm/contacts/:id/disposition', requireAuth, _lmDispositionHandler);
 // ── Reanudar manualmente una secuencia pausada (Bloque B: decisión humana) ─────
 // Solo aplica a enrolamientos pausados. Registra el evento en activities.
 // Opcional body { next_action_at }: si viene, la próxima acción sale en esa fecha;

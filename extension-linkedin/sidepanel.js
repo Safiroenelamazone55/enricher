@@ -4,7 +4,7 @@ async function pintar() {
   $('pill').textContent = paused ? 'En pausa' : 'Activa'; $('pill').className = 'pill ' + (paused ? 'off' : 'on');
   $('toggle').textContent = paused ? 'Activar' : 'Pausar';
   const e = estado.msg ? estado : { msg: token ? 'Listo.' : 'Pega el token de la cuenta para empezar.', nivel: token ? 'ok' : 'warn' };
-  $('st').textContent = e.msg + (e.t ? ' · ' + new Date(e.t).toLocaleTimeString() : ''); $('st').className = 'st ' + (e.nivel || '');
+  $('st').textContent = e.msg + (e.t ? ' · ' + new Date(e.t).toLocaleTimeString() : '') + (e.slug ? '  ·  Cuenta de LinkedIn en este Chrome: ' + e.slug : ''); $('st').className = 'st ' + (e.nivel || '');
   if (token && !$('tok').value) $('tok').placeholder = 'Token guardado (' + token.slice(0, 9) + '…)';
 }
 $('save').onclick = async () => {

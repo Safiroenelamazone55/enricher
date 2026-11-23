@@ -21656,3 +21656,6 @@ body.ibx-lb-open{overflow:hidden}
 .li-days { display: flex; gap: 12px; } .li-days label { display: flex; align-items: center; gap: 4px; font-size: .85rem; }
 .li-ol { margin: 12px 0 0 18px; padding: 0; font-size: .84rem; line-height: 1.6; color: #45586A; } .li-ol code { background: #F1F3EA; padding: 1px 5px; }
 @media (max-width: 800px) { .li-grid { grid-template-columns: 1fr 1fr; } .li-tr { grid-template-columns: 1fr 1fr; } .li-form { grid-template-columns: 1fr; } }
+.li-ev { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(0, 2fr) 170px; gap: 10px; align-items: center; padding: 8px 14px; font-size: .84rem; border-top: 1px solid var(--border, #E4E7DD); }
+.li-ev:first-child { border-top: 0; }
+@media (max-width: 800px) { .li-ev { grid-template-columns: 1fr; } }

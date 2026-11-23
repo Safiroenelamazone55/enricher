@@ -1,19 +1,38 @@
-// Service worker: pregunta a Nova qué acción toca, abre el perfil, la ejecuta con el content script y devuelve el resultado.
+// Service worker de «Nova · LinkedIn».
+//  · Pregunta a Nova qué acción toca, abre el perfil, la ejecuta con el content script y devuelve el resultado.
+//  · Comprueba que el LinkedIn de este Chrome es la cuenta correcta (identidad) y se lo dice a Nova.
+//  · Vigila TODAS las pestañas de LinkedIn: si aparece un captcha, una verificación o una restricción, o LinkedIn cierra la sesión,
+//    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
+//  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
+const CONFIG_DEFECTO = {
+  v: 0,
+  textos: { connect: ['connect', 'conectar'], pending: ['pending', 'pendiente'], message: ['message', 'mensaje'], addNote: ['add a note', 'añadir una nota', 'agregar una nota'], send: ['send', 'enviar'], sendNoNote: ['send without a note', 'enviar sin nota'], more: ['more', 'más'] },
+  selectores: { notaTextarea: 'textarea[name="message"], textarea#custom-message, .artdeco-modal textarea', cajaMensaje: 'div.msg-form__contenteditable[contenteditable="true"], div[role="textbox"][contenteditable="true"]', botonEnviarMensaje: 'button.msg-form__send-button', modal: '.artdeco-modal, [role="dialog"]' },
+  deteccion: {
+    urlPatterns: [{ pattern: '/checkpoint/challenge/', pageType: 'captcha' }, { pattern: '/checkpoint/lg/login-challenge-submit', pageType: 'identity-verification' }, { pattern: '/flagship-web/login/login-restriction', pageType: 'login-restriction' }],
+    bodyPatterns: [{ source: 'restricted your account until .+? because we detected the use of software that automates activity', flags: 'i', pageType: 'account-restricted' }],
+  },
+  chequeos: { check_connections: 'https://www.linkedin.com/mynetwork/invite-connect/connections/', check_inbox: 'https://www.linkedin.com/messaging/', check_notifications: 'https://www.linkedin.com/notifications/' },
+};
 let busy = false;
 
-const get = () => chrome.storage.local.get({ ...DEFAULTS, estado: {} });
+const get = () => chrome.storage.local.get({ ...DEFAULTS, estado: {}, config: null, identidad: { slug: '', t: 0 } });
 const setEstado = async (e) => { const { estado } = await get(); await chrome.storage.local.set({ estado: { ...estado, ...e, t: Date.now() } }); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const cfg = async () => (await get()).config || CONFIG_DEFECTO;
 
 chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('poll', { periodInMinutes: 1 }); });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('poll', { periodInMinutes: 1 }); });
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'poll') tick(); });
 chrome.runtime.onMessage.addListener((m, _s, send) => {
-  if (m && m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
+  if (!m) return false;
+  if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
+  if (m.cmd === 'config') { cfg().then(send); return true; }
+  if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });
 
@@ -29,6 +48,46 @@ async function sesionIniciada() {
   try { return !!(await chrome.cookies.get({ url: 'https://www.linkedin.com', name: 'li_at' })); } catch (_) { return false; }
 }
 
+// ── Identidad: ¿qué cuenta de LinkedIn hay abierta en este Chrome? ──
+async function leerIdentidad() {
+  const { identidad } = await get();
+  if (identidad && identidad.slug && Date.now() - identidad.t < 6 * 3600 * 1000) return identidad.slug;
+  try {
+    const r = await fetch('https://www.linkedin.com/in/me/', { credentials: 'include', redirect: 'follow' });
+    const m = String(r.url || '').match(/linkedin\.com\/in\/([^\/?#]+)/i);
+    if (m && m[1].toLowerCase() !== 'me') { const slug = decodeURIComponent(m[1]).toLowerCase(); await chrome.storage.local.set({ identidad: { slug, t: Date.now() } }); return slug; }
+  } catch (_) {}
+  return (identidad && identidad.slug) || '';
+}
+
+// ── Alertas: bloqueo o sesión cerrada, en cualquier pestaña de LinkedIn ──
+const avisadas = new Map();
+async function alertar(tipo, url) {
+  const { token } = await get();
+  if (!token) return;
+  const clave = tipo + '|' + String(url || '').split('?')[0];
+  if (avisadas.get(clave) && Date.now() - avisadas.get(clave) < 10 * 60 * 1000) return;
+  avisadas.set(clave, Date.now());
+  await chrome.storage.local.set({ paused: true });   // la propia extensión se detiene hasta que la reactives a mano
+  await setEstado({ msg: `LinkedIn mostró «${tipo}». Extensión en pausa: entra a LinkedIn, revisa el aviso y reactívala.`, nivel: 'err' });
+  try { await api('/ext/alert', { tipo, url: String(url || '').slice(0, 300), ua: navigator.userAgent }); } catch (_) {}
+}
+chrome.tabs.onUpdated.addListener(async (_id, info, tab) => {
+  const url = info.url || (info.status === 'complete' ? tab.url : '');
+  if (!url || !/^https:\/\/([a-z]+\.)?linkedin\.com\//i.test(url)) return;
+  const c = await cfg();
+  for (const p of (c.deteccion && c.deteccion.urlPatterns) || []) if (url.includes(p.pattern)) { alertar(p.pageType, url); return; }
+});
+// LinkedIn cierra una sesión respondiendo con «li_at=delete me» (o Clear-Site-Data): se avisa para no seguir enviando a ciegas
+try {
+  chrome.webRequest.onHeadersReceived.addListener(det => {
+    for (const h of det.responseHeaders || []) {
+      const n = (h.name || '').toLowerCase(), v = String(h.value || '');
+      if ((n === 'set-cookie' && /li_at=delete me/i.test(v)) || (n === 'clear-site-data' && /"cookies"|"\*"/.test(v))) { alertar('sesion_cerrada', det.url); return; }
+    }
+  }, { urls: ['*://*.linkedin.com/*'] }, ['responseHeaders', 'extraHeaders']);
+} catch (_) {}
+
 async function tick(manual) {
   if (busy) return;
   const { token, paused } = await get();
@@ -37,10 +96,12 @@ async function tick(manual) {
   busy = true;
   try {
     const sesion = await sesionIniciada();
-    const r = await api('/ext/next', { version: VERSION, sesion });
+    const slug = sesion ? await leerIdentidad() : '';
+    const r = await api('/ext/next', { version: VERSION, sesion, li_slug: slug });
+    if (r.config && r.config.v !== undefined) await chrome.storage.local.set({ config: r.config });
     if (!sesion) return setEstado({ msg: 'Inicia sesión en LinkedIn en este Chrome.', nivel: 'warn' });
-    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: 'ok' });
-    await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}`, nivel: 'work', accion: r.accion });
+    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug });
+    await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}`, nivel: 'work', accion: r.accion, slug });
     const res = await ejecutar(r.accion, r.modo);
     await api('/ext/result', { id: r.accion.id, ...res });
     if (res.codigo === 'restringida') await chrome.storage.local.set({ paused: true });
@@ -51,19 +112,21 @@ async function tick(manual) {
 }
 
 function traducir(m) {
-  return ({ cola_vacia: 'cola vacía', fuera_de_horario: 'fuera del horario', dia_no_laborable: 'día no laborable', espera_entre_acciones: 'espera entre acciones', tope_total_dia: 'tope total del día', tope_invite_dia: 'tope de invitaciones del día', tope_invitaciones_semana: 'tope semanal de invitaciones', tope_message_dia: 'tope de mensajes del día', tope_visit_dia: 'tope de visitas del día', cuenta_pausada: 'cuenta pausada en Nova', cuenta_restringida: 'cuenta en pausa por restricción', cuenta_desconectada: 'cuenta desconectada', pausa_hasta: 'pausa activa', accion_en_curso: 'acción en curso' })[m] || (m || '');
+  return ({ cola_vacia: 'cola vacía', fuera_de_horario: 'fuera del horario', dia_no_laborable: 'día no laborable', espera_entre_acciones: 'espera entre acciones', tope_total_dia: 'tope total del día', tope_invite_dia: 'tope de invitaciones del día', tope_invitaciones_semana: 'tope semanal de invitaciones', tope_message_dia: 'tope de mensajes del día', tope_visit_dia: 'tope de visitas del día', tope_notas_mes_cuenta_gratis: 'tope mensual de notas (cuenta gratuita)', cuenta_pausada: 'cuenta pausada en Nova', cuenta_restringida: 'cuenta en pausa por restricción', cuenta_desconectada: 'cuenta desconectada', cuenta_distinta: 'ESTE CHROME TIENE OTRA CUENTA DE LINKEDIN: revisa el token', pausa_hasta: 'pausa activa', accion_en_curso: 'acción en curso' })[m] || (m || '');
 }
 
-// Abre el perfil (en primer plano si es asistido) y le pide al content script que haga la acción.
+// Abre el perfil (en primer plano si es asistido y es una acción real) y le pide al content script que la haga.
 async function ejecutar(a, modo) {
-  const asistido = modo !== 'auto';
-  const tab = await chrome.tabs.create({ url: a.url, active: asistido });
+  const esCheck = String(a.tipo).startsWith('check_');
+  const asistido = !esCheck && modo !== 'auto';
+  const url = a.url || (await cfg()).chequeos[a.tipo];
+  const tab = await chrome.tabs.create({ url, active: asistido });
   try {
     await esperarCarga(tab.id, 45000);
     await sleep(2500 + Math.random() * 3000);   // un humano tarda en mirar la página
     let r;
     for (let i = 0; i < 3; i++) {
-      try { r = await chrome.tabs.sendMessage(tab.id, { cmd: 'ejecutar', accion: a, asistido }); break; } catch (e) { await sleep(2000); }
+      try { r = await chrome.tabs.sendMessage(tab.id, { cmd: 'ejecutar', accion: a, asistido, config: await cfg() }); break; } catch (e) { await sleep(2000); }
     }
     return r || { codigo: 'fallo', error: 'sin_content_script', detalle: 'La página no respondió' };
   } finally {

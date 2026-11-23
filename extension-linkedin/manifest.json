@@ -1,14 +1,38 @@
 {
   "manifest_version": 3,
   "name": "Nova · LinkedIn",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, respetando los topes diarios. Modo asistido por defecto.",
-  "permissions": ["storage", "tabs", "alarms", "cookies", "sidePanel"],
-  "host_permissions": ["https://*.linkedin.com/*", "https://api.novacentrax.com/*"],
-  "background": { "service_worker": "background.js" },
-  "side_panel": { "default_path": "sidepanel.html" },
-  "action": { "default_title": "Nova · LinkedIn" },
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "cookies",
+    "sidePanel",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://api.novacentrax.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Nova · LinkedIn"
+  },
   "content_scripts": [
-    { "matches": ["https://*.linkedin.com/*"], "js": ["content.js"], "run_at": "document_idle" }
+    {
+      "matches": [
+        "https://*.linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
   ]
 }

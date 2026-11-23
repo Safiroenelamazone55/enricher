@@ -1,32 +1,55 @@
-// Content script de LinkedIn: ejecuta UNA acción que le pide el service worker (invitar, visitar, mensaje).
-// Principios de seguridad: ante la duda NO actúa y lo informa; ante cualquier aviso de LinkedIn se detiene y pide pausa;
-// nunca reintenta un envío; todas las pausas y escrituras tienen tiempos humanos al azar.
+// Content script de LinkedIn: (1) vigila avisos de bloqueo en cualquier página y (2) ejecuta UNA acción que le pide el service worker
+// (invitar, visitar, escribir, o leer aceptaciones / bandeja / notificaciones).
+// Principios: ante la duda NO actúa y lo informa; ante un aviso de LinkedIn se detiene; nunca reintenta un envío;
+// todas las pausas y escrituras tienen tiempos humanos al azar. Textos, selectores y patrones vienen de Nova (se corrigen sin reinstalar).
 (() => {
   if (window.__novaLi) return; window.__novaLi = true;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const rnd = (a, b) => a + Math.random() * (b - a);
   const norm = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
   const vis = el => !!(el && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
-  const T = {
-    connect: ['connect', 'conectar'], pending: ['pending', 'pendiente'], message: ['message', 'mensaje'],
-    addNote: ['add a note', 'añadir una nota', 'agregar una nota'], send: ['send', 'enviar'], sendNoNote: ['send without a note', 'enviar sin nota'],
-    more: ['more', 'más'],
-  };
+  const R = (codigo, error, detalle, extra) => ({ codigo, error: error || '', detalle: detalle || '', ...(extra || {}) });
+  let CFG = null;
+  const cargarConfig = () => new Promise(res => { try { chrome.runtime.sendMessage({ cmd: 'config' }, c => res(c || null)); } catch (_) { res(null); } });
+  const T = k => (CFG && CFG.textos && CFG.textos[k]) || [];
+  const SEL = k => (CFG && CFG.selectores && CFG.selectores[k]) || '';
   const textOf = el => norm((el.getAttribute('aria-label') || '') + ' ' + (el.innerText || ''));
   const hasAny = (el, words) => words.some(w => textOf(el).includes(w));
   const btns = (root = document) => [...root.querySelectorAll('button, a[role="button"], div[role="button"]')].filter(vis);
   const findBtn = (words, root) => btns(root).find(b => hasAny(b, words));
-  const R = (codigo, error, detalle) => ({ codigo, error: error || '', detalle: detalle || '' });
 
-  // ── Detección de avisos de LinkedIn: ante cualquiera, se para todo ──
-  function avisoLinkedIn() {
-    const u = location.href;
-    if (/\/checkpoint\/|\/uas\/|\/authwall|\/login/.test(u)) return /login|authwall|uas/.test(u) ? 'sesion' : 'restringida';
-    const txt = norm(document.body.innerText).slice(0, 30000);
-    const frases = ['weekly invitation limit', 'límite semanal de invitaciones', "you've reached the weekly", 'has alcanzado el límite', 'unusual activity', 'actividad inusual', 'temporarily restricted', 'restringida temporalmente', "verify you're not a robot", 'verifica que no eres un robot', "let's do a quick security check", 'comprobación de seguridad'];
-    return frases.some(f => txt.includes(f)) ? 'restringida' : null;
+  // Copia simplificada de la página (sin scripts ni estilos) para poder arreglar un selector cuando LinkedIn cambia algo
+  function snapshot() {
+    try {
+      const e = document.documentElement.cloneNode(true);
+      e.querySelectorAll('script, style, svg, noscript, link, iframe, img, video, picture').forEach(x => x.remove());
+      return e.outerHTML.replace(/\s+/g, ' ').slice(0, 280000);
+    } catch (_) { return ''; }
   }
-  const porAviso = av => R(av === 'sesion' ? 'sesion' : 'restringida', av, 'Aviso de LinkedIn');
+
+  // ── Avisos de LinkedIn (patrones que llegan de Nova) ──
+  function avisoLinkedIn() {
+    const u = location.href, d = (CFG && CFG.deteccion) || { urlPatterns: [], bodyPatterns: [] };
+    for (const p of d.urlPatterns || []) if (u.includes(p.pattern)) return p.pageType;
+    if (/\/authwall|\/uas\/login|\/login\?|\/login$/.test(u)) return 'sesion_cerrada';
+    const txt = String(document.body && document.body.innerText || '').slice(0, 40000);
+    for (const p of d.bodyPatterns || []) { try { if (new RegExp(p.source, p.flags || 'i').test(txt)) return p.pageType; } catch (_) {} }
+    return null;
+  }
+  const porAviso = av => av === 'sesion_cerrada' ? R('sesion', av, 'La sesión de LinkedIn se cerró', { snapshot: '' }) : R('restringida', av, 'Aviso de LinkedIn: ' + av, { snapshot: snapshot() });
+
+  // Vigilancia pasiva en cada página de LinkedIn (aunque no se esté ejecutando nada)
+  (async () => {
+    CFG = await cargarConfig();
+    let ultimo = '';
+    const mirar = () => {
+      if (window.__novaEjecutando) return;
+      const av = avisoLinkedIn();
+      if (av && av !== 'sesion_cerrada' && av !== ultimo) { ultimo = av; try { chrome.runtime.sendMessage({ cmd: 'alerta', tipo: av, url: location.href }); } catch (_) {} }
+    };
+    setTimeout(mirar, 2500);
+    setInterval(mirar, 20000);
+  })();
 
   // ── Escritura «humana» en un campo (compatible con React) ──
   async function escribir(el, texto) {
@@ -46,7 +69,7 @@
     const main = document.querySelector('main') || document.body;
     const top = main.querySelector('section') || main;
     const grado = norm(top.innerText).match(/·\s*(1st|1\.º|1\.er|1º|2nd|2\.º|2º|3rd|3\.º|3º)/);
-    return { pend: findBtn(T.pending, top), con: findBtn(T.connect, top), msg: findBtn(T.message, top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: !!main.querySelector('h1') };
+    return { pend: findBtn(T('pending'), top), con: findBtn(T('connect'), top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: !!main.querySelector('h1') };
   }
 
   async function invitar(a, asistido) {
@@ -56,28 +79,28 @@
     if (p.pend) return R('omitida', 'ya_pendiente');
     let con = p.con;
     if (!con) {   // «Conectar» a veces está dentro del menú «Más»
-      const mas = findBtn(T.more, document.querySelector('main') || document);
-      if (mas) { mas.click(); await sleep(rnd(700, 1400)); con = findBtn(T.connect, document); }
+      const mas = findBtn(T('more'), document.querySelector('main') || document);
+      if (mas) { mas.click(); await sleep(rnd(700, 1400)); con = findBtn(T('connect'), document); }
     }
-    if (!con) return R('omitida', 'sin_boton_conectar', 'No hay botón Conectar (perfil restringido o solo seguir)');
+    if (!con) return R('omitida', 'sin_boton_conectar', 'No hay botón Conectar (perfil restringido o solo seguir)', { snapshot: snapshot() });
     con.click(); await sleep(rnd(900, 1800));
     let av = avisoLinkedIn(); if (av) return porAviso(av);
     if (a.nota) {
-      const nota = findBtn(T.addNote, document);
-      if (!nota) return R('fallo', 'sin_boton_nota', 'No apareció «Añadir nota» (¿cuenta gratuita sin notas?)');
+      const nota = findBtn(T('addNote'), document);
+      if (!nota) return R('fallo', 'sin_boton_nota', 'No apareció «Añadir nota» (¿cuenta gratuita sin notas?)', { snapshot: snapshot() });
       nota.click(); await sleep(rnd(700, 1400));
-      const ta = document.querySelector('textarea[name="message"], textarea#custom-message, .artdeco-modal textarea');
-      if (!ta) return R('fallo', 'sin_campo_nota');
+      const ta = document.querySelector(SEL('notaTextarea'));
+      if (!ta) return R('fallo', 'sin_campo_nota', '', { snapshot: snapshot() });
       await escribir(ta, a.nota); await sleep(rnd(600, 1200));
     }
-    const dlg = document.querySelector('.artdeco-modal, [role="dialog"]') || document;
-    const enviar = a.nota ? findBtn(T.send, dlg) : (findBtn(T.sendNoNote, dlg) || findBtn(T.send, dlg));
-    if (!enviar) return R('fallo', 'sin_boton_enviar');
+    const dlg = document.querySelector(SEL('modal')) || document;
+    const enviar = a.nota ? findBtn(T('send'), dlg) : (findBtn(T('sendNoNote'), dlg) || findBtn(T('send'), dlg));
+    if (!enviar) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
     if (asistido) return await esperarUsuario(() => !!estadoPerfil().pend, 'Revisa la nota y pulsa «Enviar».');
     enviar.click(); await sleep(rnd(1500, 2800));
     av = avisoLinkedIn(); if (av) return porAviso(av);
-    if (estadoPerfil().pend || !document.querySelector('.artdeco-modal textarea')) return R('ok');
-    return R('fallo', 'no_confirmado', 'No se pudo confirmar el envío; revisa en LinkedIn antes de repetir');
+    if (estadoPerfil().pend || !document.querySelector(SEL('notaTextarea'))) return R('ok');
+    return R('fallo', 'no_confirmado', 'No se pudo confirmar el envío; revisa en LinkedIn antes de repetir', { snapshot: snapshot() });
   }
 
   async function visitar() {
@@ -93,14 +116,57 @@
     if (!p.primerGrado || !p.msg) return R('omitida', 'no_conectado', 'Solo se escribe a conexiones de primer grado');
     p.msg.click(); await sleep(rnd(1200, 2200));
     const av = avisoLinkedIn(); if (av) return porAviso(av);
-    const box = document.querySelector('div.msg-form__contenteditable[contenteditable="true"], div[role="textbox"][contenteditable="true"]');
-    if (!box) return R('fallo', 'sin_campo_mensaje');
+    const box = document.querySelector(SEL('cajaMensaje'));
+    if (!box) return R('fallo', 'sin_campo_mensaje', '', { snapshot: snapshot() });
     await escribir(box, a.texto); await sleep(rnd(800, 1600));
     if (asistido) return await esperarUsuario(() => !String(box.innerText || '').trim(), 'Revisa el mensaje y pulsa «Enviar».');
-    const enviar = document.querySelector('button.msg-form__send-button') || findBtn(T.send, document);
-    if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar');
+    const enviar = document.querySelector(SEL('botonEnviarMensaje')) || findBtn(T('send'), document);
+    if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
     enviar.click(); await sleep(rnd(1500, 2800));
-    return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn') : R('ok');
+    return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() }) : R('ok');
+  }
+
+  // ── Lecturas para detectar aceptaciones, respuestas e interacciones (no escriben nada) ──
+  async function desplazar(veces) { for (let i = 0; i < veces; i++) { window.scrollBy({ top: rnd(500, 900), behavior: 'smooth' }); await sleep(rnd(1200, 2400)); } }
+
+  // Conexiones recientes: las personas que aceptaron aparecen arriba (orden «añadidas recientemente»)
+  async function leerConexiones() {
+    await sleep(rnd(1500, 3000)); await desplazar(2);
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    const slugs = new Set();
+    document.querySelectorAll('main a[href*="/in/"]').forEach(x => { const m = String(x.getAttribute('href') || '').match(/\/in\/([^\/?#]+)/i); if (m) slugs.add(decodeURIComponent(m[1]).toLowerCase()); });
+    if (!slugs.size) return R('fallo', 'sin_datos', 'No se encontraron conexiones en la página', { snapshot: snapshot() });
+    return R('ok', '', '', { datos: { slugs: [...slugs].slice(0, 80) } });
+  }
+
+  // Bandeja: cada conversación con su último texto. «propio» = el último mensaje lo escribí yo (Tú: / You:)
+  async function leerBandeja() {
+    await sleep(rnd(2000, 3500));
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    let nodos = [...document.querySelectorAll('li.msg-conversation-listitem, li[class*="msg-conversation"], .msg-conversations-container li')];
+    if (!nodos.length) nodos = [...document.querySelectorAll('a[href*="/messaging/thread/"]')].map(a => a.closest('li') || a);
+    const vistos = new Set(), conversaciones = [];
+    for (const li of nodos) {
+      const lineas = String(li.innerText || '').split('\n').map(x => x.trim()).filter(Boolean);
+      if (lineas.length < 2) continue;
+      const nombre = lineas[0], extracto = lineas.slice(1).filter(x => !/^(\d+\s?(min|h|d|sem|w|m)|ayer|yesterday|\d{1,2}\s\w{3})/i.test(x)).join(' ').slice(0, 300);
+      if (vistos.has(nombre + extracto)) continue; vistos.add(nombre + extracto);
+      const cls = String(li.className || '') + ' ' + [...li.querySelectorAll('*')].map(x => String(x.className || '')).join(' ');
+      const no_leido = /unread|--unread|notification-badge/i.test(cls) || !!li.querySelector('[class*="unread"], .notification-badge');
+      conversaciones.push({ nombre, extracto, no_leido, propio: /^(tú|tu|you)\s*:/i.test(extracto) });
+    }
+    if (!nodos.length) return R('fallo', 'sin_datos', 'No se encontró la lista de conversaciones', { snapshot: snapshot() });
+    return R('ok', '', '', { datos: { conversaciones: conversaciones.slice(0, 50) } });
+  }
+
+  async function leerNotificaciones() {
+    await sleep(rnd(2000, 3500)); await desplazar(1);
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    let nodos = [...document.querySelectorAll('[class*="nt-card"], article, main li')];
+    const items = [], vistos = new Set();
+    for (const n of nodos) { const t = String(n.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (t.length > 12 && !vistos.has(t)) { vistos.add(t); items.push({ texto: t }); } }
+    if (!items.length) return R('fallo', 'sin_datos', 'No se encontraron notificaciones', { snapshot: snapshot() });
+    return R('ok', '', '', { datos: { items: items.slice(0, 50) } });
   }
 
   // Modo asistido: el texto queda escrito y la persona pulsa «Enviar». Se detecta que lo hizo (o se agota el tiempo).
@@ -121,11 +187,21 @@
   chrome.runtime.onMessage.addListener((m, _s, send) => {
     if (!m || m.cmd !== 'ejecutar') return false;
     (async () => {
+      window.__novaEjecutando = true;
       try {
+        if (m.config) CFG = m.config; else if (!CFG) CFG = await cargarConfig();
         const av = avisoLinkedIn(); if (av) return send(porAviso(av));
         const a = m.accion;
-        send(a.tipo === 'invite' ? await invitar(a, m.asistido) : a.tipo === 'visit' ? await visitar() : a.tipo === 'message' ? await mensaje(a, m.asistido) : R('omitida', 'tipo_no_soportado', 'Esta versión no ejecuta ' + a.tipo));
-      } catch (e) { send(R('fallo', 'excepcion', String((e && e.message) || e).slice(0, 200))); }
+        const r = a.tipo === 'invite' ? await invitar(a, m.asistido)
+          : a.tipo === 'visit' ? await visitar()
+          : a.tipo === 'message' ? await mensaje(a, m.asistido)
+          : a.tipo === 'check_connections' ? await leerConexiones()
+          : a.tipo === 'check_inbox' ? await leerBandeja()
+          : a.tipo === 'check_notifications' ? await leerNotificaciones()
+          : R('omitida', 'tipo_no_soportado', 'Esta versión no ejecuta ' + a.tipo);
+        send(r);
+      } catch (e) { send(R('fallo', 'excepcion', String((e && e.message) || e).slice(0, 200), { snapshot: snapshot() })); }
+      finally { window.__novaEjecutando = false; }
     })();
     return true;
   });
