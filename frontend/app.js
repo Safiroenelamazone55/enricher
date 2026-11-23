@@ -1207,6 +1207,37 @@ function novaConfirm(opts = {}) {
   });
 }
 
+// Segundo paso de una acción delicada: hay que ESCRIBIR una palabra (p. ej. el nombre del cliente) para poder confirmar.
+// Sin atajo de Enter y con el botón apagado hasta que coincida. Resuelve true/false.
+function novaConfirmType(opts = {}) {
+  return new Promise(resolve => {
+    document.getElementById('nova-confirm')?.remove();
+    const o = { title: 'Confirma por segunda vez', message: '', word: '', ok: 'Confirmar', cancel: 'Cancelar', ...opts };
+    const norm = x => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const bd = document.createElement('div'); bd.id = 'nova-confirm'; bd.className = 'nvc-back';
+    const done = v => { bd.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    bd.innerHTML = `<div class="nvc-box">
+      <div class="nvc-ico nvc-ico--danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+      <div class="nvc-t">${o.title}</div>
+      ${o.message ? `<p class="nvc-m">${o.message}</p>` : ''}
+      <input type="text" class="nvc-in" autocomplete="off" spellcheck="false" placeholder="${String(o.word).replace(/"/g, '&quot;')}">
+      <div class="nvc-btns">
+        <button type="button" class="nvc-b nvc-b--ghost">${o.cancel}</button>
+        <button type="button" class="nvc-b nvc-b--pri nvc-b--danger" disabled>${o.ok}</button>
+      </div>
+    </div>`;
+    const inp = bd.querySelector('.nvc-in'), ok = bd.querySelector('.nvc-b--pri');
+    inp.oninput = () => { ok.disabled = norm(inp.value) !== norm(o.word); };
+    bd.onclick = e => { if (e.target === bd) done(false); };
+    bd.querySelector('.nvc-b--ghost').onclick = () => done(false);
+    ok.onclick = () => { if (!ok.disabled) done(true); };
+    document.body.appendChild(bd);
+    setTimeout(() => inp.focus(), 40);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
 // Modal de nota rápida (estilo Nova) — resuelve con el texto ('' si se omite/cierra).
 // Ctrl+Enter guarda, Esc omite. Uso: const nota = await novaNote({title, message});
 function novaNote(opts = {}) {
@@ -36140,12 +36171,36 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       li_que_hace: $('obc-li-quehace')?.value.trim() || '',
     };
     const btn = $('obc-save'); if (btn) btn.disabled = true;
+    // Pausar o cerrar al cliente arrastra a sus campañas y secuencias: antes se muestra el impacto y se pide DOBLE confirmación.
+    if (id && c0 && body.estado !== c0.estado && (body.estado === 'pausado' || body.estado === 'cerrado')) {
+      try {
+        const ir = await apiFetch(`${API}/outbound-clients/${id}/estado-impact?estado=${body.estado}`);
+        const im = ir.ok ? await ir.json() : null;
+        if (im && (im.campanas || im.secuencias)) {
+          const cerrar = body.estado === 'cerrado', pl = (n, a, b) => `<b>${n}</b> ${n === 1 ? a : b}`;
+          const lista = [
+            im.campanas ? `${pl(im.campanas, 'campaña pasará', 'campañas pasarán')} a <b>${cerrar ? 'cerrada' : 'pausada'}</b>` : '',
+            im.secuencias ? `${pl(im.secuencias, 'secuencia pasará', 'secuencias pasarán')} a <b>${cerrar ? 'archivada' : 'pausada'}</b>` : '',
+            im.contactos_en_curso ? `${pl(im.contactos_en_curso, 'contacto en curso dejará', 'contactos en curso dejarán')} de recibir tareas y mensajes` : '',
+            im.mensajes_pendientes ? `${pl(im.mensajes_pendientes, 'mensaje pendiente no saldrá', 'mensajes pendientes no saldrán')}` : '',
+          ].filter(Boolean).map(x => `<li style="margin:3px 0">${x}</li>`).join('');
+          const ok1 = await novaConfirm({ title: `${cerrar ? 'Cerrar' : 'Pausar'} a «${esc(c0.nombre || nombre)}»`, tone: 'danger', ok: 'Continuar', message: `Esto afecta a todo lo del cliente:<ul style="text-align:left;margin:10px 0 8px 18px;padding:0">${lista}</ul>Volver a «Activo» no reactiva nada solo: tendrías que reanudar cada secuencia.` });
+          if (!ok1) { if (btn) btn.disabled = false; return; }
+          const ok2 = await novaConfirmType({ title: 'Última confirmación', word: c0.nombre || nombre, ok: cerrar ? 'Cerrar cliente' : 'Pausar cliente', message: `Para ${cerrar ? 'cerrar' : 'pausar'} al cliente y a todas sus campañas y secuencias, escribe su nombre: <b>${esc(c0.nombre || nombre)}</b>` });
+          if (!ok2) { if (btn) btn.disabled = false; return; }
+          body.cascade = true;
+        }
+      } catch (e) { if (hint) { hint.textContent = 'No se pudo calcular el impacto: ' + e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; return; }
+    }
     try {
       const res = await apiFetch(`${API}/outbound-clients${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const _resp = await res.clone().json().catch(() => null);
       { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = {}; { const _ab = ($('obc-abrev')?.value || '').trim(); if (_ab || c0?.abrev) _x.abrev = _ab; } if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
       closeClientDrawer();
       await load();
+      if (_resp && _resp.cascade) showBanner(`✓ Cliente ${body.estado === 'cerrado' ? 'cerrado' : 'pausado'} · ${_resp.cascade.campanas} campaña(s) y ${_resp.cascade.secuencias} secuencia(s) ${body.estado === 'cerrado' ? 'cerradas' : 'pausadas'}`, 'success');
+      else if (_resp && _resp.cascade_error) showBanner(_resp.cascade_error, 'error');
     } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
   }
   async function confirmDeleteClient(id) {

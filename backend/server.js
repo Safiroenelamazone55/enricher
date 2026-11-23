@@ -4114,6 +4114,44 @@ app.post('/api/outbound-clients', requireAuth, async (req, res) => {
   }
 });
 
+// ── Cambio de estado del cliente → campañas y secuencias ──
+// Pausado: lo que está activo pasa a pausada. Cerrado: campañas a cerrada y secuencias a archivada (las completadas se quedan como están).
+// Nada se reactiva solo al volver a «Activo»: reanudar es una decisión deliberada, secuencia por secuencia.
+const _OBC_CASCADE = {
+  pausado: { camp: ['activa'], seq: ['activa'], campTo: 'pausada', seqTo: 'pausada' },
+  cerrado: { camp: ['activa', 'pausada', 'draft'], seq: ['activa', 'pausada', 'draft'], campTo: 'cerrada', seqTo: 'archivada' },
+};
+async function _obcCascadeImpact(uid, cid, estado) {
+  const r = _OBC_CASCADE[estado]; if (!r) return null;
+  const q = async (sql, a) => (await pool.query(sql, a)).rows[0];
+  const camp = await q(`SELECT COUNT(*)::int n FROM campaigns WHERE user_id=$1 AND outbound_client_id=$2 AND estado = ANY($3::text[])`, [uid, cid, r.camp]);
+  const seq = await q(`SELECT COUNT(*)::int n FROM sequences WHERE user_id=$1 AND outbound_client_id=$2 AND estado = ANY($3::text[])`, [uid, cid, r.seq]);
+  const ct = await q(`SELECT COUNT(DISTINCT cs.contact_id)::int n FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id WHERE s.user_id=$1 AND s.outbound_client_id=$2 AND s.estado = ANY($3::text[]) AND cs.estado IN ('activo','pausado')`, [uid, cid, r.seq]);
+  const msg = await q(`SELECT COUNT(*)::int n FROM lm_messages m JOIN sequences s ON s.id=m.sequence_id WHERE s.user_id=$1 AND s.outbound_client_id=$2 AND s.estado = ANY($3::text[]) AND m.estado IN ('awaiting','approved','scheduled')`, [uid, cid, r.seq]);
+  return { estado, campanas: camp.n, secuencias: seq.n, contactos_en_curso: ct.n, mensajes_pendientes: msg.n, campanas_a: r.campTo, secuencias_a: r.seqTo };
+}
+async function _obcApplyCascade(uid, cid, estado) {
+  const r = _OBC_CASCADE[estado]; if (!r) return null;
+  const cx = await pool.connect();
+  try {
+    await cx.query('BEGIN');
+    // Una secuencia en borrador con fecha de inicio automática no debe arrancar sola mientras el cliente esté pausado.
+    if (estado === 'pausado') await cx.query(`UPDATE sequences SET auto_activar=FALSE, updated_at=NOW() WHERE user_id=$1 AND outbound_client_id=$2 AND estado='draft'`, [uid, cid]);
+    const c = await cx.query(`UPDATE campaigns SET estado=$4, updated_at=NOW() WHERE user_id=$1 AND outbound_client_id=$2 AND estado = ANY($3::text[])`, [uid, cid, r.camp, r.campTo]);
+    const s = await cx.query(`UPDATE sequences SET estado=$4, auto_activar=FALSE, updated_at=NOW() WHERE user_id=$1 AND outbound_client_id=$2 AND estado = ANY($3::text[])`, [uid, cid, r.seq, r.seqTo]);
+    await cx.query('COMMIT');
+    return { campanas: c.rowCount, secuencias: s.rowCount };
+  } catch (e) { await cx.query('ROLLBACK').catch(() => {}); throw e; } finally { cx.release(); }
+}
+app.get('/api/outbound-clients/:id/estado-impact', requireAuth, async (req, res) => {
+  try {
+    const cid = parseInt(req.params.id, 10), est = String(req.query.estado || '');
+    if (!cid || !_OBC_CASCADE[est]) return res.json({ estado: est, campanas: 0, secuencias: 0, contactos_en_curso: 0, mensajes_pendientes: 0 });
+    const own = (await pool.query('SELECT 1 FROM outbound_clients WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId])).rowCount;
+    if (!own) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
+    res.json(await _obcCascadeImpact(req.workspaceOwnerId, cid, est));
+  } catch (e) { console.error('[obc] impact', e.message); res.status(500).json({ error: 'No se pudo calcular el impacto' }); }
+});
 app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
@@ -4121,7 +4159,7 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
   try {
     // si cambia el nombre, el enlace anterior del portal (slug) se conserva como alias
     const _slug = n => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    const prevRow = (await pool.query(`SELECT nombre, slug_alias FROM outbound_clients WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
+    const prevRow = (await pool.query(`SELECT nombre, slug_alias, estado FROM outbound_clients WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
     if (prevRow && _slug(prevRow.nombre) && _slug(prevRow.nombre) !== _slug(b.nombre)) {
       const set = new Set(String(prevRow.slug_alias || '').split(',').filter(Boolean)); set.add(_slug(prevRow.nombre)); set.delete(_slug(b.nombre));
       await pool.query(`UPDATE outbound_clients SET slug_alias=$1 WHERE id=$2`, [[...set].join(','), req.params.id]);
@@ -4137,6 +4175,11 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
     if (rows.length && b.seguimiento_avisos !== undefined) { rows[0].seguimiento_avisos = !!b.seguimiento_avisos; await pool.query('UPDATE outbound_clients SET seguimiento_avisos=$1 WHERE id=$2', [rows[0].seguimiento_avisos, rows[0].id]); }
     if (rows.length && b.timezone !== undefined) { rows[0].timezone = String(b.timezone || '').slice(0, 60); await pool.query('UPDATE outbound_clients SET timezone=$1 WHERE id=$2', [rows[0].timezone, rows[0].id]); }
     if (!rows.length) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
+    // Pausar o cerrar al cliente arrastra a sus campañas y secuencias. Solo si la pantalla lo pide tras la doble confirmación (cascade:true).
+    if (b.cascade === true && prevRow && prevRow.estado !== estado && _OBC_CASCADE[estado]) {
+      try { rows[0].cascade = await _obcApplyCascade(req.workspaceOwnerId, rows[0].id, estado); }
+      catch (e) { console.error('[obc] cascade', e.message); rows[0].cascade_error = 'El cliente cambió de estado pero no se pudieron actualizar sus campañas y secuencias.'; }
+    }
     res.json(rows[0]);
   } catch (err) {
     console.error('[obc] PUT error:', err.message);

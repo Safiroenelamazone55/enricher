@@ -1302,6 +1302,7 @@ async function _autoActivate(pool) {
     UPDATE sequences SET estado='activa', updated_at=NOW()
      WHERE estado = 'draft'
        AND starts_on IS NOT NULL AND starts_on <= CURRENT_DATE
+       AND NOT EXISTS (SELECT 1 FROM outbound_clients oc WHERE oc.id = sequences.outbound_client_id AND oc.estado IN ('pausado','cerrado'))   -- cliente pausado/cerrado: no arranca solo
      RETURNING id, nombre, campaign_id`);
   for (const s of porFecha) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
 

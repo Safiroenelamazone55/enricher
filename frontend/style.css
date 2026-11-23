@@ -21435,3 +21435,6 @@ body.ibx-lb-open{overflow:hidden}
 /* Historial del contacto: mensaje de una secuencia detenida */
 .cp-hist__st--off { background: #F1EFEB; color: #6C6862; }
 .nova-toast__act { margin-left: 10px; padding: 3px 10px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; } .nova-toast__act:hover { background: rgba(255,255,255,.18); } .nova-toast__act:disabled { opacity: .5; cursor: default; }
+.nvc-in { width: 100%; box-sizing: border-box; margin: 4px 0 14px; height: 38px; padding: 0 12px; border: 1px solid #D9DEDB; border-radius: 8px; font: inherit; font-size: .9rem; color: #0A2540; background: #fff; }
+.nvc-in:focus { outline: none; border-color: #B42318; box-shadow: 0 0 0 3px rgba(180,35,24,.12); }
+.nvc-b:disabled { opacity: .45; cursor: not-allowed; }
