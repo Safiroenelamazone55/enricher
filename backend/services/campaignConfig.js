@@ -167,7 +167,7 @@ function mount(app, { pool, requireAuth }) {
       const { rows: wa } = await pool.query(`SELECT w.id, w.nombre, w.numero, w.estado FROM wa_connections w WHERE w.user_id=$1 AND w.archivada_at IS NULL AND (w.outbound_client_id=$2 OR EXISTS (SELECT 1 FROM wa_connection_clients x WHERE x.connection_id=w.id AND x.outbound_client_id=$2)) ORDER BY w.id`, [uid, cid]).catch(() => ({ rows: [] }));
       const { rows: li } = await pool.query(`SELECT id, nombre, li_slug, estado, modo, plan, ultimo_visto FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY id`, [uid, cid]).catch(() => ({ rows: [] }));
       const { rows: ws } = await pool.query(`SELECT window_start, window_end, send_weekends, timezone, track_opens, track_clicks FROM lm_send_settings WHERE user_id=$1`, [uid]);
-      const { rows: seqs } = await pool.query(`SELECT id, nombre, estado, send_days, timezone, send_interval_min FROM sequences WHERE campaign_id=$1 AND user_id=$2 ORDER BY id`, [c.id, uid]);
+      const { rows: seqs } = await pool.query(`SELECT s.id, s.nombre, s.estado, s.send_days, s.timezone, s.send_interval_min, s.send_mode, s.track_opens, s.track_clicks, (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND x.estado='activo') AS activos FROM sequences s WHERE s.campaign_id=$1 AND s.user_id=$2 ORDER BY s.id`, [c.id, uid]);
       // Campaña sin configuración guardada: se parte de lo que YA tienen sus secuencias (así guardar sin tocar nada no cambia el comportamiento actual)
       if (!(isObj(c.config) && c.config.guardada)) {
         const q0 = seqs[0];
@@ -201,8 +201,10 @@ function mount(app, { pool, requireAuth }) {
       await cx.query(`UPDATE campaigns SET config = $2::jsonb, updated_at=NOW() WHERE id=$1`, [c.id, JSON.stringify({ ...cfg, guardada: true, fin_aplicado: (c.config && c.config.fin_aplicado && c.config.planificacion && c.config.planificacion.fecha_fin === cfg.planificacion.fecha_fin) ? true : false })]);
       // Se copia a las secuencias de la campaña lo que el motor ya entiende
       await cx.query(
-        `UPDATE sequences SET send_days=$3, send_interval_min=$4, timezone=CASE WHEN $5 <> '' THEN $5 ELSE timezone END, track_opens=$6, track_clicks=$7 WHERE campaign_id=$1 AND user_id=$2`,
-        [c.id, uid, maskDe(cfg.planificacion.dias), cfg.planificacion.cada_min, cfg.planificacion.zona, cfg.tracking.aperturas, cfg.tracking.clics]);
+        `UPDATE sequences SET send_days=$3, send_interval_min=$4, timezone=CASE WHEN $5 <> '' THEN $5 ELSE timezone END, track_opens=$6, track_clicks=$7
+          WHERE campaign_id=$1 AND user_id=$2 AND ($8::int[] IS NULL OR id = ANY($8::int[]))`,
+        [c.id, uid, maskDe(cfg.planificacion.dias), cfg.planificacion.cada_min, cfg.planificacion.zona, cfg.tracking.aperturas, cfg.tracking.clics,
+          Array.isArray(b.aplicar_a) ? b.aplicar_a.map(x => parseInt(x, 10)).filter(Boolean) : null]);
       if (Array.isArray(b.remitentes)) {
         await cx.query(`DELETE FROM campaign_senders WHERE campaign_id=$1`, [c.id]);
         for (const r of b.remitentes) {
