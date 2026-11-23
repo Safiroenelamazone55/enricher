@@ -204,6 +204,26 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   };
   const nota = (a, texto) => a.contact_id ? pool.query(`INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','linkedin',$3,NOW(),'hecha')`, [a.user_id, a.contact_id, texto]).catch(() => {}) : null;
 
+  // Avanza la inscripción tras un paso hecho. Caso especial: tras una invitación, si los pasos que siguen solo aplican a quien ACEPTA y aún no aceptó,
+  // la inscripción NO termina: queda en espera (pausada: «esperando_aceptacion») y se reanuda sola cuando se detecta la aceptación.
+  async function avanzar(ac) {
+    const se = sendEngine();
+    try {
+      if (ac.tipo === 'invite') {
+        const { rows: steps } = await pool.query(`SELECT id, dia, canal, espera_dias, cond, cond_step_id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [ac.sequence_id]);
+        const cur = steps.findIndex(x => x.id === ac.step_id);
+        const { rows: [k] } = await pool.query(`SELECT disposition, li_aceptado_at FROM lm_contacts WHERE id=$1`, [ac.contact_id]);
+        const later = steps.slice(cur + 1);
+        const eff = await se.nextEffIdx(pool, steps, { contact_id: ac.contact_id, disposition: k && k.disposition, li_aceptado_at: k && k.li_aceptado_at }, cur + 1);
+        if (cur >= 0 && eff < 0 && later.some(x => x.cond === 'replied') && !(k && k.li_aceptado_at)) {
+          await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='esperando_aceptacion', paso_date=CURRENT_DATE WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [ac.user_id, ac.contact_id, ac.sequence_id]);
+          return;
+        }
+      }
+      await se.advancePastStep(pool, ac.user_id, ac.contact_id, ac.sequence_id, ac.step_id);
+    } catch (e) { console.error('[li] avanzar', e.message); }
+  }
+
   // Contactos que esta cuenta ha tocado en los últimos 60 días (para casar nombres de bandeja y notificaciones)
   async function contactosDeCuenta(a) {
     const { rows } = await pool.query(
@@ -268,6 +288,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       // (2a) Limpieza: acciones en cola de una inscripción que ya no está activa
       await pool.query(`UPDATE li_actions x SET estado='cancelled', detalle='La secuencia ya no está activa para esta persona' WHERE x.estado='queued' AND x.sequence_id IS NOT NULL AND x.contact_id IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id AND s.estado='activa' WHERE cs.contact_id=x.contact_id AND cs.sequence_id=x.sequence_id AND cs.estado='activo')`);
+      // Quien lleva 21 días sin aceptar la invitación sale de la secuencia (la espera no es eterna)
+      await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', paused_reason='' WHERE estado='pausado' AND paused_reason='esperando_aceptacion' AND paso_date < CURRENT_DATE - 21`);
       // (1) Lecturas de detección, solo en cuentas conectadas y activas, y solo si hay algo que esperar
       const { rows: cuentas } = await pool.query(`SELECT * FROM li_accounts WHERE estado='activa' AND ultimo_visto > NOW() - INTERVAL '10 minutes'`);
       for (const a of cuentas) {
@@ -526,16 +548,16 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         else if (ac.contact_id && ac.sequence_id && ac.step_id) {
           const rot = { invite: 'Invitación de LinkedIn enviada' + (ac.nota ? ' con nota' : ''), message: 'Mensaje de LinkedIn enviado', visit: 'Perfil de LinkedIn visitado' }[ac.tipo] || 'Acción de LinkedIn hecha';
           await nota(ac, rot + ' (automático, extensión)');
-          await sendEngine().advancePastStep(pool, ac.user_id, ac.contact_id, ac.sequence_id, ac.step_id).catch(e => console.error('[li] avanzar', e.message));
+          await avanzar(ac);
         }
       } else if (codigo === 'omitida') {
         await pool.query(`UPDATE li_actions SET estado='skipped', done_at=NOW(), error=$2, detalle=$3 WHERE id=$1`, [id, String(b.error || 'omitida').slice(0, 60), det]);
         if (!String(ac.tipo).startsWith('check_') && ac.contact_id && ac.sequence_id) {
           if (b.error === 'ya_conectado' && ac.tipo === 'invite') {
             await aplicar(ac.user_id, ac.contact_id, { disposition: 'aceptado', canal: 'linkedin', nota: 'Ya estaba conectado en LinkedIn', sequence_id: ac.sequence_id });
-            if (ac.step_id) await sendEngine().advancePastStep(pool, ac.user_id, ac.contact_id, ac.sequence_id, ac.step_id).catch(() => {});
+            if (ac.step_id) await avanzar({ ...ac, tipo: 'visit' });
           } else if (b.error === 'ya_pendiente' && ac.tipo === 'invite') {
-            if (ac.step_id) await sendEngine().advancePastStep(pool, ac.user_id, ac.contact_id, ac.sequence_id, ac.step_id).catch(() => {});
+            if (ac.step_id) await avanzar(ac);
           } else {
             await pausarInscripcion(ac, 'linkedin_omitido', `Secuencia pausada: la extensión no pudo ejecutar el paso de LinkedIn (${b.error || 'omitido'}${det ? ': ' + det : ''}). Revísalo.`);
           }
