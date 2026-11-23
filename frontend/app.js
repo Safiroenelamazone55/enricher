@@ -23462,6 +23462,7 @@ const LeadManagerModule = (() => {
     if (section === 'leads')     _reloadActivities();
     if (section === 'calls')     { _callsData = null; }
     if (section === 'exclusions') { _exList = null; _exLoad(); }
+    if (section === 'cmptpl') { _ct.list = null; _ctLoad(); }
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
@@ -23527,6 +23528,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'company-view') { body.innerHTML = _vCompanyPage(_companyView); }
     else if (_section === 'exclusions') body.innerHTML = _vExclusions();
     else if (_section === 'templates') body.innerHTML = _vTemplates();
+    else if (_section === 'cmptpl') body.innerHTML = _vCmpTpl();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
     else if (_section === 'settings') { body.innerHTML = _vSettings(); _countUp(); _mountCanteraCfg(); }
     else if (String(_section).startsWith('x-') && _canDatos()) _xMount(_section.slice(2));
@@ -34115,6 +34117,102 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       </div>${tbl}`;
   }
 
+  // ── Plantillas → Campañas: biblioteca de templates de campaña (comunidad · equipo · propios) ──
+  const _ct = { col: 'comunidad', q: '', sort: 'relevante', sortOpen: false, dd: '', list: null, f: { tipo: [], idioma: [], para: [], objetivo: [] } };
+  const _CT_TABS = [['campanas', 'Campañas'], ['emails', 'Emails'], ['envio', 'Planificaciones de envío'], ['fragmentos', 'Fragmentos'], ['imagenes', 'Imágenes'], ['landing', 'Landing pages']];
+  const _CT_COLS = [['comunidad', 'Plantillas de la comunidad'], ['equipo', 'Plantillas del equipo'], ['mis', 'Mis templates']];
+  const _CT_FILTERS = [
+    ['tipo', 'Tipo de campaña', [['multicanal', 'Multicanal'], ['solo_emails', 'Solo emails']]],
+    ['idioma', 'Idioma', [['en', 'Inglés'], ['fr', 'Francés'], ['es', 'Español']]],
+    ['para', 'Plantilla para', ['Agencia', 'Equipo de ventas', 'Fundadores', 'Growth y especialistas en marketing', 'Operaciones de ventas'].map(x => [x, x])],
+    ['objetivo', 'Objetivo', ['C-Level', 'Director', 'Operativo', 'Administrador'].map(x => [x, x])],
+  ];
+  const _CT_SORTS = [['relevante', 'Relevante para mí'], ['reciente', 'Más reciente'], ['popular', 'Más popular']];
+  const _CT_I = {
+    search: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>',
+    sort: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="17" x2="14" y2="17"/></svg>',
+    chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+    users: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5a3 3 0 0 1 0 6"/></svg>',
+    mail: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8-5 8 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 9l8 6 8-6"/></svg>',
+    chat: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+    multi: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 9h10M7 13h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>',
+    solo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M6.5 9l5.5 4 5.5-4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    box: '<svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#B4BEB8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.3 7.5L12 12.5l8.7-5"/><line x1="12" y1="22" x2="12" y2="12.5"/></svg>',
+  };
+  async function _ctLoad() {
+    try { const r = await apiFetch(`${API}/lm/campaign-templates`); _ct.list = r.ok ? await r.json() : []; } catch (_) { _ct.list = []; }
+    if (_section === 'cmptpl') _ctPaint();
+  }
+  function _ctFiltered() {
+    let l = (_ct.list || []).filter(t => t.scope === _ct.col);
+    const q = _lmNorm(_ct.q);
+    if (q) l = l.filter(t => _lmNorm((t.titulo || '') + ' ' + (t.autor_nombre || '')).includes(q));
+    const f = _ct.f;
+    if (f.tipo.length) l = l.filter(t => f.tipo.includes(t.tipo));
+    if (f.idioma.length) l = l.filter(t => f.idioma.includes(t.idioma));
+    if (f.para.length) l = l.filter(t => (t.para || []).some(x => f.para.includes(x)));
+    if (f.objetivo.length) l = l.filter(t => (t.objetivo || []).some(x => f.objetivo.includes(x)));
+    const by = _ct.sort === 'reciente' ? (a, b) => new Date(b.created_at) - new Date(a.created_at) : (a, b) => (b.copias || 0) - (a.copias || 0);
+    return l.slice().sort(by);
+  }
+  function _ctCard(t) {
+    const multi = t.tipo !== 'solo_emails';
+    const nm = t.autor_nombre || '';
+    const av = t.autor_avatar ? `<img class="ctp-card__av" src="${esc(t.autor_avatar)}" alt="">` : `<span class="ctp-card__av ctp-card__av--i">${esc((nm.trim()[0] || '·').toUpperCase())}</span>`;
+    return `<div class="ctp-card" title="${esc(t.titulo || '')}">
+      <div class="ctp-card__hd"><span class="ctp-type ${multi ? 'ctp-type--multi' : 'ctp-type--solo'}">${multi ? _CT_I.multi : _CT_I.solo}${multi ? 'Multicanal' : 'Solo emails'}</span><span class="ctp-copies" title="Veces que se usó">${_CT_I.copy}${t.copias || 0}</span></div>
+      <div class="ctp-card__t">${esc(t.titulo || 'Sin título')}</div>
+      <div class="ctp-card__ft"><span class="ctp-card__au">${av}<span>${esc(nm)}</span></span>
+        <span class="ctp-stats"><span title="Prospectos">${_CT_I.users}${t.prospectos || 0}</span><span title="Tasa de apertura">${_CT_I.mail}${t.apertura || 0}%</span><span title="Tasa de respuesta">${_CT_I.chat}${t.respuesta || 0}%</span></span></div>
+    </div>`;
+  }
+  function _ctInner() {
+    const list = _ct.list === null ? null : _ctFiltered();
+    const filtros = _CT_FILTERS.map(([k, lbl, opts]) => {
+      const sel = _ct.f[k], open = _ct.dd === k;
+      const txt = sel.length ? opts.filter(o => sel.includes(o[0])).map(o => o[1]).join(', ') : 'Todo';
+      return `<div class="ctp-f"><span class="ctp-f__l">${lbl}</span>
+        <button type="button" class="ctp-dd${open ? ' is-open' : ''}" onclick="event.stopPropagation();LeadManagerModule.ctDd('${k}')"><span class="ctp-dd__v${sel.length ? ' is-set' : ''}">${esc(txt)}</span>${_CT_I.chev}</button>
+        ${open ? `<div class="ctp-menu" onclick="event.stopPropagation()">${opts.map(o => `<label class="ctp-menu__i"><input type="checkbox" ${sel.includes(o[0]) ? 'checked' : ''} onchange="LeadManagerModule.ctPick('${k}','${esc(o[0]).replace(/'/g, "\\'")}',this.checked)"><span>${esc(o[1])}</span></label>`).join('')}</div>` : ''}</div>`;
+    }).join('');
+    const grid = list === null ? '<div class="ctp-empty">Cargando…</div>'
+      : list.length ? list.map(_ctCard).join('')
+      : `<div class="ctp-empty">${_CT_I.box}<b>${(_ct.list || []).some(t => t.scope === _ct.col) ? 'Ningún template coincide con estos filtros' : 'Aún no hay templates en esta colección'}</b><span>${(_ct.list || []).some(t => t.scope === _ct.col) ? 'Prueba con otra búsqueda o quita algún filtro.' : 'Cuando importes templates, aparecerán aquí listos para usar.'}</span></div>`;
+    return `<div class="ctp-left">
+        <div class="ctp-search"><span class="ctp-search__ic">${_CT_I.search}</span><input id="ctp-q" type="text" placeholder="Buscar" value="${esc(_ct.q)}" oninput="LeadManagerModule.ctSearch(this.value)">
+          <button type="button" class="ctp-sortb" title="Ordenar" onclick="event.stopPropagation();LeadManagerModule.ctSortMenu()">${_CT_I.sort}</button>
+          ${_ct.sortOpen ? `<div class="ctp-menu ctp-menu--sort" onclick="event.stopPropagation()">${_CT_SORTS.map(([v, l]) => `<button type="button" class="ctp-menu__b${_ct.sort === v ? ' is-on' : ''}" onclick="LeadManagerModule.ctSort('${v}')">${l}</button>`).join('')}</div>` : ''}</div>
+        <div class="ctp-cols">${_CT_COLS.map(([k, l]) => `<button type="button" class="ctp-col${_ct.col === k ? ' is-on' : ''}" onclick="LeadManagerModule.ctCol('${k}')">${l}</button>`).join('')}</div>
+        ${filtros}
+      </div>
+      <div class="ctp-gridwrap"><div class="ctp-grid${list && list.length ? '' : ' is-empty'}">${grid}</div></div>`;
+  }
+  function _vCmpTpl() {
+    return `<div class="ctp" onclick="LeadManagerModule.ctClose()">
+      <h2 class="ctp-title">Plantillas</h2>
+      <div class="ctp-tabs">${_CT_TABS.map(([k, l]) => `<button type="button" class="ctp-tab${k === 'campanas' ? ' is-on' : ''}" onclick="LeadManagerModule.ctTab('${k}')">${l}</button>`).join('')}</div>
+      <div class="ctp-main" id="ctp-main">${_ctInner()}</div>
+    </div>`;
+  }
+  function _ctPaint() {
+    const el = document.getElementById('ctp-main'); if (!el) return;
+    const q = document.getElementById('ctp-q'), hadFocus = q && document.activeElement === q, pos = q ? q.selectionStart : 0;
+    el.innerHTML = _ctInner();
+    if (hadFocus) { const n = document.getElementById('ctp-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} } }
+  }
+  function ctCol(k) { _ct.col = k; _ct.dd = ''; _ct.sortOpen = false; _ctPaint(); }
+  function ctSearch(v) { _ct.q = v; _ct.dd = ''; _ctPaint(); }
+  function ctSortMenu() { _ct.sortOpen = !_ct.sortOpen; _ct.dd = ''; _ctPaint(); }
+  function ctSort(v) { _ct.sort = v; _ct.sortOpen = false; _ctPaint(); }
+  function ctDd(k) { _ct.dd = _ct.dd === k ? '' : k; _ct.sortOpen = false; _ctPaint(); }
+  function ctPick(k, v, on) { const a = _ct.f[k]; const i = a.indexOf(v); if (on && i < 0) a.push(v); if (!on && i >= 0) a.splice(i, 1); _ctPaint(); }
+  function ctClose() { if (_ct.dd || _ct.sortOpen) { _ct.dd = ''; _ct.sortOpen = false; _ctPaint(); } }
+  function ctTab(k) {
+    if (k === 'campanas') return;
+    if (k === 'emails') return go('templates');
+    showBanner('Esta pestaña llega en una próxima versión.', 'info');
+  }
   function _vTemplates() {
     let list = _tplFilter === 'all' ? _lmTpls : _lmTpls.filter(t => (t.canal || 'general') === _tplFilter);
     if (_tplTagFilter) list = list.filter(t => _tplTagsOf(t).some(x => _lmNorm(x) === _lmNorm(_tplTagFilter)));
@@ -36298,7 +36396,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         </div>
         <div class="cmpst-tpl">
           <div class="cmpst-tpl__t"><b>Empezar con templates</b><span>Parte de una secuencia ya armada y adáptala a tu cliente.</span></div>
-          <button type="button" class="btn btn--ghost cmpst-tpl__b" onclick="showBanner('La biblioteca de templates se activa cuando importes los templates.', 'info')">${_CS_ICO.book} Explorar la biblioteca de templates</button>
+          <button type="button" class="btn btn--ghost cmpst-tpl__b" onclick="LeadManagerModule.closeCampaignStart();LeadManagerModule.go('cmptpl')">${_CS_ICO.book} Explorar la biblioteca de templates</button>
         </div>
       </div>
     </div>`;
@@ -41052,6 +41150,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

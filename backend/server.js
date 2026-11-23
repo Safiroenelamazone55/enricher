@@ -4963,6 +4963,18 @@ function _gateOut(g) {
     enrollBlocked: ei.ya_contactados || 0, enrollBlockedDetalle: ei.ya_contactados_detalle || [],
   };
 }
+// Biblioteca de templates de campaña: comunidad (user_id NULL) + los del equipo y propios de esta cuenta. La pantalla filtra y ordena.
+app.get('/api/lm/campaign-templates', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, scope, tipo, idioma, para, objetivo, titulo, autor_nombre, autor_avatar, copias, prospectos, apertura, respuesta,
+              jsonb_array_length(pasos) AS n_pasos, created_at
+         FROM lm_campaign_templates
+        WHERE user_id IS NULL OR user_id = $1
+        ORDER BY copias DESC, id DESC LIMIT 1000`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (e) { console.error('[campaign-templates]', e.message); res.status(500).json({ error: 'No se pudieron cargar los templates' }); }
+});
 app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {

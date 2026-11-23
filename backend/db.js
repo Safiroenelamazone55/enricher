@@ -1314,6 +1314,26 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem2_prog BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS dest_email TEXT NOT NULL DEFAULT ''`);
+    // Biblioteca de templates de campaña (vista «Plantillas → Campañas»). user_id NULL = plantilla de la comunidad (visible para todos).
+    await pool.query(`CREATE TABLE IF NOT EXISTS lm_campaign_templates (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      scope TEXT NOT NULL DEFAULT 'mis',               -- comunidad | equipo | mis
+      tipo TEXT NOT NULL DEFAULT 'multicanal',          -- multicanal | solo_emails
+      idioma TEXT NOT NULL DEFAULT 'es',                -- es | en | fr
+      para JSONB NOT NULL DEFAULT '[]'::jsonb,          -- Agencia, Equipo de ventas, Fundadores, Growth y especialistas en marketing, Operaciones de ventas
+      objetivo JSONB NOT NULL DEFAULT '[]'::jsonb,      -- C-Level, Director, Operativo, Administrador
+      titulo TEXT NOT NULL DEFAULT '',
+      autor_nombre TEXT NOT NULL DEFAULT '',
+      autor_avatar TEXT NOT NULL DEFAULT '',
+      copias INTEGER NOT NULL DEFAULT 0,
+      prospectos INTEGER NOT NULL DEFAULT 0,
+      apertura INTEGER NOT NULL DEFAULT 0,
+      respuesta INTEGER NOT NULL DEFAULT 0,
+      pasos JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_lm_campaign_templates_user ON lm_campaign_templates (user_id, scope)`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);
