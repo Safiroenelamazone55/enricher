@@ -127,10 +127,11 @@ function buildTree(nodes, edges, contents) {
   const byId = new Map(nodes.map(n => [n.id, n]));
   const next = new Map();   // origen → [{to, rama}]
   for (const e of edges || []) {
-    const m = String(e).match(/^(.+?)->(.+?)(?:-(yes|no))?$/);
+    const m = String(e).match(/^(.+?)->(.+?)(?:-(yes|no|branch-\d+|fallback))?$/);
     if (!m) continue;
     if (!next.has(m[1])) next.set(m[1], []);
-    next.get(m[1]).push({ to: m[2], rama: m[3] || '' });
+    const rama = /^branch-/.test(m[3] || '') ? 'yes' : m[3] === 'fallback' ? 'no' : (m[3] || '');
+    next.get(m[1]).push({ to: m[2], rama });
   }
   const out = (id, rama) => ((next.get(id) || []).find(x => rama ? x.rama === rama : !x.rama) || {}).to || null;
   const isMerge = id => /__merge$/.test(id || '');
@@ -144,6 +145,12 @@ function buildTree(nodes, edges, contents) {
       if (isCond(n)) {
         const c = parseCond(n.name || n.txt);
         const si = out(cur, 'yes'), no = out(cur, 'no');
+        if (!byId.has(cur + '__merge') && !si && !no) {
+          // «Esperar hasta…»: no ramifica, lo que sigue ocurre solo si se cumple la condición
+          const nx = out(cur);
+          items.push({ k: 'cond', ...c, si: nx ? walk(nx) : [], no: [] });
+          break;
+        }
         items.push({ k: 'cond', ...c, si: si ? walk(si) : [], no: no ? walk(no) : [] });
         cur = out(cur + '__merge');
         continue;
