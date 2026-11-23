@@ -23923,56 +23923,56 @@ const LeadManagerModule = (() => {
     await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id), _seqLoadApprovals(id), _seqLoadPendingNoEmail(id)]);
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
-  // ── LinkedIn con la extensión de Nova: cuentas, topes, calentamiento y cola ──
-  const _li = { accs: null, queue: null, events: [], acc: 0, timer: null };
-  const _LI_EST = { activa: ['Activa', '#00804C', '#EAF5EE'], pausada: ['Pausada', '#B45309', '#FFF7E6'], restringida: ['En pausa por restricción', '#B42318', '#FDECEA'], desconectada: ['Sin sesión de LinkedIn', '#B42318', '#FDECEA'] };
-  const _LI_QST = { queued: 'En cola', taken: 'En curso', done: 'Hecha', failed: 'Falló', skipped: 'Omitida', cancelled: 'Cancelada' };
-  const _LI_TIPO = { invite: 'Invitación', message: 'Mensaje', visit: 'Visita', inmail: 'InMail' };
-  async function _liLoad() {
-    try {
-      const [a, q] = await Promise.all([apiFetch(`${API}/li/accounts`), apiFetch(`${API}/li/queue?account_id=${_li.acc || 0}`)]);
+  // ── LinkedIn con la extensión de Nova: cuentas, topes, calentamiento y cola ──
+  const _li = { accs: null, queue: null, events: [], acc: 0, timer: null };
+  const _LI_EST = { activa: ['Activa', '#00804C', '#EAF5EE'], pausada: ['Pausada', '#B45309', '#FFF7E6'], restringida: ['En pausa por restricción', '#B42318', '#FDECEA'], desconectada: ['Sin sesión de LinkedIn', '#B42318', '#FDECEA'] };
+  const _LI_QST = { queued: 'En cola', taken: 'En curso', done: 'Hecha', failed: 'Falló', skipped: 'Omitida', cancelled: 'Cancelada' };
+  const _LI_TIPO = { invite: 'Invitación', message: 'Mensaje', visit: 'Visita', inmail: 'InMail' };
+  async function _liLoad() {
+    try {
+      const [a, q] = await Promise.all([apiFetch(`${API}/li/accounts`), apiFetch(`${API}/li/queue?account_id=${_li.acc || 0}`)]);
       _li.accs = a.ok ? await a.json() : []; _li.queue = q.ok ? await q.json() : [];
-      try { const ev = await apiFetch(`${API}/li/events`); _li.events = ev.ok ? await ev.json() : []; } catch (_) { _li.events = _li.events || []; }
-    } catch (_) { _li.accs = _li.accs || []; _li.queue = _li.queue || []; }
-    if (_section === 'linkedin') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _liPaint(); }
-    clearTimeout(_li.timer); if (_section === 'linkedin') _li.timer = setTimeout(() => { if (_section === 'linkedin' && !document.getElementById('li-modal')) _liLoad(); }, 20000);
-  }
-  function _liPaint() { const r = document.getElementById('li-root'); if (r) r.innerHTML = _liInner(); }
-  function _liBar(n, max, warn) { const p = max ? Math.min(100, Math.round(n / max * 100)) : 0; return `<span class="li-bar"><i style="width:${p}%"${p >= 100 ? ' class="full"' : ''}></i></span><span class="li-bar__t">${n}/${max}</span>`; }
-  function _liCard(a) {
-    const e = _LI_EST[a.estado] || _LI_EST.pausada, h = a.hoy || {}, f = a.efectivos || {};
-    const cli = (_clients.find(c => c.id === a.outbound_client_id) || {}).nombre;
-    return `<div class="li-card">
-      <div class="li-card__hd"><div><b>${esc(a.nombre)}</b>${a.li_slug ? ` <span class="li-sub">· linkedin.com/in/${esc(a.li_slug)}</span>` : ''}<div class="li-sub">${cli ? esc(cli) + ' · ' : ''}${a.conectada ? '<span class="li-dot on"></span>Extensión conectada' : '<span class="li-dot"></span>Extensión sin conexión'}${a.ext_version ? ' · v' + esc(a.ext_version) : ''}</div></div>
-        <span class="li-pill" style="color:${e[1]};background:${e[2]}">${e[0]}</span></div>
-      ${a.motivo ? `<div class="li-motivo">${esc(a.motivo)}${a.pausa_hasta ? ` · hasta ${esc(new Date(a.pausa_hasta).toLocaleString())}` : ''}</div>` : ''}
-      <div class="li-grid">
-        <div><span>Invitaciones hoy</span>${_liBar(h.inv_hoy || 0, f.inv || 0)}</div>
-        <div><span>Invitaciones 7 días</span>${_liBar(h.inv_semana || 0, f.inv_semana || 0)}</div>
-        <div><span>Mensajes hoy</span>${_liBar(h.msg_hoy || 0, f.msg || 0)}</div>
-        <div><span>Visitas hoy</span>${_liBar(h.vis_hoy || 0, f.vis || 0)}</div>
-        <div><span>Acciones totales hoy</span>${_liBar(h.total_hoy || 0, f.total || 0)}</div>
-        <div><span>Calentamiento</span><b class="li-w">${f.calentando ? 'Día ' + (f.dia_calentamiento + 1) + ' de ' + a.ramp_dias : 'Completado'}</b></div>
-      </div>
-      <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días · modo <b>${a.modo === 'auto' ? 'automático' : 'asistido'}</b></span>
-        <div class="li-btns">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(${a.id})">Ver cola</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
-          <button class="btn ${a.estado === 'activa' ? 'btn--ghost' : 'btn--primary'} btn--sm" onclick="LeadManagerModule.liToggle(${a.id}, '${a.estado === 'activa' ? 'pausar' : 'activar'}')">${a.estado === 'activa' ? 'Pausar' : 'Activar'}</button>
-        </div></div></div>`;
-  }
-  function _liInner() {
-    if (_li.accs === null) return '<div class="ctp-empty" style="padding:40px">Cargando…</div>';
-    const q = (_li.queue || []).slice(0, 60);
-    return `<div class="li-hd"><div><h2 class="li-t">LinkedIn</h2><p class="li-p">Cada cuenta de LinkedIn se conecta con la extensión de Nova, instalada en su propio perfil de Chrome. Nova decide qué se hace y cuándo, y aplica los topes por cuenta. En modo <b>asistido</b> la extensión deja todo escrito y tú pulsas «Enviar».</p></div>
-        <button class="btn btn--primary" onclick="LeadManagerModule.liNew()">+ Conectar cuenta</button></div>
-      ${_li.accs.length ? _li.accs.map(_liCard).join('') : `<div class="ctp-empty" style="padding:40px"><b>Aún no hay cuentas conectadas</b><span>Pulsa «Conectar cuenta», instala la extensión en ese perfil de Chrome y pega el token.</span></div>`}
+      try { const ev = await apiFetch(`${API}/li/events`); _li.events = ev.ok ? await ev.json() : []; } catch (_) { _li.events = _li.events || []; }
+    } catch (_) { _li.accs = _li.accs || []; _li.queue = _li.queue || []; }
+    if (_section === 'linkedin') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _liPaint(); }
+    clearTimeout(_li.timer); if (_section === 'linkedin') _li.timer = setTimeout(() => { if (_section === 'linkedin' && !document.getElementById('li-modal')) _liLoad(); }, 20000);
+  }
+  function _liPaint() { const r = document.getElementById('li-root'); if (r) r.innerHTML = _liInner(); }
+  function _liBar(n, max, warn) { const p = max ? Math.min(100, Math.round(n / max * 100)) : 0; return `<span class="li-bar"><i style="width:${p}%"${p >= 100 ? ' class="full"' : ''}></i></span><span class="li-bar__t">${n}/${max}</span>`; }
+  function _liCard(a) {
+    const e = _LI_EST[a.estado] || _LI_EST.pausada, h = a.hoy || {}, f = a.efectivos || {};
+    const cli = (_clients.find(c => c.id === a.outbound_client_id) || {}).nombre;
+    return `<div class="li-card">
+      <div class="li-card__hd"><div><b>${esc(a.nombre)}</b>${a.li_slug ? ` <span class="li-sub">· linkedin.com/in/${esc(a.li_slug)}</span>` : ''}<div class="li-sub">${cli ? esc(cli) + ' · ' : ''}${a.conectada ? '<span class="li-dot on"></span>Extensión conectada' : '<span class="li-dot"></span>Extensión sin conexión'}${a.ext_version ? ' · v' + esc(a.ext_version) : ''}</div></div>
+        <span class="li-pill" style="color:${e[1]};background:${e[2]}">${e[0]}</span></div>
+      ${a.motivo ? `<div class="li-motivo">${esc(a.motivo)}${a.pausa_hasta ? ` · hasta ${esc(new Date(a.pausa_hasta).toLocaleString())}` : ''}</div>` : ''}
+      <div class="li-grid">
+        <div><span>Invitaciones hoy</span>${_liBar(h.inv_hoy || 0, f.inv || 0)}</div>
+        <div><span>Invitaciones 7 días</span>${_liBar(h.inv_semana || 0, f.inv_semana || 0)}</div>
+        <div><span>Mensajes hoy</span>${_liBar(h.msg_hoy || 0, f.msg || 0)}</div>
+        <div><span>Visitas hoy</span>${_liBar(h.vis_hoy || 0, f.vis || 0)}</div>
+        <div><span>Acciones totales hoy</span>${_liBar(h.total_hoy || 0, f.total || 0)}</div>
+        <div><span>Calentamiento</span><b class="li-w">${f.calentando ? 'Día ' + (f.dia_calentamiento + 1) + ' de ' + a.ramp_dias : 'Completado'}</b></div>
+      </div>
+      <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días · modo <b>${a.modo === 'auto' ? 'automático' : 'asistido'}</b></span>
+        <div class="li-btns">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(${a.id})">Ver cola</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
+          <button class="btn ${a.estado === 'activa' ? 'btn--ghost' : 'btn--primary'} btn--sm" onclick="LeadManagerModule.liToggle(${a.id}, '${a.estado === 'activa' ? 'pausar' : 'activar'}')">${a.estado === 'activa' ? 'Pausar' : 'Activar'}</button>
+        </div></div></div>`;
+  }
+  function _liInner() {
+    if (_li.accs === null) return '<div class="ctp-empty" style="padding:40px">Cargando…</div>';
+    const q = (_li.queue || []).slice(0, 60);
+    return `<div class="li-hd"><div><h2 class="li-t">LinkedIn</h2><p class="li-p">Cada cuenta de LinkedIn se conecta con la extensión de Nova, instalada en su propio perfil de Chrome. Nova decide qué se hace y cuándo, y aplica los topes por cuenta. En modo <b>asistido</b> la extensión deja todo escrito y tú pulsas «Enviar».</p></div>
+        <button class="btn btn--primary" onclick="LeadManagerModule.liNew()">+ Conectar cuenta</button></div>
+      ${_li.accs.length ? _li.accs.map(_liCard).join('') : `<div class="ctp-empty" style="padding:40px"><b>Aún no hay cuentas conectadas</b><span>Pulsa «Conectar cuenta», instala la extensión en ese perfil de Chrome y pega el token.</span></div>`}
       <h3 class="li-t2">Lo que ha pasado en LinkedIn</h3>
       ${(_li.events || []).length ? `<div class="li-tbl">${(_li.events || []).slice(0, 25).map(x => { const t = _LI_EVT[x.tipo] || [x.tipo, '#64748B']; return `<div class="li-ev"><b style="color:${t[1]}">${esc(t[0])}</b><span>${esc(x.slug || '')}</span><span class="li-sub">${esc(x.detalle || '')}</span><span class="li-sub">${new Date(x.created_at).toLocaleString()}</span></div>`; }).join('')}</div>` : '<p class="li-p">Cuando la extensión detecte una aceptación o una respuesta, aparecerá aquí y se marcará en el contacto.</p>'}
-      <h3 class="li-t2">Cola de acciones${_li.acc ? ' · ' + esc((_li.accs.find(x => x.id === _li.acc) || {}).nombre || '') : ''}${_li.acc ? ` <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(0)">Ver todas</button>` : ''}</h3>
-      ${q.length ? `<div class="li-tbl"><div class="li-tr li-th"><span>Acción</span><span>Perfil</span><span>Estado</span><span>Detalle</span><span></span></div>${q.map(x => `<div class="li-tr"><span>${_LI_TIPO[x.tipo] || esc(x.tipo)}</span><span><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.slug)}</a></span><span class="li-q li-q--${x.estado}">${_LI_QST[x.estado] || esc(x.estado)}</span><span class="li-sub">${esc(x.error ? x.error + (x.detalle ? ': ' + x.detalle : '') : (x.done_at ? new Date(x.done_at).toLocaleString() : new Date(x.created_at).toLocaleString()))}</span><span>${x.estado === 'queued' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liCancel(${x.id})">Cancelar</button>` : ''}</span></div>`).join('')}</div>` : '<p class="li-p">Sin acciones todavía.</p>'}`;
-  }
-  function _vLinkedin() { return `<div class="li-wrap" id="li-root">${_liInner()}</div>`; }
+      <h3 class="li-t2">Cola de acciones${_li.acc ? ' · ' + esc((_li.accs.find(x => x.id === _li.acc) || {}).nombre || '') : ''}${_li.acc ? ` <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(0)">Ver todas</button>` : ''}</h3>
+      ${q.length ? `<div class="li-tbl"><div class="li-tr li-th"><span>Acción</span><span>Perfil</span><span>Estado</span><span>Detalle</span><span></span></div>${q.map(x => `<div class="li-tr"><span>${_LI_TIPO[x.tipo] || esc(x.tipo)}</span><span><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.slug)}</a></span><span class="li-q li-q--${x.estado}">${_LI_QST[x.estado] || esc(x.estado)}</span><span class="li-sub">${esc(x.error ? x.error + (x.detalle ? ': ' + x.detalle : '') : (x.done_at ? new Date(x.done_at).toLocaleString() : new Date(x.created_at).toLocaleString()))}</span><span>${x.estado === 'queued' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liCancel(${x.id})">Cancelar</button>` : ''}</span></div>`).join('')}</div>` : '<p class="li-p">Sin acciones todavía.</p>'}`;
+  }
+  function _vLinkedin() { return `<div class="li-wrap" id="li-root">${_liInner()}</div>`; }
   async function seqLiAuto(seqId) {
     const s0 = _sequences.find(x => x.id === seqId), on = !(s0 && s0.linkedin_auto);
     if (on && !(await novaConfirm({ title: 'LinkedIn automático', message: 'Los pasos de invitación, visita y mensaje de LinkedIn de esta secuencia los ejecutará la extensión de la cuenta ligada a su cliente, respetando topes y horario. Los demás pasos de LinkedIn (InMail, comentar, seguir) siguen siendo manuales.', ok: 'Activar' }))) return;
@@ -23984,273 +23984,321 @@ const LeadManagerModule = (() => {
     try { await load(); } catch (_) {}
   }
   const _LI_EVT = { aceptada: ['Aceptó la invitación', '#00804C'], respuesta: ['Respondió', '#1E5FA8'], visita_perfil: ['Visitó tu perfil', '#64748B'], seguidor: ['Empezó a seguirte', '#64748B'], interaccion: ['Interactuó contigo', '#64748B'], alerta: ['Alerta de LinkedIn', '#B42318'] };
-  function liSel(id) { _li.acc = id; _li.queue = null; _liLoad(); }
-  async function liToggle(id, accion) {
-    if (accion === 'activar' && !(await novaConfirm({ title: 'Activar la cuenta', message: 'La extensión empezará a ejecutar las acciones de la cola respetando los topes y el horario. Asegúrate de haber revisado los topes.', ok: 'Activar' }))) return;
-    await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion }) }); _liLoad();
-  }
-  async function liCancel(id) { await apiFetch(`${API}/li/queue/${id}`, { method: 'DELETE' }); _liLoad(); }
-  function _liModal(html) {
-    document.getElementById('li-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'li-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
-  }
+  function liSel(id) { _li.acc = id; _li.queue = null; _liLoad(); }
+  async function liToggle(id, accion) {
+    if (accion === 'activar' && !(await novaConfirm({ title: 'Activar la cuenta', message: 'La extensión empezará a ejecutar las acciones de la cola respetando los topes y el horario. Asegúrate de haber revisado los topes.', ok: 'Activar' }))) return;
+    await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion }) }); _liLoad();
+  }
+  async function liCancel(id) { await apiFetch(`${API}/li/queue/${id}`, { method: 'DELETE' }); _liLoad(); }
+  function _liModal(html) {
+    document.getElementById('li-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'li-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
+  }
   function liConnectFor(clientId) { go('linkedin'); setTimeout(() => liNew(clientId), 350); }
-  function liNew(presetClient) {
-    _liModal(`<div class="fin-pi-box__hd"><h3>Conectar una cuenta de LinkedIn</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
-      <div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre de la cuenta</span><input class="form-input" id="li-n" placeholder="Ej. LinkedIn de Jenny"></label>
-      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound (opcional)</span><select class="form-input" id="li-c"><option value="">— Ninguno —</option>${_clients.map(c => `<option value="${c.id}"${String(c.id) === String(presetClient) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
-      <p class="li-p">Se crea <b>en pausa</b>, con los topes recomendados y calentamiento de 14 días. Después verás un token para pegar en la extensión de ese perfil de Chrome.</p><div class="ctu-err" id="li-e"></div></div>
-      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liCreate()">Crear cuenta</button></div></div>`);
-  }
-  async function liCreate() {
-    const r = await apiFetch(`${API}/li/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: document.getElementById('li-n').value.trim() || 'Cuenta LinkedIn', outbound_client_id: document.getElementById('li-c').value || null }) });
-    const d = await r.json(); if (!r.ok) { document.getElementById('li-e').textContent = d.error || 'Error'; return; }
-    _liToken(d.token, d.nombre); _liLoad();
-  }
-  function _liToken(tok, nombre) {
-    _liModal(`<div class="fin-pi-box__hd"><h3>Token de «${esc(nombre)}»</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
-      <div class="fin-pi-form"><p class="li-p">Cópialo ahora: <b>no se vuelve a mostrar</b> (si lo pierdes, se genera uno nuevo).</p>
-      <input class="form-input" id="li-tok" readonly value="${esc(tok)}" onclick="this.select()">
-      <ol class="li-ol"><li>Abre el perfil de Chrome de esta cuenta y carga la extensión (carpeta <code>extension-linkedin</code>) en <code>chrome://extensions</code> con «Modo desarrollador» → «Cargar descomprimida».</li><li>Inicia sesión en LinkedIn en ese perfil.</li><li>Abre el panel de la extensión, pega el token y pulsa «Guardar token».</li><li>Aquí, pulsa <b>Activar</b> en la cuenta y, en la extensión, <b>Activar</b>.</li></ol></div>
-      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="navigator.clipboard.writeText(document.getElementById('li-tok').value);this.textContent='Copiado ✓'">Copiar token</button></div></div>`);
-  }
-  async function liNewToken(id) {
-    if (!(await novaConfirm({ title: 'Generar un token nuevo', message: 'El token anterior deja de funcionar y la extensión de esa cuenta tendrá que reconectarse.', ok: 'Generar', tone: 'danger' }))) return;
-    const r = await apiFetch(`${API}/li/accounts/${id}/token`, { method: 'POST' }); const d = await r.json();
-    if (r.ok) { _liToken(d.token, (_li.accs.find(a => a.id === id) || {}).nombre || ''); _liLoad(); }
-  }
-  function liEdit(id) {
-    const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
-    const f = (k, l, mx, hint) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${l}</span><input class="form-input" type="number" min="0" max="${mx}" id="li-f-${k}" value="${a[k]}">${hint ? `<span class="li-hint">${hint}</span>` : ''}</label>`;
-    const dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-    _liModal(`<div class="fin-pi-box__hd"><h3>Topes y horario · ${esc(a.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
-      <div class="fin-pi-form li-form">
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre</span><input class="form-input" id="li-f-nombre" value="${esc(a.nombre)}"></label>
+  function liNew(presetClient) {
+    _liModal(`<div class="fin-pi-box__hd"><h3>Conectar una cuenta de LinkedIn</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
+      <div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre de la cuenta</span><input class="form-input" id="li-n" placeholder="Ej. LinkedIn de Jenny"></label>
+      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound (opcional)</span><select class="form-input" id="li-c"><option value="">— Ninguno —</option>${_clients.map(c => `<option value="${c.id}"${String(c.id) === String(presetClient) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
+      <p class="li-p">Se crea <b>en pausa</b>, con los topes recomendados y calentamiento de 14 días. Después verás un token para pegar en la extensión de ese perfil de Chrome.</p><div class="ctu-err" id="li-e"></div></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liCreate()">Crear cuenta</button></div></div>`);
+  }
+  async function liCreate() {
+    const r = await apiFetch(`${API}/li/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: document.getElementById('li-n').value.trim() || 'Cuenta LinkedIn', outbound_client_id: document.getElementById('li-c').value || null }) });
+    const d = await r.json(); if (!r.ok) { document.getElementById('li-e').textContent = d.error || 'Error'; return; }
+    _liToken(d.token, d.nombre); _liLoad();
+  }
+  function _liToken(tok, nombre) {
+    _liModal(`<div class="fin-pi-box__hd"><h3>Token de «${esc(nombre)}»</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
+      <div class="fin-pi-form"><p class="li-p">Cópialo ahora: <b>no se vuelve a mostrar</b> (si lo pierdes, se genera uno nuevo).</p>
+      <input class="form-input" id="li-tok" readonly value="${esc(tok)}" onclick="this.select()">
+      <ol class="li-ol"><li>Abre el perfil de Chrome de esta cuenta y carga la extensión (carpeta <code>extension-linkedin</code>) en <code>chrome://extensions</code> con «Modo desarrollador» → «Cargar descomprimida».</li><li>Inicia sesión en LinkedIn en ese perfil.</li><li>Abre el panel de la extensión, pega el token y pulsa «Guardar token».</li><li>Aquí, pulsa <b>Activar</b> en la cuenta y, en la extensión, <b>Activar</b>.</li></ol></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="navigator.clipboard.writeText(document.getElementById('li-tok').value);this.textContent='Copiado ✓'">Copiar token</button></div></div>`);
+  }
+  async function liNewToken(id) {
+    if (!(await novaConfirm({ title: 'Generar un token nuevo', message: 'El token anterior deja de funcionar y la extensión de esa cuenta tendrá que reconectarse.', ok: 'Generar', tone: 'danger' }))) return;
+    const r = await apiFetch(`${API}/li/accounts/${id}/token`, { method: 'POST' }); const d = await r.json();
+    if (r.ok) { _liToken(d.token, (_li.accs.find(a => a.id === id) || {}).nombre || ''); _liLoad(); }
+  }
+  function liEdit(id) {
+    const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
+    const f = (k, l, mx, hint) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${l}</span><input class="form-input" type="number" min="0" max="${mx}" id="li-f-${k}" value="${a[k]}">${hint ? `<span class="li-hint">${hint}</span>` : ''}</label>`;
+    const dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    _liModal(`<div class="fin-pi-box__hd"><h3>Topes y horario · ${esc(a.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
+      <div class="fin-pi-form li-form">
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre</span><input class="form-input" id="li-f-nombre" value="${esc(a.nombre)}"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Plan de LinkedIn de esta cuenta</span><select class="form-input" id="li-f-plan"><option value="gratis"${a.plan !== 'premium' ? ' selected' : ''}>Gratuito (solo 3 invitaciones con nota por mes)</option><option value="premium"${a.plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator (sin tope de notas)</option></select></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Modo</span><select class="form-input" id="li-f-modo"><option value="asistido"${a.modo !== 'auto' ? ' selected' : ''}>Asistido: la extensión deja el texto escrito y yo pulso «Enviar» (recomendado)</option><option value="auto"${a.modo === 'auto' ? ' selected' : ''}>Automático: la extensión envía sola (más riesgo para la cuenta)</option></select></label>
-        ${f('inv_dia', 'Invitaciones por día', 40, 'Guía: 20')}${f('inv_semana', 'Invitaciones por semana (7 días)', 150, 'Guía: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Guía: 30')}${f('vis_dia', 'Visitas por día', 60, 'Guía: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Guía: 100')}${f('inmail_dia', 'InMail por día', 30, 'Lemlist: 5')}
-        ${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}${f('gap_min', 'Espera mínima entre acciones (s)', 3600)}${f('gap_max', 'Espera máxima entre acciones (s)', 7200)}
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria</span><input class="form-input" id="li-f-tz" value="${esc(a.tz)}"></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Calentamiento</span><select class="form-input" id="li-f-ramp"><option value="1"${a.ramp_activo ? ' selected' : ''}>Activo (empieza en ${a.ramp_inicio} y sube ${a.ramp_paso}/día)</option><option value="0"${!a.ramp_activo ? ' selected' : ''}>Desactivado</option></select></label>
-        <div class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de envío</span><div class="li-days">${dn.map((d, i) => `<label><input type="checkbox" class="li-d" value="${i + 1}"${(a.dias || []).includes(i + 1) ? ' checked' : ''}>${d}</label>`).join('')}</div></div>
-        <p class="li-p fin-pi-full">Guía de lemlist (mismos valores que su pantalla «Límites»): 20 invitaciones (≈100 por semana), 30 mensajes, 30 visitas y 5 InMail, siempre contados en las últimas 24 horas. Lo que haces a mano en LinkedIn cuenta contra el mismo cupo de LinkedIn y Nova no lo ve: si prospectas a mano, baja estos topes. Nova no deja subir los topes más del doble de la guía.</p>
-        <div class="ctu-err fin-pi-full" id="li-e"></div></div>
-      <div class="fin-pi-box__ft"><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liNewToken(${a.id})">Token nuevo</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReramp(${a.id})">Reiniciar calentamiento</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReid(${a.id})">Reiniciar identidad</button> <button class="btn btn--ghost btn--sm" style="color:#B42318" onclick="LeadManagerModule.liDel(${a.id})">Eliminar cuenta</button></div><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liSave(${a.id})">Guardar</button></div></div>`);
-  }
-  async function liSave(id) {
-    const g = k => document.getElementById('li-f-' + k).value;
-    const body = { nombre: g('nombre'), modo: g('modo'), plan: g('plan'), tz: g('tz'), ramp_activo: g('ramp') === '1', dias: [...document.querySelectorAll('.li-d:checked')].map(x => Number(x.value)) };
-    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'gap_min', 'gap_max'].forEach(k => { body[k] = Number(g(k)); });
-    if (body.modo === 'auto' && !(await novaConfirm({ title: 'Modo automático', message: 'La extensión enviará sin que pulses nada. LinkedIn puede restringir la cuenta si detecta automatización. ¿Seguro?', ok: 'Sí, automático', tone: 'danger' }))) return;
-    const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) { document.getElementById('li-e').textContent = (await r.json()).error || 'Error'; return; }
-    document.getElementById('li-modal')?.remove(); _liLoad();
-  }
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Modo</span><select class="form-input" id="li-f-modo"><option value="asistido"${a.modo !== 'auto' ? ' selected' : ''}>Asistido: la extensión deja el texto escrito y yo pulso «Enviar» (recomendado)</option><option value="auto"${a.modo === 'auto' ? ' selected' : ''}>Automático: la extensión envía sola (más riesgo para la cuenta)</option></select></label>
+        ${f('inv_dia', 'Invitaciones por día', 40, 'Guía: 20')}${f('inv_semana', 'Invitaciones por semana (7 días)', 150, 'Guía: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Guía: 30')}${f('vis_dia', 'Visitas por día', 60, 'Guía: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Guía: 100')}${f('inmail_dia', 'InMail por día', 30, 'Lemlist: 5')}
+        ${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}${f('gap_min', 'Espera mínima entre acciones (s)', 3600)}${f('gap_max', 'Espera máxima entre acciones (s)', 7200)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria</span><input class="form-input" id="li-f-tz" value="${esc(a.tz)}"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Calentamiento</span><select class="form-input" id="li-f-ramp"><option value="1"${a.ramp_activo ? ' selected' : ''}>Activo (empieza en ${a.ramp_inicio} y sube ${a.ramp_paso}/día)</option><option value="0"${!a.ramp_activo ? ' selected' : ''}>Desactivado</option></select></label>
+        <div class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de envío</span><div class="li-days">${dn.map((d, i) => `<label><input type="checkbox" class="li-d" value="${i + 1}"${(a.dias || []).includes(i + 1) ? ' checked' : ''}>${d}</label>`).join('')}</div></div>
+        <p class="li-p fin-pi-full">Guía de lemlist (mismos valores que su pantalla «Límites»): 20 invitaciones (≈100 por semana), 30 mensajes, 30 visitas y 5 InMail, siempre contados en las últimas 24 horas. Lo que haces a mano en LinkedIn cuenta contra el mismo cupo de LinkedIn y Nova no lo ve: si prospectas a mano, baja estos topes. Nova no deja subir los topes más del doble de la guía.</p>
+        <div class="ctu-err fin-pi-full" id="li-e"></div></div>
+      <div class="fin-pi-box__ft"><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liNewToken(${a.id})">Token nuevo</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReramp(${a.id})">Reiniciar calentamiento</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReid(${a.id})">Reiniciar identidad</button> <button class="btn btn--ghost btn--sm" style="color:#B42318" onclick="LeadManagerModule.liDel(${a.id})">Eliminar cuenta</button></div><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liSave(${a.id})">Guardar</button></div></div>`);
+  }
+  async function liSave(id) {
+    const g = k => document.getElementById('li-f-' + k).value;
+    const body = { nombre: g('nombre'), modo: g('modo'), plan: g('plan'), tz: g('tz'), ramp_activo: g('ramp') === '1', dias: [...document.querySelectorAll('.li-d:checked')].map(x => Number(x.value)) };
+    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'gap_min', 'gap_max'].forEach(k => { body[k] = Number(g(k)); });
+    if (body.modo === 'auto' && !(await novaConfirm({ title: 'Modo automático', message: 'La extensión enviará sin que pulses nada. LinkedIn puede restringir la cuenta si detecta automatización. ¿Seguro?', ok: 'Sí, automático', tone: 'danger' }))) return;
+    const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) { document.getElementById('li-e').textContent = (await r.json()).error || 'Error'; return; }
+    document.getElementById('li-modal')?.remove(); _liLoad();
+  }
   async function liReid(id) {
     if (!(await novaConfirm({ title: 'Reiniciar la identidad', message: 'La próxima vez que la extensión se conecte, Nova guardará como identidad de esta cuenta la sesión de LinkedIn que tenga abierta ese Chrome. Úsalo solo si cambiaste a propósito de cuenta de LinkedIn.', ok: 'Reiniciar', tone: 'danger' }))) return;
     await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'reiniciar_identidad' }) }); document.getElementById('li-modal')?.remove(); _liLoad();
   }
-  async function liReramp(id) { await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'reiniciar_calentamiento' }) }); document.getElementById('li-modal')?.remove(); _liLoad(); }
-  async function liDel(id) {
-    if (!(await novaConfirm({ title: 'Eliminar la cuenta', message: 'Se borra la cuenta y su cola de acciones. No se puede deshacer.', ok: 'Eliminar', tone: 'danger' }))) return;
-    await apiFetch(`${API}/li/accounts/${id}`, { method: 'DELETE' }); document.getElementById('li-modal')?.remove(); _li.acc = 0; _liLoad();
-  }
-  // ── Configuración de la campaña (como la de lemlist): automatización, tracking, remitentes, planificación, CRM y general ──
-  let _cc = null;
-  const _CC_SECC = [['auto', 'Automatización'], ['tracking', 'Tracking'], ['rem', 'Remitentes'], ['plan', 'Planificaciones de envío y lanzamiento'], ['crm', 'Integración con CRM'], ['gen', 'General']];
-  const _CC_SOON = '<span class="cc-soon">Próximamente</span>';
-  const _ccGet = (path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), _cc.cfg);
-  function ccSet(path, v) { const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((a, k) => a[k], _cc.cfg); o[last] = v; _cc.dirty = true; }
-  function ccSetRep(path, v) { ccSet(path, v); ccPaint(); }
-  const _ccSw = (path, label, o = {}) => `<label class="cc-row${o.soon ? ' is-off' : ''}"><span class="cc-sw"><input type="checkbox"${_ccGet(path) ? ' checked' : ''}${o.soon || o.lock ? ' disabled' : ''} onchange="LeadManagerModule.ccSet('${path}', this.checked)"><i></i></span><span class="cc-row__t"><b>${label}</b>${o.desc ? `<small>${o.desc}</small>` : ''}</span>${o.soon ? _CC_SOON : ''}</label>`;
-  const _ccSeg = (path, opts) => `<div class="cc-seg">${opts.map(([v, l]) => `<button type="button" class="${_ccGet(path) === v ? 'is-on' : ''}" onclick="LeadManagerModule.ccSetRep('${path}','${v}')">${l}</button>`).join('')}</div>`;
-  const _CC_PROG = [['continuar', 'Continuar'], ['pausar', 'Pausar prospecto'], ['finalizar', 'Finalizar prospecto']];
-  function _ccAuto() {
-    return `<div class="cc-card"><h4>Cuando las personas hacen clic en un enlace</h4>${_ccSw('automatizacion.clic.tarea', 'Crear una nueva tarea', { desc: 'Te avisa para que le escribas mientras está interesado.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.clic.progreso', _CC_PROG)}</div>
-      <div class="cc-card"><h4>Cuando las personas responden</h4>${_ccSw('automatizacion.respuesta.tarea', 'Crear una nueva tarea', { desc: 'Una tarea «Revisar respuesta» para decidir qué hacer.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.respuesta.progreso', _CC_PROG)}${_ccSw('automatizacion.respuesta.pausar_empresa', 'También pausar contactos de la misma empresa')}
-        <div class="cc-lbl" style="margin-top:14px">Cuando un contacto responda, utilizar IA para</div>${_ccSw('automatizacion.respuesta.ia_puntuar', 'Puntuar la respuesta en función del tono', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_fuera_oficina', 'Gestionar automáticamente las respuestas de «fuera de la oficina»', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_interesado', 'Marcar el prospecto como interesado', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_no_interesado', 'Marcar al prospecto como no interesado', { soon: 1 })}</div>
-      <div class="cc-card"><h4>Cuando se agenda una reunión</h4><div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.reunion.progreso', _CC_PROG)}${_ccSw('automatizacion.reunion.pausar_empresa', 'También pausar contactos de la misma empresa')}</div>`;
-  }
-  function _ccTracking() {
-    return `<div class="cc-card"><h4>Opciones de tracking</h4>${_ccSw('tracking.aperturas', 'Registrar aperturas de email', { desc: 'Detecta cuando un destinatario abre su email. Puede ser útil como señal, aunque no siempre es fiable. Es un elemento de tracking y puede perjudicar la entregabilidad.' })}${_ccSw('tracking.clics', 'Hacer seguimiento de clics en enlaces', { desc: 'Detecta cuando un destinatario hace clic en un enlace. Es lo más vigilado por los proveedores de correo y el que más puede perjudicar la entregabilidad.' })}${_ccSw('tracking.respuestas', 'Rastrear respuestas', { lock: 1, desc: 'Detecta respuestas automáticamente. Necesario para que los seguimientos se detengan en cuanto un prospecto responda (siempre activo).' })}</div>`;
-  }
-  function _ccSenderRow(tipo, x, nombre, sub, estadoTxt, ok) {
-    return `<label class="cc-snd"><span class="cc-sw"><input type="checkbox"${x.activo ? ' checked' : ''} onchange="LeadManagerModule.ccSender('${tipo}',${x.id},this.checked)"><i></i></span><span class="cc-snd__ic cc-snd__ic--${tipo}">${{ email: '✉', whatsapp: '✆', linkedin: 'in' }[tipo]}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(estadoTxt)}</span></label>`;
-  }
-  function _ccRem() {
-    const r = _cc.rem, cid = _cc.camp.outbound_client_id, n = r.email.length + r.whatsapp.length + r.linkedin.length, on = [...r.email, ...r.whatsapp, ...r.linkedin].filter(x => x.activo).length;
-    const grp = (titulo, arr, fn) => arr.length ? `<div class="cc-grp">${titulo}</div>${arr.map(fn).join('')}` : '';
-    return `<div class="cc-card"><h4>Configuración del remitente</h4>
-        <label class="cc-rad"><input type="radio" name="cc-modo"${_cc.cfg.remitentes.modo === 'equilibrado' ? ' checked' : ''} onchange="LeadManagerModule.ccSet('remitentes.modo','equilibrado')"><span><b>Distribuir remitentes de forma equilibrada</b><small>Tú eliges qué remitentes usar.</small></span></label>
-        <label class="cc-rad is-off"><input type="radio" name="cc-modo" disabled><span><b>Hacer coincidir dinámicamente el remitente con la propiedad</b><small>Asignado según la titularidad del contacto. ${_CC_SOON}</small></span></label></div>
-      <div class="cc-card"><div class="cc-hd2"><h4>Cuentas de envío para la campaña <small>${on}/${n}</small></h4>
-        <div class="cc-add"><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.ccAddMenu(event)">+ Añadir remitente</button></div></div>
-        <p class="cc-note">Las cuentas son las del cliente de esta campaña. La selección de LinkedIn ya se aplica: la extensión solo usa las cuentas marcadas. En email y WhatsApp la selección se guarda y se aplicará pronto.</p>
-        ${n ? '' : '<div class="cc-empty">Este cliente aún no tiene remitentes. Usa «+ Añadir remitente».</div>'}
-        ${grp('Email', r.email, x => _ccSenderRow('email', x, x.email, x.proveedor || '', x.estado === 'ok' || x.estado === 'conectado' || x.estado === 'activo' ? 'Conectado' : (x.estado || '—'), ['ok', 'conectado', 'activo'].includes(x.estado)))}
-        ${grp('WhatsApp', r.whatsapp, x => _ccSenderRow('whatsapp', x, x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado'))}
-        ${grp('LinkedIn', r.linkedin, x => _ccSenderRow('linkedin', x, x.nombre, x.slug ? 'linkedin.com/in/' + x.slug : 'sin identidad aún', x.estado === 'activa' ? (x.conectada ? 'Activa' : 'Extensión sin conexión') : ({ pausada: 'Pausada', restringida: 'Restringida', desconectada: 'Sin sesión' }[x.estado] || x.estado), x.estado === 'activa' && x.conectada))}
-        <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span>${_CC_SOON}</div></div>`;
-  }
-  const _CC_ZONAS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'Europe/London', 'UTC'];
-  function _ccPlan() {
-    const p = _cc.cfg.planificacion, g = _cc.global || {}, dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-    return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { soon: 1, desc: 'Enviará automáticamente la campaña a los nuevos prospectos añadidos.' })}</div>
-      <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
-        <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
-        <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
-          <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
-        <p class="cc-note">Horario de envío: de <b>${g.window_start != null ? g.window_start : 9}:00</b> a <b>${g.window_end != null ? g.window_end : 18}:00</b>${g.send_weekends ? ' (incluye fines de semana)' : ''}. Ese horario es global para todo Nova y se cambia en Configuración de envío.</p></div>
-      <div class="cc-card"><h4>Fecha de fin <small>(opcional)</small></h4><p class="cc-note">La campaña deja de enviar en esta fecha. Elige qué ocurre con los prospectos que siguen en la secuencia.</p>
-        <div class="cc-two"><label><span class="cc-lbl">Fecha</span><input class="form-input" type="date" value="${esc(p.fecha_fin)}" onchange="LeadManagerModule.ccSet('planificacion.fecha_fin', this.value)"></label>
-          <label><span class="cc-lbl">Con quien siga en la secuencia</span><select class="form-input" onchange="LeadManagerModule.ccSet('planificacion.al_finalizar', this.value)"><option value="terminar"${p.al_finalizar === 'terminar' ? ' selected' : ''}>Terminar su secuencia</option><option value="pausar"${p.al_finalizar === 'pausar' ? ' selected' : ''}>Pausarlo</option></select></label></div></div>
-      <div class="cc-card"><h4>Pausar durante las vacaciones ${_CC_SOON}</h4><p class="cc-note">Elige durante qué festivos pausar la campaña; se reanudará sola después.</p></div>`;
-  }
-  function _ccCrm() {
-    return `<div class="cc-card"><h4>Integración con CRM</h4>${['HubSpot', 'Salesforce', 'Pipedrive'].map(n => `<div class="cc-row is-off"><span class="cc-row__t"><b>${n}</b><small>No conectado</small></span>${_CC_SOON}</div>`).join('')}<p class="cc-note">Elige el CRM que quieras usar con esta campaña. Nova todavía no tiene integraciones de CRM.</p></div>`;
-  }
-  function _ccGen() {
-    const g = _cc.cfg.general;
-    return `<div class="cc-card"><h4>Etiquetas <small>(opcional)</small></h4><p class="cc-note">Añade etiquetas para organizar mejor tus campañas.</p><div class="cc-tags">${g.etiquetas.map((t, i) => `<span class="cc-tag">${esc(t)}<button type="button" onclick="LeadManagerModule.ccTagDel(${i})">×</button></span>`).join('')}<input class="cc-tagin" placeholder="Añadir etiqueta y pulsar Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.ccTagAdd(this.value);this.value=''}"></div></div>
-      <div class="cc-card"><h4>Compartir tu campaña</h4>${_ccSw('general.compartir', 'Activar el enlace compartible de la campaña', { soon: 1, desc: 'Solo las personas con el enlace podrán ver los pasos de tu campaña y duplicarlos en su cuenta.' })}</div>
-      <div class="cc-card"><h4>Cancelar suscripción del contacto</h4><p class="cc-note">Comportamiento cuando el contacto haga clic en el enlace de baja. ${_CC_SOON}</p>
-        <label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción del email del contacto</b></span></label><label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción de todo el contacto</b><small>Incluye otros canales.</small></span></label>
-        ${_ccSw('general.enlace_baja', 'Añadir un enlace de baja a los emails nuevos', { soon: 1 })}</div>
-      <div class="cc-card"><h4>Eliminar campaña</h4><p class="cc-note">Esta acción elimina la campaña de forma permanente.</p><button class="btn btn--ghost btn--danger btn--sm" onclick="document.getElementById('cc-modal')?.remove();LeadManagerModule.confirmDeleteCampaign(${_cc.camp.id})">Eliminar campaña</button></div>`;
-  }
-  function ccPaint() {
-    const r = document.getElementById('cc-body'); if (!r || !_cc) return;
-    r.innerHTML = { auto: _ccAuto, tracking: _ccTracking, rem: _ccRem, plan: _ccPlan, crm: _ccCrm, gen: _ccGen }[_cc.tab]();
-    document.querySelectorAll('#cc-modal .cc-nav button').forEach(b => b.classList.toggle('is-on', b.dataset.t === _cc.tab));
-  }
-  function ccTab(t) { _cc.tab = t; ccPaint(); }
-  async function openCampaignConfig(id, tab) {
-    document.getElementById('cc-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'cc-modal'; m.className = 'fin-pi-backdrop';
-    m.onclick = e => { if (e.target === m) ccClose(); };
-    m.innerHTML = '<div class="fin-pi-box cc-box"><div class="ctp-empty" style="padding:60px">Cargando…</div></div>'; document.body.appendChild(m);
-    let d; try { const r = await apiFetch(`${API}/campaigns/${id}/config`); d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); } catch (e) { m.remove(); return showBanner('No se pudo cargar la configuración: ' + e.message, 'error'); }
-    _cc = { id, camp: d.campana, cfg: d.config, rem: d.remitentes, global: d.global, seqs: d.secuencias, tab: tab || 'auto', dirty: false };
-    m.querySelector('.cc-box').innerHTML = `<div class="cc-side"><h3>Configuración de la campaña</h3><div class="cc-sub">${esc(d.campana.nombre)}</div><div class="cc-nav">${_CC_SECC.map(([k, l]) => `<button type="button" data-t="${k}" onclick="LeadManagerModule.ccTab('${k}')">${l}</button>`).join('')}</div></div>
-      <div class="cc-main"><button class="fin-pi-x" onclick="LeadManagerModule.ccClose()">✕</button><div class="cc-scroll" id="cc-body"></div>
-        <div class="cc-ft"><span class="cc-note" id="cc-msg">Los cambios afectan a toda la campaña y a sus ${_cc.seqs.length} secuencia(s).</span><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ccClose()">Cancelar</button> <button class="btn btn--primary btn--sm" id="cc-save" onclick="LeadManagerModule.ccSave()">Guardar</button></div></div></div>`;
-    ccPaint();
-  }
-  async function ccClose() {
-    if (_cc && _cc.dirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Tienes cambios sin guardar. ¿Cerrar de todas formas?', ok: 'Cerrar sin guardar', tone: 'danger' }))) return;
-    document.getElementById('cc-modal')?.remove(); _cc = null;
-  }
-  function ccDia(n) { const a = _cc.cfg.planificacion.dias, i = a.indexOf(n); if (i >= 0) { if (a.length > 1) a.splice(i, 1); } else a.push(n); a.sort(); _cc.dirty = true; ccPaint(); }
-  function ccTagAdd(v) { v = String(v || '').trim(); if (!v) return; const a = _cc.cfg.general.etiquetas; if (!a.includes(v) && a.length < 12) a.push(v); _cc.dirty = true; ccPaint(); }
-  function ccTagDel(i) { _cc.cfg.general.etiquetas.splice(i, 1); _cc.dirty = true; ccPaint(); }
-  function ccSender(tipo, id, on) { const x = (_cc.rem[tipo] || []).find(y => y.id === id); if (x) { x.activo = on; _cc.dirty = true; } }
-  function ccAddMenu(ev) {
-    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const cid = _cc.camp.outbound_client_id, go2 = js => `document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());LeadManagerModule.ccGoConnect('${js}',${cid})`;
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
-    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${go2('email')}">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${go2('whatsapp')}">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${go2('linkedin')}">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
-    document.body.appendChild(menu);
-    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
-    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
-  }
-  async function ccGoConnect(tipo, clientId) {
-    if (_cc && _cc.dirty) { const r = await novaConfirm({ title: 'Guardar antes de salir', message: 'Para conectar un remitente hay que salir de esta pantalla. ¿Guardo los cambios primero?', ok: 'Guardar y continuar', cancel: 'Descartar' }); if (r) await ccSave(true); }
-    document.getElementById('cc-modal')?.remove(); _cc = null;
-    if (tipo === 'email') mbManageOpen(clientId); else if (tipo === 'whatsapp') wamOpen(clientId); else liConnectFor(clientId);
-  }
-  async function ccSave(silent) {
-    const b = document.getElementById('cc-save'), msg = document.getElementById('cc-msg'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
-    const remitentes = [].concat(...['email', 'whatsapp', 'linkedin'].map(t => (_cc.rem[t] || []).map(x => ({ tipo: t, ref_id: x.id, activo: x.activo }))));
-    try {
-      const r = await apiFetch(`${API}/campaigns/${_cc.id}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: _cc.cfg, remitentes }) });
-      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
-      _cc.dirty = false; try { await load(); } catch (_) {}
-      if (!silent) { document.getElementById('cc-modal')?.remove(); showBanner('✓ Configuración de la campaña guardada', 'success'); _cc = null; }
-    } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = '#B42318'; } if (b) { b.disabled = false; b.textContent = 'Guardar'; } }
-  }
-  // ── Vista de flujo (estilo Lemlist): los pasos como nodos a la izquierda y el contenido editable a la derecha ──
-  let _sfl = { seq: 0, sel: 0, ver: 0 };
-  const _sflIsTpl = (st, v) => { try { return !!_varResolve(v || {}, st).tplId; } catch (_) { return false; } };
-  const _sflVarHtml = t => esc(t || '').replace(/\{\{[^}]*\}\}/g, m => `<span class="ctm-var">${m}</span>`);
-  function _sflVers(st) {
-    const raw = Array.isArray(st.variants) ? st.variants : [];
-    const base = raw.filter(v => v && ((v.cuerpo || '').trim() || (v.nombre || '').trim() || _sflIsTpl(st, v)));
-    return (st.variant_mode && st.variant_mode !== 'off' && base.length) ? base : null;
-  }
-  function _sflNode(st, i, prev) {
-    const t = _TOUCH[st.canal] || _TOUCH.email;
-    const gap = prev ? Math.max(0, (Number(st.dia) || 0) - (Number(prev.dia) || 0)) : 0;
-    const hd = (!prev || !gap) ? (prev ? 'Mismo día' : 'Enviar inmediatamente') : `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>`;
-    const vs = _sflVers(st);
-    const cb = (typeof _stepCondBadge === 'function') ? _stepCondBadge(st) : '';
-    const nm = st.titulo || t[0];
-    return `<div class="sfl-link"><button type="button" class="sfl-plus" title="Añadir un paso" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div>
-      <div class="sfl-node${_sfl.sel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowSel(${st.id})">
-        <div class="sfl-hd">${hd}${cb ? ` <span class="sfl-cond">${cb}</span>` : ''}</div>
-        <div class="sfl-body"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><span class="sfl-nm">${esc(nm)}</span><span class="sfl-d">Día ${Number(st.dia) || 1}</span></div>
-        ${vs ? `<div class="sfl-vers">${vs.map((v, k) => `<div class="sfl-ver"><span>${String.fromCharCode(65 + k)}</span>${esc(v.nombre || ('Versión ' + String.fromCharCode(65 + k)))}</div>`).join('')}</div>` : ''}
-      </div>`;
-  }
-  function _sflPanel(st) {
-    if (!st) return `<div class="sfl-empty">Elige un paso del flujo para ver y editar su contenido.</div>`;
-    const t = _TOUCH[st.canal] || _TOUCH.email, isMail = (st.canal || 'email') === 'email';
-    const vs = _sflVers(st);
-    const k = vs ? Math.min(_sfl.ver, vs.length - 1) : 0;
-    const v = vs ? vs[k] : { asunto: st.asunto || '', cuerpo: st.plantilla || '' };
-    const r = vs ? _varResolve(v, st) : { asunto: v.asunto, cuerpo: v.cuerpo, tplId: null };
-    const locked = !!r.tplId;
-    const tabs = vs && vs.length > 1 ? `<div class="ctm-tabs">${vs.map((x, i) => `<button type="button" class="ctm-tab${i === k ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowVer(${i})">Versión ${String.fromCharCode(65 + i)}</button>`).join('')}</div>` : '';
-    return `<div class="sfl-ph"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><b>${esc(st.titulo || t[0])}</b><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openStepDrawer(${st.seqId || st.sequence_id},${st.id})">Ajustes del paso</button></div>
-      <div class="sfl-pb">${tabs}
-        ${locked ? `<div class="sfl-lock">Este paso usa una plantilla guardada. Para cambiar el texto edítalo en «Ajustes del paso».</div>` : ''}
-        ${isMail ? `<label class="ctm-l" for="sfl-asunto">Asunto</label><input class="form-input" id="sfl-asunto" value="${esc(r.asunto || '')}"${locked ? ' disabled' : ''}>` : ''}
-        <label class="ctm-l" for="sfl-cuerpo">${isMail ? 'Contenido del email' : 'Mensaje'}</label>
-        <textarea class="form-input sfl-ta" id="sfl-cuerpo"${locked ? ' disabled' : ''}>${esc(r.cuerpo || '')}</textarea>
-        <div class="sfl-vars">Variables: ${['first_name', 'last_name', 'company', 'title'].map(x => `<code>{{${x}}}</code>`).join(' ')}</div>
-        <div class="sfl-prev"><div class="ctm-l">Vista previa</div><div class="ctm-box">${_sflVarHtml(r.cuerpo || '') .replace(/\n/g, '<br>') || '<span class="ctm-empty">(vacío)</span>'}</div></div>
-        <div class="sfl-ft"><span id="sfl-msg"></span><button type="button" class="btn btn--primary" id="sfl-save"${locked ? ' disabled' : ''} onclick="LeadManagerModule.seqFlowSave(${st.id})">Guardar cambios</button></div>
-      </div>`;
-  }
-  function _sflPaint() {
-    const box = document.getElementById('sfl-root'); if (!box) return;
-    const s0 = _sequences.find(x => x.id === _sfl.seq), steps = _seqSteps(_sfl.seq);
-    if (!steps.some(x => x.id === _sfl.sel)) _sfl.sel = steps.length ? steps[0].id : 0;
-    const st = steps.find(x => x.id === _sfl.sel);
-    box.innerHTML = `<div class="sfl-top"><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowClose()">← Volver a la secuencia</button><b class="sfl-title">${esc(s0 ? s0.nombre : '')}</b>${s0 ? _seqBadge(s0.estado) : ''}<span class="sfl-sp"></span><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+ Añadir paso</button></div>
-      <div class="sfl-main"><div class="sfl-canvas"><div class="sfl-start">Inicio</div>${steps.length ? steps.map((x, i) => _sflNode(x, i, steps[i - 1])).join('') : `<div class="sfl-empty">Esta secuencia aún no tiene pasos.</div>`}<div class="sfl-link"><button type="button" class="sfl-plus" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div><div class="sfl-start">Fin</div></div>
-      <div class="sfl-panel">${_sflPanel(st)}</div></div>`;
-  }
-  function seqFlowOpen(seqId) {
-    _sfl = { seq: seqId, sel: 0, ver: 0 };
-    document.getElementById('sfl-root')?.remove();
-    const el = document.createElement('div'); el.id = 'sfl-root'; el.className = 'sfl-root';
-    document.body.appendChild(el); _sflPaint();
-  }
-  function seqFlowClose() { document.getElementById('sfl-root')?.remove(); }
-  function seqFlowSel(id) { _sfl.sel = id; _sfl.ver = 0; _sflPaint(); }
-  function seqFlowVer(i) { _sfl.ver = i; _sflPaint(); }
-  async function seqFlowSave(id) {
-    const st = _steps.find(x => x.id === id); if (!st) return;
-    const msg = document.getElementById('sfl-msg'), btn = document.getElementById('sfl-save');
-    const asunto = (document.getElementById('sfl-asunto') || {}).value, cuerpo = (document.getElementById('sfl-cuerpo') || {}).value || '';
-    let variants = Array.isArray(st.variants) ? st.variants.map(v => ({ ...v })) : [], plantilla = st.plantilla || '', asuntoStep = st.asunto || '';
-    const vs = _sflVers(st);
-    if (vs) {
-      const target = vs[Math.min(_sfl.ver, vs.length - 1)];
-      const j = st.variants.indexOf(target);
-      if (j >= 0) { variants[j].cuerpo = cuerpo; if (asunto !== undefined) variants[j].asunto = asunto; }
-      if (j === 0) { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
-    } else { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
-    const body = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: asuntoStep, plantilla, variants, variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, reply_to_step_id: st.reply_to_step_id || null, post_dias: st.post_dias || '', reaccion: st.reaccion || '' };
-    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-    try {
-      const res = await apiFetch(`${API}/sequence-steps/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error((await res.json()).error || 'Error');
-      await load(); _sflPaint();
-      const m2 = document.getElementById('sfl-msg'); if (m2) { m2.textContent = '✓ Guardado'; m2.className = 'sfl-ok'; }
-    } catch (e) { if (msg) { msg.textContent = e.message; msg.className = 'sfl-err'; } if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; } }
-  }
+  async function liReramp(id) { await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'reiniciar_calentamiento' }) }); document.getElementById('li-modal')?.remove(); _liLoad(); }
+  async function liDel(id) {
+    if (!(await novaConfirm({ title: 'Eliminar la cuenta', message: 'Se borra la cuenta y su cola de acciones. No se puede deshacer.', ok: 'Eliminar', tone: 'danger' }))) return;
+    await apiFetch(`${API}/li/accounts/${id}`, { method: 'DELETE' }); document.getElementById('li-modal')?.remove(); _li.acc = 0; _liLoad();
+  }
+  // ── Configuración de la campaña (como la de lemlist): automatización, tracking, remitentes, planificación, CRM y general ──
+  let _cc = null;
+  const _CC_SECC = [['auto', 'Automatización'], ['tracking', 'Tracking'], ['rem', 'Remitentes'], ['plan', 'Planificaciones de envío y lanzamiento'], ['crm', 'Integración con CRM'], ['gen', 'General']];
+  const _CC_SOON = '<span class="cc-soon">Próximamente</span>';
+  const _ccGet = (path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), _cc.cfg);
+  function ccSet(path, v) { const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((a, k) => a[k], _cc.cfg); o[last] = v; _cc.dirty = true; }
+  function ccSetRep(path, v) { ccSet(path, v); ccPaint(); }
+  const _ccSw = (path, label, o = {}) => `<label class="cc-row${o.soon ? ' is-off' : ''}"><span class="cc-sw"><input type="checkbox"${_ccGet(path) ? ' checked' : ''}${o.soon || o.lock ? ' disabled' : ''} onchange="LeadManagerModule.ccSet('${path}', this.checked)"><i></i></span><span class="cc-row__t"><b>${label}</b>${o.desc ? `<small>${o.desc}</small>` : ''}</span>${o.soon ? _CC_SOON : ''}</label>`;
+  const _ccSeg = (path, opts) => `<div class="cc-seg">${opts.map(([v, l]) => `<button type="button" class="${_ccGet(path) === v ? 'is-on' : ''}" onclick="LeadManagerModule.ccSetRep('${path}','${v}')">${l}</button>`).join('')}</div>`;
+  const _CC_PROG = [['continuar', 'Continuar'], ['pausar', 'Pausar prospecto'], ['finalizar', 'Finalizar prospecto']];
+  function _ccAuto() {
+    return `<div class="cc-card"><h4>Cuando las personas hacen clic en un enlace</h4>${_ccSw('automatizacion.clic.tarea', 'Crear una nueva tarea', { desc: 'Te avisa para que le escribas mientras está interesado.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.clic.progreso', _CC_PROG)}</div>
+      <div class="cc-card"><h4>Cuando las personas responden</h4>${_ccSw('automatizacion.respuesta.tarea', 'Crear una nueva tarea', { desc: 'Una tarea «Revisar respuesta» para decidir qué hacer.' })}<div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.respuesta.progreso', _CC_PROG)}${_ccSw('automatizacion.respuesta.pausar_empresa', 'También pausar contactos de la misma empresa')}
+        <div class="cc-lbl" style="margin-top:14px">Cuando un contacto responda, utilizar IA para</div>${_ccSw('automatizacion.respuesta.ia_puntuar', 'Puntuar la respuesta en función del tono', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_fuera_oficina', 'Gestionar automáticamente las respuestas de «fuera de la oficina»', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_interesado', 'Marcar el prospecto como interesado', { soon: 1 })}${_ccSw('automatizacion.respuesta.ia_no_interesado', 'Marcar al prospecto como no interesado', { soon: 1 })}</div>
+      <div class="cc-card"><h4>Cuando se agenda una reunión</h4><div class="cc-lbl">Progreso de la campaña</div>${_ccSeg('automatizacion.reunion.progreso', _CC_PROG)}${_ccSw('automatizacion.reunion.pausar_empresa', 'También pausar contactos de la misma empresa')}</div>`;
+  }
+  function _ccTracking() {
+    return `<div class="cc-card"><h4>Opciones de tracking</h4>${_ccSw('tracking.aperturas', 'Registrar aperturas de email', { desc: 'Detecta cuando un destinatario abre su email. Puede ser útil como señal, aunque no siempre es fiable. Es un elemento de tracking y puede perjudicar la entregabilidad.' })}${_ccSw('tracking.clics', 'Hacer seguimiento de clics en enlaces', { desc: 'Detecta cuando un destinatario hace clic en un enlace. Es lo más vigilado por los proveedores de correo y el que más puede perjudicar la entregabilidad.' })}${_ccSw('tracking.respuestas', 'Rastrear respuestas', { lock: 1, desc: 'Detecta respuestas automáticamente. Necesario para que los seguimientos se detengan en cuanto un prospecto responda (siempre activo).' })}</div>`;
+  }
+  function _ccSenderRow(tipo, x, nombre, sub, estadoTxt, ok) {
+    return `<label class="cc-snd"><span class="cc-sw"><input type="checkbox"${x.activo ? ' checked' : ''} onchange="LeadManagerModule.ccSender('${tipo}',${x.id},this.checked)"><i></i></span><span class="cc-snd__ic cc-snd__ic--${tipo}">${{ email: '✉', whatsapp: '✆', linkedin: 'in' }[tipo]}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(estadoTxt)}</span></label>`;
+  }
+  function _ccRem() {
+    const r = _cc.rem, cid = _cc.camp.outbound_client_id, n = r.email.length + r.whatsapp.length + r.linkedin.length, on = [...r.email, ...r.whatsapp, ...r.linkedin].filter(x => x.activo).length;
+    const grp = (titulo, arr, fn) => arr.length ? `<div class="cc-grp">${titulo}</div>${arr.map(fn).join('')}` : '';
+    return `<div class="cc-card"><h4>Configuración del remitente</h4>
+        <label class="cc-rad"><input type="radio" name="cc-modo"${_cc.cfg.remitentes.modo === 'equilibrado' ? ' checked' : ''} onchange="LeadManagerModule.ccSet('remitentes.modo','equilibrado')"><span><b>Distribuir remitentes de forma equilibrada</b><small>Tú eliges qué remitentes usar.</small></span></label>
+        <label class="cc-rad is-off"><input type="radio" name="cc-modo" disabled><span><b>Hacer coincidir dinámicamente el remitente con la propiedad</b><small>Asignado según la titularidad del contacto. ${_CC_SOON}</small></span></label></div>
+      <div class="cc-card"><div class="cc-hd2"><h4>Cuentas de envío para la campaña <small>${on}/${n}</small></h4>
+        <div class="cc-add"><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.ccAddMenu(event)">+ Añadir remitente</button></div></div>
+        <p class="cc-note">Las cuentas son las del cliente de esta campaña. La selección de LinkedIn ya se aplica: la extensión solo usa las cuentas marcadas. En email y WhatsApp la selección se guarda y se aplicará pronto.</p>
+        ${n ? '' : '<div class="cc-empty">Este cliente aún no tiene remitentes. Usa «+ Añadir remitente».</div>'}
+        ${grp('Email', r.email, x => _ccSenderRow('email', x, x.email, x.proveedor || '', x.estado === 'ok' || x.estado === 'conectado' || x.estado === 'activo' ? 'Conectado' : (x.estado || '—'), ['ok', 'conectado', 'activo'].includes(x.estado)))}
+        ${grp('WhatsApp', r.whatsapp, x => _ccSenderRow('whatsapp', x, x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado'))}
+        ${grp('LinkedIn', r.linkedin, x => _ccSenderRow('linkedin', x, x.nombre, x.slug ? 'linkedin.com/in/' + x.slug : 'sin identidad aún', x.estado === 'activa' ? (x.conectada ? 'Activa' : 'Extensión sin conexión') : ({ pausada: 'Pausada', restringida: 'Restringida', desconectada: 'Sin sesión' }[x.estado] || x.estado), x.estado === 'activa' && x.conectada))}
+        <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span>${_CC_SOON}</div></div>`;
+  }
+  const _CC_ZONAS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'Europe/London', 'UTC'];
+  function _ccPlan() {
+    const p = _cc.cfg.planificacion, g = _cc.global || {}, dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { soon: 1, desc: 'Enviará automáticamente la campaña a los nuevos prospectos añadidos.' })}</div>
+      <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
+        <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
+        <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
+          <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
+        <p class="cc-note">Horario de envío: de <b>${g.window_start != null ? g.window_start : 9}:00</b> a <b>${g.window_end != null ? g.window_end : 18}:00</b>${g.send_weekends ? ' (incluye fines de semana)' : ''}. Ese horario es global para todo Nova y se cambia en Configuración de envío.</p></div>
+      <div class="cc-card"><h4>Fecha de fin <small>(opcional)</small></h4><p class="cc-note">La campaña deja de enviar en esta fecha. Elige qué ocurre con los prospectos que siguen en la secuencia.</p>
+        <div class="cc-two"><label><span class="cc-lbl">Fecha</span><input class="form-input" type="date" value="${esc(p.fecha_fin)}" onchange="LeadManagerModule.ccSet('planificacion.fecha_fin', this.value)"></label>
+          <label><span class="cc-lbl">Con quien siga en la secuencia</span><select class="form-input" onchange="LeadManagerModule.ccSet('planificacion.al_finalizar', this.value)"><option value="terminar"${p.al_finalizar === 'terminar' ? ' selected' : ''}>Terminar su secuencia</option><option value="pausar"${p.al_finalizar === 'pausar' ? ' selected' : ''}>Pausarlo</option></select></label></div></div>
+      <div class="cc-card"><h4>Pausar durante las vacaciones ${_CC_SOON}</h4><p class="cc-note">Elige durante qué festivos pausar la campaña; se reanudará sola después.</p></div>`;
+  }
+  function _ccCrm() {
+    return `<div class="cc-card"><h4>Integración con CRM</h4>${['HubSpot', 'Salesforce', 'Pipedrive'].map(n => `<div class="cc-row is-off"><span class="cc-row__t"><b>${n}</b><small>No conectado</small></span>${_CC_SOON}</div>`).join('')}<p class="cc-note">Elige el CRM que quieras usar con esta campaña. Nova todavía no tiene integraciones de CRM.</p></div>`;
+  }
+  function _ccGen() {
+    const g = _cc.cfg.general;
+    return `<div class="cc-card"><h4>Etiquetas <small>(opcional)</small></h4><p class="cc-note">Añade etiquetas para organizar mejor tus campañas.</p><div class="cc-tags">${g.etiquetas.map((t, i) => `<span class="cc-tag">${esc(t)}<button type="button" onclick="LeadManagerModule.ccTagDel(${i})">×</button></span>`).join('')}<input class="cc-tagin" placeholder="Añadir etiqueta y pulsar Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.ccTagAdd(this.value);this.value=''}"></div></div>
+      <div class="cc-card"><h4>Compartir tu campaña</h4>${_ccSw('general.compartir', 'Activar el enlace compartible de la campaña', { soon: 1, desc: 'Solo las personas con el enlace podrán ver los pasos de tu campaña y duplicarlos en su cuenta.' })}</div>
+      <div class="cc-card"><h4>Cancelar suscripción del contacto</h4><p class="cc-note">Comportamiento cuando el contacto haga clic en el enlace de baja. ${_CC_SOON}</p>
+        <label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción del email del contacto</b></span></label><label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción de todo el contacto</b><small>Incluye otros canales.</small></span></label>
+        ${_ccSw('general.enlace_baja', 'Añadir un enlace de baja a los emails nuevos', { soon: 1 })}</div>
+      <div class="cc-card"><h4>Eliminar campaña</h4><p class="cc-note">Esta acción elimina la campaña de forma permanente.</p><button class="btn btn--ghost btn--danger btn--sm" onclick="document.getElementById('cc-modal')?.remove();LeadManagerModule.confirmDeleteCampaign(${_cc.camp.id})">Eliminar campaña</button></div>`;
+  }
+  function ccPaint() {
+    const r = document.getElementById('cc-body'); if (!r || !_cc) return;
+    r.innerHTML = { auto: _ccAuto, tracking: _ccTracking, rem: _ccRem, plan: _ccPlan, crm: _ccCrm, gen: _ccGen }[_cc.tab]();
+    document.querySelectorAll('#cc-modal .cc-nav button').forEach(b => b.classList.toggle('is-on', b.dataset.t === _cc.tab));
+  }
+  function ccTab(t) { _cc.tab = t; ccPaint(); }
+  async function openCampaignConfig(id, tab) {
+    document.getElementById('cc-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) ccClose(); };
+    m.innerHTML = '<div class="fin-pi-box cc-box"><div class="ctp-empty" style="padding:60px">Cargando…</div></div>'; document.body.appendChild(m);
+    let d; try { const r = await apiFetch(`${API}/campaigns/${id}/config`); d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); } catch (e) { m.remove(); return showBanner('No se pudo cargar la configuración: ' + e.message, 'error'); }
+    _cc = { id, camp: d.campana, cfg: d.config, rem: d.remitentes, global: d.global, seqs: d.secuencias, tab: tab || 'auto', dirty: false, orig: JSON.stringify({ a: d.config.automatizacion, r: d.remitentes }) };
+    m.querySelector('.cc-box').innerHTML = `<div class="cc-side"><h3>Configuración de la campaña</h3><div class="cc-sub">${esc(d.campana.nombre)}</div><div class="cc-nav">${_CC_SECC.map(([k, l]) => `<button type="button" data-t="${k}" onclick="LeadManagerModule.ccTab('${k}')">${l}</button>`).join('')}</div></div>
+      <div class="cc-main"><button class="fin-pi-x" onclick="LeadManagerModule.ccClose()">✕</button><div class="cc-scroll" id="cc-body"></div>
+        <div class="cc-ft"><span class="cc-note" id="cc-msg">Los cambios afectan a toda la campaña y a sus ${_cc.seqs.length} secuencia(s).</span><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ccClose()">Cancelar</button> <button class="btn btn--primary btn--sm" id="cc-save" onclick="LeadManagerModule.ccSave()">Guardar</button></div></div></div>`;
+    ccPaint();
+  }
+  async function ccClose() {
+    if (_cc && _cc.dirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Tienes cambios sin guardar. ¿Cerrar de todas formas?', ok: 'Cerrar sin guardar', tone: 'danger' }))) return;
+    document.getElementById('cc-modal')?.remove(); _cc = null;
+  }
+  function ccDia(n) { const a = _cc.cfg.planificacion.dias, i = a.indexOf(n); if (i >= 0) { if (a.length > 1) a.splice(i, 1); } else a.push(n); a.sort(); _cc.dirty = true; ccPaint(); }
+  function ccTagAdd(v) { v = String(v || '').trim(); if (!v) return; const a = _cc.cfg.general.etiquetas; if (!a.includes(v) && a.length < 12) a.push(v); _cc.dirty = true; ccPaint(); }
+  function ccTagDel(i) { _cc.cfg.general.etiquetas.splice(i, 1); _cc.dirty = true; ccPaint(); }
+  function ccSender(tipo, id, on) { const x = (_cc.rem[tipo] || []).find(y => y.id === id); if (x) { x.activo = on; _cc.dirty = true; } }
+  function ccAddMenu(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const cid = _cc.camp.outbound_client_id, go2 = js => `document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());LeadManagerModule.ccGoConnect('${js}',${cid})`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
+    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${go2('email')}">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${go2('whatsapp')}">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${go2('linkedin')}">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
+  }
+  async function ccGoConnect(tipo, clientId) {
+    if (_cc && _cc.dirty) { const r = await novaConfirm({ title: 'Guardar antes de salir', message: 'Para conectar un remitente hay que salir de esta pantalla. ¿Guardo los cambios primero?', ok: 'Guardar y continuar', cancel: 'Descartar' }); if (r) { await ccSave(true); if (document.getElementById('cc-confirm')) return; } }
+    document.getElementById('cc-modal')?.remove(); _cc = null;
+    if (tipo === 'email') mbManageOpen(clientId); else if (tipo === 'whatsapp') wamOpen(clientId); else liConnectFor(clientId);
+  }
+  // Qué cambiaría en cada secuencia de la campaña con la configuración nueva
+  const _ccMaskDe = dias => [1, 2, 3, 4, 5, 6, 7].map(d => (dias.includes(d) ? '1' : '0')).join('');
+  const _ccDiasTxt = m => { const dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D']; return dn.filter((_, i) => String(m || '1111100')[i] === '1').join('·') || '—'; };
+  function _ccCambios() {
+    const p = _cc.cfg.planificacion, t = _cc.cfg.tracking, g = _cc.global || {}, mk = _ccMaskDe(p.dias);
+    return (_cc.seqs || []).map(q => {
+      const c = [];
+      if (String(q.send_days || '1111100') !== mk) c.push(`Días de envío: ${_ccDiasTxt(q.send_days)} → ${_ccDiasTxt(mk)}`);
+      if ((q.send_interval_min || 5) !== p.cada_min) c.push(`Entre envíos: ${q.send_interval_min || 5} min → ${p.cada_min} min`);
+      if (p.zona && p.zona !== q.timezone) c.push(`Zona horaria: ${q.timezone || '—'} → ${p.zona}`);
+      const ao = q.track_opens != null ? q.track_opens : g.track_opens !== false, ac = q.track_clicks != null ? q.track_clicks : g.track_clicks !== false;
+      if (ao !== t.aperturas) c.push(`Aperturas: ${ao ? 'sí' : 'no'} → ${t.aperturas ? 'sí' : 'no'}`);
+      if (ac !== t.clics) c.push(`Clics: ${ac ? 'sí' : 'no'} → ${t.clics ? 'sí' : 'no'}`);
+      return { q, cambios: c };
+    });
+  }
+  const _CC_MODO = { manual: ['Manual', '#64748B'], auto: ['Automática', '#00804C'], preaprobado: ['Con tu aprobación', '#1E5FA8'] };
+  const _CC_SEQ_EST = { activa: 'Activa', pausada: 'Pausada', draft: 'Borrador', completada: 'Completada', archivada: 'Archivada' };
+  async function ccSave(silent) {
+    // Verificación en dos pasos: solo si la campaña tiene MÁS de una secuencia y el cambio toca a alguna. Con una sola secuencia (la primera) se guarda directo.
+    const lista = _ccCambios(), n = (_cc.seqs || []).length;
+    const autoCambio = JSON.stringify({ a: _cc.cfg.automatizacion, r: _cc.rem }) !== _cc.orig;
+    const tocadas = lista.filter(x => x.cambios.length);
+    if (n > 1 && (tocadas.length || autoCambio)) return _ccConfirmar(lista, autoCambio, silent);
+    return _ccGuardar(silent, null);
+  }
+  function _ccConfirmar(lista, autoCambio, silent) {
+    document.getElementById('cc-confirm')?.remove();
+    const m = document.createElement('div'); m.id = 'cc-confirm'; m.className = 'fin-pi-backdrop'; m.style.zIndex = '10060';
+    const fila = x => {
+      const md = _CC_MODO[x.q.send_mode] || _CC_MODO.manual, hay = x.cambios.length > 0;
+      return `<label class="ccf-row${hay ? '' : ' is-off'}"><input type="checkbox" class="ccf-ck" value="${x.q.id}"${hay ? ' checked' : ' disabled'}><span class="ccf-t"><b>${esc(x.q.nombre)}</b>
+        <span class="ccf-m"><i style="color:${md[1]}">${md[0]}</i> · ${_CC_SEQ_EST[x.q.estado] || esc(x.q.estado)}${x.q.activos ? ` · ${x.q.activos} persona(s) en curso` : ''}</span>
+        ${hay ? x.cambios.map(c => `<span class="ccf-c">${esc(c)}</span>`).join('') : '<span class="ccf-m">Sin cambios en horario ni tracking</span>'}</span></label>`;
+    };
+    m.innerHTML = `<div class="fin-pi-box ccf-box"><div class="fin-pi-box__hd"><h3>Este cambio afecta a otras secuencias</h3></div>
+      <div class="fin-pi-form"><p class="cc-note" style="margin:0 0 10px">Esta campaña tiene <b>${lista.length} secuencias</b>. Elige a cuáles se aplica el nuevo horario y tracking. Cada secuencia puede ser distinta (manual, automática o con aprobación): desmarca las que no quieras tocar.</p>
+        <div class="ccf-list">${lista.map(fila).join('')}</div>
+        ${autoCambio ? '<p class="cc-note" style="margin:12px 0 0"><b>Reglas de automatización y remitentes:</b> cambiaron y se aplican siempre a <b>toda la campaña</b> (todas sus secuencias).</p>' : ''}
+        ${lista.some(x => x.cambios.length && x.q.estado === 'activa' && x.q.send_mode !== 'manual') ? '<p class="cc-note" style="margin:10px 0 0;color:#B45309">Hay secuencias activas que envían solas: el cambio se nota desde el próximo envío.</p>' : ''}</div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('cc-confirm').remove()">Volver</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ccConfirmGo(${silent ? 'true' : 'false'})">Confirmar y guardar</button></div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function ccConfirmGo(silent) {
+    const ids = [...document.querySelectorAll('#cc-confirm .ccf-ck:checked')].map(x => Number(x.value));
+    document.getElementById('cc-confirm')?.remove();
+    return _ccGuardar(silent, ids);
+  }
+  async function _ccGuardar(silent, aplicarA) {
+    const b = document.getElementById('cc-save'), msg = document.getElementById('cc-msg'); if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
+    const remitentes = [].concat(...['email', 'whatsapp', 'linkedin'].map(t => (_cc.rem[t] || []).map(x => ({ tipo: t, ref_id: x.id, activo: x.activo }))));
+    try {
+      const r = await apiFetch(`${API}/campaigns/${_cc.id}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: _cc.cfg, remitentes, aplicar_a: aplicarA }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _cc.dirty = false; _cc.orig = JSON.stringify({ a: _cc.cfg.automatizacion, r: _cc.rem }); try { await load(); } catch (_) {}
+      if (!silent) { document.getElementById('cc-modal')?.remove(); showBanner('✓ Configuración de la campaña guardada', 'success'); _cc = null; }
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.style.color = '#B42318'; } if (b) { b.disabled = false; b.textContent = 'Guardar'; } }
+  }
+  // ── Vista de flujo (estilo Lemlist): los pasos como nodos a la izquierda y el contenido editable a la derecha ──
+  let _sfl = { seq: 0, sel: 0, ver: 0 };
+  const _sflIsTpl = (st, v) => { try { return !!_varResolve(v || {}, st).tplId; } catch (_) { return false; } };
+  const _sflVarHtml = t => esc(t || '').replace(/\{\{[^}]*\}\}/g, m => `<span class="ctm-var">${m}</span>`);
+  function _sflVers(st) {
+    const raw = Array.isArray(st.variants) ? st.variants : [];
+    const base = raw.filter(v => v && ((v.cuerpo || '').trim() || (v.nombre || '').trim() || _sflIsTpl(st, v)));
+    return (st.variant_mode && st.variant_mode !== 'off' && base.length) ? base : null;
+  }
+  function _sflNode(st, i, prev) {
+    const t = _TOUCH[st.canal] || _TOUCH.email;
+    const gap = prev ? Math.max(0, (Number(st.dia) || 0) - (Number(prev.dia) || 0)) : 0;
+    const hd = (!prev || !gap) ? (prev ? 'Mismo día' : 'Enviar inmediatamente') : `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>`;
+    const vs = _sflVers(st);
+    const cb = (typeof _stepCondBadge === 'function') ? _stepCondBadge(st) : '';
+    const nm = st.titulo || t[0];
+    return `<div class="sfl-link"><button type="button" class="sfl-plus" title="Añadir un paso" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div>
+      <div class="sfl-node${_sfl.sel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowSel(${st.id})">
+        <div class="sfl-hd">${hd}${cb ? ` <span class="sfl-cond">${cb}</span>` : ''}</div>
+        <div class="sfl-body"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><span class="sfl-nm">${esc(nm)}</span><span class="sfl-d">Día ${Number(st.dia) || 1}</span></div>
+        ${vs ? `<div class="sfl-vers">${vs.map((v, k) => `<div class="sfl-ver"><span>${String.fromCharCode(65 + k)}</span>${esc(v.nombre || ('Versión ' + String.fromCharCode(65 + k)))}</div>`).join('')}</div>` : ''}
+      </div>`;
+  }
+  function _sflPanel(st) {
+    if (!st) return `<div class="sfl-empty">Elige un paso del flujo para ver y editar su contenido.</div>`;
+    const t = _TOUCH[st.canal] || _TOUCH.email, isMail = (st.canal || 'email') === 'email';
+    const vs = _sflVers(st);
+    const k = vs ? Math.min(_sfl.ver, vs.length - 1) : 0;
+    const v = vs ? vs[k] : { asunto: st.asunto || '', cuerpo: st.plantilla || '' };
+    const r = vs ? _varResolve(v, st) : { asunto: v.asunto, cuerpo: v.cuerpo, tplId: null };
+    const locked = !!r.tplId;
+    const tabs = vs && vs.length > 1 ? `<div class="ctm-tabs">${vs.map((x, i) => `<button type="button" class="ctm-tab${i === k ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowVer(${i})">Versión ${String.fromCharCode(65 + i)}</button>`).join('')}</div>` : '';
+    return `<div class="sfl-ph"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><b>${esc(st.titulo || t[0])}</b><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openStepDrawer(${st.seqId || st.sequence_id},${st.id})">Ajustes del paso</button></div>
+      <div class="sfl-pb">${tabs}
+        ${locked ? `<div class="sfl-lock">Este paso usa una plantilla guardada. Para cambiar el texto edítalo en «Ajustes del paso».</div>` : ''}
+        ${isMail ? `<label class="ctm-l" for="sfl-asunto">Asunto</label><input class="form-input" id="sfl-asunto" value="${esc(r.asunto || '')}"${locked ? ' disabled' : ''}>` : ''}
+        <label class="ctm-l" for="sfl-cuerpo">${isMail ? 'Contenido del email' : 'Mensaje'}</label>
+        <textarea class="form-input sfl-ta" id="sfl-cuerpo"${locked ? ' disabled' : ''}>${esc(r.cuerpo || '')}</textarea>
+        <div class="sfl-vars">Variables: ${['first_name', 'last_name', 'company', 'title'].map(x => `<code>{{${x}}}</code>`).join(' ')}</div>
+        <div class="sfl-prev"><div class="ctm-l">Vista previa</div><div class="ctm-box">${_sflVarHtml(r.cuerpo || '') .replace(/\n/g, '<br>') || '<span class="ctm-empty">(vacío)</span>'}</div></div>
+        <div class="sfl-ft"><span id="sfl-msg"></span><button type="button" class="btn btn--primary" id="sfl-save"${locked ? ' disabled' : ''} onclick="LeadManagerModule.seqFlowSave(${st.id})">Guardar cambios</button></div>
+      </div>`;
+  }
+  function _sflPaint() {
+    const box = document.getElementById('sfl-root'); if (!box) return;
+    const s0 = _sequences.find(x => x.id === _sfl.seq), steps = _seqSteps(_sfl.seq);
+    if (!steps.some(x => x.id === _sfl.sel)) _sfl.sel = steps.length ? steps[0].id : 0;
+    const st = steps.find(x => x.id === _sfl.sel);
+    box.innerHTML = `<div class="sfl-top"><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowClose()">← Volver a la secuencia</button><b class="sfl-title">${esc(s0 ? s0.nombre : '')}</b>${s0 ? _seqBadge(s0.estado) : ''}<span class="sfl-sp"></span><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+ Añadir paso</button></div>
+      <div class="sfl-main"><div class="sfl-canvas"><div class="sfl-start">Inicio</div>${steps.length ? steps.map((x, i) => _sflNode(x, i, steps[i - 1])).join('') : `<div class="sfl-empty">Esta secuencia aún no tiene pasos.</div>`}<div class="sfl-link"><button type="button" class="sfl-plus" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div><div class="sfl-start">Fin</div></div>
+      <div class="sfl-panel">${_sflPanel(st)}</div></div>`;
+  }
+  function seqFlowOpen(seqId) {
+    _sfl = { seq: seqId, sel: 0, ver: 0 };
+    document.getElementById('sfl-root')?.remove();
+    const el = document.createElement('div'); el.id = 'sfl-root'; el.className = 'sfl-root';
+    document.body.appendChild(el); _sflPaint();
+  }
+  function seqFlowClose() { document.getElementById('sfl-root')?.remove(); }
+  function seqFlowSel(id) { _sfl.sel = id; _sfl.ver = 0; _sflPaint(); }
+  function seqFlowVer(i) { _sfl.ver = i; _sflPaint(); }
+  async function seqFlowSave(id) {
+    const st = _steps.find(x => x.id === id); if (!st) return;
+    const msg = document.getElementById('sfl-msg'), btn = document.getElementById('sfl-save');
+    const asunto = (document.getElementById('sfl-asunto') || {}).value, cuerpo = (document.getElementById('sfl-cuerpo') || {}).value || '';
+    let variants = Array.isArray(st.variants) ? st.variants.map(v => ({ ...v })) : [], plantilla = st.plantilla || '', asuntoStep = st.asunto || '';
+    const vs = _sflVers(st);
+    if (vs) {
+      const target = vs[Math.min(_sfl.ver, vs.length - 1)];
+      const j = st.variants.indexOf(target);
+      if (j >= 0) { variants[j].cuerpo = cuerpo; if (asunto !== undefined) variants[j].asunto = asunto; }
+      if (j === 0) { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
+    } else { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
+    const body = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: asuntoStep, plantilla, variants, variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, reply_to_step_id: st.reply_to_step_id || null, post_dias: st.post_dias || '', reaccion: st.reaccion || '' };
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/sequence-steps/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      await load(); _sflPaint();
+      const m2 = document.getElementById('sfl-msg'); if (m2) { m2.textContent = '✓ Guardado'; m2.className = 'sfl-ok'; }
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.className = 'sfl-err'; } if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; } }
+  }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
   // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
   // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
@@ -41656,7 +41704,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccClose, liNew, liCreate, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liCreate, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
