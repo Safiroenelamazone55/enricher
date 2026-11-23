@@ -23919,6 +23919,88 @@ const LeadManagerModule = (() => {
     await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id), _seqLoadApprovals(id), _seqLoadPendingNoEmail(id)]);
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
+  // ── Vista de flujo (estilo Lemlist): los pasos como nodos a la izquierda y el contenido editable a la derecha ──
+  let _sfl = { seq: 0, sel: 0, ver: 0 };
+  const _sflIsTpl = (st, v) => { try { return !!_varResolve(v || {}, st).tplId; } catch (_) { return false; } };
+  const _sflVarHtml = t => esc(t || '').replace(/\{\{[^}]*\}\}/g, m => `<span class="ctm-var">${m}</span>`);
+  function _sflVers(st) {
+    const raw = Array.isArray(st.variants) ? st.variants : [];
+    const base = raw.filter(v => v && ((v.cuerpo || '').trim() || (v.nombre || '').trim() || _sflIsTpl(st, v)));
+    return (st.variant_mode && st.variant_mode !== 'off' && base.length) ? base : null;
+  }
+  function _sflNode(st, i, prev) {
+    const t = _TOUCH[st.canal] || _TOUCH.email;
+    const gap = prev ? Math.max(0, (Number(st.dia) || 0) - (Number(prev.dia) || 0)) : 0;
+    const hd = (!prev || !gap) ? (prev ? 'Mismo día' : 'Enviar inmediatamente') : `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>`;
+    const vs = _sflVers(st);
+    const cb = (typeof _stepCondBadge === 'function') ? _stepCondBadge(st) : '';
+    const nm = st.titulo || t[0];
+    return `<div class="sfl-link"><button type="button" class="sfl-plus" title="Añadir un paso" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div>
+      <div class="sfl-node${_sfl.sel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowSel(${st.id})">
+        <div class="sfl-hd">${hd}${cb ? ` <span class="sfl-cond">${cb}</span>` : ''}</div>
+        <div class="sfl-body"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><span class="sfl-nm">${esc(nm)}</span><span class="sfl-d">Día ${Number(st.dia) || 1}</span></div>
+        ${vs ? `<div class="sfl-vers">${vs.map((v, k) => `<div class="sfl-ver"><span>${String.fromCharCode(65 + k)}</span>${esc(v.nombre || ('Versión ' + String.fromCharCode(65 + k)))}</div>`).join('')}</div>` : ''}
+      </div>`;
+  }
+  function _sflPanel(st) {
+    if (!st) return `<div class="sfl-empty">Elige un paso del flujo para ver y editar su contenido.</div>`;
+    const t = _TOUCH[st.canal] || _TOUCH.email, isMail = (st.canal || 'email') === 'email';
+    const vs = _sflVers(st);
+    const k = vs ? Math.min(_sfl.ver, vs.length - 1) : 0;
+    const v = vs ? vs[k] : { asunto: st.asunto || '', cuerpo: st.plantilla || '' };
+    const r = vs ? _varResolve(v, st) : { asunto: v.asunto, cuerpo: v.cuerpo, tplId: null };
+    const locked = !!r.tplId;
+    const tabs = vs && vs.length > 1 ? `<div class="ctm-tabs">${vs.map((x, i) => `<button type="button" class="ctm-tab${i === k ? ' is-on' : ''}" onclick="LeadManagerModule.seqFlowVer(${i})">Versión ${String.fromCharCode(65 + i)}</button>`).join('')}</div>` : '';
+    return `<div class="sfl-ph"><span class="sfl-ic" style="color:${t[1]};background:${t[1]}14"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span><b>${esc(st.titulo || t[0])}</b><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openStepDrawer(${st.seqId || st.sequence_id},${st.id})">Ajustes del paso</button></div>
+      <div class="sfl-pb">${tabs}
+        ${locked ? `<div class="sfl-lock">Este paso usa una plantilla guardada. Para cambiar el texto edítalo en «Ajustes del paso».</div>` : ''}
+        ${isMail ? `<label class="ctm-l" for="sfl-asunto">Asunto</label><input class="form-input" id="sfl-asunto" value="${esc(r.asunto || '')}"${locked ? ' disabled' : ''}>` : ''}
+        <label class="ctm-l" for="sfl-cuerpo">${isMail ? 'Contenido del email' : 'Mensaje'}</label>
+        <textarea class="form-input sfl-ta" id="sfl-cuerpo"${locked ? ' disabled' : ''}>${esc(r.cuerpo || '')}</textarea>
+        <div class="sfl-vars">Variables: ${['first_name', 'last_name', 'company', 'title'].map(x => `<code>{{${x}}}</code>`).join(' ')}</div>
+        <div class="sfl-prev"><div class="ctm-l">Vista previa</div><div class="ctm-box">${_sflVarHtml(r.cuerpo || '') .replace(/\n/g, '<br>') || '<span class="ctm-empty">(vacío)</span>'}</div></div>
+        <div class="sfl-ft"><span id="sfl-msg"></span><button type="button" class="btn btn--primary" id="sfl-save"${locked ? ' disabled' : ''} onclick="LeadManagerModule.seqFlowSave(${st.id})">Guardar cambios</button></div>
+      </div>`;
+  }
+  function _sflPaint() {
+    const box = document.getElementById('sfl-root'); if (!box) return;
+    const s0 = _sequences.find(x => x.id === _sfl.seq), steps = _seqSteps(_sfl.seq);
+    if (!steps.some(x => x.id === _sfl.sel)) _sfl.sel = steps.length ? steps[0].id : 0;
+    const st = steps.find(x => x.id === _sfl.sel);
+    box.innerHTML = `<div class="sfl-top"><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowClose()">← Volver a la secuencia</button><b class="sfl-title">${esc(s0 ? s0.nombre : '')}</b>${s0 ? _seqBadge(s0.estado) : ''}<span class="sfl-sp"></span><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+ Añadir paso</button></div>
+      <div class="sfl-main"><div class="sfl-canvas"><div class="sfl-start">Inicio</div>${steps.length ? steps.map((x, i) => _sflNode(x, i, steps[i - 1])).join('') : `<div class="sfl-empty">Esta secuencia aún no tiene pasos.</div>`}<div class="sfl-link"><button type="button" class="sfl-plus" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div><div class="sfl-start">Fin</div></div>
+      <div class="sfl-panel">${_sflPanel(st)}</div></div>`;
+  }
+  function seqFlowOpen(seqId) {
+    _sfl = { seq: seqId, sel: 0, ver: 0 };
+    document.getElementById('sfl-root')?.remove();
+    const el = document.createElement('div'); el.id = 'sfl-root'; el.className = 'sfl-root';
+    document.body.appendChild(el); _sflPaint();
+  }
+  function seqFlowClose() { document.getElementById('sfl-root')?.remove(); }
+  function seqFlowSel(id) { _sfl.sel = id; _sfl.ver = 0; _sflPaint(); }
+  function seqFlowVer(i) { _sfl.ver = i; _sflPaint(); }
+  async function seqFlowSave(id) {
+    const st = _steps.find(x => x.id === id); if (!st) return;
+    const msg = document.getElementById('sfl-msg'), btn = document.getElementById('sfl-save');
+    const asunto = (document.getElementById('sfl-asunto') || {}).value, cuerpo = (document.getElementById('sfl-cuerpo') || {}).value || '';
+    let variants = Array.isArray(st.variants) ? st.variants.map(v => ({ ...v })) : [], plantilla = st.plantilla || '', asuntoStep = st.asunto || '';
+    const vs = _sflVers(st);
+    if (vs) {
+      const target = vs[Math.min(_sfl.ver, vs.length - 1)];
+      const j = st.variants.indexOf(target);
+      if (j >= 0) { variants[j].cuerpo = cuerpo; if (asunto !== undefined) variants[j].asunto = asunto; }
+      if (j === 0) { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
+    } else { plantilla = cuerpo; if (asunto !== undefined) asuntoStep = asunto; }
+    const body = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: asuntoStep, plantilla, variants, variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, reply_to_step_id: st.reply_to_step_id || null, post_dias: st.post_dias || '', reaccion: st.reaccion || '' };
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/sequence-steps/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      await load(); _sflPaint();
+      const m2 = document.getElementById('sfl-msg'); if (m2) { m2.textContent = '✓ Guardado'; m2.className = 'sfl-ok'; }
+    } catch (e) { if (msg) { msg.textContent = e.message; msg.className = 'sfl-err'; } if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; } }
+  }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
   // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
   // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
@@ -23929,6 +24011,7 @@ const LeadManagerModule = (() => {
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     let html = `<div class="cp-mark-menu__list">`
+      + item('Ver como flujo (editar pasos)', `LeadManagerModule.seqFlowOpen(${seqId})`)
       + item('＋ Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
       + item('＋ Agregar contacto', `LeadManagerModule.seqAddContactOpen(${seqId})`)
       + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
@@ -41317,7 +41400,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
