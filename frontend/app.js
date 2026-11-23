@@ -34143,6 +34143,30 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   async function _ctLoad() {
     try { const r = await apiFetch(`${API}/lm/campaign-templates`); _ct.list = r.ok ? await r.json() : []; } catch (_) { _ct.list = []; }
     if (_section === 'cmptpl') _ctPaint();
+    _ctHashImport();
+  }
+  // Importación desde Lemlist: los templates leídos llegan comprimidos en #lemlist=… y se suben de 8 en 8.
+  async function _ctHashImport() {
+    const h = location.hash || ''; if (!h.startsWith('#lemlist=')) return;
+    const b64 = h.slice(9).replace(/-/g, '+').replace(/_/g, '/'); history.replaceState(null, '', location.pathname + location.search);
+    let items;
+    try {
+      const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const txt = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      items = JSON.parse(txt);
+    } catch (e) { return showBanner('No se pudo leer lo copiado de Lemlist: ' + e.message, 'error'); }
+    if (!Array.isArray(items) || !items.length) return;
+    if (!(await novaConfirm({ title: 'Importar templates de Lemlist', message: `Se importarán ${items.length} template(s) a la colección Comunidad.`, ok: 'Importar' }))) return;
+    let nu = 0, ac = 0, fail = 0;
+    for (let k = 0; k < items.length; k += 8) {
+      showBanner(`Importando templates… ${Math.min(k + 8, items.length)}/${items.length}`, 'info');
+      try {
+        const r = await apiFetch(`${API}/lm/campaign-templates/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items.slice(k, k + 8) }) });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); nu += d.nuevos; ac += d.actualizados;
+      } catch (e) { fail += Math.min(8, items.length - k); console.warn('[ct] import', e.message); }
+    }
+    showBanner(`✓ Templates importados: ${nu} nuevos, ${ac} actualizados${fail ? ', ' + fail + ' con error' : ''}`, fail ? 'error' : 'success');
+    _ctLoad();
   }
   function _ctFiltered() {
     let l = (_ct.list || []).filter(t => t.scope === _ct.col);
@@ -34165,6 +34189,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="ctp-card__t">${esc(t.titulo || 'Sin título')}</div>
       <div class="ctp-card__ft"><span class="ctp-card__au">${av}<span>${esc(nm)}</span></span>
         <span class="ctp-stats"><span title="Prospectos">${_CT_I.users}${t.prospectos || 0}</span><span title="Tasa de apertura">${_CT_I.mail}${t.apertura || 0}%</span><span title="Tasa de respuesta">${_CT_I.chat}${t.respuesta || 0}%</span></span></div>
+      <div class="ctp-card__hov"><button type="button" class="btn btn--primary" onclick="event.stopPropagation();LeadManagerModule.ctUse(${t.id})">Usar template</button><button type="button" class="btn btn--ghost" onclick="event.stopPropagation();LeadManagerModule.ctOpen(${t.id})">Vista previa</button></div>
     </div>`;
   }
   function _ctInner() {
@@ -34214,12 +34239,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const hd = (first || !espera) ? `<span class="ctf-hd__l">Enviar inmediatamente</span>` : `<span class="ctf-hd__l">Esperar durante <b>${esc(_ctDias(espera))}</b></span>`;
     const vers = Array.isArray(it.versiones) && it.versiones.length > 1
       ? `<div class="ctf-vers">${it.versiones.map((v, i) => `<div class="ctf-ver"><span class="ctf-ver__k">${String.fromCharCode(65 + i)}</span>${esc(v.nombre || ('Versión ' + String.fromCharCode(65 + i)))}</div>`).join('')}</div>` : '';
-    return `<div class="ctf-node"><div class="ctf-hd">${hd}</div><div class="ctf-body"><span class="ctf-ic" style="color:${nd[1]};background:${nd[1]}14">${nd[2]}</span><span class="ctf-name">${esc(it.titulo || nd[0])}</span></div>${vers}</div>`;
+    return `<div class="ctf-node" onclick="LeadManagerModule.ctStep('${esc(it.id || '')}')" title="Ver el contenido de este paso"><div class="ctf-hd">${hd}</div><div class="ctf-body"><span class="ctf-ic" style="color:${nd[1]};background:${nd[1]}14">${nd[2]}</span><span class="ctf-name">${esc(it.nombre || it.titulo || nd[0])}</span></div>${vers}</div>`;
   }
   function _ctFlow(items, first) {
     return (items || []).map((it, i) => {
       if (it.k === 'cond') {
-        const lbl = `Si ${esc(_CT_COND[it.cond] || it.cond || 'condición')}${it.dias ? ` en el plazo de ${esc(_ctDias(it.dias))}` : ''}`;
+        const lbl = it.texto ? esc(it.texto) : `Si ${esc(_CT_COND[it.cond] || it.cond || 'condición')}${it.dias ? ` en el plazo de ${esc(_ctDias(it.dias))}` : ''}`;
         return `<div class="ctf-link"></div><div class="ctf-cond"><span class="ctf-cond__p">${lbl}</span></div>
           <div class="ctf-branches"><div class="ctf-br"><span class="ctf-br__t ctf-br__t--si">Sí</span>${_ctFlow(it.si, false)}</div><div class="ctf-br"><span class="ctf-br__t ctf-br__t--no">No</span>${_ctFlow(it.no, false)}</div></div>`;
       }
@@ -34255,6 +34280,78 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         </div>
       </div>`;
   }
+  // Contenido de un paso (como lo muestra Lemlist al abrir un nodo): asunto y mensaje por versión, con las variables resaltadas.
+  function _ctFindStep(items, id) {
+    for (const it of items || []) {
+      if (it.k === 'step' && it.id === id) return it;
+      if (it.k === 'cond') { const r = _ctFindStep(it.si, id) || _ctFindStep(it.no, id); if (r) return r; }
+    }
+    return null;
+  }
+  const _ctVarHtml = t => esc(t || '').replace(/\{\{[^}]*\}\}/g, m => `<span class="ctm-var">${m}</span>`).replace(/\n/g, '<br>');
+  function ctStep(id) {
+    const it = _ct.det && _ctFindStep(_ct.det.pasos, id); if (!it) return;
+    const nd = _CT_NODE[it.tipo] || _CT_NODE.task, vs = (it.versiones || []).filter(v => v && (v.cuerpo || v.asunto));
+    const LBL = { email: ['Objeto de email', 'Contenido del email'], invite: [null, 'Mensaje adjunto a la invitación'], message: [null, 'Mensaje'], inmail: ['Asunto', 'Mensaje'], whatsapp: [null, 'Mensaje'], call: [null, 'Guion de llamada'], task: [null, 'Descripción de la tarea'], visit: [null, null] }[it.tipo] || [null, 'Contenido'];
+    const espera = Number(it.espera) || 0;
+    const body = (v, i) => `<div class="ctm-ver" data-ver="${i}"${i ? ' hidden' : ''}>${LBL[0] ? `<div class="ctm-l">${LBL[0]}</div><div class="ctm-box">${_ctVarHtml(v.asunto) || '<span class="ctm-empty">(vacío)</span>'}</div>` : ''}${LBL[1] ? `<div class="ctm-l">${LBL[1]}</div><div class="ctm-box ctm-box--big">${_ctVarHtml(v.cuerpo) || '<span class="ctm-empty">(vacío)</span>'}</div>` : ''}</div>`;
+    const tabs = vs.length > 1 ? `<div class="ctm-tabs">${vs.map((v, i) => `<button type="button" class="ctm-tab${i ? '' : ' is-on'}" onclick="LeadManagerModule.ctVer(${i})">Versión ${String.fromCharCode(65 + i)}</button>`).join('')}</div>` : '';
+    document.getElementById('ct-step-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'ct-step-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box ctm-box-wrap">
+      <div class="ctm-hd"><span class="ctf-ic" style="color:${nd[1]};background:${nd[1]}14">${nd[2]}</span><b>${esc(it.nombre || nd[0])}</b><span class="ctm-delay">${espera ? 'Esperar durante ' + esc(_ctDias(espera)) : 'Enviar inmediatamente'}</span><button class="fin-pi-x" onclick="document.getElementById('ct-step-modal').remove()">✕</button></div>
+      <div class="ctm-body">${tabs}${vs.length ? vs.map(body).join('') : `<div class="ctm-empty">${it.tipo === 'visit' ? 'Este paso no lleva mensaje: visita el perfil.' : 'Este paso no trae contenido en el template.'}</div>`}</div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  function ctVer(i) {
+    document.querySelectorAll('#ct-step-modal .ctm-ver').forEach(e => { e.hidden = String(e.dataset.ver) !== String(i); });
+    document.querySelectorAll('#ct-step-modal .ctm-tab').forEach((b, k) => b.classList.toggle('is-on', k === i));
+  }
+  // «Usar esta template»: crea una secuencia en borrador con sus pasos, dentro de una campaña del cliente.
+  async function ctUse(id) {
+    const t = (_ct.list || []).find(x => x.id === id) || (_ct.det && _ct.det.id === id ? _ct.det : null); if (!t) return;
+    if (!_clients.length) return showBanner('Primero crea un cliente outbound.', 'error');
+    document.getElementById('ct-use-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'ct-use-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const cli0 = _gcli || '';
+    m.innerHTML = `<div class="fin-pi-box ctu-box">
+      <div class="fin-pi-box__hd"><h3>Usar esta template</h3><button class="fin-pi-x" onclick="document.getElementById('ct-use-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <p class="ctu-t">${esc(t.titulo || '')}</p>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound <b class="lm-req">*</b></span><select class="form-input" id="ctu-cli" onchange="LeadManagerModule.ctUseCli()"><option value="">— Elegir cliente —</option>${_clients.map(c => `<option value="${c.id}"${String(c.id) === String(cli0) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Campaña</span><select class="form-input" id="ctu-camp" onchange="LeadManagerModule.ctUseCli(true)"><option value="">＋ Crear una campaña nueva</option></select></label>
+        <label class="fin-cfg-field fin-pi-full" id="ctu-newname"><span class="fin-cfg-lbl">Nombre de la campaña nueva</span><input class="form-input" id="ctu-cname" value="${esc(t.titulo || '')}"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre de la secuencia</span><input class="form-input" id="ctu-sname" value="${esc(t.titulo || '')}"></label>
+        <p class="ctu-n">La secuencia se crea en <b>borrador</b>, sin contactos. Las esperas pasan a días de la cadencia y las condiciones, a condiciones por paso. Revisa los textos y las variables antes de activarla.</p>
+        <div class="ctu-err" id="ctu-err"></div>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('ct-use-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="ctu-go" onclick="LeadManagerModule.ctUseGo(${id})">Crear secuencia en borrador</button></div></div>
+    </div>`;
+    document.body.appendChild(m);
+    ctUseCli();
+  }
+  function ctUseCli(onlyName) {
+    const cli = parseInt((document.getElementById('ctu-cli') || {}).value, 10) || 0, sel = document.getElementById('ctu-camp'); if (!sel) return;
+    if (!onlyName) sel.innerHTML = '<option value="">＋ Crear una campaña nueva</option>' + (_campaigns || []).filter(c => c.outbound_client_id === cli).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    const nw = document.getElementById('ctu-newname'); if (nw) nw.style.display = sel.value ? 'none' : '';
+  }
+  async function ctUseGo(id) {
+    const cli = parseInt((document.getElementById('ctu-cli') || {}).value, 10) || 0, err = document.getElementById('ctu-err'), btn = document.getElementById('ctu-go');
+    if (!cli) { if (err) err.textContent = 'Elige un cliente.'; return; }
+    const body = { outbound_client_id: cli, campaign_id: parseInt((document.getElementById('ctu-camp') || {}).value, 10) || null, campaign_nombre: (document.getElementById('ctu-cname') || {}).value || '', sequence_nombre: (document.getElementById('ctu-sname') || {}).value || '' };
+    if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      const r = await apiFetch(`${API}/lm/campaign-templates/${id}/use`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      document.getElementById('ct-use-modal')?.remove();
+      try { await load(); } catch (_) {}
+      showBanner(`✓ Secuencia creada en borrador con ${d.pasos} paso(s)${d.avisos && d.avisos.length ? ' · ' + d.avisos.length + ' aviso(s) en sus notas' : ''}`, 'success');
+      go('sequences'); setTimeout(() => { try { openSequence(d.sequence_id); } catch (_) {} }, 400);
+    } catch (e) { if (err) err.textContent = e.message; if (btn) { btn.disabled = false; btn.textContent = 'Crear secuencia en borrador'; } }
+  }
   async function ctOpen(id) {
     _ct.open = id; _ct.det = null; _ct.zoom = 1; _ct.dd = ''; _ct.sortOpen = false; _ctPaint();
     try { const r = await apiFetch(`${API}/lm/campaign-templates/${id}`); _ct.det = r.ok ? await r.json() : null; } catch (_) { _ct.det = null; }
@@ -34263,7 +34360,6 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function ctBack() { _ct.open = 0; _ct.det = null; _ctPaint(); }
   function ctZoom(d) { _ct.zoom = d === 0 ? 1 : Math.max(0.4, Math.min(1.6, +(_ct.zoom + d).toFixed(2))); const f = document.getElementById('ctd-flow'); if (f) f.style.transform = `scale(${_ct.zoom})`; }
-  function ctUse(id) { showBanner('«Usar esta template» crea una campaña con su secuencia: se conecta en el siguiente paso.', 'info'); }
   function _ctPaint() {
     const el = document.getElementById('ctp-main'); if (!el) return;
     const q = document.getElementById('ctp-q'), hadFocus = q && document.activeElement === q, pos = q ? q.selectionStart : 0;
@@ -41220,7 +41316,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

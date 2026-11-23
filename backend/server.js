@@ -4984,6 +4984,130 @@ app.get('/api/lm/campaign-templates/:id', requireAuth, async (req, res) => {
     res.json(t);
   } catch (e) { console.error('[campaign-templates] detalle', e.message); res.status(500).json({ error: 'No se pudo cargar el template' }); }
 });
+// Importar templates leídos de otra herramienta (el dato crudo se guarda y se reprocesa si cambia el parser). Hasta 8 por llamada.
+app.post('/api/lm/campaign-templates/import', requireAuth, async (req, res) => {
+  try {
+    const lt = require('./services/lemlistTemplates');
+    const items = (Array.isArray(req.body && req.body.items) ? req.body.items : []).slice(0, 8);
+    let nuevos = 0, actualizados = 0;
+    for (const raw of items) {
+      if (!raw || !raw.id) continue;
+      const t = lt.parseTemplate(raw);
+      const r = await pool.query(
+        `INSERT INTO lm_campaign_templates (user_id, scope, tipo, idioma, para, objetivo, titulo, autor_nombre, autor_avatar, copias, prospectos, apertura, respuesta, pasos, descripcion, origen_id, origen_raw)
+         VALUES (NULL,'comunidad',$1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15::jsonb)
+         ON CONFLICT (origen_id) WHERE origen_id IS NOT NULL DO UPDATE SET tipo=EXCLUDED.tipo, idioma=EXCLUDED.idioma, para=EXCLUDED.para, objetivo=EXCLUDED.objetivo, titulo=EXCLUDED.titulo,
+           autor_nombre=EXCLUDED.autor_nombre, autor_avatar=EXCLUDED.autor_avatar, copias=EXCLUDED.copias, prospectos=EXCLUDED.prospectos, apertura=EXCLUDED.apertura, respuesta=EXCLUDED.respuesta,
+           pasos=EXCLUDED.pasos, descripcion=EXCLUDED.descripcion, origen_raw=EXCLUDED.origen_raw
+         RETURNING (xmax = 0) AS nuevo`,
+        [t.tipo, t.idioma, JSON.stringify(t.para), JSON.stringify(t.objetivo), t.titulo, t.autor, String(raw.avatar || '').slice(0, 500), t.copias, t.prospectos, t.apertura, t.respuesta, JSON.stringify(t.pasos), t.descripcion, String(raw.id), JSON.stringify(raw)]);
+      if (r.rows[0] && r.rows[0].nuevo) nuevos++; else actualizados++;
+    }
+    res.json({ ok: true, nuevos, actualizados });
+  } catch (e) { console.error('[campaign-templates] import', e.message); res.status(500).json({ error: 'No se pudo importar: ' + e.message }); }
+});
+// «Usar esta template»: crea (o reutiliza) una campaña del cliente y una secuencia en BORRADOR con los pasos del template.
+// Esperas → día de la secuencia; condiciones → condición por paso (abierto, clic, respondió/aceptó); versiones A/B → variantes al azar.
+const _CTPL_VARS = { firstname: 'first_name', lastname: 'last_name', fullname: 'full_name', companyname: 'company', company: 'company', companydomain: 'company_domain', title: 'title', jobtitle: 'title', email: 'email', city: 'city', country: 'country' };
+function _ctplVars(t) {
+  return String(t || '').replace(/\{\{\s*([\w ]+?)\s*\}\}/g, (m, k) => {
+    const key = k.toLowerCase().replace(/\s+/g, '');
+    if (key === 'signature') return '';
+    return _CTPL_VARS[key] ? '{{' + _CTPL_VARS[key] + '}}' : m;
+  }).replace(/\n{3,}/g, '\n\n').trim();
+}
+function _ctplFlatten(pasos) {
+  const steps = [], avisos = [];
+  const COND = {
+    email_opened: ['opened', 'not_opened', 'email'], email_clicked: ['clicked', 'not_clicked', 'email'], email_replied: ['replied', 'no_reply', 'email'],
+    invite_accepted: ['replied', 'no_reply', 'invite'], replied: ['replied', 'no_reply', null],
+  };
+  let anidadas = 0;
+  const walk = (items, off, ctx, depth) => {
+    let day = off;
+    for (const it of items || []) {
+      if (it.k === 'cond') {
+        const m = COND[it.cond];
+        const condOff = day + (Number(it.dias) || 0);
+        if (!m) avisos.push('Condición «' + (it.texto || it.cond) + '» no existe en Nova: sus dos ramas quedaron sin condición.');
+        if (depth > 0 && m) anidadas++;
+        const ref = m && m[2] ? (m[2] === 'email' ? ctx.lastEmail : ctx.lastInvite) : null;
+        const mk = (val) => m ? { cond: val, ref: ref == null ? null : ref } : { cond: '', ref: null };
+        const a = walk(it.si, condOff, { ...ctx, ...mk(m && m[0]) }, depth + 1);
+        const b = walk(it.no, condOff, { ...ctx, ...mk(m && m[1]) }, depth + 1);
+        day = Math.max(a, b, condOff);
+        continue;
+      }
+      const first = steps.length === 0;
+      day = first ? 0 : day + (Number(it.espera) || 0);
+      const v = (it.versiones || []).filter(x => x && (x.cuerpo || x.asunto));
+      const base = v[0] || { asunto: '', cuerpo: '' };
+      const tipo = it.tipo;
+      const o = { dia: 1 + Math.floor(day + 1e-9), canal: 'task', accion: '', titulo: it.nombre || '', asunto: '', plantilla: _ctplVars(base.cuerpo), cond: ctx.cond || '', condRef: ctx.ref == null ? null : ctx.ref, replyRef: null, variants: [], tipo };
+      if (tipo === 'email') { o.canal = 'email'; o.asunto = _ctplVars(base.asunto); o.accion = steps.some(s => s.tipo === 'email') ? 'seguimiento' : 'inicial'; if (o.accion === 'seguimiento') o.replyRef = steps.findIndex(s => s.tipo === 'email' && s.accion === 'inicial'); }
+      else if (tipo === 'invite') { o.canal = 'linkedin'; o.accion = o.plantilla ? 'invite_nota' : 'invite'; }
+      else if (tipo === 'visit') { o.canal = 'linkedin'; o.accion = 'visita'; }
+      else if (tipo === 'message') { o.canal = 'linkedin'; o.accion = 'mensaje'; }
+      else if (tipo === 'inmail') { o.canal = 'linkedin'; o.accion = 'inmail'; o.asunto = _ctplVars(base.asunto); }
+      else if (tipo === 'whatsapp') { o.canal = 'whatsapp'; o.accion = 'mensaje'; }
+      else if (tipo === 'call') { o.canal = 'call'; o.accion = 'llamada'; }
+      if (v.length > 1) o.variants = v.map((x, i) => ({ tplId: '', asunto: _ctplVars(x.asunto), cuerpo: _ctplVars(x.cuerpo), nombre: String.fromCharCode(65 + i), targets: [] }));
+      steps.push(o);
+      const idx = steps.length - 1;
+      if (tipo === 'email') ctx = { ...ctx, lastEmail: idx };
+      if (tipo === 'invite') ctx = { ...ctx, lastInvite: idx };
+    }
+    return day;
+  };
+  walk(pasos, 0, { cond: '', ref: null, lastEmail: null, lastInvite: null }, 0);
+  if (anidadas) avisos.push(anidadas + ' condición(es) anidada(s): cada paso conserva solo la condición de su rama más interna.');
+  return { steps, avisos };
+}
+app.post('/api/lm/campaign-templates/:id/use', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {};
+  const cx = await pool.connect();
+  try {
+    const clientId = parseInt(b.outbound_client_id, 10) || 0;
+    const { rows: [t] } = await cx.query(`SELECT * FROM lm_campaign_templates WHERE id=$1 AND (user_id IS NULL OR user_id=$2)`, [parseInt(req.params.id, 10) || 0, uid]);
+    if (!t) return res.status(404).json({ error: 'Template no encontrado' });
+    const { rows: [oc] } = await cx.query(`SELECT id, nombre, timezone FROM outbound_clients WHERE id=$1 AND user_id=$2`, [clientId, uid]);
+    if (!oc) return res.status(400).json({ error: 'Elige un cliente' });
+    const { steps, avisos } = _ctplFlatten(Array.isArray(t.pasos) ? t.pasos : []);
+    if (!steps.length) return res.status(400).json({ error: 'Este template aún no tiene pasos para copiar' });
+    await cx.query('BEGIN');
+    let campId = parseInt(b.campaign_id, 10) || 0;
+    if (campId) {
+      const ok = (await cx.query(`SELECT 1 FROM campaigns WHERE id=$1 AND user_id=$2 AND outbound_client_id=$3`, [campId, uid, clientId])).rowCount;
+      if (!ok) throw new Error('La campaña no pertenece a ese cliente');
+    } else {
+      const nombre = await _conCodigoCampana(0, clientId, String(b.campaign_nombre || t.titulo).trim().slice(0, 120) || t.titulo);
+      const { rows: [c] } = await cx.query(`INSERT INTO campaigns (user_id, outbound_client_id, nombre, estado, canal, canal_secundario, objetivo, notas) VALUES ($1,$2,$3,'draft',$4,$5,'',$6) RETURNING id`,
+        [uid, clientId, nombre, steps.some(s => s.canal === 'linkedin') ? 'LinkedIn' : 'Email', steps.some(s => s.canal === 'linkedin') && steps.some(s => s.canal === 'email') ? 'Email' : '', 'Creada desde el template «' + t.titulo + '».']);
+      campId = c.id;
+    }
+    const sNombre = await _conCodigoSec(campId, String(b.sequence_nombre || t.titulo).trim().slice(0, 140), null);
+    const { rows: [sq] } = await cx.query(`INSERT INTO sequences (user_id, outbound_client_id, campaign_id, nombre, objetivo, estado, timezone, send_days, daily_limit, send_mode, send_interval_min, auto_activar, notas, idioma_faltante)
+      VALUES ($1,$2,$3,$4,'','draft',$5,'1111100',0,'manual',10,false,$6,'base') RETURNING id`, [uid, clientId, campId, sNombre, oc.timezone || '', 'Copiada del template «' + t.titulo + '». Revisa los textos y las variables antes de activarla.']);
+    const ids = [];
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      const { rows: [r] } = await cx.query(`INSERT INTO sequence_steps (user_id, sequence_id, dia, canal, titulo, plantilla, orden, variants, variant_mode, variant_field, asunto, accion, reply_to_prev, cond)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,'',$10,$11,$12,$13) RETURNING id`,
+        [uid, sq.id, s.dia, s.canal, s.titulo || '', s.plantilla || '', i + 1, JSON.stringify(s.variants || []), s.variants && s.variants.length > 1 ? 'random' : 'off', s.asunto || '', s.accion || '', s.accion === 'seguimiento', s.cond || '']);
+      ids.push(r.id);
+    }
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      const cref = s.condRef != null ? ids[s.condRef] : null, rref = s.replyRef != null && s.replyRef >= 0 ? ids[s.replyRef] : null;
+      if (cref || rref) await cx.query(`UPDATE sequence_steps SET cond_step_id=$1, reply_to_step_id=$2 WHERE id=$3`, [cref, rref, ids[i]]);
+    }
+    if (avisos.length) await cx.query(`UPDATE sequences SET notas = notas || $1 WHERE id=$2`, ['\nAvisos de la copia: ' + avisos.join(' '), sq.id]);
+    await cx.query(`UPDATE lm_campaign_templates SET copias = copias + 1 WHERE id=$1`, [t.id]);
+    await cx.query('COMMIT');
+    res.json({ ok: true, campaign_id: campId, sequence_id: sq.id, pasos: steps.length, avisos });
+  } catch (e) { await cx.query('ROLLBACK').catch(() => {}); console.error('[campaign-templates] use', e.message); res.status(500).json({ error: 'No se pudo crear la secuencia: ' + e.message }); }
+  finally { cx.release(); }
+});
 app.get('/api/lm/exclusions', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {

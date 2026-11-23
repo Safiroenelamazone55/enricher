@@ -1335,6 +1335,9 @@ async function initDb() {
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_lm_campaign_templates_user ON lm_campaign_templates (user_id, scope)`);
     await pool.query(`ALTER TABLE lm_campaign_templates ADD COLUMN IF NOT EXISTS descripcion TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE lm_campaign_templates ADD COLUMN IF NOT EXISTS origen_id TEXT`);
+    await pool.query(`ALTER TABLE lm_campaign_templates ADD COLUMN IF NOT EXISTS origen_raw JSONB`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_lm_ctpl_origen ON lm_campaign_templates (origen_id) WHERE origen_id IS NOT NULL`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);
