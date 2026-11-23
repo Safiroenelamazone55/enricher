@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -49,14 +49,20 @@ async function sesionIniciada() {
 }
 
 // ── Identidad: ¿qué cuenta de LinkedIn hay abierta en este Chrome? ──
+// «/in/me/» solo se resuelve DENTRO de la página (no con fetch): se abre una pestaña en segundo plano y se lee a dónde llega. Se cachea 6 h.
 async function leerIdentidad() {
   const { identidad } = await get();
   if (identidad && identidad.slug && Date.now() - identidad.t < 6 * 3600 * 1000) return identidad.slug;
+  let tab;
   try {
-    const r = await fetch('https://www.linkedin.com/in/me/', { credentials: 'include', redirect: 'follow' });
-    const m = String(r.url || '').match(/linkedin\.com\/in\/([^\/?#]+)/i);
-    if (m && m[1].toLowerCase() !== 'me') { const slug = decodeURIComponent(m[1]).toLowerCase(); await chrome.storage.local.set({ identidad: { slug, t: Date.now() } }); return slug; }
-  } catch (_) {}
+    tab = await chrome.tabs.create({ url: 'https://www.linkedin.com/in/me/', active: false });
+    for (let i = 0; i < 20; i++) {
+      await sleep(600);
+      const t = await chrome.tabs.get(tab.id);
+      const m = String(t.url || '').match(/linkedin\.com\/in\/([^\/?#]+)/i);
+      if (m && m[1].toLowerCase() !== 'me') { const slug = decodeURIComponent(m[1]).toLowerCase(); await chrome.storage.local.set({ identidad: { slug, t: Date.now() } }); return slug; }
+    }
+  } catch (_) {} finally { if (tab) chrome.tabs.remove(tab.id).catch(() => {}); }
   return (identidad && identidad.slug) || '';
 }
 

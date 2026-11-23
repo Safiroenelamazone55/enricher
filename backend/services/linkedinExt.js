@@ -25,7 +25,8 @@ DEF.chequeos_dia = 30;   // «comprobaciones de red en 24 h»: el valor de la pa
 // Configuración que viaja DESDE el servidor hacia la extensión (como hace lemlist): si LinkedIn cambia su página, se corrige aquí y
 // las extensiones lo reciben solas, sin reinstalarlas. Los patrones de bloqueo son los que usa lemlist (leídos en su extensión).
 const CONFIG = {
-  v: 1,
+  v: 2,
+  bandeja: { item: 'li.msg-conversation-listitem', nombre: '.msg-conversation-card__participant-names, .msg-conversation-listitem__participant-names', extracto: '.msg-conversation-card__message-snippet' },   // comprobado en una cuenta real el 2026-11-23
   textos: {
     connect: ['connect', 'conectar'], pending: ['pending', 'pendiente'], message: ['message', 'mensaje'],
     addNote: ['add a note', 'añadir una nota', 'agregar una nota'], send: ['send', 'enviar'],

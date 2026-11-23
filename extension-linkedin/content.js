@@ -69,7 +69,7 @@
     const main = document.querySelector('main') || document.body;
     const top = main.querySelector('section') || main;
     const grado = norm(top.innerText).match(/·\s*(1st|1\.º|1\.er|1º|2nd|2\.º|2º|3rd|3\.º|3º)/);
-    return { pend: findBtn(T('pending'), top), con: findBtn(T('connect'), top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: !!main.querySelector('h1') };
+    return { pend: findBtn(T('pending'), top), con: findBtn(T('connect'), top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: /\/in\//.test(location.pathname) && !!([...main.querySelectorAll('h2')].find(h => (h.innerText || '').trim().length > 1) || main.querySelector('h1')) };
   }
 
   async function invitar(a, asistido) {
@@ -129,43 +129,48 @@
   // ── Lecturas para detectar aceptaciones, respuestas e interacciones (no escriben nada) ──
   async function desplazar(veces) { for (let i = 0; i < veces; i++) { window.scrollBy({ top: rnd(500, 900), behavior: 'smooth' }); await sleep(rnd(1200, 2400)); } }
 
-  // Conexiones recientes: las personas que aceptaron aparecen arriba (orden «añadidas recientemente»)
+  // Conexiones recientes: las personas que aceptaron aparecen arriba. La página dice «N connections»; con 0 no hay nada que leer (y no es un fallo).
   async function leerConexiones() {
     await sleep(rnd(1500, 3000)); await desplazar(2);
     const av = avisoLinkedIn(); if (av) return porAviso(av);
+    const main = document.querySelector('main') || document.body;
+    const total = (String(main.innerText || '').match(/(\d[\d.,]*)\s+(connections|conexiones)/i) || [])[1];
     const slugs = new Set();
-    document.querySelectorAll('main a[href*="/in/"]').forEach(x => { const m = String(x.getAttribute('href') || '').match(/\/in\/([^\/?#]+)/i); if (m) slugs.add(decodeURIComponent(m[1]).toLowerCase()); });
+    main.querySelectorAll('a[href*="/in/"]').forEach(x => { const m = String(x.getAttribute('href') || '').match(/\/in\/([^\/?#]+)/i); if (m) slugs.add(decodeURIComponent(m[1]).toLowerCase()); });
+    if (total && Number(String(total).replace(/\D/g, '')) === 0) return R('ok', '', '', { datos: { slugs: [] } });
     if (!slugs.size) return R('fallo', 'sin_datos', 'No se encontraron conexiones en la página', { snapshot: snapshot() });
     return R('ok', '', '', { datos: { slugs: [...slugs].slice(0, 80) } });
   }
 
-  // Bandeja: cada conversación con su último texto. «propio» = el último mensaje lo escribí yo (Tú: / You:)
+  // Bandeja (clases comprobadas en una cuenta real): nombre, último texto y si tiene mensajes sin leer. «propio» = el último mensaje lo escribí yo (Tú: / You:)
   async function leerBandeja() {
-    await sleep(rnd(2000, 3500));
+    for (let i = 0; i < 16 && !document.querySelector('li.msg-conversation-listitem'); i++) await sleep(800);   // la lista tarda en pintarse
+    await sleep(rnd(1200, 2500));
     const av = avisoLinkedIn(); if (av) return porAviso(av);
-    let nodos = [...document.querySelectorAll('li.msg-conversation-listitem, li[class*="msg-conversation"], .msg-conversations-container li')];
-    if (!nodos.length) nodos = [...document.querySelectorAll('a[href*="/messaging/thread/"]')].map(a => a.closest('li') || a);
+    const B = (CFG && CFG.bandeja) || {};
+    const nodos = [...document.querySelectorAll(B.item || 'li.msg-conversation-listitem')];
     const vistos = new Set(), conversaciones = [];
     for (const li of nodos) {
-      const lineas = String(li.innerText || '').split('\n').map(x => x.trim()).filter(Boolean);
-      if (lineas.length < 2) continue;
-      const nombre = lineas[0], extracto = lineas.slice(1).filter(x => !/^(\d+\s?(min|h|d|sem|w|m)|ayer|yesterday|\d{1,2}\s\w{3})/i.test(x)).join(' ').slice(0, 300);
-      if (vistos.has(nombre + extracto)) continue; vistos.add(nombre + extracto);
-      const cls = String(li.className || '') + ' ' + [...li.querySelectorAll('*')].map(x => String(x.className || '')).join(' ');
-      const no_leido = /unread|--unread|notification-badge/i.test(cls) || !!li.querySelector('[class*="unread"], .notification-badge');
+      const nombre = String((li.querySelector(B.nombre || '.msg-conversation-card__participant-names, .msg-conversation-listitem__participant-names') || {}).innerText || '').replace(/\s+/g, ' ').trim();
+      const extracto = String((li.querySelector(B.extracto || '.msg-conversation-card__message-snippet') || {}).innerText || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (!nombre || vistos.has(nombre + extracto)) continue; vistos.add(nombre + extracto);
+      const no_leido = /new notification|notificaci[oó]n(es)? nueva|nuevas? notificaci/i.test(li.innerText || '') || !!li.querySelector('[class*="unread"]');
       conversaciones.push({ nombre, extracto, no_leido, propio: /^(tú|tu|you)\s*:/i.test(extracto) });
     }
-    if (!nodos.length) return R('fallo', 'sin_datos', 'No se encontró la lista de conversaciones', { snapshot: snapshot() });
+    if (!nodos.length && /messaging/.test(location.pathname) && !/no (messages|conversations)|sin mensajes/i.test(document.body.innerText || '')) return R('fallo', 'sin_datos', 'No se encontró la lista de conversaciones', { snapshot: snapshot() });
     return R('ok', '', '', { datos: { conversaciones: conversaciones.slice(0, 50) } });
   }
 
+  // Notificaciones: esa página usa nombres de clase ofuscados y cambiantes, así que se lee por TEXTO: cada notificación termina en su antigüedad (1w, 3h, 2d…)
   async function leerNotificaciones() {
     await sleep(rnd(2000, 3500)); await desplazar(1);
     const av = avisoLinkedIn(); if (av) return porAviso(av);
-    let nodos = [...document.querySelectorAll('[class*="nt-card"], article, main li')];
-    const items = [], vistos = new Set();
-    for (const n of nodos) { const t = String(n.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (t.length > 12 && !vistos.has(t)) { vistos.add(t); items.push({ texto: t }); } }
-    if (!items.length) return R('fallo', 'sin_datos', 'No se encontraron notificaciones', { snapshot: snapshot() });
+    const main = document.querySelector('main') || document.body;
+    const lineas = String(main.innerText || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    const esTiempo = x => /^\d+\s?(s|m|h|d|w|mo|y|min|sem|mes|mon|dias?|d[ií]as?|h|hr|hrs)$/i.test(x);
+    const items = []; let acum = [];
+    for (const l of lineas) { if (esTiempo(l)) { const t = acum.join(' ').replace(/\s+/g, ' ').trim(); if (t.length > 8) items.push({ texto: t.slice(-220) }); acum = []; } else acum.push(l); }
+    if (!items.length && !/no (new )?notifications|sin notificaciones/i.test(main.innerText || '')) return R('fallo', 'sin_datos', 'No se encontraron notificaciones', { snapshot: snapshot() });
     return R('ok', '', '', { datos: { items: items.slice(0, 50) } });
   }
 

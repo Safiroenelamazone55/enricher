@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nova · LinkedIn",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, respetando los topes diarios. Modo asistido por defecto.",
   "permissions": [
     "storage",
