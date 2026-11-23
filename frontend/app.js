@@ -23591,7 +23591,7 @@ const LeadManagerModule = (() => {
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Campañas</h2></div>
-        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer()">＋ Nueva campaña</button>` : ''}
+        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignStart()">＋ Nueva campaña</button>` : ''}
       </div>
       <div class="ldh-toolbar">
         <select class="ldh-sel" id="cm-cli" onchange="LeadManagerModule.cmSetCli(this.value)"></select>
@@ -23727,7 +23727,7 @@ const LeadManagerModule = (() => {
     if (selC) selC.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_cmCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
     if (selE) selE.innerHTML = `<option value="">Estado: todos</option>` + Object.entries(_CMP).map(([k, v]) => `<option value="${k}"${_cmEst === k ? ' selected' : ''}>${v[0]}</option>`).join('');
     if (!_campaigns.length) {
-      wrap.innerHTML = _clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignDrawer()')
+      wrap.innerHTML = _clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignStart()')
                                        : _empty('campaigns', 'Primero crea un cliente outbound', 'Las campañas pertenecen a un cliente outbound. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()');
       return;
     }
@@ -33607,9 +33607,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     }
     if (tab === 'Campañas') {
       const cs = _sortCmp(_campaignsByClient(c.id));
-      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${cs.length} campaña${cs.length !== 1 ? 's' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer(null,${c.id})">＋ Nueva campaña</button></div>
+      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${cs.length} campaña${cs.length !== 1 ? 's' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignStart(${c.id})">＋ Nueva campaña</button></div>
         ${cs.length ? `<div class="lm-cmp-grid">${cs.map(x => _campaignCard(x, false)).join('')}</div>`
-          : _empty('campaigns', 'Sin campañas para este cliente', 'Crea una campaña y asígnale leads de este cliente.', 'Nueva campaña', `LeadManagerModule.openCampaignDrawer(null,${c.id})`)}`;
+          : _empty('campaigns', 'Sin campañas para este cliente', 'Crea una campaña y asígnale leads de este cliente.', 'Nueva campaña', `LeadManagerModule.openCampaignStart(${c.id})`)}`;
     }
     if (tab === 'Secuencias') {
       const ss = _sortSeq(_sequencesByClient(c.id));
@@ -36243,6 +36243,69 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     } catch (_) { pre.textContent = ''; }
   }
   function _nmJoin(fid) { return (($(fid + '-pre')?.textContent || '') + ($(fid)?.value || '').trim()).trim(); }
+  // ── Vista de inicio de campaña: elegir cómo empezar (manual, por activador de señal o desde un template) ──
+  const _CS_ICO = {
+    list: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>',
+    vars: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></svg>',
+    branch: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10"/><path d="M18 11c0 4-6 3-12 6"/></svg>',
+    target: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>',
+    people: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5a3 3 0 0 1 0 6"/><path d="M18 14c2 .6 3 2.6 3 5"/></svg>',
+    spark: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/></svg>',
+  };
+  const _CS_ART_MANUAL = `<svg viewBox="0 0 440 190" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="440" height="190" fill="#F3F6F2"/>
+    <rect x="70" y="26" width="190" height="64" rx="8" fill="#fff" stroke="#DCE3DD"/><rect x="86" y="40" width="26" height="20" rx="3" fill="none" stroke="#8C97A3" stroke-width="1.6"/><path d="M86 43l13 9 13-9" fill="none" stroke="#8C97A3" stroke-width="1.6"/><rect x="126" y="46" width="112" height="9" rx="4.5" fill="#E4E9E5"/>
+    <rect x="70" y="100" width="190" height="64" rx="8" fill="#fff" stroke="#DCE3DD"/><path d="M92 124c0-4 3-6 6-6l3 5-3 2c1 3 3 5 6 6l2-3 5 3c0 3-2 6-6 6-8 0-13-6-13-13z" fill="none" stroke="#8C97A3" stroke-width="1.6" stroke-linejoin="round" transform="translate(-2 -2)"/><rect x="126" y="120" width="112" height="9" rx="4.5" fill="#E4E9E5"/>
+    <rect x="190" y="64" width="190" height="64" rx="8" fill="#fff" stroke="#DCE3DD" style="filter:drop-shadow(0 6px 10px rgba(10,37,64,.08))"/><rect x="206" y="80" width="28" height="28" rx="5" fill="#00804C"/><text x="220" y="100" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#fff">in</text><rect x="248" y="88" width="108" height="9" rx="4.5" fill="#DCEFE3"/></svg>`;
+  const _CS_ART_SIGNAL = `<svg viewBox="0 0 440 190" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="440" height="190" fill="#EAF2F6"/>
+    <rect x="150" y="48" width="140" height="94" rx="0" fill="none" stroke="#BFD0DA" stroke-dasharray="4 4"/>
+    <circle cx="220" cy="95" r="34" fill="#fff" stroke="#D3DEE4" style="filter:drop-shadow(0 6px 10px rgba(10,37,64,.10))"/><circle cx="220" cy="95" r="21" fill="none" stroke="#00804C" stroke-width="3"/><circle cx="220" cy="95" r="11" fill="none" stroke="#00804C" stroke-width="3"/><circle cx="220" cy="95" r="3.5" fill="#00804C"/>
+    <rect x="22" y="30" width="118" height="46" rx="8" fill="#fff" stroke="#D3DEE4"/><circle cx="46" cy="53" r="8" fill="none" stroke="#1E488F" stroke-width="1.6"/><rect x="62" y="48" width="64" height="9" rx="4.5" fill="#DCE6EE"/>
+    <rect x="300" y="30" width="118" height="46" rx="8" fill="#fff" stroke="#D3DEE4"/><circle cx="324" cy="53" r="8" fill="none" stroke="#1E488F" stroke-width="1.6"/><rect x="340" y="48" width="64" height="9" rx="4.5" fill="#DCE6EE"/>
+    <rect x="22" y="116" width="118" height="46" rx="8" fill="#fff" stroke="#D3DEE4"/><rect x="38" y="130" width="22" height="22" rx="4" fill="#00804C"/><text x="49" y="146" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#fff">in</text><rect x="68" y="135" width="58" height="9" rx="4.5" fill="#DCE6EE"/>
+    <rect x="300" y="116" width="118" height="46" rx="8" fill="#fff" stroke="#D3DEE4"/><rect x="316" y="132" width="22" height="16" rx="3" fill="none" stroke="#1E488F" stroke-width="1.6"/><rect x="346" y="135" width="58" height="9" rx="4.5" fill="#DCE6EE"/></svg>`;
+  function openCampaignStart(presetClient, onCreated) {
+    document.getElementById('lm-cmpstart-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-cmpstart-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeCampaignStart(); };
+    const row = (ic, t) => `<div class="cmpst-row"><span class="cmpst-row__ic">${_CS_ICO[ic]}</span><span>${t}</span></div>`;
+    m.innerHTML = `<div class="fin-pi-box cmpst-box">
+      <div class="fin-pi-box__hd"><h3>Nueva campaña</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeCampaignStart()">✕</button></div>
+      <div class="cmpst-body">
+        <p class="cmpst-lead">¿Cómo quieres empezar?</p>
+        <div class="cmpst-grid">
+          <div class="cmpst-card">
+            <div class="cmpst-art">${_CS_ART_MANUAL}</div>
+            <h4 class="cmpst-t">Crear manualmente</h4>
+            <div class="cmpst-rows">
+              ${row('list', 'Añade pasos y prospectos manualmente.')}
+              ${row('vars', 'Escribe mensajes de prospección con {{variables}}.')}
+              ${row('branch', 'Crea secuencias complejas basadas en condiciones.')}
+            </div>
+            <button type="button" class="btn btn--primary cmpst-cta" onclick="LeadManagerModule.campaignStartManual(${presetClient == null ? 'null' : Number(presetClient)})">Crear campaña manual</button>
+          </div>
+          <div class="cmpst-card">
+            <div class="cmpst-art">${_CS_ART_SIGNAL}</div>
+            <h4 class="cmpst-t">Crear mediante activador de señal <span class="cmpst-soon">Próximamente</span></h4>
+            <div class="cmpst-rows">
+              ${row('target', 'Llega a los prospectos en el momento en que salta una señal: cambio de puesto, visita al sitio web, financiación, cambio tecnológico…')}
+              ${row('people', 'Abre con un rompehielos personalizado basado en lo que activó la señal.')}
+              ${row('spark', 'Obtén una secuencia creada por IA, con pasos, tiempos y canales adaptados a su señal y a su ICP.')}
+            </div>
+            <button type="button" class="btn btn--ghost cmpst-cta cmpst-cta--alt" onclick="showBanner('Los activadores de señal llegan en una próxima versión.', 'info')">Enlace a un activador de señal</button>
+          </div>
+        </div>
+        <div class="cmpst-tpl">
+          <div class="cmpst-tpl__t"><b>Empezar con templates</b><span>Parte de una secuencia ya armada y adáptala a tu cliente.</span></div>
+          <button type="button" class="btn btn--ghost cmpst-tpl__b" onclick="showBanner('La biblioteca de templates se activa cuando importes los templates.', 'info')">${_CS_ICO.book} Explorar la biblioteca de templates</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  function closeCampaignStart() { document.getElementById('lm-cmpstart-modal')?.remove(); }
+  function campaignStartManual(presetClient) { closeCampaignStart(); openCampaignDrawer(null, presetClient == null ? undefined : presetClient); }
   function openCampaignDrawer(id, presetClient, onCreated) {
     _cmpOnCreated = onCreated || null;
     const c = id ? _campaigns.find(x => x.id === id) : null;
@@ -40989,7 +41052,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
+    openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
