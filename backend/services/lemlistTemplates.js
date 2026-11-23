@@ -124,6 +124,13 @@ function parseContenido(txt, tipo) {
 
 // ── Árbol de pasos a partir de nodos y aristas ──
 function buildTree(nodes, edges, contents) {
+  // Sin conexiones leídas y sin condiciones: el flujo es una línea recta, el orden lo da la posición vertical de los nodos.
+  const hayCond = (nodes || []).some(n => /conditional/i.test(n.icon || '') || /^(Si\s|Esperar hasta|Tienes)/i.test(n.name || n.txt || ''));
+  if (!(edges && edges.length) && nodes && nodes.length > 2 && !hayCond) {
+    const seq = nodes.filter(n => n.id === 'start' || n.id === 'end' || /^stp_/.test(n.id)).filter(n => !/__merge$/.test(n.id))
+      .sort((x, y) => (x.id === 'start' ? -1 : y.id === 'start' ? 1 : x.id === 'end' ? 1 : y.id === 'end' ? -1 : x.y - y.y));
+    edges = seq.slice(1).map((n, i) => seq[i].id + '->' + n.id);
+  }
   const byId = new Map(nodes.map(n => [n.id, n]));
   const next = new Map();   // origen → [{to, rama}]
   for (const e of edges || []) {
