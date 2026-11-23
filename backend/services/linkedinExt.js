@@ -6,13 +6,16 @@
 // Cifras por defecto = guía pública de lemlist (help.lemlist.com, leída 2026-11-23): 20 invitaciones/día, ~100/semana móvil,
 // 30 mensajes/día, 30 visitas/día, 100 acciones/día en total, calentamiento +2 invitaciones/día desde 5, cuentas nuevas ~50
 // acciones/día, tras una restricción: parar 48 h y reiniciar en 5. LinkedIn no publica sus límites: son estimaciones.
-// Las cifras de InMail, las esperas entre acciones y el calentamiento de mensajes/visitas son cifras PROPIAS (conservadoras).
+// Confirmado en la pantalla «Límites» de una cuenta real de lemlist (2026-11-23): visitas 30, invitaciones 20, mensajes 30, InMail 5,
+// seguimientos 20, retiros de invitación 30, «me gusta» 30 — todos «en 24 h» (ventana móvil, no día natural). Su planificación de envío:
+// 9:00–18:00, 5 de 7 días, una acción cada 20 min. Cifras PROPIAS (conservadoras): esperas de 5–20 min y el calentamiento de mensajes/visitas.
+// Cuenta gratuita de LinkedIn: 3 invitaciones con nota por mes (guía de lemlist).
 const crypto = require('crypto');
 
 const DEF = {
-  inv_dia: 20, inv_semana: 100, msg_dia: 30, vis_dia: 30, inmail_dia: 10, total_dia: 100,
+  inv_dia: 20, inv_semana: 100, msg_dia: 30, vis_dia: 30, inmail_dia: 5, total_dia: 100, notas_mes_gratis: 3,
   ramp_activo: true, ramp_inicio: 5, ramp_paso: 2, ramp_dias: 14, total_nuevo: 50,
-  hora_ini: 9, hora_fin: 18, dias: [1, 2, 3, 4, 5], gap_min: 60, gap_max: 240, nota_max: 200, tz: 'America/Lima',
+  hora_ini: 9, hora_fin: 18, dias: [1, 2, 3, 4, 5], gap_min: 300, gap_max: 1200, nota_max: 200, tz: 'America/Lima',
 };
 const TIPOS = ['invite', 'message', 'visit', 'inmail'];
 const FALLOS_PAUSA = 3;          // fallos seguidos que pausan la cuenta (algo cambió o LinkedIn avisa)
@@ -53,7 +56,7 @@ function efectivos(a, now) {
 
 // ── ¿Puede la cuenta hacer una acción de este tipo AHORA? ──
 // hist: { inv_hoy, msg_hoy, vis_hoy, inmail_hoy, total_hoy, inv_semana, ultima: Date|null }
-function evaluar(a, hist, tipo, now, rnd) {
+function evaluar(a, hist, tipo, now, rnd, conNota) {
   now = now || new Date(); rnd = typeof rnd === 'number' ? rnd : Math.random();
   if (a.estado === 'restringida' || a.estado === 'pausada' || a.estado === 'desconectada') {
     if (!(a.pausa_hasta && new Date(a.pausa_hasta) <= now && a.estado !== 'desconectada')) return { ok: false, motivo: 'cuenta_' + a.estado, espera_s: 600 };
@@ -67,6 +70,7 @@ function evaluar(a, hist, tipo, now, rnd) {
   if (!caps) return { ok: false, motivo: 'tipo_desconocido', espera_s: 0 };
   if (caps[0] >= caps[1]) return { ok: false, motivo: 'tope_' + tipo + '_dia', espera_s: 3600 };
   if (tipo === 'invite' && hist.inv_semana >= ef.inv_semana) return { ok: false, motivo: 'tope_invitaciones_semana', espera_s: 3600 };
+  if (tipo === 'invite' && conNota && a.plan !== 'premium' && (hist.notas_mes || 0) >= DEF.notas_mes_gratis) return { ok: false, motivo: 'tope_notas_mes_cuenta_gratis', espera_s: 3600 };
   // espera aleatoria entre acciones: nunca ráfagas
   const gap = a.gap_min + rnd * Math.max(0, a.gap_max - a.gap_min);
   if (hist.ultima) {
@@ -92,11 +96,13 @@ async function ensure(pool) {
     token_hash TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pausada', motivo TEXT NOT NULL DEFAULT '', pausa_hasta TIMESTAMPTZ,
     modo TEXT NOT NULL DEFAULT 'asistido',
     inv_dia INTEGER NOT NULL DEFAULT 20, inv_semana INTEGER NOT NULL DEFAULT 100, msg_dia INTEGER NOT NULL DEFAULT 30, vis_dia INTEGER NOT NULL DEFAULT 30,
-    inmail_dia INTEGER NOT NULL DEFAULT 10, total_dia INTEGER NOT NULL DEFAULT 100,
+    inmail_dia INTEGER NOT NULL DEFAULT 5, total_dia INTEGER NOT NULL DEFAULT 100,
     ramp_activo BOOLEAN NOT NULL DEFAULT TRUE, ramp_inicio INTEGER NOT NULL DEFAULT 5, ramp_paso INTEGER NOT NULL DEFAULT 2, ramp_dias INTEGER NOT NULL DEFAULT 14, ramp_desde DATE,
     hora_ini REAL NOT NULL DEFAULT 9, hora_fin REAL NOT NULL DEFAULT 18, dias INTEGER[] NOT NULL DEFAULT '{1,2,3,4,5}', tz TEXT NOT NULL DEFAULT 'America/Lima',
-    gap_min INTEGER NOT NULL DEFAULT 60, gap_max INTEGER NOT NULL DEFAULT 240, fallos_seguidos INTEGER NOT NULL DEFAULT 0,
+    gap_min INTEGER NOT NULL DEFAULT 300, gap_max INTEGER NOT NULL DEFAULT 1200, fallos_seguidos INTEGER NOT NULL DEFAULT 0,
     ultimo_visto TIMESTAMPTZ, ext_version TEXT NOT NULL DEFAULT '', li_nombre TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratis'`);
+  await pool.query(`ALTER TABLE li_accounts ALTER COLUMN inmail_dia SET DEFAULT 5, ALTER COLUMN gap_min SET DEFAULT 300, ALTER COLUMN gap_max SET DEFAULT 1200`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_li_accounts_token ON li_accounts (token_hash)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS li_actions (
     id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, account_id INTEGER NOT NULL REFERENCES li_accounts(id) ON DELETE CASCADE,
@@ -115,14 +121,15 @@ async function ensure(pool) {
 async function historial(pool, a, now) {
   const { rows: [r] } = await pool.query(
     `SELECT
-       COUNT(*) FILTER (WHERE tipo='invite'  AND (done_at AT TIME ZONE $2)::date = ($3::timestamptz AT TIME ZONE $2)::date)::int AS inv_hoy,
-       COUNT(*) FILTER (WHERE tipo='message' AND (done_at AT TIME ZONE $2)::date = ($3::timestamptz AT TIME ZONE $2)::date)::int AS msg_hoy,
-       COUNT(*) FILTER (WHERE tipo='visit'   AND (done_at AT TIME ZONE $2)::date = ($3::timestamptz AT TIME ZONE $2)::date)::int AS vis_hoy,
-       COUNT(*) FILTER (WHERE tipo='inmail'  AND (done_at AT TIME ZONE $2)::date = ($3::timestamptz AT TIME ZONE $2)::date)::int AS inmail_hoy,
-       COUNT(*) FILTER (WHERE (done_at AT TIME ZONE $2)::date = ($3::timestamptz AT TIME ZONE $2)::date)::int AS total_hoy,
-       COUNT(*) FILTER (WHERE tipo='invite' AND done_at > $3::timestamptz - INTERVAL '7 days')::int AS inv_semana,
+       COUNT(*) FILTER (WHERE tipo='invite'  AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS inv_hoy,
+       COUNT(*) FILTER (WHERE tipo='message' AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS msg_hoy,
+       COUNT(*) FILTER (WHERE tipo='visit'   AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS vis_hoy,
+       COUNT(*) FILTER (WHERE tipo='inmail'  AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS inmail_hoy,
+       COUNT(*) FILTER (WHERE done_at > $2::timestamptz - INTERVAL '24 hours')::int AS total_hoy,
+       COUNT(*) FILTER (WHERE tipo='invite' AND done_at > $2::timestamptz - INTERVAL '7 days')::int AS inv_semana,
+       COUNT(*) FILTER (WHERE tipo='invite' AND nota <> '' AND done_at > $2::timestamptz - INTERVAL '30 days')::int AS notas_mes,
        MAX(COALESCE(done_at, taken_at)) AS ultima
-     FROM li_actions WHERE account_id=$1 AND (estado='done' OR estado='taken')`, [a.id, a.tz, now.toISOString()]);
+     FROM li_actions WHERE account_id=$1 AND (estado='done' OR estado='taken')`, [a.id, now.toISOString()]);
   return r;
 }
 
@@ -180,6 +187,7 @@ function mount(app, { pool, requireAuth }) {
         ramp_dias: num(b.ramp_dias, cur.ramp_dias, 0, 60),
         hora_ini: num(b.hora_ini, cur.hora_ini, 0, 23), hora_fin: num(b.hora_fin, cur.hora_fin, 1, 24), tz: b.tz ? String(b.tz).slice(0, 60) : cur.tz,
         dias: Array.isArray(b.dias) ? b.dias.map(Number).filter(d => d >= 1 && d <= 7) : cur.dias,
+        plan: b.plan === 'premium' ? 'premium' : (b.plan === 'gratis' ? 'gratis' : cur.plan),
         gap_min: num(b.gap_min, cur.gap_min, 20, 3600), gap_max: num(b.gap_max, cur.gap_max, 20, 7200),
       };
       if (v.gap_max < v.gap_min) v.gap_max = v.gap_min;
@@ -190,11 +198,11 @@ function mount(app, { pool, requireAuth }) {
       if (b.accion === 'reiniciar_calentamiento') ramp = new Date().toISOString().slice(0, 10);
       const { rows: [a] } = await pool.query(
         `UPDATE li_accounts SET nombre=$3, outbound_client_id=$4, modo=$5, inv_dia=$6, inv_semana=$7, msg_dia=$8, vis_dia=$9, inmail_dia=$10, total_dia=$11,
-           ramp_activo=$12, ramp_inicio=$13, ramp_paso=$14, ramp_dias=$15, hora_ini=$16, hora_fin=$17, tz=$18, dias=$19, gap_min=$20, gap_max=$21,
+           ramp_activo=$12, ramp_inicio=$13, ramp_paso=$14, ramp_dias=$15, hora_ini=$16, hora_fin=$17, tz=$18, dias=$19, gap_min=$20, gap_max=$21, plan=$27,
            estado=$22, motivo=$23, pausa_hasta=$24, ramp_desde=$25, fallos_seguidos=CASE WHEN $26 THEN 0 ELSE fallos_seguidos END
          WHERE id=$1 AND user_id=$2 RETURNING *`,
         [id, req.workspaceOwnerId, v.nombre, v.outbound_client_id, v.modo, v.inv_dia, v.inv_semana, v.msg_dia, v.vis_dia, v.inmail_dia, v.total_dia,
-          v.ramp_activo, v.ramp_inicio, v.ramp_paso, v.ramp_dias, v.hora_ini, v.hora_fin, v.tz, v.dias, v.gap_min, v.gap_max, estado, motivo, pausa, ramp, b.accion === 'activar']);
+          v.ramp_activo, v.ramp_inicio, v.ramp_paso, v.ramp_dias, v.hora_ini, v.hora_fin, v.tz, v.dias, v.gap_min, v.gap_max, estado, motivo, pausa, ramp, b.accion === 'activar', v.plan]);
       res.json(publica(a));
     } catch (e) { console.error('[li] update', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
   });
@@ -295,7 +303,7 @@ function mount(app, { pool, requireAuth }) {
       let mejor = null, espera = 3600, motivo = '';
       const rnd = Math.random();
       for (const q of cola) {
-        const ev = evaluar(a, hist, q.tipo, now, rnd);
+        const ev = evaluar(a, hist, q.tipo, now, rnd, !!(q.nota && q.nota.trim()));
         if (ev.ok) { mejor = q; break; }
         if (ev.espera_s < espera) { espera = ev.espera_s; motivo = ev.motivo; }
       }
