@@ -11971,6 +11971,40 @@ app.get('/api/lm/sequences/:id/performance', requireAuth, async (req, res) => {
     });
   } catch (e) { console.error('[seq perf]', e.message); res.status(500).json({ error: 'No se pudo cargar el rendimiento' }); }
 });
+// Entregabilidad (sección «Entregabilidad»): enviados, entregados y rebotes por periodo, buzón, proveedor y dominio del destinatario.
+app.get('/api/lm/deliverability', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const isD = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+    const now = new Date(), to = isD(req.query.to) ? req.query.to : now.toISOString().slice(0, 10), from = isD(req.query.from) ? req.query.from : new Date(now.getTime() - 29 * 864e5).toISOString().slice(0, 10);
+    const gran = ['D', 'W', 'M'].includes(req.query.gran) ? req.query.gran : 'D', fMb = parseInt(req.query.mailbox) || 0, fPv = String(req.query.provider || ''), fDm = String(req.query.domain || '').toLowerCase();
+    const { rows: mbs } = await pool.query('SELECT id, email, provider, estado, outbound_client_id FROM lm_mailboxes WHERE user_id=$1 ORDER BY email', [uid]);
+    const { rows } = await pool.query(`SELECT m.id, m.estado, m.sent_at, m.error, m.mailbox_id, m.to_email FROM lm_messages m
+        WHERE m.user_id=$1 AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN $2::date AND $3::date AND m.estado IN ('sent','replied','bounced','failed')`, [uid, from, to]);
+    const mbById = new Map(mbs.map(x => [x.id, x]));
+    const domOf = e => String(e || '').split('@')[1] ? String(e).split('@')[1].toLowerCase().trim() : '';
+    const provOf = d => /(^|\.)gmail\.com$|googlemail\.com$/.test(d) ? 'Gmail' : /outlook\.|hotmail\.|live\.|msn\.com$/.test(d) ? 'Outlook' : /yahoo\./.test(d) ? 'Yahoo' : /icloud\.|me\.com$/.test(d) ? 'iCloud' : d ? 'Corporativo / otros' : 'Desconocido';
+    const reasonOf = t => { t = String(t || '').toLowerCase(); return /user unknown|no such user|does not exist|unknown user|invalid (recipient|address|mailbox)|550 5\.1\.1|mailbox unavailable/.test(t) ? 'Buzón inexistente' : /quota|mailbox full|over quota|storage/.test(t) ? 'Buzón lleno' : /spam|blocked|blacklist|reputation|policy|denied|rejected|dmarc|spf/.test(t) ? 'Bloqueado por spam o política' : /domain|dns|mx|host not found/.test(t) ? 'Dominio o DNS' : /timeout|temporar|try again|4\.\d\.\d/.test(t) ? 'Error temporal' : 'Otros'; };
+    const list = rows.filter(r => (!fMb || r.mailbox_id === fMb) && (!fPv || (mbById.get(r.mailbox_id) || {}).provider === fPv) && (!fDm || domOf(r.to_email) === fDm));
+    const sentL = list.filter(r => r.estado !== 'failed'), bounced = sentL.filter(r => r.estado === 'bounced'), failed = list.filter(r => r.estado === 'failed');
+    const key = d => { const x = new Date(d), iso = x.toISOString().slice(0, 10); if (gran === 'M') return iso.slice(0, 7); if (gran === 'W') { const m = new Date(x); m.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return m.toISOString().slice(0, 10); } return iso; };
+    const ser = new Map();
+    sentL.forEach(r => { const k = key(r.sent_at); const o = ser.get(k) || { k, enviados: 0, rebotados: 0 }; o.enviados++; if (r.estado === 'bounced') o.rebotados++; ser.set(k, o); });
+    const serie = [...ser.values()].sort((a, b) => a.k.localeCompare(b.k)).map(o => ({ ...o, entregados: o.enviados - o.rebotados }));
+    const motivos = {}; bounced.concat(failed).forEach(r => { const k = reasonOf(r.error); motivos[k] = (motivos[k] || 0) + 1; });
+    const agg = (arr, kf) => { const m = new Map(); arr.forEach(r => { const k = kf(r); if (k == null) return; const o = m.get(k) || { k, enviados: 0, rebotados: 0, ultima: null }; o.enviados++; if (r.estado === 'bounced') o.rebotados++; if (!o.ultima || new Date(r.sent_at) > new Date(o.ultima)) o.ultima = r.sent_at; m.set(k, o); }); return [...m.values()].map(o => ({ ...o, entregados: o.enviados - o.rebotados })).sort((a, b) => b.enviados - a.enviados); };
+    const porBuzon = agg(sentL, r => (mbById.get(r.mailbox_id) || {}).email || 'Sin buzón registrado');
+    const porProv = agg(sentL, r => ((mbById.get(r.mailbox_id) || {}).provider || 'otro') + ' → ' + provOf(domOf(r.to_email)));
+    const porDom = agg(sentL, r => domOf(r.to_email) || null).slice(0, 50);
+    const dias = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
+    res.json({
+      rango: { from, to }, gran, buzones: mbs, proveedores: [...new Set(mbs.map(x => x.provider))],
+      dominios: porDom.slice(0, 30).map(x => x.k),
+      totales: { enviados: sentL.length, entregados: sentL.length - bounced.length, rebotados: bounced.length, no_enviados: failed.length, promedio_diario: Math.round(sentL.length / dias * 10) / 10, promedio_buzon: mbs.length ? Math.round(sentL.length / mbs.length / dias * 10) / 10 : 0 },
+      serie, motivos, porBuzon, porProv, porDom,
+    });
+  } catch (e) { console.error('[deliverability]', e.message); res.status(500).json({ error: 'No se pudo cargar la entregabilidad' }); }
+});
 app.get('/api/sequence-steps', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [req.workspaceOwnerId]);
