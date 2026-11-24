@@ -11680,7 +11680,8 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
 app.post('/api/sequences', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
-  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  if (estado === 'activa') return res.status(400).json({ error: 'Una secuencia nueva empieza en borrador: crea los pasos, añade prospectos y luego lánzala.' });
   try {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
@@ -11774,7 +11775,17 @@ app.post('/api/sequences/:id/estado', requireAuth, async (req, res) => {
 app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
-  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  try {
+    const { rows: [_old] } = await pool.query('SELECT estado FROM sequences WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (estado === 'activa' && _old && _old.estado !== 'activa') {
+      const { rows: [n] } = await pool.query(`SELECT
+        (SELECT COUNT(*) FROM sequence_steps WHERE sequence_id=$1)::int AS pasos,
+        ((SELECT COUNT(*) FROM lm_contact_sequences WHERE sequence_id=$1 AND user_id=$2) + (SELECT COUNT(*) FROM lm_company_sequences WHERE sequence_id=$1 AND user_id=$2))::int AS lista`, [req.params.id, req.workspaceOwnerId]);
+      if (!n.pasos) return res.status(400).json({ error: 'No se puede activar: primero crea los pasos de la secuencia.' });
+      if (!n.lista) return res.status(400).json({ error: 'No se puede activar: primero añade prospectos a la lista y luego lánzala.' });
+    }
+  } catch (e) { console.warn('[seq put guard]', e.message); }
   try {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);

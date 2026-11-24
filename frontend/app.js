@@ -24846,189 +24846,532 @@ const LeadManagerModule = (() => {
     if (list) list.style.display = 'none';
   }
   function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
-  // ═══════════ Editor de la secuencia (paso 1): vista de flujo estilo Lemlist o lista tradicional, con edición en el panel derecho ═══════════
-  let _seqStage = '';
-  let _sedView = (() => { try { return localStorage.getItem('lm_sed_view') === 'lista' ? 'lista' : 'flujo'; } catch (_) { return 'flujo'; } })();
-  let _sedSel = 0, _sedZoom = 1, _sedPanel = true, _sedDirty = false;
-  const _SED_CAT = [
-    ['Más usado', [['Email', 'email', 'inicial'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Visitar el perfil', 'linkedin', 'visita']]],
-    ['LinkedIn', [['Retirar invitación', null], ['Visitar el perfil', 'linkedin', 'visita'], ['Invitación con nota', 'linkedin', 'invite_nota'], ['Invitación sin nota', 'linkedin', 'invite'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Mensaje de voz', null], ['Seguir al usuario', 'linkedin', 'follow'], ['Mensaje InMail', 'linkedin', 'inmail'], ['Reaccionar a la última publicación', 'linkedin', 'like'], ['Comentar la última publicación', 'linkedin', 'comentario'], ['Avalar aptitud', null]]],
-    ['Otros canales', [['Mensaje de chat de WhatsApp', 'whatsapp', 'mensaje'], ['Llamada de WhatsApp', 'whatsapp', 'llamada'], ['SMS', null], ['Email', 'email', 'inicial'], ['Email de seguimiento', 'email', 'seguimiento'], ['Llamar', 'call', 'llamada']]],
-    ['Otros pasos', [['Tarea manual', 'task', ''], ['Llamar a una API', null], ['Enviar a otra secuencia', null], ['Secuencia final', null]]],
+  // ═══════════ Lista de prospectos (paso 2): tabla estilo Lemlist con filtros, columnas, enriquecimiento y alta de prospectos ═══════════
+  let _llQ = '', _llF = [], _llSel = new Set(), _llPage = 0, _llDraft = null, _llFBanner = true;
+  const _LL_PAGE = 50;
+  const _LL_COLS = [
+    { k: 'nombre_completo', l: 'Nombre completo', lock: true },
+    { k: 'nombre', l: 'Nombre' }, { k: 'apellido', l: 'Apellido' },
+    { k: 'email', l: 'Dirección de email' }, { k: 'estado', l: 'Estado' }, { k: 'entreg', l: 'Entregabilidad' },
+    { k: 'telefono', l: 'Número de teléfono' }, { k: 'linkedin', l: 'LinkedIn' },
+    { k: 'empresa', l: 'Empresa' }, { k: 'cargo', l: 'Título del puesto' }, { k: 'pais', l: 'País' },
+    { k: 'paso', l: 'Paso' }, { k: 'resultado', l: 'Resultado' }, { k: 'propietario', l: 'Propietario' }, { k: 'incorporado', l: 'Fecha de incorporación' },
   ];
-  const _SED_COND = [['Condición sobre el paso anterior', [['Si no respondió', 'no_reply'], ['Si respondió (o aceptó la conexión)', 'replied'], ['Email abierto', 'opened'], ['Email no abierto', 'not_opened'], ['Hizo clic en el enlace', 'clicked'], ['No hizo clic', 'not_clicked']]],
-    ['Información del prospecto', [['Está en la red de LinkedIn (1.º)', null], ['Tiene dirección de email', null], ['Tiene URL de LinkedIn', null], ['Variable de prospecto', null], ['Tiene número de teléfono', null]]],
-    ['Otras', [['Pistas paralelas', null], ['Ha reservado una reunión', null]]]];
-  const _sedI = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  function _sedGap(steps, i) { return i ? Math.max(0, (Number(steps[i].dia) || 0) - (Number(steps[i - 1].dia) || 0)) : Math.max(0, (Number(steps[0].dia) || 1) - 1); }
-  function _sedTitle(st) { return st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || _TOUCH.email)[0]; }
-  function _sedNode(st, i, steps) {
-    const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st);
-    const hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente');
-    const vs = _sflVers(st);
-    return `<div class="sed-link"><button type="button" class="sed-plus" title="Añadir un paso aquí" onclick="LeadManagerModule.sedAddMenu(event,${i})">+</button></div>
-      <div class="sed-node${_sedSel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.sedSel(${st.id})">
-        <div class="sed-node__hd" onclick="event.stopPropagation();LeadManagerModule.sedDelay(event,${st.id})" title="Cambiar la espera antes de este paso"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<i>${_sedI('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 12)}</i></div>
-        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span>
-          ${st.canal === 'email' && !_stepHasCopy(st) ? '<span class="sed-node__warn" title="Este email aún no tiene mensaje">!</span>' : ''}
-          <button type="button" class="sed-node__more" onclick="event.stopPropagation();LeadManagerModule.sedStepMenu(event,${st.id})" title="Más">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button></div>
-        ${vs ? `<div class="sed-node__vs">${vs.map((v, k) => `<span>${String.fromCharCode(65 + k)} · ${esc(v.nombre || 'Versión ' + String.fromCharCode(65 + k))}</span>`).join('')}</div>` : ''}
-      </div>`;
+  const _LL_DEF = ['nombre_completo', 'email', 'estado', 'empresa', 'cargo', 'paso', 'propietario'];
+  function _llCols() {
+    let v = null; try { v = JSON.parse(localStorage.getItem('lm_ll_cols') || 'null'); } catch (_) {}
+    const set = new Set(Array.isArray(v) ? v : _LL_DEF); set.add('nombre_completo');
+    return set;
   }
-  function _sedFlow(id, s, steps) {
-    const cli = _clientName(s.outbound_client_id) || '—';
-    const ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '·';
-    const sch = _seqTzChip(s);
-    return `<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
-        <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
-          <div class="sed-start__c"><small>Remitente</small><span class="sed-start__av" title="${esc(cli)}">${esc(ini)}</span></div>
-          <div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${sch ? sch : 'Planificación predeterminada'}</span></div>
-        </div>
-        ${steps.map((x, i) => _sedNode(x, i, steps)).join('')}
-        <div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>
-      </div>
-      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
+  function _llSaveCols(set) { try { localStorage.setItem('lm_ll_cols', JSON.stringify([...set])); } catch (_) {} }
+  const _LL_EST = { rebotado: ['Rebotado', '#B42318', '#FEE4E2'], interesado: ['Interesado', '#15803D', '#DCFCE7'], no_interesado: ['No interesado', '#B45309', '#FEF3C7'], respondido: ['Respondido', '#0E7490', '#CFFAFE'], finalizado: ['Finalizado', '#475569', '#E2E8F0'], pausa: ['En pausa', '#B45309', '#FFEDD5'], ejecucion: ['En ejecución', '#1D4ED8', '#DBEAFE'], pendiente: ['Pendiente de lanzar', '#475569', '#F1F5F9'], sinemail: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
+  const _LL_ENT = { valid: ['Entregable', '#15803D', '#DCFCE7'], risky: ['Arriesgado', '#B45309', '#FEF3C7'], 'catch-all': ['Arriesgado', '#B45309', '#FEF3C7'], invalid: ['No entregado', '#B42318', '#FEE4E2'], '': ['No verificado', '#64748B', '#F1F5F9'], none: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
+  function _llRows(id) {
+    const sq = _sequences.find(x => x.id === id) || {}, launched = (sq.estado || 'draft') !== 'draft';
+    const byId = new Map((_contacts || []).map(c => [c.id, c]));
+    return (Array.isArray(_seqContacts) ? _seqContacts : []).map(e => {
+      const c = byId.get(e.contact_id) || {}, email = e.email || c.email || '', es = c.email_status || '';
+      const disp = e.real_disposition || e.disposition || c.disposition || '';
+      let est = 'pendiente';
+      if (es === 'invalid' || disp === 'rebote') est = 'rebotado';
+      else if (disp === 'interesado') est = 'interesado'; else if (disp === 'no_interesado') est = 'no_interesado';
+      else if (['respondio', 'aceptado', 'reunion', 'mas_adelante'].includes(disp)) est = 'respondido';
+      else if (e.estado === 'terminado') est = 'finalizado'; else if (e.estado === 'pausado') est = 'pausa';
+      else if (!email) est = 'sinemail'; else if (launched) est = 'ejecucion';
+      const entreg = !email ? 'none' : (['valid', 'risky', 'catch-all', 'invalid'].includes(es) ? es : '');
+      const N0 = _seqSteps(id).length;
+      return { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '' };
+    });
   }
-  function _sedList(id, s, steps) {
-    const states = steps.length ? _stepStates(steps) : [], prog = steps.length ? _stepRealProgress(steps) : [];
-    const rows = steps.map((st, i) => _stepRow(st, states[i], prog[i]).replace(`onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})"`, `onclick="LeadManagerModule.sedSel(${st.id})"`).replace('class="lm-step ', `class="lm-step${_sedSel === st.id ? ' sed-sel' : ''} `)).join('');
-    return `<div class="sed-listwrap"><div class="lm-seq-tl">${rows || `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero.</span></div>`}</div>
-      <button type="button" class="sed-addpill sed-addpill--list" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>`;
+  const _LL_FDEF = [
+    { k: 'estado', l: 'Estado', t: 'sel', opts: () => Object.entries(_LL_EST).map(([v, a]) => [v, a[0]]) },
+    { k: 'entreg', l: 'Entregabilidad', t: 'sel', opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
+    { k: 'paso', l: 'Paso', t: 'sel', opts: (id) => _seqSteps(id).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
+    { k: 'propietario', l: 'Propietario', t: 'sel', opts: () => [...new Set((_clients || []).map(c => c.nombre))].map(n => [n, n]) },
+    { k: 'nombre', l: 'Nombre', t: 'txt' }, { k: 'apellido', l: 'Apellido', t: 'txt' }, { k: 'email', l: 'Email', t: 'txt' }, { k: 'telefono', l: 'Número de teléfono', t: 'txt' },
+    { k: 'linkedin', l: 'LinkedIn', t: 'txt' }, { k: 'empresa', l: 'Empresa', t: 'txt' }, { k: 'cargo', l: 'Título del puesto', t: 'txt' }, { k: 'pais', l: 'País', t: 'txt' },
+  ];
+  function _llFiltered(id, rows) {
+    const q = _llQ.toLowerCase();
+    return rows.filter(r => {
+      if (q && ![r.nombre, r.apellido, r.email, r.empresa, r.cargo, r.telefono, r.pais].join(' ').toLowerCase().includes(q)) return false;
+      return _llF.every(f => {
+        const v = String(f.k === 'paso' ? r.paso : r[f.k] == null ? '' : r[f.k]);
+        if (f.vals) return f.vals.includes(v);
+        return v.toLowerCase().includes(String(f.q || '').toLowerCase());
+      });
+    });
   }
-  function _seqEditorHtml(id) {
-    const s = _sequences.find(x => x.id === id), steps = _seqSteps(id);
-    if (!steps.some(x => x.id === _sedSel)) _sedSel = steps.length ? steps[0].id : 0;
-    const st = steps.find(x => x.id === _sedSel), t = st ? (_TOUCH[st.canal] || _TOUCH.email) : null;
-    return `<div class="sed">
-      <div class="sed__bar">
-        <div class="sed__seg" role="tablist"><button class="${_sedView === 'flujo' ? 'on' : ''}" onclick="LeadManagerModule.sedView('flujo')" title="Vista de flujo">${_sedI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/>', 15)} Flujo</button><button class="${_sedView === 'lista' ? 'on' : ''}" onclick="LeadManagerModule.sedView('lista')" title="Vista de lista">${_sedI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>', 15)} Lista</button></div>
-        <span class="sed__n">${steps.length} paso${steps.length === 1 ? '' : 's'}${steps.length ? ' · ' + steps[steps.length - 1].dia + ' días' : ''}</span><span class="sp"></span>
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowOpen(${id})" title="Abrir el flujo a pantalla completa (modo anterior)">Pantalla completa</button>
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button>
+  const _llI = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  function _llAvColor(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; }
+  function _llCell(k, r) {
+    switch (k) {
+      case 'nombre_completo': { const nm = [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || '—'; const ini = nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(); return `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(ini)}</span><b>${esc(nm)}</b></div>`; }
+      case 'email': return r.email ? `<span class="ll-mail">${esc(r.email)}</span>` : `<button class="ll-find" onclick="event.stopPropagation();LeadManagerModule.llFindEmail(${r.cid})">ENCONTRAR EMAIL</button>`;
+      case 'estado': { const a = _LL_EST[r.estado] || _LL_EST.pendiente; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
+      case 'entreg': { const a = _LL_ENT[r.entreg] || _LL_ENT['']; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
+      case 'paso': return r.npasos ? `Paso ${r.paso}/${r.npasos}` : '—';
+      case 'resultado': return r.resultado ? _dispoBadge(r.resultado) : '<span class="ll-dim">—</span>';
+      case 'linkedin': return r.linkedin ? `<a href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(r.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '<span class="ll-dim">—</span>';
+      case 'incorporado': return r.incorporado ? new Date(r.incorporado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+      default: return r[k] ? esc(r[k]) : '<span class="ll-dim">—</span>';
+    }
+  }
+  function _llHtml(id) {
+    const rows = _llRows(id), all = _llFiltered(id, rows), vis = _llCols();
+    const cols = _LL_COLS.filter(c => vis.has(c.k)), hidden = _LL_COLS.filter(c => !vis.has(c.k));
+    const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
+    const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
+    const sinEmail = rows.filter(r => !r.email).length, nSel = _llSel.size;
+    const allSel = view.length && view.every(r => _llSel.has(r.cid));
+    const enrN = nSel || rows.length;
+    const loading = !Array.isArray(_seqContacts);
+    const chips = _llF.map((f, i) => { const d = _LL_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts(id) : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : `contiene «${f.q}»`; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
+    return `<div class="ll">
+      ${sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
+      <div class="ll__bar">
+        <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
+        <button class="ll-btn${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
+        <span class="sp"></span>
+        <button class="ll-ico" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
+        <button class="ll-ico" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llAiMenu(event)">${_llI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 14)} Columnas de IA ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN} prospecto${enrN === 1 ? '' : 's'} ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
       </div>
-      <div class="sed__main${_sedPanel ? '' : ' is-closed'}">
-        <div class="sed__left">${_sedView === 'flujo' ? _sedFlow(id, s, steps) : _sedList(id, s, steps)}</div>
-        <div class="sed__right">
-          <div class="sed__rh">${st ? `<span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 16)}</span><b>${esc(_sedTitle(st))}</b>` : '<b>Sin paso seleccionado</b>'}<span class="sp"></span>
-            ${st ? `<button class="seqtop__ib" title="Más" onclick="LeadManagerModule.sedStepMenu(event,${st.id})">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}
-            <button class="seqtop__ib" title="${_sedPanel ? 'Ocultar el panel' : 'Mostrar el panel'}" onclick="LeadManagerModule.sedPanel()">${_sedI('<path d="M13 5l7 7-7 7M4 5v14"/>', 15)}</button></div>
-          <div class="sed__rb" id="sed-form">${st ? '' : `<div class="sed-empty"><div class="sed-empty__ic">🪜</div><b>Empieza tu secuencia</b><p>Añade el primer paso y edítalo aquí mismo.</p><div class="sed-empty__b"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAdd(0,'email','inicial','Email')">Email</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','visita','Visitar el perfil')">Visitar el perfil</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','invite_nota','Invitación con nota')">Invitación con nota</button></div></div>`}</div>
-        </div>
-      </div>
+      ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
+      ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
+      <div class="ll__tbl"><table class="ll-t"><thead><tr>
+        <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
+        ${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}
+        <th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead>
+        <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>
+      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
     </div>`;
   }
-  function _sedMount() {
-    _sedDirty = false;
-    const host = document.getElementById('sed-form'); if (!host || !_seqStage || !_sedSel) return;
-    const st = _steps.find(x => x.id === _sedSel); if (!st) return;
-    openStepDrawer(st.sequence_id, st.id, host);
-    host.oninput = host.onchange = () => { _sedDirty = true; };
+  function _llRepaint() { _renderBody(); }
+  function llSearch(v) {
+    _llQ = String(v || '').trim(); _llPage = 0;
+    const el = document.getElementById('ll-q'), pos = el ? el.selectionStart : 0; _llRepaint();
+    const e2 = document.getElementById('ll-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} }
   }
-  async function sedSel(id) {
-    if (id === _sedSel) return;
-    if (_sedDirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Este paso tiene cambios sin guardar. Si cambias de paso se pierden.', confirmText: 'Descartar' }))) return;
-    _sedSel = id; _renderBody();
+  function llPg(d) { _llPage = Math.max(0, _llPage + d); _llRepaint(); }
+  function llBanner() { _llFBanner = false; _llRepaint(); }
+  function llSelToggle(cid, on) { if (on) _llSel.add(cid); else _llSel.delete(cid); _llRepaint(); }
+  function llSelClear() { _llSel.clear(); _llRepaint(); }
+  function llSelPage(on) {
+    const all = _llFiltered(_activeSeq, _llRows(_activeSeq)), view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
+    view.forEach(r => { if (on) _llSel.add(r.cid); else _llSel.delete(r.cid); }); _llRepaint();
   }
-  function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v); } catch (_) {} _renderBody(); }
-  function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
-  function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
-  function sedCenter() { const c = document.getElementById('sed-canvas'); if (c) c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); }
-  function _sedPop(ev, html, wide) {
+  // ── Menús ──
+  function _llPop(ev, html, w, align) {
     ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
-    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop'; if (wide) m.style.width = wide + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
+    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop ll-pop'; if (w) m.style.width = w + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
     document.body.appendChild(m);
-    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
-    m.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
-    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(align === 'right' ? r.right - mw : r.left, window.innerWidth - mw - 8)) + 'px';
+    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - mh - 8)) + 'px';
     setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
     return m;
   }
-  let _sedAddIdx = 0, _sedAddTab = 'pasos';
-  function sedAddMenu(ev, idx) { _sedAddIdx = idx; _sedAddTab = 'pasos'; _sedPop(ev, _sedAddHtml(), 300); setTimeout(() => document.getElementById('sed-q')?.focus(), 30); }
-  function _sedAddHtml() {
-    const cat = _sedAddTab === 'pasos' ? _SED_CAT : _SED_COND;
-    const body = cat.map(([g, items]) => `<div class="sed-pop__g" data-g>${esc(g)}</div>${items.map(it => {
-      if (_sedAddTab === 'pasos') { const [l, canal, acc] = it; const t = canal ? _TOUCH[canal] : null; return canal ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedAdd(${_sedAddIdx},'${canal}','${acc}','${esc(l).replace(/'/g, "\\'")}')"><span style="color:${t[1]}">${_sedI(_stepIcoPath({ canal, accion: acc }), 15)}</span>${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 15)}${esc(l)}<em>Próximamente</em></button>`; }
+  const _llMI = (ic, t, js, o) => `<button class="sed-pop__i${o && o.off ? ' is-off' : ''}" ${o && o.off ? 'disabled' : `onclick="document.getElementById('sed-pop')?.remove();${js}"`}>${ic ? _llI(ic, 15) : ''}<span>${t}</span>${o && o.badge ? `<em>${o.badge}</em>` : ''}${o && o.n != null ? `<i class="ll-cnt">${o.n}</i>` : ''}</button>`;
+  function llAddMenu(ev) {
+    const id = _activeSeq, big = (ic, t, js) => `<button class="ll-card" onclick="document.getElementById('sed-pop')?.remove();${js}">${_llI(ic, 20)}<span>${t}</span></button>`;
+    _llPop(ev, `<div class="ll-cards">${big('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV', "LeadManagerModule.openImport('contacts',true)")}${big('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'CRM', `LeadManagerModule.seqEnrolOpen(${id})`)}${big('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar', "LeadManagerModule.llGoBase()")}</div>
+      <div class="sed-pop__g">Buscando prospectos</div>
+      ${_llMI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', 'Agentes de señales', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 'Buscar en la base de datos de prospectos', "LeadManagerModule.llGoBase()")}
+      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>', 'Extraer de una búsqueda de LinkedIn', '', { off: true, badge: 'Próximamente' })}
+      <div class="sed-pop__g">Importar tus prospectos</div>
+      ${_llMI('<path d="m22 2-7 20-4-9-9-4z"/>', 'De una campaña existente', `LeadManagerModule.llFromSeq()`)}
+      ${_llMI('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'Sincronizar con su CRM', '', { off: true, badge: 'No conectado' })}
+      ${_llMI('<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/>', 'Sincronizar con una lista de contactos', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar archivo CSV', "LeadManagerModule.openImport('contacts',true)")}
+      ${_llMI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', 'Pegue una lista de emails', `LeadManagerModule.llPasteEmails()`)}
+      ${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un prospecto manualmente', `LeadManagerModule.llManual()`)}`, 340, 'right');
+  }
+  function llGoBase() { try { selectModule('cantera'); setTimeout(() => { try { CanteraModule.go ? CanteraModule.go('global') : 0; } catch (_) {} }, 600); } catch (_) {} }
+  function llAiMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Escribir con IA para un prospecto', 'LeadManagerModule.llAiOne()')}
+      <div class="sed-pop__sep"></div>
+      ${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('', 'Company context', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('', 'Icebreaker desde la descripción de la empresa', '', { off: true, badge: 'Próximamente' })}`, 300, 'right');
+  }
+  function llAiOne() {
+    const id = _activeSeq, rows = _llRows(id), pick = _llSel.size ? rows.find(r => _llSel.has(r.cid)) : rows[0];
+    if (!pick) { showBanner('Añade o selecciona un prospecto primero.', 'info'); return; }
+    openAiDrafts(pick.cid, id);
+  }
+  function _llIds(kind) {
+    const rows = _llRows(_activeSeq), base = _llSel.size ? rows.filter(r => _llSel.has(r.cid)) : rows;
+    return base.filter(r => kind === 'find' ? !r.email : kind === 'verify' ? !!r.email && !['valid', 'invalid'].includes(r.c.email_status || '') : true).map(r => r.cid);
+  }
+  function llEnrichMenu(ev) {
+    const nFind = _llIds('find').length, nVer = _llIds('verify').length;
+    _llPop(ev, `${_llMI('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', 'Encontrar números de teléfono', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>', 'Encontrar emails verificados', "LeadManagerModule.llEnrich('find')", { n: nFind })}
+      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/>', 'Encontrar perfiles de LinkedIn y enriquecer', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>', 'Verificar los emails principales', "LeadManagerModule.llEnrich('verify')", { n: nVer })}
+      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Usar IA', 'LeadManagerModule.llAiOne()')}
+      ${_llMI('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 'Estadísticas de enriquecimiento', 'LeadManagerModule.llStats()')}`, 360, 'right');
+  }
+  async function llEnrich(kind) {
+    const ids = _llIds(kind);
+    if (!ids.length) { showBanner(kind === 'find' ? 'Todos los prospectos ya tienen email.' : 'No hay emails por verificar.', 'info'); return; }
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(0, 500) }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      showBanner(`${d.queued} prospecto${d.queued === 1 ? '' : 's'} en cola: Nova ${kind === 'find' ? 'busca y verifica' : 'verifica'} los emails. Los resultados aparecen solos en unos minutos.`, 'success');
+      [15000, 45000, 120000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
+    } catch (e) { showBanner('No se pudo enviar: ' + e.message, 'error'); }
+  }
+  async function llFindEmail(cid) {
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [cid] }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      showBanner('Buscando el email de este prospecto… aparecerá en la tabla en cuanto Nova lo encuentre.', 'success');
+      [12000, 40000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
+    } catch (e) { showBanner('No se pudo buscar: ' + e.message, 'error'); }
+  }
+  function llStats() {
+    const rows = _llRows(_activeSeq), n = rows.length, c = k => rows.filter(r => r.entreg === k).length;
+    const bar = (l, v, col) => `<div class="ll-st"><span>${l}</span><div><i style="width:${n ? Math.round(v / n * 100) : 0}%;background:${col}"></i></div><b>${v}</b></div>`;
+    _llModal('Estadísticas de enriquecimiento', `<p class="ll-m__p">${n} prospecto${n === 1 ? '' : 's'} en la lista.</p>${bar('Entregable', c('valid'), '#16A34A')}${bar('Arriesgado', c('risky') + c('catch-all'), '#F59E0B')}${bar('No entregado', c('invalid'), '#DC2626')}${bar('No verificado', c(''), '#94A3B8')}${bar('Email no encontrado', c('none'), '#8B5CF6')}`, '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cerrar</button>');
+  }
+  function _llModal(title, body, foot, wide) {
+    document.getElementById('ll-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'll-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="ll-m" ${wide ? `style="width:${wide}px"` : ''}><div class="ll-m__hd"><b>${title}</b><button onclick="LeadManagerModule.llModalClose()">✕</button></div><div class="ll-m__bd">${body}</div>${foot ? `<div class="ll-m__ft">${foot}</div>` : ''}</div>`;
+    document.body.appendChild(m); return m;
+  }
+  function llModalClose() { document.getElementById('ll-modal')?.remove(); }
+  // ── Ajustes de la tabla ──
+  let _llColDraft = null, _llColQ = '';
+  function llColsOpen() { _llColDraft = new Set(_llCols()); _llColQ = ''; _llColsPaint(); }
+  function _llColsPaint() {
+    const q = _llColQ.toLowerCase(), list = _LL_COLS.filter(c => !q || c.l.toLowerCase().includes(q));
+    const body = `<div class="ll-cs__top"><span>Columnas <i class="ll-n">${_llColDraft.size} / ${_LL_COLS.length}</i></span><span class="sp"></span><button onclick="LeadManagerModule.llColsAll(true)">${_llI('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 14)} Mostrar todo</button><button onclick="LeadManagerModule.llColsAll(false)">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/>', 14)} Ocultar todo</button></div>
+      <label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
+      <div class="ll-cs__l">${list.map(c => `<label class="ll-cs__r${c.lock ? ' is-lock' : ''}"><input type="checkbox" ${_llColDraft.has(c.k) ? 'checked' : ''} ${c.lock ? 'disabled' : ''} onchange="LeadManagerModule.llColsTick('${c.k}',this.checked)"><span>${esc(c.l)}</span>${c.lock ? _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 13) : ''}</label>`).join('')}</div>`;
+    const foot = `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
+    const had = document.getElementById('ll-modal'); if (had) { had.querySelector('.ll-m__bd').innerHTML = body; } else _llModal('Ajustes de la tabla', body, foot, 460);
+  }
+  function llColsQ(v) { _llColQ = v; const pos = v.length; _llColsPaint(); const e = document.getElementById('ll-cq'); if (e) { e.focus(); e.setSelectionRange(pos, pos); } }
+  function llColsTick(k, on) { if (on) _llColDraft.add(k); else _llColDraft.delete(k); _llColsPaint(); }
+  function llColsAll(on) { _llColDraft = on ? new Set(_LL_COLS.map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
+  function llColsSave() { _llSaveCols(_llColDraft); llModalClose(); _llRepaint(); }
+  function llColAdd(ev) {
+    const vis = _llCols(), hid = _LL_COLS.filter(c => !vis.has(c.k));
+    _llPop(ev, `${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna personalizada', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
+      <div class="sed-pop__g">COLUMNAS OCULTAS</div>
+      ${hid.length ? hid.map(c => `<button class="sed-pop__i" onclick="document.getElementById('sed-pop')?.remove();LeadManagerModule.llColShow('${c.k}')">${esc(c.l)}</button>`).join('') : '<div class="sed-pop__note">Todas las columnas están visibles.</div>'}
+      <div class="sed-pop__sep"></div>${_llMI('', 'Ajustes de la tabla…', 'LeadManagerModule.llColsOpen()')}`, 280, 'right');
+  }
+  function llColShow(k) { const set = _llCols(); set.add(k); _llSaveCols(set); _llRepaint(); }
+  // ── Filtros ──
+  function llFilterOpen(ev, key) {
+    if (ev.stopPropagation) ev.stopPropagation();
+    const f0 = key ? _llF.find(f => f.k === key) : null;
+    const first = key || (_LL_FDEF[0] || {}).k;
+    _llDraft = f0 ? JSON.parse(JSON.stringify(f0)) : { k: first, vals: _LL_FDEF.find(x => x.k === first).t === 'sel' ? [] : undefined, q: '' };
+    window.__llAnchor = ev.currentTarget;
+    _llFilterPaint(true);
+  }
+  function _llFilterPaint(first) {
+    const id = _activeSeq, rows = _llRows(id), d = _LL_FDEF.find(x => x.k === _llDraft.k), q = (window.__llColQ || '').toLowerCase();
+    const left = _LL_FDEF.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${x.k}')">${esc(x.l)}</button>`).join('');
+    let right = '';
+    if (d.t === 'sel') {
+      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.k === 'paso' ? r.paso : r[d.k]) === v).length, vals = _llDraft.vals || [];
+      right = `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length && opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('');
+    } else right = `<div class="ll-fp__t"><small>Contiene</small><input id="ll-ft" value="${esc(_llDraft.q || '')}" placeholder="Valor…" autocomplete="off" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()"></div>`;
+    const html = `<div class="ll-fp"><div class="ll-fp__l"><label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 14)}<input placeholder="Buscar una columna" value="${esc(window.__llColQ || '')}" oninput="window.__llColQ=this.value;LeadManagerModule.llFilterColSearch()" autocomplete="off"></label><div class="ll-fp__cl">${left}</div></div><div class="ll-fp__r"><div class="ll-fp__vl">${right}</div><div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llFilterApply()">Aplicar</button></div></div></div>`;
+    const m = document.getElementById('sed-pop');
+    if (!first && m) { m.innerHTML = html; return; }
+    document.getElementById('sed-pop')?.remove();
+    const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = '600px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
+    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 620)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { pop.remove(); document.removeEventListener('click', f); }), 0);
+  }
+  function llFilterColSearch() { const el = document.querySelector('#sed-pop .ll-fp__l input'); const pos = el ? el.selectionStart : 0; _llFilterPaint(false); const e2 = document.querySelector('#sed-pop .ll-fp__l input'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
+  function llFilterCol(k) { const ex = _llF.find(f => f.k === k), d = _LL_FDEF.find(x => x.k === k); _llDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' }; _llFilterPaint(false); }
+  function llFilterTick(v, on) { const a = new Set(_llDraft.vals || []); if (on) a.add(v); else a.delete(v); _llDraft.vals = [...a]; _llFilterPaint(false); }
+  function llFilterAll(on) { const d = _LL_FDEF.find(x => x.k === _llDraft.k); _llDraft.vals = on ? d.opts(_activeSeq).map(o => o[0]) : []; _llFilterPaint(false); }
+  function llFilterQ(v) { _llDraft.q = v; }
+  function llFilterApply() {
+    const d = _LL_FDEF.find(x => x.k === _llDraft.k); document.getElementById('sed-pop')?.remove();
+    _llF = _llF.filter(f => f.k !== _llDraft.k);
+    if (d.t === 'sel' ? (_llDraft.vals || []).length : String(_llDraft.q || '').trim()) _llF.push(d.t === 'sel' ? { k: d.k, vals: _llDraft.vals } : { k: d.k, q: String(_llDraft.q).trim() });
+    _llPage = 0; _llRepaint();
+  }
+  function llFilterDel(i) { _llF.splice(i, 1); _llRepaint(); }
+  function llFilterClear() { _llF = []; _llRepaint(); }
+  // ── Acciones en bloque ──
+  async function llBulk(kind) {
+    const id = _activeSeq, ids = [..._llSel]; if (!ids.length) return;
+    if (kind === 'verify') { await llEnrich('verify'); return; }
+    if (kind === 'remove' && !(await novaConfirm({ title: 'Quitar de la secuencia', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia. Siguen en tu CRM.`, confirmText: 'Quitar' }))) return;
+    let ok = 0;
+    for (const cid of ids) {
+      try {
+        const r = kind === 'remove' ? await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }) : await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: kind === 'pause' ? 'pausado' : 'activo' }) });
+        if (r.ok) ok++;
+      } catch (_) {}
+    }
+    _llSel.clear(); _seqContacts = null; await _seqLoadContacts(id);
+    showBanner(`${ok} de ${ids.length} prospecto${ids.length === 1 ? '' : 's'}: ${kind === 'remove' ? 'quitados' : kind === 'pause' ? 'pausados' : 'reanudados'}`, ok ? 'success' : 'error');
+  }
+  // ── Historial de altas ──
+  function llHistory() {
+    const rows = _llRows(_activeSeq), g = new Map();
+    rows.forEach(r => { const d = r.incorporado ? String(r.incorporado).slice(0, 10) : '—'; if (!g.has(d)) g.set(d, []); g.get(d).push(r.cid); });
+    const list = [...g.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    const body = list.length ? `<table class="ll-ht"><thead><tr><th>Método</th><th>Fecha</th><th>Información</th><th></th></tr></thead><tbody>${list.map(([d, ids]) => `<tr><td>Alta en la secuencia</td><td>${d === '—' ? '—' : new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td><td>${ids.length} prospecto${ids.length === 1 ? '' : 's'} añadido${ids.length === 1 ? '' : 's'}</td><td><button class="ll-ico" title="Quitar este grupo de la secuencia" onclick="LeadManagerModule.llHistDel('${d}')">${_llI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>', 15)}</button></td></tr>`).join('')}</tbody></table>` : '<p class="ll-m__p">Aún no se añadió ningún prospecto.</p>';
+    _llModal('Historial de altas', body, '', 720);
+  }
+  async function llHistDel(d) {
+    const id = _activeSeq, ids = _llRows(id).filter(r => (r.incorporado ? String(r.incorporado).slice(0, 10) : '—') === d).map(r => r.cid);
+    if (!ids.length || !(await novaConfirm({ title: 'Quitar este grupo', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia (siguen en tu CRM).`, confirmText: 'Quitar' }))) return;
+    for (const cid of ids) { try { await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }); } catch (_) {} }
+    llModalClose(); _seqContacts = null; await _seqLoadContacts(id); showBanner('Grupo quitado de la secuencia', 'success');
+  }
+  // ── Alta de prospectos ──
+  async function _llAddIds(ids) {
+    const id = _activeSeq;
+    const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, sequence_id: id }) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error');
+    _seqContacts = null; await load(); await _seqLoadContacts(id); return d;
+  }
+  async function llFromSeq() {
+    const id = _activeSeq, list = (_sequences || []).filter(x => x.id !== id).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    _llModal('Importar de una campaña existente', `<p class="ll-m__p">Elige una secuencia: se añaden sus prospectos a esta (los que ya estén se omiten).</p><div class="ll-pick">${list.map(x => `<button onclick="LeadManagerModule.llFromSeqGo(${x.id})"><b>${esc(x.nombre)}</b><small>${esc(_clientName(x.outbound_client_id) || '')}</small></button>`).join('') || '<p class="ll-m__p">No hay otras secuencias.</p>'}</div>`, '', 520);
+  }
+  async function llFromSeqGo(srcId) {
+    try {
+      const r = await apiFetch(`${API}/lm/sequences/${srcId}/contacts`); const arr = r.ok ? await r.json() : [];
+      const ids = [...new Set(arr.map(e => e.contact_id).filter(Boolean))];
+      if (!ids.length) { showBanner('Esa secuencia no tiene prospectos.', 'info'); return; }
+      const d = await _llAddIds(ids); llModalClose(); showBanner(`${d.added != null ? d.added : ids.length} prospecto${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`, 'success');
+    } catch (e) { showBanner('No se pudo importar: ' + e.message, 'error'); }
+  }
+  function llPasteEmails() {
+    _llModal('Pegar una lista de emails', `<p class="ll-m__p">Un email por línea (o separados por comas). Se añaden los que ya existen en tu CRM; de los demás te avisamos.</p><textarea id="ll-paste" class="ll-ta" rows="8" placeholder="ana@empresa.com&#10;luis@otra.com"></textarea>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llPasteGo()">Añadir</button>`, 520);
+    setTimeout(() => document.getElementById('ll-paste')?.focus(), 40);
+  }
+  async function llPasteGo() {
+    const txt = (document.getElementById('ll-paste') || {}).value || '', mails = [...new Set((txt.match(/[^\s,;<>"']+@[^\s,;<>"']+\.[^\s,;<>"']+/g) || []).map(x => x.toLowerCase()))];
+    if (!mails.length) { showBanner('No encontré ningún email válido.', 'info'); return; }
+    const by = new Map((_contacts || []).map(c => [String(c.email || '').toLowerCase(), c]));
+    const ids = mails.map(m => (by.get(m) || {}).id).filter(Boolean), missing = mails.filter(m => !by.has(m));
+    try {
+      let msg = '';
+      if (ids.length) { const d = await _llAddIds(ids); msg = `${d.added != null ? d.added : ids.length} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`; }
+      llModalClose();
+      if (missing.length) { _llModal('Algunos emails no están en tu CRM', `<p class="ll-m__p">${msg ? msg + '. ' : ''}${missing.length} email${missing.length === 1 ? ' no está' : 's no están'} en tu CRM. Impórtalos primero (CSV) o añádelos uno a uno:</p><pre class="ll-pre">${esc(missing.join('\n'))}</pre>`, `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llModalClose()">Entendido</button>`, 520); }
+      else showBanner(msg || 'Listo', 'success');
+    } catch (e) { showBanner('No se pudo añadir: ' + e.message, 'error'); }
+  }
+  function llManual() {
+    const f = (k, l, ph) => `<label class="ll-f"><span>${l}</span><input id="llm-${k}" placeholder="${ph || ''}" autocomplete="off"></label>`;
+    _llModal('Añadir un prospecto manualmente', `<div class="ll-fg">${f('nombre', 'Nombre')}${f('apellido', 'Apellido')}${f('email', 'Email', 'nombre@empresa.com')}${f('empresa_nombre', 'Empresa')}${f('cargo', 'Título del puesto')}${f('linkedin', 'LinkedIn', 'linkedin.com/in/…')}</div><p class="ll-m__p" id="llm-err" style="color:#B42318"></p>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llManualGo()">Añadir a la secuencia</button>`, 520);
+    setTimeout(() => document.getElementById('llm-nombre')?.focus(), 40);
+  }
+  async function llManualGo() {
+    const g = k => ((document.getElementById('llm-' + k) || {}).value || '').trim(), id = _activeSeq, sq = _sequences.find(x => x.id === id) || {};
+    const body = { nombre: g('nombre'), apellido: g('apellido'), email: g('email'), empresa_nombre: g('empresa_nombre'), cargo: g('cargo'), linkedin: g('linkedin'), outbound_client_id: sq.outbound_client_id || null, fuente: 'manual' };
+    const err = document.getElementById('llm-err');
+    if (!body.nombre && !body.apellido && !body.email) { if (err) err.textContent = 'Escribe al menos un nombre o un email.'; return; }
+    try {
+      const r = await apiFetch(`${API}/lm/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const c = await r.json(); if (!r.ok) throw new Error(c.error || 'Error');
+      await _llAddIds([c.id]); llModalClose(); showBanner('Prospecto añadido a la secuencia', 'success');
+    } catch (e) { if (err) err.textContent = e.message; }
+  }
+  // ═══════════ Editor de la secuencia (paso 1): vista de flujo estilo Lemlist o lista tradicional, con edición en el panel derecho ═══════════
+  let _seqStage = '';
+  let _sedView = (() => { try { return localStorage.getItem('lm_sed_view') === 'lista' ? 'lista' : 'flujo'; } catch (_) { return 'flujo'; } })();
+  let _sedSel = 0, _sedZoom = 1, _sedPanel = true, _sedDirty = false;
+  const _SED_CAT = [
+    ['Más usado', [['Email', 'email', 'inicial'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Visitar el perfil', 'linkedin', 'visita']]],
+    ['LinkedIn', [['Retirar invitación', null], ['Visitar el perfil', 'linkedin', 'visita'], ['Invitación con nota', 'linkedin', 'invite_nota'], ['Invitación sin nota', 'linkedin', 'invite'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Mensaje de voz', null], ['Seguir al usuario', 'linkedin', 'follow'], ['Mensaje InMail', 'linkedin', 'inmail'], ['Reaccionar a la última publicación', 'linkedin', 'like'], ['Comentar la última publicación', 'linkedin', 'comentario'], ['Avalar aptitud', null]]],
+    ['Otros canales', [['Mensaje de chat de WhatsApp', 'whatsapp', 'mensaje'], ['Llamada de WhatsApp', 'whatsapp', 'llamada'], ['SMS', null], ['Email', 'email', 'inicial'], ['Email de seguimiento', 'email', 'seguimiento'], ['Llamar', 'call', 'llamada']]],
+    ['Otros pasos', [['Tarea manual', 'task', ''], ['Llamar a una API', null], ['Enviar a otra secuencia', null], ['Secuencia final', null]]],
+  ];
+  const _SED_COND = [['Condición sobre el paso anterior', [['Si no respondió', 'no_reply'], ['Si respondió (o aceptó la conexión)', 'replied'], ['Email abierto', 'opened'], ['Email no abierto', 'not_opened'], ['Hizo clic en el enlace', 'clicked'], ['No hizo clic', 'not_clicked']]],
+    ['Información del prospecto', [['Está en la red de LinkedIn (1.º)', null], ['Tiene dirección de email', null], ['Tiene URL de LinkedIn', null], ['Variable de prospecto', null], ['Tiene número de teléfono', null]]],
+    ['Otras', [['Pistas paralelas', null], ['Ha reservado una reunión', null]]]];
+  const _sedI = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  function _sedGap(steps, i) { return i ? Math.max(0, (Number(steps[i].dia) || 0) - (Number(steps[i - 1].dia) || 0)) : Math.max(0, (Number(steps[0].dia) || 1) - 1); }
+  function _sedTitle(st) { return st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || _TOUCH.email)[0]; }
+  function _sedNode(st, i, steps) {
+    const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st);
+    const hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente');
+    const vs = _sflVers(st);
+    return `<div class="sed-link"><button type="button" class="sed-plus" title="Añadir un paso aquí" onclick="LeadManagerModule.sedAddMenu(event,${i})">+</button></div>
+      <div class="sed-node${_sedSel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.sedSel(${st.id})">
+        <div class="sed-node__hd" onclick="event.stopPropagation();LeadManagerModule.sedDelay(event,${st.id})" title="Cambiar la espera antes de este paso"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<i>${_sedI('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 12)}</i></div>
+        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span>
+          ${st.canal === 'email' && !_stepHasCopy(st) ? '<span class="sed-node__warn" title="Este email aún no tiene mensaje">!</span>' : ''}
+          <button type="button" class="sed-node__more" onclick="event.stopPropagation();LeadManagerModule.sedStepMenu(event,${st.id})" title="Más">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button></div>
+        ${vs ? `<div class="sed-node__vs">${vs.map((v, k) => `<span>${String.fromCharCode(65 + k)} · ${esc(v.nombre || 'Versión ' + String.fromCharCode(65 + k))}</span>`).join('')}</div>` : ''}
+      </div>`;
+  }
+  function _sedFlow(id, s, steps) {
+    const cli = _clientName(s.outbound_client_id) || '—';
+    const ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '·';
+    const sch = _seqTzChip(s);
+    return `<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
+        <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
+          <div class="sed-start__c"><small>Remitente</small><span class="sed-start__av" title="${esc(cli)}">${esc(ini)}</span></div>
+          <div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${sch ? sch : 'Planificación predeterminada'}</span></div>
+        </div>
+        ${steps.map((x, i) => _sedNode(x, i, steps)).join('')}
+        <div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>
+      </div>
+      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
+  }
+  function _sedList(id, s, steps) {
+    const states = steps.length ? _stepStates(steps) : [], prog = steps.length ? _stepRealProgress(steps) : [];
+    const rows = steps.map((st, i) => _stepRow(st, states[i], prog[i]).replace(`onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})"`, `onclick="LeadManagerModule.sedSel(${st.id})"`).replace('class="lm-step ', `class="lm-step${_sedSel === st.id ? ' sed-sel' : ''} `)).join('');
+    return `<div class="sed-listwrap"><div class="lm-seq-tl">${rows || `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero.</span></div>`}</div>
+      <button type="button" class="sed-addpill sed-addpill--list" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>`;
+  }
+  function _seqEditorHtml(id) {
+    const s = _sequences.find(x => x.id === id), steps = _seqSteps(id);
+    if (!steps.some(x => x.id === _sedSel)) _sedSel = steps.length ? steps[0].id : 0;
+    const st = steps.find(x => x.id === _sedSel), t = st ? (_TOUCH[st.canal] || _TOUCH.email) : null;
+    return `<div class="sed">
+      <div class="sed__bar">
+        <div class="sed__seg" role="tablist"><button class="${_sedView === 'flujo' ? 'on' : ''}" onclick="LeadManagerModule.sedView('flujo')" title="Vista de flujo">${_sedI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/>', 15)} Flujo</button><button class="${_sedView === 'lista' ? 'on' : ''}" onclick="LeadManagerModule.sedView('lista')" title="Vista de lista">${_sedI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>', 15)} Lista</button></div>
+        <span class="sed__n">${steps.length} paso${steps.length === 1 ? '' : 's'}${steps.length ? ' · ' + steps[steps.length - 1].dia + ' días' : ''}</span><span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowOpen(${id})" title="Abrir el flujo a pantalla completa (modo anterior)">Pantalla completa</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button>
+      </div>
+      <div class="sed__main${_sedPanel ? '' : ' is-closed'}">
+        <div class="sed__left">${_sedView === 'flujo' ? _sedFlow(id, s, steps) : _sedList(id, s, steps)}</div>
+        <div class="sed__right">
+          <div class="sed__rh">${st ? `<span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 16)}</span><b>${esc(_sedTitle(st))}</b>` : '<b>Sin paso seleccionado</b>'}<span class="sp"></span>
+            ${st ? `<button class="seqtop__ib" title="Más" onclick="LeadManagerModule.sedStepMenu(event,${st.id})">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}
+            <button class="seqtop__ib" title="${_sedPanel ? 'Ocultar el panel' : 'Mostrar el panel'}" onclick="LeadManagerModule.sedPanel()">${_sedI('<path d="M13 5l7 7-7 7M4 5v14"/>', 15)}</button></div>
+          <div class="sed__rb" id="sed-form">${st ? '' : `<div class="sed-empty"><div class="sed-empty__ic">🪜</div><b>Empieza tu secuencia</b><p>Añade el primer paso y edítalo aquí mismo.</p><div class="sed-empty__b"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAdd(0,'email','inicial','Email')">Email</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','visita','Visitar el perfil')">Visitar el perfil</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','invite_nota','Invitación con nota')">Invitación con nota</button></div></div>`}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  function _sedMount() {
+    _sedDirty = false;
+    const host = document.getElementById('sed-form'); if (!host || !_seqStage || !_sedSel) return;
+    const st = _steps.find(x => x.id === _sedSel); if (!st) return;
+    openStepDrawer(st.sequence_id, st.id, host);
+    host.oninput = host.onchange = () => { _sedDirty = true; };
+  }
+  async function sedSel(id) {
+    if (id === _sedSel) return;
+    if (_sedDirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Este paso tiene cambios sin guardar. Si cambias de paso se pierden.', confirmText: 'Descartar' }))) return;
+    _sedSel = id; _renderBody();
+  }
+  function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v); } catch (_) {} _renderBody(); }
+  function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
+  function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
+  function sedCenter() { const c = document.getElementById('sed-canvas'); if (c) c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); }
+  function _sedPop(ev, html, wide) {
+    ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
+    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop'; if (wide) m.style.width = wide + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
+    document.body.appendChild(m);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
+    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+    return m;
+  }
+  let _sedAddIdx = 0, _sedAddTab = 'pasos';
+  function sedAddMenu(ev, idx) { _sedAddIdx = idx; _sedAddTab = 'pasos'; _sedPop(ev, _sedAddHtml(), 300); setTimeout(() => document.getElementById('sed-q')?.focus(), 30); }
+  function _sedAddHtml() {
+    const cat = _sedAddTab === 'pasos' ? _SED_CAT : _SED_COND;
+    const body = cat.map(([g, items]) => `<div class="sed-pop__g" data-g>${esc(g)}</div>${items.map(it => {
+      if (_sedAddTab === 'pasos') { const [l, canal, acc] = it; const t = canal ? _TOUCH[canal] : null; return canal ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedAdd(${_sedAddIdx},'${canal}','${acc}','${esc(l).replace(/'/g, "\\'")}')"><span style="color:${t[1]}">${_sedI(_stepIcoPath({ canal, accion: acc }), 15)}</span>${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 15)}${esc(l)}<em>Próximamente</em></button>`; }
       const [l, cond] = it;
       const _pv = _seqSteps(_activeSeq)[_sedAddIdx - 1], _emailOnly = ['opened', 'not_opened', 'clicked', 'not_clicked'].includes(cond), _bad = _emailOnly && !(_pv && _pv.canal === 'email');
       if (cond && _bad) return `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled title="Solo aplica cuando el paso anterior es un email">${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}<em>Tras un email</em></button>`;
-      return cond ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedCond(${_sedAddIdx},'${cond}')">${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}<em>Próximamente</em></button>`;
-    }).join('')}`).join('');
-    return `<div class="sed-pop__q"><input id="sed-q" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.sedAddSearch(this.value)"></div>
-      <div class="sed-pop__tabs"><button class="${_sedAddTab === 'pasos' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('pasos')">Pasos</button><button class="${_sedAddTab === 'cond' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('cond')">Condiciones</button></div>
-      <div class="sed-pop__b" id="sed-popb">${body}${_sedAddTab === 'cond' ? '<p class="sed-pop__note">Una condición se aplica al <b>paso que viene después</b> del «+»: solo se hace si se cumple.</p>' : ''}</div>`;
-  }
-  function sedAddTab(t) { _sedAddTab = t; const m = document.getElementById('sed-pop'); if (m) { m.innerHTML = _sedAddHtml(); document.getElementById('sed-q')?.focus(); } }
-  function sedAddSearch(q) {
-    q = String(q || '').toLowerCase().trim();
-    document.querySelectorAll('#sed-popb .sed-pop__i').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; });
-    document.querySelectorAll('#sed-popb [data-g]').forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute('data-g') && n.classList.contains('sed-pop__i')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; } g.style.display = any ? '' : 'none'; });
-  }
-  async function _sedApi(path, body) {
-    const r = await apiFetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error'); return d;
-  }
-  async function _sedEnroladosAviso(idx, steps) {
-    const sq = _sequences.find(x => x.id === _activeSeq); const g = sq ? _seqProg(sq.id, sq, steps) : { lista: 0 };
-    if (!g.lista || idx >= steps.length) return true;
-    return novaConfirm({ title: 'Insertar un paso en medio', message: 'Esta secuencia ya tiene prospectos. Si insertas un paso antes del final, los que ya avanzaron pueden quedar desfasados un paso. ¿Insertarlo igual?', confirmText: 'Insertar' });
-  }
-  async function _sedInsert(idx, fields) {
-    const id = _activeSeq, steps = _seqSteps(id);
-    if (!(await _sedEnroladosAviso(idx, steps))) return;
-    const dia = idx <= 0 ? ((steps[0] && steps[0].dia) || 1) : steps[Math.min(idx, steps.length) - 1].dia;
-    try {
-      const row = await _sedApi('/sequence-steps', { sequence_id: id, dia, orden: idx <= 0 ? -1 : (steps[Math.min(idx, steps.length) - 1].orden || 0), plantilla: '', variants: [], variant_mode: 'off', variant_field: '', ...fields });
-      const ids = steps.map(x => x.id); ids.splice(Math.min(Math.max(idx, 0), ids.length), 0, row.id);
-      await _sedApi(`/sequences/${id}/steps/reorder`, { ids });
-      _sedSel = row.id; await load();
-    } catch (e) { showBanner('No se pudo añadir el paso: ' + e.message, 'error'); }
-  }
-  async function sedAdd(idx, canal, accion, titulo) { document.getElementById('sed-pop')?.remove(); await _sedInsert(idx, { canal, accion, titulo: titulo || '' }); }
-  async function sedCond(idx, cond) {
-    document.getElementById('sed-pop')?.remove();
-    const steps = _seqSteps(_activeSeq), st = steps[idx];
-    if (!st) { showBanner('Añade primero un paso después del «+»: la condición se aplica a ese paso.', 'info'); return; }
-    const prev = idx ? steps[idx - 1] : null;
-    try { await _putStepPatch(st, { cond, cond_step_id: prev ? prev.id : null }); _sedSel = st.id; await load(); showBanner('Condición aplicada al paso', 'success'); } catch (e) { showBanner(e.message, 'error'); }
-  }
-  async function _putStepPatch(st, patch) {
-    const b = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden || 0, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, post_dias: st.post_dias || '', reaccion: st.reaccion || '', reply_to_step_id: st.reply_to_step_id || null, ...patch };
-    const r = await apiFetch(`${API}/sequence-steps/${st.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
-  }
-  function sedDelay(ev, stepId) {
-    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
-    const gap = _sedGap(steps, i);
-    _sedPop(ev, `<div class="sed-dl"><small>Esperar durante</small><div class="sed-dl__r"><button onclick="LeadManagerModule.sedDlStep(-1)">−</button><input id="sed-dl-n" type="number" min="0" value="${gap}" oninput="LeadManagerModule.sedDlStep(0)"><button onclick="LeadManagerModule.sedDlStep(1)">+</button><span>días</span></div>
-      <label class="sed-dl__sw"><input type="checkbox" id="sed-dl-now"${gap ? '' : ' checked'} onchange="LeadManagerModule.sedDlNow(this.checked)"> Enviar inmediatamente</label>
-      <button class="btn btn--primary btn--sm" style="width:100%;margin-top:8px" onclick="LeadManagerModule.sedDlApply(${stepId})">Aplicar</button></div>`, 240);
-  }
-  function sedDlStep(d) { const n = document.getElementById('sed-dl-n'); if (!n) return; n.value = Math.max(0, (parseInt(n.value) || 0) + d); const c = document.getElementById('sed-dl-now'); if (c) c.checked = !(parseInt(n.value) > 0); }
-  function sedDlNow(on) { const n = document.getElementById('sed-dl-n'); if (n && on) n.value = 0; if (n && !on && !(parseInt(n.value) > 0)) n.value = 1; }
-  async function sedDlApply(stepId) {
-    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
-    const want = Math.max(0, parseInt(document.getElementById('sed-dl-n')?.value) || 0), delta = want - _sedGap(steps, i);
-    document.getElementById('sed-pop')?.remove();
-    if (!delta) return;
-    try { await _sedApi(`/sequences/${_activeSeq}/steps/shift`, { from_id: stepId, delta }); await load(); } catch (e) { showBanner(e.message, 'error'); }
-  }
-  function sedStepMenu(ev, stepId) {
-    const it = (l, js, red) => `<button class="sed-pop__i${red ? ' is-red' : ''}" onclick="document.getElementById('sed-pop').remove();${js}">${l}</button>`;
-    _sedPop(ev, it('Añadir un tiempo de espera antes de este paso', `LeadManagerModule.sedDelay({stopPropagation(){},currentTarget:document.querySelector('.sed-node.is-on .sed-node__hd')||document.querySelector('.sed__rh')},${stepId})`)
-      + it('Duplicar el paso', `LeadManagerModule.sedDup(${stepId})`)
-      + it('Ajustes avanzados (ventana)…', `LeadManagerModule.openStepDrawer(${_activeSeq},${stepId})`)
-      + '<div class="sed-pop__sep"></div>' + it('Eliminar el paso', `LeadManagerModule.confirmDeleteStep(${stepId})`, true), 270);
-  }
-  async function sedDup(stepId) {
-    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return; const st = steps[i];
-    try {
-      const row = await _sedApi('/sequence-steps', { sequence_id: st.sequence_id, dia: st.dia, orden: st.orden || 0, canal: st.canal, titulo: st.titulo ? st.titulo + ' (copia)' : '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, post_dias: st.post_dias || '', reaccion: st.reaccion || '' });
-      const ids = steps.map(x => x.id); ids.splice(i + 1, 0, row.id);
-      await _sedApi(`/sequences/${_activeSeq}/steps/reorder`, { ids });
-      _sedSel = row.id; await load();
-    } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); }
-  }
+      return cond ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedCond(${_sedAddIdx},'${cond}')">${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}<em>Próximamente</em></button>`;
+    }).join('')}`).join('');
+    return `<div class="sed-pop__q"><input id="sed-q" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.sedAddSearch(this.value)"></div>
+      <div class="sed-pop__tabs"><button class="${_sedAddTab === 'pasos' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('pasos')">Pasos</button><button class="${_sedAddTab === 'cond' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('cond')">Condiciones</button></div>
+      <div class="sed-pop__b" id="sed-popb">${body}${_sedAddTab === 'cond' ? '<p class="sed-pop__note">Una condición se aplica al <b>paso que viene después</b> del «+»: solo se hace si se cumple.</p>' : ''}</div>`;
+  }
+  function sedAddTab(t) { _sedAddTab = t; const m = document.getElementById('sed-pop'); if (m) { m.innerHTML = _sedAddHtml(); document.getElementById('sed-q')?.focus(); } }
+  function sedAddSearch(q) {
+    q = String(q || '').toLowerCase().trim();
+    document.querySelectorAll('#sed-popb .sed-pop__i').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; });
+    document.querySelectorAll('#sed-popb [data-g]').forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute('data-g') && n.classList.contains('sed-pop__i')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; } g.style.display = any ? '' : 'none'; });
+  }
+  async function _sedApi(path, body) {
+    const r = await apiFetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error'); return d;
+  }
+  async function _sedEnroladosAviso(idx, steps) {
+    const sq = _sequences.find(x => x.id === _activeSeq); const g = sq ? _seqProg(sq.id, sq, steps) : { lista: 0 };
+    if (!g.lista || idx >= steps.length) return true;
+    return novaConfirm({ title: 'Insertar un paso en medio', message: 'Esta secuencia ya tiene prospectos. Si insertas un paso antes del final, los que ya avanzaron pueden quedar desfasados un paso. ¿Insertarlo igual?', confirmText: 'Insertar' });
+  }
+  async function _sedInsert(idx, fields) {
+    const id = _activeSeq, steps = _seqSteps(id);
+    if (!(await _sedEnroladosAviso(idx, steps))) return;
+    const dia = idx <= 0 ? ((steps[0] && steps[0].dia) || 1) : steps[Math.min(idx, steps.length) - 1].dia;
+    try {
+      const row = await _sedApi('/sequence-steps', { sequence_id: id, dia, orden: idx <= 0 ? -1 : (steps[Math.min(idx, steps.length) - 1].orden || 0), plantilla: '', variants: [], variant_mode: 'off', variant_field: '', ...fields });
+      const ids = steps.map(x => x.id); ids.splice(Math.min(Math.max(idx, 0), ids.length), 0, row.id);
+      await _sedApi(`/sequences/${id}/steps/reorder`, { ids });
+      _sedSel = row.id; await load();
+    } catch (e) { showBanner('No se pudo añadir el paso: ' + e.message, 'error'); }
+  }
+  async function sedAdd(idx, canal, accion, titulo) { document.getElementById('sed-pop')?.remove(); await _sedInsert(idx, { canal, accion, titulo: titulo || '' }); }
+  async function sedCond(idx, cond) {
+    document.getElementById('sed-pop')?.remove();
+    const steps = _seqSteps(_activeSeq), st = steps[idx];
+    if (!st) { showBanner('Añade primero un paso después del «+»: la condición se aplica a ese paso.', 'info'); return; }
+    const prev = idx ? steps[idx - 1] : null;
+    try { await _putStepPatch(st, { cond, cond_step_id: prev ? prev.id : null }); _sedSel = st.id; await load(); showBanner('Condición aplicada al paso', 'success'); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function _putStepPatch(st, patch) {
+    const b = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden || 0, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, post_dias: st.post_dias || '', reaccion: st.reaccion || '', reply_to_step_id: st.reply_to_step_id || null, ...patch };
+    const r = await apiFetch(`${API}/sequence-steps/${st.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+  }
+  function sedDelay(ev, stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
+    const gap = _sedGap(steps, i);
+    _sedPop(ev, `<div class="sed-dl"><small>Esperar durante</small><div class="sed-dl__r"><button onclick="LeadManagerModule.sedDlStep(-1)">−</button><input id="sed-dl-n" type="number" min="0" value="${gap}" oninput="LeadManagerModule.sedDlStep(0)"><button onclick="LeadManagerModule.sedDlStep(1)">+</button><span>días</span></div>
+      <label class="sed-dl__sw"><input type="checkbox" id="sed-dl-now"${gap ? '' : ' checked'} onchange="LeadManagerModule.sedDlNow(this.checked)"> Enviar inmediatamente</label>
+      <button class="btn btn--primary btn--sm" style="width:100%;margin-top:8px" onclick="LeadManagerModule.sedDlApply(${stepId})">Aplicar</button></div>`, 240);
+  }
+  function sedDlStep(d) { const n = document.getElementById('sed-dl-n'); if (!n) return; n.value = Math.max(0, (parseInt(n.value) || 0) + d); const c = document.getElementById('sed-dl-now'); if (c) c.checked = !(parseInt(n.value) > 0); }
+  function sedDlNow(on) { const n = document.getElementById('sed-dl-n'); if (n && on) n.value = 0; if (n && !on && !(parseInt(n.value) > 0)) n.value = 1; }
+  async function sedDlApply(stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
+    const want = Math.max(0, parseInt(document.getElementById('sed-dl-n')?.value) || 0), delta = want - _sedGap(steps, i);
+    document.getElementById('sed-pop')?.remove();
+    if (!delta) return;
+    try { await _sedApi(`/sequences/${_activeSeq}/steps/shift`, { from_id: stepId, delta }); await load(); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function sedStepMenu(ev, stepId) {
+    const it = (l, js, red) => `<button class="sed-pop__i${red ? ' is-red' : ''}" onclick="document.getElementById('sed-pop').remove();${js}">${l}</button>`;
+    _sedPop(ev, it('Añadir un tiempo de espera antes de este paso', `LeadManagerModule.sedDelay({stopPropagation(){},currentTarget:document.querySelector('.sed-node.is-on .sed-node__hd')||document.querySelector('.sed__rh')},${stepId})`)
+      + it('Duplicar el paso', `LeadManagerModule.sedDup(${stepId})`)
+      + it('Ajustes avanzados (ventana)…', `LeadManagerModule.openStepDrawer(${_activeSeq},${stepId})`)
+      + '<div class="sed-pop__sep"></div>' + it('Eliminar el paso', `LeadManagerModule.confirmDeleteStep(${stepId})`, true), 270);
+  }
+  async function sedDup(stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return; const st = steps[i];
+    try {
+      const row = await _sedApi('/sequence-steps', { sequence_id: st.sequence_id, dia: st.dia, orden: st.orden || 0, canal: st.canal, titulo: st.titulo ? st.titulo + ' (copia)' : '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, post_dias: st.post_dias || '', reaccion: st.reaccion || '' });
+      const ids = steps.map(x => x.id); ids.splice(i + 1, 0, row.id);
+      await _sedApi(`/sequences/${_activeSeq}/steps/reorder`, { ids });
+      _sedSel = row.id; await load();
+    } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); }
+  }
   // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
   function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
   function _seqProg(id, s, steps) {
@@ -25051,7 +25394,7 @@ const LeadManagerModule = (() => {
       { k: 3, l: 'Lanzar', n: '', ico: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', done: g.launched, locked: !g.launched && !(g.p1 && g.p2) },
       { k: 4, l: 'Rendimiento', n: '', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', done: false, locked: !g.launched },
     ];
-    const active = { 1: _seqStage === 'secuencia', 2: !_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen, 3: false, 4: !_seqStage && _seqTab === 'metricas' && !_seqPasosOpen };
+    const active = { 1: _seqStage === 'secuencia', 2: _seqStage === 'lista' || (!_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen), 3: false, 4: !_seqStage && _seqTab === 'metricas' && !_seqPasosOpen };
     const viewing = _seqStage === 'secuencia' ? 1 : (active[2] ? 2 : active[4] ? 4 : 0);
     const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : (viewing ? viewing === x.k : cur === x.k)) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
         ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
@@ -25086,8 +25429,7 @@ const LeadManagerModule = (() => {
     if (k === 1) { _seqStage = 'secuencia'; _seqPasosOpen = false; _renderBody(); return; }
     if (k === 2) {
       if (!g.p1 && !g.launched) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
-      seqTab(g.nContacts === 0 && g.nCos > 0 ? 'empresas' : 'contactos');
-      if (!g.lista && !g.launched) setTimeout(() => seqAddContactOpen(id), 250);
+      _seqStage = 'lista'; _seqPasosOpen = false; _llPage = 0; _renderBody();
       return;
     }
     if (k === 3) {
@@ -25125,6 +25467,7 @@ const LeadManagerModule = (() => {
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
     if (_seqStage === 'secuencia') { setTimeout(_sedMount, 0); return `${_seqTopbar(id, s, steps)}${_seqEditorHtml(id)}`; }
+    if (_seqStage === 'lista') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); return `${_seqTopbar(id, s, steps)}${_llHtml(id)}`; }
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
@@ -37880,7 +38223,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${_nmField('seq-nombre', 'Nombre *', s?.nombre, 'Ej. QuickBooks field service sequence')}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="seq-client">${clientOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Campaña (opcional)</span><select class="form-input" id="seq-campaign">${cmpOpts}</select></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => { const lock = v === 'activa' && (!s || s.estado === 'draft'); return `<option value="${v}"${s?.estado === v || (!s && v === 'draft') ? ' selected' : ''}${lock ? ' disabled' : ''}>${l}${lock ? ' — se activa al lanzar' : ''}</option>`; }).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
         <div class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Fecha de inicio (opcional)</span>
           <div class="seq-start-row"><input class="form-input" type="date" id="seq-starts" value="${esc((s?.starts_on || '').slice(0, 10))}"><label class="seq-autoact" title="Al llegar la fecha de inicio, la secuencia pasa a “activa” automáticamente (aunque esté en borrador o pausada)."><input type="checkbox" id="seq-autoact" ${s?.auto_activar ? 'checked' : ''} style="width:auto"><span>Activar sola ese día</span></label></div>
@@ -42530,7 +42873,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
