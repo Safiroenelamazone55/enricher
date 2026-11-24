@@ -40710,6 +40710,33 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       document.getElementById('sed-pop')?.remove(); showBanner(`✓ Campo «${label}» creado`, 'success'); _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  function cpSeqMenu(ev, cid, seqId) {
+    _llPop(ev, `${_llMI('', 'Ver y editar pasos', `LeadManagerModule.openSequence(${seqId})`)}${_llMI('', 'Pausar / reanudar', `LeadManagerModule.seqCtPause(${seqId},${cid})`)}${_llMI('', 'Inscribir en otra secuencia', `LeadManagerModule.bulkAddOpen('sequence',[${cid}])`)}<div class="sed-pop__sep"></div>${_llMI('', 'Quitar de esta secuencia', `LeadManagerModule.seqCtRemove(${seqId},${cid})`)}`, 240, 'right');
+  }
+  const _CPB_DEF = ['etapa', 'campos', 'actividad', 'empresa'], _CPB_LBL = { etapa: 'Etapa comercial', campos: 'Campos', actividad: 'Última actividad', empresa: 'Empresa' };
+  function _cpBoardGet() {
+    let o = null; try { o = JSON.parse(localStorage.getItem('lm_cpm_board') || 'null'); } catch (_) {}
+    if (!o || !Array.isArray(o.order)) return { order: _CPB_DEF.slice(), hidden: [], custom: false };
+    const order = o.order.filter(k => _CPB_DEF.includes(k)); _CPB_DEF.forEach(k => { if (!order.includes(k)) order.push(k); });
+    return { order, hidden: (o.hidden || []).filter(k => _CPB_DEF.includes(k)), custom: true };
+  }
+  function _cpBoardMenuHtml() {
+    const b = _cpBoardGet();
+    const rows = b.order.map((k, i) => `<div class="cpm-bm"><label><input type="checkbox" ${b.hidden.includes(k) ? '' : 'checked'} onchange="LeadManagerModule.cpBoardSet('${k}','toggle')"> ${_CPB_LBL[k]}</label><span><button type="button" ${i === 0 ? 'disabled' : ''} onclick="LeadManagerModule.cpBoardSet('${k}','up')" title="Subir">↑</button><button type="button" ${i === b.order.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.cpBoardSet('${k}','down')" title="Bajar">↓</button></span></div>`).join('');
+    return `<div class="cpm-cfg"><div class="cpm-cfg__t">Personalizar tablero</div><p>Elige qué tarjetas ver y en qué orden. Se guarda en este navegador.</p>${rows}<button class="cp-dispo-b" style="margin-top:10px" onclick="LeadManagerModule.cpBoardSet('','reset')">Restablecer tablero predeterminado</button></div>`;
+  }
+  function cpBoardMenu(ev) { _llPop(ev, _cpBoardMenuHtml(), 300, 'left'); }
+  function cpBoardSet(k, act) {
+    const b = _cpBoardGet(); const pop = document.getElementById('sed-pop');
+    if (act === 'reset') { try { localStorage.removeItem('lm_cpm_board'); } catch (_) {} pop && pop.remove(); }
+    else {
+      if (act === 'toggle') b.hidden = b.hidden.includes(k) ? b.hidden.filter(x => x !== k) : b.hidden.concat(k);
+      else { const i = b.order.indexOf(k), j = act === 'up' ? i - 1 : i + 1; if (j >= 0 && j < b.order.length) { b.order.splice(i, 1); b.order.splice(j, 0, k); } }
+      try { localStorage.setItem('lm_cpm_board', JSON.stringify({ order: b.order, hidden: b.hidden })); } catch (_) {}
+    }
+    const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView));
+    if (pop && act !== 'reset') pop.innerHTML = _cpBoardMenuHtml(); else if (act === 'reset') _renderBody();
+  }
   function cpMoreTabs(ev) { _llPop(ev, [['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => _llMI('', l, `LeadManagerModule.cpTab('${k}')`)).join(''), 180, 'left'); }
   function cpAddMenu(ev) {
     _llPop(ev, ['nota|Registrar nota', 'llamada|Registrar llamada', 'tarea|Crear tarea', 'reunion|Registrar reunión', 'email_enviado|Registrar email', 'linkedin_msg|Registrar mensaje de LinkedIn'].map(x => { const [k, l] = x.split('|'); return _llMI('', l, `LeadManagerModule.cpActOpen('${k}')`); }).join(''), 220, 'right');
@@ -40752,7 +40779,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <div class="cpm-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' en ' : ''}<button type="button" class="cpm-co" ${c.company_id ? `onclick="LeadManagerModule.openCompanyPage(${c.company_id})"` : ''}><span class="cpm-co__av" style="background:${_llAvColor(emp)}">${esc(emp[0].toUpperCase())}</span>${esc(emp)}</button>` : ''}</div>
         <div class="cpm-badges"><span class="client-badge" style="${eStyle}">${esc(STAGE_LABELS[c.estado] || c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${c.codigo ? `<span class="lm-code" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</div>
         <div class="cpm-act">
-          <button type="button" class="cpm-primary" onclick="LeadManagerModule.cpTab('seguimiento')">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 15)} Añadir a la campaña</button>
+          <button type="button" class="cpm-primary" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 15)} Añadir a la campaña</button>
           ${ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 'Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${id})`)}
           ${ic('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>', 'Registrar llamada', `LeadManagerModule.cpActOpen('llamada')`)}
           ${ic('<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 'Crear tarea', `LeadManagerModule.cpActOpen('tarea')`)}
@@ -40806,9 +40833,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const coBox = box('Empresa asociada', `<span class="cpm-f__box"><i>${_llI(_CPI.org, 15)}</i><select data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select>${c.company_id ? `<button type="button" class="cpm-f__go" title="Abrir ficha de la empresa" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">${_llI('<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', 14)}</button>` : ''}</span>`);
     return `<div class="cpm-card"><div class="cpm-card__t"><span>Campos de contacto</span>${_cpFieldTools('contact')}</div>
       ${emailBox}
-      ${F('email_personal', 'Email personal', c.email_personal, 'mail')}
+      <div class="cpm-more" ${c.email_personal ? '' : 'hidden'}>${F('email_personal', 'Email adicional', c.email_personal, 'mail', c.email_personal ? _infoCopyBtn(c.email_personal, 'Copiar email') : '')}</div>
+      ${c.email_personal ? '' : `<button type="button" class="cpm-addl" onclick="var m=this.previousElementSibling;m.hidden=false;this.remove();m.querySelector('input').focus()">${_llI('<path d="M12 5v14M5 12h14"/>', 14)} Añadir email</button>`}
       ${F('telefono', 'Teléfono principal', c.telefono, 'phone', c.telefono ? _infoCopyBtn(c.telefono, 'Copiar teléfono') : '')}
-      ${F('movil', 'Móvil', c.movil, 'phone', c.movil ? _infoCopyBtn(c.movil, 'Copiar móvil') : '')}
+      <div class="cpm-more" ${c.movil ? '' : 'hidden'}>${F('movil', 'Teléfono adicional (móvil)', c.movil, 'phone', c.movil ? _infoCopyBtn(c.movil, 'Copiar móvil') : '')}</div>
+      ${c.movil ? '' : `<button type="button" class="cpm-addl" onclick="var m=this.previousElementSibling;m.hidden=false;this.remove();m.querySelector('input').focus()">${_llI('<path d="M12 5v14M5 12h14"/>', 14)} Añadir teléfono</button>`}
       ${F('nombre', 'Nombre', c.nombre, 'user')}${F('apellido', 'Apellido', c.apellido, 'user')}
       ${dateBox}${stBox}
       ${F('cargo', 'Cargo', c.cargo, 'job')}${F('seniority', 'Seniority', c.seniority, 'user')}${F('departamento', 'Departamento', c.departamento, 'org')}
@@ -40847,16 +40876,18 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${known.length ? `<div class="cp-fields cpm-cof">${known.map(([l, v]) => R(l, v)).join('')}</div>` : ''}
         <div class="cp-map cp-map--wide" id="cp-map-co"></div></div>`;
     }
-    return `<div class="cpm-res">
-      <div class="cpm-w"><div class="cpm-w__t"><b>Etapa comercial</b></div>${_cpStepper(c, c.id)}</div>
-      <div class="cpm-two">
-        <div class="cpm-w"><div class="cpm-w__t">${_llI('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', 16)}<b>Campos</b></div>
+    const _bd = _cpBoardGet();
+    const _wd = {
+      etapa: ['full', () => `<div class="cpm-w"><div class="cpm-w__t"><b>Etapa comercial</b></div>${_cpStepper(c, c.id)}</div>`],
+      campos: ['half', () => `<div class="cpm-w"><div class="cpm-w__t">${_llI('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', 16)}<b>Campos</b></div>
           ${row(_CPI.job, 'Cargo', c.cargo)}${row(_CPI.mail, 'Email', c.email)}${row(_CPI.pin, 'Ubicación', loc)}${row(_CPI.user, 'Propietario', cli ? (cli.nombre || cli.empresa || '') : '')}${row(_CPI.tag, 'Estado', STAGE_LABELS[c.estado] || c.estado || 'nuevo')}
-        </div>
-        <div class="cpm-w"><div class="cpm-w__t">${_llI('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>', 16)}<b>Última actividad</b><button class="cp-link2" style="margin-left:auto" onclick="LeadManagerModule.cpTab('actividad')">Ver todo ›</button></div>${actBody}</div>
-      </div>
-      ${coCard}
-    </div>`;
+          ${_lmActiveCustomFields('contact').filter(f => c[f.field_key]).map(f => row(_CPI.tag, esc(f.label), c[f.field_key])).join('')}
+        </div>`],
+      actividad: ['half', () => `<div class="cpm-w"><div class="cpm-w__t">${_llI('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>', 16)}<b>Última actividad</b><button class="cp-link2" style="margin-left:auto" onclick="LeadManagerModule.cpTab('actividad')">Ver todo ›</button></div>${actBody}</div>`],
+      empresa: ['full', () => coCard],
+    };
+    return `<div class="cpm-boardbar"><button type="button" class="cpm-bsel" onclick="LeadManagerModule.cpBoardMenu(event)">${_llI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>', 15)} Tablero ${_bd.custom ? 'personalizado' : 'predeterminado'} ${_llI('<path d="m6 9 6 6 6-6"/>', 13)}</button><button type="button" class="cpm-ib" title="Personalizar tablero" aria-label="Personalizar tablero" onclick="LeadManagerModule.cpBoardMenu(event)">${_llI('<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', 15)}</button></div>
+    <div class="cpm-grid">${_bd.order.filter(k => !_bd.hidden.includes(k) && _wd[k] && !(k === 'empresa' && !coCard)).map(k => `<div class="cpm-gi cpm-gi--${_wd[k][0]}">${_wd[k][1]()}</div>`).join('')}</div>`;
   }
   function _cpSeguimientoHtml(c) {
     const id = c.id;
@@ -41047,7 +41078,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (s.paso_date) meta.push(`Última acción: ${_cpFmtDate(s.paso_date)}`);
       if (s.next_action_at) meta.push(`Próxima: ${_cpFmtDate(s.next_action_at)}`);
       return `<div class="cp-f cp-f--full" style="border-bottom:1px solid #EAE7E2;padding-bottom:8px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(s.nombre)}</b><span class="client-badge" style="${badgeSt}">${esc(est)}</span>${canResume ? `<button class="cp-dispo-b" onclick="LeadManagerModule.cpResumeSeq(${id},${s.id})">▶ Reanudar</button>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(s.nombre)}</b><span class="client-badge" style="${badgeSt}">${esc(est)}</span><span style="flex:1"></span>${canResume ? `<button class="cp-dispo-b" onclick="LeadManagerModule.cpResumeSeq(${id},${s.id})">▶ Reanudar</button>` : (est === 'activo' ? `<button class="cp-dispo-b" onclick="LeadManagerModule.seqCtPause(${s.id},${id})">⏸ Pausar</button>` : '')}<button class="cp-dispo-b" onclick="LeadManagerModule.openSequence(${s.id})">Ver y editar pasos</button><button class="cpm-ib cpm-ib--bare" title="Más acciones" onclick="LeadManagerModule.cpSeqMenu(event,${id},${s.id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button></div>
         ${meta.length ? `<div class="cp-f__ro" style="margin-top:4px">${meta.join(' · ')}</div>` : ''}
       </div>`;
     };
@@ -41165,7 +41196,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function _cpTabContent(c) {
     if (!c) return '';
-    if (_cpTab === 'seguimiento') return `<div class="cpm-wh"><b>Campañas</b><button class="cpm-btn" onclick="LeadManagerModule.cpTab('seguimiento')">Enviar a la campaña</button></div>` + _cpSeguimientoHtml(c);
+    if (_cpTab === 'seguimiento') return `<div class="cpm-wh"><b>Campañas</b><button class="cpm-btn" onclick="LeadManagerModule.bulkAddOpen('sequence',[${c.id}])">Enviar a la campaña</button></div>` + _cpSeguimientoHtml(c);
     if (_cpTab === 'senales') return `<div class="cpm-empty cpm-empty--big"><i>${_llI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>', 26)}</i><b>Sin señales por ahora</b><span>Las señales de compra (cambios de puesto, noticias) aparecerán aquí cuando conectemos una fuente.</span></div>`;
     if (_cpTab === 'informacion' || _cpTab === 'resumen') { setTimeout(() => _cpLoadMap(c), 0); return _cpInfoHtml(c); }
     if (_cpTab === 'notas') {
@@ -43685,7 +43716,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpFieldsCfg, cpFieldNew, cpFieldCreate, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpSeqMenu, cpBoardMenu, cpBoardSet, cpFieldsCfg, cpFieldNew, cpFieldCreate, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
