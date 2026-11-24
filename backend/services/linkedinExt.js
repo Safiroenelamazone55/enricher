@@ -368,9 +368,9 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     try {
       const b = req.body || {}, token = newToken();
       const { rows: [a] } = await pool.query(
-        `INSERT INTO li_accounts (user_id, nombre, outbound_client_id, token_hash, estado, motivo, ramp_desde, tz)
-         VALUES ($1,$2,$3,$4,'pausada','Recién creada: conecta la extensión y actívala', (NOW() AT TIME ZONE $5)::date, $5) RETURNING *`,
-        [req.workspaceOwnerId, String(b.nombre || 'Cuenta LinkedIn').slice(0, 80), parseInt(b.outbound_client_id, 10) || null, hash(token), String(b.tz || DEF.tz)]);
+        `INSERT INTO li_accounts (user_id, nombre, outbound_client_id, token_hash, estado, motivo, ramp_desde, tz, li_slug)
+         VALUES ($1,$2,$3,$4,'pausada','Recién creada: conecta la extensión y actívala', (NOW() AT TIME ZONE $5)::date, $5, $6) RETURNING *`,
+        [req.workspaceOwnerId, String(b.nombre || 'Cuenta LinkedIn').slice(0, 80), parseInt(b.outbound_client_id, 10) || null, hash(token), String(b.tz || DEF.tz), String(b.li_slug || '').toLowerCase().slice(0, 120)]);
       res.json({ ...publica(a), token });   // el token solo se muestra ahora
     } catch (e) { console.error('[li] create', e.message); res.status(500).json({ error: 'No se pudo crear la cuenta' }); }
   });
@@ -415,7 +415,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   app.post('/api/li/accounts/:id/token', requireAuth, async (req, res) => {
     try {
       const token = newToken();
-      const r = await pool.query(`UPDATE li_accounts SET token_hash=$3, estado='pausada', motivo='Token nuevo: reconecta la extensión', ultimo_visto=NULL WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId, hash(token)]);
+      const slugNuevo = String((req.body || {}).li_slug || '').toLowerCase().slice(0, 120);
+      const r = await pool.query(`UPDATE li_accounts SET token_hash=$3, estado='pausada', motivo='Reconectada: actívala cuando estés lista', ultimo_visto=NULL, li_slug=CASE WHEN $4 <> '' THEN $4 ELSE li_slug END, pausa_hasta=NULL WHERE id=$1 AND user_id=$2`, [parseInt(req.params.id, 10), req.workspaceOwnerId, hash(token), slugNuevo]);
       if (!r.rowCount) return res.status(404).json({ error: 'Cuenta no encontrada' });
       res.json({ token });
     } catch (e) { res.status(500).json({ error: 'No se pudo regenerar el token' }); }

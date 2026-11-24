@@ -23957,7 +23957,7 @@ const LeadManagerModule = (() => {
       <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días · modo <b>${a.modo === 'auto' ? 'automático' : 'asistido'}</b></span>
         <div class="li-btns">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(${a.id})">Ver cola</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReconnect(${a.id})">Reconectar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
           <button class="btn ${a.estado === 'activa' ? 'btn--ghost' : 'btn--primary'} btn--sm" onclick="LeadManagerModule.liToggle(${a.id}, '${a.estado === 'activa' ? 'pausar' : 'activar'}')">${a.estado === 'activa' ? 'Pausar' : 'Activar'}</button>
         </div></div></div>`;
   }
@@ -23996,17 +23996,113 @@ const LeadManagerModule = (() => {
     m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
   }
   function liConnectFor(clientId) { go('linkedin'); setTimeout(() => liNew(clientId), 350); }
+  // ── Conectar una cuenta de LinkedIn como «Iniciar sesión con Google»: Nova habla con la extensión, se ve qué LinkedIn hay abierto, se pide permiso y listo ──
+  const _liw = { client: '', nombre: '', reconectar: 0, timer: null, estado: '' };
+  if (!window.__liBridgeOn) {
+    window.__liBridgeOn = true; window.__liPend = {};
+    window.addEventListener('message', ev => {
+      const d = ev.data;
+      if (ev.source !== window || !d || d.__nova_li !== true || d.dir !== 'from-ext') return;
+      if (d.id === 'ready') { window.__liReady = true; return; }
+      const f = window.__liPend[d.id]; if (f) { delete window.__liPend[d.id]; f(d.resp); }
+    });
+  }
+  function _liExt(cmd, datos, ms) {
+    return new Promise(res => {
+      const id = 'm' + Date.now() + Math.random(), t = setTimeout(() => { delete window.__liPend[id]; res(null); }, ms || 4000);
+      window.__liPend[id] = r => { clearTimeout(t); res(r); };
+      window.postMessage({ __nova_li: true, dir: 'to-ext', id, cmd, datos: datos || {} }, location.origin);
+    });
+  }
+  function liwClose() { clearInterval(_liw.timer); _liw.timer = null; document.getElementById('li-modal')?.remove(); }
   function liNew(presetClient) {
-    _liModal(`<div class="fin-pi-box__hd"><h3>Conectar una cuenta de LinkedIn</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
+    _liw.client = presetClient || ''; _liw.reconectar = 0; _liw.nombre = '';
+    _liModal(`<div class="fin-pi-box__hd"><h3>Conectar una cuenta de LinkedIn</h3><button class="fin-pi-x" onclick="LeadManagerModule.liwClose()">✕</button></div>
       <div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre de la cuenta</span><input class="form-input" id="li-n" placeholder="Ej. LinkedIn de Jenny"></label>
       <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Cliente outbound (opcional)</span><select class="form-input" id="li-c"><option value="">— Ninguno —</option>${_clients.map(c => `<option value="${c.id}"${String(c.id) === String(presetClient) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
-      <p class="li-p">Se crea <b>en pausa</b>, con los topes recomendados y calentamiento de 14 días. Después verás un token para pegar en la extensión de ese perfil de Chrome.</p><div class="ctu-err" id="li-e"></div></div>
-      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liCreate()">Crear cuenta</button></div></div>`);
+      <p class="li-p fin-pi-full">En el siguiente paso Nova detecta la cuenta de LinkedIn que tienes abierta en este Chrome y te pide permiso para conectarla.</p><div class="ctu-err fin-pi-full" id="li-e"></div></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liwNext()">Continuar</button></div></div>`);
   }
-  async function liCreate() {
-    const r = await apiFetch(`${API}/li/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: document.getElementById('li-n').value.trim() || 'Cuenta LinkedIn', outbound_client_id: document.getElementById('li-c').value || null }) });
-    const d = await r.json(); if (!r.ok) { document.getElementById('li-e').textContent = d.error || 'Error'; return; }
-    _liToken(d.token, d.nombre); _liLoad();
+  function liReconnect(id) {
+    const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
+    _liw.reconectar = id; _liw.nombre = a.nombre; _liw.client = a.outbound_client_id || '';
+    _liwPaso2();
+  }
+  function liwNext() {
+    _liw.nombre = (document.getElementById('li-n').value || '').trim() || 'Cuenta LinkedIn';
+    _liw.client = document.getElementById('li-c').value || '';
+    _liwPaso2();
+  }
+  function _liwPaso2() {
+    _liModal(`<div class="fin-pi-box__hd"><h3>${_liw.reconectar ? 'Reconectar' : 'Conectar'} «${esc(_liw.nombre)}»</h3><button class="fin-pi-x" onclick="LeadManagerModule.liwClose()">✕</button></div>
+      <div class="fin-pi-form"><div id="liw-body" class="liw-body"></div></div>
+      <div class="fin-pi-box__ft"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwManual()">Conectar manualmente con un token</button><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwClose()">Cancelar</button></div></div>`);
+    clearInterval(_liw.timer); _liw.estado = '';
+    const tick = async () => {
+      if (!document.getElementById('liw-body')) { clearInterval(_liw.timer); return; }
+      if (_liw.estado === 'conectando' || _liw.estado === 'ok') return;
+      const r = await _liExt('hello', {}, 6000);
+      _liwPintar(r);
+    };
+    tick(); _liw.timer = setInterval(tick, 3000);
+  }
+  function _liwPintar(r) {
+    const el = document.getElementById('liw-body'); if (!el || _liw.estado === 'conectando' || _liw.estado === 'ok') return;
+    const paso = (n, t, ok) => `<div class="liw-step${ok ? ' is-ok' : ''}"><span>${ok ? '✓' : n}</span>${t}</div>`;
+    if (!r || !r.instalada) {
+      el.innerHTML = `<div class="liw-big">Buscando la extensión de Nova en este Chrome…<span class="liw-dots"></span></div>
+        <p class="li-p">Si no la has instalado:</p><ol class="li-ol"><li>Abre <code>chrome://extensions</code> y activa el «Modo de desarrollador».</li><li>Pulsa «Cargar descomprimida» y elige la carpeta <code>extension-linkedin</code>.</li><li>Vuelve aquí: se detecta sola.</li></ol>`;
+      return;
+    }
+    if (!r.sesion_linkedin) {
+      el.innerHTML = `${paso(1, 'Extensión de Nova instalada', true)}${paso(2, 'Inicia sesión en LinkedIn en este Chrome')}<p class="li-p">Abre LinkedIn con la cuenta que quieres conectar. Esta pantalla avanza sola cuando la detecte.</p><button class="btn btn--primary btn--sm" onclick="window.open('https://www.linkedin.com/login','_blank')">Abrir LinkedIn</button>`;
+      return;
+    }
+    if (!r.li_slug) { el.innerHTML = `${paso(1, 'Extensión de Nova instalada', true)}${paso(2, 'Sesión de LinkedIn detectada', true)}<div class="liw-big">Leyendo tu cuenta de LinkedIn…<span class="liw-dots"></span></div>`; return; }
+    el.innerHTML = `<div class="liw-consent"><div class="liw-acc"><span class="liw-in">in</span><div><b>linkedin.com/in/${esc(r.li_slug)}</b><small>Cuenta de LinkedIn abierta en este Chrome</small></div></div>
+      <p class="liw-q"><b>Nova</b> quiere conectarse a esta cuenta para:</p>
+      <ul class="liw-perm"><li>Enviar invitaciones, visitas y mensajes que tú programes, respetando topes y horarios.</li><li>Leer tus conexiones, bandeja y notificaciones para detectar aceptaciones y respuestas.</li><li>Pausarse sola si LinkedIn muestra un aviso.</li></ul>
+      ${r.vinculada && !_liw.reconectar ? '<p class="cc-note" style="color:#B45309">Este Chrome ya estaba vinculado a otra cuenta de Nova: se reemplazará.</p>' : ''}
+      <p class="cc-note">LinkedIn puede restringir cuentas que automatizan. Nova empieza despacio y con topes bajos. Nunca se envía tu contraseña ni tu sesión de LinkedIn a Nova.</p>
+      <div class="ctu-err" id="li-e"></div>
+      <div class="liw-btns"><button class="btn btn--ghost" onclick="LeadManagerModule.liwClose()">Cancelar</button><button class="btn btn--primary" onclick="LeadManagerModule.liwPermit('${esc(r.li_slug)}')">Permitir y conectar</button></div></div>`;
+  }
+  async function liwPermit(slug) {
+    _liw.estado = 'conectando';
+    const el = document.getElementById('liw-body'); if (el) el.innerHTML = '<div class="liw-big">Conectando…<span class="liw-dots"></span></div>';
+    try {
+      let tok, id;
+      if (_liw.reconectar) {
+        const r = await apiFetch(`${API}/li/accounts/${_liw.reconectar}/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ li_slug: slug }) });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); tok = d.token; id = _liw.reconectar;
+      } else {
+        const r = await apiFetch(`${API}/li/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: _liw.nombre, outbound_client_id: _liw.client || null, li_slug: slug }) });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); tok = d.token; id = d.id;
+      }
+      const v = await _liExt('vincular', { token: tok }, 6000);
+      if (!v || !v.ok) throw new Error('La extensión no aceptó la vinculación. Prueba «Conectar manualmente con un token».');
+      _liw.estado = 'ok'; _liw.cuentaId = id; _liLoad();
+      const body = document.getElementById('liw-body');
+      if (body) body.innerHTML = `<div class="liw-done"><div class="liw-check">✓</div><h4>Cuenta conectada</h4><p class="li-p">linkedin.com/in/${esc(slug)} quedó vinculada a «${esc(_liw.nombre)}». Está <b>en pausa</b>: no envía nada hasta que la actives.</p>
+        <div class="liw-btns"><button class="btn btn--ghost" onclick="LeadManagerModule.liwClose()">Más tarde</button><button class="btn btn--primary" onclick="LeadManagerModule.liwActivar(${id})">Activar ahora</button></div></div>`;
+    } catch (e) {
+      _liw.estado = '';
+      _liwPintar(await _liExt('hello', {}, 6000));
+      const er = document.getElementById('li-e'); if (er) er.textContent = e.message;
+    }
+  }
+  async function liwActivar(id) {
+    await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'activar' }) });
+    await _liExt('activar', { activa: true }, 6000);
+    liwClose(); showBanner('✓ Cuenta activa. Empezará con topes bajos y calentamiento.', 'success'); _liLoad();
+  }
+  async function liwManual() {
+    clearInterval(_liw.timer);
+    try {
+      if (_liw.reconectar) { liNewToken(_liw.reconectar); return; }
+      const r = await apiFetch(`${API}/li/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: _liw.nombre, outbound_client_id: _liw.client || null }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); _liToken(d.token, d.nombre); _liLoad();
+    } catch (e) { showBanner(e.message, 'error'); }
   }
   function _liToken(tok, nombre) {
     _liModal(`<div class="fin-pi-box__hd"><h3>Token de «${esc(nombre)}»</h3><button class="fin-pi-x" onclick="document.getElementById('li-modal').remove()">✕</button></div>
@@ -41704,7 +41800,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liCreate, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

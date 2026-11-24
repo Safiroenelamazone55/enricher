@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -32,6 +32,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (!m) return false;
   if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
   if (m.cmd === 'config') { cfg().then(send); return true; }
+  if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });
@@ -145,4 +146,28 @@ function esperarCarga(tabId, ms) {
     const f = (id, info) => { if (id === tabId && info.status === 'complete') { clearTimeout(t); chrome.tabs.onUpdated.removeListener(f); res(); } };
     chrome.tabs.onUpdated.addListener(f);
   });
+}
+
+
+// ── Órdenes que llegan desde la página de Nova (vincular sin copiar tokens) ──
+async function puente(orden, datos) {
+  const { token, paused, estado } = await get();
+  if (orden === 'hello') {
+    const sesion = await sesionIniciada();
+    const slug = sesion ? await leerIdentidad() : '';
+    return { instalada: true, version: VERSION, sesion_linkedin: sesion, li_slug: slug, vinculada: !!token, pausada: paused };
+  }
+  if (orden === 'vincular') {
+    if (!/^nvli_[a-f0-9]+$/i.test(String(datos.token || ''))) return { error: 'token_invalido' };
+    await chrome.storage.local.set({ token: datos.token, paused: true, estado: {}, identidad: { slug: '', t: 0 } });
+    return { ok: true };
+  }
+  if (orden === 'activar') {
+    if (!token && !datos.token) return { error: 'sin_vincular' };
+    await chrome.storage.local.set({ paused: !datos.activa });
+    if (datos.activa) tick(true);
+    return { ok: true, pausada: !datos.activa };
+  }
+  if (orden === 'estado') return { vinculada: !!token, pausada: paused, estado };
+  return { error: 'orden_desconocida' };
 }
