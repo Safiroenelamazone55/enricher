@@ -22162,3 +22162,6 @@ body.ibx-lb-open{overflow:hidden}
 .cp-link2 { font-family: inherit; font-size: 12.5px; font-weight: 500; color: #55657D; background: none; border: none; cursor: pointer; }
 .cp-link2:hover { color: var(--primary); }
 @media (max-width: 1000px) { .cp2 { grid-template-columns: 1fr; } .cp2-l { position: static; max-height: none; } }
+
+.cp-grid .cp-fields--one { grid-template-columns: 1fr; }
+#lm-co-page .cp-grid { grid-template-columns: 300px minmax(0, 1fr); }
