@@ -30349,7 +30349,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _tkMarkRead(key) { const rs = _tkRead(); if (rs.has(key)) return; rs.add(key); try { localStorage.setItem('lm_tk_read', JSON.stringify([...rs].slice(-3000))); } catch (_) {} }
   const _tkScore = c => { c = c || {}; if (['interesado', 'reunion'].includes(c.disposition)) return 'alto'; const p = String(c.contact_priority || '').toLowerCase(); return p === 'alta' ? 'alto' : p === 'media' ? 'medio' : p === 'baja' ? 'bajo' : (c.id ? 'muybajo' : ''); };
   const _tkPrio = n => { const m = /Prioridad (alta|media|baja)/i.exec(n || ''); return m ? { alta: 'alto', media: 'medio', baja: 'baja' }[m[1].toLowerCase()] : 'ninguno'; };
-  function _tkRows() {
+  function _tkRows(withDone) {
     const today = _dayOf(new Date()), lim7 = new Date(today.getTime() + 8 * 864e5 - 1), eod = new Date(today.getTime() + 864e5 - 1), byId = new Map((_contacts || []).map(c => [c.id, c])), out = [], rd = _tkRead();
     const seqOf = id => (_sequences || []).find(x => x.id === id) || {};
     const estOf = d => d <= eod ? 'venc' : d <= lim7 ? 'prox' : '';
@@ -30360,7 +30360,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     });
     (_activities || []).filter(a => a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
       const pend = a.estado === 'pendiente', tipoOk = /^(tarea|followup|llamada|revisar_|seguimiento_inactivo)/.test(a.tipo || '');
-      if (!pend && !tipoOk) return;
+      if (!pend && (!tipoOk || !withDone)) return;   // lo ya hecho (notas internas incluidas) solo se ve si el filtro Estado incluye «Hecho»
       const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || ''), due = new Date(a.fecha), key = 'a' + a.id;
       if (!pend && due < new Date(Date.now() - 45 * 864e5)) return;
       out.push({ kind: 'act', key, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.canal === 'call' || a.tipo === 'llamada' ? 'call' : ['email', 'linkedin', 'whatsapp', 'sms'].includes(a.canal) ? a.canal : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due, hora: '', c, cid: a.contact_id, act: a, origen: '', campId: '', prio: _tkPrio(a.nota), resp: a.tipo === 'revisar_respuesta', estado: pend ? estOf(due) : 'hecho', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
@@ -30416,6 +30416,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return _tkSig(_tkVTree(_tk.view));
   }
   function _tkInit() { if (!_tk.tree) _tk.tree = _tkVTree(_tk.view); }
+  function _tkWantsDone(n) { n = n || _tk.tree; if (!n) return false; if (!n.items) return n.k === 'estado' && n.op !== 'no_es' && (n.vals || []).includes('hecho'); return n.items.some(i => _tkWantsDone(i)); }
   const _tkDirty = () => !!_tk.tree && _tkSig(_tk.tree) !== _tkBase();
   // ── Evaluación ──
   function _tkRelRange(rel, today) {
@@ -30488,7 +30489,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_tk.classic) return `<div class="tk-back"><button class="ll-btn" onclick="LeadManagerModule.tkClassic(false)">‹ Volver a la vista de tareas</button></div>${_vTasksClassic()}`;
     if (_apList === null) _apReload();
     _tkInit();
-    const I = _llI, today = _dayOf(new Date()), rows = _tkRows(), all = _tkApply(rows, today), cols = _TK_COLS.filter(c => _tkCols().has(c[0]));
+    const I = _llI, today = _dayOf(new Date()), rows = _tkRows(_tkWantsDone()), all = _tkApply(rows, today), cols = _TK_COLS.filter(c => _tkCols().has(c[0]));
     const cnt = v => rows.filter(r => _tkEvTree(_tkVTree(v), r, today)).length;
     const custom = _tkViews();
     const strip = `<div class="vw">${_TK_VIEWS.map(([k, l, d]) => `<button class="vw-t${_tk.view === k ? ' on' : ''}" onclick="LeadManagerModule.tkView('${k}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg><span>${l}</span><i>${cnt(k)}</i></button>`).join('')}${custom.map(v => `<button class="vw-t${_tk.view === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.tkView('c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" onclick="event.stopPropagation();LeadManagerModule.tkViewDel('${v.id}')">✕</span></button>`).join('')}<button class="vw-t vw-plus" title="Nueva vista" onclick="LeadManagerModule.tkNewView()">${I('<path d="M12 5v14M5 12h14"/>', 15)}</button></div>`;
@@ -30636,13 +30637,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function tkColTick(k, on) { const set = _tkCols(); if (on) set.add(k); else set.delete(k); try { localStorage.setItem('lm_tk_cols', JSON.stringify([...set])); } catch (_) {} _renderBody(); }
   function tkOpen(key) {
-    const r = _tkRows().find(x => x.key === key); if (!r) return; _tkMarkRead(key);
+    const r = _tkRows(true).find(x => x.key === key); if (!r) return; _tkMarkRead(key);
     if (r.kind === 'seq') { seqTaskOpen(r.seqId, r.cid); return; }
     if (r.kind === 'ap') { _tk.classic = true; _taskStat = 'approve'; _renderBody(); return; }
     openContactPage(r.cid);
   }
   function tkStart() {
-    const today = _dayOf(new Date()), all = _tkApply(_tkRows(), today), r = all.find(x => x.kind === 'seq') || all[0]; if (!r) return;
+    const today = _dayOf(new Date()), all = _tkApply(_tkRows(_tkWantsDone()), today), r = all.find(x => x.kind === 'seq') || all[0]; if (!r) return;
     if (!all.some(x => x.kind === 'seq')) showBanner('Estas tareas se abren desde la ficha del prospecto.', 'info');
     tkOpen(r.key);
   }
