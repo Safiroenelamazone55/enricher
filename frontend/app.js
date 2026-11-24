@@ -24193,8 +24193,13 @@ const LeadManagerModule = (() => {
   }
   async function liReramp(id) { await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'reiniciar_calentamiento' }) }); document.getElementById('li-modal')?.remove(); _liLoad(); }
   async function liDel(id) {
-    if (!(await novaConfirm({ title: 'Eliminar la cuenta', message: 'Se borra la cuenta y su cola de acciones. No se puede deshacer.', ok: 'Eliminar', tone: 'danger' }))) return;
+    const a = (_li.accs || []).find(x => x.id === id) || {}, nom = a.nombre || 'esta cuenta', cola = a.cola || 0;
+    // Primer paso: qué se pierde
+    if (!(await novaConfirm({ title: 'Eliminar la cuenta de LinkedIn', message: `Se elimina «${esc(nom)}» con su historial y su cola de acciones (${cola} en cola${a.estado === 'activa' ? '; <b>está ACTIVA</b> y dejará de enviar' : ''}). Los contactos y las secuencias no se tocan. No se puede deshacer.`, ok: 'Continuar', tone: 'danger' }))) return;
+    // Segundo paso: escribir el nombre
+    if (!(await novaConfirmType({ title: 'Última confirmación', message: `Escribe el nombre de la cuenta para eliminarla: <b>${esc(nom)}</b>`, word: nom, ok: 'Eliminar cuenta' }))) return;
     await apiFetch(`${API}/li/accounts/${id}`, { method: 'DELETE' }); document.getElementById('li-modal')?.remove(); _li.acc = 0; _liLoad();
+    showBanner('Cuenta eliminada', 'success');
   }
   // ── Configuración de la campaña (como la de lemlist): automatización, tracking, remitentes, planificación, CRM y general ──
   let _cc = null;
