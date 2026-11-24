@@ -156,6 +156,18 @@ function mount(app, { pool, requireAuth }) {
     return c;
   }
 
+  // Remitentes de un cliente outbound (email, WhatsApp, LinkedIn): lo que ve «Conectar remitente» en el menú del cliente
+  app.get('/api/outbound-clients/:id/senders', requireAuth, async (req, res) => {
+    try {
+      const uid = req.workspaceOwnerId, cid = parseInt(req.params.id, 10) || 0;
+      const { rows: [cl] } = await pool.query(`SELECT id, nombre FROM outbound_clients WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      if (!cl) return res.status(404).json({ error: 'Cliente no encontrado' });
+      const { rows: em } = await pool.query(`SELECT id, email, provider, estado, last_error FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY id`, [uid, cid]);
+      const { rows: wa } = await pool.query(`SELECT w.id, w.nombre, w.numero, w.estado FROM wa_connections w WHERE w.user_id=$1 AND w.archivada_at IS NULL AND (w.outbound_client_id=$2 OR EXISTS (SELECT 1 FROM wa_connection_clients x WHERE x.connection_id=w.id AND x.outbound_client_id=$2)) ORDER BY w.id`, [uid, cid]).catch(() => ({ rows: [] }));
+      res.json({ cliente: cl, email: em, whatsapp: wa });
+    } catch (e) { console.error('[campaignConfig] senders', e.message); res.status(500).json({ error: 'No se pudieron cargar los remitentes' }); }
+  });
+
   app.get('/api/campaigns/:id/config', requireAuth, async (req, res) => {
     try {
       const c = await cargar(req, res); if (!c) return;

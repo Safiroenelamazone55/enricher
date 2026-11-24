@@ -23200,7 +23200,6 @@ const LeadManagerModule = (() => {
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
-    { k: 'linkedin',   l: 'LinkedIn',           g: 'Workspace' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
@@ -23934,7 +23933,8 @@ const LeadManagerModule = (() => {
       _li.accs = a.ok ? await a.json() : []; _li.queue = q.ok ? await q.json() : [];
       try { const ev = await apiFetch(`${API}/li/events`); _li.events = ev.ok ? await ev.json() : []; } catch (_) { _li.events = _li.events || []; }
     } catch (_) { _li.accs = _li.accs || []; _li.queue = _li.queue || []; }
-    if (_section === 'linkedin') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _liPaint(); }
+    if (_section === 'linkedin') _liPaint();
+    if (document.getElementById('snd-root')) _sndPaint();
     clearTimeout(_li.timer); if (_section === 'linkedin') _li.timer = setTimeout(() => { if (_section === 'linkedin' && !document.getElementById('li-modal')) _liLoad(); }, 20000);
   }
   function _liPaint() { const r = document.getElementById('li-root'); if (r) r.innerHTML = _liInner(); }
@@ -23995,7 +23995,48 @@ const LeadManagerModule = (() => {
     const m = document.createElement('div'); m.id = 'li-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
   }
-  function liConnectFor(clientId) { go('linkedin'); setTimeout(() => liNew(clientId), 350); }
+  function liConnectFor(clientId) { if (!_li.accs) _liLoad(); liNew(clientId); }
+  // ── Remitentes de un cliente: email, WhatsApp, LinkedIn (SMS y llamadas, próximamente). Todo se conecta desde aquí ──
+  const _snd = { id: 0, data: null };
+  async function openClientSenders(clientId) {
+    _snd.id = clientId; _snd.data = null;
+    document.getElementById('snd-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'snd-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box snd-box"><div class="fin-pi-box__hd"><h3>Remitentes · ${esc((_clients.find(c => c.id === clientId) || {}).nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('snd-modal').remove()">✕</button></div><div class="snd-scroll" id="snd-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
+    document.body.appendChild(m);
+    await _liLoad();
+    _sndPaint();
+  }
+  async function _sndCargar() {
+    try { const r = await apiFetch(`${API}/outbound-clients/${_snd.id}/senders`); _snd.data = r.ok ? await r.json() : { email: [], whatsapp: [] }; } catch (_) { _snd.data = { email: [], whatsapp: [] }; }
+  }
+  async function _sndPaint() {
+    const root = document.getElementById('snd-root'); if (!root) return;
+    if (!_snd.data) await _sndCargar();
+    const d = _snd.data, id = _snd.id, accs = (_li.accs || []).filter(a => a.outbound_client_id === id), ids = new Set(accs.map(a => a.id));
+    const chip = (t, ok) => `<span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(t)}</span>`;
+    const fila = (ic, tipo, nombre, sub, est, ok, btn) => `<div class="cc-snd"><span class="cc-snd__ic cc-snd__ic--${tipo}">${ic}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span>${chip(est, ok)}${btn}</div>`;
+    const okEm = x => ['ok', 'conectado', 'activo', 'verificado'].includes(String(x.estado || '').toLowerCase());
+    const ev = (_li.events || []).filter(x => ids.has(x.account_id)).slice(0, 8), q = (_li.queue || []).filter(x => ids.has(x.account_id)).slice(0, 8);
+    root.innerHTML = `<div class="snd-top"><p class="li-p" style="margin:0">Aquí conectas y gestionas lo que envía en nombre de este cliente. Las campañas eligen cuáles usar en «Configuración de la campaña → Remitentes».</p>
+        <button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.sndAddMenu(event)">+ Añadir remitente</button></div>
+      <div class="cc-grp">Email</div>${d.email.length ? d.email.map(x => fila('✉', 'email', x.email, x.provider || '', okEm(x) ? 'Conectado' : (x.estado || '—'), okEm(x), `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbManageOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin buzón conectado.</div>'}
+      <div class="cc-grp">WhatsApp</div>${d.whatsapp.length ? d.whatsapp.map(x => fila('✆', 'whatsapp', x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado', `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin línea de WhatsApp conectada.</div>'}
+      <div class="cc-grp">LinkedIn</div>${accs.length ? accs.map(_liCard).join('') : '<div class="cc-empty">Sin cuentas de LinkedIn conectadas.</div>'}
+      ${accs.length ? `<div class="cc-grp">Lo que ha pasado en LinkedIn</div>${ev.length ? `<div class="li-tbl">${ev.map(x => { const t = _LI_EVT[x.tipo] || [x.tipo, '#64748B']; return `<div class="li-ev"><b style="color:${t[1]}">${esc(t[0])}</b><span>${esc(x.slug || '')}</span><span class="li-sub">${esc(x.detalle || '')}</span><span class="li-sub">${new Date(x.created_at).toLocaleString()}</span></div>`; }).join('')}</div>` : '<p class="li-p">Cuando la extensión detecte una aceptación o una respuesta, aparecerá aquí.</p>'}
+        <div class="cc-grp">Cola de acciones</div>${q.length ? `<div class="li-tbl">${q.map(x => `<div class="li-ev"><b>${_LI_TIPO[x.tipo] || esc(x.tipo)}</b><span><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.slug)}</a></span><span class="li-q li-q--${x.estado}">${_LI_QST[x.estado] || esc(x.estado)}</span><span>${x.estado === 'queued' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liCancel(${x.id})">Cancelar</button>` : ''}</span></div>`).join('')}</div>` : '<p class="li-p">Sin acciones todavía.</p>'}` : ''}
+      <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span><span class="cc-soon">Próximamente</span></div>`;
+  }
+  function sndAddMenu(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const id = _snd.id, c0 = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
+    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.mbManageOpen(${id})">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.wamOpen(${id})">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.liConnectFor(${id})">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
+  }
   // ── Conectar una cuenta de LinkedIn como «Iniciar sesión con Google»: Nova habla con la extensión, se ve qué LinkedIn hay abierto, se pide permiso y listo ──
   const _liw = { client: '', nombre: '', reconectar: 0, timer: null, estado: '' };
   if (!window.__liBridgeOn) {
@@ -24036,7 +24077,7 @@ const LeadManagerModule = (() => {
   function _liwPaso2() {
     _liModal(`<div class="fin-pi-box__hd"><h3>${_liw.reconectar ? 'Reconectar' : 'Conectar'} «${esc(_liw.nombre)}»</h3><button class="fin-pi-x" onclick="LeadManagerModule.liwClose()">✕</button></div>
       <div class="fin-pi-form"><div id="liw-body" class="liw-body"></div></div>
-      <div class="fin-pi-box__ft"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwManual()">Conectar manualmente con un token</button><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwClose()">Cancelar</button></div></div>`);
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwClose()">Cancelar</button></div></div>`);
     clearInterval(_liw.timer); _liw.estado = '';
     _liwPintar(null);
     const tick = async () => {
@@ -24133,7 +24174,7 @@ const LeadManagerModule = (() => {
         <div class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de envío</span><div class="li-days">${dn.map((d, i) => `<label><input type="checkbox" class="li-d" value="${i + 1}"${(a.dias || []).includes(i + 1) ? ' checked' : ''}>${d}</label>`).join('')}</div></div>
         <p class="li-p fin-pi-full">Guía de lemlist (mismos valores que su pantalla «Límites»): 20 invitaciones (≈100 por semana), 30 mensajes, 30 visitas y 5 InMail, siempre contados en las últimas 24 horas. Lo que haces a mano en LinkedIn cuenta contra el mismo cupo de LinkedIn y Nova no lo ve: si prospectas a mano, baja estos topes. Nova no deja subir los topes más del doble de la guía.</p>
         <div class="ctu-err fin-pi-full" id="li-e"></div></div>
-      <div class="fin-pi-box__ft"><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liNewToken(${a.id})">Token nuevo</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReramp(${a.id})">Reiniciar calentamiento</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReid(${a.id})">Reiniciar identidad</button> <button class="btn btn--ghost btn--sm" style="color:#B42318" onclick="LeadManagerModule.liDel(${a.id})">Eliminar cuenta</button></div><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liSave(${a.id})">Guardar</button></div></div>`);
+      <div class="fin-pi-box__ft"><div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReramp(${a.id})">Reiniciar calentamiento</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReid(${a.id})">Reiniciar identidad</button> <button class="btn btn--ghost btn--sm" style="color:#B42318" onclick="LeadManagerModule.liDel(${a.id})">Eliminar cuenta</button></div><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.liSave(${a.id})">Guardar</button></div></div>`);
   }
   async function liSave(id) {
     const g = k => document.getElementById('li-f-' + k).value;
@@ -33854,11 +33895,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const mbYa = !!_mbFor(id);
     const waYa = _waClientIds instanceof Set && _waClientIds.has(id);
     let html = `<div class="cp-mark-menu__list">`
-      + item(mbYa ? 'Editar buzón' : 'Conectar buzón', `LeadManagerModule.mbManageOpen(${id})`)
-      + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
-      + item('Conectar LinkedIn', `LeadManagerModule.liConnectFor(${id})`)
-      + `<button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Conectar SMS <span class="cc-soon">Próximamente</span></button>`
-      + `<button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Configurar llamadas <span class="cc-soon">Próximamente</span></button>`
+      + item('Conectar remitente', `LeadManagerModule.openClientSenders(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Portal del cliente', `LeadManagerModule.openClient(${id});setTimeout(()=>LeadManagerModule._clientGoTab('Portal'),80)`)
       + `</div>`;
@@ -41801,7 +41838,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
