@@ -30359,6 +30359,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       out.push({ kind: 'seq', key, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: seqOf(t.sq.id).nombre || t.sq.nombre || '', campId: camp(t.sq.id), accion: _accionLabel(st.canal, st.accion) || '', stepKey: st.canal + '|' + (st.accion || ''), prio: 'ninguno', estado: estOf(t.due), lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
     });
     (_activities || []).filter(a => a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
+      if (/Contacto sin email|^\s*Rebote:|rebotó antes/i.test(a.nota || '')) return;   // avisos automáticos del sistema (viven en «Por corregir» de la vista clásica): no son tareas
       const pend = a.estado === 'pendiente', tipoOk = /^(tarea|followup|llamada|revisar_|seguimiento_inactivo)/.test(a.tipo || '');
       if (!pend && (!tipoOk || !withDone)) return;   // lo ya hecho (notas internas incluidas) solo se ve si el filtro Estado incluye «Hecho»
       const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || ''), due = new Date(a.fecha), key = 'a' + a.id;
