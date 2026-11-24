@@ -24847,120 +24847,120 @@ const LeadManagerModule = (() => {
     if (list) list.style.display = 'none';
   }
   function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
-  // ═══════════ Rendimiento (paso 4): resumen (embudo y estadísticas) y detalle por paso, con periodo, remitente y canal ═══════════
-  const _rd = { mode: 'resumen', preset: '30', from: '', to: '', sender: 0, canal: '', data: null, busy: false, show: new Set(['abierto', 'clicado', 'respondido', 'aceptado']), t1: 'enviados', t2: 'no_enviados', t3: 'ultimas' };
-  function _rdRange() {
-    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5));
-    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    switch (_rd.preset) {
-      case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t];
-      case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; case 'todo': return ['', ''];
-      default: return [_rd.from, _rd.to];
-    }
-  }
-  const _RD_PRE = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes'], ['todo', 'Todo el tiempo']];
-  function _rdLabel() {
-    const [f, t] = _rdRange(), fm = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-    return f ? `${fm(f)} → ${fm(t)}` : 'Todo el tiempo';
-  }
-  async function _rdLoad(id) {
-    _rd.busy = true; const [f, t] = _rdRange();
-    try {
-      const r = await apiFetch(`${API}/lm/sequences/${id}/performance?${f ? 'from=' + f + '&to=' + t + '&' : ''}canal=${_rd.canal}&sender=${_rd.sender}`);
-      _rd.data = r.ok ? await r.json() : { error: true };
-    } catch (_) { _rd.data = { error: true }; }
-    _rd.busy = false;
-    if (_section === 'sequence' && _seqStage === 'rendimiento' && _activeSeq === id) _renderBody();
-  }
-  function _rdReload() { _rd.data = null; _renderBody(); }
-  const _rdPct = (n, d) => d ? Math.round(n / d * 100) : 0;
-  function _rdHtml(id) {
-    const d = _rd.data, I = _llI;
-    const seg = `<div class="rd-modes"><button class="${_rd.mode === 'resumen' ? 'on' : ''}" onclick="LeadManagerModule.rdMode('resumen')"><span class="rd-modes__ic">${I('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 26)}</span>Resumen</button><button class="${_rd.mode === 'detalle' ? 'on' : ''}" onclick="LeadManagerModule.rdMode('detalle')"><span class="rd-modes__ic">${I('<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>', 26)}</span>Detalles del paso</button></div>`;
-    const senders = (d && d.senders) || [];
-    const stats = _rd.mode === 'detalle' ? `<label class="rd-l">Estadísticas para mostrar</label><div class="rd-chips">${[['abierto', 'Abierto', 'a'], ['clicado', 'Clicado', 'c'], ['respondido', 'Respondido', 'r'], ['reservado', 'Reservado', 'x'], ['interesado', 'Interesado', 'x'], ['aceptado', 'Aceptado', 'l'], ['no_enviado', 'No enviado', 'n'], ['baja', 'Dado de baja', 'x'], ['rebotado', 'Rebotados', 'n'], ['no_interesa', 'No le interesa', 'x'], ['omitido', 'Omitido', 'x']].map(([k, l, t]) => `<button class="rd-chip rd-chip--${t}${_rd.show.has(k) ? ' on' : ''}${t === 'x' ? ' is-off' : ''}" ${t === 'x' ? 'disabled title="Nova todavía no mide esto por paso"' : `onclick="LeadManagerModule.rdShow('${k}')"`}>${l}</button>`).join('')}</div>` : '';
-    const left = `<div class="rd-left">${seg}
-      <label class="rd-l">Periodo de tiempo</label><button class="rd-sel rd-date" onclick="LeadManagerModule.rdDateOpen(event)"><span>${esc(_rdLabel())}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
-      <label class="rd-l">Remitentes</label><select class="rd-sel" onchange="LeadManagerModule.rdSet('sender',this.value)"><option value="0">Todos los remitentes de la campaña</option>${senders.map(x => `<option value="${x.id}"${_rd.sender === x.id ? ' selected' : ''}>${esc(x.email)}</option>`).join('')}</select>
-      ${_rd.mode === 'resumen' ? `<label class="rd-l">Canales</label><select class="rd-sel" onchange="LeadManagerModule.rdSet('canal',this.value)">${[['', 'Todos los canales'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['call', 'Llamada'], ['task', 'Tarea']].map(([v, l]) => `<option value="${v}"${_rd.canal === v ? ' selected' : ''}>${l}</option>`).join('')}</select>` : ''}
-      ${stats}<span class="sp"></span><button class="rd-exp" onclick="LeadManagerModule.rdExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 15)} Exportar campaña</button></div>`;
-    let right;
-    if (!d) right = '<div class="rd-right"><div class="ll-empty">Cargando rendimiento…</div></div>';
-    else if (d.error) right = '<div class="rd-right"><div class="ll-empty">No se pudo cargar el rendimiento. <button class="ll-btn" onclick="LeadManagerModule.rdRetry()">Reintentar</button></div></div>';
-    else right = _rd.mode === 'detalle' ? _rdDetail(id, d) : _rdSummary(id, d);
-    return `<div class="rd">${left}${right}</div>`;
-  }
-  function _rdSummary(id, d) {
-    const e = d.embudo, base = e.base || 0, I = _llI;
-    const FN = [['Contactado', e.contactado, ''], ['Abierto', e.abierto, ''], ['Interacción', e.interaccion, 'Clics en un email o invitaciones de LinkedIn aceptadas'], ['Respondido', e.respondido, ''], ['Interesado', e.interesado, ''], ['Interrumpido', e.interrumpido, 'Prospectos cuya secuencia se detuvo por una respuesta, un rebote o un resultado']];
-    const funnel = `<div class="rd-card"><div class="rd-card__hd"><h3>Proceso del prospecto en el embudo</h3><button class="rd-how" onclick="LeadManagerModule.rdHow()">${I('<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 15)} Cómo se calcula</button></div>
-      <div class="rd-fn">${FN.map(([l, v, tip], i) => `${i ? `<span class="rd-fn__ar">${I('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>', 14)}</span>` : ''}<div class="rd-fn__c"><div class="rd-fn__h">${l}${tip ? `<i title="${esc(tip)}">?</i>` : ''}</div><div class="rd-fn__bar"><i style="height:${Math.max(base ? Math.round(v / base * 100) : 0, v ? 4 : 0)}%"></i></div><div class="rd-fn__v"><b>${v}</b><span>${_rdPct(v, base)}%</span></div></div>`).join('')}</div></div>`;
-    const stat = (v, l, ic, pct) => `<div class="rd-stat"><span class="rd-stat__ic">${I(ic, 22)}</span><div><div class="rd-stat__v">${pct != null ? `<b>${pct}%</b> <small>${v}</small>` : `<b>${v}</b>`}</div><div class="rd-stat__l">${l}</div></div></div>`;
-    const P = d.prospectos, E = d.entregabilidad, A = d.positivas, G = d.negativas;
-    const IC = { u: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', f: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>', s: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', ok: '<polyline points="20 6 9 17 4 12"/>', m: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', c: '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>', r: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', in: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/>', cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', h: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>', ban: '<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>', b: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' };
-    const stats = `<div class="rd-card"><h3>Estadísticas de la campaña</h3>
-      <h4>Estadísticas de prospectos</h4><div class="rd-g3">${stat(P.total, 'Prospectos en la campaña', IC.u)}${stat(P.lanzados, 'Prospectos lanzados', IC.f, _rdPct(P.lanzados, P.total))}${stat(P.alcanzados, 'Prospectos alcanzados', IC.u, _rdPct(P.alcanzados, P.total))}</div>
-      <h4>Estadísticas de entregabilidad</h4><div class="rd-g3">${stat(E.enviados, 'Mensajes enviados', IC.s)}${stat(E.no_enviados, 'Mensajes no enviados', IC.x)}${stat(E.entregados, 'Entregado', IC.ok, _rdPct(E.entregados, E.enviados))}</div>
-      <h4>Estadísticas de señales positivas</h4><div class="rd-g3">${stat(A.abiertos, 'Tasa de apertura', IC.m, _rdPct(A.abiertos, A.enviados))}${stat(A.clicados, 'Tasa de clics', IC.c, _rdPct(A.clicados, A.enviados))}${stat(A.respondidos, 'Tasa de respuesta', IC.r, _rdPct(A.respondidos, d.embudo.contactado))}${stat(A.aceptadas, 'Invitación aceptada', IC.in, _rdPct(A.aceptadas, A.invitaciones))}${stat(A.reservados, 'Reservado', IC.cal)}${stat(A.interesados, 'Interesado', IC.h, _rdPct(A.interesados, d.embudo.contactado))}</div>
-      <h4>Estadísticas de señales negativas</h4><div class="rd-g3">${stat(G.rebotados, 'Rebotados', IC.b, _rdPct(G.rebotados, E.enviados))}${stat(G.baja, 'Dado de baja (no contactar)', IC.ban)}${stat(G.no_interesa, 'No le interesa', IC.x, _rdPct(G.no_interesa, d.embudo.contactado))}</div></div>`;
-    const MET = [['invitados', 'Invitado'], ['enviados', 'Enviado'], ['entregados', 'Entregado'], ['abiertos', 'Abierto'], ['clicados', 'Clicado'], ['respondidos', 'Respondido']];
-    const top = [...d.pasos].sort((a, b) => (b[_rd.t1] || 0) - (a[_rd.t1] || 0)).filter(x => (x[_rd.t1] || 0) > 0);
-    const tbl = (rows, key, ph) => rows.length ? `<table class="rd-t"><thead><tr><th>Rango</th><th>Tipo</th><th>${ph}</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(_sedTitle(x))}<small> · paso ${x.pos}</small></td><td><b>${x[key] || 0}</b></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>';
-    const topCard = `<div class="rd-card"><h3>Pasos con mejor rendimiento</h3><div class="rd-tabs">${MET.map(([k, l]) => `<button class="${_rd.t1 === k ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t1','${k}')">${l}</button>`).join('')}</div>${tbl(top, _rd.t1, (MET.find(x => x[0] === _rd.t1) || [0, ''])[1])}</div>`;
-    const dropRows = [...d.pasos].sort((a, b) => (b[_rd.t2] || 0) - (a[_rd.t2] || 0)).filter(x => (x[_rd.t2] || 0) > 0);
-    const dropCard = `<div class="rd-card"><h3>Pasos de abandono</h3><div class="rd-tabs">${[['no_enviados', 'No enviado'], ['rebotados', 'Rebotados']].map(([k, l]) => `<button class="${_rd.t2 === k ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t2','${k}')">${l}</button>`).join('')}</div>${tbl(dropRows, _rd.t2, _rd.t2 === 'no_enviados' ? 'No enviado' : 'Rebotados')}</div>`;
-    const act = _rd.t3 === 'ultimas' ? d.ultimas : d.proximas, fm = x => x ? new Date(x).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-    const actCard = `<div class="rd-card"><div class="rd-tabs"><button class="${_rd.t3 === 'ultimas' ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t3','ultimas')">Últimas actividades</button><button class="${_rd.t3 === 'proximas' ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t3','proximas')">Próximas actividades</button></div>
-      ${act.length ? `<table class="rd-t"><thead><tr><th>Último paso ejecutado</th><th>Prospecto</th><th>Empresa</th><th>${_rd.t3 === 'ultimas' ? 'Fecha' : 'Programado'}</th></tr></thead><tbody>${act.map(x => `<tr onclick="LeadManagerModule.openContactPage(${x.contact_id})" style="cursor:pointer"><td>${x.paso ? 'Paso ' + x.paso + ' · ' : ''}${esc(x.paso_titulo || '')}</td><td>${esc(x.prospecto || '—')}</td><td>${esc(x.empresa || '—')}</td><td>${fm(x.at)}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>'}</div>`;
-    return `<div class="rd-right">${funnel}${stats}<div class="rd-g2">${topCard}${dropCard}</div>${actCard}</div>`;
-  }
-  function _rdDetail(id, d) {
-    const steps = _seqSteps(id), by = new Map(d.pasos.map(x => [x.id, x])), s = _sequences.find(x => x.id === id) || {}, sh = _rd.show;
-    const chip = (cls, ic, pct, n) => `<span class="rd-nc rd-nc--${cls}"><i>${ic}</i>${pct}% <b>${n}</b></span>`;
-    const nodes = steps.map((st, i) => {
-      const x = by.get(st.id); if (!x) return '';
-      const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente'), cb = _stepCondBadge(st);
-      const base = x.enviados || x.hechos || 0, ch = [];
-      if (st.canal === 'email') {
-        if (sh.has('abierto')) ch.push(chip('a', '✉', _rdPct(x.abiertos, x.enviados), x.abiertos));
-        if (sh.has('clicado')) ch.push(chip('c', '↖', _rdPct(x.clicados, x.enviados), x.clicados));
-        if (sh.has('respondido')) ch.push(chip('r', '💬', _rdPct(x.respondidos, x.enviados), x.respondidos));
-        if (sh.has('no_enviado')) ch.push(chip('n', '✕', _rdPct(x.no_enviados, x.enviados + x.no_enviados), x.no_enviados));
-        if (sh.has('rebotado')) ch.push(chip('n', '⚠', _rdPct(x.rebotados, x.enviados), x.rebotados));
-      } else if (x.invitados) { if (sh.has('aceptado')) ch.push(chip('l', 'in', _rdPct(x.aceptados, x.invitados), x.aceptados)); }
-      return `${i ? '<div class="sed-link sed-link--s"></div>' : ''}<div class="sed-node rd-node"><div class="sed-node__hd"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<span class="lz-date">${x.por_venir} por venir</span></div>
-        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span><span class="rd-cnt" title="Prospectos que ya pasaron o están en este paso">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} ${x.contactados}</span></div>
-        ${ch.length ? `<div class="rd-nc__row">${ch.join('')}</div>` : ''}</div>`;
-    }).join('');
-    const fin = (d.embudo.interrumpido || 0), term = (d.pasos.length ? d.pasos[d.pasos.length - 1].hechos : 0);
-    const cli = _clientName(s.outbound_client_id) || '·', ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    return `<div class="rd-right rd-right--flow"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
-      <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})"><div class="sed-start__c"><small>Remitente</small><span class="sed-start__av">${esc(ini)}</span></div><div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${_seqTzChip(s) || 'Planificación predeterminada'}</span></div></div><div class="sed-link sed-link--s"></div>
-      ${nodes || '<div class="ll-empty">Sin pasos para este canal.</div>'}<div class="sed-link sed-link--s"></div><div class="rd-fin"><span>Fin</span><b>${term}</b></div></div>
-      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
-  }
-  function rdMode(m) { _rd.mode = m; _renderBody(); }
-  function rdShow(k) { if (_rd.show.has(k)) _rd.show.delete(k); else _rd.show.add(k); _renderBody(); }
-  function rdSet(k, v) { if (k === 'sender') _rd.sender = parseInt(v) || 0; else _rd[k] = v; if (k === 'sender' || k === 'canal') _rdReload(); else _renderBody(); }
-  function rdRetry() { _rdReload(); }
-  function rdPreset(k) { _rd.preset = k; document.getElementById('sed-pop')?.remove(); _rdReload(); }
-  function rdDateOpen(ev) {
-    const [f, t] = _rdRange();
-    _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="rd-f" value="${f}"></label><label>Hasta<input type="date" id="rd-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.rdDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${_RD_PRE.map(([k, l]) => `<button class="sed-pop__i${_rd.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.rdPreset('${k}')">${l}</button>`).join('')}</div>`, 320);
-  }
-  function rdDateApply() { const f = (document.getElementById('rd-f') || {}).value, t = (document.getElementById('rd-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _rd.preset = 'custom'; _rd.from = f; _rd.to = t; document.getElementById('sed-pop')?.remove(); _rdReload(); }
-  function rdHow() {
-    const li = (a, b) => `<li><b>${a}</b> ${b}</li>`;
-    _llModal('Cómo se calcula el embudo', `<ul class="rd-how-l">${li('Contactado', 'prospectos a los que ya se les envió algo (un email, o un paso de LinkedIn, llamada, WhatsApp o tarea completado).')}${li('Abierto', 'prospectos que abrieron al menos un email de la secuencia.')}${li('Interacción', 'prospectos que hicieron clic en un enlace o aceptaron tu invitación de LinkedIn.')}${li('Respondido', 'prospectos que respondieron por cualquier canal.')}${li('Interesado', 'prospectos que marcaste como Interesado o con Reunión.')}${li('Interrumpido', 'prospectos cuya secuencia se detuvo por una respuesta, un rebote o un resultado.')}</ul><p class="ll-m__p">Aperturas, clics, envíos y rebotes de email se acotan al periodo elegido. El avance por paso y los resultados son el estado actual de la secuencia. Las aperturas pueden inflarse por la protección de privacidad de Apple Mail.</p>`, '<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llModalClose()">Entendido</button>', 560);
-  }
-  function rdExport() {
-    const d = _rd.data; if (!d || d.error) { showBanner('Espera a que cargue el rendimiento.', 'info'); return; }
-    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', rows = [];
-    rows.push(['Secuencia', d.secuencia.nombre], ['Periodo', _rdLabel()], [], ['Embudo'], ...Object.entries(d.embudo).map(([k, v]) => [k, v]), [], ['Paso', 'Canal', 'Título', 'Contactados', 'Hechos', 'En este paso', 'Por venir', 'Enviados', 'Entregados', 'Abiertos', 'Clicados', 'Respondidos', 'Rebotados', 'No enviados', 'Invitados', 'Aceptados']);
-    d.pasos.forEach(x => rows.push([x.pos, x.canal, _sedTitle(x), x.contactados, x.hechos, x.en_este, x.por_venir, x.enviados, x.entregados, x.abiertos, x.clicados, x.respondidos, x.rebotados, x.no_enviados, x.invitados, x.aceptados]));
-    const csv = '\ufeff' + rows.map(r => r.map(q).join(',')).join('\n'), a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `rendimiento-${String(d.secuencia.nombre).replace(/[^\w]+/g, '-').slice(0, 40)}.csv`; document.body.appendChild(a); a.click(); a.remove();
-  }
+  // ═══════════ Rendimiento (paso 4): resumen (embudo y estadísticas) y detalle por paso, con periodo, remitente y canal ═══════════
+  const _rd = { mode: 'resumen', preset: '30', from: '', to: '', sender: 0, canal: '', data: null, busy: false, show: new Set(['abierto', 'clicado', 'respondido', 'aceptado']), t1: 'enviados', t2: 'no_enviados', t3: 'ultimas' };
+  function _rdRange() {
+    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5));
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    switch (_rd.preset) {
+      case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t];
+      case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; case 'todo': return ['', ''];
+      default: return [_rd.from, _rd.to];
+    }
+  }
+  const _RD_PRE = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes'], ['todo', 'Todo el tiempo']];
+  function _rdLabel() {
+    const [f, t] = _rdRange(), fm = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    return f ? `${fm(f)} → ${fm(t)}` : 'Todo el tiempo';
+  }
+  async function _rdLoad(id) {
+    _rd.busy = true; const [f, t] = _rdRange();
+    try {
+      const r = await apiFetch(`${API}/lm/sequences/${id}/performance?${f ? 'from=' + f + '&to=' + t + '&' : ''}canal=${_rd.canal}&sender=${_rd.sender}`);
+      _rd.data = r.ok ? await r.json() : { error: true };
+    } catch (_) { _rd.data = { error: true }; }
+    _rd.busy = false;
+    if (_section === 'sequence' && _seqStage === 'rendimiento' && _activeSeq === id) _renderBody();
+  }
+  function _rdReload() { _rd.data = null; _renderBody(); }
+  const _rdPct = (n, d) => d ? Math.round(n / d * 100) : 0;
+  function _rdHtml(id) {
+    const d = _rd.data, I = _llI;
+    const seg = `<div class="rd-modes"><button class="${_rd.mode === 'resumen' ? 'on' : ''}" onclick="LeadManagerModule.rdMode('resumen')"><span class="rd-modes__ic">${I('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 26)}</span>Resumen</button><button class="${_rd.mode === 'detalle' ? 'on' : ''}" onclick="LeadManagerModule.rdMode('detalle')"><span class="rd-modes__ic">${I('<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>', 26)}</span>Detalles del paso</button></div>`;
+    const senders = (d && d.senders) || [];
+    const stats = _rd.mode === 'detalle' ? `<label class="rd-l">Estadísticas para mostrar</label><div class="rd-chips">${[['abierto', 'Abierto', 'a'], ['clicado', 'Clicado', 'c'], ['respondido', 'Respondido', 'r'], ['reservado', 'Reservado', 'x'], ['interesado', 'Interesado', 'x'], ['aceptado', 'Aceptado', 'l'], ['no_enviado', 'No enviado', 'n'], ['baja', 'Dado de baja', 'x'], ['rebotado', 'Rebotados', 'n'], ['no_interesa', 'No le interesa', 'x'], ['omitido', 'Omitido', 'x']].map(([k, l, t]) => `<button class="rd-chip rd-chip--${t}${_rd.show.has(k) ? ' on' : ''}${t === 'x' ? ' is-off' : ''}" ${t === 'x' ? 'disabled title="Nova todavía no mide esto por paso"' : `onclick="LeadManagerModule.rdShow('${k}')"`}>${l}</button>`).join('')}</div>` : '';
+    const left = `<div class="rd-left">${seg}
+      <label class="rd-l">Periodo de tiempo</label><button class="rd-sel rd-date" onclick="LeadManagerModule.rdDateOpen(event)"><span>${esc(_rdLabel())}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
+      <label class="rd-l">Remitentes</label><select class="rd-sel" onchange="LeadManagerModule.rdSet('sender',this.value)"><option value="0">Todos los remitentes de la campaña</option>${senders.map(x => `<option value="${x.id}"${_rd.sender === x.id ? ' selected' : ''}>${esc(x.email)}</option>`).join('')}</select>
+      ${_rd.mode === 'resumen' ? `<label class="rd-l">Canales</label><select class="rd-sel" onchange="LeadManagerModule.rdSet('canal',this.value)">${[['', 'Todos los canales'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['call', 'Llamada'], ['task', 'Tarea']].map(([v, l]) => `<option value="${v}"${_rd.canal === v ? ' selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+      ${stats}<span class="sp"></span><button class="rd-exp" onclick="LeadManagerModule.rdExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 15)} Exportar campaña</button></div>`;
+    let right;
+    if (!d) right = '<div class="rd-right"><div class="ll-empty">Cargando rendimiento…</div></div>';
+    else if (d.error) right = '<div class="rd-right"><div class="ll-empty">No se pudo cargar el rendimiento. <button class="ll-btn" onclick="LeadManagerModule.rdRetry()">Reintentar</button></div></div>';
+    else right = _rd.mode === 'detalle' ? _rdDetail(id, d) : _rdSummary(id, d);
+    return `<div class="rd">${left}${right}</div>`;
+  }
+  function _rdSummary(id, d) {
+    const e = d.embudo, base = e.base || 0, I = _llI;
+    const FN = [['Contactado', e.contactado, ''], ['Abierto', e.abierto, ''], ['Interacción', e.interaccion, 'Clics en un email o invitaciones de LinkedIn aceptadas'], ['Respondido', e.respondido, ''], ['Interesado', e.interesado, ''], ['Interrumpido', e.interrumpido, 'Prospectos cuya secuencia se detuvo por una respuesta, un rebote o un resultado']];
+    const funnel = `<div class="rd-card"><div class="rd-card__hd"><h3>Proceso del prospecto en el embudo</h3><button class="rd-how" onclick="LeadManagerModule.rdHow()">${I('<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 15)} Cómo se calcula</button></div>
+      <div class="rd-fn">${FN.map(([l, v, tip], i) => `${i ? `<span class="rd-fn__ar">${I('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>', 14)}</span>` : ''}<div class="rd-fn__c"><div class="rd-fn__h">${l}${tip ? `<i title="${esc(tip)}">?</i>` : ''}</div><div class="rd-fn__bar"><i style="height:${Math.max(base ? Math.round(v / base * 100) : 0, v ? 4 : 0)}%"></i></div><div class="rd-fn__v"><b>${v}</b><span>${_rdPct(v, base)}%</span></div></div>`).join('')}</div></div>`;
+    const stat = (v, l, ic, pct) => `<div class="rd-stat"><span class="rd-stat__ic">${I(ic, 22)}</span><div><div class="rd-stat__v">${pct != null ? `<b>${pct}%</b> <small>${v}</small>` : `<b>${v}</b>`}</div><div class="rd-stat__l">${l}</div></div></div>`;
+    const P = d.prospectos, E = d.entregabilidad, A = d.positivas, G = d.negativas;
+    const IC = { u: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', f: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>', s: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', ok: '<polyline points="20 6 9 17 4 12"/>', m: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', c: '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>', r: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', in: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/>', cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', h: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>', ban: '<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>', b: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' };
+    const stats = `<div class="rd-card"><h3>Estadísticas de la campaña</h3>
+      <h4>Estadísticas de prospectos</h4><div class="rd-g3">${stat(P.total, 'Prospectos en la campaña', IC.u)}${stat(P.lanzados, 'Prospectos lanzados', IC.f, _rdPct(P.lanzados, P.total))}${stat(P.alcanzados, 'Prospectos alcanzados', IC.u, _rdPct(P.alcanzados, P.total))}</div>
+      <h4>Estadísticas de entregabilidad</h4><div class="rd-g3">${stat(E.enviados, 'Mensajes enviados', IC.s)}${stat(E.no_enviados, 'Mensajes no enviados', IC.x)}${stat(E.entregados, 'Entregado', IC.ok, _rdPct(E.entregados, E.enviados))}</div>
+      <h4>Estadísticas de señales positivas</h4><div class="rd-g3">${stat(A.abiertos, 'Tasa de apertura', IC.m, _rdPct(A.abiertos, A.enviados))}${stat(A.clicados, 'Tasa de clics', IC.c, _rdPct(A.clicados, A.enviados))}${stat(A.respondidos, 'Tasa de respuesta', IC.r, _rdPct(A.respondidos, d.embudo.contactado))}${stat(A.aceptadas, 'Invitación aceptada', IC.in, _rdPct(A.aceptadas, A.invitaciones))}${stat(A.reservados, 'Reservado', IC.cal)}${stat(A.interesados, 'Interesado', IC.h, _rdPct(A.interesados, d.embudo.contactado))}</div>
+      <h4>Estadísticas de señales negativas</h4><div class="rd-g3">${stat(G.rebotados, 'Rebotados', IC.b, _rdPct(G.rebotados, E.enviados))}${stat(G.baja, 'Dado de baja (no contactar)', IC.ban)}${stat(G.no_interesa, 'No le interesa', IC.x, _rdPct(G.no_interesa, d.embudo.contactado))}</div></div>`;
+    const MET = [['invitados', 'Invitado'], ['enviados', 'Enviado'], ['entregados', 'Entregado'], ['abiertos', 'Abierto'], ['clicados', 'Clicado'], ['respondidos', 'Respondido']];
+    const top = [...d.pasos].sort((a, b) => (b[_rd.t1] || 0) - (a[_rd.t1] || 0)).filter(x => (x[_rd.t1] || 0) > 0);
+    const tbl = (rows, key, ph) => rows.length ? `<table class="rd-t"><thead><tr><th>Rango</th><th>Tipo</th><th>${ph}</th></tr></thead><tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(_sedTitle(x))}<small> · paso ${x.pos}</small></td><td><b>${x[key] || 0}</b></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>';
+    const topCard = `<div class="rd-card"><h3>Pasos con mejor rendimiento</h3><div class="rd-tabs">${MET.map(([k, l]) => `<button class="${_rd.t1 === k ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t1','${k}')">${l}</button>`).join('')}</div>${tbl(top, _rd.t1, (MET.find(x => x[0] === _rd.t1) || [0, ''])[1])}</div>`;
+    const dropRows = [...d.pasos].sort((a, b) => (b[_rd.t2] || 0) - (a[_rd.t2] || 0)).filter(x => (x[_rd.t2] || 0) > 0);
+    const dropCard = `<div class="rd-card"><h3>Pasos de abandono</h3><div class="rd-tabs">${[['no_enviados', 'No enviado'], ['rebotados', 'Rebotados']].map(([k, l]) => `<button class="${_rd.t2 === k ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t2','${k}')">${l}</button>`).join('')}</div>${tbl(dropRows, _rd.t2, _rd.t2 === 'no_enviados' ? 'No enviado' : 'Rebotados')}</div>`;
+    const act = _rd.t3 === 'ultimas' ? d.ultimas : d.proximas, fm = x => x ? new Date(x).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const actCard = `<div class="rd-card"><div class="rd-tabs"><button class="${_rd.t3 === 'ultimas' ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t3','ultimas')">Últimas actividades</button><button class="${_rd.t3 === 'proximas' ? 'on' : ''}" onclick="LeadManagerModule.rdSet('t3','proximas')">Próximas actividades</button></div>
+      ${act.length ? `<table class="rd-t"><thead><tr><th>Último paso ejecutado</th><th>Prospecto</th><th>Empresa</th><th>${_rd.t3 === 'ultimas' ? 'Fecha' : 'Programado'}</th></tr></thead><tbody>${act.map(x => `<tr onclick="LeadManagerModule.openContactPage(${x.contact_id})" style="cursor:pointer"><td>${x.paso ? 'Paso ' + x.paso + ' · ' : ''}${esc(x.paso_titulo || '')}</td><td>${esc(x.prospecto || '—')}</td><td>${esc(x.empresa || '—')}</td><td>${fm(x.at)}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>'}</div>`;
+    return `<div class="rd-right">${funnel}${stats}<div class="rd-g2">${topCard}${dropCard}</div>${actCard}</div>`;
+  }
+  function _rdDetail(id, d) {
+    const steps = _seqSteps(id), by = new Map(d.pasos.map(x => [x.id, x])), s = _sequences.find(x => x.id === id) || {}, sh = _rd.show;
+    const chip = (cls, ic, pct, n) => `<span class="rd-nc rd-nc--${cls}"><i>${ic}</i>${pct}% <b>${n}</b></span>`;
+    const nodes = steps.map((st, i) => {
+      const x = by.get(st.id); if (!x) return '';
+      const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente'), cb = _stepCondBadge(st);
+      const base = x.enviados || x.hechos || 0, ch = [];
+      if (st.canal === 'email') {
+        if (sh.has('abierto')) ch.push(chip('a', '✉', _rdPct(x.abiertos, x.enviados), x.abiertos));
+        if (sh.has('clicado')) ch.push(chip('c', '↖', _rdPct(x.clicados, x.enviados), x.clicados));
+        if (sh.has('respondido')) ch.push(chip('r', '💬', _rdPct(x.respondidos, x.enviados), x.respondidos));
+        if (sh.has('no_enviado')) ch.push(chip('n', '✕', _rdPct(x.no_enviados, x.enviados + x.no_enviados), x.no_enviados));
+        if (sh.has('rebotado')) ch.push(chip('n', '⚠', _rdPct(x.rebotados, x.enviados), x.rebotados));
+      } else if (x.invitados) { if (sh.has('aceptado')) ch.push(chip('l', 'in', _rdPct(x.aceptados, x.invitados), x.aceptados)); }
+      return `${i ? '<div class="sed-link sed-link--s"></div>' : ''}<div class="sed-node rd-node"><div class="sed-node__hd"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<span class="lz-date">${x.por_venir} por venir</span></div>
+        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span><span class="rd-cnt" title="Prospectos que ya pasaron o están en este paso">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} ${x.contactados}</span></div>
+        ${ch.length ? `<div class="rd-nc__row">${ch.join('')}</div>` : ''}</div>`;
+    }).join('');
+    const fin = (d.embudo.interrumpido || 0), term = (d.pasos.length ? d.pasos[d.pasos.length - 1].hechos : 0);
+    const cli = _clientName(s.outbound_client_id) || '·', ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    return `<div class="rd-right rd-right--flow"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
+      <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})"><div class="sed-start__c"><small>Remitente</small><span class="sed-start__av">${esc(ini)}</span></div><div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${_seqTzChip(s) || 'Planificación predeterminada'}</span></div></div><div class="sed-link sed-link--s"></div>
+      ${nodes || '<div class="ll-empty">Sin pasos para este canal.</div>'}<div class="sed-link sed-link--s"></div><div class="rd-fin"><span>Fin</span><b>${term}</b></div></div>
+      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
+  }
+  function rdMode(m) { _rd.mode = m; _renderBody(); }
+  function rdShow(k) { if (_rd.show.has(k)) _rd.show.delete(k); else _rd.show.add(k); _renderBody(); }
+  function rdSet(k, v) { if (k === 'sender') _rd.sender = parseInt(v) || 0; else _rd[k] = v; if (k === 'sender' || k === 'canal') _rdReload(); else _renderBody(); }
+  function rdRetry() { _rdReload(); }
+  function rdPreset(k) { _rd.preset = k; document.getElementById('sed-pop')?.remove(); _rdReload(); }
+  function rdDateOpen(ev) {
+    const [f, t] = _rdRange();
+    _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="rd-f" value="${f}"></label><label>Hasta<input type="date" id="rd-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.rdDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${_RD_PRE.map(([k, l]) => `<button class="sed-pop__i${_rd.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.rdPreset('${k}')">${l}</button>`).join('')}</div>`, 320);
+  }
+  function rdDateApply() { const f = (document.getElementById('rd-f') || {}).value, t = (document.getElementById('rd-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _rd.preset = 'custom'; _rd.from = f; _rd.to = t; document.getElementById('sed-pop')?.remove(); _rdReload(); }
+  function rdHow() {
+    const li = (a, b) => `<li><b>${a}</b> ${b}</li>`;
+    _llModal('Cómo se calcula el embudo', `<ul class="rd-how-l">${li('Contactado', 'prospectos a los que ya se les envió algo (un email, o un paso de LinkedIn, llamada, WhatsApp o tarea completado).')}${li('Abierto', 'prospectos que abrieron al menos un email de la secuencia.')}${li('Interacción', 'prospectos que hicieron clic en un enlace o aceptaron tu invitación de LinkedIn.')}${li('Respondido', 'prospectos que respondieron por cualquier canal.')}${li('Interesado', 'prospectos que marcaste como Interesado o con Reunión.')}${li('Interrumpido', 'prospectos cuya secuencia se detuvo por una respuesta, un rebote o un resultado.')}</ul><p class="ll-m__p">Aperturas, clics, envíos y rebotes de email se acotan al periodo elegido. El avance por paso y los resultados son el estado actual de la secuencia. Las aperturas pueden inflarse por la protección de privacidad de Apple Mail.</p>`, '<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llModalClose()">Entendido</button>', 560);
+  }
+  function rdExport() {
+    const d = _rd.data; if (!d || d.error) { showBanner('Espera a que cargue el rendimiento.', 'info'); return; }
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', rows = [];
+    rows.push(['Secuencia', d.secuencia.nombre], ['Periodo', _rdLabel()], [], ['Embudo'], ...Object.entries(d.embudo).map(([k, v]) => [k, v]), [], ['Paso', 'Canal', 'Título', 'Contactados', 'Hechos', 'En este paso', 'Por venir', 'Enviados', 'Entregados', 'Abiertos', 'Clicados', 'Respondidos', 'Rebotados', 'No enviados', 'Invitados', 'Aceptados']);
+    d.pasos.forEach(x => rows.push([x.pos, x.canal, _sedTitle(x), x.contactados, x.hechos, x.en_este, x.por_venir, x.enviados, x.entregados, x.abiertos, x.clicados, x.respondidos, x.rebotados, x.no_enviados, x.invitados, x.aceptados]));
+    const csv = '\ufeff' + rows.map(r => r.map(q).join(',')).join('\n'), a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `rendimiento-${String(d.secuencia.nombre).replace(/[^\w]+/g, '-').slice(0, 40)}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  }
   // ═══════════ Lanzar (paso 3): prospectos a la izquierda (Validar / En curso) y el flujo con el avance real de cada paso a la derecha ═══════════
   function _lzProblemas(r, steps) {
     const out = [], hasMail = steps.some(x => x.canal === 'email'), hasLi = steps.some(x => x.canal === 'linkedin');
@@ -25119,37 +25119,61 @@ const LeadManagerModule = (() => {
     }
   }
   function _llHtml(id) {
-    const rows = _llRows(id), all = _llFiltered(id, rows), vis = _llCols();
+    const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), all = isE ? _llCoFilter(emp) : _llFiltered(id, rows), vis = _llCols();
     const cols = _LL_COLS.filter(c => vis.has(c.k)), hidden = _LL_COLS.filter(c => !vis.has(c.k));
     const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
     const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
     const sinEmail = rows.filter(r => !r.email).length, nSel = _llSel.size;
-    const allSel = view.length && view.every(r => _llSel.has(r.cid));
+    const allSel = !isE && view.length && view.every(r => _llSel.has(r.cid));
     const enrN = nSel || rows.length;
     const loading = !Array.isArray(_seqContacts);
     const chips = _llF.map((f, i) => { const d = _LL_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts(id) : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : `contiene «${f.q}»`; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
-    return `<div class="ll">
-      ${sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
+    return `<div class="ll${isE ? ' ll--emp' : ''}">
+      ${!isE && sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
       <div class="ll__bar">
         <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
-        <button class="ll-btn${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
-        <span class="sp"></span>
-        <button class="ll-ico" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
-        <button class="ll-ico" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
+        <button class="ll-btn ll-hide-e${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
+        <button class="ll-ico ll-hide-e" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
+        <button class="ll-ico ll-hide-e" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-btn ll-hide-e" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <div class="ll-seg" role="tablist"><button class="${!isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('contactos')">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} Contactos <i>${rows.length}</i></button><button class="${isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('empresas')">${_llI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18M3 9h6"/>', 14)} Empresas <i>${emp.length}</i></button></div>
+        <span class="sp"></span>
         <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
       </div>
       ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
       ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
-      <div class="ll__tbl"><table class="ll-t"><thead><tr>
+      ${isE ? _llCoTable(view, loading) : `      <div class="ll__tbl"><table class="ll-t"><thead><tr>
         <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
         ${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}
         <th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead>
-        <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>
-      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
+        <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>`}
+      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${!isE && all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
     </div>`;
   }
+  let _llMode = 'contactos';
+  function llMode(m) { _llMode = m; _llPage = 0; _llSel.clear(); _renderBody(); }
+  function _llCompanies(id, rows) {
+    const byId = new Map((_companies || []).map(c => [c.id, c])), g = new Map();
+    rows.forEach(r => {
+      const c = r.c || {}, cid = c.company_id != null ? c.company_id : null, nm = r.empresa || '';
+      if (cid == null && !nm) return;
+      const key = cid != null ? 'i' + cid : 'n' + nm.toLowerCase(), co = cid != null ? (byId.get(cid) || {}) : {};
+      if (!g.has(key)) g.set(key, { key, id: cid, nombre: nm || co.nombre || '', dominio: c.company_dominio || co.dominio || '', industria: c.company_industria || co.industria || '', tamano: c.company_tamano || co.tamano || '', pais: c.company_pais || co.pais || '', n: 0, resp: 0 });
+      const x = g.get(key); x.n++; if (['respondido', 'interesado', 'no_interesado'].includes(r.estado)) x.resp++;
+    });
+    (Array.isArray(_seqPendingCos) ? _seqPendingCos : []).forEach(p => {
+      const key = p.company_id != null ? 'i' + p.company_id : 'n' + String(p.nombre || '').toLowerCase();
+      if (!g.has(key)) g.set(key, { key, id: p.company_id, nombre: p.nombre || '', dominio: p.dominio || '', industria: p.industria || '', tamano: p.tamano || '', pais: p.pais || '', n: 0, resp: 0, cola: true });
+    });
+    return [...g.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+  function _llCoFilter(emp) { const q = _llQ.toLowerCase(); return q ? emp.filter(c => [c.nombre, c.dominio, c.industria, c.pais, c.tamano].join(' ').toLowerCase().includes(q)) : emp; }
+  function _llCoTable(view, loading) {
+    const row = c => { const est = c.resp ? ['Respondió', '#0E7490', '#CFFAFE'] : c.n ? ['En curso', '#1D4ED8', '#DBEAFE'] : ['En cola', '#475569', '#F1F5F9'];
+      return `<tr ${c.id != null ? `onclick="LeadManagerModule.openCompanyPage(${c.id})"` : ''}><td><div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(c.nombre)}">${esc((c.nombre || '?')[0].toUpperCase())}</span><b>${esc(c.nombre || '—')}</b></div></td><td>${c.dominio ? esc(c.dominio) : '<span class="ll-dim">—</span>'}</td><td>${c.industria ? esc(c.industria) : '<span class="ll-dim">—</span>'}</td><td>${c.tamano ? esc(c.tamano) : '<span class="ll-dim">—</span>'}</td><td>${c.pais ? esc(c.pais) : '<span class="ll-dim">—</span>'}</td><td><b>${c.n}</b></td><td><span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span></td></tr>`; };
+    return `<div class="ll__tbl"><table class="ll-t"><thead><tr><th>Empresa</th><th>Dominio</th><th>Industria</th><th>Tamaño</th><th>País</th><th>Contactos</th><th>Estado</th></tr></thead><tbody>${loading ? '<tr><td colspan="7" class="ll-empty">Cargando…</td></tr>' : view.length ? view.map(row).join('') : '<tr><td colspan="7" class="ll-empty">Aún no hay empresas en esta secuencia.</td></tr>'}</tbody></table></div>`;
+  }
   function _llRepaint() { _renderBody(); }
   function llSearch(v) {
     _llQ = String(v || '').trim(); _llPage = 0;
@@ -25200,6 +25224,11 @@ const LeadManagerModule = (() => {
       ${_llMI('', 'Icebreaker desde la descripción de la empresa', '', { off: true, badge: 'Próximamente' })}`, 300, 'right');
   }
   function llCleanMenu(ev) {
+    if (_llMode === 'empresas') {
+      const cids = _llCompanies(_activeSeq, _llRows(_activeSeq)).map(c => c.id).filter(x => x != null);
+      if (!cids.length) { showBanner('No hay empresas del CRM para limpiar.', 'info'); return; }
+      _dgEntity = 'companies'; _dgSel = new Set(cids); dgCleanMenu(ev); return;
+    }
     const ids = _llIds('all');
     if (!ids.length) { showBanner('Aún no hay prospectos para limpiar.', 'info'); return; }
     _dgEntity = 'contacts'; _dgSel = new Set(ids);
@@ -25579,6 +25608,12 @@ const LeadManagerModule = (() => {
       _sedSel = row.id; await load();
     } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); }
   }
+  // ── Ajustes de la secuencia: configuración, idiomas, dudas por resolver e información ──
+  function _ajHtml(id) {
+    return `<div class="aj"><div class="aj__tabs"><button class="${_seqTab !== 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('config')">Configuración</button><button class="${_seqTab === 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('info')">Información</button></div><div id="seq-tabwrap" class="aj__body">${_seqConfigTab(id, _seqTab === 'info' ? 'info' : 'config')}</div></div>`;
+  }
+  function ajTab(t) { _seqTab = t; _renderBody(); }
+  function seqAjustes() { _seqStage = 'ajustes'; _seqTab = 'config'; _seqPasosOpen = false; _renderBody(); }
   // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
   function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
   function _seqProg(id, s, steps) {
@@ -25603,8 +25638,9 @@ const LeadManagerModule = (() => {
     ];
     const active = { 1: _seqStage === 'secuencia', 2: _seqStage === 'lista' || (!_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen), 3: _seqStage === 'lanzar', 4: _seqStage === 'rendimiento' || (!_seqStage && _seqTab === 'metricas' && !_seqPasosOpen) };
     const viewing = _seqStage === 'secuencia' ? 1 : _seqStage === 'lanzar' ? 3 : _seqStage === 'rendimiento' ? 4 : (active[2] ? 2 : active[4] ? 4 : 0);
+    const ajBtn = `<span class="seqtop__sep seqtop__sep--aj"></span><button class="seqtop__st seqtop__aj${_seqStage === 'ajustes' ? ' is-cur' : ''}" onclick="LeadManagerModule.seqAjustes()" title="Idiomas, cadencia, envío y pendientes de la secuencia">${ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>', 14)}<span>Ajustes</span></button>`;
     const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : (viewing ? viewing === x.k : cur === x.k)) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
-        ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
+        ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('') + ajBtn;
     const falta = g.launched ? '' : (!g.p1 ? 'Crea al menos un paso' : !g.p2 ? 'Añade prospectos a la lista' : 'Todo listo para lanzar');
     return `<div class="seqtop">
       <div class="seqtop__row1">
@@ -25673,9 +25709,10 @@ const LeadManagerModule = (() => {
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
     if (_seqStage === 'secuencia') { setTimeout(_sedMount, 0); return `${_seqTopbar(id, s, steps)}${_seqEditorHtml(id)}`; }
+    if (_seqStage === 'ajustes') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); if (_seqTab !== 'info') _seqTab = 'config'; return `${_seqTopbar(id, s, steps)}${_ajHtml(id)}`; }
     if (_seqStage === 'rendimiento') { if (!_rd.data && !_rd.busy) _rdLoad(id); return `${_seqTopbar(id, s, steps)}${_rdHtml(id)}`; }
     if (_seqStage === 'lanzar') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); if (_li.accs === null) _liLoad(); return `${_seqTopbar(id, s, steps)}${_lzHtml(id)}`; }
-    if (_seqStage === 'lista') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); return `${_seqTopbar(id, s, steps)}${_llHtml(id)}`; }
+    if (_seqStage === 'lista') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); if (!Array.isArray(_seqPendingCos)) _seqLoadPendingCos(id); return `${_seqTopbar(id, s, steps)}${_llHtml(id)}`; }
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
@@ -25753,10 +25790,7 @@ const LeadManagerModule = (() => {
       ['empresas', 'Empresas', empresasN],
       ['contactos', 'Contactos', Array.isArray(_seqContacts) ? _seqContacts.length : null],
       ['tareas', 'Tareas', taskN],
-      ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
-      ['info', 'Información', null],
-      ['config', 'Configuración', null],
     ];
     const apN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqApprovals) ? _seqApprovals.filter(a => a.estado === 'awaiting').length : 0;
     const blN = s.estado === 'activa' && _seqSteps(id).length && Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail.length : 0;
@@ -43081,7 +43115,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

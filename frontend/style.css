@@ -22102,3 +22102,15 @@ body.ibx-lb-open{overflow:hidden}
 .rd-dp { padding: 8px 0; } .rd-dp__in { display: flex; align-items: flex-end; gap: 8px; padding: 8px 14px 12px; } .rd-dp__in label { font-size: 12px; color: #6B7A90; display: flex; flex-direction: column; gap: 3px; flex: 1; } .rd-dp__in input { height: 32px; border: 1px solid #E6E6E6; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 13px; } .sed-pop__i.is-on { background: #EEF4FF; color: #2563EB; font-weight: 600; }
 .rd-how-l { padding-left: 18px; line-height: 1.7; margin: 0 0 12px; }
 @media (max-width: 1100px) { .rd { grid-template-columns: 1fr; } .rd-left { position: static; min-height: 0; } .rd-g3 { grid-template-columns: 1fr; } .rd-g2 { grid-template-columns: 1fr; } }
+
+.ll__bar .sp { flex: 1 1 0; min-width: 8px; }
+.ll--emp .ll-hide-e { display: none; }
+.ll-seg { display: inline-flex; height: 32px; border: 0.75px solid #E6E6E6; border-radius: 10px; overflow: hidden; flex: 0 0 auto; }
+.ll-seg button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; padding: 0 12px; background: #fff; border: 0; color: #55657D; cursor: pointer; } .ll-seg button + button { border-left: 0.75px solid #E6E6E6; }
+.ll-seg button.on { background: #EEF4FF; color: #2563EB; font-weight: 600; } .ll-seg i { font-style: normal; font-size: 12px; font-weight: 700; background: #F1F3F7; color: #55657D; padding: 0 7px; border-radius: 9px; } .ll-seg button.on i { background: #2563EB; color: #fff; }
+.ll-av--sq { border-radius: 8px !important; }
+.seqtop__sep--aj { width: 1px; height: 22px; background: #D9DEE6; margin: 0 10px; padding: 0; }
+.seqtop__aj { color: #55657D; } .seqtop__aj.is-cur { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+.aj { background: #fff; border: 1px solid #E6E6E6; }
+.aj__tabs { display: flex; gap: 6px; padding: 10px 14px 0; border-bottom: 1px solid #E6E6E6; } .aj__tabs button { font: inherit; font-size: 14px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: #6B7A90; cursor: pointer; } .aj__tabs button.on { color: #213856; font-weight: 600; border-bottom-color: #213856; }
+.aj__body { padding: 14px; background: #F7F8F6; }
