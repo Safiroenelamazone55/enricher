@@ -22381,3 +22381,5 @@ body.ibx-lb-open{overflow:hidden}
 
 .cpm-fxi { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
 .cpm-f__box .lm-fx-i { margin: 0; }
+
+.ll-fp__in--n { display: flex; gap: 8px; padding-left: 24px; } .ll-fp__in--n input { width: 100%; min-width: 0; }

@@ -25090,27 +25090,49 @@ const LeadManagerModule = (() => {
     { k: 'paso', l: 'Paso' }, { k: 'resultado', l: 'Resultado' }, { k: 'propietario', l: 'Propietario' }, { k: 'incorporado', l: 'Fecha de incorporación' },
   ];
   const _LL_DEF = ['nombre_completo', 'email', 'estado', 'empresa', 'cargo', 'paso', 'propietario'];
-  const _LL_EXTRA = [{ k: 'ciudad', l: 'Ciudad' }, { k: 'region', l: 'Región' }, { k: 'seniority', l: 'Seniority' }, { k: 'departamento', l: 'Departamento' }, { k: 'prioridad', l: 'Prioridad del contacto' }, { k: 'tz', l: 'Zona horaria' }, { k: 'lista', l: 'Lista de contactos' }, { k: 'verificado', l: 'Fecha de verificación del email' }];
+  const _CO_F = [['dominio', 'Dominio'], ['website', 'Sitio web'], ['industria', 'Industria'], ['tamano', 'Tamaño'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['ingresos', 'Ingresos'], ['fundada', 'Año de fundación'], ['tecnologias', 'Tecnologías'], ['segmento', 'Segmento / ICP'], ['target_tier', 'Target Tier'], ['funding', 'Financiación'], ['descripcion', 'Descripción']];
+  const _LL_EXTRA = [{ k: 'ciudad', l: 'Ciudad' }, { k: 'region', l: 'Región' }, { k: 'seniority', l: 'Seniority' }, { k: 'departamento', l: 'Departamento' }, { k: 'prioridad', l: 'Prioridad del contacto' }, { k: 'tz', l: 'Zona horaria' }, { k: 'lista', l: 'Lista de contactos' }, { k: 'verificado', l: 'Fecha de verificación del email' },
+    { k: 'email_personal', l: 'Email personal' }, { k: 'movil', l: 'Móvil' }, { k: 'salesnav', l: 'Sales Navigator' }, { k: 'idioma', l: 'Idioma' }, { k: 'fuente', l: 'Fuente' }, { k: 'codigo', l: 'Código' }, { k: 'notas', l: 'Notas' }]
+    .concat(_CO_F.map(([k, l]) => ({ k: 'co:' + k, l: 'Empresa · ' + l })));
+  const _LLC_COLS = [{ k: 'nombre', l: 'Empresa' }].concat(_CO_F.map(([k, l]) => ({ k, l })), [{ k: 'n', l: 'Contactos' }, { k: 'resp', l: 'Con respuesta' }, { k: 'estado', l: 'Estado' }]);
+  const _LLC_DEF = ['nombre', 'dominio', 'industria', 'tamano', 'pais', 'n', 'estado'];
+  const _isCo = () => _llMode === 'empresas';
+  const _llLockK = () => (_isCo() ? 'nombre' : 'nombre_completo');
+  // valor de una columna (estándar, variable importada del contacto «v:», dato de su empresa «co:» o variable de la empresa «cv:»)
+  function _llVal(r, k) {
+    if (k.startsWith('v:')) return (r.vars || {})[k.slice(2)];
+    if (k.startsWith('co:')) return (r.co || {})[k.slice(3)];
+    if (k.startsWith('cv:')) return ((r.co || {}).raw || {})[k.slice(3)];
+    return r[k];
+  }
   function _llAllCols(rows) {
     rows = rows || _llRows(_activeSeq);
-    const vk = new Set(); rows.forEach(r => Object.keys(r.vars || {}).forEach(k => { if (String(r.vars[k] == null ? '' : r.vars[k]).trim()) vk.add(k); }));
-    return _LL_COLS.concat(_LL_EXTRA, [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).map(k => ({ k: 'v:' + k, l: k, varcol: true })));
+    if (_isCo()) {
+      const emp = _llCompanies(_activeSeq, rows), vk = new Set();
+      emp.forEach(c => Object.keys(c.vars || {}).forEach(k => { if (String(c.vars[k] == null ? '' : c.vars[k]).trim()) vk.add(k); }));
+      return _LLC_COLS.concat([...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).map(k => ({ k: 'v:' + k, l: k, varcol: true })));
+    }
+    const vk = new Set(), ck = new Set();
+    rows.forEach(r => { Object.keys(r.vars || {}).forEach(k => { if (String(r.vars[k] == null ? '' : r.vars[k]).trim()) vk.add(k); }); const rw = (r.co || {}).raw || {}; Object.keys(rw).forEach(k => { if (String(rw[k] == null ? '' : rw[k]).trim()) ck.add(k); }); });
+    return _LL_COLS.concat(_LL_EXTRA, [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).map(k => ({ k: 'v:' + k, l: k, varcol: true })), [...ck].sort((a, b) => a.localeCompare(b)).slice(0, 120).map(k => ({ k: 'cv:' + k, l: 'Empresa · ' + k, varcol: true })));
   }
-  function _llOrder() { try { const v = JSON.parse(localStorage.getItem('lm_ll_order') || 'null'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
+  function _llOrder() { try { const v = JSON.parse(localStorage.getItem(_isCo() ? 'lm_llc_order' : 'lm_ll_order') || 'null'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
   function _llAllOrdered(rows) {
     const all = _llAllCols(rows), byK = new Map(all.map(c => [c.k, c])), out = [];
     _llOrder().forEach(k => { if (byK.has(k)) { out.push(byK.get(k)); byK.delete(k); } });
-    const res = out.concat([...byK.values()]), i = res.findIndex(c => c.k === 'nombre_completo'); if (i > 0) res.unshift(res.splice(i, 1)[0]);
+    const lk = _llLockK(), res = out.concat([...byK.values()]), i = res.findIndex(c => c.k === lk); if (i > 0) res.unshift(res.splice(i, 1)[0]);
     return res;
   }
   function _llCols() {
-    let v = null; try { v = JSON.parse(localStorage.getItem('lm_ll_cols') || 'null'); } catch (_) {}
-    const set = new Set(Array.isArray(v) ? v : _LL_DEF); set.add('nombre_completo');
+    const E = _isCo(); let v = null; try { v = JSON.parse(localStorage.getItem(E ? 'lm_llc_cols' : 'lm_ll_cols') || 'null'); } catch (_) {}
+    const set = new Set(Array.isArray(v) ? v : (E ? _LLC_DEF : _LL_DEF)); set.add(_llLockK());
     return set;
   }
-  function _llSaveCols(set) { try { localStorage.setItem('lm_ll_cols', JSON.stringify([...set])); } catch (_) {} }
+  function _llSaveCols(set) { try { localStorage.setItem(_isCo() ? 'lm_llc_cols' : 'lm_ll_cols', JSON.stringify([...set])); } catch (_) {} }
   const _LL_EST = { rebotado: ['Rebotado', '#B42318', '#FEE4E2'], interesado: ['Interesado', '#15803D', '#DCFCE7'], no_interesado: ['No interesado', '#B45309', '#FEF3C7'], respondido: ['Respondido', '#0E7490', '#CFFAFE'], finalizado: ['Finalizado', '#475569', '#E2E8F0'], pausa: ['En pausa', '#B45309', '#FFEDD5'], ejecucion: ['En ejecución', '#1D4ED8', '#DBEAFE'], pendiente: ['Pendiente de lanzar', '#475569', '#F1F5F9'], sinemail: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
   const _LL_ENT = { valid: ['Entregable', '#15803D', '#DCFCE7'], risky: ['Arriesgado', '#B45309', '#FEF3C7'], 'catch-all': ['Arriesgado', '#B45309', '#FEF3C7'], invalid: ['No entregado', '#B42318', '#FEE4E2'], '': ['No verificado', '#64748B', '#F1F5F9'], none: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
+  let _coMapC = null;
+  function _coByIdMap() { if (!_coMapC || _coMapC.src !== _companies) _coMapC = { src: _companies, m: new Map((_companies || []).map(c => [c.id, c])) }; return _coMapC.m; }
   function _llRows(id) {
     const sq = _sequences.find(x => x.id === id) || {}, launched = (sq.estado || 'draft') !== 'draft';
     const byId = new Map((_contacts || []).map(c => [c.id, c]));
@@ -25125,7 +25147,7 @@ const LeadManagerModule = (() => {
       else if (!email) est = 'sinemail'; else if (launched) est = 'ejecucion';
       const entreg = !email ? 'none' : (['valid', 'risky', 'catch-all', 'invalid'].includes(es) ? es : '');
       const N0 = _seqSteps(id).length;
-      const r = { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '', ciudad: c.ciudad || e.ciudad || '', region: c.region || e.region || '', seniority: c.seniority || '', departamento: c.departamento || '', prioridad: c.contact_priority || '', lista: c.import_batch || e.import_batch || '', verificado: e.email_verified_at || c.email_verified_at || '', tz: _contactTz(c) || sq.timezone || '', sent: +e.msg_sent || 0, opened: +e.msg_opened || 0, clicked: +e.msg_clicked || 0, failed: +e.msg_failed || 0, bounced: +e.msg_bounced || 0, dissue: e.data_issue || c.data_issue || '', vars: (() => { const v = Object.assign({}, (c.raw && typeof c.raw === 'object') ? c.raw : {}); _lmActiveCustomFields('contact').forEach(f => { if (c[f.field_key]) v[f.label] = c[f.field_key]; }); return v; })() };
+      const r = { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '', ciudad: c.ciudad || e.ciudad || '', region: c.region || e.region || '', seniority: c.seniority || '', departamento: c.departamento || '', prioridad: c.contact_priority || '', lista: c.import_batch || e.import_batch || '', verificado: e.email_verified_at || c.email_verified_at || '', tz: _contactTz(c) || sq.timezone || '', sent: +e.msg_sent || 0, opened: +e.msg_opened || 0, clicked: +e.msg_clicked || 0, failed: +e.msg_failed || 0, bounced: +e.msg_bounced || 0, dissue: e.data_issue || c.data_issue || '', co: _coByIdMap().get(c.company_id) || {}, email_personal: c.email_personal || '', movil: c.movil || '', salesnav: c.linkedin_sales_nav || '', idioma: e.idioma_ef || e.idioma || c.idioma || '', fuente: c.fuente || '', codigo: c.codigo || '', notas: c.notas || '', vars: (() => { const v = Object.assign({}, (c.raw && typeof c.raw === 'object') ? c.raw : {}); _lmActiveCustomFields('contact').forEach(f => { if (c[f.field_key]) v[f.label] = c[f.field_key]; }); return v; })() };
       r.ests = _llEsts(r); return r;
     });
   }
@@ -25155,7 +25177,8 @@ const LeadManagerModule = (() => {
   let _llFDc = null;
   function _llFD(rows) {
     rows = rows || _llRows(_activeSeq);
-    if (_llFDc && _llFDc.rows === rows) return _llFDc.defs;
+    if (_llFDc && _llFDc.rows === rows && _llFDc.E === _isCo()) return _llFDc.defs;
+    if (_isCo()) { const d0 = _llFDC(_llCompanies(_activeSeq, rows)); _llFDc = { rows, E: true, defs: d0 }; return d0; }
     const T = (k, l, get) => ({ k, l, t: 'txt', get: get || (r => r[k]) });
     const defs = [
       { k: 'estado', l: 'Estado', t: 'tree' },
@@ -25169,11 +25192,27 @@ const LeadManagerModule = (() => {
       T('pais', 'País'), T('ciudad', 'Ciudad'), T('region', 'Región'), T('seniority', 'Seniority'), T('departamento', 'Departamento'),
       { k: 'paso', l: 'Paso de la secuencia', t: 'sel', get: r => String(r.paso), opts: (id) => _seqSteps(id || _activeSeq).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
       { k: 'entreg', l: 'Entregabilidad', t: 'sel', get: r => r.entreg, opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
+      T('email_personal', 'Email personal'), T('movil', 'Móvil'), T('salesnav', 'Sales Navigator'), T('idioma', 'Idioma'), T('fuente', 'Fuente'), T('codigo', 'Código'), T('notas', 'Notas'),
+      ..._CO_F.map(([k, l]) => ({ k: 'co:' + k, l: 'Empresa · ' + l, t: 'txt', get: r => (r.co || {})[k] })),
     ];
+    const ck = new Set(); rows.forEach(r => { const rw = (r.co || {}).raw || {}; Object.keys(rw).forEach(k => { if (String(rw[k] == null ? '' : rw[k]).trim()) ck.add(k); }); });
+    [...ck].sort((a, b) => a.localeCompare(b)).slice(0, 120).forEach(k => defs.push({ k: 'cv:' + k, l: 'Empresa · ' + k, t: 'txt', get: r => ((r.co || {}).raw || {})[k], variable: true }));
     const vk = new Set(); rows.forEach(r => Object.keys(r.vars || {}).forEach(k => { if (String(r.vars[k] == null ? '' : r.vars[k]).trim()) vk.add(k); }));
     [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).forEach(k => defs.push({ k: 'v:' + k, l: k, t: 'txt', get: r => (r.vars || {})[k], variable: true }));
-    _llFDc = { rows, defs }; return defs;
+    _llFDc = { rows, E: false, defs }; return defs;
   }
+  // Filtros de la vista Empresas: campos de la empresa + número de contactos (rangos) + estado + variables importadas
+  function _llFDC(emp) {
+    const T = (k, l) => ({ k, l, t: 'txt', get: c => c[k] }), N = (k, l) => ({ k, l, t: 'num', get: c => c[k] });
+    const U = (k, l) => ({ k, l, t: 'sel', get: c => c[k], opts: () => _llUniq(emp, c => c[k]).map(v => [v, v]) });
+    const defs = [T('nombre', 'Nombre de la empresa'), T('dominio', 'Dominio'), T('website', 'Sitio web'), T('industria', 'Industria'), U('tamano', 'Tamaño (empleados)'), U('pais', 'País'), T('ciudad', 'Ciudad'), T('region', 'Región'), T('telefono', 'Teléfono'), T('linkedin', 'LinkedIn'), T('ingresos', 'Ingresos'), N('fundada', 'Año de fundación'), T('tecnologias', 'Tecnologías'), T('segmento', 'Segmento / ICP'), T('target_tier', 'Target Tier'), T('funding', 'Financiación'), T('descripcion', 'Descripción'),
+      N('n', 'Número de contactos'), N('resp', 'Contactos con respuesta'),
+      { k: 'est', l: 'Estado', t: 'sel', get: c => c.est, opts: () => [['curso', 'En curso'], ['respondio', 'Respondió'], ['cola', 'En cola']] }];
+    const vk = new Set(); emp.forEach(c => Object.keys(c.vars || {}).forEach(k => { if (String(c.vars[k] == null ? '' : c.vars[k]).trim()) vk.add(k); }));
+    [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).forEach(k => defs.push({ k: 'v:' + k, l: k, t: 'txt', get: c => (c.vars || {})[k], variable: true }));
+    return defs;
+  }
+  const _LL_NOPS = [['eq', 'Es igual a', 1], ['gt', 'Mayor que', 1], ['lt', 'Menor que', 1], ['between', 'Entre', 2], ['completado', 'Completado', 0], ['no_rellenado', 'No rellenado', 0]];
   const _ymd = d => { const x = new Date(d); if (isNaN(x)) return ''; return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
   function _llTxt(v, op, q) {
     v = String(v == null ? '' : v).trim().toLowerCase(); q = String(q || '').trim().toLowerCase();
@@ -25191,6 +25230,10 @@ const LeadManagerModule = (() => {
     if (d.t === 'tree') return (f.vals || []).some(k => (r.ests || []).includes(k));
     if (d.t === 'sel') return (f.vals || []).includes(String(d.get(r) == null ? '' : d.get(r)));
     if (d.t === 'date') { const v = _ymd(d.get(r)); if (!v) return false; return (!f.from || v >= f.from) && (!f.to || v <= f.to); }
+    if (d.t === 'num') {
+      const raw = d.get(r), has = String(raw == null ? '' : raw).trim() !== '', v = parseFloat(String(raw).replace(/[^0-9.\-]/g, '')), a = parseFloat(f.q), b = parseFloat(f.q2);
+      switch (f.op) { case 'completado': return has; case 'no_rellenado': return !has; case 'eq': return has && v === a; case 'gt': return has && v > a; case 'lt': return has && v < a; case 'between': return has && v >= Math.min(a, b) && v <= Math.max(a, b); default: return true; }
+    }
     return _llTxt(d.get(r), f.op || 'contiene', f.q);
   }
   function _llFiltered(id, rows) {
@@ -25214,6 +25257,7 @@ const LeadManagerModule = (() => {
     if (d.t === 'tree') { const names = {}; _LL_TREE.forEach(n => { names[n.k] = n.l; (n.kids || []).forEach(([k, l]) => { names[k] = l; }); }); return (f.vals || []).map(v => names[v] || v).join(', '); }
     if (d.t === 'sel') { const o = d.opts(id); return (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? x[1] : (v === '' ? 'No verificado' : v); }).join(', '); }
     if (d.t === 'date') return (f.from === f.to || !f.to) ? _fmtD(f.from) : `${_fmtD(f.from)} → ${_fmtD(f.to)}`;
+    if (d.t === 'num') { const o = _LL_NOPS.find(x => x[0] === f.op) || _LL_NOPS[0]; return o[1].toLowerCase() + (o[2] === 2 ? ` ${f.q} y ${f.q2}` : o[2] ? ` ${f.q}` : ''); }
     const op = _LL_OPS.find(x => x[0] === (f.op || 'contiene')) || _LL_OPS[2];
     return op[1].toLowerCase() + (op[2] ? ` «${f.q}»` : '');
   }
@@ -25230,11 +25274,15 @@ const LeadManagerModule = (() => {
       case 'linkedin': return r.linkedin ? `<a href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(r.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '<span class="ll-dim">—</span>';
       case 'incorporado': return r.incorporado ? new Date(r.incorporado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
       case 'verificado': return r.verificado ? new Date(r.verificado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '<span class="ll-dim">—</span>';
-      default: { const v = k.startsWith('v:') ? (r.vars || {})[k.slice(2)] : r[k]; return v ? esc(v) : '<span class="ll-dim">—</span>'; }
+      default: { const v = _llVal(r, k); return v ? esc(v) : '<span class="ll-dim">—</span>'; }
     }
   }
   function _llHtml(id) {
-    const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), fRows = _llFiltered(id, rows), empBase = _llF.length ? _llCompanies(id, fRows).filter(c => !c.cola) : emp, empF = _llCoFilter(empBase), all = isE ? empF : fRows, vis = _llCols();
+    const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), vis = _llCols();
+    let fRows, empF;
+    if (isE) { empF = _llCoFilter(emp); const ks = new Set(empF.map(c => c.key)); fRows = (_llF.length || _llQ) ? rows.filter(r => ks.has(_llCoKey(r))) : rows; }
+    else { fRows = _llFiltered(id, rows); empF = (_llF.length || _llQ) ? _llCompanies(id, fRows).filter(c => !c.cola) : emp; }
+    const all = isE ? empF : fRows;
     const allc = _llAllOrdered(rows), cols = allc.filter(c => vis.has(c.k)), hidden = allc.filter(c => !vis.has(c.k));
     const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
     const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
@@ -25243,13 +25291,13 @@ const LeadManagerModule = (() => {
     const enrN = nSel || rows.length;
     const loading = !Array.isArray(_seqContacts);
     const _fdAll = _llF.length ? _llFD(_llRows(id)) : [];
-    const chips = _llF.map((f, i) => { const d = _fdAll.find(x => x.k === f.k) || {}; const sep = d.t === 'txt' ? ' ' : ': '; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${esc(f.k).replace(/'/g, "\\'")}')"><b>${esc(d.l || f.k)}</b>${sep}${esc(_llChipTxt(f, d, id))}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
+    const chips = _llF.map((f, i) => { const d = _fdAll.find(x => x.k === f.k) || {}; const sep = (d.t === 'txt' || d.t === 'num') ? ' ' : ': '; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${esc(f.k).replace(/'/g, "\\'")}')"><b>${esc(d.l || f.k)}</b>${sep}${esc(_llChipTxt(f, d, id))}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
     return `<div class="ll${isE ? ' ll--emp' : ''}">
       ${!isE && sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
       <div class="ll__bar">
         <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
-        <button class="ll-btn ll-hide-e${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
-        <button class="ll-ico ll-hide-e" title="Configurar columnas" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
+        <button class="ll-btn${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
+        <button class="ll-ico" title="Configurar columnas" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
         <button class="ll-ico ll-hide-e" title="Historial de importación" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <button class="ll-btn ll-hide-e" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
@@ -25259,36 +25307,61 @@ const LeadManagerModule = (() => {
       </div>
       ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Eliminar todos los filtros</button></div>` : ''}
       ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
-      ${isE ? _llCoTable(view, loading) : `      <div class="ll__tbl"><table class="ll-t"><thead><tr>
+      ${isE ? _llCoTable(view, loading, cols) : `      <div class="ll__tbl"><table class="ll-t"><thead><tr>
         <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
         ${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}
         <th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead>
         <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>`}
-      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${!isE && all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
+      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${(isE ? all.length !== emp.length : all.length !== rows.length) ? ` (${isE ? emp.length : rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
     </div>`;
   }
   let _llMode = 'contactos';
-  function llMode(m) { _llMode = m; _llPage = 0; _llSel.clear(); _renderBody(); }
+  function llMode(m) { if (m !== _llMode) { _llF = []; _llQ = ''; _llDraft = null; _llFDc = null; document.getElementById('sed-pop')?.remove(); } _llMode = m; _llPage = 0; _llSel.clear(); _renderBody(); }
+  function _llCoKey(r) { const c = r.c || {}; return c.company_id != null ? 'i' + c.company_id : 'n' + String(r.empresa || '').toLowerCase(); }
   function _llCompanies(id, rows) {
-    const byId = new Map((_companies || []).map(c => [c.id, c])), g = new Map();
+    const byId = _coByIdMap(), g = new Map();
+    const mk = (key, cid, nm, co, c, extra) => {
+      co = co || {}; c = c || {};
+      const vars = Object.assign({}, (co.raw && typeof co.raw === 'object') ? co.raw : {});
+      try { _lmActiveCustomFields('company').forEach(f => { if (co[f.field_key]) vars[f.label] = co[f.field_key]; }); } catch (_) {}
+      return Object.assign({ key, id: cid, nombre: nm || co.nombre || '', dominio: c.company_dominio || co.dominio || '', industria: c.company_industria || co.industria || '', tamano: c.company_tamano || co.tamano || '', pais: c.company_pais || co.pais || '', n: 0, resp: 0, co, vars,
+        website: co.website || '', telefono: co.telefono || '', linkedin: co.linkedin || '', ciudad: co.ciudad || '', region: co.region || '', ingresos: co.ingresos || '', fundada: co.fundada || '', tecnologias: co.tecnologias || '', segmento: co.segmento || '', target_tier: co.target_tier || '', funding: co.funding || '', descripcion: co.descripcion || '' }, extra || {});
+    };
     rows.forEach(r => {
       const c = r.c || {}, cid = c.company_id != null ? c.company_id : null, nm = r.empresa || '';
       if (cid == null && !nm) return;
-      const key = cid != null ? 'i' + cid : 'n' + nm.toLowerCase(), co = cid != null ? (byId.get(cid) || {}) : {};
-      if (!g.has(key)) g.set(key, { key, id: cid, nombre: nm || co.nombre || '', dominio: c.company_dominio || co.dominio || '', industria: c.company_industria || co.industria || '', tamano: c.company_tamano || co.tamano || '', pais: c.company_pais || co.pais || '', n: 0, resp: 0 });
+      const key = cid != null ? 'i' + cid : 'n' + nm.toLowerCase();
+      if (!g.has(key)) g.set(key, mk(key, cid, nm, cid != null ? byId.get(cid) : null, c));
       const x = g.get(key); x.n++; if (['respondido', 'interesado', 'no_interesado'].includes(r.estado)) x.resp++;
     });
     (Array.isArray(_seqPendingCos) ? _seqPendingCos : []).forEach(p => {
       const key = p.company_id != null ? 'i' + p.company_id : 'n' + String(p.nombre || '').toLowerCase();
-      if (!g.has(key)) g.set(key, { key, id: p.company_id, nombre: p.nombre || '', dominio: p.dominio || '', industria: p.industria || '', tamano: p.tamano || '', pais: p.pais || '', n: 0, resp: 0, cola: true });
+      if (!g.has(key)) g.set(key, mk(key, p.company_id, p.nombre || '', p.company_id != null ? byId.get(p.company_id) : null, { company_dominio: p.dominio, company_industria: p.industria, company_tamano: p.tamano, company_pais: p.pais }, { cola: true }));
     });
-    return [...g.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const out = [...g.values()]; out.forEach(c => { c.est = c.resp ? 'respondio' : c.n ? 'curso' : 'cola'; });
+    return out.sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
-  function _llCoFilter(emp) { const q = _llQ.toLowerCase(); return q ? emp.filter(c => [c.nombre, c.dominio, c.industria, c.pais, c.tamano].join(' ').toLowerCase().includes(q)) : emp; }
-  function _llCoTable(view, loading) {
-    const row = c => { const est = c.resp ? ['Respondió', '#0E7490', '#CFFAFE'] : c.n ? ['En curso', '#1D4ED8', '#DBEAFE'] : ['En cola', '#475569', '#F1F5F9'];
-      return `<tr ${c.id != null ? `onclick="LeadManagerModule.openCompanyPage(${c.id})"` : ''}><td><div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(c.nombre)}">${esc((c.nombre || '?')[0].toUpperCase())}</span><b>${esc(c.nombre || '—')}</b></div></td><td>${c.dominio ? esc(c.dominio) : '<span class="ll-dim">—</span>'}</td><td>${c.industria ? esc(c.industria) : '<span class="ll-dim">—</span>'}</td><td>${c.tamano ? esc(c.tamano) : '<span class="ll-dim">—</span>'}</td><td>${c.pais ? esc(c.pais) : '<span class="ll-dim">—</span>'}</td><td><b>${c.n}</b></td><td><span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span></td></tr>`; };
-    return `<div class="ll__tbl"><table class="ll-t"><thead><tr><th>Empresa</th><th>Dominio</th><th>Industria</th><th>Tamaño</th><th>País</th><th>Contactos</th><th>Estado</th></tr></thead><tbody>${loading ? '<tr><td colspan="7" class="ll-empty">Cargando…</td></tr>' : view.length ? view.map(row).join('') : '<tr><td colspan="7" class="ll-empty">Aún no hay empresas en esta secuencia.</td></tr>'}</tbody></table></div>`;
+  // Búsqueda + filtros de la vista Empresas
+  function _llCoFilter(emp) {
+    const q = _llQ.toLowerCase();
+    let out = q ? emp.filter(c => [c.nombre, c.dominio, c.industria, c.pais, c.tamano].join(' ').toLowerCase().includes(q)) : emp;
+    if (_llF.length && _isCo()) { const defs = _llFD(); out = out.filter(c => _llF.every(f => _llMatch(f, c, defs))); }
+    return out;
+  }
+  function _llCoCell(k, c) {
+    const dim = '<span class="ll-dim">—</span>';
+    if (k === 'nombre') return `<div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(c.nombre)}">${esc((c.nombre || '?')[0].toUpperCase())}</span><b>${esc(c.nombre || '—')}</b></div>`;
+    if (k === 'n') return `<b>${c.n}</b>`;
+    if (k === 'resp') return c.resp ? `<b>${c.resp}</b>` : dim;
+    if (k === 'estado') { const est = c.resp ? ['Respondió', '#0E7490', '#CFFAFE'] : c.n ? ['En curso', '#1D4ED8', '#DBEAFE'] : ['En cola', '#475569', '#F1F5F9']; return `<span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span>`; }
+    if ((k === 'website' || k === 'linkedin') && c[k]) return `<a href="${esc(/^https?:/i.test(c[k]) ? c[k] : 'https://' + c[k])}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(c[k]).replace(/^https?:\/\/(www\.)?/i, ''))}</a>`;
+    const v = k.startsWith('v:') ? (c.vars || {})[k.slice(2)] : c[k];
+    return v != null && String(v).trim() !== '' ? esc(v) : dim;
+  }
+  function _llCoTable(view, loading, cols) {
+    const n = cols.length + 1;
+    const row = c => `<tr ${c.id != null ? `onclick="LeadManagerModule.openCompanyPage(${c.id})"` : ''}>${cols.map(k => `<td>${_llCoCell(k.k, c)}</td>`).join('')}<td></td></tr>`;
+    return `<div class="ll__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}<th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead><tbody>${loading ? `<tr><td colspan="${n}" class="ll-empty">Cargando…</td></tr>` : view.length ? view.map(row).join('') : `<tr><td colspan="${n}" class="ll-empty">${_llF.length || _llQ ? 'Ninguna empresa coincide con la búsqueda o los filtros.' : 'Aún no hay empresas en esta secuencia.'}</td></tr>`}</tbody></table></div>`;
   }
   function _llRepaint() { _renderBody(); }
   function llSearch(v) {
@@ -25341,7 +25414,7 @@ const LeadManagerModule = (() => {
   }
   function llCleanMenu(ev) {
     if (_llMode === 'empresas') {
-      const cids = _llCompanies(_activeSeq, _llRows(_activeSeq)).map(c => c.id).filter(x => x != null);
+      const cids = _llCoFilter(_llCompanies(_activeSeq, _llRows(_activeSeq))).map(c => c.id).filter(x => x != null);
       if (!cids.length) { showBanner('No hay empresas del CRM para limpiar.', 'info'); return; }
       _dgEntity = 'companies'; _dgSel = new Set(cids); dgCleanMenu(ev); return;
     }
@@ -25356,7 +25429,7 @@ const LeadManagerModule = (() => {
     openAiDrafts(pick.cid, id);
   }
   function _llIds(kind) {
-    const rows = _llRows(_activeSeq), base = _llSel.size ? rows.filter(r => _llSel.has(r.cid)) : rows;
+    const rows = _llRows(_activeSeq), base = _llSel.size ? rows.filter(r => _llSel.has(r.cid)) : _llFiltered(_activeSeq, rows);
     return base.filter(r => kind === 'find' ? !r.email : kind === 'verify' ? !!r.email && !['valid', 'invalid'].includes(r.c.email_status || '') : true).map(r => r.cid);
   }
   function llEnrichMenu(ev) {
@@ -25409,7 +25482,7 @@ const LeadManagerModule = (() => {
     const lock = _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 14);
     const body = `<div class="llcs-top"><span class="llcs-t">Columnas <i>${_llColDraft.size} / ${all.length}</i></span><span class="sp"></span><button type="button" class="llcs-b" onclick="LeadManagerModule.llColsAll(true)">${eye} Mostrar todo</button><button type="button" class="llcs-b" onclick="LeadManagerModule.llColsAll(false)">${eyeOff} Ocultar todo</button></div>
       <label class="llcs-s">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
-      <div class="llcs-l">${list.map(c => { const lk = c.k === 'nombre_completo', on = _llColDraft.has(c.k); return `<div class="llcs-r${on ? '' : ' is-off'}${lk ? ' is-lock' : ''}" data-k="${esc(c.k)}" ${lk ? '' : 'draggable="true" ondragstart="LeadManagerModule.llColDrag(event)"'} ondragover="event.preventDefault()" ondrop="LeadManagerModule.llColDrop(event)"><span class="llcs-n">${lk ? lock : grip}<span>${esc(c.l)}</span></span>${lk ? '' : `<span class="llcs-o"><button type="button" title="${on ? 'Ocultar columna' : 'Mostrar columna'}" aria-label="${on ? 'Ocultar columna' : 'Mostrar columna'}" onclick="LeadManagerModule.llColsTick(this)">${on ? eye : eyeOff}</button></span>`}</div>`; }).join('') || '<div class="cp2-empty">Sin resultados.</div>'}</div>`;
+      <div class="llcs-l">${list.map(c => { const lk = c.k === _llLockK(), on = _llColDraft.has(c.k); return `<div class="llcs-r${on ? '' : ' is-off'}${lk ? ' is-lock' : ''}" data-k="${esc(c.k)}" ${lk ? '' : 'draggable="true" ondragstart="LeadManagerModule.llColDrag(event)"'} ondragover="event.preventDefault()" ondrop="LeadManagerModule.llColDrop(event)"><span class="llcs-n">${lk ? lock : grip}<span>${esc(c.l)}</span></span>${lk ? '' : `<span class="llcs-o"><button type="button" title="${on ? 'Ocultar columna' : 'Mostrar columna'}" aria-label="${on ? 'Ocultar columna' : 'Mostrar columna'}" onclick="LeadManagerModule.llColsTick(this)">${on ? eye : eyeOff}</button></span>`}</div>`; }).join('') || '<div class="cp2-empty">Sin resultados.</div>'}</div>`;
     const foot = `<button class="llcs-fb" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="llcs-fb llcs-fb--p" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
     const had = document.getElementById('ll-modal');
     if (had) { const l = had.querySelector('.llcs-l'), st = l ? l.scrollTop : 0; had.querySelector('.ll-m__bd').innerHTML = body; const l2 = had.querySelector('.llcs-l'); if (l2) l2.scrollTop = st; }
@@ -25417,14 +25490,14 @@ const LeadManagerModule = (() => {
   }
   function llColsQ(v) { _llColQ = v; const pos = v.length; _llColsPaint(); const e = document.getElementById('ll-cq'); if (e) { e.focus(); e.setSelectionRange(pos, pos); } }
   function llColsTick(el) { const k = el.closest('.llcs-r').dataset.k; if (_llColDraft.has(k)) _llColDraft.delete(k); else _llColDraft.add(k); _llColsPaint(); }
-  function llColsAll(on) { _llColDraft = on ? new Set(_llAllCols().map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
+  function llColsAll(on) { _llColDraft = on ? new Set(_llAllCols().map(c => c.k)) : new Set([_llLockK()]); _llColsPaint(); }
   function llColDrag(ev) { _llDragK = ev.currentTarget.dataset.k; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', _llDragK); } catch (_) {} }
   function llColDrop(ev) {
     ev.preventDefault(); const to = ev.currentTarget.dataset.k, from = _llDragK; _llDragK = '';
-    if (!from || from === to || to === 'nombre_completo') return;
+    if (!from || from === to || to === _llLockK()) return;
     const o = _llColOrd.filter(k => k !== from), i = o.indexOf(to); o.splice(i < 0 ? o.length : i, 0, from); _llColOrd = o; _llColsPaint();
   }
-  function llColsSave() { _llSaveCols(_llColDraft); try { localStorage.setItem('lm_ll_order', JSON.stringify(_llColOrd)); } catch (_) {} llModalClose(); _llRepaint(); }
+  function llColsSave() { _llSaveCols(_llColDraft); try { localStorage.setItem(_isCo() ? 'lm_llc_order' : 'lm_ll_order', JSON.stringify(_llColOrd)); } catch (_) {} llModalClose(); _llRepaint(); }
   function llColAdd(ev) {
     const vis = _llCols(), hid = _llAllOrdered().filter(c => !vis.has(c.k));
     _llPop(ev, `${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna personalizada', '', { off: true, badge: 'Próximamente' })}
@@ -25438,7 +25511,7 @@ const LeadManagerModule = (() => {
   function _llNewDraft(k) {
     const d = _llFD().find(x => x.k === k) || {}, ex = _llF.find(f => f.k === k), t = new Date();
     if (ex) { const c = JSON.parse(JSON.stringify(ex)); if (d.t === 'date') c.month = (c.from || _ymd(t)).slice(0, 7); return c; }
-    return { k, vals: (d.t === 'tree' || d.t === 'sel') ? [] : undefined, op: d.t === 'txt' ? '' : undefined, q: '', from: '', to: '', month: _ymd(t).slice(0, 7) };
+    return { k, vals: (d.t === 'tree' || d.t === 'sel') ? [] : undefined, op: (d.t === 'txt' || d.t === 'num') ? '' : undefined, q: '', q2: '', from: '', to: '', month: _ymd(t).slice(0, 7) };
   }
   function llFilterOpen(ev, key) {
     if (ev.stopPropagation) ev.stopPropagation();
@@ -25450,6 +25523,7 @@ const LeadManagerModule = (() => {
     if (!d) return false;
     if (d.t === 'tree' || d.t === 'sel') return (dr.vals || []).length > 0;
     if (d.t === 'date') return !!dr.from;
+    if (d.t === 'num') { const o = _LL_NOPS.find(x => x[0] === dr.op); if (!o) return false; const ok = v => v !== '' && v != null && !isNaN(parseFloat(v)); return o[2] === 0 || (o[2] === 1 && ok(dr.q)) || (o[2] === 2 && ok(dr.q) && ok(dr.q2)); }
     const op = _LL_OPS.find(x => x[0] === dr.op); return !!op && (!op[2] || String(dr.q || '').trim() !== '');
   }
   function _llCalHtml(dr) {
@@ -25464,7 +25538,7 @@ const LeadManagerModule = (() => {
       <div class="llc-s"><div class="llc-st">Sugerencias</div>${_llDateSug().map(([l, a, b]) => `<button type="button" class="llc-sg${dr.from === a && (dr.to || dr.from) === b ? ' is-on' : ''}" onclick="LeadManagerModule.llDateSug('${a}','${b}')"><span>${l}</span><em>${a === b ? _fmtD(a) : _fmtD(a) + ' – ' + _fmtD(b)}</em></button>`).join('')}</div>`;
   }
   function _llFilterPaint(first) {
-    const id = _activeSeq, rows = _llRows(id), defs = _llFD(rows), d = defs.find(x => x.k === _llDraft.k) || defs[0], q = (window.__llColQ || '').toLowerCase();
+    const id = _activeSeq, rows = _llRows(id), defs = _llFD(rows), items = _isCo() ? _llCompanies(id, rows) : rows, d = defs.find(x => x.k === _llDraft.k) || defs[0], q = (window.__llColQ || '').toLowerCase();
     const left = defs.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${esc(x.k).replace(/'/g, "\\'")}')">${esc(x.l)}</button>`).join('') || '<div class="sed-pop__note">Sin columnas</div>';
     let right = '';
     const vals = _llDraft.vals || [];
@@ -25478,8 +25552,10 @@ const LeadManagerModule = (() => {
         return `<label class="ll-fp__v ll-fp__v--i"><input type="checkbox" ${on === n.kids.length ? 'checked' : ''} ${on && on < n.kids.length ? 'data-ind="1"' : ''} onchange="LeadManagerModule.llFilterGroup('${n.k}',this.checked)"> <span>${n.l} <em>(${tot})</em></span></label>` + n.kids.map(([k, l]) => `<label class="ll-fp__v ll-fp__v--k"><input type="checkbox" ${vals.includes(k) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${k}',this.checked)"> <span>${l} <em>(${cnt(k)})</em></span></label>`).join('');
       }).join('');
     } else if (d.t === 'sel') {
-      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.get(r) == null ? '' : d.get(r)) === v).length;
+      const opts = d.opts(id), cnt = v => items.filter(r => String(d.get(r) == null ? '' : d.get(r)) === v).length;
       right = opts.length ? `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('') : '<div class="sed-pop__note" style="padding:16px">Todavía no hay valores en esta columna.</div>';
+    } else if (d.t === 'num') {
+      right = _LL_NOPS.map(([k, l, needs]) => `<label class="ll-fp__v ll-fp__v--op"><input type="radio" name="llop" ${_llDraft.op === k ? 'checked' : ''} onchange="LeadManagerModule.llFilterOp('${k}')"> <span>${l}</span></label>${needs && _llDraft.op === k ? `<div class="ll-fp__in ll-fp__in--n">${needs === 2 ? `<input id="ll-ft" type="number" placeholder="Mínimo" value="${esc(_llDraft.q || '')}" oninput="LeadManagerModule.llFilterQ(this.value)"><input type="number" placeholder="Máximo" value="${esc(_llDraft.q2 || '')}" oninput="LeadManagerModule.llFilterQ2(this.value)">` : `<input id="ll-ft" type="number" placeholder="Valor" value="${esc(_llDraft.q || '')}" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()">`}</div>` : ''}`).join('');
     } else if (d.t === 'date') {
       right = `<div class="llc-wrap">${_llCalHtml(_llDraft)}</div>`;
     } else {
@@ -25502,6 +25578,7 @@ const LeadManagerModule = (() => {
   function llFilterGroup(k, on) { const n = _LL_TREE.find(x => x.k === k); const a = new Set(_llDraft.vals || []); (n.kids || []).forEach(x => { if (on) a.add(x[0]); else a.delete(x[0]); }); _llDraft.vals = [...a]; _llFilterPaint(false); }
   function llFilterAll(on) { const d = _llFD().find(x => x.k === _llDraft.k); _llDraft.vals = !on ? [] : d.t === 'tree' ? _LL_TREE.flatMap(n => n.kids ? n.kids.map(x => x[0]) : [n.k]) : d.opts(_activeSeq).map(o => o[0]); _llFilterPaint(false); }
   function llFilterOp(op) { _llDraft.op = op; _llFilterPaint(false); const i = document.getElementById('ll-ft'); if (i) i.focus(); }
+  function llFilterQ2(v) { _llDraft.q2 = v; const b = document.getElementById('ll-fapply'); if (b) b.disabled = !_llFValid(_llDraft, _llFD().find(x => x.k === _llDraft.k)); }
   function llFilterQ(v) { _llDraft.q = v; const b = document.getElementById('ll-fapply'); if (b) b.disabled = !_llFValid(_llDraft, _llFD().find(x => x.k === _llDraft.k)); }
   function llDateDay(ymd) { const dr = _llDraft; if (!dr.from || (dr.from && dr.to)) { dr.from = ymd; dr.to = ''; } else if (ymd < dr.from) { dr.to = dr.from; dr.from = ymd; } else dr.to = ymd; _llFilterPaint(false); }
   function llDateMonth(n) { const [y, m] = _llDraft.month.split('-').map(Number), x = new Date(y, m - 1 + n, 1); _llDraft.month = _ymd(x).slice(0, 7); _llFilterPaint(false); }
@@ -25512,6 +25589,7 @@ const LeadManagerModule = (() => {
     _llF = _llF.filter(f => f.k !== _llDraft.k);
     if (d.t === 'tree' || d.t === 'sel') _llF.push({ k: d.k, vals: _llDraft.vals });
     else if (d.t === 'date') _llF.push({ k: d.k, from: _llDraft.from, to: _llDraft.to || _llDraft.from });
+    else if (d.t === 'num') _llF.push({ k: d.k, op: _llDraft.op, q: _llDraft.q, q2: _llDraft.q2 });
     else _llF.push({ k: d.k, op: _llDraft.op, q: String(_llDraft.q || '').trim() });
     _llPage = 0; _llRepaint();
   }
@@ -43954,7 +44032,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
