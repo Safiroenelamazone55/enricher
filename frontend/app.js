@@ -24935,8 +24935,8 @@ const LeadManagerModule = (() => {
         <span class="sp"></span>
         <button class="ll-ico" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
         <button class="ll-ico" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
-        <button class="ll-btn" onclick="LeadManagerModule.llAiMenu(event)">${_llI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 14)} Columnas de IA ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN} prospecto${enrN === 1 ? '' : 's'} ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
       </div>
       ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
@@ -24998,6 +24998,12 @@ const LeadManagerModule = (() => {
       ${_llMI('', 'Company context', '', { off: true, badge: 'Próximamente' })}
       ${_llMI('', 'Icebreaker desde la descripción de la empresa', '', { off: true, badge: 'Próximamente' })}`, 300, 'right');
   }
+  function llCleanMenu(ev) {
+    const ids = _llIds('all');
+    if (!ids.length) { showBanner('Aún no hay prospectos para limpiar.', 'info'); return; }
+    _dgEntity = 'contacts'; _dgSel = new Set(ids);
+    dgCleanMenu(ev);
+  }
   function llAiOne() {
     const id = _activeSeq, rows = _llRows(id), pick = _llSel.size ? rows.find(r => _llSel.has(r.cid)) : rows[0];
     if (!pick) { showBanner('Añade o selecciona un prospecto primero.', 'info'); return; }
@@ -42675,7 +42681,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       dgCleanClose();
       _dgCleanCnt = null;
       showBanner(`✓ ${d.applied} campo(s) limpiado(s)${d.syncedNames ? ` · ${d.syncedNames} contacto(s) actualizado(s)` : ''}`, 'success');
-      await load(); _dgRenderRows();
+      await load(); try { _dgRenderRows(); } catch (_) {} if (_seqStage === 'lista') _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── Enriquecer en bloque: mismo patrón preview/aplicar que Limpiar, pero SOLO
@@ -42751,7 +42757,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (!res.ok) throw new Error(d.error || 'Error');
       dgEnrichClose();
       showBanner(`✓ ${d.applied} campo(s) completado(s)`, 'success');
-      await load(); _dgRenderRows();
+      await load(); try { _dgRenderRows(); } catch (_) {} if (_seqStage === 'lista') _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
@@ -42847,7 +42853,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner(`✓ Fusionadas ${d.merged} empresa(s) · ${d.contactsMoved} contacto(s) reasignado(s)`, 'success');
-      await load(); _dgRenderRows(); dgDupOpen();
+      await load(); try { _dgRenderRows(); } catch (_) {} if (_seqStage === 'lista') _renderBody(); dgDupOpen();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function dgDupDeleteGroup(clave) {
@@ -42859,7 +42865,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner(`✓ ${d.deleted} contacto(s) eliminado(s)`, 'success');
-      await load(); _dgRenderRows(); dgDupOpen();
+      await load(); try { _dgRenderRows(); } catch (_) {} if (_seqStage === 'lista') _renderBody(); dgDupOpen();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
@@ -42873,7 +42879,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
