@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nova · LinkedIn",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, respetando los topes diarios. Modo asistido por defecto.",
   "permissions": [
     "storage",
@@ -9,11 +9,13 @@
     "alarms",
     "cookies",
     "sidePanel",
-    "webRequest"
+    "webRequest",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.linkedin.com/*",
-    "https://api.novacentrax.com/*"
+    "https://api.novacentrax.com/*",
+    "https://app.novacentrax.com/*"
   ],
   "background": {
     "service_worker": "background.js"

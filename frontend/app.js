@@ -24085,7 +24085,7 @@ const LeadManagerModule = (() => {
     const tick = async () => {
       if (!document.getElementById('liw-body')) { clearInterval(_liw.timer); return; }
       if (_liw.estado === 'conectando' || _liw.estado === 'ok') return;
-      const r = await _liExt('hello', {}, window.__liReady ? 8000 : 2500);
+      const r = await _liExt('hello', {}, 6000);
       _liwPintar(r);
     };
     tick(); _liw.timer = setInterval(tick, 3000);
@@ -24095,7 +24095,8 @@ const LeadManagerModule = (() => {
     const paso = (n, t, ok) => `<div class="liw-step${ok ? ' is-ok' : ''}"><span>${ok ? '✓' : n}</span>${t}</div>`;
     if (!r || !r.instalada) {
       el.innerHTML = `<div class="liw-big">Buscando la extensión de Nova en este Chrome…<span class="liw-dots"></span></div>
-        <p class="li-p">Si no la has instalado:</p><ol class="li-ol"><li>Abre <code>chrome://extensions</code> y activa el «Modo de desarrollador».</li><li>Pulsa «Cargar descomprimida» y elige la carpeta <code>extension-linkedin</code>.</li><li>Vuelve aquí: se detecta sola.</li></ol>`;
+        <p class="li-p">Si no la has instalado:</p><ol class="li-ol"><li>Abre <code>chrome://extensions</code> y activa el «Modo de desarrollador».</li><li>Pulsa «Cargar descomprimida» y elige la carpeta <code>extension-linkedin</code>.</li><li>Vuelve aquí: se detecta sola.</li></ol>
+        <p class="cc-note" style="margin-top:12px"><b>¿Ya la instalaste y no avanza?</b> Recarga esta página (F5) y vuelve a abrir este asistente. También puedes conectar desde el <b>panel de la extensión</b> (el icono de «Nova · LinkedIn» en la barra de Chrome): ahí eliges la cuenta y pulsas «Permitir y conectar».</p>`;
       return;
     }
     if (!r.sesion_linkedin) {
