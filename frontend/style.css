@@ -22142,3 +22142,6 @@ body.ibx-lb-open{overflow:hidden}
 .inf-lg { display: flex; gap: 16px; margin-top: 8px; font-size: 13px; color: #55657D; } .inf-lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
 .inf-al { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; } .inf-al--warn { background: #FFF4DB; color: #7A5A00; } .inf-al--bad { background: #FEE4E2; color: #B42318; }
 @media (max-width: 1000px) { .inf-kp4 { grid-template-columns: 1fr 1fr; } }
+
+.tk { color: #213856; font-size: 14px; background: #fff; border: 1px solid #E6E6E6; padding: 12px 16px 0; } .tk .vw { padding-top: 0; }
+.tk__tbl { border-top: 1px solid #E6E6E6; max-height: calc(100vh - 340px); } .tk-over { color: #B42318; font-weight: 600; } .tk-back { margin-bottom: 10px; }

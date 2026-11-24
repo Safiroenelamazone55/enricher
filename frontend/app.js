@@ -23321,7 +23321,7 @@ const LeadManagerModule = (() => {
     { k: 'inbox',      l: 'Bandeja de entrada', g: 'Comercial' },
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
-    { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
+    { k: 'tasks',      l: 'Tareas',             g: 'Comercial' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'x-datos',              l: 'Tabla de datos',       g: 'Datos', x: 1 },
@@ -30049,7 +30049,178 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     } else _taskFSeq = val;
     _renderBody();
   }
-  function _vTasks() {
+  // ═══════════ Tareas (estilo Lemlist): vistas en pestañas, filtros editables, columnas, crear tarea e iniciar tareas ═══════════
+  const _tk = { view: 'mis', q: '', f: [], filtOpen: false, dirty: false, classic: false, cols: null };
+  const _TK_VIEWS = [['mis', 'Mis tareas', 'M13 2 3 14h9l-1 8 10-12h-9l1-8z'], ['llamadas', 'Llamadas', 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z'], ['revisar', 'Para revisar', 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'], ['calientes', 'Prospectos calientes', 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'], ['respuestas', 'Respuestas de prospectos', 'M9 14 4 9l5-5M20 20v-7a4 4 0 0 0-4-4H4'], ['todas', 'Todas las tareas', 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01']];
+  const _TK_COLS = [['titulo', 'Tipo de tarea y título', 1], ['due', 'Fecha de vencimiento'], ['campo', 'Campo asociado'], ['score', 'Puntuación'], ['cargo', 'Título del puesto'], ['empresa', 'Empresa'], ['origen', 'Origen de la campaña'], ['prioridad', 'Prioridad']];
+  const _TK_DEF = ['titulo', 'due', 'campo', 'score', 'cargo', 'empresa'];
+  function _tkCols() { if (_tk.cols) return _tk.cols; let v = null; try { v = JSON.parse(localStorage.getItem('lm_tk_cols') || 'null'); } catch (_) {} _tk.cols = new Set(Array.isArray(v) ? v : _TK_DEF); _tk.cols.add('titulo'); return _tk.cols; }
+  function _tkViews() { try { return JSON.parse(localStorage.getItem('lm_tk_views') || '[]') || []; } catch (_) { return []; } }
+  const _TK_TIPO = { linkedin: 'LinkedIn', email: 'Email', call: 'Llamada', whatsapp: 'WhatsApp', task: 'Tarea manual', revisar: 'Revisar' };
+  function _tkRows() {
+    const today = _dayOf(new Date()), byId = new Map((_contacts || []).map(c => [c.id, c])), out = [];
+    _allSeqTasks().forEach(t => {
+      const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task'].includes(st.canal) ? st.canal : 'task');
+      out.push({ kind: 'seq', key: 's' + t.sq.id + '-' + c.id, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: (_sequences || []).find(x => x.id === t.sq.id)?.nombre || t.sq.nombre || '', prio: '' });
+    });
+    (_activities || []).filter(a => a.estado === 'pendiente' && a.contact_id).forEach(a => {
+      const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || '');
+      out.push({ kind: 'act', key: 'a' + a.id, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.tipo === 'llamada' ? 'call' : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due: new Date(a.fecha), hora: '', c, cid: a.contact_id, act: a, origen: '', prio: '', resp: a.tipo === 'revisar_respuesta' });
+    });
+    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting').forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
+    return out.sort((a, b) => a.due - b.due);
+  }
+  function _tkPreset(v, r, today) {
+    const over = r.due <= new Date(today.getTime() + 864e5 - 1);
+    if (v === 'mis') return over && r.kind !== 'ap' || (r.kind === 'ap');
+    if (v === 'llamadas') return r.tipo === 'call';
+    if (v === 'revisar') return r.tipo === 'revisar';
+    if (v === 'calientes') return ['interesado', 'reunion'].includes((r.c || {}).disposition);
+    if (v === 'respuestas') return !!r.resp;
+    return true;
+  }
+  const _TK_FDEF = [
+    { k: 'titulo', l: 'Título de la tarea', t: 'txt', get: r => r.titulo },
+    { k: 'tipo', l: 'Tipo de tarea', t: 'sel', opts: () => Object.entries(_TK_TIPO), get: r => r.tipo },
+    { k: 'estado', l: 'Estado', t: 'sel', opts: () => [['venc', 'Vencida'], ['hoy', 'Para hoy'], ['prox', 'Próximas']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : 'prox' },
+    { k: 'venc', l: 'Fecha de vencimiento', t: 'sel', opts: () => [['venc', 'Vencidas'], ['hoy', 'Hoy'], ['7', 'Próximos 7 días'], ['mas', 'Más adelante']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : r.due <= new Date(today.getTime() + 7 * 864e5) ? '7' : 'mas' },
+    { k: 'prop', l: 'Propietario', t: 'sel', opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), get: r => String((r.c || {}).outbound_client_id || '') },
+    { k: 'origen', l: 'Origen de la campaña', t: 'sel', opts: () => (_sequences || []).map(x => [x.nombre, x.nombre]), get: r => r.origen },
+    { k: 'empresa', l: 'Empresa', t: 'txt', get: r => (r.c || {}).company_nombre || (r.c || {}).empresa_nombre || '' },
+    { k: 'contacto', l: 'Campo asociado (contacto)', t: 'txt', get: r => [(r.c || {}).nombre, (r.c || {}).apellido].filter(Boolean).join(' ') },
+  ];
+  function _tkApply(rows, today) {
+    const q = _tk.q.toLowerCase();
+    return rows.filter(r => _tkPreset(_tk.view, r, today)).filter(r => !q || [r.titulo, (r.c || {}).nombre, (r.c || {}).apellido, (r.c || {}).company_nombre, r.origen].join(' ').toLowerCase().includes(q))
+      .filter(r => _tk.f.every(f => { const d = _TK_FDEF.find(x => x.k === f.k); if (!d) return true; const v = String(d.get(r, today) || ''); return f.vals ? f.vals.includes(v) : v.toLowerCase().includes(String(f.q || '').toLowerCase()); }));
+  }
+  function _tkDue(d, hora) {
+    const today = _dayOf(new Date()), x = _dayOf(d), diff = Math.round((x - today) / 864e5), nm = diff === 0 ? 'Hoy' : diff === -1 ? 'Ayer' : diff === 1 ? 'Mañana' : x.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+    const h = hora || (d.getHours() || d.getMinutes() ? d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
+    return `<span class="${diff < 0 ? 'tk-over' : ''}">${nm}${h ? ', ' + h : ''}</span>`;
+  }
+  function _vTasks() {
+    if (_tk.classic) return `<div class="tk-back"><button class="ll-btn" onclick="LeadManagerModule.tkClassic(false)">‹ Volver a la vista de tareas</button></div>${_vTasksClassic()}`;
+    if (_apList === null) _apReload();
+    const I = _llI, today = _dayOf(new Date()), rows = _tkRows(), all = _tkApply(rows, today), cols = _TK_COLS.filter(c => _tkCols().has(c[0]));
+    const cnt = v => v === 'todas' ? rows.length : rows.filter(r => _tkPreset(v, r, today)).length;
+    const custom = _tkViews();
+    const strip = `<div class="vw">${_TK_VIEWS.map(([k, l, d]) => `<button class="vw-t${_tk.view === k ? ' on' : ''}" onclick="LeadManagerModule.tkView('${k}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg><span>${l}</span><i>${cnt(k)}</i></button>`).join('')}${custom.map(v => `<button class="vw-t${_tk.view === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.tkView('c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" onclick="event.stopPropagation();LeadManagerModule.tkViewDel('${v.id}')">✕</span></button>`).join('')}</div>`;
+    const first = all[0], nSeq = all.filter(r => r.kind === 'seq').length;
+    const chips = _tk.f.map((f, i) => { const d = _TK_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts() : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : '«' + f.q + '»'; return `<span class="ll-chip" onclick="LeadManagerModule.tkFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${f.vals ? 'es' : 'contiene'} ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.tkFilterDel(${i})">✕</button></span>`; }).join('');
+    const filtRow = (_tk.filtOpen || _tk.f.length) ? `<div class="ll__chips">${chips}<button class="ll-clr" id="tk-addf" onclick="LeadManagerModule.tkFilterOpen(event)">＋ Añadir filtro</button>${_tk.f.length ? `<button class="ll-clr" onclick="LeadManagerModule.tkFilterClear()">Eliminar</button>` : ''}${_tk.dirty ? `<span class="sp"></span><button class="ll-clr" onclick="LeadManagerModule.tkDiscard()">Descartar cambios</button><button class="ll-btn" onclick="LeadManagerModule.tkSaveView()">Guardar como vista nueva</button>` : ''}</div>` : '';
+    const cell = (k, r) => {
+      const c = r.c || {}, nm = [c.nombre, c.apellido].filter(Boolean).join(' ');
+      if (k === 'titulo') { const t = _TOUCH[r.tipo] || _TOUCH.task; return `<div class="ll-name"><span class="sed-node__ic" style="width:28px;height:28px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><b>${esc(r.titulo)}</b></div>`; }
+      if (k === 'due') return _tkDue(r.due, r.hora);
+      if (k === 'campo') return nm ? `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>${esc(nm)}</div>` : '<span class="ll-dim">—</span>';
+      if (k === 'score') return '<span class="ll-dim">—</span>';
+      if (k === 'cargo') return c.cargo ? esc(c.cargo) : '<span class="ll-dim">—</span>';
+      if (k === 'empresa') return esc(c.company_nombre || c.empresa_nombre || '') || '<span class="ll-dim">—</span>';
+      if (k === 'origen') return r.origen ? esc(r.origen) : '<span class="ll-dim">—</span>';
+      return '<span class="ll-dim">—</span>';
+    };
+    const body = all.slice(0, 200).map(r => `<tr onclick="LeadManagerModule.tkOpen('${r.key}')">${cols.map(c => `<td>${cell(c[0], r)}</td>`).join('')}</tr>`).join('');
+    return `<div class="tk">${strip}
+      <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="tk-q" placeholder="Buscar una tarea…" value="${esc(_tk.q)}" autocomplete="off" oninput="LeadManagerModule.tkSearch(this.value)"></label>
+        <button class="ll-btn${_tk.f.length ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_tk.f.length ? ` <i class="ll-n">${_tk.f.length}</i>` : ''}</button><span class="sp"></span>
+        <button class="ll-ico" title="Columnas" onclick="LeadManagerModule.tkColsMenu(event)">${I('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 16)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.tkClassic(true)" title="Vista con aprobaciones, correcciones y prioridad">Vista clásica</button>
+        <button class="ll-btn" onclick="LeadManagerModule.tkCreate()">${I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Crear tarea</button>
+        <button class="ll-pri" ${first ? '' : 'disabled'} onclick="LeadManagerModule.tkStart()">${I('<polygon points="5 3 19 12 5 21 5 3"/>', 14)} Iniciar ${all.length} tarea${all.length === 1 ? '' : 's'}</button></div>
+      ${filtRow}
+      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length}" class="ll-empty">${rows.length ? 'No hay tareas en esta vista.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
+      <div class="ll__foot"><span><b>${all.length ? 1 : 0} - ${Math.min(200, all.length)}</b> de ${all.length}</span></div></div>`;
+  }
+  function tkView(v) {
+    if (v.startsWith('c:')) { const x = _tkViews().find(y => y.id === v.slice(2)); if (!x) return; _tk.view = x.base || 'todas'; _tk.f = JSON.parse(JSON.stringify(x.f || [])); _tk.q = x.q || ''; _tk.view = x.base || 'todas'; _tk.cur = v; _tk.dirty = false; _tk.filtOpen = !!_tk.f.length; }
+    else { _tk.view = v; _tk.f = []; _tk.q = ''; _tk.cur = v; _tk.dirty = false; _tk.filtOpen = false; }
+    _renderBody();
+  }
+  function tkSearch(v) { _tk.q = String(v || '').trim(); const el = document.getElementById('tk-q'), pos = el ? el.selectionStart : 0; _renderBody(); const e2 = document.getElementById('tk-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
+  function tkFiltToggle() { _tk.filtOpen = !_tk.filtOpen; _renderBody(); }
+  function tkClassic(on) { _tk.classic = !!on; _renderBody(); }
+  function tkDiscard() { tkView(_tk.cur || _tk.view); }
+  function tkFilterClear() { _tk.f = []; _tk.dirty = true; _renderBody(); }
+  function tkFilterDel(i) { _tk.f.splice(i, 1); _tk.dirty = true; _renderBody(); }
+  let _tkDraft = null;
+  function tkFilterOpen(ev, key) {
+    if (ev.stopPropagation) ev.stopPropagation();
+    window.__tkAnchor = ev.currentTarget || document.getElementById('tk-addf');
+    if (!key) { _llPop(ev, `<div class="sed-pop__q"><input id="tk-fq" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.tkFilterSearch(this.value)"></div><div id="tk-fl">${_TK_FDEF.map(d => `<button class="sed-pop__i" data-n="${esc(d.l.toLowerCase())}" onclick="LeadManagerModule.tkFilterPick('${d.k}')">${esc(d.l)}</button>`).join('')}</div>`, 270); setTimeout(() => document.getElementById('tk-fq')?.focus(), 30); return; }
+    _tkEdit(key);
+  }
+  function tkFilterSearch(q) { q = String(q || '').toLowerCase().trim(); document.querySelectorAll('#tk-fl .sed-pop__i').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; }); }
+  function tkFilterPick(k) { document.getElementById('sed-pop')?.remove(); _tkEdit(k); }
+  function _tkEdit(k) {
+    const d = _TK_FDEF.find(x => x.k === k), ex = _tk.f.find(f => f.k === k); _tkDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' };
+    const body = d.t === 'sel' ? `<div class="ll-fp__vl">${d.opts().map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" value="${esc(v)}" ${(_tkDraft.vals || []).includes(v) ? 'checked' : ''} onchange="LeadManagerModule.tkTick(this)"> <span>${esc(l)}</span></label>`).join('')}</div>` : `<div class="ll-fp__t" style="padding:12px"><small>Contiene</small><input id="tk-fv" value="${esc(_tkDraft.q || '')}" oninput="LeadManagerModule.tkDraftQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.tkFilterApply()" autocomplete="off"></div>`;
+    const a = window.__tkAnchor || document.querySelector('.tk .ll__bar'); const m = document.createElement('div');
+    document.getElementById('sed-pop')?.remove(); m.id = 'sed-pop'; m.className = 'sed-pop ll-pop'; m.style.width = '280px'; m.onclick = e => e.stopPropagation();
+    m.innerHTML = `<div class="sed-pop__g" style="font-size:13px">${esc(d.l)}</div>${body}<div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.tkFilterApply()">Aplicar</button></div>`;
+    document.body.appendChild(m); const r = a.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 300)) + 'px'; m.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+  }
+  function tkTick(el) { const a = new Set(_tkDraft.vals || []); if (el.checked) a.add(el.value); else a.delete(el.value); _tkDraft.vals = [...a]; }
+  function tkDraftQ(v) { _tkDraft.q = v; }
+  function tkFilterApply() {
+    const d = _TK_FDEF.find(x => x.k === _tkDraft.k); document.getElementById('sed-pop')?.remove();
+    _tk.f = _tk.f.filter(f => f.k !== _tkDraft.k);
+    if (d.t === 'sel' ? (_tkDraft.vals || []).length : String(_tkDraft.q || '').trim()) _tk.f.push(d.t === 'sel' ? { k: d.k, vals: _tkDraft.vals } : { k: d.k, q: String(_tkDraft.q).trim() });
+    _tk.dirty = true; _tk.filtOpen = true; _renderBody();
+  }
+  function tkSaveView() {
+    _llModal('Guardar vista', `<label class="ll-f"><span>Nombre de la vista</span><input id="tkv-nm" placeholder="Ej. LinkedIn vencidas" autocomplete="off"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.tkSaveGo()">Guardar</button>`, 440);
+    setTimeout(() => document.getElementById('tkv-nm')?.focus(), 40);
+  }
+  function tkSaveGo() {
+    const nm = ((document.getElementById('tkv-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la vista.', 'info'); return; }
+    const arr = _tkViews(), base = String(_tk.view).startsWith('c:') ? 'todas' : _tk.view; arr.push({ id: String(Date.now()), nombre: nm, base, f: JSON.parse(JSON.stringify(_tk.f)), q: _tk.q });
+    try { localStorage.setItem('lm_tk_views', JSON.stringify(arr)); } catch (_) {}
+    llModalClose(); _tk.view = 'c:' + arr[arr.length - 1].id; _tk.cur = _tk.view; _tk.dirty = false; _renderBody(); showBanner('Vista guardada', 'success');
+  }
+  function tkViewDel(id) { try { localStorage.setItem('lm_tk_views', JSON.stringify(_tkViews().filter(x => x.id !== id))); } catch (_) {} if (_tk.view === 'c:' + id) { _tk.view = 'mis'; _tk.f = []; } _renderBody(); }
+  function tkColsMenu(ev) {
+    _llPop(ev, `<div class="sed-pop__g">Columnas visibles</div>${_TK_COLS.map(([k, l, lock]) => `<label class="ll-cs__r${lock ? ' is-lock' : ''}" style="padding:8px 14px"><input type="checkbox" ${_tkCols().has(k) ? 'checked' : ''} ${lock ? 'disabled' : ''} onchange="LeadManagerModule.tkColTick('${k}',this.checked)"><span>${l}</span></label>`).join('')}`, 260, 'right');
+  }
+  function tkColTick(k, on) { const set = _tkCols(); if (on) set.add(k); else set.delete(k); try { localStorage.setItem('lm_tk_cols', JSON.stringify([...set])); } catch (_) {} _renderBody(); }
+  function tkOpen(key) {
+    const r = _tkRows().find(x => x.key === key); if (!r) return;
+    if (r.kind === 'seq') { seqTaskOpen(r.seqId, r.cid); return; }
+    if (r.kind === 'ap') { _tk.classic = true; _taskStat = 'approve'; _renderBody(); return; }
+    openContactPage(r.cid);
+  }
+  function tkStart() {
+    const today = _dayOf(new Date()), all = _tkApply(_tkRows(), today), r = all.find(x => x.kind === 'seq') || all[0]; if (!r) return;
+    if (!all.some(x => x.kind === 'seq')) showBanner('Estas tareas se abren desde la ficha del prospecto.', 'info');
+    tkOpen(r.key);
+  }
+  function tkCreate() {
+    const f = (k, l, inner) => `<label class="ll-f"><span>${l}</span>${inner}</label>`;
+    _llModal('Crear nueva tarea', `<div class="ll-fg">${f('t', 'Tipo de tarea', `<select id="tkc-tipo" class="rd-sel"><option value="tarea">Tarea manual</option><option value="llamada">Llamada</option><option value="email">Email</option><option value="linkedin">LinkedIn</option><option value="whatsapp">WhatsApp</option></select>`)}${f('p', 'Prioridad', `<select id="tkc-prio" class="rd-sel"><option value="">Ninguno</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select>`)}</div>
+      <label class="ll-f" style="margin-top:10px"><span>Campo asociado*</span><input id="tkc-q" placeholder="Buscar su asociación…" autocomplete="off" oninput="LeadManagerModule.tkcSearch(this.value)"><div id="tkc-res" class="ll-pick" style="margin-top:6px"></div><input type="hidden" id="tkc-cid"></label>
+      <div class="ll-fg" style="margin-top:10px">${f('d', 'Fecha y hora de vencimiento*', `<input id="tkc-d" type="datetime-local" class="rd-sel">`)}${f('ti', 'Título*', `<input id="tkc-ti" placeholder="Nombre de la tarea" autocomplete="off">`)}</div>
+      <label class="ll-f" style="margin-top:10px"><span>Instrucción</span><textarea id="tkc-in" class="ll-ta" rows="4" placeholder="Escribe tu instrucción aquí"></textarea></label><p class="ll-m__p" id="tkc-err" style="color:#B42318;margin-top:8px"></p>`,
+      `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.tkcGo()">Crear tarea</button>`, 620);
+    const d = new Date(Date.now() + 36e5); d.setMinutes(0, 0, 0); const dv = document.getElementById('tkc-d'); if (dv) dv.value = new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+  }
+  function tkcSearch(q) {
+    q = String(q || '').trim().toLowerCase(); const box = document.getElementById('tkc-res'); if (!box) return; if (q.length < 2) { box.innerHTML = ''; return; }
+    const m = (_contacts || []).filter(c => [c.nombre, c.apellido, c.email, c.company_nombre].join(' ').toLowerCase().includes(q)).slice(0, 8);
+    box.innerHTML = m.map(c => `<button onclick="LeadManagerModule.tkcPick(${c.id})"><b>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || c.email)}</b><small>${esc(c.company_nombre || c.empresa_nombre || '')}</small></button>`).join('') || '<small>Sin resultados</small>';
+  }
+  function tkcPick(id) { const c = (_contacts || []).find(x => x.id === id); document.getElementById('tkc-cid').value = id; document.getElementById('tkc-q').value = [c.nombre, c.apellido].filter(Boolean).join(' '); document.getElementById('tkc-res').innerHTML = ''; }
+  async function tkcGo() {
+    const g = k => (document.getElementById('tkc-' + k) || {}).value || '', err = document.getElementById('tkc-err'), cid = parseInt(g('cid')), ti = g('ti').trim(), d = g('d');
+    if (!cid) { err.textContent = 'Elige el prospecto asociado.'; return; } if (!ti) { err.textContent = 'Escribe un título.'; return; } if (!d) { err.textContent = 'Elige la fecha de vencimiento.'; return; }
+    const c = (_contacts || []).find(x => x.id === cid) || {}, tipo = g('tipo'), nota = ti + (g('in').trim() ? ' — ' + g('in').trim() : '') + (g('prio') ? ' · Prioridad ' + g('prio') : '');
+    try {
+      const r = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'tarea', canal: tipo === 'tarea' ? '' : tipo, nota, fecha: new Date(d).toISOString(), estado: 'pendiente', contact_id: cid, outbound_client_id: c.outbound_client_id || null }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      llModalClose(); await load(); _renderBody(); showBanner('Tarea creada', 'success');
+    } catch (e) { err.textContent = e.message; }
+  }
+  function _vTasksClassic() {
     if (_tiData === null) setTimeout(() => { if (_tiData === null) _tiReload(); }, 0);   // para que el recuadro Prioridad ya traiga su número
 
     const allRaw = _allSeqTasks();
@@ -35474,66 +35645,66 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _repKpi(iconKey, n, l, color) {
     return `<div class="rep-kpi"><span class="rep-kpi__i" style="background:${color}1a;color:${color}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_REP_ICON[iconKey] || ''}</svg></span><div class="rep-kpi__b"><div class="rep-kpi__v" data-count="${n}">0</div><div class="rep-kpi__l">${l}</div></div></div>`;
   }
-  // ═══════════ Entregabilidad (estilo Lemlist): Prospección, Warm-up, Pruebas de inbox, Alertas y Ajustes ═══════════
-  const _dv = { tab: 'prospeccion', preset: '30', from: '', to: '', gran: 'D', mb: 0, pv: '', dm: '', data: null, busy: false };
-  function _dvRange() {
-    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5));
-    switch (_dv.preset) { case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; default: return [_dv.from || back(29), _dv.to || t]; }
-  }
-  async function _dvLoad() {
-    _dv.busy = true; const [f, t] = _dvRange();
-    try { const r = await apiFetch(`${API}/lm/deliverability?from=${f}&to=${t}&gran=${_dv.gran}&mailbox=${_dv.mb}&provider=${encodeURIComponent(_dv.pv)}&domain=${encodeURIComponent(_dv.dm)}`); _dv.data = r.ok ? await r.json() : { error: true }; } catch (_) { _dv.data = { error: true }; }
-    _dv.busy = false; if (_section === 'deliverability') _renderBody();
-  }
-  function dvSet(k, v) { if (k === 'tab') _dv.tab = v; else { _dv[k] = k === 'mb' ? (parseInt(v) || 0) : v; _dv.data = null; } _renderBody(); }
-  function dvPreset(k) { _dv.preset = k; _dv.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
-  function dvDateOpen(ev) { const [f, t] = _dvRange(); _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="dv-f" value="${f}"></label><label>Hasta<input type="date" id="dv-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.dvDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${[['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes']].map(([k, l]) => `<button class="sed-pop__i${_dv.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.dvPreset('${k}')">${l}</button>`).join('')}</div>`, 320); }
-  function dvDateApply() { const f = (document.getElementById('dv-f') || {}).value, t = (document.getElementById('dv-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _dv.preset = 'custom'; _dv.from = f; _dv.to = t; _dv.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
-  function _vDeliv() {
-    if (!_dv.data && !_dv.busy && ['prospeccion', 'alertas', 'ajustes'].includes(_dv.tab)) _dvLoad();
-    const I = _llI, [f, t] = _dvRange(), fm = x => new Date(x + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
-    const TABS = [['warmup', 'Warm-up'], ['prospeccion', 'Prospección'], ['inbox', 'Pruebas de inbox'], ['alertas', 'Alertas'], ['ajustes', 'Ajustes']];
-    const bar = `<div class="inf-tabs">${TABS.map(([k, l]) => `<button class="${_dv.tab === k ? 'on' : ''}" onclick="LeadManagerModule.dvSet('tab','${k}')">${l}</button>`).join('')}</div>`;
-    const d = _dv.data;
-    let body;
-    if (_dv.tab === 'warmup') body = _dvSoon('Warm-up de buzones', 'El calentamiento automático de buzones todavía no existe en Nova. Mientras tanto, la protección está en el envío: topes diarios por buzón, intervalo entre correos y bloqueo de direcciones que ya rebotaron.');
-    else if (_dv.tab === 'inbox') body = _dvSoon('Pruebas de inbox', 'Las pruebas de colocación (bandeja de entrada, promociones o spam) en cuentas semilla todavía no están disponibles.');
-    else if (!d) body = '<div class="ll-empty">Cargando entregabilidad…</div>';
-    else if (d.error) body = '<div class="ll-empty">No se pudo cargar la entregabilidad.</div>';
-    else if (_dv.tab === 'alertas') body = _dvAlertas(d);
-    else if (_dv.tab === 'ajustes') body = _dvAjustes(d);
-    else body = `<div class="inf-filters"><button class="rd-sel rd-date" onclick="LeadManagerModule.dvDateOpen(event)"><span>${fm(f)} → ${fm(t)}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
-      <select class="rd-sel" onchange="LeadManagerModule.dvSet('gran',this.value)">${[['D', 'Diario'], ['W', 'Semanal'], ['M', 'Mensual']].map(([k, l]) => `<option value="${k}"${_dv.gran === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      <select class="rd-sel" onchange="LeadManagerModule.dvSet('mb',this.value)"><option value="0">Todos los buzones de correo electrónico</option>${d.buzones.map(x => `<option value="${x.id}"${_dv.mb === x.id ? ' selected' : ''}>${esc(x.email)}</option>`).join('')}</select>
-      <select class="rd-sel" onchange="LeadManagerModule.dvSet('pv',this.value)"><option value="">Todos los proveedores</option>${d.proveedores.map(x => `<option value="${esc(x)}"${_dv.pv === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
-      <select class="rd-sel" onchange="LeadManagerModule.dvSet('dm',this.value)"><option value="">Todos los dominios</option>${d.dominios.map(x => `<option value="${esc(x)}"${_dv.dm === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>${_dvProspeccion(d)}`;
-    return `<div class="inf">${bar}${body}</div>`;
-  }
-  function _dvSoon(t, p) { return `<div class="rd-card"><div class="rd-none"><b>${t}</b><br>${p}<br><span class="sed-pop__i is-off" style="display:inline-flex;width:auto;margin-top:10px"><em>Próximamente</em></span></div></div>`; }
-  function _dvProspeccion(d) {
-    const T = d.totales, pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0, mx = Math.max(1, ...d.serie.map(x => x.enviados));
-    const kp = (l, v, sub) => `<div class="rd-stat"><div><div class="rd-stat__v"><b>${v}</b></div><div class="rd-stat__l">${l}</div><small style="color:#8794A8">${sub}</small></div></div>`;
-    const kpis = `<div class="inf-kp4">${kp('Total de emails enviados en el periodo', T.enviados, d.serie.length ? '' : 'No hay datos de tendencia disponibles')}${kp('Entregado', T.entregados, pct(T.entregados, T.enviados) + '% de entregas completadas')}${kp('Rebotado', T.rebotados, pct(T.rebotados, T.enviados) + '% tasa de bounce')}${kp('Promedio diario enviados', T.promedio_diario, 'Promedio por buzón: ' + T.promedio_buzon)}</div>`;
-    const bars = d.serie.length ? `<div class="inf-bars inf-bars--3">${d.serie.map(x => `<div title="${x.k}: ${x.enviados} enviados · ${x.entregados} entregados · ${x.rebotados} rebotados"><span><i class="b1" style="height:${Math.max(3, Math.round(x.enviados / mx * 100))}%"></i><i class="b2" style="height:${Math.max(0, Math.round(x.entregados / mx * 100))}%"></i><i class="b3" style="height:${Math.round(x.rebotados / mx * 100)}%"></i></span><small>${x.k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg"><span><i class="b1"></i>Enviado</span><span><i class="b2"></i>Entregado</span><span><i class="b3"></i>Rebotado</span></div>` : '<div class="rd-none">No se han encontrado datos, prueba con otros filtros</div>';
-    const rates = d.serie.length ? `<div class="inf-bars">${d.serie.map(x => `<div title="${x.k}: entrega ${pct(x.entregados, x.enviados)}% · rebote ${pct(x.rebotados, x.enviados)}%"><i style="height:${Math.max(3, pct(x.entregados, x.enviados))}%;background:#16A34A"></i><small>${x.k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg"><span><i style="background:#16A34A"></i>Tasa de entrega</span></div>` : '<div class="rd-none">Sin datos</div>';
-    const mot = Object.entries(d.motivos).sort((a, b) => b[1] - a[1]), mt = mot.reduce((n, x) => n + x[1], 0);
-    const motHtml = mot.length ? `<table class="rd-t"><tbody>${mot.map(([k, v]) => `<tr><td>${esc(k)}</td><td><b>${v}</b></td><td><div class="inf-mini"><i style="width:${pct(v, mt)}%;background:#DC2626"></i></div></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin rebotes en el periodo</div>';
-    const tbl = (rows, hd, nm) => rows.length ? `<table class="rd-t"><thead><tr><th>${hd}</th><th>Enviado</th><th>Entregado</th><th>Tasa de entregas</th><th>Rebotado</th><th>Tasa de bounce</th>${nm ? '<th>Última actividad</th>' : ''}</tr></thead><tbody>${rows.map(x => `<tr><td>${esc(x.k)}</td><td>${x.enviados}</td><td>${x.entregados}</td><td>${pct(x.entregados, x.enviados)}%</td><td>${x.rebotados}</td><td>${pct(x.rebotados, x.enviados)}%</td>${nm ? `<td>${x.ultima ? new Date(x.ultima).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>';
-    return `${kpis}<div class="rd-g2"><div class="rd-card"><h3>Enviado vs. entregado vs. devuelto</h3>${bars}</div><div class="rd-card"><h3>Tasa de entrega y de rebote a lo largo del tiempo</h3>${rates}</div></div>
-      <div class="rd-card"><h3>Desglose de bounces</h3>${motHtml}</div>
-      <div class="rd-card"><h3>Rendimiento por proveedor de email</h3>${tbl(d.porProv, 'Remitente → destinatario')}</div>
-      <div class="rd-card"><h3>Rendimiento del outreach por buzón de correo electrónico</h3>${tbl(d.porBuzon, 'Buzón de correo electrónico', true)}</div>
-      <div class="rd-card"><h3>Rendimiento del alcance por dominio del destinatario</h3>${tbl(d.porDom, 'Dominio')}</div>`;
-  }
-  function _dvAlertas(d) {
-    const al = []; d.buzones.forEach(b => { if (b.estado && b.estado !== 'conectado') al.push([b.email, 'El buzón no está conectado (' + b.estado + '). No enviará ni leerá respuestas.', 'warn']); });
-    d.porBuzon.forEach(x => { const r = x.enviados ? x.rebotados / x.enviados : 0; if (x.enviados >= 20 && r > 0.05) al.push([x.k, 'Tasa de rebote del ' + Math.round(r * 1000) / 10 + '% (' + x.rebotados + ' de ' + x.enviados + '). Verifica la lista antes de seguir enviando.', 'bad']); });
-    if (d.totales.no_enviados) al.push(['Envíos fallidos', d.totales.no_enviados + ' mensaje(s) no se pudieron enviar en el periodo.', 'warn']);
-    return `<div class="rd-card"><h3>Alertas de entregabilidad</h3>${al.length ? al.map(([t, m, k]) => `<div class="inf-al inf-al--${k}"><b>${esc(t)}</b><span>${esc(m)}</span></div>`).join('') : '<div class="rd-none">Todo en orden: no hay alertas por ahora.</div>'}</div>`;
-  }
-  function _dvAjustes(d) {
-    return `<div class="rd-card"><h3>Buzones conectados</h3>${d.buzones.length ? `<table class="rd-t"><thead><tr><th>Buzón</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>${d.buzones.map(b => `<tr><td>${esc(b.email)}</td><td>${esc(b.provider)}</td><td><span class="ll-pill" style="background:${b.estado === 'conectado' ? '#DCFCE7' : '#FFF1CC'};color:${b.estado === 'conectado' ? '#166534' : '#7A5A00'}">${esc(b.estado)}</span></td><td>${b.outbound_client_id ? `<button class="ll-btn" onclick="LeadManagerModule.openClientSenders(${b.outbound_client_id})">Gestionar</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Aún no hay buzones conectados. Conéctalos desde «Clientes outbound → Conectar remitente».</div>'}<p class="ll-m__p" style="margin-top:12px">Los topes diarios, la ventana de envío y el intervalo entre correos se configuran en cada secuencia (pestaña Ajustes) y en Configuración de la campaña.</p></div>`;
-  }
+  // ═══════════ Entregabilidad (estilo Lemlist): Prospección, Warm-up, Pruebas de inbox, Alertas y Ajustes ═══════════
+  const _dv = { tab: 'prospeccion', preset: '30', from: '', to: '', gran: 'D', mb: 0, pv: '', dm: '', data: null, busy: false };
+  function _dvRange() {
+    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5));
+    switch (_dv.preset) { case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; default: return [_dv.from || back(29), _dv.to || t]; }
+  }
+  async function _dvLoad() {
+    _dv.busy = true; const [f, t] = _dvRange();
+    try { const r = await apiFetch(`${API}/lm/deliverability?from=${f}&to=${t}&gran=${_dv.gran}&mailbox=${_dv.mb}&provider=${encodeURIComponent(_dv.pv)}&domain=${encodeURIComponent(_dv.dm)}`); _dv.data = r.ok ? await r.json() : { error: true }; } catch (_) { _dv.data = { error: true }; }
+    _dv.busy = false; if (_section === 'deliverability') _renderBody();
+  }
+  function dvSet(k, v) { if (k === 'tab') _dv.tab = v; else { _dv[k] = k === 'mb' ? (parseInt(v) || 0) : v; _dv.data = null; } _renderBody(); }
+  function dvPreset(k) { _dv.preset = k; _dv.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  function dvDateOpen(ev) { const [f, t] = _dvRange(); _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="dv-f" value="${f}"></label><label>Hasta<input type="date" id="dv-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.dvDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${[['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes']].map(([k, l]) => `<button class="sed-pop__i${_dv.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.dvPreset('${k}')">${l}</button>`).join('')}</div>`, 320); }
+  function dvDateApply() { const f = (document.getElementById('dv-f') || {}).value, t = (document.getElementById('dv-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _dv.preset = 'custom'; _dv.from = f; _dv.to = t; _dv.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  function _vDeliv() {
+    if (!_dv.data && !_dv.busy && ['prospeccion', 'alertas', 'ajustes'].includes(_dv.tab)) _dvLoad();
+    const I = _llI, [f, t] = _dvRange(), fm = x => new Date(x + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+    const TABS = [['warmup', 'Warm-up'], ['prospeccion', 'Prospección'], ['inbox', 'Pruebas de inbox'], ['alertas', 'Alertas'], ['ajustes', 'Ajustes']];
+    const bar = `<div class="inf-tabs">${TABS.map(([k, l]) => `<button class="${_dv.tab === k ? 'on' : ''}" onclick="LeadManagerModule.dvSet('tab','${k}')">${l}</button>`).join('')}</div>`;
+    const d = _dv.data;
+    let body;
+    if (_dv.tab === 'warmup') body = _dvSoon('Warm-up de buzones', 'El calentamiento automático de buzones todavía no existe en Nova. Mientras tanto, la protección está en el envío: topes diarios por buzón, intervalo entre correos y bloqueo de direcciones que ya rebotaron.');
+    else if (_dv.tab === 'inbox') body = _dvSoon('Pruebas de inbox', 'Las pruebas de colocación (bandeja de entrada, promociones o spam) en cuentas semilla todavía no están disponibles.');
+    else if (!d) body = '<div class="ll-empty">Cargando entregabilidad…</div>';
+    else if (d.error) body = '<div class="ll-empty">No se pudo cargar la entregabilidad.</div>';
+    else if (_dv.tab === 'alertas') body = _dvAlertas(d);
+    else if (_dv.tab === 'ajustes') body = _dvAjustes(d);
+    else body = `<div class="inf-filters"><button class="rd-sel rd-date" onclick="LeadManagerModule.dvDateOpen(event)"><span>${fm(f)} → ${fm(t)}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
+      <select class="rd-sel" onchange="LeadManagerModule.dvSet('gran',this.value)">${[['D', 'Diario'], ['W', 'Semanal'], ['M', 'Mensual']].map(([k, l]) => `<option value="${k}"${_dv.gran === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <select class="rd-sel" onchange="LeadManagerModule.dvSet('mb',this.value)"><option value="0">Todos los buzones de correo electrónico</option>${d.buzones.map(x => `<option value="${x.id}"${_dv.mb === x.id ? ' selected' : ''}>${esc(x.email)}</option>`).join('')}</select>
+      <select class="rd-sel" onchange="LeadManagerModule.dvSet('pv',this.value)"><option value="">Todos los proveedores</option>${d.proveedores.map(x => `<option value="${esc(x)}"${_dv.pv === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select class="rd-sel" onchange="LeadManagerModule.dvSet('dm',this.value)"><option value="">Todos los dominios</option>${d.dominios.map(x => `<option value="${esc(x)}"${_dv.dm === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>${_dvProspeccion(d)}`;
+    return `<div class="inf">${bar}${body}</div>`;
+  }
+  function _dvSoon(t, p) { return `<div class="rd-card"><div class="rd-none"><b>${t}</b><br>${p}<br><span class="sed-pop__i is-off" style="display:inline-flex;width:auto;margin-top:10px"><em>Próximamente</em></span></div></div>`; }
+  function _dvProspeccion(d) {
+    const T = d.totales, pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0, mx = Math.max(1, ...d.serie.map(x => x.enviados));
+    const kp = (l, v, sub) => `<div class="rd-stat"><div><div class="rd-stat__v"><b>${v}</b></div><div class="rd-stat__l">${l}</div><small style="color:#8794A8">${sub}</small></div></div>`;
+    const kpis = `<div class="inf-kp4">${kp('Total de emails enviados en el periodo', T.enviados, d.serie.length ? '' : 'No hay datos de tendencia disponibles')}${kp('Entregado', T.entregados, pct(T.entregados, T.enviados) + '% de entregas completadas')}${kp('Rebotado', T.rebotados, pct(T.rebotados, T.enviados) + '% tasa de bounce')}${kp('Promedio diario enviados', T.promedio_diario, 'Promedio por buzón: ' + T.promedio_buzon)}</div>`;
+    const bars = d.serie.length ? `<div class="inf-bars inf-bars--3">${d.serie.map(x => `<div title="${x.k}: ${x.enviados} enviados · ${x.entregados} entregados · ${x.rebotados} rebotados"><span><i class="b1" style="height:${Math.max(3, Math.round(x.enviados / mx * 100))}%"></i><i class="b2" style="height:${Math.max(0, Math.round(x.entregados / mx * 100))}%"></i><i class="b3" style="height:${Math.round(x.rebotados / mx * 100)}%"></i></span><small>${x.k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg"><span><i class="b1"></i>Enviado</span><span><i class="b2"></i>Entregado</span><span><i class="b3"></i>Rebotado</span></div>` : '<div class="rd-none">No se han encontrado datos, prueba con otros filtros</div>';
+    const rates = d.serie.length ? `<div class="inf-bars">${d.serie.map(x => `<div title="${x.k}: entrega ${pct(x.entregados, x.enviados)}% · rebote ${pct(x.rebotados, x.enviados)}%"><i style="height:${Math.max(3, pct(x.entregados, x.enviados))}%;background:#16A34A"></i><small>${x.k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg"><span><i style="background:#16A34A"></i>Tasa de entrega</span></div>` : '<div class="rd-none">Sin datos</div>';
+    const mot = Object.entries(d.motivos).sort((a, b) => b[1] - a[1]), mt = mot.reduce((n, x) => n + x[1], 0);
+    const motHtml = mot.length ? `<table class="rd-t"><tbody>${mot.map(([k, v]) => `<tr><td>${esc(k)}</td><td><b>${v}</b></td><td><div class="inf-mini"><i style="width:${pct(v, mt)}%;background:#DC2626"></i></div></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin rebotes en el periodo</div>';
+    const tbl = (rows, hd, nm) => rows.length ? `<table class="rd-t"><thead><tr><th>${hd}</th><th>Enviado</th><th>Entregado</th><th>Tasa de entregas</th><th>Rebotado</th><th>Tasa de bounce</th>${nm ? '<th>Última actividad</th>' : ''}</tr></thead><tbody>${rows.map(x => `<tr><td>${esc(x.k)}</td><td>${x.enviados}</td><td>${x.entregados}</td><td>${pct(x.entregados, x.enviados)}%</td><td>${x.rebotados}</td><td>${pct(x.rebotados, x.enviados)}%</td>${nm ? `<td>${x.ultima ? new Date(x.ultima).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados</div>';
+    return `${kpis}<div class="rd-g2"><div class="rd-card"><h3>Enviado vs. entregado vs. devuelto</h3>${bars}</div><div class="rd-card"><h3>Tasa de entrega y de rebote a lo largo del tiempo</h3>${rates}</div></div>
+      <div class="rd-card"><h3>Desglose de bounces</h3>${motHtml}</div>
+      <div class="rd-card"><h3>Rendimiento por proveedor de email</h3>${tbl(d.porProv, 'Remitente → destinatario')}</div>
+      <div class="rd-card"><h3>Rendimiento del outreach por buzón de correo electrónico</h3>${tbl(d.porBuzon, 'Buzón de correo electrónico', true)}</div>
+      <div class="rd-card"><h3>Rendimiento del alcance por dominio del destinatario</h3>${tbl(d.porDom, 'Dominio')}</div>`;
+  }
+  function _dvAlertas(d) {
+    const al = []; d.buzones.forEach(b => { if (b.estado && b.estado !== 'conectado') al.push([b.email, 'El buzón no está conectado (' + b.estado + '). No enviará ni leerá respuestas.', 'warn']); });
+    d.porBuzon.forEach(x => { const r = x.enviados ? x.rebotados / x.enviados : 0; if (x.enviados >= 20 && r > 0.05) al.push([x.k, 'Tasa de rebote del ' + Math.round(r * 1000) / 10 + '% (' + x.rebotados + ' de ' + x.enviados + '). Verifica la lista antes de seguir enviando.', 'bad']); });
+    if (d.totales.no_enviados) al.push(['Envíos fallidos', d.totales.no_enviados + ' mensaje(s) no se pudieron enviar en el periodo.', 'warn']);
+    return `<div class="rd-card"><h3>Alertas de entregabilidad</h3>${al.length ? al.map(([t, m, k]) => `<div class="inf-al inf-al--${k}"><b>${esc(t)}</b><span>${esc(m)}</span></div>`).join('') : '<div class="rd-none">Todo en orden: no hay alertas por ahora.</div>'}</div>`;
+  }
+  function _dvAjustes(d) {
+    return `<div class="rd-card"><h3>Buzones conectados</h3>${d.buzones.length ? `<table class="rd-t"><thead><tr><th>Buzón</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>${d.buzones.map(b => `<tr><td>${esc(b.email)}</td><td>${esc(b.provider)}</td><td><span class="ll-pill" style="background:${b.estado === 'conectado' ? '#DCFCE7' : '#FFF1CC'};color:${b.estado === 'conectado' ? '#166534' : '#7A5A00'}">${esc(b.estado)}</span></td><td>${b.outbound_client_id ? `<button class="ll-btn" onclick="LeadManagerModule.openClientSenders(${b.outbound_client_id})">Gestionar</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Aún no hay buzones conectados. Conéctalos desde «Clientes outbound → Conectar remitente».</div>'}<p class="ll-m__p" style="margin-top:12px">Los topes diarios, la ventana de envío y el intervalo entre correos se configuran en cada secuencia (pestaña Ajustes) y en Configuración de la campaña.</p></div>`;
+  }
   // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas, con periodo y filtros ═══════════
   const _inf = { tab: 'overview', preset: '30', from: '', to: '', disp: '', camp: 0, cli: 0, data: null, busy: false, met: 'resp', gran: 'W' };
   function _infRange() {
@@ -43319,7 +43490,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
