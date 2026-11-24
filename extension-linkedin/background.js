@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -33,6 +33,8 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
   if (m.cmd === 'config') { cfg().then(send); return true; }
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });
@@ -170,4 +172,30 @@ async function puente(orden, datos) {
   }
   if (orden === 'estado') return { vinculada: !!token, pausada: paused, estado };
   return { error: 'orden_desconocida' };
+}
+
+
+// ── Vinculación desde la propia extensión: se usa la sesión de Nova de este Chrome, sin copiar tokens ──
+async function novaFetch(path, opts) {
+  const { apiBase } = await get();
+  const r = await fetch(apiBase + '/api' + path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...(opts || {}) });
+  let d = {}; try { d = await r.json(); } catch (_) {}
+  return { status: r.status, data: d };
+}
+async function parEstado() {
+  const sesion = await sesionIniciada();
+  const slug = sesion ? await leerIdentidad() : '';
+  let nova = null;
+  try { nova = await novaFetch('/li/pair/accounts'); } catch (e) { return { nova: 'sin_conexion', sesion_linkedin: sesion, li_slug: slug }; }
+  if (nova.status === 401) return { nova: 'sin_sesion', sesion_linkedin: sesion, li_slug: slug };
+  if (nova.status !== 200) return { nova: 'error', detalle: (nova.data && nova.data.error) || ('HTTP ' + nova.status), sesion_linkedin: sesion, li_slug: slug };
+  return { nova: 'ok', sesion_linkedin: sesion, li_slug: slug, cuentas: nova.data.cuentas || [], clientes: nova.data.clientes || [], usuario: nova.data.usuario || '' };
+}
+async function parVincular(d) {
+  const slug = (await sesionIniciada()) ? await leerIdentidad() : '';
+  const body = d.account_id ? { account_id: d.account_id, li_slug: slug } : { nueva: { nombre: d.nombre || 'Cuenta LinkedIn', outbound_client_id: d.cliente_id || null }, li_slug: slug };
+  const r = await novaFetch('/li/pair', { method: 'POST', body: JSON.stringify(body) });
+  if (r.status !== 200 || !r.data.token) return { error: (r.data && r.data.error) || ('HTTP ' + r.status) };
+  await chrome.storage.local.set({ token: r.data.token, paused: true, estado: { msg: 'Cuenta vinculada. Pulsa Activar cuando quieras empezar.', nivel: 'ok', t: Date.now(), slug }, identidad: { slug, t: Date.now() } });
+  return { ok: true, cuenta: r.data.cuenta, slug };
 }

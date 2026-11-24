@@ -5,19 +5,45 @@
 :root{--ink:#0A2540;--mut:#64748B;--line:#E4E7DD;--ok:#00804C;--warn:#B45309;--err:#B42318;--bg:#F6F7ED}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);padding:16px}
 h1{font-size:16px;margin:0 0 4px}p{margin:0 0 12px;color:var(--mut);font-size:12.5px}
-.card{background:#fff;border:1px solid var(--line);padding:12px;margin-bottom:12px}
-label{display:block;font-weight:600;font-size:12.5px;margin-bottom:4px}input{width:100%;padding:8px;border:1px solid var(--line);font:inherit}
-button{font:inherit;font-weight:600;padding:8px 12px;border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
-button.pri{background:var(--ink);color:#fff}.row{display:flex;gap:8px;margin-top:8px}.row>*{flex:1}
+.card{background:#fff;border:1px solid var(--line);padding:14px;margin-bottom:12px}
+label{display:block;font-weight:600;font-size:12.5px;margin:10px 0 4px}input,select{width:100%;padding:8px;border:1px solid var(--line);font:inherit;background:#fff}
+button{font:inherit;font-weight:600;padding:9px 12px;border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+button.pri{background:var(--ink);color:#fff}button:disabled{opacity:.5;cursor:default}.row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1}
 .st{padding:10px;border-left:4px solid var(--mut);background:#fff;font-size:13px}.st.ok{border-color:var(--ok)}.st.warn{border-color:var(--warn)}.st.err{border-color:var(--err)}.st.work{border-color:#1E5FA8}
 .pill{display:inline-block;padding:2px 8px;font-size:12px;font-weight:700;margin-bottom:8px}.pill.on{background:#EAF5EE;color:var(--ok)}.pill.off{background:#FFF7E6;color:var(--warn)}
-small{color:var(--mut)}
+.step{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13px}.step i{width:22px;height:22px;border:1px solid #C9CEC0;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:12px;flex-shrink:0}.step.ok i{background:var(--ok);border-color:var(--ok);color:#fff}
+.li{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);margin:8px 0}.li b{display:block}.li small{color:var(--mut)}
+.in{width:34px;height:34px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+small{color:var(--mut)}details summary{cursor:pointer;font-weight:600;font-size:12.5px}
 </style></head><body>
 <h1>Nova · LinkedIn</h1><p>Ejecuta en esta cuenta lo que Nova programa. Los topes y horarios los controla Nova.</p>
-<div class="card"><span id="pill" class="pill off">En pausa</span>
+
+<!-- 1) Aún no vinculada: conectar con Nova, como «iniciar sesión» -->
+<div class="card" id="conectar" hidden>
+  <b>Conectar esta cuenta de LinkedIn con Nova</b>
+  <div id="pasos" style="margin-top:8px"></div>
+  <div id="elegir" hidden>
+    <div class="li"><span class="in">in</span><div><b id="slug">—</b><small>Cuenta de LinkedIn abierta en este Chrome</small></div></div>
+    <label for="cuenta">¿A qué cuenta de Nova la conectas?</label>
+    <select id="cuenta"></select>
+    <div id="nueva">
+      <label for="nombre">Nombre de la cuenta</label><input id="nombre" placeholder="Ej. LinkedIn de Jenny">
+      <label for="cliente">Cliente outbound (opcional)</label><select id="cliente"></select>
+    </div>
+    <p style="margin-top:10px"><small>Nova podrá enviar invitaciones, visitas y mensajes que tú programes (con topes), y leer aceptaciones y respuestas. Nunca recibe tu contraseña.</small></p>
+    <div class="row"><button id="vincular" class="pri">Permitir y conectar</button></div>
+  </div>
+  <div class="row" id="accion-extra" hidden><button id="abrir">Abrir</button><button id="reintentar">Reintentar</button></div>
+  <p id="err" style="color:var(--err);margin:10px 0 0"></p>
+</div>
+
+<!-- 2) Ya vinculada -->
+<div class="card" id="vinculada" hidden><span id="pill" class="pill off">En pausa</span>
 <div id="st" class="st">Cargando…</div>
 <div class="row"><button id="toggle" class="pri">Activar</button><button id="now">Comprobar ahora</button></div>
 <p style="margin-top:10px"><small>Se detiene sola si LinkedIn muestra un aviso, y Nova pausa la cuenta 48 h.</small></p></div>
-<details class="card"><summary style="cursor:pointer;font-weight:600;font-size:12.5px">Avanzado: vincular con un token</summary><label for="tok" style="margin-top:8px">Token de la cuenta (desde Nova)</label><input id="tok" type="password" placeholder="nvli_…" autocomplete="off">
-<div class="row"><button id="save">Guardar token</button></div></details>
+
+<details class="card"><summary>Avanzado</summary>
+<label for="tok">Vincular con un token (solo si lo anterior no funciona)</label><input id="tok" type="password" placeholder="nvli_…" autocomplete="off">
+<div class="row"><button id="save">Guardar token</button><button id="desvincular">Desvincular este Chrome</button></div></details>
 <script src="sidepanel.js"></script></body></html>

@@ -475,6 +475,34 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     } catch (e) { res.status(500).json({ error: 'No se pudo cancelar' }); }
   });
 
+  // ───────── Vinculación desde la propia extensión (sesión de Nova, sin copiar tokens) ─────────
+  // La extensión usa la sesión de Nova de ese Chrome para ver las cuentas, elegir o crear una y recibir su token directamente.
+  app.get('/api/li/pair/accounts', requireAuth, async (req, res) => {
+    try {
+      const uid = req.workspaceOwnerId;
+      const { rows: cuentas } = await pool.query(`SELECT a.id, a.nombre, a.li_slug, a.estado, a.outbound_client_id, c.nombre AS cliente, (a.ultimo_visto > NOW() - INTERVAL '5 minutes') AS conectada FROM li_accounts a LEFT JOIN outbound_clients c ON c.id=a.outbound_client_id WHERE a.user_id=$1 ORDER BY a.id`, [uid]);
+      const { rows: clientes } = await pool.query(`SELECT id, nombre FROM outbound_clients WHERE user_id=$1 AND COALESCE(estado,'') <> 'cerrado' ORDER BY nombre`, [uid]);
+      res.json({ ok: true, cuentas, clientes, usuario: (req.user && (req.user.email || req.user.nombre || req.user.name)) || '' });
+    } catch (e) { console.error('[li] pair accounts', e.message); res.status(500).json({ error: 'No se pudieron cargar las cuentas' }); }
+  });
+  app.post('/api/li/pair', requireAuth, async (req, res) => {
+    try {
+      const uid = req.workspaceOwnerId, b = req.body || {}, token = newToken();
+      const slug = String(b.li_slug || '').toLowerCase().slice(0, 120);
+      if (parseInt(b.account_id, 10)) {
+        const r = await pool.query(`UPDATE li_accounts SET token_hash=$3, estado='pausada', motivo='Reconectada desde la extensión: actívala cuando estés lista', ultimo_visto=NULL, li_slug=CASE WHEN $4 <> '' THEN $4 ELSE li_slug END, pausa_hasta=NULL WHERE id=$1 AND user_id=$2 RETURNING id, nombre`, [parseInt(b.account_id, 10), uid, hash(token), slug]);
+        if (!r.rowCount) return res.status(404).json({ error: 'Cuenta no encontrada' });
+        return res.json({ ok: true, token, cuenta: r.rows[0] });
+      }
+      const n = b.nueva || {};
+      const { rows: [a] } = await pool.query(
+        `INSERT INTO li_accounts (user_id, nombre, outbound_client_id, token_hash, estado, motivo, ramp_desde, tz, li_slug)
+         VALUES ($1,$2,$3,$4,'pausada','Conectada desde la extensión: actívala cuando estés lista', (NOW() AT TIME ZONE $5)::date, $5, $6) RETURNING id, nombre`,
+        [uid, String(n.nombre || 'Cuenta LinkedIn').slice(0, 80), parseInt(n.outbound_client_id, 10) || null, hash(token), DEF.tz, slug]);
+      res.json({ ok: true, token, cuenta: a });
+    } catch (e) { console.error('[li] pair', e.message); res.status(500).json({ error: 'No se pudo vincular' }); }
+  });
+
   // ───────── Lado extensión (token de cuenta) ─────────
   async function liAuth(req, res, next) {
     const m = (req.headers.authorization || '').match(/^Bearer\s+(nvli_[a-f0-9]+)$/i);
