@@ -40662,7 +40662,39 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (!taskCtx && _section !== 'contact-view') { _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts'; _cpFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
     _cpHistFor = null; _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
   }
-  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'resumen' || t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
+  function cpMenu(ev, id) {
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const I = d => _llI(d, 15);
+    _llPop(ev, `${_llMI(I('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'), 'Enriquecer datos (buscar email)', `LeadManagerModule.llFindEmail(${id})`)}
+      ${_llMI(I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'), 'Copiar datos del contacto', `LeadManagerModule.ldCopy(${id})`)}
+      ${_llMI(I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'), 'Descargar ficha en PDF (ES)', `LeadManagerModule.ldPdf(${id},'es')`)}
+      ${_llMI(I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'), 'Download PDF (EN)', `LeadManagerModule.ldPdf(${id},'en')`)}
+      <div class="sed-pop__sep"></div>
+      ${_llMI(I('<path d="M12 5v14M5 12h14"/>'), 'Crear referido', `LeadManagerModule.ldRefer(${id},'derivado')`)}
+      ${_llMI(I('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'), (c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? 'Ver deal' : 'Crear deal', `LeadManagerModule.dlOpen(${id})`)}
+      ${_llMI(I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'), 'Reunión', `LeadManagerModule.mtOpen(${id})`)}
+      ${_llMI(I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'), 'No es la persona / Derivó a otro', `LeadManagerModule.cpMoreMenu(event,${id})`)}
+      <div class="sed-pop__sep"></div>
+      ${_llMI(I('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'), 'Eliminar contacto', `LeadManagerModule.cpDelete(${id})`)}`, 270, 'left');
+  }
+  let _cpActType = '', _cpActFrom = '', _cpActTo = '';
+  function cpActRange(k, v) { if (k === 'from') _cpActFrom = v; else _cpActTo = v; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); }
+  function cpActFilterMenu(ev) {
+    const opts = [['', 'Todos los tipos']].concat(Object.keys(_ACT).map(k => [k, _ACT[k][0]]));
+    _llPop(ev, opts.map(([k, l]) => _llMI('', (k === _cpActType ? '✓ ' : '') + l, `LeadManagerModule.cpActType('${k}')`)).join(''), 230, 'right');
+  }
+  function cpActType(k) { _cpActType = k; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.getElementById('sed-pop')?.remove(); }
+  function cpMoreTabs(ev) { _llPop(ev, [['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => _llMI('', l, `LeadManagerModule.cpTab('${k}')`)).join(''), 180, 'left'); }
+  function cpAddMenu(ev) {
+    _llPop(ev, ['nota|Registrar nota', 'llamada|Registrar llamada', 'tarea|Crear tarea', 'reunion|Registrar reunión', 'email_enviado|Registrar email', 'linkedin_msg|Registrar mensaje de LinkedIn'].map(x => { const [k, l] = x.split('|'); return _llMI('', l, `LeadManagerModule.cpActOpen('${k}')`); }).join(''), 220, 'right');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || _section !== 'contact-view') return;
+    if ([...document.querySelectorAll('.fin-pi-backdrop, #sed-pop, .cp-mark-menu, [id$="-modal"]')].some(el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed' && getComputedStyle(el).display !== 'none')) return;
+    const t = document.activeElement && document.activeElement.tagName; if (/^(INPUT|TEXTAREA|SELECT)$/.test(t || '')) { document.activeElement.blur(); return; }
+    _cpBack();
+  });
+  function cpTab(t) { const _mt = ['reuniones', 'notas', 'facturas']; const _wasMore = _mt.includes(_cpTab); _cpTab = t; if (_mt.includes(t) || _wasMore) { _renderBody(); const w = document.querySelector('.cpm-body'); if (w) w.scrollTop = 0; if (t === 'resumen') _cpLoadMap(_contacts.find(x => x.id === _contactView)); return; } const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'resumen' || t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
   function _vContactPage(id) {
     const c = _contacts.find(x => x.id === id);
     if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_cpFrom}')">‹ ${_CP_FROM_LABEL[_cpFrom] || 'Contactos'}</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
@@ -40674,44 +40706,46 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
-    return `<div class="cp" id="lm-cp">
-      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? (_cpReturnTo ? 'Contactos' : 'Tareas') : (_cpFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos'))}</button>
-      ${_derivBanner(c)}
-      ${_cpTaskBar(id)}
-      <div class="cp-pg"><span>Contacto ${(() => { const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(x => x.id); const i = ids.indexOf(id); return (i + 1) + ' de ' + ids.length; })()}</span><button title="Contacto anterior" onclick="LeadManagerModule.cpNav(-1)">↑</button><button title="Contacto siguiente" onclick="LeadManagerModule.cpNav(1)">↓</button></div>
-      <div class="cp-head">
-        <button type="button" class="cp-copy" title="Copiar todos los datos del contacto y de su empresa (estado, canal, paso…)" aria-label="Copiar datos" onclick="LeadManagerModule.ldCopy(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-        <div class="cp-pdfg" role="group" aria-label="Descargar ficha en PDF">
-          <button type="button" class="cp-pdf" title="Descargar la ficha en PDF, lista para compartir con tu cliente" aria-label="Descargar ficha en PDF" onclick="LeadManagerModule.ldPdf(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5"/></svg></button>
-          <button type="button" class="cp-pdfl${_pdfLangSel === 'es' ? ' on' : ''}" data-lg="es" title="Descargar PDF en español" onclick="LeadManagerModule.ldPdf(${id}, 'es')">ES</button>
-          <button type="button" class="cp-pdfl${_pdfLangSel === 'en' ? ' on' : ''}" data-lg="en" title="Download PDF in English" onclick="LeadManagerModule.ldPdf(${id}, 'en')">EN</button>
-        </div>
-        <img class="cp-ava" src="${_av(full)}" alt="">
-        <div class="cp-id">
-          <h2 class="cp-name">${esc(full)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</h2>
-          <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
-          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato — corrige el dato y sus secuencias se reanudan">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
-          ${_cpStrip(c)}
-        <div class="cp-actions" style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
-          <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
-          <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de cierre, reunión pactada y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
-          <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">Reunión</button>
-          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
-          <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
+    const ini = full.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(x => x.id);
+    const pos = ids.indexOf(id);
+    const nCamp = Array.isArray(c.sequences) ? c.sequences.length : 0;
+    const nTar = Array.isArray(_cpActs) ? _cpActs.filter(a => a.estado === 'pendiente').length : null;
+    const tabsDef = [['resumen', 'Resumen'], ['actividad', 'Actividades'], ['seguimiento', 'Campañas', nCamp], ['tareas', 'Tareas', nTar], ['senales', 'Señales']];
+    const moreTabs = [['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']];
+    const curTab = _cpTab === 'informacion' ? 'resumen' : _cpTab;
+    const ic = (d, t, js) => `<button type="button" class="cpm-ib" title="${t}" aria-label="${t}" onclick="${js}">${_llI(d, 16)}</button>`;
+    return `<div class="cpm-bd" onclick="LeadManagerModule._cpBack()"></div>
+    <div class="cp cpm" id="lm-cp">
+      <aside class="cpm-l">
+        <div class="cpm-hd"><span class="cpm-av" style="background:${_llAvColor(full)}">${esc(ini)}</span><b class="cpm-nm" title="${esc(full)}">${esc(full)}</b>
+          ${c.linkedin ? `<a class="cpm-lk" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>` : ''}
+          ${c.linkedin_sales_nav ? `<a class="cpm-lk cpm-lk--sn" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">${_SN_ICO}</a>` : ''}
           <span style="flex:1"></span>
-          <button class="cp-act" style="padding:6px 9px" title="Cambiar de contacto: No es la persona / Derivó a otro" onclick="LeadManagerModule.cpMoreMenu(event,${id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+          <button type="button" class="cpm-ib cpm-ib--bare" title="Más acciones" aria-label="Más acciones" onclick="LeadManagerModule.cpMenu(event,${id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+        <div class="cpm-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' en ' : ''}<button type="button" class="cpm-co" ${c.company_id ? `onclick="LeadManagerModule.openCompanyPage(${c.company_id})"` : ''}><span class="cpm-co__av" style="background:${_llAvColor(emp)}">${esc(emp[0].toUpperCase())}</span>${esc(emp)}</button>` : ''}</div>
+        <div class="cpm-badges"><span class="client-badge" style="${eStyle}">${esc(STAGE_LABELS[c.estado] || c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${c.codigo ? `<span class="lm-code" title="Identificador único del contacto">${esc(c.codigo)}</span>` : ''}</div>
+        <div class="cpm-act">
+          <button type="button" class="cpm-primary" onclick="LeadManagerModule.cpTab('seguimiento')">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 15)} Añadir a la campaña</button>
+          ${ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 'Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${id})`)}
+          ${ic('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>', 'Registrar llamada', `LeadManagerModule.cpActOpen('llamada')`)}
+          ${ic('<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 'Crear tarea', `LeadManagerModule.cpActOpen('tarea')`)}
+          ${ic('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 'Registrar nota', `LeadManagerModule.cpActOpen('nota')`)}
         </div>
+        ${_cpFieldsHtml(c)}
+        ${_cpVarsHtml(c)}
+      </aside>
+      <section class="cpm-r">
+        <div class="cpm-tb">
+          <div class="cp-tabs cpm-tabs">${tabsDef.map(([k, l, n]) => `<button class="cp-tab${curTab === k ? ' active' : ''}" data-t="${k}" onclick="LeadManagerModule.cpTab('${k}')">${l}${n != null ? ` <span class="cpm-n">${n}</span>` : ''}</button>`).join('')}<button class="cp-tab${moreTabs.some(m => m[0] === curTab) ? ' active' : ''}" data-t="more" onclick="LeadManagerModule.cpMoreTabs(event)">${(moreTabs.find(m => m[0] === curTab) || ['', 'Más'])[1]} ${_llI('<path d="m6 9 6 6 6-6"/>', 12)}</button></div>
+          <div class="cpm-pg"><span>Contacto ${pos + 1} de ${ids.length}</span><button class="cpm-ib" title="Contacto anterior" onclick="LeadManagerModule.cpNav(-1)">${_llI('<path d="M12 19V5M5 12l7-7 7 7"/>', 15)}</button><button class="cpm-ib" title="Contacto siguiente" onclick="LeadManagerModule.cpNav(1)">${_llI('<path d="M12 5v14M19 12l-7 7-7-7"/>', 15)}</button><span class="cpm-sep"></span><button class="cpm-ib cpm-ib--bare" title="Cerrar (Esc)" aria-label="Cerrar" onclick="LeadManagerModule._cpBack()">${_llI('<path d="M18 6 6 18M6 6l12 12"/>', 16)}</button></div>
         </div>
-      </div>
-      <div class="cp-f__l" style="margin:2px 0 4px 2px">Etapa comercial</div>
-      ${_cpStepper(c, id)}
-      <div class="cp2"><aside class="cp2-l">${_cpFieldsHtml(c)}</aside><div class="cp2-r">
-      <div class="cp-tabs">
-            ${[['resumen', 'Resumen'], ['actividad', 'Actividades'], ['seguimiento', 'Campañas'], ['tareas', 'Tareas'], ['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => `<button class="cp-tab${(_cpTab === 'informacion' ? 'resumen' : _cpTab) === k ? ' active' : ''}" data-t="${k}" onclick="LeadManagerModule.cpTab('${k}')">${l}</button>`).join('')}
-      </div>
-      <div id="cp-tabwrap">${_cpTabContent(c)}</div>
-      </div></div>
+        <div class="cpm-body">
+          ${_derivBanner(c)}
+          ${_cpTaskBar(id)}
+          <div id="cp-tabwrap">${_cpTabContent(c)}</div>
+        </div>
+      </section>
     </div>`;
   }
   // ── Pestañas de la ficha (rediseño 2026-10-04): Información / Seguimiento / Canales ──
@@ -40719,43 +40753,83 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   const _CP_ICO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   const _infoCopyBtn = (v, tip) => `<button type="button" class="cp-go" title="${tip || 'Copiar'}" onclick="event.preventDefault();event.stopPropagation();LeadManagerModule.lmCopy('${esc(String(v).replace(/'/g, '&#39;'))}','Copiado')">${_CP_ICO}</button>`;
   const _goUrl = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:[/][/]/i.test(u) ? u : 'https://' + u); };
-  // Panel izquierdo fijo «Campos de contacto» (estilo Lemlist): siempre visible, edita al salir del campo.
+  // Panel izquierdo «Campos de contacto» (estilo Lemlist): cada campo en su caja con icono; se guarda al salir del campo.
+  const _CPI = {
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>',
+    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    job: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+    pin: '<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    tag: '<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0l-7.17-7.17a2 2 0 0 1 0-2.83l7.17-7.17a2 2 0 0 1 2.83 0l7.17 7.17a2 2 0 0 1 0 2.83z"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    org: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/>',
+  };
   function _cpFieldsHtml(c) {
     const id = c.id;
-    const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
-    const FB = (f, label, val, btns) => `<label class="cp-f"><span class="cp-f__l">${label}</span><span class="cp-f__row"><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})">${val ? btns : ''}</span></label>`;
+    const box = (label, inner) => `<div class="cpm-f"><span class="cpm-f__l">${label}</span>${inner}</div>`;
+    const F = (f, label, val, ico, extra) => box(label, `<span class="cpm-f__box"><i>${_llI(_CPI[ico] || _CPI.user, 15)}</i><input data-f="${f}" value="${esc(val || '')}" placeholder="Añadir" onchange="LeadManagerModule.cpSave(${id})">${extra || ''}</span>`);
+    const goBtn = (href, tip, svg) => `<a class="cpm-f__go" href="${esc(_goUrl(href))}" target="_blank" rel="noopener" title="${tip}" onclick="event.stopPropagation()">${svg}</a>`;
+    const emailBox = box('Emails', `<span class="cpm-f__box"><i>${_llI(_CPI.mail, 15)}</i><input data-f="email" value="${esc(c.email || '')}" placeholder="Añadir email" onchange="LeadManagerModule.cpSave(${id})">${c.email ? _infoCopyBtn(c.email, 'Copiar email') : `<button type="button" class="ll-find" onclick="LeadManagerModule.llFindEmail(${id})">ENCONTRAR EMAIL</button>`}</span>`);
+    const dt = c.created_at ? new Date(c.created_at) : null;
+    const ago = dt && !isNaN(dt) ? (() => { const d = Math.floor((Date.now() - dt) / 864e5); return d <= 0 ? 'Hoy' : d === 1 ? 'Hace 1 día' : d < 30 ? `Hace ${d} días` : d < 365 ? `Hace ${Math.floor(d / 30)} mes${Math.floor(d / 30) > 1 ? 'es' : ''}` : `Hace ${Math.floor(d / 365)} año${Math.floor(d / 365) > 1 ? 's' : ''}`; })() : '';
+    const dateBox = dt && !isNaN(dt) ? box('Fecha de añadido', `<span class="cpm-f__box cpm-f__box--ro"><i>${_llI(_CPI.cal, 15)}</i><span class="cpm-f__v">${dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</span><em>${ago}</em></span>`) : '';
+    const stOpts = _ORDER.map(k => `<option value="${k}"${(c.estado || 'nuevo') === k ? ' selected' : ''}>${esc(STAGE_LABELS[k] || k)}</option>`).join('');
+    const stBox = box('Estado del contacto', `<span class="cpm-f__box"><select onchange="LeadManagerModule.cpSetStage(${id},this.value)">${stOpts}</select></span>`);
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
-    return `<div class="cp2-ft"><span>Campos de contacto</span></div><div class="cp2-fl">
-      ${F('email', 'Email', c.email)}${F('email_personal', 'Email personal', c.email_personal)}
-      ${FB('telefono', 'Teléfono', c.telefono, _infoCopyBtn(c.telefono, 'Copiar teléfono'))}${FB('movil', 'Móvil', c.movil, _infoCopyBtn(c.movil, 'Copiar móvil'))}
-      ${F('nombre', 'Nombre', c.nombre)}${F('apellido', 'Apellido', c.apellido)}
-      ${F('cargo', 'Cargo', c.cargo)}${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
-      <div class="cp-f"><span class="cp-f__l">Estado del contacto</span><span class="cp2-ro">${esc(STAGE_LABELS[c.estado] || c.estado || 'nuevo')}</span></div>
-      ${FB('linkedin', 'LinkedIn', c.linkedin, `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>`)}
-      ${FB('linkedin_sales_nav', 'URL Sales Navigator', c.linkedin_sales_nav, `<a class="cp-go" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" onclick="event.stopPropagation()">${_SN_ICO}</a>`)}
-      ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
-      ${F('fuente', 'Fuente', c.fuente)}
-      <label class="cp-f"><span class="cp-f__l">Empresa asociada</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
-      ${c.company_id ? `<button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button>` : ''}
+    const coBox = box('Empresa asociada', `<span class="cpm-f__box"><i>${_llI(_CPI.org, 15)}</i><select data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select>${c.company_id ? `<button type="button" class="cpm-f__go" title="Abrir ficha de la empresa" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">${_llI('<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', 14)}</button>` : ''}</span>`);
+    return `<div class="cpm-card"><div class="cpm-card__t"><span>Campos de contacto</span></div>
+      ${emailBox}
+      ${F('email_personal', 'Email personal', c.email_personal, 'mail')}
+      ${F('telefono', 'Teléfono principal', c.telefono, 'phone', c.telefono ? _infoCopyBtn(c.telefono, 'Copiar teléfono') : '')}
+      ${F('movil', 'Móvil', c.movil, 'phone', c.movil ? _infoCopyBtn(c.movil, 'Copiar móvil') : '')}
+      ${F('nombre', 'Nombre', c.nombre, 'user')}${F('apellido', 'Apellido', c.apellido, 'user')}
+      ${dateBox}${stBox}
+      ${F('cargo', 'Cargo', c.cargo, 'job')}${F('seniority', 'Seniority', c.seniority, 'user')}${F('departamento', 'Departamento', c.departamento, 'org')}
+      ${F('linkedin', 'LinkedIn', c.linkedin, 'link', c.linkedin ? goBtn(c.linkedin, 'Abrir perfil de LinkedIn', _GO_ICO) : '')}
+      ${F('linkedin_sales_nav', 'URL Sales Navigator', c.linkedin_sales_nav, 'link', c.linkedin_sales_nav ? goBtn(c.linkedin_sales_nav, 'Abrir en Sales Navigator', _SN_ICO) : '')}
+      ${F('ciudad', 'Ciudad', c.ciudad, 'pin')}${F('region', 'Región', c.region, 'pin')}${F('pais', 'País', c.pais, 'pin')}
+      ${F('fuente', 'Fuente', c.fuente, 'tag')}
+      ${coBox}
     </div>`;
   }
-  // Pestaña «Resumen»: empresa, última actividad y datos importados (los campos editables viven en el panel izquierdo).
-  function _cpInfoHtml(c) {
+  // Segunda tarjeta del panel izquierdo: variables (datos importados sin mapear) con buscador, como las variables de campaña de Lemlist.
+  function _cpVarsHtml(c) {
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
-    const rawKeys = Object.keys(raw).filter(k => raw[k]);
+    const keys = Object.keys(raw).filter(k => raw[k] != null && String(raw[k]).trim());
+    if (!keys.length) return '';
+    return `<div class="cpm-card"><div class="cpm-card__t"><span>Variables</span></div>
+      <div class="cpm-search">${_llI('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', 15)}<input placeholder="Buscar una variable" oninput="var q=this.value.toLowerCase();this.closest('.cpm-card').querySelectorAll('.cpm-v').forEach(function(r){r.style.display=r.dataset.k.toLowerCase().indexOf(q)>-1?'':'none'})"></div>
+      ${keys.map(k => `<div class="cpm-v" data-k="${esc(k)}"><span class="cpm-f__l">${esc(k)}</span><div class="cpm-f__box cpm-f__box--ro"><i>${_llI('<path d="M4 7V4h16v3M9 20h6M12 4v16"/>', 14)}</i><span class="cpm-f__v">${esc(raw[k])}</span></div></div>`).join('')}
+    </div>`;
+  }
+  // Pestaña «Resumen» (tablero predeterminado): etapa comercial, campos clave, última actividad y empresa.
+  function _cpInfoHtml(c) {
     const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null;
-    let coCard = `<div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp2-empty">Sin empresa asociada. Elige una en «Empresa asociada».</div></div>`;
+    const loc = [c.ciudad, c.region, c.pais].filter(Boolean).join(', ');
+    const cli = (_clients || []).find(x => x.id === c.outbound_client_id);
+    const row = (ico, l, v) => `<div class="cpm-kv"><span class="cpm-kv__l">${_llI(ico, 15)}${l}</span><span class="cpm-kv__v${v ? '' : ' is-empty'}">${v ? esc(v) : 'Sin dato'}</span></div>`;
+    const acts = Array.isArray(_cpActs) ? _cpActs.slice(0, 4) : null;
+    const actBody = acts === null ? '<div class="cp2-empty">Cargando…</div>' : (acts.length ? acts.map(a => _cpAct(a)).join('') : `<div class="cpm-empty"><i>${_llI('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>', 18)}</i><b>Sin actividad</b><span>Aún no hay actividad registrada.</span></div>`);
+    let coCard = '';
     if (co) {
       const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__row"><span class="cp-f__ro">${esc(v)}</span>${l === 'LinkedIn' ? `<a class="cp-go" href="${esc(_goUrl(v))}" target="_blank" rel="noopener" title="Abrir LinkedIn de la empresa">${_GO_ICO}</a>` : ''}${l === 'Teléfono' ? _infoCopyBtn(v, 'Copiar teléfono') : ''}</span></div>`;
-      const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
-      const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
-      const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};
-      const extra = Object.keys(rw).filter(k => rw[k] != null && String(rw[k]).trim() && !shown.has(String(rw[k]).trim().toLowerCase())).slice(0, 12).map(k => [k, String(rw[k])]);
-      coCard = `<div class="cp-card cp-card--co"><div class="cp-card__t">${esc(co.nombre || co.dominio || 'Empresa')} <button class="cp-mini" style="width:auto;padding:0 10px" onclick="LeadManagerModule.openCompanyPage(${co.id})">Ver ficha ›</button></div><div class="cp-fields">${known.concat(extra).map(([l, v]) => R(l, v)).join('')}</div><div class="cp-map cp-map--wide" id="cp-map-co"></div></div>`;
+      const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['País', co.pais]].filter(x => x[1]);
+      coCard = `<div class="cpm-w"><div class="cpm-w__t">${_llI(_CPI.org, 16)}<b>Empresas</b></div>
+        <div class="cpm-coh" onclick="LeadManagerModule.openCompanyPage(${co.id})"><span class="cpm-co__av cpm-co__av--lg" style="background:${_llAvColor(co.nombre || co.dominio || '')}">${esc((co.nombre || co.dominio || '?')[0].toUpperCase())}</span><div><b>${esc(co.nombre || co.dominio)}</b><span>${esc(co.dominio || co.website || '')}</span></div></div>
+        ${known.length ? `<div class="cp-fields cpm-cof">${known.map(([l, v]) => R(l, v)).join('')}</div>` : ''}
+        <div class="cp-map cp-map--wide" id="cp-map-co"></div></div>`;
     }
-    const acts = Array.isArray(_cpActs) ? _cpActs.slice(0, 5) : null;
-    const actCard = `<div class="cp-card"><div class="cp-card__t">Última actividad <button class="cp-link2" onclick="LeadManagerModule.cpTab('actividad')">Ver todo ›</button></div>${acts === null ? '<div class="cp2-empty">Cargando…</div>' : (acts.length ? acts.map(a => _cpAct(a)).join('') : '<div class="cp2-empty">Sin actividad registrada todavía.</div>')}</div>`;
-    return `<div class="cp-info cp-info--res">${actCard}${coCard}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
+    return `<div class="cpm-res">
+      <div class="cpm-w"><div class="cpm-w__t"><b>Etapa comercial</b></div>${_cpStepper(c, c.id)}</div>
+      <div class="cpm-two">
+        <div class="cpm-w"><div class="cpm-w__t">${_llI('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', 16)}<b>Campos</b></div>
+          ${row(_CPI.job, 'Cargo', c.cargo)}${row(_CPI.mail, 'Email', c.email)}${row(_CPI.pin, 'Ubicación', loc)}${row(_CPI.user, 'Propietario', cli ? (cli.nombre || cli.empresa || '') : '')}${row(_CPI.tag, 'Estado', STAGE_LABELS[c.estado] || c.estado || 'nuevo')}
+        </div>
+        <div class="cpm-w"><div class="cpm-w__t">${_llI('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>', 16)}<b>Última actividad</b><button class="cp-link2" style="margin-left:auto" onclick="LeadManagerModule.cpTab('actividad')">Ver todo ›</button></div>${actBody}</div>
+      </div>
+      ${coCard}
+    </div>`;
   }
   function _cpSeguimientoHtml(c) {
     const id = c.id;
@@ -41064,7 +41138,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function _cpTabContent(c) {
     if (!c) return '';
-    if (_cpTab === 'seguimiento') return _cpSeguimientoHtml(c);
+    if (_cpTab === 'seguimiento') return `<div class="cpm-wh"><b>Campañas</b><button class="cpm-btn" onclick="LeadManagerModule.cpTab('seguimiento')">Enviar a la campaña</button></div>` + _cpSeguimientoHtml(c);
+    if (_cpTab === 'senales') return `<div class="cpm-empty cpm-empty--big"><i>${_llI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>', 26)}</i><b>Sin señales por ahora</b><span>Las señales de compra (cambios de puesto, noticias) aparecerán aquí cuando conectemos una fuente.</span></div>`;
     if (_cpTab === 'informacion' || _cpTab === 'resumen') { setTimeout(() => _cpLoadMap(c), 0); return _cpInfoHtml(c); }
     if (_cpTab === 'notas') {
       return `<div class="cp-card"><div class="cp-card__t">Notas</div><textarea class="cp-notes" data-f="notas" placeholder="Escribe notas sobre este contacto…  Se guardan al salir del campo." onchange="LeadManagerModule.cpSave(${c.id})">${esc(c.notas || '')}</textarea></div>`;
@@ -41076,13 +41151,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (acts === null) return `<div class="cp-card"><div class="cp-empty2">Cargando…</div></div>`;
     if (_cpTab === 'reuniones') {
       const list = acts.filter(a => a.tipo === 'reunion');
-      return `<div class="cp-card"><div class="cp-card__t">Reuniones <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('reunion')">＋</button></div>${list.length ? list.map(a => _cpAct(a)).join('') : '<div class="cp-empty2">Sin reuniones — registra una con ＋</div>'}</div>`;
+      return `<div class="cpm-wh"><b>Reuniones</b><button class="cpm-btn" onclick="LeadManagerModule.cpActOpen('reunion')">Añadir reunión</button></div>${list.length ? `<div class="cp-card">${list.map(a => _cpAct(a)).join('')}</div>` : '<div class="cpm-empty cpm-empty--big"><b>Sin reuniones</b><span>Registra una con «Añadir reunión».</span></div>'}`;
     }
     if (_cpTab === 'tareas') {
       const list = acts.filter(a => a.estado === 'pendiente');
-      return `<div class="cp-card"><div class="cp-card__t">Tareas pendientes <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('tarea')">＋</button></div>${list.length ? list.map(a => _cpAct(a, true)).join('') : '<div class="cp-empty2">Sin tareas pendientes</div>'}</div>`;
+      return `<div class="cpm-wh"><b>Tareas pendientes</b><button class="cpm-btn" onclick="LeadManagerModule.cpActOpen('tarea')">Crear tarea</button></div>${list.length ? `<div class="cp-card">${list.map(a => _cpAct(a, true)).join('')}</div>` : `<div class="cpm-empty cpm-empty--big"><i>${_llI('<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 26)}</i><b>¡Todo claro por ahora!</b><span>Las nuevas tareas creadas se mostrarán aquí.</span><button class="cpm-primary" onclick="LeadManagerModule.cpActOpen('tarea')">Crear tarea</button></div>`}`;
     }
-    return `<div class="cp-card"><div class="cp-card__t">Actividad <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('')">＋</button></div>${acts.length ? acts.map(a => _cpAct(a)).join('') : '<div class="cp-empty2">Sin actividad — registra la primera con ＋</div>'}</div>`;
+    const _fa = acts.filter(a => (!_cpActType || a.tipo === _cpActType) && (!_cpActFrom || String(a.fecha).slice(0, 10) >= _cpActFrom) && (!_cpActTo || String(a.fecha).slice(0, 10) <= _cpActTo));
+    return `<div class="cpm-wh"><div class="cpm-dr" title="Rango de fechas">${_llI('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>', 14)}<input type="date" value="${_cpActFrom}" onchange="LeadManagerModule.cpActRange('from',this.value)" aria-label="Desde"><span>→</span><input type="date" value="${_cpActTo}" onchange="LeadManagerModule.cpActRange('to',this.value)" aria-label="Hasta"></div><span style="flex:1"></span><button class="cpm-ib${_cpActType ? ' is-on' : ''}" title="Filtrar por tipo" aria-label="Filtrar" onclick="LeadManagerModule.cpActFilterMenu(event)" style="margin-right:8px">${_llI('<path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>', 15)}</button><button class="cpm-btn" onclick="LeadManagerModule.cpAddMenu(event)">Añadir ${_llI('<path d="m6 9 6 6 6-6"/>', 13)}</button></div>${_fa.length ? `<div class="cp-card">${_fa.map(a => _cpAct(a)).join('')}</div>` : `<div class="cpm-empty cpm-empty--big"><i>${_llI('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', 26)}</i><b>No hay actividades por ahora</b><span>La actividad se mostrará aquí tan pronto suceda algo.</span></div>`}`;
   }
   function _cpAct(a, isTask) {
     const m = _actMeta(a.tipo);
@@ -43516,7 +43592,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, cpMenu, cpAddMenu, cpMoreTabs, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
