@@ -21856,3 +21856,18 @@ body.ibx-lb-open{overflow:hidden}
 .ibx2-acts { gap: 4px; padding: 0 10px 12px; }
 .ibx2-add { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; padding: 8px 6px; font-size: .74rem; }
 .ibx2-act { width: 30px; height: 34px; }
+
+.ibx2-fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 0 10px 8px; }
+.ibx2-fil { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; background: var(--primary-soft); color: var(--text-primary); border: 1px solid var(--border); padding: 2px 4px 2px 8px; border-radius: 12px; cursor: pointer; max-width: 100%; }
+.ibx2-fil b { color: var(--primary); font-weight: 700; }
+.ibx2-fil button { background: none; border: 0; color: var(--text-muted); cursor: pointer; padding: 0 3px; }
+.ibx2-addf { font: inherit; font-size: .74rem; font-weight: 600; background: none; border: 1px dashed var(--border); color: var(--primary); padding: 3px 10px; border-radius: 12px; cursor: pointer; }
+.ibx2-addf:hover { background: var(--primary-soft); }
+.ibx2-fq { padding: 8px; position: sticky; top: 0; background: var(--surface); }
+.ibx2-fq input, .ibx2-fin { width: 100%; font: inherit; font-size: .8rem; border: 1px solid var(--border); padding: 6px 8px; background: var(--surface); color: var(--text-primary); box-sizing: border-box; }
+.ibx2-fg { padding: 8px 12px 3px; font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.ibx2-fed { padding: 10px; display: flex; flex-direction: column; gap: 8px; width: 270px; }
+.ibx2-fed__t { font-size: .82rem; font-weight: 700; }
+.ibx2-fopts { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.ibx2-fopts label { display: flex; align-items: center; gap: 7px; font-size: .78rem; cursor: pointer; }
+.ibx2-fed__b { display: flex; justify-content: flex-end; gap: 6px; }

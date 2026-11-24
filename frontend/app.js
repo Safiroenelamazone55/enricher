@@ -29561,6 +29561,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ibFSeq      = 0;       // 0 = todas, o id de secuencia
   let _ibFiltrosPopClose = null;
   let _ibQ = '';             // búsqueda de texto
+  let _ibFils = [];          // filtros estilo Lemlist: [{k, op, v}]
+  let _ibFiltRow = false;    // fila «＋ Añadir un filtro» visible
   let _ibSearchOpen = false; // fila de búsqueda plegada por defecto
   let _ibSideTab = 'general';
   let _ibActive  = null;   // contact_id del hilo abierto
@@ -29684,6 +29686,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const c = _contacts.find(x => x.id === t.contact_id);
         if (!(c?.sequences || []).some(s => s.id === _ibFSeq)) return false;
       }
+      if (_ibFils.length && !_ibFilMatch(t)) return false;
       if (_ibQ) {
         const q = _ibQ.toLowerCase();
         const hay = [t.nombre, t.apellido, t.email, t.empresa, t.last_snippet, t.last_asunto].filter(Boolean).join(' ').toLowerCase();
@@ -29693,7 +29696,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     });
   }
   function _ibFiltrosActivos() {
-    let n = _ibDisp ? 1 : 0;
+    let n = (_ibDisp ? 1 : 0) + _ibFils.length;
     if (_ibFApertura !== 'todos') n++;
     if (_ibFLeido !== 'todos') n++;
     if (_ibFSeq) n++;
@@ -29702,7 +29705,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibSetFApertura(v) { _ibFApertura = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   function _ibSetFLeido(v) { _ibFLeido = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   function _ibSetFSeq(v) { _ibFSeq = parseInt(v) || 0; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
-  function _ibLimpiarFiltrosExtra() { _ibFApertura = 'todos'; _ibFLeido = 'todos'; _ibFSeq = 0; _ibDisp = ''; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function _ibLimpiarFiltrosExtra() { _ibFils = []; _ibFApertura = 'todos'; _ibFLeido = 'todos'; _ibFSeq = 0; _ibDisp = ''; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   // Mismo patrón que abrirFiltroEstado (WhatsApp): un ícono que no ocupa espacio fijo
   // en la barra, con un popover que agrupa varios filtros — pedido explícito de Jenny
   // 2026-08-26 para no repetir selects/pills que ya le habían quitado espacio antes.
@@ -31019,6 +31022,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <button class="ibx2-ico${nAct || _ibQ ? ' on' : ''}" id="ibx-more" title="Buscar, filtrar y más" onclick="LeadManagerModule.ibMoreMenu(event)">${_ibSvg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}${nAct ? `<i class="ibx2-badge">${nAct}</i>` : ''}</button>
       </div>
       ${_ibSearchOpen ? `<div class="ibx2-search">${_ibSvg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 13)}<input id="ibx-q" value="${esc(_ibQ)}" placeholder="Buscar nombre, email, empresa o texto…" autocomplete="off" oninput="LeadManagerModule.ibSearch(this.value)"><button title="Cerrar búsqueda" onclick="LeadManagerModule.ibToggleSearch()">✕</button></div>` : ''}
+      ${_ibFiltRow || _ibFils.length ? `<div class="ibx2-fbar">${_ibFils.map((f, i) => `<span class="ibx2-fil" onclick="LeadManagerModule.ibFilEdit(event,${i})"><b>${esc((_ibDef(f.k) || {}).l || f.k)}</b> ${esc(_ibOpLbl(f))}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.ibFilDel(${i})">✕</button></span>`).join('')}<button class="ibx2-addf" id="ibx-addf" onclick="LeadManagerModule.ibFilMenu(event)">＋ Añadir un filtro</button></div>` : ''}
       ${chips.length ? `<div class="ibx2-chips">${chips.map(c => `<button class="ibx2-fc" onclick="${c[1]}">${esc(c[0])} <span>✕</span></button>`).join('')}</div>` : ''}
     </div>`;
   }
@@ -31160,13 +31164,125 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function ibMoreMenu(ev) {
     _ibPop(ev, () => _ibItem("LeadManagerModule.ibToggleSearch()", 'Buscar', _ibSearchOpen, _ibSvg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 13))
-      + _ibItem("LeadManagerModule.ibAbrirFiltros(event, document.getElementById('ibx-more'))", 'Añadir un filtro…', _ibFiltrosActivos() > 0, _ibSvg('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 13))
+      + _ibItem("LeadManagerModule.ibFilRow()", 'Añadir un filtro…', _ibFiltrosActivos() > 0, _ibSvg('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 13))
       + '<div class="chat-ctx-sep"></div>'
       + _ibItem("LeadManagerModule.composeAbrir()", 'Nuevo correo', false, _ibSvg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 13))
       + (_data.length ? _ibItem("LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')", 'Registrar respuesta manual', false, _ibSvg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 13)) : '')
       + (_ibTab === 'env' ? _ibItem("LeadManagerModule.ibToggleEnvVista()", 'Ver tabla de tracking', false) : '')
       + (_ibFiltrosActivos() ? '<div class="chat-ctx-sep"></div>' + _ibItem("LeadManagerModule._ibLimpiarFiltrosExtra()", '✕ Limpiar filtros') : ''));
   }
+  // ── Filtros estilo Lemlist para la bandeja: campo → operador → valor ──
+  const _IB_OPS_T = [['has', 'contiene'], ['nhas', 'no contiene'], ['eq', 'es'], ['empty', 'está vacío'], ['nempty', 'no está vacío']];
+  const _IB_OPS_S = [['is', 'es'], ['nis', 'no es']];
+  function _ibDefs() {
+    const T = (k, g, l, get) => ({ k, g, l, t: 'txt', get });
+    return [
+      { k: 'cat', g: 'Conversación', l: 'Estado de la conversación', t: 'sel', opts: [['sin', 'Sin responder'], ['resp', 'Respondido'], ['auto', 'Automática'], ['env', 'Enviado'], ['reb', 'Rebote']], get: (t) => _ibCat(t) },
+      { k: 'disp', g: 'Conversación', l: 'Etiqueta', t: 'sel', opts: _DISPOS.map(d => [d[0], d[1]]), get: (t) => t.disposition || '' },
+      { k: 'cli', g: 'Conversación', l: 'Cliente', t: 'sel', opts: _clients.map(c => [String(c.id), c.nombre]), get: (t) => String(t.outbound_client_id || '') },
+      { k: 'seq', g: 'Conversación', l: 'Secuencia', t: 'sel', opts: [...(_sequences || [])].sort((a, b) => a.nombre.localeCompare(b.nombre)).map(x => [String(x.id), x.nombre]), get: (t, c) => (c.sequences || []).map(x => String(x.id)) },
+      { k: 'ape', g: 'Conversación', l: 'Apertura', t: 'sel', opts: [['1', 'Abierto'], ['0', 'No abierto']], get: (t) => t.abierto ? '1' : '0' },
+      { k: 'leido', g: 'Conversación', l: 'Leído', t: 'sel', opts: [['0', 'No leído'], ['1', 'Leído']], get: (t) => t.unread > 0 ? '0' : '1' },
+      T('msg', 'Conversación', 'Mensaje o asunto', (t) => [t.last_snippet, t.last_asunto].filter(Boolean).join(' ')),
+      T('nom', 'Contacto', 'Nombre completo', (t) => [t.nombre, t.apellido].filter(Boolean).join(' ')),
+      T('email', 'Contacto', 'Email', (t) => t.email || ''),
+      T('nombre', 'Contacto', 'Nombre', (t) => t.nombre || ''),
+      T('apellido', 'Contacto', 'Apellidos', (t) => t.apellido || ''),
+      T('tel', 'Contacto', 'Teléfono', (t, c) => c.telefono || c.movil || ''),
+      T('cargo', 'Contacto', 'Título del puesto', (t, c) => c.cargo || ''),
+      T('pais', 'Contacto', 'Ubicación', (t, c) => [c.ciudad, c.pais].filter(Boolean).join(' ')),
+      T('li', 'Contacto', 'LinkedIn', (t, c) => c.linkedin || ''),
+      T('empresa', 'Empresa', 'Empresa actual', (t, c) => t.empresa || c.company_nombre || ''),
+      T('sector', 'Empresa', 'Sector', (t, c) => c.company_industria || ''),
+      T('tam', 'Empresa', 'Tamaño', (t, c) => c.company_tamano || ''),
+      T('cpais', 'Empresa', 'Ubicación de la empresa', (t, c) => [c.company_ciudad, c.company_pais].filter(Boolean).join(' ')),
+      T('dom', 'Empresa', 'Dominio', (t, c) => c.company_dominio || ''),
+      T('ing', 'Empresa', 'Ingresos', (t, c) => c.company_ingresos || ''),
+    ];
+  }
+  function _ibDef(k) { return _ibDefs().find(d => d.k === k); }
+  function _ibOpLbl(f) {
+    const d = _ibDef(f.k) || {};
+    if (d.t === 'sel') { const names = (f.v || []).map(v => ((d.opts || []).find(o => o[0] === v) || [v, v])[1]); return (f.op === 'nis' ? 'no es ' : 'es ') + (names.join(', ') || '…'); }
+    const o = (_IB_OPS_T.find(x => x[0] === f.op) || [0, ''])[1];
+    return o + (['empty', 'nempty'].includes(f.op) ? '' : ' «' + (f.v || '') + '»');
+  }
+  let _ibCMap = null, _ibCMapN = -1;
+  function _ibFilMatch(t) {
+    if (_ibCMapN !== (_contacts || []).length || !_ibCMap) { _ibCMap = new Map((_contacts || []).map(c => [c.id, c])); _ibCMapN = (_contacts || []).length; }
+    const c = _ibCMap.get(t.contact_id) || {};
+    const defs = _ibDefs();
+    return _ibFils.every(f => {
+      const d = defs.find(x => x.k === f.k); if (!d) return true;
+      const raw = d.get(t, c);
+      if (d.t === 'sel') {
+        const have = Array.isArray(raw) ? raw : [raw];
+        const hit = (f.v || []).some(v => have.includes(v));
+        return f.op === 'nis' ? !hit : hit;
+      }
+      const a = String(raw || '').toLowerCase(), b = String(f.v || '').toLowerCase().trim();
+      if (f.op === 'empty') return !a.trim();
+      if (f.op === 'nempty') return !!a.trim();
+      if (!b) return true;
+      if (f.op === 'eq') return a.trim() === b;
+      if (f.op === 'nhas') return !a.includes(b);
+      return a.includes(b);
+    });
+  }
+  function _ibPopAt(anchor, html) {
+    if (_ibFiltrosPopClose) _ibFiltrosPopClose();
+    const menu = document.createElement('div'); menu.className = 'chat-ctx-menu ibx2-fpop'; menu.style.maxHeight = '70vh'; menu.style.overflowY = 'auto'; menu.style.minWidth = '250px';
+    menu.onclick = e => e.stopPropagation(); menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const r = anchor.getBoundingClientRect(), w = menu.offsetWidth || 250;
+    menu.style.top = (r.bottom + 6) + 'px'; menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    _ibFiltrosPopClose = () => { menu.remove(); document.removeEventListener('click', _ibFiltrosPopClose); _ibFiltrosPopClose = null; };
+    setTimeout(() => document.addEventListener('click', _ibFiltrosPopClose), 0);
+    return menu;
+  }
+  function ibFilRow() {
+    if (_ibFiltrosPopClose) _ibFiltrosPopClose();
+    _ibFiltRow = true; _ibPaint();
+    setTimeout(() => { const b = document.getElementById('ibx-addf'); if (b) _ibFilFieldMenu(b); }, 60);
+  }
+  function ibFilMenu(ev) { ev.stopPropagation(); _ibFilFieldMenu(ev.currentTarget); }
+  function _ibFilFieldMenu(anchor) {
+    const defs = _ibDefs(), groups = [...new Set(defs.map(d => d.g))];
+    const html = `<div class="ibx2-fq"><input id="ibx-fq" placeholder="Buscar un campo…" autocomplete="off" oninput="LeadManagerModule.ibFilSearch(this.value)"></div><div id="ibx-flist">${groups.map(g => `<div class="ibx2-fg" data-g="1">${esc(g)}</div>${defs.filter(d => d.g === g).map(d => `<button class="chat-ctx-item ibx2-fitem" data-n="${esc(d.l.toLowerCase())}" onclick="LeadManagerModule.ibFilPick('${d.k}')">${esc(d.l)}</button>`).join('')}`).join('')}</div>`;
+    _ibPopAt(anchor, html);
+    setTimeout(() => document.getElementById('ibx-fq')?.focus(), 20);
+  }
+  function ibFilSearch(q) {
+    q = String(q || '').toLowerCase().trim();
+    document.querySelectorAll('#ibx-flist .ibx2-fitem').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; });
+    document.querySelectorAll('#ibx-flist .ibx2-fg').forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.classList.contains('ibx2-fg')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; } g.style.display = any ? '' : 'none'; });
+  }
+  let _ibEditIdx = -1;
+  function ibFilPick(k) { _ibEditIdx = -1; _ibFilEditor(document.getElementById('ibx-addf') || document.getElementById('ibx-more'), { k, op: (_ibDef(k).t === 'sel' ? 'is' : 'has'), v: _ibDef(k).t === 'sel' ? [] : '' }); }
+  function ibFilEdit(ev, i) { ev.stopPropagation(); _ibEditIdx = i; _ibFilEditor(ev.currentTarget, JSON.parse(JSON.stringify(_ibFils[i]))); }
+  let _ibDraft = null;
+  function _ibFilEditor(anchor, f) {
+    _ibDraft = f; const d = _ibDef(f.k);
+    const ops = (d.t === 'sel' ? _IB_OPS_S : _IB_OPS_T).map(o => `<option value="${o[0]}"${f.op === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
+    const val = d.t === 'sel'
+      ? `<div class="ibx2-fopts">${d.opts.map(o => `<label><input type="checkbox" value="${esc(o[0])}"${(f.v || []).includes(o[0]) ? ' checked' : ''} onchange="LeadManagerModule.ibFilTick(this)"> ${esc(o[1])}</label>`).join('') || '<em>Sin opciones</em>'}</div>`
+      : `<input class="ibx2-fin" id="ibx-fval" value="${esc(f.v || '')}" placeholder="Valor…" autocomplete="off" oninput="LeadManagerModule.ibFilVal(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.ibFilApply()"${['empty', 'nempty'].includes(f.op) ? ' style="display:none"' : ''}>`;
+    _ibPopAt(anchor, `<div class="ibx2-fed"><div class="ibx2-fed__t">${esc(d.l)}</div><select class="ibx2-fin" onchange="LeadManagerModule.ibFilOp(this.value)">${ops}</select>${val}<div class="ibx2-fed__b"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibFilCancel()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibFilApply()">Aplicar</button></div></div>`);
+    setTimeout(() => document.getElementById('ibx-fval')?.focus(), 20);
+  }
+  function ibFilOp(v) { if (!_ibDraft) return; _ibDraft.op = v; const i = document.getElementById('ibx-fval'); if (i) i.style.display = ['empty', 'nempty'].includes(v) ? 'none' : ''; }
+  function ibFilVal(v) { if (_ibDraft) _ibDraft.v = v; }
+  function ibFilTick(el) { if (!_ibDraft) return; const a = new Set(_ibDraft.v || []); el.checked ? a.add(el.value) : a.delete(el.value); _ibDraft.v = [...a]; }
+  function ibFilCancel() { _ibDraft = null; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); }
+  function ibFilApply() {
+    if (!_ibDraft) return;
+    const d = _ibDef(_ibDraft.k), f = _ibDraft;
+    if (d.t === 'sel' && !(f.v || []).length) { showBanner('Elige al menos una opción', 'info'); return; }
+    if (d.t !== 'sel' && !['empty', 'nempty'].includes(f.op) && !String(f.v || '').trim()) { showBanner('Escribe un valor', 'info'); return; }
+    if (_ibEditIdx >= 0) _ibFils[_ibEditIdx] = f; else _ibFils.push(f);
+    _ibDraft = null; _ibEditIdx = -1; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint();
+  }
+  function ibFilDel(i) { _ibFils.splice(i, 1); _ibPaint(); }
   function ibToggleSearch() {
     _ibSearchOpen = !_ibSearchOpen; if (!_ibSearchOpen) _ibQ = '';
     if (_ibFiltrosPopClose) _ibFiltrosPopClose();
@@ -42160,7 +42276,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibCopy, ibSeqPick, ibSeqAdd, ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibFilRow, ibFilMenu, ibFilSearch, ibFilPick, ibFilEdit, ibFilOp, ibFilVal, ibFilTick, ibFilCancel, ibFilApply, ibFilDel, ibCopy, ibSeqPick, ibSeqAdd, ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
