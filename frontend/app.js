@@ -24983,8 +24983,7 @@ const LeadManagerModule = (() => {
         <div class="lm-seq-tl">${pasosHtml}</div>
       </div>`
       : `<button class="seq-collapse-strip" onclick="LeadManagerModule.seqPasosToggle()" title="Mostrar secuencia">›</button>`;
-    return `${backBtn}
-      ${_seqTopbar(id, s, steps)}
+    return `${_seqTopbar(id, s, steps)}
       <div class="seq-split${_seqPasosOpen ? '' : ' seq-split--closed'}">
         ${pasosCard}
         <div class="seq-split__right">
