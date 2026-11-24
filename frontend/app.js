@@ -30090,13 +30090,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const today = _dayOf(new Date()), byId = new Map((_contacts || []).map(c => [c.id, c])), out = [];
     _allSeqTasks().forEach(t => {
       const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task'].includes(st.canal) ? st.canal : 'task');
-      out.push({ kind: 'seq', key: 's' + t.sq.id + '-' + c.id, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: (_sequences || []).find(x => x.id === t.sq.id)?.nombre || t.sq.nombre || '', prio: '' });
+      out.push({ kind: 'seq', key: 's' + t.sq.id + '-' + c.id, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: (_sequences || []).find(x => x.id === t.sq.id)?.nombre || t.sq.nombre || '', accion: _accionLabel(st.canal, st.accion) || '', prio: '' });
     });
     (_activities || []).filter(a => a.estado === 'pendiente' && a.contact_id).forEach(a => {
       const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || '');
       out.push({ kind: 'act', key: 'a' + a.id, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.tipo === 'llamada' ? 'call' : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due: new Date(a.fecha), hora: '', c, cid: a.contact_id, act: a, origen: '', prio: '', resp: a.tipo === 'revisar_respuesta' });
     });
-    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting').forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
+    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting').forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
     return out.sort((a, b) => a.due - b.due);
   }
   function _tkPreset(v, r, today) {
@@ -30113,7 +30113,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     { k: 'tipo', l: 'Tipo de tarea', t: 'sel', opts: () => Object.entries(_TK_TIPO), get: r => r.tipo },
     { k: 'estado', l: 'Estado', t: 'sel', opts: () => [['venc', 'Vencida'], ['hoy', 'Para hoy'], ['prox', 'Próximas']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : 'prox' },
     { k: 'venc', l: 'Fecha de vencimiento', t: 'sel', opts: () => [['venc', 'Vencidas'], ['hoy', 'Hoy'], ['7', 'Próximos 7 días'], ['mas', 'Más adelante']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : r.due <= new Date(today.getTime() + 7 * 864e5) ? '7' : 'mas' },
-    { k: 'prop', l: 'Propietario', t: 'sel', opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), get: r => String((r.c || {}).outbound_client_id || '') },
+    { k: 'canal', l: 'Canal', t: 'sel', opts: () => [['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['call', 'Llamada'], ['task', 'Tarea manual']], get: r => r.tipo },
+    { k: 'accion', l: 'Paso / acción', t: 'sel', opts: () => [...new Set(_tkRows().map(r => r.accion).filter(Boolean))].sort().map(x => [x, x]), get: r => r.accion || '' },
+    { k: 'import', l: 'Archivo de importación', t: 'sel', opts: () => [...new Set((_contacts || []).map(c => c.import_batch).filter(Boolean))].sort().map(x => [x, x]), get: r => (r.c || {}).import_batch || '' },
+    { k: 'fuente', l: 'Fuente del contacto', t: 'sel', opts: () => [...new Set((_contacts || []).map(c => c.fuente).filter(Boolean))].sort().map(x => [x, x]), get: r => (r.c || {}).fuente || '' },
+    { k: 'prop', l: 'Cliente (propietario)', t: 'sel', opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), get: r => String((r.c || {}).outbound_client_id || '') },
+    { k: 'campana', l: 'Campaña', t: 'sel', opts: () => (_campaigns || []).map(c => [String(c.id), [c.codigo, c.nombre].filter(Boolean).join(' · ')]), get: r => { const sq = (_sequences || []).find(x => x.id === r.seqId); return sq ? String(sq.campaign_id || '') : ''; } },
+    { k: 'secuencia', l: 'Secuencia', t: 'sel', opts: () => (_sequences || []).map(x => [String(x.id), [x.codigo, x.nombre].filter(Boolean).join(' · ')]), get: r => String(r.seqId || '') },
     { k: 'origen', l: 'Origen de la campaña', t: 'sel', opts: () => (_sequences || []).map(x => [x.nombre, x.nombre]), get: r => r.origen },
     { k: 'empresa', l: 'Empresa', t: 'txt', get: r => (r.c || {}).company_nombre || (r.c || {}).empresa_nombre || '' },
     { k: 'contacto', l: 'Campo asociado (contacto)', t: 'txt', get: r => [(r.c || {}).nombre, (r.c || {}).apellido].filter(Boolean).join(' ') },
