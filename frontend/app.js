@@ -9874,101 +9874,101 @@ const CanteraGlobalModule = (() => {
         <button class="cant-global-clearall" ${_hasActiveFiltros() ? '' : 'disabled'} onclick="CanteraGlobalModule.clearAll()">Borrar todos los filtros</button>
       </div>`;
   }
-  // ── Panel de filtros estilo lemlist: pestañas Personas / Empresas, buscador de filtros, grupos plegables y «Añadir» con sugerencias ──
-  const _LF_ICO = {
-    texto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
-    lista: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
-    bool: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="7"/><circle cx="16" cy="12" r="2.5"/></svg>',
-    cubo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
-    sin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
-  };
-  const _lfNorm = t => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const _lfInc = d => d.legacy ? (_filtros[d.legacy] || []) : ((_f2[d.id] || {}).inc || []);
-  const _lfExc = d => d.legacy ? (_filtrosExcl[d.legacy] || []) : ((_f2[d.id] || {}).exc || []);
-  function _lfVisibles() {
-    const tab = _vista === 'empresa' ? 'e' : 'p', q = _lfNorm(_lfFq), usados = new Set(), out = [];
-    for (const d of _cat.filtros) {
-      if (tab === 'e' && d.ent !== 'empresa') continue;
-      if (d.legacy) { if (usados.has(d.legacy)) continue; usados.add(d.legacy); }
-      if (q && !_lfNorm(d.label).includes(q)) continue;
-      out.push(d);
-    }
-    return out;
-  }
-  function _lfItem(d) {
-    const inc = _lfInc(d), exc = _lfExc(d), total = inc.length + exc.length, sin = d.sin && !d.legacy && !total;
-    const open = _lfOpen === d.id || total > 0 && _lfOpen === d.id;
-    const chips = inc.map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',0,${i})">✕</span></span>`).join('') + exc.map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',1,${i})">✕</span></span>`).join('');
-    return `<div class="lf-it${open ? ' is-open' : ''}${sin ? ' is-sin' : ''}" data-lf="${d.id}">
-      <button type="button" class="lf-it__hd" ${sin ? 'disabled' : `onclick="CanteraGlobalModule.lfToggle('${d.id}')"`}>
-        <span class="lf-it__ic">${_LF_ICO[sin ? 'sin' : d.tipo] || _LF_ICO.texto}</span><span class="lf-it__l">${esc(d.label)}</span>
-        ${sin ? '<span class="lf-sin">Sin datos</span>' : (d.parcial && !total ? `<span class="lf-par" title="${esc(d.parcial)}">Parcial</span>` : '')}
-        ${total ? `<span class="lf-n">${total}</span>` : ''}<span class="lf-it__pl">${open ? '−' : '+'}</span>
-      </button>
-      ${open && !sin ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div>
-        <input type="text" class="lf-in" id="lf-in-${d.id}" placeholder="Añadir" autocomplete="off" onfocus="CanteraGlobalModule.lfSug('${d.id}')" oninput="CanteraGlobalModule.lfSug('${d.id}')" onblur="CanteraGlobalModule.lfBlur('${d.id}')" onkeydown="if(event.key==='Enter'){CanteraGlobalModule.lfEnter('${d.id}')}">
-        <div class="ta-menu lf-menu" id="lf-menu-${d.id}" hidden></div></div>` : ''}
-      ${!open && total ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div></div>` : ''}
-    </div>`;
-  }
-  function _lfBody() {
-    const vis = _lfVisibles(), tab = _vista === 'empresa' ? 'e' : 'p', q = _lfFq.trim();
-    const grupos = _cat.grupos.map(g => ({ g, items: vis.filter(d => d.grupo === g) })).filter(x => x.items.length);
-    return `<div class="lf-tabs"><button type="button" class="${tab === 'p' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('p')">Personas</button><button type="button" class="${tab === 'e' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('e')">Empresas</button></div>
-      <div class="lf-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" id="lf-q" placeholder="Filtros de búsqueda…" value="${esc(_lfFq)}" oninput="CanteraGlobalModule.lfBuscar(this.value)">${q ? '<button type="button" onclick="CanteraGlobalModule.lfBuscar(\'\')" title="Quitar">✕</button>' : ''}</div>
-      ${grupos.length ? grupos.map(({ g, items }) => {
-        const abierto = q ? true : !_lfGrp.has(g), act = items.filter(d => _lfInc(d).length + _lfExc(d).length).length;
-        return `<div class="lf-grp"><button type="button" class="lf-grp__hd" onclick="CanteraGlobalModule.lfGrupo('${esc(g).replace(/'/g, "\\'")}')"><span>${esc(g)}</span>${act ? `<span class="lf-n">${act}</span>` : ''}<span class="lf-chev${abierto ? ' is-open' : ''}">⌃</span></button>${abierto ? `<div class="lf-grp__bd">${items.map(_lfItem).join('')}</div>` : ''}</div>`;
-      }).join('') : '<div class="lf-none">Ningún filtro coincide.</div>'}
-      <p class="lf-foot">¿Falta algún filtro? Dímelo y lo añadimos. Los marcados «Sin datos» empezarán a funcionar cuando importes esa información.</p>`;
-  }
-  function lfTab(t) { _vista = t === 'e' ? 'empresa' : (_vista === 'empresa' ? 'contacto' : _vista); _page = 0; _clearFacets(); _search().then(_repaint); }
-  function lfBuscar(v) { _lfFq = v; const pos = v.length; _repaint(); const i = document.getElementById('lf-q'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
-  function lfGrupo(g) { if (_lfGrp.has(g)) _lfGrp.delete(g); else _lfGrp.add(g); _repaint(); }
-  function lfToggle(id) { _lfOpen = _lfOpen === id ? null : id; _repaint(); if (_lfOpen) setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30); }
-  const _lfDef = id => _cat && _cat.filtros.find(d => d.id === id);
-  let _lfTok = 0;
-  async function lfSug(id) {
-    const d = _lfDef(id), menu = document.getElementById('lf-menu-' + id), inp = document.getElementById('lf-in-' + id); if (!d || !menu) return;
-    const q = (inp && inp.value || '').trim(), tok = ++_lfTok;
-    let opts = [];
-    if (d.legacy) {
-      opts = _gOptions(d.legacy).filter(o => !q || _lfNorm(o).includes(_lfNorm(q))).map(o => ({ value: o, n: (_facetCache[d.legacy] || {})[o] }));
-      menu.innerHTML = _lfRows(d, opts); menu.hidden = false;
-      _loadFacets(d.legacy, opts.map(o => o.value));
-      return;
-    }
-    menu.innerHTML = '<div class="ta-none">Buscando…</div>'; menu.hidden = false;
-    try { const r = await apiFetch(`${API}/cantera/global/sugerir?filtro=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`); opts = r.ok ? await r.json() : []; } catch (_) { opts = []; }
-    if (tok !== _lfTok) return;
-    const yaI = new Set(_lfInc(d).concat(_lfExc(d)).map(_lfNorm));
-    opts = opts.filter(o => !yaI.has(_lfNorm(o.value)));
-    menu.innerHTML = _lfRows(d, opts, q); menu.hidden = false;
-  }
-  function _lfRows(d, opts, q) {
-    const rows = opts.map(o => {
-      const jv = esc(o.value).replace(/'/g, "\\'");
-      return `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">${esc(o.value)}${o.n == null ? '' : ` <span class="ta-opt__n">(${o.n})</span>`}</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',1)">Excluir</span></span></div>`;
-    }).join('');
-    const libre = (!d.legacy && d.tipo === 'texto' && q) ? `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">Buscar «${esc(q)}»</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',1)">Excluir</span></span></div>` : '';
-    return libre + rows || '<div class="ta-none">Sin opciones</div>';
-  }
-  function lfBlur(id) { setTimeout(() => { const m = document.getElementById('lf-menu-' + id); if (m) m.hidden = true; }, 160); }
-  function lfEnter(id) { const d = _lfDef(id), inp = document.getElementById('lf-in-' + id); if (d && inp && inp.value.trim() && !d.legacy && d.tipo === 'texto') lfAnadir(id, inp.value.trim(), 0); }
-  async function lfAnadir(id, valor, exc) {
-    const d = _lfDef(id); if (!d) return;
-    if (d.legacy) return exc ? addFiltroExcl(d.legacy, valor) : addFiltro(d.legacy, valor);
-    const f = _f2[id] = _f2[id] || { inc: [], exc: [] };
-    (exc ? (f.exc = f.exc || []) : (f.inc = f.inc || [])).push(valor);
-    _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
-    setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30);
-  }
-  async function lfQuitar(id, exc, idx) {
-    const d = _lfDef(id); if (!d) return;
-    if (d.legacy) return exc ? removeFiltroExcl(d.legacy, idx) : removeFiltro(d.legacy, idx);
-    const f = _f2[id]; if (!f) return;
-    (exc ? f.exc : f.inc).splice(idx, 1); _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
-  }
+  // ── Panel de filtros estilo lemlist: pestañas Personas / Empresas, buscador de filtros, grupos plegables y «Añadir» con sugerencias ──
+  const _LF_ICO = {
+    texto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
+    lista: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    bool: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="7"/><circle cx="16" cy="12" r="2.5"/></svg>',
+    cubo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
+    sin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  };
+  const _lfNorm = t => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const _lfInc = d => d.legacy ? (_filtros[d.legacy] || []) : ((_f2[d.id] || {}).inc || []);
+  const _lfExc = d => d.legacy ? (_filtrosExcl[d.legacy] || []) : ((_f2[d.id] || {}).exc || []);
+  function _lfVisibles() {
+    const tab = _vista === 'empresa' ? 'e' : 'p', q = _lfNorm(_lfFq), usados = new Set(), out = [];
+    for (const d of _cat.filtros) {
+      if (tab === 'e' && d.ent !== 'empresa') continue;
+      if (d.legacy) { if (usados.has(d.legacy)) continue; usados.add(d.legacy); }
+      if (q && !_lfNorm(d.label).includes(q)) continue;
+      out.push(d);
+    }
+    return out;
+  }
+  function _lfItem(d) {
+    const inc = _lfInc(d), exc = _lfExc(d), total = inc.length + exc.length, sin = d.sin && !d.legacy && !total;
+    const open = _lfOpen === d.id || total > 0 && _lfOpen === d.id;
+    const chips = inc.map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',0,${i})">✕</span></span>`).join('') + exc.map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',1,${i})">✕</span></span>`).join('');
+    return `<div class="lf-it${open ? ' is-open' : ''}${sin ? ' is-sin' : ''}" data-lf="${d.id}">
+      <button type="button" class="lf-it__hd" ${sin ? 'disabled' : `onclick="CanteraGlobalModule.lfToggle('${d.id}')"`}>
+        <span class="lf-it__ic">${_LF_ICO[sin ? 'sin' : d.tipo] || _LF_ICO.texto}</span><span class="lf-it__l">${esc(d.label)}</span>
+        ${sin ? '<span class="lf-sin">Sin datos</span>' : (d.parcial && !total ? `<span class="lf-par" title="${esc(d.parcial)}">Parcial</span>` : '')}
+        ${total ? `<span class="lf-n">${total}</span>` : ''}<span class="lf-it__pl">${open ? '−' : '+'}</span>
+      </button>
+      ${open && !sin ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div>
+        <input type="text" class="lf-in" id="lf-in-${d.id}" placeholder="Añadir" autocomplete="off" onfocus="CanteraGlobalModule.lfSug('${d.id}')" oninput="CanteraGlobalModule.lfSug('${d.id}')" onblur="CanteraGlobalModule.lfBlur('${d.id}')" onkeydown="if(event.key==='Enter'){CanteraGlobalModule.lfEnter('${d.id}')}">
+        <div class="ta-menu lf-menu" id="lf-menu-${d.id}" hidden></div></div>` : ''}
+      ${!open && total ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div></div>` : ''}
+    </div>`;
+  }
+  function _lfBody() {
+    const vis = _lfVisibles(), tab = _vista === 'empresa' ? 'e' : 'p', q = _lfFq.trim();
+    const grupos = _cat.grupos.map(g => ({ g, items: vis.filter(d => d.grupo === g) })).filter(x => x.items.length);
+    return `<div class="lf-tabs"><button type="button" class="${tab === 'p' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('p')">Personas</button><button type="button" class="${tab === 'e' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('e')">Empresas</button></div>
+      <div class="lf-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" id="lf-q" placeholder="Filtros de búsqueda…" value="${esc(_lfFq)}" oninput="CanteraGlobalModule.lfBuscar(this.value)">${q ? '<button type="button" onclick="CanteraGlobalModule.lfBuscar(\'\')" title="Quitar">✕</button>' : ''}</div>
+      ${grupos.length ? grupos.map(({ g, items }) => {
+        const abierto = q ? true : !_lfGrp.has(g), act = items.filter(d => _lfInc(d).length + _lfExc(d).length).length;
+        return `<div class="lf-grp"><button type="button" class="lf-grp__hd" onclick="CanteraGlobalModule.lfGrupo('${esc(g).replace(/'/g, "\\'")}')"><span>${esc(g)}</span>${act ? `<span class="lf-n">${act}</span>` : ''}<span class="lf-chev${abierto ? ' is-open' : ''}">⌃</span></button>${abierto ? `<div class="lf-grp__bd">${items.map(_lfItem).join('')}</div>` : ''}</div>`;
+      }).join('') : '<div class="lf-none">Ningún filtro coincide.</div>'}
+      <p class="lf-foot">¿Falta algún filtro? Dímelo y lo añadimos. Los marcados «Sin datos» empezarán a funcionar cuando importes esa información.</p>`;
+  }
+  function lfTab(t) { _vista = t === 'e' ? 'empresa' : (_vista === 'empresa' ? 'contacto' : _vista); _page = 0; _clearFacets(); _search().then(_repaint); }
+  function lfBuscar(v) { _lfFq = v; const pos = v.length; _repaint(); const i = document.getElementById('lf-q'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
+  function lfGrupo(g) { if (_lfGrp.has(g)) _lfGrp.delete(g); else _lfGrp.add(g); _repaint(); }
+  function lfToggle(id) { _lfOpen = _lfOpen === id ? null : id; _repaint(); if (_lfOpen) setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30); }
+  const _lfDef = id => _cat && _cat.filtros.find(d => d.id === id);
+  let _lfTok = 0;
+  async function lfSug(id) {
+    const d = _lfDef(id), menu = document.getElementById('lf-menu-' + id), inp = document.getElementById('lf-in-' + id); if (!d || !menu) return;
+    const q = (inp && inp.value || '').trim(), tok = ++_lfTok;
+    let opts = [];
+    if (d.legacy) {
+      opts = _gOptions(d.legacy).filter(o => !q || _lfNorm(o).includes(_lfNorm(q))).map(o => ({ value: o, n: (_facetCache[d.legacy] || {})[o] }));
+      menu.innerHTML = _lfRows(d, opts); menu.hidden = false;
+      _loadFacets(d.legacy, opts.map(o => o.value));
+      return;
+    }
+    menu.innerHTML = '<div class="ta-none">Buscando…</div>'; menu.hidden = false;
+    try { const r = await apiFetch(`${API}/cantera/global/sugerir?filtro=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`); opts = r.ok ? await r.json() : []; } catch (_) { opts = []; }
+    if (tok !== _lfTok) return;
+    const yaI = new Set(_lfInc(d).concat(_lfExc(d)).map(_lfNorm));
+    opts = opts.filter(o => !yaI.has(_lfNorm(o.value)));
+    menu.innerHTML = _lfRows(d, opts, q); menu.hidden = false;
+  }
+  function _lfRows(d, opts, q) {
+    const rows = opts.map(o => {
+      const jv = esc(o.value).replace(/'/g, "\\'");
+      return `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">${esc(o.value)}${o.n == null ? '' : ` <span class="ta-opt__n">(${o.n})</span>`}</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',1)">Excluir</span></span></div>`;
+    }).join('');
+    const libre = (!d.legacy && d.tipo === 'texto' && q) ? `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">Buscar «${esc(q)}»</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',1)">Excluir</span></span></div>` : '';
+    return libre + rows || '<div class="ta-none">Sin opciones</div>';
+  }
+  function lfBlur(id) { setTimeout(() => { const m = document.getElementById('lf-menu-' + id); if (m) m.hidden = true; }, 160); }
+  function lfEnter(id) { const d = _lfDef(id), inp = document.getElementById('lf-in-' + id); if (d && inp && inp.value.trim() && !d.legacy && d.tipo === 'texto') lfAnadir(id, inp.value.trim(), 0); }
+  async function lfAnadir(id, valor, exc) {
+    const d = _lfDef(id); if (!d) return;
+    if (d.legacy) return exc ? addFiltroExcl(d.legacy, valor) : addFiltro(d.legacy, valor);
+    const f = _f2[id] = _f2[id] || { inc: [], exc: [] };
+    (exc ? (f.exc = f.exc || []) : (f.inc = f.inc || [])).push(valor);
+    _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
+    setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30);
+  }
+  async function lfQuitar(id, exc, idx) {
+    const d = _lfDef(id); if (!d) return;
+    if (d.legacy) return exc ? removeFiltroExcl(d.legacy, idx) : removeFiltro(d.legacy, idx);
+    const f = _f2[id]; if (!f) return;
+    (exc ? f.exc : f.inc).splice(idx, 1); _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
+  }
   // Pedido explícito 2026-09-30: "LinkedIn tiene un botón de borrar todos los
   // filtros... abajo" — limpia buscador, origen y todos los campos (no borra
   // los filtros GUARDADOS, solo lo que está aplicado en los resultados).
@@ -23306,7 +23306,7 @@ const LeadManagerModule = (() => {
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
-    { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
+    { k: 'inbox',      l: 'Bandeja de entrada', g: 'Comercial' },
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
@@ -29560,6 +29560,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ibFLeido    = 'todos'; // 'todos' | 'no_leido'
   let _ibFSeq      = 0;       // 0 = todas, o id de secuencia
   let _ibFiltrosPopClose = null;
+  let _ibQ = '';             // búsqueda de texto
+  let _ibSearchOpen = false; // fila de búsqueda plegada por defecto
+  let _ibSideTab = 'general';
   let _ibActive  = null;   // contact_id del hilo abierto
   let _ibThread  = null;   // { contact, messages } del hilo abierto
   let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
@@ -29681,11 +29684,16 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const c = _contacts.find(x => x.id === t.contact_id);
         if (!(c?.sequences || []).some(s => s.id === _ibFSeq)) return false;
       }
+      if (_ibQ) {
+        const q = _ibQ.toLowerCase();
+        const hay = [t.nombre, t.apellido, t.email, t.empresa, t.last_snippet, t.last_asunto].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
   }
   function _ibFiltrosActivos() {
-    let n = 0;
+    let n = _ibDisp ? 1 : 0;
     if (_ibFApertura !== 'todos') n++;
     if (_ibFLeido !== 'todos') n++;
     if (_ibFSeq) n++;
@@ -29694,13 +29702,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibSetFApertura(v) { _ibFApertura = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   function _ibSetFLeido(v) { _ibFLeido = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   function _ibSetFSeq(v) { _ibFSeq = parseInt(v) || 0; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
-  function _ibLimpiarFiltrosExtra() { _ibFApertura = 'todos'; _ibFLeido = 'todos'; _ibFSeq = 0; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function _ibLimpiarFiltrosExtra() { _ibFApertura = 'todos'; _ibFLeido = 'todos'; _ibFSeq = 0; _ibDisp = ''; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
   // Mismo patrón que abrirFiltroEstado (WhatsApp): un ícono que no ocupa espacio fijo
   // en la barra, con un popover que agrupa varios filtros — pedido explícito de Jenny
   // 2026-08-26 para no repetir selects/pills que ya le habían quitado espacio antes.
-  function ibAbrirFiltros(ev) {
+  function _ibSetDisp(v) { _ibDisp = v || ''; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function ibAbrirFiltros(ev, anchor) {
     ev.stopPropagation();
-    if (_ibFiltrosPopClose) { _ibFiltrosPopClose(); return; }
+    anchor = anchor || ev.currentTarget;
+    if (_ibFiltrosPopClose) { _ibFiltrosPopClose(); if (!anchor || anchor.dataset.open !== '1') return; }
     const menu = document.createElement('div');
     menu.className = 'chat-ctx-menu';
     menu.style.maxHeight = '70vh'; menu.style.overflowY = 'auto';
@@ -29708,7 +29718,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const label = t => `<div style="padding:7px 10px 3px;font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">${t}</div>`;
     const opt = (checked, onclick, txt) => `<button class="chat-ctx-item" onclick="${onclick}">${esc(txt)}${checked ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
     const seqOpts = [...(_sequences || [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
-    menu.innerHTML = label('Apertura')
+    menu.innerHTML = label('Etiqueta')
+      + opt(!_ibDisp, "LeadManagerModule._ibSetDisp('')", 'Todas')
+      + _DISPOS.map(d => opt(_ibDisp === d[0], `LeadManagerModule._ibSetDisp('${d[0]}')`, d[1])).join('')
+      + '<div class="chat-ctx-sep"></div>' + label('Apertura')
       + opt(_ibFApertura === 'todos', "LeadManagerModule._ibSetFApertura('todos')", 'Todas')
       + opt(_ibFApertura === 'abierto', "LeadManagerModule._ibSetFApertura('abierto')", 'Abiertos')
       + opt(_ibFApertura === 'no_abierto', "LeadManagerModule._ibSetFApertura('no_abierto')", 'No abiertos')
@@ -29720,9 +29733,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       + seqOpts.map(s => opt(_ibFSeq === s.id, `LeadManagerModule._ibSetFSeq(${s.id})`, s.nombre)).join('')
       + (_ibFiltrosActivos() ? '<div class="chat-ctx-sep"></div>' + opt(false, 'LeadManagerModule._ibLimpiarFiltrosExtra()', '✕ Limpiar filtros') : '');
     document.body.appendChild(menu);
-    const rect = ev.currentTarget.getBoundingClientRect();
+    const rect = anchor.getBoundingClientRect();
     const w = menu.offsetWidth || 200;
-    let left = rect.right - w; if (left < 8) left = 8;
+    let left = rect.left; if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8; if (left < 8) left = 8;
     menu.style.top = (rect.bottom + 6) + 'px';
     menu.style.left = left + 'px';
     _ibFiltrosPopClose = () => { menu.remove(); document.removeEventListener('click', _ibFiltrosPopClose); _ibFiltrosPopClose = null; };
@@ -30960,6 +30973,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
 
   function _ibListHtml() {
     if (_ibThreads === null) return `<div class="ibx-empty">Cargando hilos…</div>`;
+    if (_ibQ && !_ibFiltered().length) return `<div class="ibx-empty">Nada coincide con «${esc(_ibQ)}».</div>`;
     const rows = _ibFiltered().filter(t => _ibTab === 'todos' ? ['sin', 'resp', 'auto'].includes(_ibCat(t)) : _ibCat(t) === _ibTab);   // 'Todos' = toda conversación con algún mensaje entrante (sin responder, respondidas y automáticas)
     if (!rows.length) {
       const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', auto: 'No hay respuestas automáticas (fuera de oficina) por ahora.', todos: 'Aún no hay conversaciones con respuestas.', env: '' };
@@ -30983,33 +30997,132 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     ta.style.height = 'auto';
     ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, ta.value.trim() ? 200 : 120), Math.round(window.innerHeight * 0.55)) + 'px';
   }
-  function _ibWrapHtml() {
+  // ── Bandeja de entrada: cabecera compacta (vista ▾ · cliente · ⋯), búsqueda y filtros plegados ──
+  const _IB_VIEWS = [['todos', 'Todas las conversaciones'], ['sin', 'Sin responder'], ['resp', 'Respondidos'], ['auto', 'Automáticas'], ['env', 'Enviados'], ['reb', 'Rebotes'], ['envios', 'Envíos']];
+  const _ibSvg = (d, w) => `<svg width="${w || 14}" height="${w || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  function _ibHeadHtml() {
     const n = _ibCounts();
-    const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
-    const TABS = [['todos', 'Todos', n.todos], ['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['auto', 'Automáticas', n.auto], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb], ['envios', 'Envíos', 0]];
-    return `<div id="ibx-wrap">
-      <div class="ibx-top">
-        <div class="ibx-tabs">${TABS.map(([k, l, c]) => `<button class="ibx-tab${_ibTab === k ? ' active' : ''}${k === 'reb' && c ? ' ibx-tab--warn' : ''}" onclick="LeadManagerModule.ibTab('${k}')">${l}${c ? ` <span class="ibx-tab__n">${c}</span>` : ''}</button>`).join('')}</div>
+    const cur = _IB_VIEWS.find(v => v[0] === _ibTab) || _IB_VIEWS[0];
+    const cnt = k => n[k] || 0;
+    const cli = _clients.find(c => c.id === _ibCli);
+    const nAct = _ibFiltrosActivos();
+    const chips = [];
+    if (_ibDisp) chips.push(['Etiqueta: ' + _dispoLabel(_ibDisp), "LeadManagerModule._ibSetDisp('')"]);
+    if (_ibFApertura !== 'todos') chips.push([_ibFApertura === 'abierto' ? 'Abiertos' : 'No abiertos', "LeadManagerModule._ibSetFApertura('todos')"]);
+    if (_ibFLeido !== 'todos') chips.push(['No leídos', "LeadManagerModule._ibSetFLeido('todos')"]);
+    if (_ibFSeq) chips.push(['Secuencia: ' + ((_sequences || []).find(x => x.id === _ibFSeq) || {}).nombre, "LeadManagerModule._ibSetFSeq(0)"]);
+    return `<div class="ibx2-head">
+      <div class="ibx2-row">
+        <button class="ibx2-view" onclick="LeadManagerModule.ibViewMenu(event)">${esc(cur[1])}${cnt(cur[0]) ? ` <span class="ibx2-n">${cnt(cur[0])}</span>` : ''} ${_ibSvg('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <span class="sp"></span>
-        ${unread ? `<span class="ibx-unread">${unread} sin leer</span>` : ''}
-        <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibCli(this.value)"><option value="0">Todos los clientes</option>${_clients.map(c => `<option value="${c.id}"${_ibCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-        <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibDisp(this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(d => `<option value="${d[0]}"${_ibDisp === d[0] ? ' selected' : ''}>${esc(d[1])}</option>`).join('')}</select>
-        <button class="wa-tab-filter${_ibFiltrosActivos() ? ' wa-tab-filter--active' : ''}" title="Más filtros: apertura, leído, secuencia" onclick="LeadManagerModule.ibAbrirFiltros(event)">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          ${_ibFiltrosActivos() ? `<span>${_ibFiltrosActivos()}</span>` : ''}
-        </button>
-        ${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibToggleEnvVista()">${_ibEnvShowTable ? '💬 Ver conversaciones' : '📊 Ver tabla de tracking'}</button>` : ''}
-        <button class="btn btn--primary btn--sm ibx-newmail-btn" title="Nuevo correo" onclick="LeadManagerModule.composeAbrir()">＋</button>
+        <button class="ibx2-chip" title="Cliente" onclick="LeadManagerModule.ibCliMenu(event)"><span class="ibx2-chip__av">${cli ? esc((cli.nombre || '?')[0].toUpperCase()) : _ibSvg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>', 12)}</span>${_ibSvg('<polyline points="6 9 12 15 18 9"/>', 11)}</button>
+        <button class="ibx2-ico${nAct || _ibQ ? ' on' : ''}" id="ibx-more" title="Buscar, filtrar y más" onclick="LeadManagerModule.ibMoreMenu(event)">${_ibSvg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}${nAct ? `<i class="ibx2-badge">${nAct}</i>` : ''}</button>
       </div>
+      ${_ibSearchOpen ? `<div class="ibx2-search">${_ibSvg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 13)}<input id="ibx-q" value="${esc(_ibQ)}" placeholder="Buscar nombre, email, empresa o texto…" autocomplete="off" oninput="LeadManagerModule.ibSearch(this.value)"><button title="Cerrar búsqueda" onclick="LeadManagerModule.ibToggleSearch()">✕</button></div>` : ''}
+      ${chips.length ? `<div class="ibx2-chips">${chips.map(c => `<button class="ibx2-fc" onclick="${c[1]}">${esc(c[0])} <span>✕</span></button>`).join('')}</div>` : ''}
+    </div>`;
+  }
+  function _ibEmptyHtml() {
+    const q = (lbl, js) => `<button class="ibx2-q" onclick="${js}">${lbl}</button>`;
+    return `<div class="ibx2-empty">
+      <div class="ibx2-empty__ic">${_ibSvg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 26)}</div>
+      <h3>Ninguna conversación seleccionada</h3>
+      <p>Responde a tus prospectos desde el buzón del cliente. Aquí aparecen sus respuestas, los rebotes y las respuestas automáticas.</p>
+      <div class="ibx2-empty__lb">Quiero ver:</div>
+      <div class="ibx2-qs">
+        ${q('Mensajes no leídos', "LeadManagerModule.ibQuick('noleido')")}
+        ${q('Interesado', "LeadManagerModule.ibQuick('interesado')")}
+        ${q('Respondió', "LeadManagerModule.ibQuick('respondio')")}
+        ${q('Fuera de oficina', "LeadManagerModule.ibQuick('auto')")}
+        ${q('Rebotes', "LeadManagerModule.ibQuick('reb')")}
+      </div>
+    </div>`;
+  }
+  function _ibSideHtml() {
+    const c = (_ibThread && _ibThread.contact) || {};
+    const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
+    const ini = (nm || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const row = (k, v) => v ? `<div class="ibx2-f"><span>${k}</span><b>${v}</b></div>` : '';
+    const li = c.linkedin ? `<a href="${esc(/^https?:/i.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener">${esc(String(c.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '';
+    const msgs = (_ibThread && _ibThread.messages) || [];
+    const ev = msgs.slice().reverse().map(m => {
+      const t = m.dir === 'in' ? (m.tipo === 'bounce' ? 'Rebotó' : m.tipo === 'ooo' ? 'Respuesta automática' : 'Respondió') : m.dir === 'note' ? 'Nota interna' : m.dir === 'fwd' ? 'Reenviado' : (m.estado === 'scheduled' ? 'Programado' : m.estado === 'failed' ? 'Falló el envío' : 'Enviado');
+      return `<div class="ibx2-ev"><b>${t}</b><span>${esc(m.asunto || (m.cuerpo || '').slice(0, 60))}</span><small>${m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</small></div>`;
+    }).join('') || '<div class="ibx2-none">Sin actividad todavía.</div>';
+    const body = _ibSideTab === 'actividad' ? `<div class="ibx2-evs">${ev}</div>`
+      : _ibSideTab === 'secuencia' ? (c.seq_nombre ? `<div class="ibx2-f"><span>Secuencia</span><b>${esc(c.seq_nombre)}</b></div><div class="ibx2-f"><span>Estado</span><b>${c.seq_estado === 'respondido' ? 'Pausada por respuesta' : esc(c.seq_estado || '—')}</b></div>` : '<div class="ibx2-none">No está en ninguna secuencia.</div>')
+      : `${row('Email', esc(c.email))}${row('Teléfono', esc(c.telefono))}${row('Empresa', esc(c.empresa))}${row('Cargo', esc(c.cargo))}${row('País', esc(c.pais))}${row('LinkedIn', li)}${row('Cliente', esc(c.cliente))}${row('Buzón', esc(c.buzon))}${row('Etiqueta', c.disposition ? _dispoBadge(c.disposition) : '')}`;
+    return `<aside class="ibx-side">
+      <div class="ibx2-who"><div class="ibx-av ibx-av--lg">${esc(ini)}</div><b>${esc(nm)}</b>${c.cargo || c.empresa ? `<small>${esc([c.cargo, c.empresa].filter(Boolean).join(' · '))}</small>` : ''}
+        ${c.id ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>` : ''}</div>
+      <div class="ibx2-tabs">${[['general', 'General'], ['actividad', 'Actividad'], ['secuencia', 'Secuencia']].map(([k, l]) => `<button class="${_ibSideTab === k ? 'on' : ''}" onclick="LeadManagerModule.ibSideTab('${k}')">${l}</button>`).join('')}</div>
+      <div class="ibx2-body">${body}</div>
+    </aside>`;
+  }
+  function _ibWrapHtml() {
+    const wide = _ibTab === 'envios' || (_ibTab === 'env' && _ibEnvShowTable);
+    const hasThread = !!_ibActive;
+    return `<div id="ibx-wrap">
+      ${wide ? `<div class="ibx2-bar">${_ibHeadHtml()}${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibToggleEnvVista()">💬 Ver conversaciones</button>` : ''}</div>` : ''}
       ${_ibTab === 'envios'
         ? `<div id="ibx-envios" style="padding:10px 4px">${_ibEnvHtml()}</div>`
         : _ibTab === 'env' && _ibEnvShowTable
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
-        : `<div class="ibx-grid">
-             <div class="ibx-list">${_ibListHtml()}</div>
-             <div class="ibx-conv">${_ibConvHtml()}</div>
+        : `<div class="ibx-grid ibx-grid--3${hasThread ? '' : ' ibx-grid--empty'}">
+             <div class="ibx-list">${_ibHeadHtml()}<div class="ibx-rows" id="ibx-rows">${_ibListHtml()}</div></div>
+             <div class="ibx-conv">${hasThread ? _ibConvHtml() : _ibEmptyHtml()}</div>
+             ${hasThread && _ibThread ? _ibSideHtml() : ''}
            </div>`}
     </div>`;
+  }
+  function _ibPop(ev, build) {
+    ev.stopPropagation();
+    const anchor = ev.currentTarget;
+    const had = _ibFiltrosPopClose; if (had) had();
+    if (had && anchor.dataset.open === '1') { anchor.dataset.open = ''; return; }
+    const menu = document.createElement('div'); menu.className = 'chat-ctx-menu'; menu.style.maxHeight = '70vh'; menu.style.overflowY = 'auto'; menu.style.minWidth = '210px';
+    menu.onclick = e => e.stopPropagation();
+    menu.innerHTML = build();
+    document.body.appendChild(menu);
+    const r = anchor.getBoundingClientRect(); const w = menu.offsetWidth || 220;
+    menu.style.top = (r.bottom + 6) + 'px'; menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    anchor.dataset.open = '1';
+    _ibFiltrosPopClose = () => { menu.remove(); anchor.dataset.open = ''; document.removeEventListener('click', _ibFiltrosPopClose); _ibFiltrosPopClose = null; };
+    setTimeout(() => document.addEventListener('click', _ibFiltrosPopClose), 0);
+  }
+  const _ibItem = (js, txt, on, ico) => `<button class="chat-ctx-item" onclick="${js}">${ico ? `<span style="width:16px;display:inline-flex">${ico}</span>` : ''}${esc(txt)}${on ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
+  function ibViewMenu(ev) {
+    const n = _ibCounts();
+    _ibPop(ev, () => _IB_VIEWS.map(([k, l]) => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibTab('${k}')">${esc(l)}<span style="margin-left:auto;color:var(--text-muted);font-size:.72rem">${k === 'envios' ? '' : (n[k] || '')}</span>${_ibTab === k ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`).join(''));
+  }
+  function ibCliMenu(ev) {
+    _ibPop(ev, () => _ibItem("LeadManagerModule.ibCli(0)", 'Todos los clientes', !_ibCli) + _clients.map(c => _ibItem(`LeadManagerModule.ibCli(${c.id})`, c.nombre, _ibCli === c.id)).join(''));
+  }
+  function ibMoreMenu(ev) {
+    _ibPop(ev, () => _ibItem("LeadManagerModule.ibToggleSearch()", 'Buscar', _ibSearchOpen, _ibSvg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 13))
+      + _ibItem("LeadManagerModule.ibAbrirFiltros(event, document.getElementById('ibx-more'))", 'Añadir un filtro…', _ibFiltrosActivos() > 0, _ibSvg('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 13))
+      + '<div class="chat-ctx-sep"></div>'
+      + _ibItem("LeadManagerModule.composeAbrir()", 'Nuevo correo', false, _ibSvg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 13))
+      + (_data.length ? _ibItem("LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')", 'Registrar respuesta manual', false, _ibSvg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 13)) : '')
+      + (_ibTab === 'env' ? _ibItem("LeadManagerModule.ibToggleEnvVista()", 'Ver tabla de tracking', false) : '')
+      + (_ibFiltrosActivos() ? '<div class="chat-ctx-sep"></div>' + _ibItem("LeadManagerModule._ibLimpiarFiltrosExtra()", '✕ Limpiar filtros') : ''));
+  }
+  function ibToggleSearch() {
+    _ibSearchOpen = !_ibSearchOpen; if (!_ibSearchOpen) _ibQ = '';
+    if (_ibFiltrosPopClose) _ibFiltrosPopClose();
+    _ibPaint(); if (_ibSearchOpen) setTimeout(() => document.getElementById('ibx-q')?.focus(), 30);
+  }
+  function ibSearch(v) {
+    _ibQ = String(v || '').trim();
+    const r = document.getElementById('ibx-rows'); if (r) r.innerHTML = _ibListHtml();
+  }
+  function ibSideTab(k) { _ibSideTab = k; const a = document.querySelector('.ibx-side'); if (a) a.outerHTML = _ibSideHtml(); }
+  function ibQuick(k) {
+    _ibDisp = ''; _ibFLeido = 'todos';
+    if (k === 'noleido') { _ibTab = 'todos'; _ibFLeido = 'no_leido'; }
+    else if (k === 'auto' || k === 'reb') _ibTab = k;
+    else { _ibTab = 'todos'; _ibDisp = k; }
+    _ibPaint();
   }
   // Abrir una fila de la tabla de tracking (vista opcional) como conversación real.
   function ibAbrirDesdeEnviados(cid) {
@@ -31031,9 +31144,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _ibMsgIdx = Math.max(0, (_ibThread.messages || []).length - 1);
     if (_section === 'inbox' && _ibActive === cid) _ibPaint();
   }
-  function ibTab(k) { _ibTab = k; _ibEnvShowTable = false; _ibPaint(); if (k === 'envios') _ibEnvLoad(); }
+  function ibTab(k) { if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibTab = k; _ibEnvShowTable = false; _ibPaint(); if (k === 'envios') _ibEnvLoad(); }
   function ibToggleEnvVista() { _ibEnvShowTable = !_ibEnvShowTable; if (_ibEnvShowTable && _lmMsgs === null) _loadLmMsgs(); _ibPaint(); }
-  function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
+  function ibCli(v) { if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibCli = parseInt(v) || 0; _ibPaint(); }
   function ibDisp(v) { _ibDisp = v || ''; _ibPaint(); }
   // Nota interna: NO llama a /reply ni toca lm_messages/mailboxes — no sale ningún
   // email. Solo se guarda para que el equipo la vea en este mismo hilo (misma ruta).
@@ -31332,10 +31445,6 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _vInbox() {
     const reps = _replies();
     return `
-      <div class="lm-sec-head lm-sec-head--compact">
-        <div><h2 class="lm-sec-title">Inbox</h2></div>
-        ${_data.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta manual</button>` : ''}
-      </div>
       ${_ibWrapHtml()}`;
   }
   async function setReplySentiment(actId, sent) {
@@ -34405,7 +34514,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       companies: ['Empresas', 'Cuentas/empresas objetivo de tus campañas, con sus contactos.', 'Fase 2'],
       contacts:  ['Contactos', 'Contactos por empresa y cliente, vinculados a leads y actividades.', 'Fase 2'],
       activities:['Actividades', 'Feed de touches: email enviado, LinkedIn, llamada, respuesta, stage actualizado.', 'Fase 4'],
-      inbox:     ['Inbox / Respuestas', 'Conecta email o registra respuestas manualmente. Clasifica sentimiento y crea tareas.', 'Fase 5'],
+      inbox:     ['Bandeja de entrada', 'Conecta email o registra respuestas manualmente. Clasifica sentimiento y crea tareas.', 'Fase 5'],
       tasks:     ['Tareas comerciales', 'Próximas acciones y follow-ups por lead, generados desde secuencias y respuestas.', 'Fase 4'],
       reports:   ['Reportes', 'Reply rate, meetings, conversión y rendimiento por cliente, campaña y secuencia.', 'Fase 6'],
       templates: ['Plantillas / Assets', 'Email & LinkedIn templates, snippets, ángulos, objeciones y mensajes aprobados.', 'Fase 1+'],
@@ -41991,7 +42100,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,

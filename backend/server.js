@@ -7681,6 +7681,7 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
       [req.workspaceOwnerId, cid]);
     const { rows: [contact] } = await pool.query(`
       SELECT k.id, k.nombre, k.apellido, COALESCE(NULLIF(k.email,''), k.email_personal, '') AS email, k.cargo,
+             COALESCE(NULLIF(k.telefono,''), k.movil, '') AS telefono, k.linkedin, k.pais,
              COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
              k.estado AS pipeline, k.disposition, k.outbound_client_id,
              oc.nombre AS cliente, mb.id AS mailbox_id, mb.email AS buzon, mb.estado AS buzon_estado,
