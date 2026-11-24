@@ -41897,6 +41897,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       // había pintado con el dato viejo y nunca se repintaba — reportado en vivo
       // 2026-09-16: "agregué el número y se guardó, debe aparecer el ícono de
       // wpp". Sin este repintado, el ícono solo aparecía tras navegar y volver.
+      // Si el contacto estaba pausado por «sin email» y acabas de ponerle uno, se reanuda su secuencia y se redacta su mensaje (igual que «Por corregir»): así aparece en «Emails por aprobar» / Tareas.
+      try {
+        const okMail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), gained = !String(_before.email || '').trim() && okMail(String(payload.email || '').trim()), gainedP = !String(_before.email_personal || '').trim() && okMail(String(payload.email_personal || '').trim()) && !String(payload.email || '').trim();
+        if ((gained || gainedP) && (c.sequences || []).some(q => q.estado === 'pausado')) {
+          const r2 = await apiFetch(`${API}/lm/contacts/${id}/fix-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: String(payload.email || '').trim(), email_personal: String(payload.email_personal || '').trim() }) });
+          const d2 = await r2.json().catch(() => ({}));
+          if (r2.ok) { await _reloadContacts(); try { await _apReload(); } catch (_) {} showBanner('✓ Email guardado' + (d2.drafted ? ' — su mensaje quedó en «Emails por aprobar» para que lo revises' : (d2.resumed ? ' — secuencia reanudada' : '')), 'success'); }
+        }
+      } catch (_) {}
       if (_section === 'contact-view' && _contactView === id) _renderBody();
     } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
   }
