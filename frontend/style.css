@@ -22165,3 +22165,10 @@ body.ibx-lb-open{overflow:hidden}
 
 .cp-grid .cp-fields--one { grid-template-columns: 1fr; }
 #lm-co-page .cp-grid { grid-template-columns: 300px minmax(0, 1fr); }
+
+/* Chips de filtros activos (Cantera) */
+.cant-fchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cant-fchip { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 4px 0 11px; border: 1px solid #E6E6E6; border-radius: 14px; background: #fff; color: #213856; font-size: 13px; }
+.cant-fchip__l { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-fchip__x { border: none; background: none; cursor: pointer; width: 20px; height: 20px; border-radius: 50%; color: #98A1AC; font-size: 15px; line-height: 1; }
+.cant-fchip__x:hover { background: #F0F0F0; color: #213856; }

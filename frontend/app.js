@@ -6594,7 +6594,26 @@ const CanteraModule = (() => {
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_nContLabel()}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <div class="cant-fchips">${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}${[
+            _paso1Filtro ? _cantChip('Validación básica: ' + paso1Lbl[_paso1Filtro], `CanteraModule.setPaso1Filtro('${_paso1Filtro}')`) : '',
+            ...[..._tierFiltro].map(v => _cantChip('Tier: ' + (v === TIER_DESCARTADO ? 'Descartado' : esc(v)), `CanteraModule.toggleTierFiltro('${_jsEsc(v)}')`)),
+            ...[..._tierExclFiltro].map(v => _cantChip('Tier ≠ ' + (v === TIER_DESCARTADO ? 'Descartado' : esc(v)), `CanteraModule.toggleTierExclFiltro('${_jsEsc(v)}')`)),
+            ...[..._prioFiltro].map(v => _cantChip('Prioridad: ' + v, `CanteraModule.togglePrioFiltro(${v})`)),
+            _minContactos ? _cantChip(_minContactos + '+ contactos', `CanteraModule.setMinContactos(${_minContactos})`) : '',
+            ...[..._nContFiltro].map(v => _cantChip('Nº de contactos: ' + esc(v), `CanteraModule.toggleNContFiltro('${_jsEsc(v)}')`)),
+            ...[..._nContExcl].map(v => _cantChip('Nº de contactos ≠ ' + esc(v), `CanteraModule.toggleNContExcl('${_jsEsc(v)}')`)),
+            _sinPrioridad ? _cantChip('Sin priorizar', 'CanteraModule.toggleSinPrioridad()') : '',
+            _auditoriaFiltro ? _cantChip('Auditoría: ' + (_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'), `CanteraModule.setAuditoriaFiltro('${_auditoriaFiltro}')`) : '',
+            ...[..._paisFiltro].map(v => _cantChip('País: ' + esc(v), `CanteraModule.togglePaisFiltro('${_jsEsc(v)}')`)),
+            ...[..._paisExclFiltro].map(v => _cantChip('País ≠ ' + esc(v), `CanteraModule.togglePaisExclFiltro('${_jsEsc(v)}')`)),
+            ...[..._industriaFiltro].map(v => _cantChip('Industria: ' + esc(v), `CanteraModule.toggleIndustriaFiltro('${_jsEsc(v)}')`)),
+            ...[..._industriaExclFiltro].map(v => _cantChip('Industria ≠ ' + esc(v), `CanteraModule.toggleIndustriaExclFiltro('${_jsEsc(v)}')`)),
+            ...[..._tamanoFiltro].map(v => _cantChip('Tamaño: ' + esc(v), `CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')`)),
+            ...[..._tamanoExclFiltro].map(v => _cantChip('Tamaño ≠ ' + esc(v), `CanteraModule.toggleTamanoExclFiltro('${_jsEsc(v)}')`)),
+            _domFaltante ? _cantChip('Sin dominio', 'CanteraModule.toggleDomFaltante()') : '',
+            _dominioQ ? _cantChip('Dominio contiene «' + esc(_dominioQ) + '»', "CanteraModule.setDominioQ('')") : '',
+            ...[..._paso2DescFiltro].map(v => _cantChip('Validación profunda descartada: ' + (v === 'descartado' ? 'IA' : 'manual'), `CanteraModule.togglePaso2DescFiltro('${_jsEsc(v)}')`)),
+          ].join('')}</div>
           <div class="cant-results-actions">
             <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
             ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
@@ -9525,12 +9544,19 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('campana', opts.campanas, _filtro.campana)}
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
-        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Validación básica)</span>` : ''}
-        ${_tierFiltro.size ? `<span class="cant-count">· Tier: ${[..._tierFiltro].join(', ')}</span>` : ''}
-        ${_prioFiltro.size ? `<span class="cant-count">· Prioridad: ${[..._prioFiltro].join(', ')}</span>` : ''}
-        ${_minContactos ? `<span class="cant-count">· ${_minContactos}+ contactos</span>` : ''}
-        ${_sinPrioridad ? `<span class="cant-count">· sin priorizar</span>` : ''}
-        ${_auditoriaFiltro ? `<span class="cant-count">· auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}</span>` : ''}
+        <div class="cant-fchips">${[
+          _onlyFailed ? _cantChip('Solo descartadas (Validación básica)', 'CanteraMesaModule.toggleFailed()') : '',
+          ...[..._tierFiltro].map(v => _cantChip('Tier: ' + esc(v), `CanteraMesaModule.toggleTierFiltro('${_jsEsc(v)}')`)),
+          ...[..._tierExclFiltro].map(v => _cantChip('Tier ≠ ' + esc(v), `CanteraMesaModule.toggleTierExclFiltro('${_jsEsc(v)}')`)),
+          ...[..._prioFiltro].map(v => _cantChip('Prioridad: ' + v, `CanteraMesaModule.togglePrioFiltro(${v})`)),
+          _minContactos ? _cantChip(_minContactos + '+ contactos', `CanteraMesaModule.setMinContactos(${_minContactos})`) : '',
+          _sinPrioridad ? _cantChip('Sin priorizar', 'CanteraMesaModule.toggleSinPrioridad()') : '',
+          _auditoriaFiltro ? _cantChip('Auditoría: ' + (_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'), `CanteraMesaModule.setAuditoriaFiltro('${_auditoriaFiltro}')`) : '',
+          ...[..._industriaFiltro].map(v => _cantChip('Industria: ' + esc(v), `CanteraMesaModule.toggleIndustriaFiltro('${_jsEsc(v)}')`)),
+          ...[..._industriaExclFiltro].map(v => _cantChip('Industria ≠ ' + esc(v), `CanteraMesaModule.toggleIndustriaExclFiltro('${_jsEsc(v)}')`)),
+          ...[..._archivoFiltro].map(v => { const f = _archivoOpts.find(x => String(x.id) === String(v)); return _cantChip('Archivo: ' + esc(f ? (f.nombre || 'archivo') : v), `CanteraMesaModule.toggleArchivoFiltro('${_jsEsc(v)}')`); }),
+          ...[..._archivoExclFiltro].map(v => { const f = _archivoOpts.find(x => String(x.id) === String(v)); return _cantChip('Archivo ≠ ' + esc(f ? (f.nombre || 'archivo') : v), `CanteraMesaModule.toggleArchivoExclFiltro('${_jsEsc(v)}')`); }),
+        ].join('')}</div>
         ${_onlyFailed || _tierFiltro.size || _tierExclFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _industriaFiltro.size || _industriaExclFiltro.size || _archivoFiltro.size || _archivoExclFiltro.size ? `<button class="btn btn--ghost btn--sm" onclick="CanteraMesaModule.resetFiltros()">Limpiar filtros</button>` : ''}
       </div>
       <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
@@ -9546,11 +9572,14 @@ const CanteraMesaModule = (() => {
   let _extC = false;   // filtro de cliente de Outreach
   function setExtClient(id) { if (id) { _filtro.cliente = String(id); _extC = true; } else if (_extC) { _filtro.cliente = ''; _extC = false; } }
   return { setExtClient, render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
-    toggleIndustriaFiltro, toggleArchivoFiltro, toggleTierExclFiltro, toggleIndustriaExclFiltro,
+    toggleIndustriaFiltro, toggleArchivoFiltro, toggleArchivoExclFiltro, toggleTierExclFiltro, toggleIndustriaExclFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual, primeKnownRow, _triggerNext };
 })();
+
+// Chips de filtros activos (Mesa de trabajo y Borradores): cada uno se quita con su ×.
+function _cantChip(label, js) { return `<span class="cant-fchip"><span class="cant-fchip__l">${label}</span><button type="button" class="cant-fchip__x" title="Quitar este filtro" aria-label="Quitar filtro" onclick="${js}">×</button></span>`; }
 
 // =================================================================
 // CANTERA · BASE GLOBAL — el "universo grande": cruza lo que ya está en el
