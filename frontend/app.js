@@ -24014,6 +24014,7 @@ const LeadManagerModule = (() => {
   async function _sndPaint() {
     const root = document.getElementById('snd-root'); if (!root) return;
     if (!_snd.data) await _sndCargar();
+    const h3 = document.querySelector('#snd-modal .fin-pi-box__hd h3'); if (h3 && _snd.data.cliente) h3.textContent = 'Remitentes · ' + _snd.data.cliente.nombre;
     const d = _snd.data, id = _snd.id, accs = (_li.accs || []).filter(a => a.outbound_client_id === id), ids = new Set(accs.map(a => a.id));
     const chip = (t, ok) => `<span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(t)}</span>`;
     const fila = (ic, tipo, nombre, sub, est, ok, btn) => `<div class="cc-snd"><span class="cc-snd__ic cc-snd__ic--${tipo}">${ic}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span>${chip(est, ok)}${btn}</div>`;
