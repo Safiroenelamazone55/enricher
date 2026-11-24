@@ -30258,7 +30258,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // Insignia de «Tareas comerciales»: SOLO lo que hay que hacer ya = vencidas + para hoy + emails por aprobar + por corregir.
   // Las «Próximas» (aún no son tareas), los follow-ups futuros y «Por aceptar» NO cuentan. Respeta el filtro global de cliente (las listas ya vienen acotadas) y,
   // sin filtro, es la suma de todos los clientes.
+  const _TK_SHOW_FIX = false;   // «Por corregir» (falta email / email rebotado) ya no se muestra en Tareas
   function _pendingTaskCount() {
+    try { const rws = _tkRows(false); if (Array.isArray(rws)) return rws.filter(r => r.estado === 'venc').length; } catch (_) {}   // = lo que ve la pestaña «Mis tareas» (vencidas y de hoy)
     try {
       const today = _dayOf(new Date());
       const seq = _allSeqTasks().filter(t => t.due <= today).length;
@@ -30267,8 +30269,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const delInactiva = a => a.tipo === 'tarea' && inactivas.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
       const acts = (_activities || []).filter(a => a.estado === 'pendiente' && !sys(a) && !delInactiva(a) && _dayOf(a.fecha) <= today).length;
       const aprob = Array.isArray(_apList) ? _apAll().length : (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
-      let fix = 0; try { fix = _fixList().length; } catch (_) {}
-      return seq + acts + aprob + fix;
+      return seq + acts + aprob;   // «Por corregir» (falta email / rebotes) ya no cuenta como tarea
     } catch (e) { return 0; }
   }
   function _allTaskRow(t, today) {
@@ -30785,7 +30786,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
       ${stat('next', 'Próximas', seqNext7.length, false, seqFuture.length > seqNext7.length ? 'próx. 7 días · ' + seqFuture.length + ' en total' : '')}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
-      ${(hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return stat('fix', 'Por corregir', n, true); })() : ''}
+      ${_TK_SHOW_FIX && (hasFilter ? _fixF() : _fixList()).length ? (() => { const n = (hasFilter ? _fixF() : _fixList()).length, t = _fixAllF().length; return stat('fix', 'Por corregir', n, true); })() : ''}
       ${_aprN ? stat('approve', 'Por aprobar', _aprN, true) : ''}
     </div>` : '';
     const sel = _taskStat;
@@ -30797,7 +30798,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // En «Todas», lo prioritario va primero (antes que aprobaciones y vencidas) — solo si hay algo
     if (!sel && _tiData && Array.isArray(_tiData.items) && _tiData.items.length) blocks.push('<div class="lm-prio-top">' + _vTaskInboxPriority() + '</div>');
     if (showApr) blocks.push(_apSectionHtml());
-    if (!sel || sel === 'fix') blocks.push(_fixSectionHtml());
+    if (_TK_SHOW_FIX && (!sel || sel === 'fix')) blocks.push(_fixSectionHtml());
     if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
     if (showHoy && seqHoy.length) blocks.push(hdr(' lm-tsec-h--today', 'Hoy', seqHoy.length) + '<div class="seq-tasks">' + seqHoy.map(x => _allTaskRow(x, today)).join('') + '</div>');
     if (sel === 'next' && seqFuture.length) blocks.push(hdr('', 'Próximas · 7 días', seqNext7.length) + '<div class="seq-tasks">' + seqNext7.map(x => _allTaskRow(x, today)).join('') + '</div>' + (seqFuture.length > seqNext7.length ? '<div class="seq-next">' + NI('calendar', 12) + ' ' + (seqFuture.length - seqNext7.length) + ' tareas más están programadas después, repartidas por días (arranque escalonado de la secuencia). Se irán sumando a medida que llegue su fecha.</div>' : ''));
