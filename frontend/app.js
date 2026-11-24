@@ -31040,24 +31040,84 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function _ibSideHtml() {
     const c = (_ibThread && _ibThread.contact) || {};
+    const lc = (_contacts || []).find(x => x.id === c.id) || {};
     const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
     const ini = (nm || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    const row = (k, v) => v ? `<div class="ibx2-f"><span>${k}</span><b>${v}</b></div>` : '';
-    const li = c.linkedin ? `<a href="${esc(/^https?:/i.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener">${esc(String(c.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '';
-    const msgs = (_ibThread && _ibThread.messages) || [];
-    const ev = msgs.slice().reverse().map(m => {
-      const t = m.dir === 'in' ? (m.tipo === 'bounce' ? 'Rebotó' : m.tipo === 'ooo' ? 'Respuesta automática' : 'Respondió') : m.dir === 'note' ? 'Nota interna' : m.dir === 'fwd' ? 'Reenviado' : (m.estado === 'scheduled' ? 'Programado' : m.estado === 'failed' ? 'Falló el envío' : 'Enviado');
-      return `<div class="ibx2-ev"><b>${t}</b><span>${esc(m.asunto || (m.cuerpo || '').slice(0, 60))}</span><small>${m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</small></div>`;
-    }).join('') || '<div class="ibx2-none">Sin actividad todavía.</div>';
-    const body = _ibSideTab === 'actividad' ? `<div class="ibx2-evs">${ev}</div>`
-      : _ibSideTab === 'secuencia' ? (c.seq_nombre ? `<div class="ibx2-f"><span>Secuencia</span><b>${esc(c.seq_nombre)}</b></div><div class="ibx2-f"><span>Estado</span><b>${c.seq_estado === 'respondido' ? 'Pausada por respuesta' : esc(c.seq_estado || '—')}</b></div>` : '<div class="ibx2-none">No está en ninguna secuencia.</div>')
-      : `${row('Email', esc(c.email))}${row('Teléfono', esc(c.telefono))}${row('Empresa', esc(c.empresa))}${row('Cargo', esc(c.cargo))}${row('País', esc(c.pais))}${row('LinkedIn', li)}${row('Cliente', esc(c.cliente))}${row('Buzón', esc(c.buzon))}${row('Etiqueta', c.disposition ? _dispoBadge(c.disposition) : '')}`;
+    const seqs = lc.sequences || [];
+    const tareas = (_activities || []).filter(a => a.contact_id === c.id && a.estado === 'pendiente');
+    const I = (d, w) => _ibSvg(d, w || 15);
+    const icoMail = I('<rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/>', 14);
+    const icoPhone = I('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', 14);
+    const icoCopy = I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13);
+    const icoLink = I('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>', 13);
+    const val = (v, btns) => `<div class="ibx2-box"><span class="ibx2-box__v">${v}</span>${btns || ''}</div>`;
+    const ib = (t, js, ic) => `<button class="ibx2-ib" title="${t}" onclick="${js}">${ic}</button>`;
+    const fld = (k, inner) => inner ? `<div class="ibx2-fl"><label>${k}</label>${inner}</div>` : '';
+    const liUrl = c.linkedin ? (/^https?:/i.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin) : '';
+    const act = (js, t, ic) => `<button class="ibx2-act" title="${t}" onclick="${js}">${ic}</button>`;
+    const tel = (c.telefono || '').replace(/[^\d+]/g, '');
+    const fecha = d => d ? new Date(d).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    let body;
+    if (_ibSideTab === 'actividad') {
+      const msgs = (_ibThread && _ibThread.messages) || [];
+      const ev = msgs.slice().reverse().map(m => {
+        const t = m.dir === 'in' ? (m.tipo === 'bounce' ? 'Rebotó' : m.tipo === 'ooo' ? 'Respuesta automática' : 'Respondió') : m.dir === 'note' ? 'Nota interna' : m.dir === 'fwd' ? 'Reenviado' : (m.estado === 'scheduled' ? 'Programado' : m.estado === 'failed' ? 'Falló el envío' : 'Enviado');
+        const ic = m.dir === 'in' ? '↙' : m.dir === 'note' ? '✎' : '↗';
+        return `<div class="ibx2-ev"><i>${ic}</i><div><b>${t}</b><span>${esc(m.asunto || (m.cuerpo || '').slice(0, 70))}</span><small>${fecha(m.at)}</small></div></div>`;
+      }).join('') || '<div class="ibx2-none">Sin actividad todavía.</div>';
+      body = `<div class="ibx2-card"><div class="ibx2-card__t">Actividad</div>${ev}</div>`;
+    } else if (_ibSideTab === 'campanas') {
+      const act1 = seqs.filter(x => ['activo', 'pausado', 'respondido'].includes(x.estado)), past = seqs.filter(x => !act1.includes(x));
+      const card = x => `<div class="ibx2-camp"><b>${esc(x.nombre)}</b><span class="ibx2-st ibx2-st--${esc(x.estado)}">${x.estado === 'respondido' ? 'Pausada por respuesta' : esc(x.estado || '—')}</span>${x.paso != null ? `<small>Paso ${esc(String(x.paso))}</small>` : ''}</div>`;
+      body = `<div class="ibx2-card"><div class="ibx2-card__t">Secuencias<button class="ibx2-push" onclick="LeadManagerModule.ibSeqPick(event)">${I('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>', 13)} Agregar</button></div>
+        <div class="ibx2-sub">Actuales</div>${act1.map(card).join('') || '<div class="ibx2-none">Ninguna activa.</div>'}
+        <div class="ibx2-sub">Anteriores</div>${past.map(card).join('') || '<div class="ibx2-none">Ninguna.</div>'}</div>`;
+    } else if (_ibSideTab === 'tareas') {
+      body = `<div class="ibx2-card"><div class="ibx2-card__t">Tareas pendientes</div>${tareas.map(a => `<div class="ibx2-ev"><i>☑</i><div><b>${esc(String(a.tipo || 'tarea').replace(/_/g, ' '))}</b><span>${esc(a.nota || a.titulo || '')}</span><small>${fecha(a.fecha)}</small></div></div>`).join('') || '<div class="ibx2-none">Sin tareas pendientes.</div>'}</div>`;
+    } else {
+      body = `<div class="ibx2-card"><div class="ibx2-card__t">Campos del contacto</div>
+        ${fld('Email', c.email ? val(esc(c.email), ib('Copiar', `LeadManagerModule.ibCopy('${esc(c.email)}')`, icoCopy) + ib('Responder', "document.getElementById('ibx-ta')&&document.getElementById('ibx-ta').focus()", icoMail)) : '')}
+        ${fld('Teléfono principal', c.telefono ? val(esc(c.telefono), ib('Copiar', `LeadManagerModule.ibCopy('${esc(c.telefono)}')`, icoCopy) + (tel ? `<a class="ibx2-ib" title="Llamar" href="tel:${tel}">${icoPhone}</a>` : '')) : '')}
+        ${fld('Empresa asociada', c.empresa ? val(`<span class="ibx2-co"><i>${esc(c.empresa[0].toUpperCase())}</i>${esc(c.empresa)}</span>`) : '')}
+        ${fld('Cargo', c.cargo ? val(esc(c.cargo)) : '')}
+        ${fld('País', c.pais ? val(esc(c.pais)) : '')}
+        ${fld('LinkedIn', liUrl ? val(`<a href="${esc(liUrl)}" target="_blank" rel="noopener">${esc(liUrl.replace(/^https?:\/\/(www\.)?/i, ''))}</a>`, `<a class="ibx2-ib" title="Abrir" href="${esc(liUrl)}" target="_blank" rel="noopener">${icoLink}</a>`) : '')}
+        ${fld('Propietario', c.cliente ? val(esc(c.cliente)) : '')}
+        ${fld('Buzón', c.buzon ? val(esc(c.buzon)) : '')}
+        ${fld('Etiqueta', c.disposition ? val(_dispoBadge(c.disposition)) : '')}
+      </div>`;
+    }
     return `<aside class="ibx-side">
-      <div class="ibx2-who"><div class="ibx-av ibx-av--lg">${esc(ini)}</div><b>${esc(nm)}</b>${c.cargo || c.empresa ? `<small>${esc([c.cargo, c.empresa].filter(Boolean).join(' · '))}</small>` : ''}
-        ${c.id ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>` : ''}</div>
-      <div class="ibx2-tabs">${[['general', 'General'], ['actividad', 'Actividad'], ['secuencia', 'Secuencia']].map(([k, l]) => `<button class="${_ibSideTab === k ? 'on' : ''}" onclick="LeadManagerModule.ibSideTab('${k}')">${l}</button>`).join('')}</div>
+      <div class="ibx2-top"><div class="ibx-av">${esc(ini)}</div><b>${esc(nm)}</b><span class="sp"></span>
+        ${c.id ? `<button class="ibx2-ib" title="Resolver respuesta" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})">${_ibSvg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}</div>
+      ${c.cargo || c.empresa ? `<div class="ibx2-head2">${esc(c.cargo || '')}${c.cargo && c.empresa ? ' en ' : ''}${c.empresa ? `<span class="ibx2-co ibx2-co--pill"><i>${esc(c.empresa[0].toUpperCase())}</i>${esc(c.empresa)}</span>` : ''}</div>` : ''}
+      <div class="ibx2-acts">
+        <button class="ibx2-add" onclick="LeadManagerModule.ibSeqPick(event)">${I('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>', 14)} Agregar a secuencia</button>
+        ${act("document.getElementById('ibx-ta')&&document.getElementById('ibx-ta').focus()", 'Responder', I('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'))}
+        ${tel ? `<a class="ibx2-act" title="Llamar" href="tel:${tel}">${icoPhone}</a>` : act('', 'Sin teléfono', icoPhone).replace('class="ibx2-act"', 'class="ibx2-act" disabled style="opacity:.4;cursor:default"')}
+        ${act("LeadManagerModule.ibSideTab('tareas')", 'Tareas', I('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'))}
+        ${c.id ? act(`LeadManagerModule.openContactPage(${c.id})`, 'Abrir ficha completa', I('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>')) : ''}
+      </div>
+      <div class="ibx2-tabs">${[['general', 'General', 0], ['actividad', 'Actividad', 0], ['campanas', 'Secuencias', seqs.length], ['tareas', 'Tareas', tareas.length]].map(([k, l, n]) => `<button class="${_ibSideTab === k ? 'on' : ''}" onclick="LeadManagerModule.ibSideTab('${k}')">${l}${n ? ` <em>${n}</em>` : ''}</button>`).join('')}</div>
       <div class="ibx2-body">${body}</div>
     </aside>`;
+  }
+  function ibCopy(t) { try { navigator.clipboard.writeText(t); showBanner('Copiado', 'success'); } catch (_) {} }
+  function ibSeqPick(ev) {
+    const c = (_ibThread && _ibThread.contact) || {}; if (!c.id) return;
+    const lc = (_contacts || []).find(x => x.id === c.id) || {};
+    const ya = new Set((lc.sequences || []).filter(x => ['activo', 'pausado', 'respondido'].includes(x.estado)).map(x => x.id));
+    const list = [...(_sequences || [])].filter(x => !ya.has(x.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    _ibPop(ev, () => list.length ? list.map(x => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibSeqAdd(${x.id})">${esc(x.nombre)}</button>`).join('') : '<div style="padding:10px 12px;font-size:.78rem;color:var(--text-muted)">No hay más secuencias disponibles.</div>');
+  }
+  async function ibSeqAdd(seqId) {
+    if (_ibFiltrosPopClose) _ibFiltrosPopClose();
+    const c = (_ibThread && _ibThread.contact) || {}; if (!c.id) return;
+    await seqEnrol(seqId, c.id);
+    const lc = (_contacts || []).find(x => x.id === c.id);
+    const sq = (_sequences || []).find(x => x.id === seqId);
+    if (lc && sq && !(lc.sequences || []).some(x => x.id === seqId)) lc.sequences = [...(lc.sequences || []), { id: seqId, nombre: sq.nombre, estado: 'activo', paso: 1 }];
+    _ibSideTab = 'campanas'; const a = document.querySelector('.ibx-side'); if (a) a.outerHTML = _ibSideHtml();
   }
   function _ibWrapHtml() {
     const wide = _ibTab === 'envios' || (_ibTab === 'env' && _ibEnvShowTable);
@@ -42100,7 +42160,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibCopy, ibSeqPick, ibSeqAdd, ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,

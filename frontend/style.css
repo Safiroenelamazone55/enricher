@@ -21813,3 +21813,46 @@ body.ibx-lb-open{overflow:hidden}
 @media (max-width: 900px) { .ibx-grid--3, .ibx-grid--3.ibx-grid--empty { grid-template-columns: 1fr; } }
 .ibx2-view { white-space: nowrap; text-align: left; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; width: auto; }
 .ibx2-row .sp { flex: 1 1 0; min-width: 4px; }
+
+/* Panel de contacto estilo Lemlist */
+.ibx-side { background: var(--surface-secondary, #F7F8F6); }
+.ibx2-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; }
+.ibx2-top b { font-size: .95rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ibx2-top .sp { flex: 1; }
+.ibx2-head2 { padding: 0 14px 10px; font-size: .76rem; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ibx2-co { display: inline-flex; align-items: center; gap: 6px; }
+.ibx2-co i { width: 16px; height: 16px; background: #2563EB; color: #fff; font-style: normal; font-size: .62rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.ibx2-co--pill { background: var(--surface); border: 1px solid var(--border); padding: 1px 8px 1px 3px; border-radius: 12px; color: var(--text-primary); font-weight: 600; }
+.ibx2-acts { display: flex; gap: 6px; padding: 0 14px 12px; }
+.ibx2-add { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: .78rem; font-weight: 700; padding: 8px 10px; background: var(--primary); color: #fff; border: 0; cursor: pointer; border-radius: 6px; white-space: nowrap; }
+.ibx2-add:hover { filter: brightness(1.08); }
+.ibx2-act, .ibx2-ib { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; border-radius: 6px; text-decoration: none; flex: 0 0 auto; }
+.ibx2-ib { width: 28px; height: 28px; border: 0; background: none; }
+.ibx2-act:hover, .ibx2-ib:hover { background: var(--surface-hover); color: var(--text-primary); }
+.ibx-side .ibx2-tabs { background: transparent; padding: 0 8px; }
+.ibx2-tabs button { font-size: .74rem; padding: 8px 6px; white-space: nowrap; }
+.ibx2-tabs em { font-style: normal; font-size: .62rem; background: var(--surface); border: 1px solid var(--border); padding: 0 5px; border-radius: 8px; margin-left: 2px; }
+.ibx-side .ibx2-body { padding: 10px; }
+.ibx2-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.ibx2-card__t { display: flex; align-items: center; justify-content: space-between; font-size: .84rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.ibx2-fl { margin-bottom: 10px; }
+.ibx2-fl label { display: block; font-size: .7rem; color: var(--text-muted); margin-bottom: 3px; }
+.ibx2-box { display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px 3px 9px; min-height: 34px; background: var(--surface); }
+.ibx2-box__v { flex: 1; min-width: 0; font-size: .78rem; color: var(--text-primary); word-break: break-word; }
+.ibx2-box__v a { color: var(--primary); text-decoration: none; }
+.ibx2-sub { font-size: .7rem; color: var(--text-muted); margin: 8px 0 4px; }
+.ibx2-camp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+.ibx2-camp b { flex: 1 1 100%; font-size: .78rem; }
+.ibx2-camp small { font-size: .68rem; color: var(--text-muted); }
+.ibx2-st { font-size: .66rem; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: var(--surface-secondary); color: var(--text-secondary); }
+.ibx2-st--activo { background: #DDF3E4; color: #15803D; }
+.ibx2-st--respondido { background: var(--primary-soft); color: var(--primary); }
+.ibx2-push { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: .72rem; font-weight: 600; background: var(--surface); border: 1px solid var(--border); padding: 4px 9px; cursor: pointer; border-radius: 6px; }
+.ibx2-ev { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.ibx2-ev i { font-style: normal; width: 22px; height: 22px; flex: 0 0 auto; background: var(--surface-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .72rem; color: var(--text-secondary); }
+.ibx2-ev > div { display: flex; flex-direction: column; min-width: 0; }
+.ibx2-ev:last-child { border-bottom: 0; }
+.ibx-grid--3 { grid-template-columns: minmax(0, 320px) minmax(0, 1fr) minmax(0, 330px); }
+.ibx2-acts { gap: 4px; padding: 0 10px 12px; }
+.ibx2-add { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; padding: 8px 6px; font-size: .74rem; }
+.ibx2-act { width: 30px; height: 34px; }
