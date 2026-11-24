@@ -39565,7 +39565,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _ctSelMode = false;
   let _coSelMode = false;
   let _contactView = null;
-  let _cpTab = 'informacion';
+  let _cpTab = 'resumen';
   let _companyView = null;
   let _coFrom = 'companies', _coFromSeq = null;   // desde dónde se abrió la ficha de empresa (y, si fue desde una secuencia, cuál y en qué pestaña)
   let _addIds = [];
@@ -40631,9 +40631,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
     if (!taskCtx && _section !== 'contact-view') { _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts'; _cpFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
-    _cpHistFor = null; _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
+    _cpHistFor = null; _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); _toTop(); _cpReloadActs(id);
   }
-  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
+  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'resumen' || t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
   function _vContactPage(id) {
     const c = _contacts.find(x => x.id === id);
     if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_cpFrom}')">‹ ${_CP_FROM_LABEL[_cpFrom] || 'Contactos'}</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
@@ -40677,16 +40677,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       </div>
       <div class="cp-f__l" style="margin:2px 0 4px 2px">Etapa comercial</div>
       ${_cpStepper(c, id)}
+      <div class="cp2"><aside class="cp2-l">${_cpFieldsHtml(c)}</aside><div class="cp2-r">
       <div class="cp-tabs">
-            <button class="cp-tab${_cpTab === 'informacion' ? ' active' : ''}" data-t="informacion" onclick="LeadManagerModule.cpTab('informacion')">Información</button>
-            <button class="cp-tab${_cpTab === 'seguimiento' ? ' active' : ''}" data-t="seguimiento" onclick="LeadManagerModule.cpTab('seguimiento')">Seguimiento</button>
-            <button class="cp-tab${_cpTab === 'actividad' ? ' active' : ''}" data-t="actividad" onclick="LeadManagerModule.cpTab('actividad')">Actividad</button>
-            <button class="cp-tab${_cpTab === 'reuniones' ? ' active' : ''}" data-t="reuniones" onclick="LeadManagerModule.cpTab('reuniones')">Reuniones</button>
-            <button class="cp-tab${_cpTab === 'tareas' ? ' active' : ''}" data-t="tareas" onclick="LeadManagerModule.cpTab('tareas')">Tareas</button>
-            <button class="cp-tab${_cpTab === 'notas' ? ' active' : ''}" data-t="notas" onclick="LeadManagerModule.cpTab('notas')">Notas</button>
-            <button class="cp-tab${_cpTab === 'facturas' ? ' active' : ''}" data-t="facturas" onclick="LeadManagerModule.cpTab('facturas')">Facturas</button>
+            ${[['resumen', 'Resumen'], ['actividad', 'Actividades'], ['seguimiento', 'Campañas'], ['tareas', 'Tareas'], ['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => `<button class="cp-tab${(_cpTab === 'informacion' ? 'resumen' : _cpTab) === k ? ' active' : ''}" data-t="${k}" onclick="LeadManagerModule.cpTab('${k}')">${l}</button>`).join('')}
       </div>
       <div id="cp-tabwrap">${_cpTabContent(c)}</div>
+      </div></div>
     </div>`;
   }
   // ── Pestañas de la ficha (rediseño 2026-10-04): Información / Seguimiento / Canales ──
@@ -40694,40 +40690,43 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   const _CP_ICO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   const _infoCopyBtn = (v, tip) => `<button type="button" class="cp-go" title="${tip || 'Copiar'}" onclick="event.preventDefault();event.stopPropagation();LeadManagerModule.lmCopy('${esc(String(v).replace(/'/g, '&#39;'))}','Copiado')">${_CP_ICO}</button>`;
   const _goUrl = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:[/][/]/i.test(u) ? u : 'https://' + u); };
-  function _cpInfoHtml(c) {
+  // Panel izquierdo fijo «Campos de contacto» (estilo Lemlist): siempre visible, edita al salir del campo.
+  function _cpFieldsHtml(c) {
     const id = c.id;
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
     const FB = (f, label, val, btns) => `<label class="cp-f"><span class="cp-f__l">${label}</span><span class="cp-f__row"><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})">${val ? btns : ''}</span></label>`;
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
+    return `<div class="cp2-ft"><span>Campos de contacto</span></div><div class="cp2-fl">
+      ${F('email', 'Email', c.email)}${F('email_personal', 'Email personal', c.email_personal)}
+      ${FB('telefono', 'Teléfono', c.telefono, _infoCopyBtn(c.telefono, 'Copiar teléfono'))}${FB('movil', 'Móvil', c.movil, _infoCopyBtn(c.movil, 'Copiar móvil'))}
+      ${F('nombre', 'Nombre', c.nombre)}${F('apellido', 'Apellido', c.apellido)}
+      ${F('cargo', 'Cargo', c.cargo)}${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
+      <div class="cp-f"><span class="cp-f__l">Estado del contacto</span><span class="cp2-ro">${esc(STAGE_LABELS[c.estado] || c.estado || 'nuevo')}</span></div>
+      ${FB('linkedin', 'LinkedIn', c.linkedin, `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>`)}
+      ${FB('linkedin_sales_nav', 'URL Sales Navigator', c.linkedin_sales_nav, `<a class="cp-go" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" onclick="event.stopPropagation()">${_SN_ICO}</a>`)}
+      ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
+      ${F('fuente', 'Fuente', c.fuente)}
+      <label class="cp-f"><span class="cp-f__l">Empresa asociada</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
+      ${c.company_id ? `<button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button>` : ''}
+    </div>`;
+  }
+  // Pestaña «Resumen»: empresa, última actividad y datos importados (los campos editables viven en el panel izquierdo).
+  function _cpInfoHtml(c) {
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
-    const blocks = `
-          <div class="cp-card"><div class="cp-card__t">Contacto</div><div class="cp-fields">
-            ${F('nombre', 'Nombre', c.nombre)}${F('apellido', 'Apellido', c.apellido)}
-            ${F('email', 'Email', c.email)}${F('email_personal', 'Email personal', c.email_personal)}
-            ${FB('telefono', 'Teléfono', c.telefono, _infoCopyBtn(c.telefono, 'Copiar teléfono'))}
-            ${FB('movil', 'Móvil', c.movil, _infoCopyBtn(c.movil, 'Copiar móvil'))}${F('cargo', 'Cargo', c.cargo)}
-            ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
-            ${FB('linkedin', 'LinkedIn', c.linkedin, `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>`)}${FB('linkedin_sales_nav', 'LinkedIn Sales Navigator', c.linkedin_sales_nav, `<a class="cp-go" href="${esc(_goUrl(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator" onclick="event.stopPropagation()">${_SN_ICO}</a>`)}${F('ciudad', 'Ciudad', c.ciudad)}
-            ${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
-          </div></div>
-          <div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp-fields">
-            <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
-            ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
-            ${F('fuente', 'Fuente', c.fuente)}
-            ${(() => {
-              const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '';
-              const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__row"><span class="cp-f__ro">${esc(v)}</span>${l === 'LinkedIn' ? `<a class="cp-go" href="${esc(_goUrl(v))}" target="_blank" rel="noopener" title="Abrir LinkedIn de la empresa">${_GO_ICO}</a>` : ''}${l === 'Teléfono' ? _infoCopyBtn(v, 'Copiar teléfono') : ''}</span></div>`;
-              const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
-              const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
-              const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};
-              // Datos de la importación con el nombre de columna original (sin repetir lo ya mostrado)
-              const extra = Object.keys(rw).filter(k => rw[k] != null && String(rw[k]).trim() && !shown.has(String(rw[k]).trim().toLowerCase())).slice(0, 12).map(k => [k, String(rw[k])]);
-              return known.concat(extra).map(([l, v]) => R(l, v)).join('');
-            })()}
-          </div><div class="cp-map cp-map--wide" id="cp-map-co"></div></div>
-`;
-    return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
+    const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null;
+    let coCard = `<div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp2-empty">Sin empresa asociada. Elige una en «Empresa asociada».</div></div>`;
+    if (co) {
+      const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__row"><span class="cp-f__ro">${esc(v)}</span>${l === 'LinkedIn' ? `<a class="cp-go" href="${esc(_goUrl(v))}" target="_blank" rel="noopener" title="Abrir LinkedIn de la empresa">${_GO_ICO}</a>` : ''}${l === 'Teléfono' ? _infoCopyBtn(v, 'Copiar teléfono') : ''}</span></div>`;
+      const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
+      const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
+      const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};
+      const extra = Object.keys(rw).filter(k => rw[k] != null && String(rw[k]).trim() && !shown.has(String(rw[k]).trim().toLowerCase())).slice(0, 12).map(k => [k, String(rw[k])]);
+      coCard = `<div class="cp-card cp-card--co"><div class="cp-card__t">${esc(co.nombre || co.dominio || 'Empresa')} <button class="cp-mini" style="width:auto;padding:0 10px" onclick="LeadManagerModule.openCompanyPage(${co.id})">Ver ficha ›</button></div><div class="cp-fields">${known.concat(extra).map(([l, v]) => R(l, v)).join('')}</div><div class="cp-map cp-map--wide" id="cp-map-co"></div></div>`;
+    }
+    const acts = Array.isArray(_cpActs) ? _cpActs.slice(0, 5) : null;
+    const actCard = `<div class="cp-card"><div class="cp-card__t">Última actividad <button class="cp-link2" onclick="LeadManagerModule.cpTab('actividad')">Ver todo ›</button></div>${acts === null ? '<div class="cp2-empty">Cargando…</div>' : (acts.length ? acts.map(a => _cpAct(a)).join('') : '<div class="cp2-empty">Sin actividad registrada todavía.</div>')}</div>`;
+    return `<div class="cp-info cp-info--res">${actCard}${coCard}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
   }
   function _cpSeguimientoHtml(c) {
     const id = c.id;

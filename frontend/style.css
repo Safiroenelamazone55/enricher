@@ -22145,3 +22145,20 @@ body.ibx-lb-open{overflow:hidden}
 
 .tk { color: #213856; font-size: 14px; background: #fff; border: 1px solid #E6E6E6; padding: 12px 16px 0; } .tk .vw { padding-top: 0; }
 .tk__tbl { border-top: 1px solid #E6E6E6; max-height: calc(100vh - 340px); } .tk-over { color: #B42318; font-weight: 600; } .tk-back { margin-bottom: 10px; }
+
+/* Ficha de contacto estilo Lemlist: panel de campos a la izquierda + pestañas a la derecha */
+.cp { max-width: none; }
+.cp2 { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.cp2-l { position: sticky; top: 8px; background: #fff; border: 1px solid #E6E6E6; border-radius: 12px; padding: 14px 14px 10px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.cp2-ft { font-size: 14px; font-weight: 600; color: #213856; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #F0F0F0; }
+.cp2-fl { display: flex; flex-direction: column; gap: 9px; }
+.cp2-fl .cp-f__i { border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; }
+.cp2-fl .cp-f__i:hover { border-color: #E6E6E6; background: #fff; }
+.cp2-fl .cp-f__i:focus { border-color: var(--primary); }
+.cp2-ro { font-size: .86rem; color: #213856; padding: 3px 8px; }
+.cp2-empty { font-size: 13px; color: #98A1AC; padding: 14px 4px; }
+.cp2-r { min-width: 0; }
+.cp-info--res { grid-template-columns: minmax(0, 1fr); }
+.cp-link2 { font-family: inherit; font-size: 12.5px; font-weight: 500; color: #55657D; background: none; border: none; cursor: pointer; }
+.cp-link2:hover { color: var(--primary); }
+@media (max-width: 1000px) { .cp2 { grid-template-columns: 1fr; } .cp2-l { position: static; max-height: none; } }
