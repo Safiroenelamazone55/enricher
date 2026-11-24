@@ -21730,3 +21730,30 @@ body.ibx-lb-open{overflow:hidden}
 .snd-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0 6px; }
 .snd-scroll .li-card { margin-top: 8px; }
 .li-btns .li-del { color: #B42318; }
+
+/* Panel de filtros estilo lemlist (Base global) */
+.lf-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border, #E4E7DD); margin: 12px 0 10px; }
+.lf-tabs button { border: 0; background: transparent; padding: 8px 2px; font: inherit; font-weight: 600; color: #64748B; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.lf-tabs button.is-on { color: var(--text, #0A2540); border-color: #0A2540; }
+.lf-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border, #E4E7DD); background: #fff; padding: 0 10px; margin-bottom: 12px; color: #8C97A3; }
+.lf-search input { flex: 1; border: 0; outline: 0; padding: 10px 0; font: inherit; font-size: .88rem; background: transparent; color: var(--text, #0A2540); }
+.lf-search button { border: 0; background: transparent; color: #8C97A3; cursor: pointer; }
+.lf-grp { border: 1px solid var(--border, #E4E7DD); background: #fff; margin-bottom: 10px; }
+.lf-grp__hd { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 0; background: transparent; font: inherit; font-weight: 700; font-size: .92rem; color: var(--text, #0A2540); cursor: pointer; text-align: left; }
+.lf-grp__hd > span:first-child { flex: 1; }
+.lf-chev { display: inline-block; transform: rotate(180deg); transition: transform .15s; color: #64748B; } .lf-chev.is-open { transform: rotate(0); }
+.lf-grp__bd { border-top: 1px solid var(--border, #E4E7DD); padding: 4px 6px 8px; }
+.lf-it { border-radius: 0; }
+.lf-it__hd { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border: 0; background: transparent; font: inherit; font-size: .88rem; color: var(--text, #0A2540); cursor: pointer; text-align: left; }
+.lf-it__hd:hover:not(:disabled) { background: #F6F7ED; }
+.lf-it__ic { color: #64748B; display: inline-flex; flex-shrink: 0; } .lf-it__l { flex: 1; min-width: 0; }
+.lf-it__pl { color: #64748B; font-size: 1.1rem; width: 16px; text-align: center; }
+.lf-it.is-sin .lf-it__hd { opacity: .55; cursor: default; }
+.lf-sin { font-size: .68rem; font-weight: 700; color: #8C97A3; background: #F1F3EA; padding: 2px 7px; white-space: nowrap; }
+.lf-par { font-size: .68rem; font-weight: 700; color: #7A5A00; background: #FFF1CC; padding: 2px 7px; white-space: nowrap; }
+.lf-n { min-width: 18px; height: 18px; padding: 0 5px; background: #00804C; color: #fff; font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.lf-it__bd { padding: 4px 8px 10px 34px; position: relative; }
+.lf-in { width: 100%; padding: 8px 10px; border: 1px solid #00804C; background: #fff; font: inherit; font-size: .86rem; outline: 0; margin-top: 6px; }
+.lf-menu { position: absolute; left: 34px; right: 8px; z-index: 30; max-height: 240px; overflow-y: auto; }
+.lf-none { padding: 20px; text-align: center; color: #8C97A3; font-size: .86rem; }
+.lf-foot { font-size: .76rem; color: #8C97A3; margin: 6px 2px 12px; line-height: 1.5; }

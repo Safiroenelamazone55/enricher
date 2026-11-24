@@ -9575,6 +9575,8 @@ const CanteraGlobalModule = (() => {
   // cerrados (solo la etiqueta), y se abren al click o automáticamente si
   // ya tienen valores activos (igual que LI mantiene expandido lo que usaste).
   let _taOpenSet = new Set();
+  // Filtros nuevos (catálogo estilo lemlist): { id: { inc: [...], exc: [...] } }. Los de siempre (país, industria…) siguen en _filtros.
+  let _f2 = {}, _cat = null, _lfOpen = null, _lfFq = '', _lfGrp = new Set();
   // Dos vistas del panel de criterios, igual que Sales Navigator: "Lo que tienen
   // es una vista clásica (angosta, una columna, más scroll) y otra con más
   // detalle (ancha, las mismas secciones lado a lado, menos scroll)". Se
@@ -9606,7 +9608,7 @@ const CanteraGlobalModule = (() => {
     list.unshift({
       nombre, fecha: new Date().toISOString(),
       q: _q, origen: _origen, vista: _vista,
-      filtros: JSON.parse(JSON.stringify(_filtros)), filtrosExcl: JSON.parse(JSON.stringify(_filtrosExcl)),
+      filtros: JSON.parse(JSON.stringify(_filtros)), filtrosExcl: JSON.parse(JSON.stringify(_filtrosExcl)), f2: JSON.parse(JSON.stringify(_f2)),
     });
     _saveSaved(list);
     showBanner('✓ Filtro guardado', 'success');
@@ -9618,6 +9620,7 @@ const CanteraGlobalModule = (() => {
     _q = f.q || ''; _origen = f.origen || ''; _vista = f.vista || '';
     _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtros || {}) };
     _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtrosExcl || {}) };
+    _f2 = JSON.parse(JSON.stringify(f.f2 || {}));
     _page = 0;
     _search().then(_repaint);
   }
@@ -9679,7 +9682,7 @@ const CanteraGlobalModule = (() => {
   const _STATE_KEY = 'cantera_global_state';
   let _restored = false;
   function _saveState() {
-    try { localStorage.setItem(_STATE_KEY, JSON.stringify({ q: _q, origen: _origen, vista: _vista, filtros: _filtros, filtrosExcl: _filtrosExcl })); } catch (_) {}
+    try { localStorage.setItem(_STATE_KEY, JSON.stringify({ q: _q, origen: _origen, vista: _vista, filtros: _filtros, filtrosExcl: _filtrosExcl, f2: _f2 })); } catch (_) {}
   }
   function _restoreState() {
     if (_restored) return; _restored = true;
@@ -9688,6 +9691,7 @@ const CanteraGlobalModule = (() => {
       _q = s.q || ''; _origen = s.origen || ''; _vista = s.vista || '';
       _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtros || {}) };
       _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtrosExcl || {}) };
+      _f2 = s.f2 && typeof s.f2 === 'object' ? s.f2 : {};
     } catch (_) {}
   }
   async function render(containerId) {
@@ -9696,6 +9700,7 @@ const CanteraGlobalModule = (() => {
     _restoreState();
     if (_extN) { _filtros.cliente = [_extN]; _extC = true; } else if (_extC) { _filtros.cliente = []; _extC = false; }   // filtro de cliente de Outreach (después de restaurar lo guardado)
     if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
+    if (!_cat) { try { const r = await apiFetch(`${API}/cantera/filtros/catalogo`); _cat = r.ok ? await r.json() : null; } catch { _cat = null; } }
     await _search(); el.innerHTML = _html();
   }
   function _buildFilterParams() {
@@ -9723,6 +9728,8 @@ const CanteraGlobalModule = (() => {
     if (_filtros.ciudad.length) p.set('ciudad', _filtros.ciudad.join(','));
     if (_filtrosExcl.ciudad.length) p.set('ciudadExcl', _filtrosExcl.ciudad.join(','));
     if (_vista) p.set('tipo', _vista);
+    const f2 = {}; for (const k in _f2) if ((_f2[k].inc || []).length || (_f2[k].exc || []).length) f2[k] = _f2[k];
+    if (Object.keys(f2).length) p.set('f2', JSON.stringify(f2));
     return p;
   }
   async function _search() {
@@ -9862,11 +9869,106 @@ const CanteraGlobalModule = (() => {
             <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
           </select></div>
       </div>
-      <div class="ta-groups${_vistaFiltros === 'detallada' ? ' ta-groups--detail' : ''}">${fields}</div>
+      ${_cat ? _lfBody() : `<div class="ta-groups${_vistaFiltros === 'detallada' ? ' ta-groups--detail' : ''}">${fields}</div>`}
       <div class="cant-global-clearall-row">
         <button class="cant-global-clearall" ${_hasActiveFiltros() ? '' : 'disabled'} onclick="CanteraGlobalModule.clearAll()">Borrar todos los filtros</button>
       </div>`;
   }
+  // ── Panel de filtros estilo lemlist: pestañas Personas / Empresas, buscador de filtros, grupos plegables y «Añadir» con sugerencias ──
+  const _LF_ICO = {
+    texto: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>',
+    lista: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    bool: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="7"/><circle cx="16" cy="12" r="2.5"/></svg>',
+    cubo: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
+    sin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  };
+  const _lfNorm = t => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const _lfInc = d => d.legacy ? (_filtros[d.legacy] || []) : ((_f2[d.id] || {}).inc || []);
+  const _lfExc = d => d.legacy ? (_filtrosExcl[d.legacy] || []) : ((_f2[d.id] || {}).exc || []);
+  function _lfVisibles() {
+    const tab = _vista === 'empresa' ? 'e' : 'p', q = _lfNorm(_lfFq), usados = new Set(), out = [];
+    for (const d of _cat.filtros) {
+      if (tab === 'e' && d.ent !== 'empresa') continue;
+      if (d.legacy) { if (usados.has(d.legacy)) continue; usados.add(d.legacy); }
+      if (q && !_lfNorm(d.label).includes(q)) continue;
+      out.push(d);
+    }
+    return out;
+  }
+  function _lfItem(d) {
+    const inc = _lfInc(d), exc = _lfExc(d), total = inc.length + exc.length, sin = d.sin && !d.legacy && !total;
+    const open = _lfOpen === d.id || total > 0 && _lfOpen === d.id;
+    const chips = inc.map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',0,${i})">✕</span></span>`).join('') + exc.map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.lfQuitar('${d.id}',1,${i})">✕</span></span>`).join('');
+    return `<div class="lf-it${open ? ' is-open' : ''}${sin ? ' is-sin' : ''}" data-lf="${d.id}">
+      <button type="button" class="lf-it__hd" ${sin ? 'disabled' : `onclick="CanteraGlobalModule.lfToggle('${d.id}')"`}>
+        <span class="lf-it__ic">${_LF_ICO[sin ? 'sin' : d.tipo] || _LF_ICO.texto}</span><span class="lf-it__l">${esc(d.label)}</span>
+        ${sin ? '<span class="lf-sin">Sin datos</span>' : (d.parcial && !total ? `<span class="lf-par" title="${esc(d.parcial)}">Parcial</span>` : '')}
+        ${total ? `<span class="lf-n">${total}</span>` : ''}<span class="lf-it__pl">${open ? '−' : '+'}</span>
+      </button>
+      ${open && !sin ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div>
+        <input type="text" class="lf-in" id="lf-in-${d.id}" placeholder="Añadir" autocomplete="off" onfocus="CanteraGlobalModule.lfSug('${d.id}')" oninput="CanteraGlobalModule.lfSug('${d.id}')" onblur="CanteraGlobalModule.lfBlur('${d.id}')" onkeydown="if(event.key==='Enter'){CanteraGlobalModule.lfEnter('${d.id}')}">
+        <div class="ta-menu lf-menu" id="lf-menu-${d.id}" hidden></div></div>` : ''}
+      ${!open && total ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div></div>` : ''}
+    </div>`;
+  }
+  function _lfBody() {
+    const vis = _lfVisibles(), tab = _vista === 'empresa' ? 'e' : 'p', q = _lfFq.trim();
+    const grupos = _cat.grupos.map(g => ({ g, items: vis.filter(d => d.grupo === g) })).filter(x => x.items.length);
+    return `<div class="lf-tabs"><button type="button" class="${tab === 'p' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('p')">Personas</button><button type="button" class="${tab === 'e' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('e')">Empresas</button></div>
+      <div class="lf-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" id="lf-q" placeholder="Filtros de búsqueda…" value="${esc(_lfFq)}" oninput="CanteraGlobalModule.lfBuscar(this.value)">${q ? '<button type="button" onclick="CanteraGlobalModule.lfBuscar(\'\')" title="Quitar">✕</button>' : ''}</div>
+      ${grupos.length ? grupos.map(({ g, items }) => {
+        const abierto = q ? true : !_lfGrp.has(g), act = items.filter(d => _lfInc(d).length + _lfExc(d).length).length;
+        return `<div class="lf-grp"><button type="button" class="lf-grp__hd" onclick="CanteraGlobalModule.lfGrupo('${esc(g).replace(/'/g, "\\'")}')"><span>${esc(g)}</span>${act ? `<span class="lf-n">${act}</span>` : ''}<span class="lf-chev${abierto ? ' is-open' : ''}">⌃</span></button>${abierto ? `<div class="lf-grp__bd">${items.map(_lfItem).join('')}</div>` : ''}</div>`;
+      }).join('') : '<div class="lf-none">Ningún filtro coincide.</div>'}
+      <p class="lf-foot">¿Falta algún filtro? Dímelo y lo añadimos. Los marcados «Sin datos» empezarán a funcionar cuando importes esa información.</p>`;
+  }
+  function lfTab(t) { _vista = t === 'e' ? 'empresa' : (_vista === 'empresa' ? 'contacto' : _vista); _page = 0; _clearFacets(); _search().then(_repaint); }
+  function lfBuscar(v) { _lfFq = v; const pos = v.length; _repaint(); const i = document.getElementById('lf-q'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
+  function lfGrupo(g) { if (_lfGrp.has(g)) _lfGrp.delete(g); else _lfGrp.add(g); _repaint(); }
+  function lfToggle(id) { _lfOpen = _lfOpen === id ? null : id; _repaint(); if (_lfOpen) setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30); }
+  const _lfDef = id => _cat && _cat.filtros.find(d => d.id === id);
+  let _lfTok = 0;
+  async function lfSug(id) {
+    const d = _lfDef(id), menu = document.getElementById('lf-menu-' + id), inp = document.getElementById('lf-in-' + id); if (!d || !menu) return;
+    const q = (inp && inp.value || '').trim(), tok = ++_lfTok;
+    let opts = [];
+    if (d.legacy) {
+      opts = _gOptions(d.legacy).filter(o => !q || _lfNorm(o).includes(_lfNorm(q))).map(o => ({ value: o, n: (_facetCache[d.legacy] || {})[o] }));
+      menu.innerHTML = _lfRows(d, opts); menu.hidden = false;
+      _loadFacets(d.legacy, opts.map(o => o.value));
+      return;
+    }
+    menu.innerHTML = '<div class="ta-none">Buscando…</div>'; menu.hidden = false;
+    try { const r = await apiFetch(`${API}/cantera/global/sugerir?filtro=${encodeURIComponent(id)}&q=${encodeURIComponent(q)}`); opts = r.ok ? await r.json() : []; } catch (_) { opts = []; }
+    if (tok !== _lfTok) return;
+    const yaI = new Set(_lfInc(d).concat(_lfExc(d)).map(_lfNorm));
+    opts = opts.filter(o => !yaI.has(_lfNorm(o.value)));
+    menu.innerHTML = _lfRows(d, opts, q); menu.hidden = false;
+  }
+  function _lfRows(d, opts, q) {
+    const rows = opts.map(o => {
+      const jv = esc(o.value).replace(/'/g, "\\'");
+      return `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">${esc(o.value)}${o.n == null ? '' : ` <span class="ta-opt__n">(${o.n})</span>`}</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${jv}',1)">Excluir</span></span></div>`;
+    }).join('');
+    const libre = (!d.legacy && d.tipo === 'texto' && q) ? `<div class="ta-opt ta-opt--row"><span class="ta-opt__v">Buscar «${esc(q)}»</span><span class="ta-opt__ops"><span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',0)">Incluir</span><span class="ta-opt__sep">|</span><span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.lfAnadir('${d.id}','${esc(q).replace(/'/g, "\\'")}',1)">Excluir</span></span></div>` : '';
+    return libre + rows || '<div class="ta-none">Sin opciones</div>';
+  }
+  function lfBlur(id) { setTimeout(() => { const m = document.getElementById('lf-menu-' + id); if (m) m.hidden = true; }, 160); }
+  function lfEnter(id) { const d = _lfDef(id), inp = document.getElementById('lf-in-' + id); if (d && inp && inp.value.trim() && !d.legacy && d.tipo === 'texto') lfAnadir(id, inp.value.trim(), 0); }
+  async function lfAnadir(id, valor, exc) {
+    const d = _lfDef(id); if (!d) return;
+    if (d.legacy) return exc ? addFiltroExcl(d.legacy, valor) : addFiltro(d.legacy, valor);
+    const f = _f2[id] = _f2[id] || { inc: [], exc: [] };
+    (exc ? (f.exc = f.exc || []) : (f.inc = f.inc || [])).push(valor);
+    _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
+    setTimeout(() => document.getElementById('lf-in-' + id)?.focus(), 30);
+  }
+  async function lfQuitar(id, exc, idx) {
+    const d = _lfDef(id); if (!d) return;
+    if (d.legacy) return exc ? removeFiltroExcl(d.legacy, idx) : removeFiltro(d.legacy, idx);
+    const f = _f2[id]; if (!f) return;
+    (exc ? f.exc : f.inc).splice(idx, 1); _lfOpen = id; _page = 0; _clearFacets(); await _search(); _repaint();
+  }
   // Pedido explícito 2026-09-30: "LinkedIn tiene un botón de borrar todos los
   // filtros... abajo" — limpia buscador, origen y todos los campos (no borra
   // los filtros GUARDADOS, solo lo que está aplicado en los resultados).
@@ -9874,10 +9976,11 @@ const CanteraGlobalModule = (() => {
     if (_q || _origen) return true;
     for (const k in _filtros) if ((_filtros[k] || []).length) return true;
     for (const k in _filtrosExcl) if ((_filtrosExcl[k] || []).length) return true;
+    for (const k in _f2) if ((_f2[k].inc || []).length || (_f2[k].exc || []).length) return true;
     return false;
   }
   async function clearAll() {
-    _q = ''; _origen = '';
+    _q = ''; _origen = ''; _f2 = {}; _lfFq = '';
     for (const k in _filtros) _filtros[k] = [];
     for (const k in _filtrosExcl) _filtrosExcl[k] = [];
     _page = 0; _clearFacets();
@@ -10096,7 +10199,7 @@ const CanteraGlobalModule = (() => {
   let _extC = false;   // filtro de cliente de Outreach (esta pantalla filtra por nombre)
   let _extN = '';
   function setExtClient(name) { _extN = name || ''; }
-  return { setExtClient, render, setQ, setOrigen, setVista, setVistaFiltros, clearAll, setPageSize, goPage, toggleCollapse, toggleTaField, toggleSavedOpen, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  return { setExtClient, render, setQ, setOrigen, setVista, setVistaFiltros, clearAll, setPageSize, goPage, toggleCollapse, toggleTaField, toggleSavedOpen, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, lfTab, lfBuscar, lfGrupo, lfToggle, lfSug, lfBlur, lfEnter, lfAnadir, lfQuitar };
 })();
 
 // =================================================================
@@ -23997,48 +24100,48 @@ const LeadManagerModule = (() => {
     m.innerHTML = `<div class="fin-pi-box li-modal">${html}</div>`; document.body.appendChild(m);
   }
   function liConnectFor(clientId) { if (!_li.accs) _liLoad(); liNew(clientId); }
-  // ── Remitentes de un cliente: email, WhatsApp, LinkedIn (SMS y llamadas, próximamente). Todo se conecta desde aquí ──
-  const _snd = { id: 0, data: null };
-  async function openClientSenders(clientId) {
-    _snd.id = clientId; _snd.data = null;
-    document.getElementById('snd-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'snd-modal'; m.className = 'fin-pi-backdrop';
-    m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box snd-box"><div class="fin-pi-box__hd"><h3>Remitentes · ${esc((_clients.find(c => c.id === clientId) || {}).nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('snd-modal').remove()">✕</button></div><div class="snd-scroll" id="snd-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
-    document.body.appendChild(m);
-    await _liLoad();
-    _sndPaint();
-  }
-  async function _sndCargar() {
-    try { const r = await apiFetch(`${API}/outbound-clients/${_snd.id}/senders`); _snd.data = r.ok ? await r.json() : { email: [], whatsapp: [] }; } catch (_) { _snd.data = { email: [], whatsapp: [] }; }
-  }
-  async function _sndPaint() {
-    const root = document.getElementById('snd-root'); if (!root) return;
-    if (!_snd.data) await _sndCargar();
+  // ── Remitentes de un cliente: email, WhatsApp, LinkedIn (SMS y llamadas, próximamente). Todo se conecta desde aquí ──
+  const _snd = { id: 0, data: null };
+  async function openClientSenders(clientId) {
+    _snd.id = clientId; _snd.data = null;
+    document.getElementById('snd-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'snd-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box snd-box"><div class="fin-pi-box__hd"><h3>Remitentes · ${esc((_clients.find(c => c.id === clientId) || {}).nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('snd-modal').remove()">✕</button></div><div class="snd-scroll" id="snd-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
+    document.body.appendChild(m);
+    await _liLoad();
+    _sndPaint();
+  }
+  async function _sndCargar() {
+    try { const r = await apiFetch(`${API}/outbound-clients/${_snd.id}/senders`); _snd.data = r.ok ? await r.json() : { email: [], whatsapp: [] }; } catch (_) { _snd.data = { email: [], whatsapp: [] }; }
+  }
+  async function _sndPaint() {
+    const root = document.getElementById('snd-root'); if (!root) return;
+    if (!_snd.data) await _sndCargar();
     const h3 = document.querySelector('#snd-modal .fin-pi-box__hd h3'); if (h3 && _snd.data.cliente) h3.textContent = 'Remitentes · ' + _snd.data.cliente.nombre;
-    const d = _snd.data, id = _snd.id, accs = (_li.accs || []).filter(a => a.outbound_client_id === id), ids = new Set(accs.map(a => a.id));
-    const chip = (t, ok) => `<span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(t)}</span>`;
-    const fila = (ic, tipo, nombre, sub, est, ok, btn) => `<div class="cc-snd"><span class="cc-snd__ic cc-snd__ic--${tipo}">${ic}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span>${chip(est, ok)}${btn}</div>`;
-    const okEm = x => ['ok', 'conectado', 'activo', 'verificado'].includes(String(x.estado || '').toLowerCase());
-    const ev = (_li.events || []).filter(x => ids.has(x.account_id)).slice(0, 8), q = (_li.queue || []).filter(x => ids.has(x.account_id)).slice(0, 8);
-    root.innerHTML = `<div class="snd-top"><p class="li-p" style="margin:0">Aquí conectas y gestionas lo que envía en nombre de este cliente. Las campañas eligen cuáles usar en «Configuración de la campaña → Remitentes».</p>
-        <button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.sndAddMenu(event)">+ Añadir remitente</button></div>
-      <div class="cc-grp">Email</div>${d.email.length ? d.email.map(x => fila('✉', 'email', x.email, x.provider || '', okEm(x) ? 'Conectado' : (x.estado || '—'), okEm(x), `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbManageOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin buzón conectado.</div>'}
-      <div class="cc-grp">WhatsApp</div>${d.whatsapp.length ? d.whatsapp.map(x => fila('✆', 'whatsapp', x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado', `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin línea de WhatsApp conectada.</div>'}
-      <div class="cc-grp">LinkedIn</div>${accs.length ? accs.map(_liCard).join('') : '<div class="cc-empty">Sin cuentas de LinkedIn conectadas.</div>'}
-      ${accs.length ? `<div class="cc-grp">Lo que ha pasado en LinkedIn</div>${ev.length ? `<div class="li-tbl">${ev.map(x => { const t = _LI_EVT[x.tipo] || [x.tipo, '#64748B']; return `<div class="li-ev"><b style="color:${t[1]}">${esc(t[0])}</b><span>${esc(x.slug || '')}</span><span class="li-sub">${esc(x.detalle || '')}</span><span class="li-sub">${new Date(x.created_at).toLocaleString()}</span></div>`; }).join('')}</div>` : '<p class="li-p">Cuando la extensión detecte una aceptación o una respuesta, aparecerá aquí.</p>'}
-        <div class="cc-grp">Cola de acciones</div>${q.length ? `<div class="li-tbl">${q.map(x => `<div class="li-ev"><b>${_LI_TIPO[x.tipo] || esc(x.tipo)}</b><span><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.slug)}</a></span><span class="li-q li-q--${x.estado}">${_LI_QST[x.estado] || esc(x.estado)}</span><span>${x.estado === 'queued' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liCancel(${x.id})">Cancelar</button>` : ''}</span></div>`).join('')}</div>` : '<p class="li-p">Sin acciones todavía.</p>'}` : ''}
-      <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span><span class="cc-soon">Próximamente</span></div>`;
-  }
-  function sndAddMenu(ev) {
-    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const id = _snd.id, c0 = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
-    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.mbManageOpen(${id})">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.wamOpen(${id})">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.liConnectFor(${id})">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
-    document.body.appendChild(menu);
-    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
-    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
-  }
+    const d = _snd.data, id = _snd.id, accs = (_li.accs || []).filter(a => a.outbound_client_id === id), ids = new Set(accs.map(a => a.id));
+    const chip = (t, ok) => `<span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(t)}</span>`;
+    const fila = (ic, tipo, nombre, sub, est, ok, btn) => `<div class="cc-snd"><span class="cc-snd__ic cc-snd__ic--${tipo}">${ic}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span>${chip(est, ok)}${btn}</div>`;
+    const okEm = x => ['ok', 'conectado', 'activo', 'verificado'].includes(String(x.estado || '').toLowerCase());
+    const ev = (_li.events || []).filter(x => ids.has(x.account_id)).slice(0, 8), q = (_li.queue || []).filter(x => ids.has(x.account_id)).slice(0, 8);
+    root.innerHTML = `<div class="snd-top"><p class="li-p" style="margin:0">Aquí conectas y gestionas lo que envía en nombre de este cliente. Las campañas eligen cuáles usar en «Configuración de la campaña → Remitentes».</p>
+        <button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.sndAddMenu(event)">+ Añadir remitente</button></div>
+      <div class="cc-grp">Email</div>${d.email.length ? d.email.map(x => fila('✉', 'email', x.email, x.provider || '', okEm(x) ? 'Conectado' : (x.estado || '—'), okEm(x), `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbManageOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin buzón conectado.</div>'}
+      <div class="cc-grp">WhatsApp</div>${d.whatsapp.length ? d.whatsapp.map(x => fila('✆', 'whatsapp', x.nombre || x.numero || 'Línea', x.numero || '', x.estado === 'conectado' ? 'Conectado' : (x.estado || '—'), x.estado === 'conectado', `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamOpen(${id})">Editar</button>`)).join('') : '<div class="cc-empty">Sin línea de WhatsApp conectada.</div>'}
+      <div class="cc-grp">LinkedIn</div>${accs.length ? accs.map(_liCard).join('') : '<div class="cc-empty">Sin cuentas de LinkedIn conectadas.</div>'}
+      ${accs.length ? `<div class="cc-grp">Lo que ha pasado en LinkedIn</div>${ev.length ? `<div class="li-tbl">${ev.map(x => { const t = _LI_EVT[x.tipo] || [x.tipo, '#64748B']; return `<div class="li-ev"><b style="color:${t[1]}">${esc(t[0])}</b><span>${esc(x.slug || '')}</span><span class="li-sub">${esc(x.detalle || '')}</span><span class="li-sub">${new Date(x.created_at).toLocaleString()}</span></div>`; }).join('')}</div>` : '<p class="li-p">Cuando la extensión detecte una aceptación o una respuesta, aparecerá aquí.</p>'}
+        <div class="cc-grp">Cola de acciones</div>${q.length ? `<div class="li-tbl">${q.map(x => `<div class="li-ev"><b>${_LI_TIPO[x.tipo] || esc(x.tipo)}</b><span><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.slug)}</a></span><span class="li-q li-q--${x.estado}">${_LI_QST[x.estado] || esc(x.estado)}</span><span>${x.estado === 'queued' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liCancel(${x.id})">Cancelar</button>` : ''}</span></div>`).join('')}</div>` : '<p class="li-p">Sin acciones todavía.</p>'}` : ''}
+      <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span><span class="cc-soon">Próximamente</span></div>`;
+  }
+  function sndAddMenu(ev) {
+    ev.stopPropagation(); document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const id = _snd.id, c0 = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.style.zIndex = '10050';
+    menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.mbManageOpen(${id})">✉ Email (conectar buzón)</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.wamOpen(${id})">✆ WhatsApp</button><button class="cp-mark-menu__b" onclick="${c0}LeadManagerModule.liConnectFor(${id})">in LinkedIn</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">SMS ${_CC_SOON}</button><button class="cp-mark-menu__b" disabled style="opacity:.55;cursor:default">Llamadas ${_CC_SOON}</button></div>`;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
+  }
   // ── Conectar una cuenta de LinkedIn como «Iniciar sesión con Google»: Nova habla con la extensión, se ve qué LinkedIn hay abierto, se pide permiso y listo ──
   const _liw = { client: '', nombre: '', reconectar: 0, timer: null, estado: '' };
   if (!window.__liBridgeOn) {

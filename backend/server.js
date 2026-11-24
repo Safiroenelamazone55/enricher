@@ -357,6 +357,8 @@ const _liApplyDisposition = (uid, cid, body) => new Promise((resolve, reject) =>
   Promise.resolve(_lmDispositionHandler(fake, res)).catch(reject);
 });
 require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });
+const CF = require('./services/canteraFiltros');
+CF.mount(app, { requireAuth, fetchAll: uid => _cGlobalFetchAll(uid, '%%', '') });   // filtros de la Base global al estilo lemlist
 const campaignCfg = require('./services/campaignConfig');
 campaignCfg.mount(app, { pool, requireAuth });   // configuración de la campaña: automatización, tracking, remitentes, planificación, general   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
@@ -10285,7 +10287,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
            lco.updated_at, '' AS estado, 'empresa' AS tipo,
            (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
            '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id, lco.website::text AS w_website, lco.region::text AS w_region, lco.ciudad::text AS w_ciudad, lco.ingresos::text AS w_ingresos, lco.fundada::text AS w_fundada, lco.tecnologias::text AS w_tecnologias, lco.funding::text AS w_funding, lco.linkedin::text AS w_linkedin, lco.empleados_linkedin::text AS w_empleados, lco.segmento::text AS w_segmento, lco.descripcion::text AS w_desc, NULL::text AS c_idioma, NULL::text AS c_linkedin, NULL::text AS c_region, NULL::text AS c_antiguedad, NULL::text AS b_nombre
       FROM lm_companies lco
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -10293,7 +10295,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
     UNION ALL
     SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
            'borrador_' || cb.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb.outbound_client_id) AS referencia, cco.created_at AS updated_at,
-           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id, cco.website::text AS w_website, cco.region::text AS w_region, cco.ciudad::text AS w_ciudad, NULL::text AS w_ingresos, NULL::text AS w_fundada, NULL::text AS w_tecnologias, NULL::text AS w_funding, cco.linkedin::text AS w_linkedin, cco.empleados_linkedin::text AS w_empleados, NULL::text AS w_segmento, NULL::text AS w_desc, NULL::text AS c_idioma, NULL::text AS c_linkedin, NULL::text AS c_region, NULL::text AS c_antiguedad, cb.nombre::text AS b_nombre
       FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
      WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
      ORDER BY updated_at DESC LIMIT 20000
@@ -10305,7 +10307,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
            lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
            (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
            lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, co.id AS lm_company_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, co.id AS lm_company_id, co.website::text AS w_website, co.region::text AS w_region, co.ciudad::text AS w_ciudad, co.ingresos::text AS w_ingresos, co.fundada::text AS w_fundada, co.tecnologias::text AS w_tecnologias, co.funding::text AS w_funding, co.linkedin::text AS w_linkedin, co.empleados_linkedin::text AS w_empleados, co.segmento::text AS w_segmento, co.descripcion::text AS w_desc, lc.idioma::text AS c_idioma, lc.linkedin::text AS c_linkedin, lc.region::text AS c_region, NULL::text AS c_antiguedad, NULL::text AS b_nombre
       FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lc.user_id AND co.dominio IS NOT NULL AND co.dominio <> '' AND lower(c2.dominio) = lower(co.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -10314,7 +10316,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
     SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
            cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
            'borrador_' || cb.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb.outbound_client_id) AS referencia, cc.created_at AS updated_at,
-           '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
+           '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id, cco.website::text AS w_website, cco.region::text AS w_region, cco.ciudad::text AS w_ciudad, NULL::text AS w_ingresos, NULL::text AS w_fundada, NULL::text AS w_tecnologias, NULL::text AS w_funding, cco.linkedin::text AS w_linkedin, cco.empleados_linkedin::text AS w_empleados, NULL::text AS w_segmento, NULL::text AS w_desc, cc.idioma::text AS c_idioma, cc.linkedin::text AS c_linkedin, cc.region::text AS c_region, cc.antiguedad_cargo::text AS c_antiguedad, cb.nombre::text AS b_nombre
       FROM cantera_contacts cc
       JOIN cantera_companies cco ON cco.id = cc.company_id
       JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -10323,7 +10325,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
     SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
            (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
            '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id, lco.website::text AS w_website, lco.region::text AS w_region, lco.ciudad::text AS w_ciudad, lco.ingresos::text AS w_ingresos, lco.fundada::text AS w_fundada, lco.tecnologias::text AS w_tecnologias, lco.funding::text AS w_funding, lco.linkedin::text AS w_linkedin, lco.empleados_linkedin::text AS w_empleados, lco.segmento::text AS w_segmento, lco.descripcion::text AS w_desc, NULL::text AS c_idioma, NULL::text AS c_linkedin, NULL::text AS c_region, NULL::text AS c_antiguedad, NULL::text AS b_nombre
       FROM lm_companies lco
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -10332,7 +10334,7 @@ async function _cGlobalFetchAllRaw(uid, q, tipo) {
     UNION ALL
     SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
            'borrador_' || cb2.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb2.outbound_client_id) AS referencia, cco2.created_at AS updated_at,
-           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id, NULL::int AS lm_company_id
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id, NULL::int AS lm_company_id, cco2.website::text AS w_website, cco2.region::text AS w_region, cco2.ciudad::text AS w_ciudad, NULL::text AS w_ingresos, NULL::text AS w_fundada, NULL::text AS w_tecnologias, NULL::text AS w_funding, cco2.linkedin::text AS w_linkedin, cco2.empleados_linkedin::text AS w_empleados, NULL::text AS w_segmento, NULL::text AS w_desc, NULL::text AS c_idioma, NULL::text AS c_linkedin, NULL::text AS c_region, NULL::text AS c_antiguedad, cb2.nombre::text AS b_nombre
       FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
      WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
        AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
@@ -10388,6 +10390,7 @@ function _cGlobalParseFilters(req) {
   F.ciudades = String(req.query.ciudad || '').split(',').filter(Boolean);
   F.ciudadesExcl = String(req.query.ciudadExcl || '').split(',').filter(Boolean);
   F.tipo = req.query.tipo === 'contacto' || req.query.tipo === 'empresa' ? req.query.tipo : '';
+  F.f2 = CF.parseF2(req.query.f2);
   return F;
 }
 // skip: nombre de campo a ignorar (para calcular cuántos quedarían si se
@@ -10443,6 +10446,7 @@ function _cGlobalMatch(r, F, skip) {
     if (F.ciudades.length && !F.ciudades.includes(r.ciudad || '')) return false;
     if (F.ciudadesExcl.length && F.ciudadesExcl.includes(r.ciudad || '')) return false;
   }
+  if (F.f2 && !CF.matchF2(r, F.f2)) return false;
   return true;
 }
 // ¿esta fila cuenta para ESTE candidato puntual de ESTE campo? — mismo
@@ -10567,6 +10571,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
     // con cache corto de 10s -- antes estaba DUPLICADA acá inline y se
     // volvía a golpear Postgres en cada click de filtro sin cache alguno
     // (pedido explícito: "aplicarlos o eliminarlos 1 a 1 se demora demasiado").
+    const f2 = CF.parseF2(req.query.f2);
     const all = await _cGlobalFetchAll(uid, q, tipo);
     const filtered = all.filter(r => {
       if (origen === 'crm' && r.origen !== 'crm') return false;
@@ -10598,6 +10603,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (departamentosExcl.length && departamentosExcl.includes(r.departamento || '')) return false;
       if (ciudades.length && !ciudades.includes(r.ciudad || '')) return false;
       if (ciudadesExcl.length && ciudadesExcl.includes(r.ciudad || '')) return false;
+      if (f2 && !CF.matchF2(r, f2)) return false;
       return true;
     });
     const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);
