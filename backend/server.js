@@ -11895,6 +11895,82 @@ app.post('/api/sequences/:id/steps/shift', requireAuth, async (req, res) => {
     res.json({ ok: true, delta: d });
   } catch (e) { console.error('[steps shift]', e.message); res.status(500).json({ error: 'No se pudo cambiar la espera' }); }
 });
+// Rendimiento de UNA secuencia (vista «Rendimiento»): embudo, estadísticas, rendimiento por paso y actividades.
+// Los eventos de email (envíos, aperturas, clics, rebotes) se acotan al periodo; el avance por paso es el estado actual.
+app.get('/api/lm/sequences/:id/performance', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, id = parseInt(req.params.id);
+  try {
+    const isD = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+    const from = isD(req.query.from) ? req.query.from : null, to = isD(req.query.to) ? req.query.to : null;
+    const canal = ['email', 'linkedin', 'whatsapp', 'call', 'task'].includes(req.query.canal) ? req.query.canal : '';
+    const sender = parseInt(req.query.sender) || 0;
+    const { rows: [sq] } = await pool.query('SELECT id, nombre, estado FROM sequences WHERE id=$1 AND user_id=$2', [id, uid]);
+    if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    const [stepsQ, enrQ, msgQ, sendersQ] = await Promise.all([
+      pool.query('SELECT id, dia, orden, canal, accion, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia, orden, id', [id, uid]),
+      pool.query(`SELECT cs.contact_id, cs.estado, cs.paso, cs.paused_reason, cs.next_action_at, k.nombre, k.apellido, k.disposition, k.li_aceptado_at, k.email_status,
+                         COALESCE(co.nombre, k.empresa_nombre, '') AS empresa
+                    FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id=cs.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
+                   WHERE cs.sequence_id=$1 AND cs.user_id=$2`, [id, uid]),
+      pool.query(`SELECT m.id, m.step_id, m.contact_id, m.estado, m.sent_at, m.replied_at, m.mailbox_id,
+                         EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open') AS opened,
+                         EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click') AS clicked
+                    FROM lm_messages m WHERE m.sequence_id=$1 AND m.user_id=$2`, [id, uid]),
+      pool.query(`SELECT DISTINCT mb.id, mb.email FROM lm_messages m JOIN lm_mailboxes mb ON mb.id=m.mailbox_id WHERE m.sequence_id=$1 AND m.user_id=$2`, [id, uid]),
+    ]);
+    const allSteps = stepsQ.rows;
+    const inR = d => { if (!d) return false; const t = new Date(d).toISOString().slice(0, 10); return (!from || t >= from) && (!to || t <= to); };
+    let msgs = msgQ.rows.filter(m => !sender || m.mailbox_id === sender);
+    if (canal && canal !== 'email') msgs = [];
+    const sentM = msgs.filter(m => ['sent', 'replied', 'bounced'].includes(m.estado) && inR(m.sent_at));
+    const enr = enrQ.rows, total = enr.length;
+    const idx = new Map(allSteps.map((x, i) => [x.id, i]));
+    const stepStats = allSteps.map((st, i) => {
+      const done = enr.filter(e => e.estado === 'terminado' || (e.paso || 1) - 1 > i).length;
+      const here = enr.filter(e => e.estado !== 'terminado' && (e.paso || 1) - 1 === i).length;
+      const mm = sentM.filter(m => m.step_id === st.id);
+      const enviados = mm.length, rebotados = mm.filter(m => m.estado === 'bounced').length;
+      const isInv = st.canal === 'linkedin' && ['invite', 'invite_nota'].includes(st.accion);
+      return {
+        id: st.id, pos: i + 1, canal: st.canal, accion: st.accion, titulo: st.titulo || '', contactados: done + here, hechos: done, en_este: here, por_venir: Math.max(0, total - done - here),
+        enviados, entregados: enviados - rebotados, abiertos: mm.filter(m => m.opened).length, clicados: mm.filter(m => m.clicked).length,
+        respondidos: mm.filter(m => m.estado === 'replied' || m.replied_at).length, rebotados,
+        no_enviados: msgs.filter(m => m.step_id === st.id && m.estado === 'failed').length,
+        invitados: isInv ? done : 0, aceptados: isInv ? enr.filter(e => e.li_aceptado_at && inR(e.li_aceptado_at)).length : 0,
+      };
+    }).filter(x => !canal || x.canal === canal);
+    const contactedSet = new Set(enr.filter(e => e.estado === 'terminado' || (e.paso || 1) > 1).map(e => e.contact_id));
+    sentM.forEach(m => contactedSet.add(m.contact_id));
+    const openedSet = new Set(sentM.filter(m => m.opened).map(m => m.contact_id)), clickedSet = new Set(sentM.filter(m => m.clicked).map(m => m.contact_id));
+    const repliedSet = new Set(sentM.filter(m => m.estado === 'replied' || m.replied_at).map(m => m.contact_id));
+    enr.forEach(e => {
+      if (['respondio', 'interesado', 'reunion', 'mas_adelante'].includes(e.disposition)) repliedSet.add(e.contact_id);
+      if (e.li_aceptado_at && inR(e.li_aceptado_at)) clickedSet.add(e.contact_id);
+    });
+    const interesados = enr.filter(e => ['interesado', 'reunion'].includes(e.disposition)).length;
+    const interrumpidos = enr.filter(e => (e.estado === 'pausado' && e.paused_reason && e.paused_reason !== 'rotacion_empresa') || (e.estado === 'terminado' && e.disposition)).length;
+    const enviadosN = sentM.length, rebotadosN = sentM.filter(m => m.estado === 'bounced').length;
+    const invHechos = stepStats.reduce((n, x) => n + x.invitados, 0), acept = enr.filter(e => e.li_aceptado_at && inR(e.li_aceptado_at)).length;
+    const launched = sq.estado !== 'draft';
+    const titleOf = i => { const st = allSteps[i]; return st ? (st.titulo || st.accion || st.canal) : ''; };
+    const nameOf = e => [e.nombre, e.apellido].filter(Boolean).join(' ');
+    const ultimas = sentM.filter(m => m.sent_at).sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at)).slice(0, 15).map(m => {
+      const e = enr.find(x => x.contact_id === m.contact_id) || {}, k = idx.get(m.step_id);
+      return { contact_id: m.contact_id, prospecto: nameOf(e), empresa: e.empresa || '', paso: k != null ? k + 1 : null, paso_titulo: k != null ? titleOf(k) : '', at: m.sent_at, estado: m.estado };
+    });
+    const proximas = enr.filter(e => e.estado === 'activo' && e.next_action_at).sort((a, b) => new Date(a.next_action_at) - new Date(b.next_action_at)).slice(0, 15)
+      .map(e => ({ contact_id: e.contact_id, prospecto: nameOf(e), empresa: e.empresa, paso: e.paso || 1, paso_titulo: titleOf((e.paso || 1) - 1), at: e.next_action_at }));
+    res.json({
+      secuencia: { id: sq.id, nombre: sq.nombre, estado: sq.estado }, senders: sendersQ.rows, rango: { from, to }, canal,
+      embudo: { contactado: contactedSet.size, abierto: openedSet.size, interaccion: clickedSet.size, respondido: repliedSet.size, interesado: interesados, interrumpido: interrumpidos, base: total },
+      prospectos: { total, lanzados: launched ? total : 0, alcanzados: contactedSet.size },
+      entregabilidad: { enviados: enviadosN, no_enviados: msgs.filter(m => m.estado === 'failed').length, entregados: enviadosN - rebotadosN },
+      positivas: { abiertos: sentM.filter(m => m.opened).length, clicados: sentM.filter(m => m.clicked).length, respondidos: repliedSet.size, enviados: enviadosN, aceptadas: acept, invitaciones: invHechos, reservados: enr.filter(e => e.disposition === 'reunion').length, interesados },
+      negativas: { rebotados: rebotadosN, baja: enr.filter(e => e.disposition === 'no_contactar').length, no_interesa: enr.filter(e => e.disposition === 'no_interesado').length },
+      pasos: stepStats, ultimas, proximas,
+    });
+  } catch (e) { console.error('[seq perf]', e.message); res.status(500).json({ error: 'No se pudo cargar el rendimiento' }); }
+});
 app.get('/api/sequence-steps', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [req.workspaceOwnerId]);
