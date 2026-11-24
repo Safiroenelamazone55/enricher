@@ -30356,7 +30356,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const camp = id => { const sq = seqOf(id); return sq.campaign_id ? String(sq.campaign_id) : ''; };
     _allSeqTasks().forEach(t => {
       const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task', 'sms'].includes(st.canal) ? st.canal : 'task'), key = 's' + t.sq.id + '-' + c.id;
-      out.push({ kind: 'seq', key, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: seqOf(t.sq.id).nombre || t.sq.nombre || '', campId: camp(t.sq.id), accion: _accionLabel(st.canal, st.accion) || '', prio: 'ninguno', estado: estOf(t.due), lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
+      out.push({ kind: 'seq', key, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: seqOf(t.sq.id).nombre || t.sq.nombre || '', campId: camp(t.sq.id), accion: _accionLabel(st.canal, st.accion) || '', stepKey: st.canal + '|' + (st.accion || ''), prio: 'ninguno', estado: estOf(t.due), lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
     });
     (_activities || []).filter(a => a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
       const pend = a.estado === 'pendiente', tipoOk = /^(tarea|followup|llamada|revisar_|seguimiento_inactivo)/.test(a.tipo || '');
@@ -30383,7 +30383,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // Propios de Nova
     { k: 'cli', l: 'Cliente outbound', ic: _TK_IC.org, t: 'sel', get: r => String((r.c || {}).outbound_client_id || ''), opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), nova: 1 },
     { k: 'secuencia', l: 'Secuencia', ic: _TK_IC.send, t: 'sel', get: r => String(r.seqId || ''), opts: () => (_sequences || []).map(x => [String(x.id), [x.codigo, x.nombre].filter(Boolean).join(' · ')]), nova: 1 },
-    { k: 'accion', l: 'Paso / acción', ic: _TK_IC.check, t: 'sel', get: r => r.accion || '', opts: () => [...new Set(_tkRows().map(r => r.accion).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
+    { k: 'accion', l: 'Paso / acción', ic: _TK_IC.check, t: 'sel', get: r => r.stepKey || '', nova: 1, opts: () => {
+      const seen = new Map();
+      (_steps || []).forEach(st => { const key = st.canal + '|' + (st.accion || ''); if (seen.has(key)) return; const ch = (_TOUCH[st.canal] || [st.canal])[0], ac = _accionLabel(st.canal, st.accion); seen.set(key, [key, ac ? `${ch} · ${ac}` : ch]); });
+      return [...seen.values()].sort((a, b) => a[1].localeCompare(b[1]));
+    } },
     { k: 'import', l: 'Archivo de importación', ic: _TK_IC.tag, t: 'sel', get: r => (r.c || {}).import_batch || '', opts: () => [...new Set((_contacts || []).map(c => c.import_batch).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
     { k: 'fuente', l: 'Fuente del contacto', ic: _TK_IC.tag, t: 'sel', get: r => (r.c || {}).fuente || '', opts: () => [...new Set((_contacts || []).map(c => c.fuente).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
     { k: 'empresa', l: 'Empresa', ic: _TK_IC.org, t: 'txt', get: r => (r.c || {}).company_nombre || (r.c || {}).empresa_nombre || '', nova: 1 },
