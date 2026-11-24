@@ -22284,3 +22284,31 @@ body.ibx-lb-open{overflow:hidden}
 .cpm, .cpm-l, .cpm-r, .cpm-tb { background: var(--bg, #FAF8F5); }
 .cpm-tb { border-bottom-color: var(--border, #EAE7E2); }
 .cpm-l { border-right-color: var(--border, #EAE7E2); }
+
+/* ===== Pantallas a pantalla completa (como Lemlist): sin márgenes, ocupan todo el alto; la tabla se desplaza dentro y el pie queda abajo ===== */
+#lm2-body:has(> .tk), #lm2-body:has(> #lm-vw-wrap), #lm2-body:has(> .seqtop), #lm2-body:has(> .inf) { padding: 0; height: calc(100vh - 42px); display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+/* Tareas */
+.tk { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.tk > .vw, .tk > .tk-back { padding-left: 24px; padding-right: 24px; flex: none; }
+.tk > .ll__bar, .tk > .tk__f, .tk > [class*="filt"] { margin-left: 24px; margin-right: 24px; flex: none; }
+.tk .tk__tbl { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; }
+.tk .ll__foot { flex: none; padding: 10px 24px; border-top: 1px solid var(--border, #EAE7E2); background: var(--bg, #FAF8F5); }
+/* Contactos y Empresas */
+#lm2-body:has(> #lm-vw-wrap) > #lm-vw-wrap, #lm2-body:has(> #lm-vw-wrap) > #lm-ct-qf-wrap, #lm2-body:has(> #lm-vw-wrap) > #lm-co-qf-wrap { flex: none; padding-left: 24px; padding-right: 24px; }
+#lm2-body:has(> #lm-vw-wrap) > .lm-bulk-bar, #lm2-body:has(> #lm-vw-wrap) > #lm-ct-bulk { flex: none; }
+#lm2-body:has(> #lm-vw-wrap) > :last-child { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#lm2-body:has(> #lm-vw-wrap) > :last-child > .clients-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none !important; overflow: auto; }
+#lm2-body:has(> #lm-vw-wrap) > :last-child > .lm-pager { flex: none; padding: 8px 24px; border-top: 1px solid var(--border, #EAE7E2); background: var(--bg, #FAF8F5); }
+/* Secuencias (editor, lista, lanzar, rendimiento, ajustes) */
+#lm2-body:has(> .seqtop) > .seqtop { flex: none; }
+#lm2-body:has(> .seqtop) > .sed { flex: 1 1 auto; min-height: 0; height: auto; }
+/* Informes y Entregabilidad */
+#lm2-body:has(> .inf) > .inf { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 24px 40px; }
+
+.tk .tk__tbl, .tk .ll__tbl { max-height: none !important; }
+
+#lm2-body:has(> .seqtop) > :not(.seqtop) { flex: 1 1 auto; min-height: 0; height: auto !important; max-height: none !important; }
+#lm2-body:has(> .seqtop) > .lz, #lm2-body:has(> .seqtop) > .rd, #lm2-body:has(> .seqtop) > .aj { overflow: auto; }
+#lm2-body:has(> .seqtop) > .ll { min-height: 0; overflow: hidden; }
+#lm2-body:has(> .seqtop) > .ll .ll__tbl { flex: 1 1 auto; min-height: 0; overflow: auto; }
+#lm2-body:has(> .seqtop) > .rd, #lm2-body:has(> .seqtop) > .aj { padding: 16px 24px 40px; }
