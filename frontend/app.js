@@ -23318,7 +23318,6 @@ const LeadManagerModule = (() => {
     { k: 'exclusions', l: 'Exclusiones',        g: 'Workspace' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
-    { k: 'activities', l: 'Actividades',        g: 'Comercial' },
     { k: 'inbox',      l: 'Bandeja de entrada', g: 'Comercial' },
     { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'calls',      l: 'Llamadas',           g: 'Comercial' },
