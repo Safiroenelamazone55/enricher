@@ -6660,6 +6660,72 @@ app.post('/api/lm/contacts/:id/data-issue', requireAuth, async (req, res) => {
 });
 
 // ── Contactos enrolados en una secuencia (progreso) ──
+// ── Listas (sección «Listas», como Lemlist): estáticas (miembros elegidos a mano) y dinámicas (los filtros eligen los miembros; se evalúan en pantalla) ──
+let _lmListsReady = null;
+function _ensureLmLists() {
+  if (!_lmListsReady) {
+    _lmListsReady = pool.query(`CREATE TABLE IF NOT EXISTS lm_lists (
+        id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, nombre TEXT NOT NULL DEFAULT '',
+        entidad TEXT NOT NULL DEFAULT 'contactos', modo TEXT NOT NULL DEFAULT 'estatica', filtros JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+      .then(() => pool.query(`CREATE TABLE IF NOT EXISTS lm_list_items (list_id INTEGER NOT NULL REFERENCES lm_lists(id) ON DELETE CASCADE, item_id INTEGER NOT NULL, added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (list_id, item_id))`))
+      .catch(e => { _lmListsReady = null; throw e; });
+  }
+  return _lmListsReady;
+}
+async function _lmListOwn(req, res) {
+  await _ensureLmLists();
+  const { rows } = await pool.query('SELECT * FROM lm_lists WHERE id=$1 AND user_id=$2', [parseInt(req.params.id) || 0, req.workspaceOwnerId]);
+  if (!rows[0]) { res.status(404).json({ error: 'Lista no encontrada' }); return null; }
+  return rows[0];
+}
+app.get('/api/lm/lists', requireAuth, async (req, res) => {
+  try { await _ensureLmLists(); const { rows } = await pool.query(`SELECT l.*, (SELECT COUNT(*)::int FROM lm_list_items i WHERE i.list_id=l.id) AS n FROM lm_lists l WHERE l.user_id=$1 ORDER BY l.created_at DESC`, [req.workspaceOwnerId]); res.json(rows); }
+  catch (e) { console.error('[lm-lists] GET', e.message); res.status(500).json({ error: 'No se pudieron cargar las listas' }); }
+});
+app.post('/api/lm/lists', requireAuth, async (req, res) => {
+  const b = req.body || {}; const nombre = String(b.nombre || '').trim().slice(0, 120), entidad = b.entidad === 'empresas' ? 'empresas' : 'contactos', modo = b.modo === 'dinamica' ? 'dinamica' : 'estatica';
+  if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la lista' });
+  try { await _ensureLmLists(); const { rows } = await pool.query(`INSERT INTO lm_lists (user_id, nombre, entidad, modo, filtros, created_by) VALUES ($1,$2,$3,$4,$5::jsonb,$6) RETURNING *, 0 AS n`, [req.workspaceOwnerId, nombre, entidad, modo, JSON.stringify(Array.isArray(b.filtros) ? b.filtros : []), (req.user && req.user.id) || null]); res.status(201).json(rows[0]); }
+  catch (e) { console.error('[lm-lists] POST', e.message); res.status(500).json({ error: 'No se pudo crear la lista' }); }
+});
+app.put('/api/lm/lists/:id', requireAuth, async (req, res) => {
+  try {
+    const l = await _lmListOwn(req, res); if (!l) return; const b = req.body || {};
+    const nombre = b.nombre != null ? String(b.nombre).trim().slice(0, 120) || l.nombre : l.nombre, filtros = Array.isArray(b.filtros) ? b.filtros : l.filtros;
+    const { rows } = await pool.query(`UPDATE lm_lists SET nombre=$1, filtros=$2::jsonb, updated_at=NOW() WHERE id=$3 RETURNING *, (SELECT COUNT(*)::int FROM lm_list_items WHERE list_id=$3) AS n`, [nombre, JSON.stringify(filtros), l.id]);
+    res.json(rows[0]);
+  } catch (e) { console.error('[lm-lists] PUT', e.message); res.status(500).json({ error: 'No se pudo guardar la lista' }); }
+});
+app.delete('/api/lm/lists/:id', requireAuth, async (req, res) => {
+  try { const l = await _lmListOwn(req, res); if (!l) return; await pool.query('DELETE FROM lm_lists WHERE id=$1', [l.id]); res.json({ ok: true }); }
+  catch (e) { console.error('[lm-lists] DELETE', e.message); res.status(500).json({ error: 'No se pudo eliminar la lista' }); }
+});
+app.get('/api/lm/lists/:id/items', requireAuth, async (req, res) => {
+  try { const l = await _lmListOwn(req, res); if (!l) return; const { rows } = await pool.query('SELECT item_id FROM lm_list_items WHERE list_id=$1 ORDER BY added_at DESC', [l.id]); res.json(rows.map(r => r.item_id)); }
+  catch (e) { console.error('[lm-lists] items', e.message); res.status(500).json({ error: 'No se pudieron cargar los miembros' }); }
+});
+app.post('/api/lm/lists/:id/items', requireAuth, async (req, res) => {
+  try {
+    const l = await _lmListOwn(req, res); if (!l) return;
+    if (l.modo !== 'estatica') return res.status(400).json({ error: 'Una lista dinámica se llena sola con sus filtros' });
+    const ids = (Array.isArray((req.body || {}).ids) ? req.body.ids : []).map(x => parseInt(x)).filter(Boolean).slice(0, 5000); if (!ids.length) return res.json({ added: 0 });
+    const tbl = l.entidad === 'empresas' ? 'lm_companies' : 'lm_contacts';
+    const ok = (await pool.query(`SELECT id FROM ${tbl} WHERE user_id=$1 AND id = ANY($2::int[])`, [req.workspaceOwnerId, ids])).rows.map(r => r.id);
+    const r = ok.length ? await pool.query(`INSERT INTO lm_list_items (list_id, item_id) SELECT $1, x FROM unnest($2::int[]) x ON CONFLICT DO NOTHING`, [l.id, ok]) : { rowCount: 0 };
+    await pool.query('UPDATE lm_lists SET updated_at=NOW() WHERE id=$1', [l.id]);
+    res.json({ added: r.rowCount || 0 });
+  } catch (e) { console.error('[lm-lists] add', e.message); res.status(500).json({ error: 'No se pudo añadir' }); }
+});
+app.post('/api/lm/lists/:id/items/remove', requireAuth, async (req, res) => {
+  try {
+    const l = await _lmListOwn(req, res); if (!l) return;
+    const ids = (Array.isArray((req.body || {}).ids) ? req.body.ids : []).map(x => parseInt(x)).filter(Boolean);
+    const r = ids.length ? await pool.query('DELETE FROM lm_list_items WHERE list_id=$1 AND item_id = ANY($2::int[])', [l.id, ids]) : { rowCount: 0 };
+    await pool.query('UPDATE lm_lists SET updated_at=NOW() WHERE id=$1', [l.id]);
+    res.json({ removed: r.rowCount || 0 });
+  } catch (e) { console.error('[lm-lists] remove', e.message); res.status(500).json({ error: 'No se pudo quitar' }); }
+});
 app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
     // "derivado"/"no_es_persona" son un traspaso, no una respuesta real: si el original quedó ahí,

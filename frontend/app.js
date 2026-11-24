@@ -23353,6 +23353,7 @@ const LeadManagerModule = (() => {
     { k: 'tasks',      l: 'Tareas',             g: 'Comercial' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
+    { k: 'lists',      l: 'Listas',             g: 'Datos' },
     { k: 'x-datos',              l: 'Tabla de datos',       g: 'Datos', x: 1 },
     { k: 'reports',    l: 'Informes',           g: 'Análisis' },
     { k: 'deliverability', l: 'Entregabilidad', g: 'Análisis' },
@@ -23361,6 +23362,7 @@ const LeadManagerModule = (() => {
     // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
   ];
   const _NAV_ICON = {
+    lists: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
     'x-cantera': '<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
     'x-cantera-mesa': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
     'x-cantera-global': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -23605,6 +23607,7 @@ const LeadManagerModule = (() => {
     if (section === 'inbox')     { _lmMsgs = null; _ibThreads = null; _ibActive = null; _ibThread = null; _ibReload(); _loadLmMsgs(); }
     if (section === 'wa')        { _waList = null; _waReload(); }
     if (section === 'tasks')     { _apList = null; _apReload(); }
+    if (section === 'lists')     { _ls.items = null; _lsLoad(); }
     if (section === 'leads')     _reloadActivities();
     if (section === 'calls')     { _callsData = null; }
     if (section === 'exclusions') { _exList = null; _exLoad(); }
@@ -23671,6 +23674,8 @@ const LeadManagerModule = (() => {
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
+    else if (_section === 'lists') body.innerHTML = _vLists();
+    else if (_section === 'list-view') body.innerHTML = _vListView();
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
     else if (_section === 'company-view') { body.innerHTML = _vCompanyPage(_companyView); }
     else if (_section === 'exclusions') body.innerHTML = _vExclusions();
@@ -30637,6 +30642,180 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     llModalClose(); _tk.view = 'c:' + arr[arr.length - 1].id; _tk.cur = _tk.view; _tk.tree = JSON.parse(JSON.stringify(tree)); _renderBody(); showBanner('Vista guardada', 'success');
   }
   function tkViewDel(id) { try { localStorage.setItem('lm_tk_views', JSON.stringify(_tkViews().filter(x => x.id !== id))); } catch (_) {} if (_tk.view === 'c:' + id) { _tk.view = 'mis'; _tk.tree = _tkVTree('mis'); } _renderBody(); }
+  // ═══════════ Listas (réplica de Lemlist): estáticas (a mano) y dinámicas (los filtros eligen los miembros) ═══════════
+  const _ls = { items: null, tab: 'todas', q: '', fTipo: '', view: null, mem: null, memQ: '', memSel: new Set(), addSel: new Set(), addQ: '', addFor: null };
+  async function _lsLoad() { try { const r = await apiFetch(`${API}/lm/lists`); _ls.items = r.ok ? await r.json() : []; } catch (_) { _ls.items = []; } if (_section === 'lists' || _section === 'list-view') _renderBody(); }
+  const _lsAll = () => (Array.isArray(_ls.items) ? _ls.items : []);
+  const _lsGet = id => _lsAll().find(l => l.id === id);
+  const _lsUq = (arr, g) => [...new Set(arr.map(g).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))).map(v => [v, v]);
+  const _LS_FD = {
+    contactos: () => [
+      { k: 'cli', l: 'Cliente outbound', get: c => [String(c.outbound_client_id || '')], opts: () => (_clients || []).map(x => [String(x.id), x.nombre]) },
+      { k: 'camp', l: 'Campaña', get: c => (c.campaigns || []).map(k => String(k.id)), opts: () => (_campaigns || []).map(x => [String(x.id), [x.codigo, x.nombre].filter(Boolean).join(' · ')]) },
+      { k: 'seq', l: 'Secuencia', get: c => (c.sequences || []).map(q => String(q.id)), opts: () => (_sequences || []).map(x => [String(x.id), x.nombre]) },
+      { k: 'estado', l: 'Etapa comercial', get: c => [c.estado || 'nuevo'], opts: () => _ORDER.map(k => [k, STAGE_LABELS[k] || k]) },
+      { k: 'pais', l: 'País', get: c => [c.pais || ''], opts: () => _lsUq(_contacts || [], c => c.pais) },
+      { k: 'seniority', l: 'Seniority', get: c => [c.seniority || ''], opts: () => _lsUq(_contacts || [], c => c.seniority) },
+      { k: 'fuente', l: 'Fuente', get: c => [c.fuente || ''], opts: () => _lsUq(_contacts || [], c => c.fuente) },
+      { k: 'import', l: 'Archivo de importación', get: c => [c.import_batch || ''], opts: () => _lsUq(_contacts || [], c => c.import_batch) },
+    ],
+    empresas: () => [
+      { k: 'cli', l: 'Cliente outbound', get: c => [String(c.outbound_client_id || '')], opts: () => (_clients || []).map(x => [String(x.id), x.nombre]) },
+      { k: 'pais', l: 'País', get: c => [c.pais || ''], opts: () => _lsUq(_companies || [], c => c.pais) },
+      { k: 'industria', l: 'Industria', get: c => [c.industria || ''], opts: () => _lsUq(_companies || [], c => c.industria) },
+      { k: 'tamano', l: 'Tamaño', get: c => [c.tamano || ''], opts: () => _lsUq(_companies || [], c => c.tamano) },
+      { k: 'import', l: 'Archivo de importación', get: c => [c.import_batch || ''], opts: () => _lsUq(_companies || [], c => c.import_batch) },
+    ],
+  };
+  const _lsEnts = l => (l.entidad === 'empresas' ? (_companies || []) : (_contacts || []));
+  function _lsDynIds(l) {
+    const defs = _LS_FD[l.entidad === 'empresas' ? 'empresas' : 'contactos'](), fl = (l.filtros || []).filter(f => (f.vals || []).length);
+    return _lsEnts(l).filter(e => fl.every(f => { const d = defs.find(x => x.k === f.k); return !d || d.get(e).some(v => f.vals.includes(v)); })).map(e => e.id);
+  }
+  const _lsN = l => (l.modo === 'dinamica' ? _lsDynIds(l).length : (l.n || 0));
+  const _lsFecha = d => { const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }); };
+  function _vLists() {
+    if (_ls.items === null) { _lsLoad(); }
+    const I = _llI, all = _lsAll(), loading = _ls.items === null;
+    const tabs = [['todas', 'Todas las listas', all.length], ['mias', 'Mis listas', all.length], ['contactos', 'Listas de contactos', all.filter(l => l.entidad === 'contactos').length], ['empresas', 'Listas de empresas', all.filter(l => l.entidad === 'empresas').length]];
+    const q = _ls.q.toLowerCase();
+    const rows = all.filter(l => (_ls.tab === 'contactos' || _ls.tab === 'empresas' ? l.entidad === _ls.tab : true) && (!_ls.fTipo || l.modo === _ls.fTipo) && (!q || l.nombre.toLowerCase().includes(q)));
+    const strip = `<div class="vw">${tabs.map(([k, l, n]) => `<button class="vw-t${_ls.tab === k ? ' on' : ''}" onclick="LeadManagerModule.lsTab('${k}')"><span>${l}</span><i>${n}</i></button>`).join('')}</div>`;
+    const body = rows.map(l => `<tr onclick="LeadManagerModule.lsOpen(${l.id})"><td><div class="ll-name"><span class="ls-ic">${I('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 15)}</span><b>${esc(l.nombre)}</b></div></td><td>${_lsN(l)}</td><td><span class="ll-pill" style="background:${l.modo === 'dinamica' ? '#EDE9FE' : '#EEF3FF'};color:${l.modo === 'dinamica' ? '#6D28D9' : '#2F6BFF'}">${l.modo === 'dinamica' ? 'Dinámica' : 'Estática'}</span></td><td>${l.entidad === 'empresas' ? 'Empresas' : 'Contactos'}</td><td>${_lsFecha(l.created_at)}</td><td>${_lsFecha(l.updated_at)}</td><td class="ls-k" onclick="event.stopPropagation()"><button class="cpm-ib cpm-ib--bare" onclick="LeadManagerModule.lsRowMenu(event,${l.id})" title="Más">${I('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>', 16)}</button></td></tr>`).join('');
+    const empty = `<tr><td colspan="7" class="ll-empty">${loading ? 'Cargando…' : all.length ? 'Ninguna lista coincide.' : `<div class="cpm-empty cpm-empty--big"><i>${I('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 26)}</i><b>Aún no tiene ninguna lista</b><span>Agrupe los contactos y empresas con los que desea trabajar como uno. Impórtelos, añádalos desde Contactos o Empresas, o empiece desde cero.</span><button class="cpm-primary" onclick="LeadManagerModule.lsCreate()">${I('<path d="M12 5v14M5 12h14"/>', 15)} Crear lista</button></div>`}</td></tr>`;
+    return `<div class="tk ls">${strip}
+      <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ls-q" placeholder="Buscar listas" value="${esc(_ls.q)}" autocomplete="off" oninput="LeadManagerModule.lsSearch(this.value)"></label>
+        <button class="ll-btn${_ls.fTipo ? ' is-on' : ''}" onclick="LeadManagerModule.lsFilterMenu(event)">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_ls.fTipo ? ' <i class="ll-n">1</i>' : ''}</button><span class="sp"></span>
+        <button class="ll-pri" onclick="LeadManagerModule.lsCreate()">${I('<path d="M12 5v14M5 12h14"/>', 14)} Crear lista</button></div>
+      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr><th>Nombre de la lista</th><th>Registros</th><th>Tipo</th><th>Contenido</th><th>Creada</th><th>Actualizada</th><th></th></tr></thead><tbody>${rows.length ? body : empty}</tbody></table></div>
+      <div class="ll__foot"><span><b>${rows.length ? 1 : 0} - ${rows.length}</b> de ${rows.length}</span></div></div>`;
+  }
+  function lsTab(k) { _ls.tab = k; _renderBody(); }
+  function lsSearch(v) { _ls.q = String(v || '').trim(); const el = document.getElementById('ls-q'), pos = el ? el.selectionStart : 0; _renderBody(); const e2 = document.getElementById('ls-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
+  function lsFilterMenu(ev) { _llPop(ev, [['', 'Todas'], ['estatica', 'Listas estáticas'], ['dinamica', 'Listas dinámicas']].map(([k, l]) => `<button class="sed-pop__i${_ls.fTipo === k ? ' is-on' : ''}" onclick="LeadManagerModule.lsSetTipo('${k}')"><span>${l}</span></button>`).join(''), 220, 'left'); }
+  function lsSetTipo(k) { _ls.fTipo = k; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  function lsRowMenu(ev, id) { _llPop(ev, `<button class="sed-pop__i" onclick="LeadManagerModule.lsOpen(${id})"><span>Abrir</span></button><button class="sed-pop__i" onclick="LeadManagerModule.lsRename(${id})"><span>Cambiar nombre</span></button><div class="sed-pop__sep"></div><button class="sed-pop__i is-red" onclick="LeadManagerModule.lsDelete(${id})"><span>Eliminar lista</span></button>`, 210, 'right'); }
+  // Crear lista: paso 1 (tipo) → paso 2 (contenido + nombre)
+  function lsCreate() { _ls.newModo = 'estatica'; _lsStep1(); }
+  function _lsStep1() {
+    const opt = (k, ic, t, d) => `<label class="ls-opt${_ls.newModo === k ? ' on' : ''}" onclick="LeadManagerModule.lsPickModo('${k}')"><span>${_llI(ic, 16)}<b>${t}</b></span><small>${d}</small><i></i></label>`;
+    _llModal('Crear lista nueva', `<div class="ll-fl">Tipo de lista</div>${opt('estatica', '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>', 'Lista estática', 'Usted elige los registros y los añade o los elimina usted mismo.')}${opt('dinamica', '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>', 'Lista dinámica', 'Los filtros eligen los registros. Se unen y se separan automáticamente.')}`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.lsStep2()">Siguiente</button>`, 480);
+  }
+  function lsPickModo(k) { _ls.newModo = k; _lsStep1(); }
+  function lsStep2() {
+    _ls.newEnt = _ls.newEnt || 'contactos';
+    const opt = (k, t, d) => `<label class="ls-opt ls-opt--h${_ls.newEnt === k ? ' on' : ''}" onclick="LeadManagerModule.lsPickEnt('${k}')"><span><b>${t}</b></span><small>${d}</small><i></i></label>`;
+    _llModal(_ls.newModo === 'dinamica' ? 'Nueva lista dinámica' : 'Nueva lista estática', `<div class="ll-fl">Tipo de registros</div><div class="ls-two">${opt('contactos', 'Lista de contactos', 'Personas con las que desea interactuar')}${opt('empresas', 'Lista de empresas', 'Cuentas a las que desea dirigirse')}</div><label class="ll-f" style="margin-top:12px"><span>Nombre de la lista</span><input id="ls-nm" value="Lista ${_lsAll().length + 1}" autocomplete="off" onkeydown="if(event.key==='Enter')LeadManagerModule.lsCreateGo()"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lsCreate()">‹ Atrás</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.lsCreateGo()">Crear lista</button>`, 520);
+    setTimeout(() => { const i = document.getElementById('ls-nm'); if (i) { i.focus(); i.select(); } }, 40);
+  }
+  function lsPickEnt(k) { _ls.newEnt = k; const nm = (document.getElementById('ls-nm') || {}).value; lsStep2(); const i = document.getElementById('ls-nm'); if (i && nm) i.value = nm; }
+  async function lsCreateGo() {
+    const nm = ((document.getElementById('ls-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la lista.', 'info'); return; }
+    try {
+      const r = await apiFetch(`${API}/lm/lists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nm, entidad: _ls.newEnt || 'contactos', modo: _ls.newModo || 'estatica', filtros: [] }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      llModalClose(); _ls.newEnt = null; (_ls.items = _lsAll()).unshift(d); lsOpen(d.id); showBanner('Lista creada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lsRename(id) { const l = _lsGet(id); if (!l) return; const nm = prompt('Nombre de la lista', l.nombre); if (nm == null || !nm.trim()) return; await _lsSave(id, { nombre: nm.trim() }); _renderBody(); }
+  async function _lsSave(id, patch) {
+    const l = _lsGet(id); if (!l) return;
+    try { const r = await apiFetch(`${API}/lm/lists/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); Object.assign(l, d); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lsDelete(id) {
+    const l = _lsGet(id); if (!l) return;
+    if (!(await novaConfirm({ title: 'Eliminar lista', message: `Se elimina la lista «${l.nombre}». Los contactos y empresas siguen en tu CRM.`, confirmText: 'Eliminar' }))) return;
+    try { const r = await apiFetch(`${API}/lm/lists/${id}`, { method: 'DELETE' }); if (!r.ok) throw new Error('Error'); _ls.items = _lsAll().filter(x => x.id !== id); document.getElementById('sed-pop')?.remove(); if (_section === 'list-view') { _section = 'lists'; _ls.view = null; } _renderBody(); showBanner('Lista eliminada', 'success'); }
+    catch (e) { showBanner('No se pudo eliminar', 'error'); }
+  }
+  // Detalle de una lista
+  async function lsOpen(id) {
+    document.getElementById('sed-pop')?.remove(); _ls.view = id; _ls.mem = null; _ls.memQ = ''; _ls.memSel = new Set(); _section = 'list-view'; _refreshNav(); _renderBody();
+    const l = _lsGet(id); if (l && l.modo === 'estatica') { try { const r = await apiFetch(`${API}/lm/lists/${id}/items`); _ls.mem = r.ok ? await r.json() : []; } catch (_) { _ls.mem = []; } if (_section === 'list-view' && _ls.view === id) _renderBody(); }
+  }
+  const _lsMemIds = l => (l.modo === 'dinamica' ? _lsDynIds(l) : (_ls.mem || []));
+  function _vListView() {
+    const l = _lsGet(_ls.view), I = _llI;
+    if (!l) { if (_ls.items === null) _lsLoad(); return `<div class="tk ls"><div class="ll__bar"><button class="ll-btn" onclick="LeadManagerModule.go('lists')">‹ Listas</button></div><div class="cpm-empty cpm-empty--big"><b>${_ls.items === null ? 'Cargando…' : 'Lista no encontrada'}</b></div></div>`; }
+    const isCo = l.entidad === 'empresas', ents = new Map(_lsEnts(l).map(e => [e.id, e])), dyn = l.modo === 'dinamica';
+    const loading = !dyn && _ls.mem === null, ids = loading ? [] : _lsMemIds(l), q = _ls.memQ.toLowerCase();
+    let list = ids.map(i => ents.get(i)).filter(Boolean);
+    if (q) list = list.filter(e => (isCo ? [e.nombre, e.dominio, e.industria, e.pais] : [e.nombre, e.apellido, e.email, e.company_nombre, e.empresa_nombre, e.cargo, e.pais]).join(' ').toLowerCase().includes(q));
+    const defs = _LS_FD[isCo ? 'empresas' : 'contactos'](), chips = (l.filtros || []).map((f, i) => { const d = defs.find(x => x.k === f.k); if (!d) return ''; const o = d.opts(), names = (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? x[1] : v; }); return `<span class="tkf"><button class="tkf__f" onclick="LeadManagerModule.lsFVal(event,${i})"><span>${esc(d.l)}</span></button><button class="tkf__o">es</button><button class="tkf__v${names.length ? '' : ' is-ph'}" onclick="LeadManagerModule.lsFVal(event,${i})">${names.length ? esc(names[0]) + (names.length > 1 ? `<i>+${names.length - 1}</i>` : '') : 'Seleccionar valor'}</button><button class="tkf__m" title="Quitar filtro" onclick="LeadManagerModule.lsFDel(${i})">${I('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></span>`; }).join('');
+    const nSel = _ls.memSel.size;
+    const th = isCo ? '<th>Empresa</th><th>Dominio</th><th>Industria</th><th>Tamaño</th><th>País</th>' : '<th>Nombre completo</th><th>Email</th><th>Empresa</th><th>Cargo</th><th>País</th><th>Etapa</th>';
+    const tr = e => { const ck = !dyn ? `<td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_ls.memSel.has(e.id) ? 'checked' : ''} onchange="LeadManagerModule.lsMemTick(${e.id},this.checked)"></td>` : '';
+      if (isCo) return `<tr onclick="LeadManagerModule.openCompanyPage(${e.id})">${ck}<td><div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(e.nombre || '')}">${esc((e.nombre || '?')[0].toUpperCase())}</span><b>${esc(e.nombre || e.dominio || '—')}</b></div></td><td>${esc(e.dominio || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.industria || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.tamano || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.pais || '') || '<span class="ll-dim">—</span>'}</td></tr>`;
+      const nm = [e.nombre, e.apellido].filter(Boolean).join(' ') || e.email || '—';
+      return `<tr onclick="LeadManagerModule.openContactPage(${e.id})">${ck}<td><div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span><b>${esc(nm)}</b></div></td><td>${esc(e.email || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.company_nombre || e.empresa_nombre || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.cargo || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(e.pais || '') || '<span class="ll-dim">—</span>'}</td><td>${esc(STAGE_LABELS[e.estado] || e.estado || 'nuevo')}</td></tr>`; };
+    const cols = (isCo ? 5 : 6) + (dyn ? 0 : 1);
+    return `<div class="tk ls">
+      <div class="ls-hd"><button class="ll-btn" onclick="LeadManagerModule.go('lists')">‹ Listas</button><input class="ls-name" value="${esc(l.nombre)}" onchange="LeadManagerModule.lsNameEdit(this.value)" aria-label="Nombre de la lista"><span class="ll-pill" style="background:${dyn ? '#EDE9FE' : '#EEF3FF'};color:${dyn ? '#6D28D9' : '#2F6BFF'}">${dyn ? 'Dinámica' : 'Estática'}</span><span class="ls-cnt">${loading ? '…' : list.length === ids.length ? ids.length : list.length + ' de ' + ids.length} ${isCo ? 'empresa' : 'contacto'}${ids.length === 1 ? '' : 's'}</span><span class="sp"></span>${dyn ? '' : `<button class="ll-pri" onclick="LeadManagerModule.lsAddOpen()">${I('<path d="M12 5v14M5 12h14"/>', 14)} Añadir ${isCo ? 'empresas' : 'contactos'}</button>`}<button class="cpm-ib cpm-ib--bare" title="Más" onclick="LeadManagerModule.lsRowMenu(event,${l.id})">${I('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>', 16)}</button></div>
+      <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ls-mq" placeholder="Buscar en la lista" value="${esc(_ls.memQ)}" autocomplete="off" oninput="LeadManagerModule.lsMemSearch(this.value)"></label></div>
+      ${dyn ? `<div class="tkbar">${chips}<button class="tkf__plus" title="Añadir filtro" onclick="LeadManagerModule.lsFAdd(event)">${I('<path d="M12 5v14M5 12h14"/>', 15)}</button>${(l.filtros || []).length ? '<button class="tkbar__del" onclick="LeadManagerModule.lsFClear()">Eliminar</button>' : '<span class="ls-hint">Los filtros eligen los registros de esta lista automáticamente.</span>'}</div>` : ''}
+      ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button class="is-red" onclick="LeadManagerModule.lsRemoveSel()">Quitar de la lista</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.lsMemClear()">✕</button></div>` : ''}
+      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${dyn ? '' : `<th class="ll-ck"><input type="checkbox" ${list.length && list.every(e => _ls.memSel.has(e.id)) ? 'checked' : ''} onchange="LeadManagerModule.lsMemAll(this.checked)"></th>`}${th}</tr></thead><tbody>${loading ? `<tr><td colspan="${cols}" class="ll-empty">Cargando…</td></tr>` : list.length ? list.slice(0, 200).map(tr).join('') : `<tr><td colspan="${cols}" class="ll-empty">${ids.length ? 'Nada coincide con la búsqueda.' : dyn ? 'Ningún registro cumple los filtros todavía.' : `<div class="cpm-empty cpm-empty--big"><b>La lista está vacía</b><span>Añade ${isCo ? 'empresas' : 'contactos'} con el botón de arriba, o desde las pantallas de ${isCo ? 'Empresas' : 'Contactos'} seleccionando filas.</span></div>`}</td></tr>`}</tbody></table></div>
+      <div class="ll__foot"><span><b>${list.length ? 1 : 0} - ${Math.min(200, list.length)}</b> de ${list.length}</span></div></div>`;
+  }
+  function lsMemSearch(v) { _ls.memQ = String(v || '').trim(); const el = document.getElementById('ls-mq'), pos = el ? el.selectionStart : 0; _renderBody(); const e2 = document.getElementById('ls-mq'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
+  async function lsNameEdit(v) { const l = _lsGet(_ls.view); if (!l || !String(v).trim()) return; await _lsSave(l.id, { nombre: String(v).trim() }); }
+  function lsMemTick(id, on) { if (on) _ls.memSel.add(id); else _ls.memSel.delete(id); _renderBody(); }
+  function lsMemAll(on) { const l = _lsGet(_ls.view); _ls.memSel = new Set(on ? (_lsMemIds(l) || []) : []); _renderBody(); }
+  function lsMemClear() { _ls.memSel = new Set(); _renderBody(); }
+  async function lsRemoveSel() {
+    const l = _lsGet(_ls.view), ids = [..._ls.memSel]; if (!l || !ids.length) return;
+    if (!(await novaConfirm({ title: 'Quitar de la lista', message: `Se quitan ${ids.length} registro${ids.length === 1 ? '' : 's'} de «${l.nombre}». Siguen en tu CRM.`, confirmText: 'Quitar' }))) return;
+    try { const r = await apiFetch(`${API}/lm/lists/${l.id}/items/remove`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }); if (!r.ok) throw new Error('Error'); _ls.mem = (_ls.mem || []).filter(i => !ids.includes(i)); l.n = _ls.mem.length; _ls.memSel = new Set(); _renderBody(); showBanner('Quitados de la lista', 'success'); }
+    catch (e) { showBanner('No se pudo quitar', 'error'); }
+  }
+  // Filtros de la lista dinámica
+  function lsFAdd(ev) { const l = _lsGet(_ls.view); if (!l) return; _llPop(ev, _LS_FD[l.entidad === 'empresas' ? 'empresas' : 'contactos']().map(d => `<button class="sed-pop__i" onclick="LeadManagerModule.lsFPick('${d.k}')"><span>${esc(d.l)}</span></button>`).join(''), 240, 'left'); }
+  async function lsFPick(k) { const l = _lsGet(_ls.view); document.getElementById('sed-pop')?.remove(); if (!l) return; l.filtros = (l.filtros || []).concat({ k, vals: [] }); await _lsSave(l.id, { filtros: l.filtros }); _renderBody(); setTimeout(() => { const els = document.querySelectorAll('.tkbar .tkf__v'); if (els.length) els[els.length - 1].click(); }, 60); }
+  function lsFVal(ev, i) {
+    const l = _lsGet(_ls.view), f = l && (l.filtros || [])[i], d = f && _LS_FD[l.entidad === 'empresas' ? 'empresas' : 'contactos']().find(x => x.k === f.k); if (!d) return; if (ev.stopPropagation) ev.stopPropagation();
+    window.__lsF = i; _llPop(ev, _lsFHtml(f, d, ''), 300, 'left'); setTimeout(() => document.getElementById('ls-fq')?.focus(), 30);
+  }
+  function _lsFHtml(f, d, q) { const opts = d.opts().filter(o => !q || String(o[1]).toLowerCase().includes(q.toLowerCase())); return `<div class="sed-pop__q"><input id="ls-fq" placeholder="Buscar" value="${esc(q)}" autocomplete="off" oninput="LeadManagerModule.lsFQ(this.value)"></div><div class="tk-optl">${opts.map(([v, lb]) => `<label class="tk-opt"><input type="checkbox" ${(f.vals || []).includes(v) ? 'checked' : ''} data-v="${esc(v)}" onchange="LeadManagerModule.lsFTick(this.dataset.v,this.checked)"><span>${esc(lb)}</span></label>`).join('') || '<div class="sed-pop__note">Sin resultados</div>'}</div>`; }
+  function lsFQ(v) { const l = _lsGet(_ls.view), f = l.filtros[window.__lsF], d = _LS_FD[l.entidad === 'empresas' ? 'empresas' : 'contactos']().find(x => x.k === f.k), pop = document.getElementById('sed-pop'); if (pop) { pop.innerHTML = _lsFHtml(f, d, v); const i = document.getElementById('ls-fq'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } } }
+  async function lsFTick(v, on) { const l = _lsGet(_ls.view), f = l.filtros[window.__lsF]; const a = new Set(f.vals || []); if (on) a.add(v); else a.delete(v); f.vals = [...a]; _renderBody(); await _lsSave(l.id, { filtros: l.filtros }); _renderBody(); }
+  async function lsFDel(i) { const l = _lsGet(_ls.view); l.filtros.splice(i, 1); await _lsSave(l.id, { filtros: l.filtros }); _renderBody(); }
+  async function lsFClear() { const l = _lsGet(_ls.view); l.filtros = []; await _lsSave(l.id, { filtros: [] }); _renderBody(); }
+  // Añadir miembros a una lista estática (desde la propia lista)
+  function lsAddOpen() { const l = _lsGet(_ls.view); if (!l) return; _ls.addSel = new Set(); _ls.addQ = ''; _ls.addFor = l.id; _lsAddPaint(); }
+  function _lsAddPaint() {
+    const l = _lsGet(_ls.addFor); if (!l) return; const isCo = l.entidad === 'empresas', have = new Set(_ls.mem || []), q = _ls.addQ.toLowerCase();
+    const pool = _lsEnts(l).filter(e => !have.has(e.id) && (!q || (isCo ? [e.nombre, e.dominio, e.industria] : [e.nombre, e.apellido, e.email, e.company_nombre, e.empresa_nombre, e.cargo]).join(' ').toLowerCase().includes(q))).slice(0, 40);
+    const row = e => { const nm = isCo ? (e.nombre || e.dominio) : ([e.nombre, e.apellido].filter(Boolean).join(' ') || e.email), sub = isCo ? [e.dominio, e.pais].filter(Boolean).join(' · ') : [e.cargo, e.company_nombre || e.empresa_nombre].filter(Boolean).join(' · '); return `<label class="tk-opt"><input type="checkbox" ${_ls.addSel.has(e.id) ? 'checked' : ''} onchange="LeadManagerModule.lsAddTick(${e.id},this.checked)"><span><b style="font-weight:500">${esc(nm || '—')}</b><br><small style="color:#98A1AC">${esc(sub)}</small></span></label>`; };
+    const body = `<label class="llcs-s"><input id="ls-aq" placeholder="Buscar ${isCo ? 'empresas' : 'contactos'}" value="${esc(_ls.addQ)}" autocomplete="off" oninput="LeadManagerModule.lsAddQ(this.value)"></label><div class="tk-optl" style="max-height:340px">${pool.map(row).join('') || '<div class="sed-pop__note">Sin resultados</div>'}</div>`;
+    const foot = `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" ${_ls.addSel.size ? '' : 'disabled'} onclick="LeadManagerModule.lsAddGo()">Añadir ${_ls.addSel.size || ''}</button>`;
+    const m = document.getElementById('ll-modal'); if (m) { m.querySelector('.ll-m__bd').innerHTML = body; m.querySelector('.ll-m__ft').innerHTML = foot; } else _llModal(`Añadir ${isCo ? 'empresas' : 'contactos'} a la lista`, body, foot, 520);
+  }
+  function lsAddQ(v) { _ls.addQ = String(v || '').trim(); _lsAddPaint(); const i = document.getElementById('ls-aq'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }
+  function lsAddTick(id, on) { if (on) _ls.addSel.add(id); else _ls.addSel.delete(id); _lsAddPaint(); }
+  async function lsAddGo() {
+    const l = _lsGet(_ls.addFor), ids = [..._ls.addSel]; if (!l || !ids.length) return;
+    try { const r = await apiFetch(`${API}/lm/lists/${l.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); llModalClose(); _ls.mem = null; await lsOpen(l.id); l.n = (_ls.mem || []).length; _renderBody(); showBanner(`${d.added} añadido${d.added === 1 ? '' : 's'} a la lista`, 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // «Añadir a una lista» desde Contactos / Empresas / ficha
+  async function lsAddTo(entidad, ids) {
+    ids = (ids || []).slice(); if (!ids.length) { showBanner('Selecciona al menos un registro.', 'info'); return; }
+    if (_ls.items === null) await _lsLoad();
+    document.getElementById('sed-pop')?.remove(); _ls.toIds = ids; _ls.toEnt = entidad;
+    const lists = _lsAll().filter(l => l.modo === 'estatica' && l.entidad === entidad);
+    _llModal('Añadir a una lista', `<p class="ll-m__p">${ids.length} ${entidad === 'empresas' ? 'empresa' : 'contacto'}${ids.length === 1 ? '' : 's'} seleccionado${ids.length === 1 ? '' : 's'}. Elige una lista estática o crea una nueva.</p><div class="ll-pick">${lists.map(l => `<button onclick="LeadManagerModule.lsAddToGo(${l.id})"><b>${esc(l.nombre)}</b><small>${l.n || 0} registro${l.n === 1 ? '' : 's'}</small></button>`).join('') || '<p class="ll-m__p">Todavía no tienes listas estáticas de este tipo.</p>'}</div><label class="ll-f" style="margin-top:12px"><span>O crea una lista nueva</span><input id="ls-newnm" placeholder="Nombre de la lista nueva" autocomplete="off" onkeydown="if(event.key==='Enter')LeadManagerModule.lsAddToNew()"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.lsAddToNew()">Crear y añadir</button>`, 500);
+  }
+  async function lsAddToGo(listId) {
+    try { const r = await apiFetch(`${API}/lm/lists/${listId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: _ls.toIds }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); llModalClose(); _ls.items = null; _lsLoad(); showBanner(`${d.added} añadido${d.added === 1 ? '' : 's'} a la lista (${(d.added < _ls.toIds.length) ? (_ls.toIds.length - d.added) + ' ya estaban' : 'ninguno repetido'})`, 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lsAddToNew() {
+    const nm = ((document.getElementById('ls-newnm') || {}).value || '').trim(); if (!nm) { showBanner('Escribe el nombre de la lista nueva.', 'info'); return; }
+    try { const r = await apiFetch(`${API}/lm/lists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nm, entidad: _ls.toEnt, modo: 'estatica', filtros: [] }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); await lsAddToGo(d.id); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function lsAddToSel() { lsAddTo('contactos', [..._ctSel]); }
+  function lsAddToSelCo() { lsAddTo('empresas', [..._coSel]); }
   function tkColsMenu(ev) {
     _llPop(ev, `<div class="sed-pop__g">Columnas visibles</div>${_TK_COLS.map(([k, l, lock]) => `<label class="ll-cs__r${lock ? ' is-lock' : ''}" style="padding:8px 14px"><input type="checkbox" ${_tkCols().has(k) ? 'checked' : ''} ${lock ? 'disabled' : ''} onchange="LeadManagerModule.tkColTick('${k}',this.checked)"><span>${l}</span></label>`).join('')}`, 260, 'right');
   }
@@ -40039,7 +40218,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
   let _cpFrom = 'contacts';
   let _cpFromSeq = null;   // {seqId, tab} si la ficha se abrió desde dentro de una secuencia
-  const _CP_FROM_LABEL = { sequences: 'Secuencia', contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
+  const _CP_FROM_LABEL = { 'list-view': 'Lista', sequences: 'Secuencia', contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
@@ -40948,6 +41127,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCtSel()">Ninguno</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('sequence')">＋ Secuencia</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('campaign')">＋ Campaña</button>
+        <button class="lm-bulk-act" onclick="LeadManagerModule.lsAddToSel()">＋ Lista</button>
         <button class="lm-bulk-act" title="Sacar los contactos seleccionados de una secuencia (antes de que empiece a enviar)" onclick="LeadManagerModule.bulkRemoveSeqOpen()">✕ Quitar de secuencia</button>
         <button class="lm-bulk-act lm-bulk-act--vf" title="Verifica emails con el pipeline propio (SMTP) — y busca el email si falta" onclick="LeadManagerModule.bulkVerifyEmails()">${NI('zap')} Verificar emails</button>
         <button class="lm-bulk-act lm-bulk-act--ai" title="Genera un borrador de email personalizado por IA (Fable 5 para cuentas de alto valor, Haiku para el resto)" onclick="LeadManagerModule.bulkPersonalize()">${NI('sparkles')} Personalizar (IA)</button>
@@ -41114,6 +41294,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_llMI(I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'), 'Descargar ficha en PDF (ES)', `LeadManagerModule.ldPdf(${id},'es')`)}
       ${_llMI(I('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'), 'Download PDF (EN)', `LeadManagerModule.ldPdf(${id},'en')`)}
       <div class="sed-pop__sep"></div>
+      ${_llMI(I('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'), 'Añadir a una lista', `LeadManagerModule.lsAddTo('contactos',[${id}])`)}
       ${_llMI(I('<path d="M12 5v14M5 12h14"/>'), 'Crear referido', `LeadManagerModule.ldRefer(${id},'derivado')`)}
       ${_llMI(I('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'), (c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? 'Ver deal' : 'Crear deal', `LeadManagerModule.dlOpen(${id})`)}
       ${_llMI(I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'), 'Reunión', `LeadManagerModule.mtOpen(${id})`)}
@@ -42162,6 +42343,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const acts = `
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCoSel()">Ninguna</button>
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.coEnrolOpen()">＋ Enrolar en secuencia</button>
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.lsAddToSelCo()">＋ Lista</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(false)">Eliminar empresas</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(true)">Eliminar + sus contactos</button>`;
     bar.innerHTML = `<span class="lm-bulk-n">${n} seleccionada${n === 1 ? '' : 's'}</span>
@@ -42888,6 +43070,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const I = d => _llI(d, 15);
     _llPop(ev, `${_llMI(I('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'), 'Editar todos los campos', `LeadManagerModule.openCompany(${id})`)}
       ${_llMI(I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>'), 'Añadir prospecto', `LeadManagerModule.openContact(null,${id})`)}
+      ${_llMI(I('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'), 'Añadir a una lista', `LeadManagerModule.lsAddTo('empresas',[${id}])`)}
       <div class="sed-pop__sep"></div>
       ${_llMI(I('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'), 'Eliminar empresa', `LeadManagerModule.deleteCompany(${id},1)`)}`, 250, 'left');
   }
@@ -44206,7 +44389,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
