@@ -25151,29 +25151,29 @@ const LeadManagerModule = (() => {
       <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${!isE && all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
     </div>`;
   }
-  let _llMode = 'contactos';
-  function llMode(m) { _llMode = m; _llPage = 0; _llSel.clear(); _renderBody(); }
-  function _llCompanies(id, rows) {
-    const byId = new Map((_companies || []).map(c => [c.id, c])), g = new Map();
-    rows.forEach(r => {
-      const c = r.c || {}, cid = c.company_id != null ? c.company_id : null, nm = r.empresa || '';
-      if (cid == null && !nm) return;
-      const key = cid != null ? 'i' + cid : 'n' + nm.toLowerCase(), co = cid != null ? (byId.get(cid) || {}) : {};
-      if (!g.has(key)) g.set(key, { key, id: cid, nombre: nm || co.nombre || '', dominio: c.company_dominio || co.dominio || '', industria: c.company_industria || co.industria || '', tamano: c.company_tamano || co.tamano || '', pais: c.company_pais || co.pais || '', n: 0, resp: 0 });
-      const x = g.get(key); x.n++; if (['respondido', 'interesado', 'no_interesado'].includes(r.estado)) x.resp++;
-    });
-    (Array.isArray(_seqPendingCos) ? _seqPendingCos : []).forEach(p => {
-      const key = p.company_id != null ? 'i' + p.company_id : 'n' + String(p.nombre || '').toLowerCase();
-      if (!g.has(key)) g.set(key, { key, id: p.company_id, nombre: p.nombre || '', dominio: p.dominio || '', industria: p.industria || '', tamano: p.tamano || '', pais: p.pais || '', n: 0, resp: 0, cola: true });
-    });
-    return [...g.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }
-  function _llCoFilter(emp) { const q = _llQ.toLowerCase(); return q ? emp.filter(c => [c.nombre, c.dominio, c.industria, c.pais, c.tamano].join(' ').toLowerCase().includes(q)) : emp; }
-  function _llCoTable(view, loading) {
-    const row = c => { const est = c.resp ? ['Respondió', '#0E7490', '#CFFAFE'] : c.n ? ['En curso', '#1D4ED8', '#DBEAFE'] : ['En cola', '#475569', '#F1F5F9'];
-      return `<tr ${c.id != null ? `onclick="LeadManagerModule.openCompanyPage(${c.id})"` : ''}><td><div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(c.nombre)}">${esc((c.nombre || '?')[0].toUpperCase())}</span><b>${esc(c.nombre || '—')}</b></div></td><td>${c.dominio ? esc(c.dominio) : '<span class="ll-dim">—</span>'}</td><td>${c.industria ? esc(c.industria) : '<span class="ll-dim">—</span>'}</td><td>${c.tamano ? esc(c.tamano) : '<span class="ll-dim">—</span>'}</td><td>${c.pais ? esc(c.pais) : '<span class="ll-dim">—</span>'}</td><td><b>${c.n}</b></td><td><span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span></td></tr>`; };
-    return `<div class="ll__tbl"><table class="ll-t"><thead><tr><th>Empresa</th><th>Dominio</th><th>Industria</th><th>Tamaño</th><th>País</th><th>Contactos</th><th>Estado</th></tr></thead><tbody>${loading ? '<tr><td colspan="7" class="ll-empty">Cargando…</td></tr>' : view.length ? view.map(row).join('') : '<tr><td colspan="7" class="ll-empty">Aún no hay empresas en esta secuencia.</td></tr>'}</tbody></table></div>`;
-  }
+  let _llMode = 'contactos';
+  function llMode(m) { _llMode = m; _llPage = 0; _llSel.clear(); _renderBody(); }
+  function _llCompanies(id, rows) {
+    const byId = new Map((_companies || []).map(c => [c.id, c])), g = new Map();
+    rows.forEach(r => {
+      const c = r.c || {}, cid = c.company_id != null ? c.company_id : null, nm = r.empresa || '';
+      if (cid == null && !nm) return;
+      const key = cid != null ? 'i' + cid : 'n' + nm.toLowerCase(), co = cid != null ? (byId.get(cid) || {}) : {};
+      if (!g.has(key)) g.set(key, { key, id: cid, nombre: nm || co.nombre || '', dominio: c.company_dominio || co.dominio || '', industria: c.company_industria || co.industria || '', tamano: c.company_tamano || co.tamano || '', pais: c.company_pais || co.pais || '', n: 0, resp: 0 });
+      const x = g.get(key); x.n++; if (['respondido', 'interesado', 'no_interesado'].includes(r.estado)) x.resp++;
+    });
+    (Array.isArray(_seqPendingCos) ? _seqPendingCos : []).forEach(p => {
+      const key = p.company_id != null ? 'i' + p.company_id : 'n' + String(p.nombre || '').toLowerCase();
+      if (!g.has(key)) g.set(key, { key, id: p.company_id, nombre: p.nombre || '', dominio: p.dominio || '', industria: p.industria || '', tamano: p.tamano || '', pais: p.pais || '', n: 0, resp: 0, cola: true });
+    });
+    return [...g.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+  function _llCoFilter(emp) { const q = _llQ.toLowerCase(); return q ? emp.filter(c => [c.nombre, c.dominio, c.industria, c.pais, c.tamano].join(' ').toLowerCase().includes(q)) : emp; }
+  function _llCoTable(view, loading) {
+    const row = c => { const est = c.resp ? ['Respondió', '#0E7490', '#CFFAFE'] : c.n ? ['En curso', '#1D4ED8', '#DBEAFE'] : ['En cola', '#475569', '#F1F5F9'];
+      return `<tr ${c.id != null ? `onclick="LeadManagerModule.openCompanyPage(${c.id})"` : ''}><td><div class="ll-name"><span class="ll-av ll-av--sq" style="background:${_llAvColor(c.nombre)}">${esc((c.nombre || '?')[0].toUpperCase())}</span><b>${esc(c.nombre || '—')}</b></div></td><td>${c.dominio ? esc(c.dominio) : '<span class="ll-dim">—</span>'}</td><td>${c.industria ? esc(c.industria) : '<span class="ll-dim">—</span>'}</td><td>${c.tamano ? esc(c.tamano) : '<span class="ll-dim">—</span>'}</td><td>${c.pais ? esc(c.pais) : '<span class="ll-dim">—</span>'}</td><td><b>${c.n}</b></td><td><span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span></td></tr>`; };
+    return `<div class="ll__tbl"><table class="ll-t"><thead><tr><th>Empresa</th><th>Dominio</th><th>Industria</th><th>Tamaño</th><th>País</th><th>Contactos</th><th>Estado</th></tr></thead><tbody>${loading ? '<tr><td colspan="7" class="ll-empty">Cargando…</td></tr>' : view.length ? view.map(row).join('') : '<tr><td colspan="7" class="ll-empty">Aún no hay empresas en esta secuencia.</td></tr>'}</tbody></table></div>`;
+  }
   function _llRepaint() { _renderBody(); }
   function llSearch(v) {
     _llQ = String(v || '').trim(); _llPage = 0;
@@ -25608,12 +25608,12 @@ const LeadManagerModule = (() => {
       _sedSel = row.id; await load();
     } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); }
   }
-  // ── Ajustes de la secuencia: configuración, idiomas, dudas por resolver e información ──
-  function _ajHtml(id) {
-    return `<div class="aj"><div class="aj__tabs"><button class="${_seqTab !== 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('config')">Configuración</button><button class="${_seqTab === 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('info')">Información</button></div><div id="seq-tabwrap" class="aj__body">${_seqConfigTab(id, _seqTab === 'info' ? 'info' : 'config')}</div></div>`;
-  }
-  function ajTab(t) { _seqTab = t; _renderBody(); }
-  function seqAjustes() { _seqStage = 'ajustes'; _seqTab = 'config'; _seqPasosOpen = false; _renderBody(); }
+  // ── Ajustes de la secuencia: configuración, idiomas, dudas por resolver e información ──
+  function _ajHtml(id) {
+    return `<div class="aj"><div class="aj__tabs"><button class="${_seqTab !== 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('config')">Configuración</button><button class="${_seqTab === 'info' ? 'on' : ''}" onclick="LeadManagerModule.ajTab('info')">Información</button></div><div id="seq-tabwrap" class="aj__body">${_seqConfigTab(id, _seqTab === 'info' ? 'info' : 'config')}</div></div>`;
+  }
+  function ajTab(t) { _seqTab = t; _renderBody(); }
+  function seqAjustes() { _seqStage = 'ajustes'; _seqTab = 'config'; _seqPasosOpen = false; _renderBody(); }
   // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
   function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
   function _seqProg(id, s, steps) {
@@ -39714,14 +39714,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
 
   function _vContacts() {
-    return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Contactos</h2></div>
-        <div class="lm-hd-actions">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
-        </div>
-      </div>
+    return `<div id="lm-vw-wrap">${_vwStripHtml('ct')}</div>
       <div id="lm-ct-qf-wrap">${_ctQFBarHtml()}</div>
       ${_fltChipsHtml('contacts')}
       <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
@@ -39830,6 +39823,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ctVisible() {
     const q = _ctQuery;
     let list = _contacts;
+    if (_vw.ct !== 'todos') { const pr = _vwPred('ct', _vw.ct); if (pr) list = list.filter(pr); }
     if (q) list = list.filter(c => (`${c.codigo || ''} ${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.company_codigo || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
     if (_ctClientFilter) list = list.filter(c => String(c.outbound_client_id) === String(_ctClientFilter));
     if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
@@ -39861,6 +39855,73 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function ctQFSet(k, v) { _ctQF[k] = v || ''; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
   function ctQFClear() { _ctQF = { cliente: '', seq: '', campana: '', estado: '', pais: '' }; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
+  // ═══════════ Vistas guardadas (pestañas) + acciones estilo Lemlist para Contactos y Empresas ═══════════
+  const _vw = { ct: 'todos', co: 'todos' };
+  const _VW_PRE = {
+    ct: [['todos', 'Todos los contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2|c9,7,4'], ['calientes', 'Contactos calientes', 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'], ['respondido', 'Respondido recientemente', 'M9 14 4 9l5-5|M20 20v-7a4 4 0 0 0-4-4H4'], ['activo', 'Activo en la campaña', 'M13 2 3 14h9l-1 8 10-12h-9l1-8z'], ['sinemail', 'Sin email', 'M4 4h16v16H4z|M22 6l-10 7L2 6']],
+    co: [['todos', 'Todas las empresas', 'M4 3h16v18H4z|M9 3v18'], ['conctos', 'Con contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'], ['sinctos', 'Sin contactos', 'M18 6 6 18M6 6l12 12'], ['resp', 'Con respuestas', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']],
+  };
+  function _vwCustom(k) { try { return (JSON.parse(localStorage.getItem('lm_vw_' + k) || '[]') || []); } catch (_) { return []; } }
+  function _vwPred(k, v) {
+    const cts = (c) => Array.isArray(c.sequences) ? c.sequences : [];
+    if (k === 'ct') {
+      if (v === 'calientes') return c => ['interesado', 'reunion'].includes(c.disposition);
+      if (v === 'respondido') return c => ['respondio', 'aceptado'].includes(c.disposition);
+      if (v === 'activo') return c => cts(c).some(x => x.estado === 'activo');
+      if (v === 'sinemail') return c => !c.email;
+      return null;
+    }
+    const nBy = new Map(); (_contacts || []).forEach(c => { if (c.company_id != null) { const o = nBy.get(c.company_id) || { n: 0, r: 0 }; o.n++; if (['respondio', 'interesado', 'reunion', 'aceptado'].includes(c.disposition)) o.r++; nBy.set(c.company_id, o); } });
+    if (v === 'conctos') return c => (nBy.get(c.id) || { n: 0 }).n > 0;
+    if (v === 'sinctos') return c => !(nBy.get(c.id) || { n: 0 }).n;
+    if (v === 'resp') return c => (nBy.get(c.id) || { r: 0 }).r > 0;
+    return null;
+  }
+  function _vwStripHtml(k) {
+    const list = k === 'ct' ? (_contacts || []) : (_companies || []), cur = _vw[k];
+    const ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${String(d).split('|').filter(x => !/^c\d/.test(x)).map(x => `<path d="${x}"/>`).join('')}</svg>`;
+    const tabs = _VW_PRE[k].map(([id, l, d]) => { const pr = id === 'todos' ? null : _vwPred(k, id), n = pr ? list.filter(pr).length : list.length; return `<button class="vw-t${cur === id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','${id}')">${ico(d)}<span>${l}</span><i>${n}</i></button>`; }).join('');
+    const cu = _vwCustom(k).map(v => `<button class="vw-t${cur === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" title="Eliminar la vista" onclick="event.stopPropagation();LeadManagerModule.vwDel('${k}','${v.id}')">✕</span></button>`).join('');
+    return `<div class="vw">${tabs}${cu}<button class="vw-add" title="Guardar la búsqueda y los filtros actuales como una vista" onclick="LeadManagerModule.vwSave('${k}')">+</button></div>`;
+  }
+  function _vwRepaint(k) {
+    const w = document.getElementById('lm-vw-wrap'); if (w) w.innerHTML = _vwStripHtml(k);
+    if (k === 'ct') { _renderContacts(); } else if (typeof _renderCompanies === 'function') { _renderCompanies(); }
+  }
+  function vwSet(k, v) {
+    if (v.startsWith('c:')) {
+      const x = _vwCustom(k).find(y => y.id === v.slice(2)); if (!x) return;
+      if (k === 'ct') { _ctQF = Object.assign({ cliente: '', seq: '', campana: '', estado: '', pais: '' }, x.qf || {}); _ctQuery = x.q || ''; _ctFilters = (x.filters || []).slice(); _vw.ct = 'todos'; _vw.ctCustom = v; _vRenderCtFiltersBar(); }
+      _vw[k] = 'todos'; _vwRepaintStrip(k, v); return;
+    }
+    _vw[k] = v; _vwRepaint(k);
+  }
+  function _vwRepaintStrip(k, activeCustom) { const w = document.getElementById('lm-vw-wrap'); if (w) { w.innerHTML = _vwStripHtml(k).replace(`vw-t${''}`, 'vw-t'); } if (k === 'ct') _renderContacts(); else if (typeof _renderCompanies === 'function') _renderCompanies(); }
+  function vwSave(k) {
+    _llModal('Guardar vista', `<p class="ll-m__p">Se guarda la búsqueda y los filtros que tienes ahora${k === 'ct' ? '' : ' (solo para contactos)'} como una pestaña.</p><label class="ll-f"><span>Nombre de la vista</span><input id="vw-nm" placeholder="Ej. Directores en Alemania" autocomplete="off"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.vwSaveGo('${k}')">Guardar</button>`, 460);
+    setTimeout(() => document.getElementById('vw-nm')?.focus(), 40);
+  }
+  function vwSaveGo(k) {
+    const nm = ((document.getElementById('vw-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la vista.', 'info'); return; }
+    if (k !== 'ct') { llModalClose(); showBanner('Las vistas guardadas por ahora son para contactos.', 'info'); return; }
+    const arr = _vwCustom(k); arr.push({ id: String(Date.now()), nombre: nm, qf: Object.assign({}, _ctQF), q: _ctQuery, filters: (_ctFilters || []).slice() });
+    try { localStorage.setItem('lm_vw_' + k, JSON.stringify(arr)); } catch (_) {}
+    llModalClose(); _vwRepaint(k); showBanner('Vista guardada', 'success');
+  }
+  function vwDel(k, id) { try { localStorage.setItem('lm_vw_' + k, JSON.stringify(_vwCustom(k).filter(x => x.id !== id))); } catch (_) {} _vwRepaint(k); }
+  // Limpiar y Añadir contactos/empresas (misma barra que la Lista de prospectos)
+  function ctCleanMenu(ev) { _dgEntity = 'contacts'; _dgSel = new Set(_ctSel.size ? [..._ctSel] : (_ctFilteredIds || _contacts.map(c => c.id))); if (!_dgSel.size) { showBanner('No hay contactos para limpiar.', 'info'); return; } dgCleanMenu(ev); }
+  function coCleanMenu(ev) { _dgEntity = 'companies'; _dgSel = new Set((typeof _coSel !== 'undefined' && _coSel.size) ? [..._coSel] : _coVisible().map(c => c.id)); if (!_dgSel.size) { showBanner('No hay empresas para limpiar.', 'info'); return; } dgCleanMenu(ev); }
+  function ctAddMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un contacto manualmente', 'LeadManagerModule.openContact()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar contactos (CSV)', "LeadManagerModule.exportCsv('contacts')")}${_llMI('', 'Sincronizar con un CRM', '', { off: true, badge: 'Próximamente' })}`, 330, 'right');
+  }
+  function coAddMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18"/>', 'Añadir una empresa manualmente', 'LeadManagerModule.openCompany()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar empresas (CSV)', "LeadManagerModule.exportCsv('companies')")}`, 330, 'right');
+  }
+  function cpNav(d) {
+    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(c => c.id), i = ids.indexOf(_contactView), n = ids[i + d];
+    if (i < 0 || n == null) return; openContactPage(n);
+  }
   function _ctQFBarHtml() {
     const opt = (k, label, items, cur) => `<label class="dash-f${cur ? ' is-on' : ''}"><select onchange="LeadManagerModule.ctQFSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${items}</select></label>`;
     const o = _ctQFOptions();
@@ -39879,6 +39940,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${opt('pais', 'País', paisOpts, _ctQF.pais)}
       ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.ctQFClear()">Limpiar</button>` : ''}
       <span class="lm-count dash-f--count" id="lm-ct-count"></span>
+      <button class="ll-btn" onclick="LeadManagerModule.ctCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+      <button class="ll-pri" onclick="LeadManagerModule.ctAddMenu(event)">${_llI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Añadir contactos</button>
       <button class="dg-kebab${(_ctClientFilter || _ctBounced || _ctDataIssue || _ctFilters.length) ? ' on' : ''}" onclick="LeadManagerModule.ctMoreMenu(event)" title="Filtros, vistas, columnas y selección">⋮</button>
     </div>`;
   }
@@ -40272,6 +40335,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? (_cpReturnTo ? 'Contactos' : 'Tareas') : (_cpFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos'))}</button>
       ${_derivBanner(c)}
       ${_cpTaskBar(id)}
+      <div class="cp-pg"><span>Contacto ${(() => { const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(x => x.id); const i = ids.indexOf(id); return (i + 1) + ' de ' + ids.length; })()}</span><button title="Contacto anterior" onclick="LeadManagerModule.cpNav(-1)">↑</button><button title="Contacto siguiente" onclick="LeadManagerModule.cpNav(1)">↓</button></div>
       <div class="cp-head">
         <button type="button" class="cp-copy" title="Copiar todos los datos del contacto y de su empresa (estado, canal, paso…)" aria-label="Copiar datos" onclick="LeadManagerModule.ldCopy(${id})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
         <div class="cp-pdfg" role="group" aria-label="Descargar ficha en PDF">
@@ -40960,14 +41024,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
 
   // ── Vista: Empresas ──
   function _vCompanies() {
-    return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Empresas</h2></div>
-        <div class="lm-hd-actions">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openCompany()">＋ Empresa</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
-        </div>
-      </div>
+    return `<div id="lm-vw-wrap">${_vwStripHtml('co')}</div>
       <div id="lm-co-qf-wrap">${_coQFBarHtml()}</div>
       ${_fltChipsHtml('companies')}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
@@ -40977,6 +41034,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _coVisible() {
     const q = _coQuery;
     let list = _companies;
+    if (_vw.co !== 'todos') { const pr = _vwPred('co', _vw.co); if (pr) list = list.filter(pr); }
     if (q) list = list.filter(c => (`${c.codigo || ''} ${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
     if (_coFilters.length) list = list.filter(c => _lmMatch(c, _coFilters));
     if (_coQF.tier) list = list.filter(c => (c.target_tier || '').trim() === _coQF.tier);
@@ -41015,6 +41073,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${opt('estado', 'Estado', estOpts, _coQF.estado)}
       ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.coQFClear()">Limpiar</button>` : ''}
       <span class="lm-count dash-f--count" id="lm-co-count"></span>
+      <button class="ll-btn" onclick="LeadManagerModule.coCleanMenu(event)" title="Limpiar nombres, dominios, webs, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+      <button class="ll-pri" onclick="LeadManagerModule.coAddMenu(event)">${_llI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Añadir empresas</button>
       <button class="dg-kebab${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.coMoreMenu(event)" title="Filtros, vistas y selección">⋮</button>
     </div>`;
   }
@@ -43116,7 +43176,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

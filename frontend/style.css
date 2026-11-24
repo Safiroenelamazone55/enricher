@@ -22114,3 +22114,12 @@ body.ibx-lb-open{overflow:hidden}
 .aj { background: #fff; border: 1px solid #E6E6E6; }
 .aj__tabs { display: flex; gap: 6px; padding: 10px 14px 0; border-bottom: 1px solid #E6E6E6; } .aj__tabs button { font: inherit; font-size: 14px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: #6B7A90; cursor: pointer; } .aj__tabs button.on { color: #213856; font-weight: 600; border-bottom-color: #213856; }
 .aj__body { padding: 14px; background: #F7F8F6; }
+
+/* ── Vistas (pestañas) estilo Lemlist en Contactos / Empresas ── */
+.vw { display: flex; align-items: center; gap: 4px; padding: 4px 0 10px; overflow-x: auto; border-bottom: 1px solid #E6E6E6; margin-bottom: 12px; }
+.vw-t { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 14px; padding: 8px 14px; background: none; border: 0; border-radius: 10px; color: #55657D; cursor: pointer; white-space: nowrap; }
+.vw-t:hover { background: #F3F5F8; } .vw-t.on { background: #fff; color: #213856; font-weight: 600; box-shadow: 0 0 0 1px #E6E6E6; }
+.vw-t i { font-style: normal; font-size: 12px; background: #F1F3F7; border-radius: 9px; padding: 0 7px; color: #55657D; } .vw-t.on i { background: #213856; color: #fff; } .vw-x { color: #8794A8; font-size: 11px; margin-left: 2px; }
+.vw-add { width: 30px; height: 30px; border: 1px dashed #C9D0DB; background: none; border-radius: 8px; font-size: 18px; color: #6B7A90; cursor: pointer; flex: 0 0 auto; } .vw-add:hover { border-color: #2563EB; color: #2563EB; }
+.cp-pg { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 13px; color: #55657D; margin-bottom: 6px; } .cp-pg button { width: 28px; height: 28px; border: 1px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; }
+#lm-ct-qf .ll-btn, #lm-ct-qf .ll-pri, #lm-co-qf .ll-btn, #lm-co-qf .ll-pri { height: 32px; }
