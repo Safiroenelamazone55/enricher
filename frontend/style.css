@@ -22375,3 +22375,6 @@ body.ibx-lb-open{overflow:hidden}
 .llh-h { height: 44px; font-size: 13px; color: #55657D; font-weight: 500; }
 .llh-m { display: inline-flex; align-items: center; gap: 8px; color: #55657D; } .llh-m b { font-weight: 600; color: #55657D; } .llh-o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .llh-a { text-align: right; } .llh-x { width: 28px; height: 28px; border: .75px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; color: #213856; } .llh-x:hover { background: #F6F7F9; }
+
+.ll-fp { height: var(--llfp-h, min(620px, calc(100vh - 90px))); }
+.sed-pop.ll-pop:has(.ll-fp) { max-height: calc(100vh - 16px); }

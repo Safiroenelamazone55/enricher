@@ -25492,7 +25492,8 @@ const LeadManagerModule = (() => {
     document.getElementById('sed-pop')?.remove();
     const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = w + 'px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
     pop.querySelectorAll('input[data-ind]').forEach(i => { i.indeterminate = true; });
-    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 20)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    const r = window.__llAnchor.getBoundingClientRect(), vh = window.innerHeight, h = Math.max(300, Math.min(620, vh - 16)), top = Math.max(8, Math.min(r.bottom + 6, vh - h - 8));
+    pop.style.setProperty('--llfp-h', h + 'px'); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 20)) + 'px'; pop.style.top = top + 'px';
     setTimeout(() => document.addEventListener('click', function f() { pop.remove(); document.removeEventListener('click', f); }), 0);
   }
   function llFilterColSearch() { const el = document.querySelector('#sed-pop .ll-fp__l input'); const pos = el ? el.selectionStart : 0; _llFilterPaint(false); const e2 = document.querySelector('#sed-pop .ll-fp__l input'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
