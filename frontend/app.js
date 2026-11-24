@@ -24038,10 +24038,11 @@ const LeadManagerModule = (() => {
       <div class="fin-pi-form"><div id="liw-body" class="liw-body"></div></div>
       <div class="fin-pi-box__ft"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwManual()">Conectar manualmente con un token</button><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liwClose()">Cancelar</button></div></div>`);
     clearInterval(_liw.timer); _liw.estado = '';
+    _liwPintar(null);
     const tick = async () => {
       if (!document.getElementById('liw-body')) { clearInterval(_liw.timer); return; }
       if (_liw.estado === 'conectando' || _liw.estado === 'ok') return;
-      const r = await _liExt('hello', {}, 6000);
+      const r = await _liExt('hello', {}, window.__liReady ? 8000 : 2500);
       _liwPintar(r);
     };
     tick(); _liw.timer = setInterval(tick, 3000);
