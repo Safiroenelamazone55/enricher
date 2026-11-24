@@ -24050,6 +24050,7 @@ const LeadManagerModule = (() => {
     } catch (_) { _li.accs = _li.accs || []; _li.queue = _li.queue || []; }
     if (_section === 'linkedin') _liPaint();
     if (document.getElementById('snd-root')) _sndPaint();
+    if (_seqStage === 'lanzar' && _section === 'sequence') _renderBody();
     clearTimeout(_li.timer); if (_section === 'linkedin') _li.timer = setTimeout(() => { if (_section === 'linkedin' && !document.getElementById('li-modal')) _liLoad(); }, 20000);
   }
   function _liPaint() { const r = document.getElementById('li-root'); if (r) r.innerHTML = _liInner(); }
@@ -24846,355 +24847,441 @@ const LeadManagerModule = (() => {
     if (list) list.style.display = 'none';
   }
   function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
-  // ═══════════ Lista de prospectos (paso 2): tabla estilo Lemlist con filtros, columnas, enriquecimiento y alta de prospectos ═══════════
-  let _llQ = '', _llF = [], _llSel = new Set(), _llPage = 0, _llDraft = null, _llFBanner = true;
-  const _LL_PAGE = 50;
-  const _LL_COLS = [
-    { k: 'nombre_completo', l: 'Nombre completo', lock: true },
-    { k: 'nombre', l: 'Nombre' }, { k: 'apellido', l: 'Apellido' },
-    { k: 'email', l: 'Dirección de email' }, { k: 'estado', l: 'Estado' }, { k: 'entreg', l: 'Entregabilidad' },
-    { k: 'telefono', l: 'Número de teléfono' }, { k: 'linkedin', l: 'LinkedIn' },
-    { k: 'empresa', l: 'Empresa' }, { k: 'cargo', l: 'Título del puesto' }, { k: 'pais', l: 'País' },
-    { k: 'paso', l: 'Paso' }, { k: 'resultado', l: 'Resultado' }, { k: 'propietario', l: 'Propietario' }, { k: 'incorporado', l: 'Fecha de incorporación' },
-  ];
-  const _LL_DEF = ['nombre_completo', 'email', 'estado', 'empresa', 'cargo', 'paso', 'propietario'];
-  function _llCols() {
-    let v = null; try { v = JSON.parse(localStorage.getItem('lm_ll_cols') || 'null'); } catch (_) {}
-    const set = new Set(Array.isArray(v) ? v : _LL_DEF); set.add('nombre_completo');
-    return set;
+  // ═══════════ Lanzar (paso 3): prospectos a la izquierda (Validar / En curso) y el flujo con el avance real de cada paso a la derecha ═══════════
+  function _lzProblemas(r, steps) {
+    const out = [], hasMail = steps.some(x => x.canal === 'email'), hasLi = steps.some(x => x.canal === 'linkedin');
+    if (hasMail && !r.email) out.push('Sin email');
+    else if (hasMail && r.entreg === 'invalid') out.push('Email no entregable');
+    if (hasLi && !r.linkedin) out.push('Sin LinkedIn');
+    return out;
   }
-  function _llSaveCols(set) { try { localStorage.setItem('lm_ll_cols', JSON.stringify([...set])); } catch (_) {} }
-  const _LL_EST = { rebotado: ['Rebotado', '#B42318', '#FEE4E2'], interesado: ['Interesado', '#15803D', '#DCFCE7'], no_interesado: ['No interesado', '#B45309', '#FEF3C7'], respondido: ['Respondido', '#0E7490', '#CFFAFE'], finalizado: ['Finalizado', '#475569', '#E2E8F0'], pausa: ['En pausa', '#B45309', '#FFEDD5'], ejecucion: ['En ejecución', '#1D4ED8', '#DBEAFE'], pendiente: ['Pendiente de lanzar', '#475569', '#F1F5F9'], sinemail: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
-  const _LL_ENT = { valid: ['Entregable', '#15803D', '#DCFCE7'], risky: ['Arriesgado', '#B45309', '#FEF3C7'], 'catch-all': ['Arriesgado', '#B45309', '#FEF3C7'], invalid: ['No entregado', '#B42318', '#FEE4E2'], '': ['No verificado', '#64748B', '#F1F5F9'], none: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
-  function _llRows(id) {
-    const sq = _sequences.find(x => x.id === id) || {}, launched = (sq.estado || 'draft') !== 'draft';
-    const byId = new Map((_contacts || []).map(c => [c.id, c]));
-    return (Array.isArray(_seqContacts) ? _seqContacts : []).map(e => {
-      const c = byId.get(e.contact_id) || {}, email = e.email || c.email || '', es = c.email_status || '';
-      const disp = e.real_disposition || e.disposition || c.disposition || '';
-      let est = 'pendiente';
-      if (es === 'invalid' || disp === 'rebote') est = 'rebotado';
-      else if (disp === 'interesado') est = 'interesado'; else if (disp === 'no_interesado') est = 'no_interesado';
-      else if (['respondio', 'aceptado', 'reunion', 'mas_adelante'].includes(disp)) est = 'respondido';
-      else if (e.estado === 'terminado') est = 'finalizado'; else if (e.estado === 'pausado') est = 'pausa';
-      else if (!email) est = 'sinemail'; else if (launched) est = 'ejecucion';
-      const entreg = !email ? 'none' : (['valid', 'risky', 'catch-all', 'invalid'].includes(es) ? es : '');
-      const N0 = _seqSteps(id).length;
-      return { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '' };
-    });
+  function _lzBanner(id, s) {
+    const launched = (s.estado || 'draft') !== 'draft';
+    if (!launched) return `<div class="lz-ban lz-ban--i"><span>Esta secuencia aún <b>no se ha lanzado</b>: no se envía nada hasta que la lances.</span></div>`;
+    if (s.estado !== 'activa') return `<div class="lz-ban lz-ban--w"><span>La secuencia está <b>${esc((_CC_SEQ_EST || {})[s.estado] || s.estado)}</b>: no se están enviando actividades.</span></div>`;
+    const tz = s.timezone || 'America/Lima', days = _sanSendDays(s.send_days);
+    let hh = 12, wd = 1, label = '';
+    try { const p = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false }).formatToParts(new Date()); const g = k => (p.find(x => x.type === k) || {}).value; hh = parseInt(g('hour')); wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(g('weekday')); label = g('hour') + ':' + g('minute'); } catch (_) {}
+    const okDay = days[wd] === '1', okHour = hh >= 9 && hh < 18;
+    if (okDay && okHour) return `<div class="lz-ban lz-ban--ok"><span>Se están enviando actividades ahora (${label} · ${esc(tz.split('/').pop().replace('_', ' '))}).</span></div>`;
+    return `<div class="lz-ban lz-ban--i"><span>No se están enviando actividades en este momento (${label} · ${esc(tz.split('/').pop().replace('_', ' '))}). Estamos fuera de tu planificación de envío. <a href="javascript:void(0)" onclick="LeadManagerModule.openSequenceDrawer(${id})">Editar planificación de envío</a></span></div>`;
   }
-  const _LL_FDEF = [
-    { k: 'estado', l: 'Estado', t: 'sel', opts: () => Object.entries(_LL_EST).map(([v, a]) => [v, a[0]]) },
-    { k: 'entreg', l: 'Entregabilidad', t: 'sel', opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
-    { k: 'paso', l: 'Paso', t: 'sel', opts: (id) => _seqSteps(id).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
-    { k: 'propietario', l: 'Propietario', t: 'sel', opts: () => [...new Set((_clients || []).map(c => c.nombre))].map(n => [n, n]) },
-    { k: 'nombre', l: 'Nombre', t: 'txt' }, { k: 'apellido', l: 'Apellido', t: 'txt' }, { k: 'email', l: 'Email', t: 'txt' }, { k: 'telefono', l: 'Número de teléfono', t: 'txt' },
-    { k: 'linkedin', l: 'LinkedIn', t: 'txt' }, { k: 'empresa', l: 'Empresa', t: 'txt' }, { k: 'cargo', l: 'Título del puesto', t: 'txt' }, { k: 'pais', l: 'País', t: 'txt' },
-  ];
-  function _llFiltered(id, rows) {
-    const q = _llQ.toLowerCase();
-    return rows.filter(r => {
-      if (q && ![r.nombre, r.apellido, r.email, r.empresa, r.cargo, r.telefono, r.pais].join(' ').toLowerCase().includes(q)) return false;
-      return _llF.every(f => {
-        const v = String(f.k === 'paso' ? r.paso : r[f.k] == null ? '' : r[f.k]);
-        if (f.vals) return f.vals.includes(v);
-        return v.toLowerCase().includes(String(f.q || '').toLowerCase());
-      });
-    });
+  function _lzLimit(st, acc) {
+    if (!acc || st.canal !== 'linkedin') return '';
+    const h = acc.hoy || {}, f = acc.efectivos || {}, a = st.accion || '';
+    let t = null;
+    if (['visita'].includes(a)) t = ['Visitas al perfil', h.vis_hoy || 0, f.vis];
+    else if (['invite', 'invite_nota'].includes(a)) t = ['Solicitudes de conexión', h.inv_hoy || 0, f.inv];
+    else if (['mensaje', 'inmail'].includes(a)) t = ['Mensajes', h.msg_hoy || 0, f.msg];
+    else t = ['Acciones de LinkedIn', h.total_hoy || 0, f.total];
+    return `<div class="lz-lim">${_llI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 16)}<span>${t[0]}: <b>${t[1]}/${t[2] != null ? t[2] : '—'}</b> en las últimas 24 horas</span></div>`;
   }
-  const _llI = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  function _llAvColor(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; }
-  function _llCell(k, r) {
-    switch (k) {
-      case 'nombre_completo': { const nm = [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || '—'; const ini = nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(); return `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(ini)}</span><b>${esc(nm)}</b></div>`; }
-      case 'email': return r.email ? `<span class="ll-mail">${esc(r.email)}</span>` : `<button class="ll-find" onclick="event.stopPropagation();LeadManagerModule.llFindEmail(${r.cid})">ENCONTRAR EMAIL</button>`;
-      case 'estado': { const a = _LL_EST[r.estado] || _LL_EST.pendiente; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
-      case 'entreg': { const a = _LL_ENT[r.entreg] || _LL_ENT['']; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
-      case 'paso': return r.npasos ? `Paso ${r.paso}/${r.npasos}` : '—';
-      case 'resultado': return r.resultado ? _dispoBadge(r.resultado) : '<span class="ll-dim">—</span>';
-      case 'linkedin': return r.linkedin ? `<a href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(r.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '<span class="ll-dim">—</span>';
-      case 'incorporado': return r.incorporado ? new Date(r.incorporado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-      default: return r[k] ? esc(r[k]) : '<span class="ll-dim">—</span>';
-    }
+  function _lzNode(st, i, steps, rows, states, acc, launched) {
+    const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st), N0 = rows.length;
+    const done = rows.filter(r => r.e.estado === 'terminado' || (r.e.paso || 1) - 1 > i).length;
+    const here = rows.filter(r => r.e.estado !== 'terminado' && (r.e.paso || 1) - 1 === i).length;
+    const wait = Math.max(0, N0 - done - here), pct = N0 ? Math.round(done / N0 * 100) : 0;
+    const hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente');
+    const stt = states[i], tag = !launched ? ['Pendiente', 'p'] : stt === 'done' ? ['Completado', 'd'] : stt === 'atrasado' ? ['Atrasado', 'a'] : stt === 'current' ? ['En curso', 'c'] : ['Pendiente', 'p'];
+    const date = _stepCalDate(st);
+    return `${i ? '<div class="sed-link sed-link--s"></div>' : ''}<div class="lz-tag lz-tag--${tag[1]}">${tag[0]}</div>
+      <div class="sed-node lz-node" onclick="LeadManagerModule.lzEditStep(${st.id})" title="Abrir este paso para editarlo">
+        <div class="sed-node__hd"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<span class="lz-date">${date || ''}</span></div>
+        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span></div>
+        ${_lzLimit(st, acc)}
+        ${N0 ? `<div class="lz-prog"><div class="lz-prog__bar"><i style="width:${pct}%"></i></div><div class="lz-prog__n"><span><b>${done}</b> de ${N0} hechos</span><span>${here} en este paso</span><span>${wait} pendientes</span></div></div>` : ''}
+      </div>`;
   }
-  function _llHtml(id) {
-    const rows = _llRows(id), all = _llFiltered(id, rows), vis = _llCols();
-    const cols = _LL_COLS.filter(c => vis.has(c.k)), hidden = _LL_COLS.filter(c => !vis.has(c.k));
-    const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
-    const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
-    const sinEmail = rows.filter(r => !r.email).length, nSel = _llSel.size;
-    const allSel = view.length && view.every(r => _llSel.has(r.cid));
-    const enrN = nSel || rows.length;
+  function _lzHtml(id) {
+    const s = _sequences.find(x => x.id === id) || {}, steps = _seqSteps(id), rows = _llRows(id), launched = (s.estado || 'draft') !== 'draft';
+    const states = steps.length ? _stepStates(steps) : [];
+    const acc = (_li.accs || []).find(a => a.outbound_client_id === s.outbound_client_id) || null;
+    const all = _llFiltered(id, rows).map(r => Object.assign({}, r, { prob: _lzProblemas(r, steps) }));
+    const val = all.filter(r => r.prob.length), cur = all.filter(r => !r.prob.length);
+    const list = _lzTab === 'validar' ? val : cur, nSel = _llSel.size;
     const loading = !Array.isArray(_seqContacts);
-    const chips = _llF.map((f, i) => { const d = _LL_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts(id) : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : `contiene «${f.q}»`; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
-    return `<div class="ll">
-      ${sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
-      <div class="ll__bar">
-        <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
-        <button class="ll-btn${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
-        <span class="sp"></span>
-        <button class="ll-ico" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
-        <button class="ll-ico" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
-        <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
-      </div>
-      ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
-      ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
-      <div class="ll__tbl"><table class="ll-t"><thead><tr>
-        <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
-        ${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}
-        <th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead>
-        <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>
-      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
+    const card = r => { const nm = [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || '—', ini = nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(), est = _LL_EST[r.estado] || _LL_EST.pendiente;
+      return `<div class="lz-card${_llSel.has(r.cid) ? ' is-sel' : ''}" onclick="LeadManagerModule.openContactPage(${r.cid})"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"><span class="lz-card__av" style="background:${_llAvColor(nm)}">${esc(ini)}</span>
+        <div class="lz-card__b"><div class="lz-card__n"><b>${esc(nm)}</b>${r.linkedin ? `<a class="lz-li" href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir LinkedIn">in</a>` : ''}</div>
+          <div class="lz-card__s">${esc([r.cargo, r.empresa].filter(Boolean).join(' · '))}</div>
+          ${r.prob.length ? `<div class="lz-card__p">${!r.email ? `<button class="ll-find" onclick="event.stopPropagation();LeadManagerModule.llFindEmail(${r.cid})">ENCONTRAR EMAIL</button>` : ''}${!r.telefono ? `<button class="ll-find" onclick="event.stopPropagation();LeadManagerModule.lzPhone()">ENCONTRAR TELÉFONO</button>` : ''}${r.prob.map(x => `<span class="lz-warn">${esc(x)}</span>`).join('')}</div>` : `<div class="lz-card__st"><span class="ll-pill" style="background:${est[2]};color:${est[1]}">${est[0]}</span><small>Paso ${r.paso}/${r.npasos}</small></div>`}</div>
+        <button class="lz-card__m" onclick="event.stopPropagation();LeadManagerModule.lzCardMenu(event,${r.cid})" title="Más">${_llI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button></div>`; };
+    const left = `<div class="lz-left">
+      <div class="lz-tabs"><button class="${_lzTab === 'validar' ? 'on' : ''}" onclick="LeadManagerModule.lzTab('validar')">Validar${val.length ? ` <i class="ll-n">${val.length}</i>` : ''}</button><button class="${_lzTab !== 'validar' ? 'on' : ''}" onclick="LeadManagerModule.lzTab('curso')">En curso <i class="lz-cn">${cur.length}</i></button></div>
+      ${_lzBanner(id, s)}
+      <div class="lz-lbar"><label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar…" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label><button class="ll-ico${_llF.length ? ' is-on' : ''}" title="Filtros" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 15)}</button><button class="ll-ico" title="Enriquecer y verificar" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button></div>
+      <div class="lz-sel"><label><input type="checkbox" ${list.length && list.every(r => _llSel.has(r.cid)) ? 'checked' : ''} onchange="LeadManagerModule.lzSelAll(this.checked)"> <span>${nSel} prospecto${nSel === 1 ? '' : 's'} seleccionado${nSel === 1 ? '' : 's'}</span></label>${nSel ? `<button onclick="LeadManagerModule.llBulk('verify')" title="Verificar los emails de la selección">${_llI('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>', 15)}</button><button onclick="LeadManagerModule.llSelClear()" title="Quitar la selección">✕</button>` : ''}</div>
+      <div class="lz-list">${loading ? '<div class="ll-empty">Cargando prospectos…</div>' : list.length ? list.slice(0, 200).map(card).join('') : `<div class="ll-empty">${_lzTab === 'validar' ? 'Nada que validar: todos los prospectos tienen lo necesario para esta secuencia.' : 'Aún no hay prospectos en curso.'}</div>`}${list.length > 200 ? `<div class="ll-empty">Mostrando 200 de ${list.length}. Usa la búsqueda o los filtros.</div>` : ''}</div>
     </div>`;
+    const start = `<div class="sed-start lz-start${launched ? ' is-live' : ''}" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia"><div class="sed-start__c"><small>Remitente</small><span class="sed-start__av">${esc((String(_clientName(s.outbound_client_id) || '·').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '·').toUpperCase())}</span></div><div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${_seqTzChip(s) || 'Planificación predeterminada'}</span></div></div>`;
+    const g = _seqProg(id, s, steps);
+    const launchBar = launched ? '' : `<div class="lz-launch"><div><b>${g.p1 && g.p2 ? 'Todo listo para lanzar' : 'Aún falta algo'}</b><small>${g.pasos} paso${g.pasos === 1 ? '' : 's'} · ${g.lista} prospecto${g.lista === 1 ? '' : 's'}${val.length ? ` · ${val.length} por validar` : ''}</small></div><button class="ll-pri" ${g.p1 && g.p2 ? '' : 'disabled'} onclick="LeadManagerModule.lzLaunch()">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 15)} Lanzar secuencia</button></div>`;
+    const right = `<div class="lz-right">${launchBar}<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">${start}<div class="sed-link sed-link--s"></div>${steps.length ? steps.map((st, i) => _lzNode(st, i, steps, rows, states, acc, launched)).join('') : '<div class="ll-empty">Esta secuencia aún no tiene pasos.</div>'}</div>
+      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
+    return `<div class="lz">${left}${right}</div>`;
   }
-  function _llRepaint() { _renderBody(); }
-  function llSearch(v) {
-    _llQ = String(v || '').trim(); _llPage = 0;
-    const el = document.getElementById('ll-q'), pos = el ? el.selectionStart : 0; _llRepaint();
-    const e2 = document.getElementById('ll-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} }
+  function lzTab(t) { _lzTab = t; _renderBody(); }
+  function lzSelAll(on) { const id = _activeSeq, steps = _seqSteps(id), rows = _llFiltered(id, _llRows(id)).map(r => Object.assign({}, r, { prob: _lzProblemas(r, steps) })); (_lzTab === 'validar' ? rows.filter(r => r.prob.length) : rows.filter(r => !r.prob.length)).forEach(r => { if (on) _llSel.add(r.cid); else _llSel.delete(r.cid); }); _renderBody(); }
+  function lzPhone() { showBanner('Buscar teléfonos todavía no está disponible en Nova. Puedes añadirlo a mano en la ficha del prospecto.', 'info'); }
+  function lzEditStep(stId) { _sedSel = stId; _seqStage = 'secuencia'; _renderBody(); }
+  function lzCardMenu(ev, cid) {
+    const id = _activeSeq;
+    _llPop(ev, `${_llMI('', 'Ver ficha', `LeadManagerModule.openContactPage(${cid})`)}${_llMI('', 'Pausar / reanudar', `LeadManagerModule.seqCtPause(${id},${cid})`)}${_llMI('', 'Verificar email', `LeadManagerModule.llFindEmail(${cid})`)}<div class="sed-pop__sep"></div>${_llMI('', 'Quitar de la secuencia', `LeadManagerModule.seqCtRemove(${id},${cid})`)}`, 230, 'right');
   }
-  function llPg(d) { _llPage = Math.max(0, _llPage + d); _llRepaint(); }
-  function llBanner() { _llFBanner = false; _llRepaint(); }
-  function llSelToggle(cid, on) { if (on) _llSel.add(cid); else _llSel.delete(cid); _llRepaint(); }
-  function llSelClear() { _llSel.clear(); _llRepaint(); }
-  function llSelPage(on) {
-    const all = _llFiltered(_activeSeq, _llRows(_activeSeq)), view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
-    view.forEach(r => { if (on) _llSel.add(r.cid); else _llSel.delete(r.cid); }); _llRepaint();
+  async function lzLaunch() {
+    const id = _activeSeq, s = _sequences.find(x => x.id === id); if (!s) return; const g = _seqProg(id, s, _seqSteps(id));
+    if (await novaConfirm({ title: 'Lanzar la secuencia', message: `Se lanza «${esc(s.nombre)}» con ${g.lista} prospecto${g.lista === 1 ? '' : 's'}. Los envíos y tareas empiezan según su configuración.`, confirmText: 'Lanzar' })) seqSetEstado(id, 'activa');
   }
-  // ── Menús ──
-  function _llPop(ev, html, w, align) {
-    ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
-    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop ll-pop'; if (w) m.style.width = w + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
-    document.body.appendChild(m);
-    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
-    m.style.left = Math.max(8, Math.min(align === 'right' ? r.right - mw : r.left, window.innerWidth - mw - 8)) + 'px';
-    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - mh - 8)) + 'px';
-    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
-    return m;
-  }
-  const _llMI = (ic, t, js, o) => `<button class="sed-pop__i${o && o.off ? ' is-off' : ''}" ${o && o.off ? 'disabled' : `onclick="document.getElementById('sed-pop')?.remove();${js}"`}>${ic ? _llI(ic, 15) : ''}<span>${t}</span>${o && o.badge ? `<em>${o.badge}</em>` : ''}${o && o.n != null ? `<i class="ll-cnt">${o.n}</i>` : ''}</button>`;
-  function llAddMenu(ev) {
-    const id = _activeSeq, big = (ic, t, js) => `<button class="ll-card" onclick="document.getElementById('sed-pop')?.remove();${js}">${_llI(ic, 20)}<span>${t}</span></button>`;
-    _llPop(ev, `<div class="ll-cards">${big('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV', "LeadManagerModule.openImport('contacts',true)")}${big('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'CRM', `LeadManagerModule.seqEnrolOpen(${id})`)}${big('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar', "LeadManagerModule.llGoBase()")}</div>
-      <div class="sed-pop__g">Buscando prospectos</div>
-      ${_llMI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', 'Agentes de señales', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 'Buscar en la base de datos de prospectos', "LeadManagerModule.llGoBase()")}
-      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>', 'Extraer de una búsqueda de LinkedIn', '', { off: true, badge: 'Próximamente' })}
-      <div class="sed-pop__g">Importar tus prospectos</div>
-      ${_llMI('<path d="m22 2-7 20-4-9-9-4z"/>', 'De una campaña existente', `LeadManagerModule.llFromSeq()`)}
-      ${_llMI('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'Sincronizar con su CRM', '', { off: true, badge: 'No conectado' })}
-      ${_llMI('<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/>', 'Sincronizar con una lista de contactos', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar archivo CSV', "LeadManagerModule.openImport('contacts',true)")}
-      ${_llMI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', 'Pegue una lista de emails', `LeadManagerModule.llPasteEmails()`)}
-      ${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un prospecto manualmente', `LeadManagerModule.llManual()`)}`, 340, 'right');
-  }
-  function llGoBase() { try { selectModule('cantera'); setTimeout(() => { try { CanteraModule.go ? CanteraModule.go('global') : 0; } catch (_) {} }, 600); } catch (_) {} }
-  function llAiMenu(ev) {
-    _llPop(ev, `${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Escribir con IA para un prospecto', 'LeadManagerModule.llAiOne()')}
-      <div class="sed-pop__sep"></div>
-      ${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('', 'Company context', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('', 'Icebreaker desde la descripción de la empresa', '', { off: true, badge: 'Próximamente' })}`, 300, 'right');
-  }
+  // ═══════════ Lista de prospectos (paso 2): tabla estilo Lemlist con filtros, columnas, enriquecimiento y alta de prospectos ═══════════
+  let _llQ = '', _llF = [], _llSel = new Set(), _llPage = 0, _llDraft = null, _llFBanner = true;
+  const _LL_PAGE = 50;
+  let _lzTab = 'curso';
+  const _LL_COLS = [
+    { k: 'nombre_completo', l: 'Nombre completo', lock: true },
+    { k: 'nombre', l: 'Nombre' }, { k: 'apellido', l: 'Apellido' },
+    { k: 'email', l: 'Dirección de email' }, { k: 'estado', l: 'Estado' }, { k: 'entreg', l: 'Entregabilidad' },
+    { k: 'telefono', l: 'Número de teléfono' }, { k: 'linkedin', l: 'LinkedIn' },
+    { k: 'empresa', l: 'Empresa' }, { k: 'cargo', l: 'Título del puesto' }, { k: 'pais', l: 'País' },
+    { k: 'paso', l: 'Paso' }, { k: 'resultado', l: 'Resultado' }, { k: 'propietario', l: 'Propietario' }, { k: 'incorporado', l: 'Fecha de incorporación' },
+  ];
+  const _LL_DEF = ['nombre_completo', 'email', 'estado', 'empresa', 'cargo', 'paso', 'propietario'];
+  function _llCols() {
+    let v = null; try { v = JSON.parse(localStorage.getItem('lm_ll_cols') || 'null'); } catch (_) {}
+    const set = new Set(Array.isArray(v) ? v : _LL_DEF); set.add('nombre_completo');
+    return set;
+  }
+  function _llSaveCols(set) { try { localStorage.setItem('lm_ll_cols', JSON.stringify([...set])); } catch (_) {} }
+  const _LL_EST = { rebotado: ['Rebotado', '#B42318', '#FEE4E2'], interesado: ['Interesado', '#15803D', '#DCFCE7'], no_interesado: ['No interesado', '#B45309', '#FEF3C7'], respondido: ['Respondido', '#0E7490', '#CFFAFE'], finalizado: ['Finalizado', '#475569', '#E2E8F0'], pausa: ['En pausa', '#B45309', '#FFEDD5'], ejecucion: ['En ejecución', '#1D4ED8', '#DBEAFE'], pendiente: ['Pendiente de lanzar', '#475569', '#F1F5F9'], sinemail: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
+  const _LL_ENT = { valid: ['Entregable', '#15803D', '#DCFCE7'], risky: ['Arriesgado', '#B45309', '#FEF3C7'], 'catch-all': ['Arriesgado', '#B45309', '#FEF3C7'], invalid: ['No entregado', '#B42318', '#FEE4E2'], '': ['No verificado', '#64748B', '#F1F5F9'], none: ['Email no encontrado', '#7C3AED', '#EDE9FE'] };
+  function _llRows(id) {
+    const sq = _sequences.find(x => x.id === id) || {}, launched = (sq.estado || 'draft') !== 'draft';
+    const byId = new Map((_contacts || []).map(c => [c.id, c]));
+    return (Array.isArray(_seqContacts) ? _seqContacts : []).map(e => {
+      const c = byId.get(e.contact_id) || {}, email = e.email || c.email || '', es = c.email_status || '';
+      const disp = e.real_disposition || e.disposition || c.disposition || '';
+      let est = 'pendiente';
+      if (es === 'invalid' || disp === 'rebote') est = 'rebotado';
+      else if (disp === 'interesado') est = 'interesado'; else if (disp === 'no_interesado') est = 'no_interesado';
+      else if (['respondio', 'aceptado', 'reunion', 'mas_adelante'].includes(disp)) est = 'respondido';
+      else if (e.estado === 'terminado') est = 'finalizado'; else if (e.estado === 'pausado') est = 'pausa';
+      else if (!email) est = 'sinemail'; else if (launched) est = 'ejecucion';
+      const entreg = !email ? 'none' : (['valid', 'risky', 'catch-all', 'invalid'].includes(es) ? es : '');
+      const N0 = _seqSteps(id).length;
+      return { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '' };
+    });
+  }
+  const _LL_FDEF = [
+    { k: 'estado', l: 'Estado', t: 'sel', opts: () => Object.entries(_LL_EST).map(([v, a]) => [v, a[0]]) },
+    { k: 'entreg', l: 'Entregabilidad', t: 'sel', opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
+    { k: 'paso', l: 'Paso', t: 'sel', opts: (id) => _seqSteps(id).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
+    { k: 'propietario', l: 'Propietario', t: 'sel', opts: () => [...new Set((_clients || []).map(c => c.nombre))].map(n => [n, n]) },
+    { k: 'nombre', l: 'Nombre', t: 'txt' }, { k: 'apellido', l: 'Apellido', t: 'txt' }, { k: 'email', l: 'Email', t: 'txt' }, { k: 'telefono', l: 'Número de teléfono', t: 'txt' },
+    { k: 'linkedin', l: 'LinkedIn', t: 'txt' }, { k: 'empresa', l: 'Empresa', t: 'txt' }, { k: 'cargo', l: 'Título del puesto', t: 'txt' }, { k: 'pais', l: 'País', t: 'txt' },
+  ];
+  function _llFiltered(id, rows) {
+    const q = _llQ.toLowerCase();
+    return rows.filter(r => {
+      if (q && ![r.nombre, r.apellido, r.email, r.empresa, r.cargo, r.telefono, r.pais].join(' ').toLowerCase().includes(q)) return false;
+      return _llF.every(f => {
+        const v = String(f.k === 'paso' ? r.paso : r[f.k] == null ? '' : r[f.k]);
+        if (f.vals) return f.vals.includes(v);
+        return v.toLowerCase().includes(String(f.q || '').toLowerCase());
+      });
+    });
+  }
+  const _llI = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  function _llAvColor(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; }
+  function _llCell(k, r) {
+    switch (k) {
+      case 'nombre_completo': { const nm = [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || '—'; const ini = nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(); return `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(ini)}</span><b>${esc(nm)}</b></div>`; }
+      case 'email': return r.email ? `<span class="ll-mail">${esc(r.email)}</span>` : `<button class="ll-find" onclick="event.stopPropagation();LeadManagerModule.llFindEmail(${r.cid})">ENCONTRAR EMAIL</button>`;
+      case 'estado': { const a = _LL_EST[r.estado] || _LL_EST.pendiente; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
+      case 'entreg': { const a = _LL_ENT[r.entreg] || _LL_ENT['']; return `<span class="ll-pill" style="background:${a[2]};color:${a[1]}">${a[0]}</span>`; }
+      case 'paso': return r.npasos ? `Paso ${r.paso}/${r.npasos}` : '—';
+      case 'resultado': return r.resultado ? _dispoBadge(r.resultado) : '<span class="ll-dim">—</span>';
+      case 'linkedin': return r.linkedin ? `<a href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(r.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '<span class="ll-dim">—</span>';
+      case 'incorporado': return r.incorporado ? new Date(r.incorporado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+      default: return r[k] ? esc(r[k]) : '<span class="ll-dim">—</span>';
+    }
+  }
+  function _llHtml(id) {
+    const rows = _llRows(id), all = _llFiltered(id, rows), vis = _llCols();
+    const cols = _LL_COLS.filter(c => vis.has(c.k)), hidden = _LL_COLS.filter(c => !vis.has(c.k));
+    const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
+    const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
+    const sinEmail = rows.filter(r => !r.email).length, nSel = _llSel.size;
+    const allSel = view.length && view.every(r => _llSel.has(r.cid));
+    const enrN = nSel || rows.length;
+    const loading = !Array.isArray(_seqContacts);
+    const chips = _llF.map((f, i) => { const d = _LL_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts(id) : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : `contiene «${f.q}»`; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
+    return `<div class="ll">
+      ${sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
+      <div class="ll__bar">
+        <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
+        <button class="ll-btn${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
+        <span class="sp"></span>
+        <button class="ll-ico" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
+        <button class="ll-ico" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-btn" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
+      </div>
+      ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
+      ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
+      <div class="ll__tbl"><table class="ll-t"><thead><tr>
+        <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
+        ${cols.map(c => `<th>${esc(c.l)}</th>`).join('')}
+        <th class="ll-add"><button onclick="LeadManagerModule.llColAdd(event)">+ Añadir</button></th></tr></thead>
+        <tbody>${loading ? `<tr><td colspan="${cols.length + 2}" class="ll-empty">Cargando prospectos…</td></tr>` : view.length ? view.map(r => `<tr onclick="LeadManagerModule.openContactPage(${r.cid})"><td class="ll-ck" onclick="event.stopPropagation()"><input type="checkbox" ${_llSel.has(r.cid) ? 'checked' : ''} onchange="LeadManagerModule.llSelToggle(${r.cid},this.checked)"></td>${cols.map(c => `<td>${_llCell(c.k, r)}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${cols.length + 2}" class="ll-empty">${rows.length ? 'Ningún prospecto coincide con la búsqueda o los filtros.' : `<b>Aún no hay prospectos</b><br>Pulsa «Añadir prospectos» para importar un CSV, pegar emails o elegirlos de tu CRM.`}</td></tr>`}</tbody></table></div>
+      <div class="ll__foot"><span><b>${all.length ? _llPage * _LL_PAGE + 1 : 0} - ${Math.min((_llPage + 1) * _LL_PAGE, all.length)}</b> de ${all.length}${all.length !== rows.length ? ` (${rows.length} en total)` : ''}</span><span class="sp"></span><button ${_llPage <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(-1)">‹</button><button ${_llPage >= pages - 1 ? 'disabled' : ''} onclick="LeadManagerModule.llPg(1)">›</button></div>
+    </div>`;
+  }
+  function _llRepaint() { _renderBody(); }
+  function llSearch(v) {
+    _llQ = String(v || '').trim(); _llPage = 0;
+    const el = document.getElementById('ll-q'), pos = el ? el.selectionStart : 0; _llRepaint();
+    const e2 = document.getElementById('ll-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} }
+  }
+  function llPg(d) { _llPage = Math.max(0, _llPage + d); _llRepaint(); }
+  function llBanner() { _llFBanner = false; _llRepaint(); }
+  function llSelToggle(cid, on) { if (on) _llSel.add(cid); else _llSel.delete(cid); _llRepaint(); }
+  function llSelClear() { _llSel.clear(); _llRepaint(); }
+  function llSelPage(on) {
+    const all = _llFiltered(_activeSeq, _llRows(_activeSeq)), view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
+    view.forEach(r => { if (on) _llSel.add(r.cid); else _llSel.delete(r.cid); }); _llRepaint();
+  }
+  // ── Menús ──
+  function _llPop(ev, html, w, align) {
+    ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
+    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop ll-pop'; if (w) m.style.width = w + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
+    document.body.appendChild(m);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(align === 'right' ? r.right - mw : r.left, window.innerWidth - mw - 8)) + 'px';
+    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - mh - 8)) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+    return m;
+  }
+  const _llMI = (ic, t, js, o) => `<button class="sed-pop__i${o && o.off ? ' is-off' : ''}" ${o && o.off ? 'disabled' : `onclick="document.getElementById('sed-pop')?.remove();${js}"`}>${ic ? _llI(ic, 15) : ''}<span>${t}</span>${o && o.badge ? `<em>${o.badge}</em>` : ''}${o && o.n != null ? `<i class="ll-cnt">${o.n}</i>` : ''}</button>`;
+  function llAddMenu(ev) {
+    const id = _activeSeq, big = (ic, t, js) => `<button class="ll-card" onclick="document.getElementById('sed-pop')?.remove();${js}">${_llI(ic, 20)}<span>${t}</span></button>`;
+    _llPop(ev, `<div class="ll-cards">${big('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV', "LeadManagerModule.openImport('contacts',true)")}${big('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'CRM', `LeadManagerModule.seqEnrolOpen(${id})`)}${big('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar', "LeadManagerModule.llGoBase()")}</div>
+      <div class="sed-pop__g">Buscando prospectos</div>
+      ${_llMI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', 'Agentes de señales', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 'Buscar en la base de datos de prospectos', "LeadManagerModule.llGoBase()")}
+      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>', 'Extraer de una búsqueda de LinkedIn', '', { off: true, badge: 'Próximamente' })}
+      <div class="sed-pop__g">Importar tus prospectos</div>
+      ${_llMI('<path d="m22 2-7 20-4-9-9-4z"/>', 'De una campaña existente', `LeadManagerModule.llFromSeq()`)}
+      ${_llMI('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'Sincronizar con su CRM', '', { off: true, badge: 'No conectado' })}
+      ${_llMI('<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/>', 'Sincronizar con una lista de contactos', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar archivo CSV', "LeadManagerModule.openImport('contacts',true)")}
+      ${_llMI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', 'Pegue una lista de emails', `LeadManagerModule.llPasteEmails()`)}
+      ${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un prospecto manualmente', `LeadManagerModule.llManual()`)}`, 340, 'right');
+  }
+  function llGoBase() { try { selectModule('cantera'); setTimeout(() => { try { CanteraModule.go ? CanteraModule.go('global') : 0; } catch (_) {} }, 600); } catch (_) {} }
+  function llAiMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Escribir con IA para un prospecto', 'LeadManagerModule.llAiOne()')}
+      <div class="sed-pop__sep"></div>
+      ${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('', 'Company context', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('', 'Icebreaker desde la descripción de la empresa', '', { off: true, badge: 'Próximamente' })}`, 300, 'right');
+  }
   function llCleanMenu(ev) {
     const ids = _llIds('all');
     if (!ids.length) { showBanner('Aún no hay prospectos para limpiar.', 'info'); return; }
     _dgEntity = 'contacts'; _dgSel = new Set(ids);
     dgCleanMenu(ev);
   }
-  function llAiOne() {
-    const id = _activeSeq, rows = _llRows(id), pick = _llSel.size ? rows.find(r => _llSel.has(r.cid)) : rows[0];
-    if (!pick) { showBanner('Añade o selecciona un prospecto primero.', 'info'); return; }
-    openAiDrafts(pick.cid, id);
-  }
-  function _llIds(kind) {
-    const rows = _llRows(_activeSeq), base = _llSel.size ? rows.filter(r => _llSel.has(r.cid)) : rows;
-    return base.filter(r => kind === 'find' ? !r.email : kind === 'verify' ? !!r.email && !['valid', 'invalid'].includes(r.c.email_status || '') : true).map(r => r.cid);
-  }
-  function llEnrichMenu(ev) {
-    const nFind = _llIds('find').length, nVer = _llIds('verify').length;
-    _llPop(ev, `${_llMI('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', 'Encontrar números de teléfono', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>', 'Encontrar emails verificados', "LeadManagerModule.llEnrich('find')", { n: nFind })}
-      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/>', 'Encontrar perfiles de LinkedIn y enriquecer', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>', 'Verificar los emails principales', "LeadManagerModule.llEnrich('verify')", { n: nVer })}
-      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Usar IA', 'LeadManagerModule.llAiOne()')}
-      ${_llMI('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 'Estadísticas de enriquecimiento', 'LeadManagerModule.llStats()')}`, 360, 'right');
-  }
-  async function llEnrich(kind) {
-    const ids = _llIds(kind);
-    if (!ids.length) { showBanner(kind === 'find' ? 'Todos los prospectos ya tienen email.' : 'No hay emails por verificar.', 'info'); return; }
-    try {
-      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(0, 500) }) });
-      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
-      showBanner(`${d.queued} prospecto${d.queued === 1 ? '' : 's'} en cola: Nova ${kind === 'find' ? 'busca y verifica' : 'verifica'} los emails. Los resultados aparecen solos en unos minutos.`, 'success');
-      [15000, 45000, 120000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
-    } catch (e) { showBanner('No se pudo enviar: ' + e.message, 'error'); }
-  }
-  async function llFindEmail(cid) {
-    try {
-      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [cid] }) });
-      if (!r.ok) throw new Error((await r.json()).error || 'Error');
-      showBanner('Buscando el email de este prospecto… aparecerá en la tabla en cuanto Nova lo encuentre.', 'success');
-      [12000, 40000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
-    } catch (e) { showBanner('No se pudo buscar: ' + e.message, 'error'); }
-  }
-  function llStats() {
-    const rows = _llRows(_activeSeq), n = rows.length, c = k => rows.filter(r => r.entreg === k).length;
-    const bar = (l, v, col) => `<div class="ll-st"><span>${l}</span><div><i style="width:${n ? Math.round(v / n * 100) : 0}%;background:${col}"></i></div><b>${v}</b></div>`;
-    _llModal('Estadísticas de enriquecimiento', `<p class="ll-m__p">${n} prospecto${n === 1 ? '' : 's'} en la lista.</p>${bar('Entregable', c('valid'), '#16A34A')}${bar('Arriesgado', c('risky') + c('catch-all'), '#F59E0B')}${bar('No entregado', c('invalid'), '#DC2626')}${bar('No verificado', c(''), '#94A3B8')}${bar('Email no encontrado', c('none'), '#8B5CF6')}`, '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cerrar</button>');
-  }
-  function _llModal(title, body, foot, wide) {
-    document.getElementById('ll-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'll-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="ll-m" ${wide ? `style="width:${wide}px"` : ''}><div class="ll-m__hd"><b>${title}</b><button onclick="LeadManagerModule.llModalClose()">✕</button></div><div class="ll-m__bd">${body}</div>${foot ? `<div class="ll-m__ft">${foot}</div>` : ''}</div>`;
-    document.body.appendChild(m); return m;
-  }
-  function llModalClose() { document.getElementById('ll-modal')?.remove(); }
-  // ── Ajustes de la tabla ──
-  let _llColDraft = null, _llColQ = '';
-  function llColsOpen() { _llColDraft = new Set(_llCols()); _llColQ = ''; _llColsPaint(); }
-  function _llColsPaint() {
-    const q = _llColQ.toLowerCase(), list = _LL_COLS.filter(c => !q || c.l.toLowerCase().includes(q));
-    const body = `<div class="ll-cs__top"><span>Columnas <i class="ll-n">${_llColDraft.size} / ${_LL_COLS.length}</i></span><span class="sp"></span><button onclick="LeadManagerModule.llColsAll(true)">${_llI('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 14)} Mostrar todo</button><button onclick="LeadManagerModule.llColsAll(false)">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/>', 14)} Ocultar todo</button></div>
-      <label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
-      <div class="ll-cs__l">${list.map(c => `<label class="ll-cs__r${c.lock ? ' is-lock' : ''}"><input type="checkbox" ${_llColDraft.has(c.k) ? 'checked' : ''} ${c.lock ? 'disabled' : ''} onchange="LeadManagerModule.llColsTick('${c.k}',this.checked)"><span>${esc(c.l)}</span>${c.lock ? _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 13) : ''}</label>`).join('')}</div>`;
-    const foot = `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
-    const had = document.getElementById('ll-modal'); if (had) { had.querySelector('.ll-m__bd').innerHTML = body; } else _llModal('Ajustes de la tabla', body, foot, 460);
-  }
-  function llColsQ(v) { _llColQ = v; const pos = v.length; _llColsPaint(); const e = document.getElementById('ll-cq'); if (e) { e.focus(); e.setSelectionRange(pos, pos); } }
-  function llColsTick(k, on) { if (on) _llColDraft.add(k); else _llColDraft.delete(k); _llColsPaint(); }
-  function llColsAll(on) { _llColDraft = on ? new Set(_LL_COLS.map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
-  function llColsSave() { _llSaveCols(_llColDraft); llModalClose(); _llRepaint(); }
-  function llColAdd(ev) {
-    const vis = _llCols(), hid = _LL_COLS.filter(c => !vis.has(c.k));
-    _llPop(ev, `${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna personalizada', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
-      <div class="sed-pop__g">COLUMNAS OCULTAS</div>
-      ${hid.length ? hid.map(c => `<button class="sed-pop__i" onclick="document.getElementById('sed-pop')?.remove();LeadManagerModule.llColShow('${c.k}')">${esc(c.l)}</button>`).join('') : '<div class="sed-pop__note">Todas las columnas están visibles.</div>'}
-      <div class="sed-pop__sep"></div>${_llMI('', 'Ajustes de la tabla…', 'LeadManagerModule.llColsOpen()')}`, 280, 'right');
-  }
-  function llColShow(k) { const set = _llCols(); set.add(k); _llSaveCols(set); _llRepaint(); }
-  // ── Filtros ──
-  function llFilterOpen(ev, key) {
-    if (ev.stopPropagation) ev.stopPropagation();
-    const f0 = key ? _llF.find(f => f.k === key) : null;
-    const first = key || (_LL_FDEF[0] || {}).k;
-    _llDraft = f0 ? JSON.parse(JSON.stringify(f0)) : { k: first, vals: _LL_FDEF.find(x => x.k === first).t === 'sel' ? [] : undefined, q: '' };
-    window.__llAnchor = ev.currentTarget;
-    _llFilterPaint(true);
-  }
-  function _llFilterPaint(first) {
-    const id = _activeSeq, rows = _llRows(id), d = _LL_FDEF.find(x => x.k === _llDraft.k), q = (window.__llColQ || '').toLowerCase();
-    const left = _LL_FDEF.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${x.k}')">${esc(x.l)}</button>`).join('');
-    let right = '';
-    if (d.t === 'sel') {
-      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.k === 'paso' ? r.paso : r[d.k]) === v).length, vals = _llDraft.vals || [];
-      right = `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length && opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('');
-    } else right = `<div class="ll-fp__t"><small>Contiene</small><input id="ll-ft" value="${esc(_llDraft.q || '')}" placeholder="Valor…" autocomplete="off" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()"></div>`;
-    const html = `<div class="ll-fp"><div class="ll-fp__l"><label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 14)}<input placeholder="Buscar una columna" value="${esc(window.__llColQ || '')}" oninput="window.__llColQ=this.value;LeadManagerModule.llFilterColSearch()" autocomplete="off"></label><div class="ll-fp__cl">${left}</div></div><div class="ll-fp__r"><div class="ll-fp__vl">${right}</div><div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llFilterApply()">Aplicar</button></div></div></div>`;
-    const m = document.getElementById('sed-pop');
-    if (!first && m) { m.innerHTML = html; return; }
-    document.getElementById('sed-pop')?.remove();
-    const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = '600px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
-    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 620)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
-    setTimeout(() => document.addEventListener('click', function f() { pop.remove(); document.removeEventListener('click', f); }), 0);
-  }
-  function llFilterColSearch() { const el = document.querySelector('#sed-pop .ll-fp__l input'); const pos = el ? el.selectionStart : 0; _llFilterPaint(false); const e2 = document.querySelector('#sed-pop .ll-fp__l input'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
-  function llFilterCol(k) { const ex = _llF.find(f => f.k === k), d = _LL_FDEF.find(x => x.k === k); _llDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' }; _llFilterPaint(false); }
-  function llFilterTick(v, on) { const a = new Set(_llDraft.vals || []); if (on) a.add(v); else a.delete(v); _llDraft.vals = [...a]; _llFilterPaint(false); }
-  function llFilterAll(on) { const d = _LL_FDEF.find(x => x.k === _llDraft.k); _llDraft.vals = on ? d.opts(_activeSeq).map(o => o[0]) : []; _llFilterPaint(false); }
-  function llFilterQ(v) { _llDraft.q = v; }
-  function llFilterApply() {
-    const d = _LL_FDEF.find(x => x.k === _llDraft.k); document.getElementById('sed-pop')?.remove();
-    _llF = _llF.filter(f => f.k !== _llDraft.k);
-    if (d.t === 'sel' ? (_llDraft.vals || []).length : String(_llDraft.q || '').trim()) _llF.push(d.t === 'sel' ? { k: d.k, vals: _llDraft.vals } : { k: d.k, q: String(_llDraft.q).trim() });
-    _llPage = 0; _llRepaint();
-  }
-  function llFilterDel(i) { _llF.splice(i, 1); _llRepaint(); }
-  function llFilterClear() { _llF = []; _llRepaint(); }
-  // ── Acciones en bloque ──
-  async function llBulk(kind) {
-    const id = _activeSeq, ids = [..._llSel]; if (!ids.length) return;
-    if (kind === 'verify') { await llEnrich('verify'); return; }
-    if (kind === 'remove' && !(await novaConfirm({ title: 'Quitar de la secuencia', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia. Siguen en tu CRM.`, confirmText: 'Quitar' }))) return;
-    let ok = 0;
-    for (const cid of ids) {
-      try {
-        const r = kind === 'remove' ? await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }) : await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: kind === 'pause' ? 'pausado' : 'activo' }) });
-        if (r.ok) ok++;
-      } catch (_) {}
-    }
-    _llSel.clear(); _seqContacts = null; await _seqLoadContacts(id);
-    showBanner(`${ok} de ${ids.length} prospecto${ids.length === 1 ? '' : 's'}: ${kind === 'remove' ? 'quitados' : kind === 'pause' ? 'pausados' : 'reanudados'}`, ok ? 'success' : 'error');
-  }
-  // ── Historial de altas ──
-  function llHistory() {
-    const rows = _llRows(_activeSeq), g = new Map();
-    rows.forEach(r => { const d = r.incorporado ? String(r.incorporado).slice(0, 10) : '—'; if (!g.has(d)) g.set(d, []); g.get(d).push(r.cid); });
-    const list = [...g.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-    const body = list.length ? `<table class="ll-ht"><thead><tr><th>Método</th><th>Fecha</th><th>Información</th><th></th></tr></thead><tbody>${list.map(([d, ids]) => `<tr><td>Alta en la secuencia</td><td>${d === '—' ? '—' : new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td><td>${ids.length} prospecto${ids.length === 1 ? '' : 's'} añadido${ids.length === 1 ? '' : 's'}</td><td><button class="ll-ico" title="Quitar este grupo de la secuencia" onclick="LeadManagerModule.llHistDel('${d}')">${_llI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>', 15)}</button></td></tr>`).join('')}</tbody></table>` : '<p class="ll-m__p">Aún no se añadió ningún prospecto.</p>';
-    _llModal('Historial de altas', body, '', 720);
-  }
-  async function llHistDel(d) {
-    const id = _activeSeq, ids = _llRows(id).filter(r => (r.incorporado ? String(r.incorporado).slice(0, 10) : '—') === d).map(r => r.cid);
-    if (!ids.length || !(await novaConfirm({ title: 'Quitar este grupo', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia (siguen en tu CRM).`, confirmText: 'Quitar' }))) return;
-    for (const cid of ids) { try { await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }); } catch (_) {} }
-    llModalClose(); _seqContacts = null; await _seqLoadContacts(id); showBanner('Grupo quitado de la secuencia', 'success');
-  }
-  // ── Alta de prospectos ──
-  async function _llAddIds(ids) {
-    const id = _activeSeq;
-    const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, sequence_id: id }) });
-    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error');
-    _seqContacts = null; await load(); await _seqLoadContacts(id); return d;
-  }
-  async function llFromSeq() {
-    const id = _activeSeq, list = (_sequences || []).filter(x => x.id !== id).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    _llModal('Importar de una campaña existente', `<p class="ll-m__p">Elige una secuencia: se añaden sus prospectos a esta (los que ya estén se omiten).</p><div class="ll-pick">${list.map(x => `<button onclick="LeadManagerModule.llFromSeqGo(${x.id})"><b>${esc(x.nombre)}</b><small>${esc(_clientName(x.outbound_client_id) || '')}</small></button>`).join('') || '<p class="ll-m__p">No hay otras secuencias.</p>'}</div>`, '', 520);
-  }
-  async function llFromSeqGo(srcId) {
-    try {
-      const r = await apiFetch(`${API}/lm/sequences/${srcId}/contacts`); const arr = r.ok ? await r.json() : [];
-      const ids = [...new Set(arr.map(e => e.contact_id).filter(Boolean))];
-      if (!ids.length) { showBanner('Esa secuencia no tiene prospectos.', 'info'); return; }
-      const d = await _llAddIds(ids); llModalClose(); showBanner(`${d.added != null ? d.added : ids.length} prospecto${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`, 'success');
-    } catch (e) { showBanner('No se pudo importar: ' + e.message, 'error'); }
-  }
-  function llPasteEmails() {
-    _llModal('Pegar una lista de emails', `<p class="ll-m__p">Un email por línea (o separados por comas). Se añaden los que ya existen en tu CRM; de los demás te avisamos.</p><textarea id="ll-paste" class="ll-ta" rows="8" placeholder="ana@empresa.com&#10;luis@otra.com"></textarea>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llPasteGo()">Añadir</button>`, 520);
-    setTimeout(() => document.getElementById('ll-paste')?.focus(), 40);
-  }
-  async function llPasteGo() {
-    const txt = (document.getElementById('ll-paste') || {}).value || '', mails = [...new Set((txt.match(/[^\s,;<>"']+@[^\s,;<>"']+\.[^\s,;<>"']+/g) || []).map(x => x.toLowerCase()))];
-    if (!mails.length) { showBanner('No encontré ningún email válido.', 'info'); return; }
-    const by = new Map((_contacts || []).map(c => [String(c.email || '').toLowerCase(), c]));
-    const ids = mails.map(m => (by.get(m) || {}).id).filter(Boolean), missing = mails.filter(m => !by.has(m));
-    try {
-      let msg = '';
-      if (ids.length) { const d = await _llAddIds(ids); msg = `${d.added != null ? d.added : ids.length} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`; }
-      llModalClose();
-      if (missing.length) { _llModal('Algunos emails no están en tu CRM', `<p class="ll-m__p">${msg ? msg + '. ' : ''}${missing.length} email${missing.length === 1 ? ' no está' : 's no están'} en tu CRM. Impórtalos primero (CSV) o añádelos uno a uno:</p><pre class="ll-pre">${esc(missing.join('\n'))}</pre>`, `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llModalClose()">Entendido</button>`, 520); }
-      else showBanner(msg || 'Listo', 'success');
-    } catch (e) { showBanner('No se pudo añadir: ' + e.message, 'error'); }
-  }
-  function llManual() {
-    const f = (k, l, ph) => `<label class="ll-f"><span>${l}</span><input id="llm-${k}" placeholder="${ph || ''}" autocomplete="off"></label>`;
-    _llModal('Añadir un prospecto manualmente', `<div class="ll-fg">${f('nombre', 'Nombre')}${f('apellido', 'Apellido')}${f('email', 'Email', 'nombre@empresa.com')}${f('empresa_nombre', 'Empresa')}${f('cargo', 'Título del puesto')}${f('linkedin', 'LinkedIn', 'linkedin.com/in/…')}</div><p class="ll-m__p" id="llm-err" style="color:#B42318"></p>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llManualGo()">Añadir a la secuencia</button>`, 520);
-    setTimeout(() => document.getElementById('llm-nombre')?.focus(), 40);
-  }
-  async function llManualGo() {
-    const g = k => ((document.getElementById('llm-' + k) || {}).value || '').trim(), id = _activeSeq, sq = _sequences.find(x => x.id === id) || {};
-    const body = { nombre: g('nombre'), apellido: g('apellido'), email: g('email'), empresa_nombre: g('empresa_nombre'), cargo: g('cargo'), linkedin: g('linkedin'), outbound_client_id: sq.outbound_client_id || null, fuente: 'manual' };
-    const err = document.getElementById('llm-err');
-    if (!body.nombre && !body.apellido && !body.email) { if (err) err.textContent = 'Escribe al menos un nombre o un email.'; return; }
-    try {
-      const r = await apiFetch(`${API}/lm/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const c = await r.json(); if (!r.ok) throw new Error(c.error || 'Error');
-      await _llAddIds([c.id]); llModalClose(); showBanner('Prospecto añadido a la secuencia', 'success');
-    } catch (e) { if (err) err.textContent = e.message; }
-  }
+  function llAiOne() {
+    const id = _activeSeq, rows = _llRows(id), pick = _llSel.size ? rows.find(r => _llSel.has(r.cid)) : rows[0];
+    if (!pick) { showBanner('Añade o selecciona un prospecto primero.', 'info'); return; }
+    openAiDrafts(pick.cid, id);
+  }
+  function _llIds(kind) {
+    const rows = _llRows(_activeSeq), base = _llSel.size ? rows.filter(r => _llSel.has(r.cid)) : rows;
+    return base.filter(r => kind === 'find' ? !r.email : kind === 'verify' ? !!r.email && !['valid', 'invalid'].includes(r.c.email_status || '') : true).map(r => r.cid);
+  }
+  function llEnrichMenu(ev) {
+    const nFind = _llIds('find').length, nVer = _llIds('verify').length;
+    _llPop(ev, `${_llMI('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', 'Encontrar números de teléfono', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>', 'Encontrar emails verificados', "LeadManagerModule.llEnrich('find')", { n: nFind })}
+      ${_llMI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/>', 'Encontrar perfiles de LinkedIn y enriquecer', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>', 'Verificar los emails principales', "LeadManagerModule.llEnrich('verify')", { n: nVer })}
+      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Usar IA', 'LeadManagerModule.llAiOne()')}
+      ${_llMI('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 'Estadísticas de enriquecimiento', 'LeadManagerModule.llStats()')}`, 360, 'right');
+  }
+  async function llEnrich(kind) {
+    const ids = _llIds(kind);
+    if (!ids.length) { showBanner(kind === 'find' ? 'Todos los prospectos ya tienen email.' : 'No hay emails por verificar.', 'info'); return; }
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(0, 500) }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      showBanner(`${d.queued} prospecto${d.queued === 1 ? '' : 's'} en cola: Nova ${kind === 'find' ? 'busca y verifica' : 'verifica'} los emails. Los resultados aparecen solos en unos minutos.`, 'success');
+      [15000, 45000, 120000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
+    } catch (e) { showBanner('No se pudo enviar: ' + e.message, 'error'); }
+  }
+  async function llFindEmail(cid) {
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [cid] }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      showBanner('Buscando el email de este prospecto… aparecerá en la tabla en cuanto Nova lo encuentre.', 'success');
+      [12000, 40000].forEach(ms => setTimeout(async () => { if (_section === 'sequence' && _seqStage === 'lista') { await load(); _renderBody(); } }, ms));
+    } catch (e) { showBanner('No se pudo buscar: ' + e.message, 'error'); }
+  }
+  function llStats() {
+    const rows = _llRows(_activeSeq), n = rows.length, c = k => rows.filter(r => r.entreg === k).length;
+    const bar = (l, v, col) => `<div class="ll-st"><span>${l}</span><div><i style="width:${n ? Math.round(v / n * 100) : 0}%;background:${col}"></i></div><b>${v}</b></div>`;
+    _llModal('Estadísticas de enriquecimiento', `<p class="ll-m__p">${n} prospecto${n === 1 ? '' : 's'} en la lista.</p>${bar('Entregable', c('valid'), '#16A34A')}${bar('Arriesgado', c('risky') + c('catch-all'), '#F59E0B')}${bar('No entregado', c('invalid'), '#DC2626')}${bar('No verificado', c(''), '#94A3B8')}${bar('Email no encontrado', c('none'), '#8B5CF6')}`, '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cerrar</button>');
+  }
+  function _llModal(title, body, foot, wide) {
+    document.getElementById('ll-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'll-modal'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="ll-m" ${wide ? `style="width:${wide}px"` : ''}><div class="ll-m__hd"><b>${title}</b><button onclick="LeadManagerModule.llModalClose()">✕</button></div><div class="ll-m__bd">${body}</div>${foot ? `<div class="ll-m__ft">${foot}</div>` : ''}</div>`;
+    document.body.appendChild(m); return m;
+  }
+  function llModalClose() { document.getElementById('ll-modal')?.remove(); }
+  // ── Ajustes de la tabla ──
+  let _llColDraft = null, _llColQ = '';
+  function llColsOpen() { _llColDraft = new Set(_llCols()); _llColQ = ''; _llColsPaint(); }
+  function _llColsPaint() {
+    const q = _llColQ.toLowerCase(), list = _LL_COLS.filter(c => !q || c.l.toLowerCase().includes(q));
+    const body = `<div class="ll-cs__top"><span>Columnas <i class="ll-n">${_llColDraft.size} / ${_LL_COLS.length}</i></span><span class="sp"></span><button onclick="LeadManagerModule.llColsAll(true)">${_llI('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 14)} Mostrar todo</button><button onclick="LeadManagerModule.llColsAll(false)">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/>', 14)} Ocultar todo</button></div>
+      <label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
+      <div class="ll-cs__l">${list.map(c => `<label class="ll-cs__r${c.lock ? ' is-lock' : ''}"><input type="checkbox" ${_llColDraft.has(c.k) ? 'checked' : ''} ${c.lock ? 'disabled' : ''} onchange="LeadManagerModule.llColsTick('${c.k}',this.checked)"><span>${esc(c.l)}</span>${c.lock ? _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 13) : ''}</label>`).join('')}</div>`;
+    const foot = `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
+    const had = document.getElementById('ll-modal'); if (had) { had.querySelector('.ll-m__bd').innerHTML = body; } else _llModal('Ajustes de la tabla', body, foot, 460);
+  }
+  function llColsQ(v) { _llColQ = v; const pos = v.length; _llColsPaint(); const e = document.getElementById('ll-cq'); if (e) { e.focus(); e.setSelectionRange(pos, pos); } }
+  function llColsTick(k, on) { if (on) _llColDraft.add(k); else _llColDraft.delete(k); _llColsPaint(); }
+  function llColsAll(on) { _llColDraft = on ? new Set(_LL_COLS.map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
+  function llColsSave() { _llSaveCols(_llColDraft); llModalClose(); _llRepaint(); }
+  function llColAdd(ev) {
+    const vis = _llCols(), hid = _LL_COLS.filter(c => !vis.has(c.k));
+    _llPop(ev, `${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna personalizada', '', { off: true, badge: 'Próximamente' })}
+      ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
+      <div class="sed-pop__g">COLUMNAS OCULTAS</div>
+      ${hid.length ? hid.map(c => `<button class="sed-pop__i" onclick="document.getElementById('sed-pop')?.remove();LeadManagerModule.llColShow('${c.k}')">${esc(c.l)}</button>`).join('') : '<div class="sed-pop__note">Todas las columnas están visibles.</div>'}
+      <div class="sed-pop__sep"></div>${_llMI('', 'Ajustes de la tabla…', 'LeadManagerModule.llColsOpen()')}`, 280, 'right');
+  }
+  function llColShow(k) { const set = _llCols(); set.add(k); _llSaveCols(set); _llRepaint(); }
+  // ── Filtros ──
+  function llFilterOpen(ev, key) {
+    if (ev.stopPropagation) ev.stopPropagation();
+    const f0 = key ? _llF.find(f => f.k === key) : null;
+    const first = key || (_LL_FDEF[0] || {}).k;
+    _llDraft = f0 ? JSON.parse(JSON.stringify(f0)) : { k: first, vals: _LL_FDEF.find(x => x.k === first).t === 'sel' ? [] : undefined, q: '' };
+    window.__llAnchor = ev.currentTarget;
+    _llFilterPaint(true);
+  }
+  function _llFilterPaint(first) {
+    const id = _activeSeq, rows = _llRows(id), d = _LL_FDEF.find(x => x.k === _llDraft.k), q = (window.__llColQ || '').toLowerCase();
+    const left = _LL_FDEF.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${x.k}')">${esc(x.l)}</button>`).join('');
+    let right = '';
+    if (d.t === 'sel') {
+      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.k === 'paso' ? r.paso : r[d.k]) === v).length, vals = _llDraft.vals || [];
+      right = `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length && opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('');
+    } else right = `<div class="ll-fp__t"><small>Contiene</small><input id="ll-ft" value="${esc(_llDraft.q || '')}" placeholder="Valor…" autocomplete="off" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()"></div>`;
+    const html = `<div class="ll-fp"><div class="ll-fp__l"><label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 14)}<input placeholder="Buscar una columna" value="${esc(window.__llColQ || '')}" oninput="window.__llColQ=this.value;LeadManagerModule.llFilterColSearch()" autocomplete="off"></label><div class="ll-fp__cl">${left}</div></div><div class="ll-fp__r"><div class="ll-fp__vl">${right}</div><div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llFilterApply()">Aplicar</button></div></div></div>`;
+    const m = document.getElementById('sed-pop');
+    if (!first && m) { m.innerHTML = html; return; }
+    document.getElementById('sed-pop')?.remove();
+    const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = '600px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
+    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 620)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { pop.remove(); document.removeEventListener('click', f); }), 0);
+  }
+  function llFilterColSearch() { const el = document.querySelector('#sed-pop .ll-fp__l input'); const pos = el ? el.selectionStart : 0; _llFilterPaint(false); const e2 = document.querySelector('#sed-pop .ll-fp__l input'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
+  function llFilterCol(k) { const ex = _llF.find(f => f.k === k), d = _LL_FDEF.find(x => x.k === k); _llDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' }; _llFilterPaint(false); }
+  function llFilterTick(v, on) { const a = new Set(_llDraft.vals || []); if (on) a.add(v); else a.delete(v); _llDraft.vals = [...a]; _llFilterPaint(false); }
+  function llFilterAll(on) { const d = _LL_FDEF.find(x => x.k === _llDraft.k); _llDraft.vals = on ? d.opts(_activeSeq).map(o => o[0]) : []; _llFilterPaint(false); }
+  function llFilterQ(v) { _llDraft.q = v; }
+  function llFilterApply() {
+    const d = _LL_FDEF.find(x => x.k === _llDraft.k); document.getElementById('sed-pop')?.remove();
+    _llF = _llF.filter(f => f.k !== _llDraft.k);
+    if (d.t === 'sel' ? (_llDraft.vals || []).length : String(_llDraft.q || '').trim()) _llF.push(d.t === 'sel' ? { k: d.k, vals: _llDraft.vals } : { k: d.k, q: String(_llDraft.q).trim() });
+    _llPage = 0; _llRepaint();
+  }
+  function llFilterDel(i) { _llF.splice(i, 1); _llRepaint(); }
+  function llFilterClear() { _llF = []; _llRepaint(); }
+  // ── Acciones en bloque ──
+  async function llBulk(kind) {
+    const id = _activeSeq, ids = [..._llSel]; if (!ids.length) return;
+    if (kind === 'verify') { await llEnrich('verify'); return; }
+    if (kind === 'remove' && !(await novaConfirm({ title: 'Quitar de la secuencia', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia. Siguen en tu CRM.`, confirmText: 'Quitar' }))) return;
+    let ok = 0;
+    for (const cid of ids) {
+      try {
+        const r = kind === 'remove' ? await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }) : await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: kind === 'pause' ? 'pausado' : 'activo' }) });
+        if (r.ok) ok++;
+      } catch (_) {}
+    }
+    _llSel.clear(); _seqContacts = null; await _seqLoadContacts(id);
+    showBanner(`${ok} de ${ids.length} prospecto${ids.length === 1 ? '' : 's'}: ${kind === 'remove' ? 'quitados' : kind === 'pause' ? 'pausados' : 'reanudados'}`, ok ? 'success' : 'error');
+  }
+  // ── Historial de altas ──
+  function llHistory() {
+    const rows = _llRows(_activeSeq), g = new Map();
+    rows.forEach(r => { const d = r.incorporado ? String(r.incorporado).slice(0, 10) : '—'; if (!g.has(d)) g.set(d, []); g.get(d).push(r.cid); });
+    const list = [...g.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    const body = list.length ? `<table class="ll-ht"><thead><tr><th>Método</th><th>Fecha</th><th>Información</th><th></th></tr></thead><tbody>${list.map(([d, ids]) => `<tr><td>Alta en la secuencia</td><td>${d === '—' ? '—' : new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td><td>${ids.length} prospecto${ids.length === 1 ? '' : 's'} añadido${ids.length === 1 ? '' : 's'}</td><td><button class="ll-ico" title="Quitar este grupo de la secuencia" onclick="LeadManagerModule.llHistDel('${d}')">${_llI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>', 15)}</button></td></tr>`).join('')}</tbody></table>` : '<p class="ll-m__p">Aún no se añadió ningún prospecto.</p>';
+    _llModal('Historial de altas', body, '', 720);
+  }
+  async function llHistDel(d) {
+    const id = _activeSeq, ids = _llRows(id).filter(r => (r.incorporado ? String(r.incorporado).slice(0, 10) : '—') === d).map(r => r.cid);
+    if (!ids.length || !(await novaConfirm({ title: 'Quitar este grupo', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia (siguen en tu CRM).`, confirmText: 'Quitar' }))) return;
+    for (const cid of ids) { try { await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }); } catch (_) {} }
+    llModalClose(); _seqContacts = null; await _seqLoadContacts(id); showBanner('Grupo quitado de la secuencia', 'success');
+  }
+  // ── Alta de prospectos ──
+  async function _llAddIds(ids) {
+    const id = _activeSeq;
+    const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, sequence_id: id }) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error');
+    _seqContacts = null; await load(); await _seqLoadContacts(id); return d;
+  }
+  async function llFromSeq() {
+    const id = _activeSeq, list = (_sequences || []).filter(x => x.id !== id).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    _llModal('Importar de una campaña existente', `<p class="ll-m__p">Elige una secuencia: se añaden sus prospectos a esta (los que ya estén se omiten).</p><div class="ll-pick">${list.map(x => `<button onclick="LeadManagerModule.llFromSeqGo(${x.id})"><b>${esc(x.nombre)}</b><small>${esc(_clientName(x.outbound_client_id) || '')}</small></button>`).join('') || '<p class="ll-m__p">No hay otras secuencias.</p>'}</div>`, '', 520);
+  }
+  async function llFromSeqGo(srcId) {
+    try {
+      const r = await apiFetch(`${API}/lm/sequences/${srcId}/contacts`); const arr = r.ok ? await r.json() : [];
+      const ids = [...new Set(arr.map(e => e.contact_id).filter(Boolean))];
+      if (!ids.length) { showBanner('Esa secuencia no tiene prospectos.', 'info'); return; }
+      const d = await _llAddIds(ids); llModalClose(); showBanner(`${d.added != null ? d.added : ids.length} prospecto${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`, 'success');
+    } catch (e) { showBanner('No se pudo importar: ' + e.message, 'error'); }
+  }
+  function llPasteEmails() {
+    _llModal('Pegar una lista de emails', `<p class="ll-m__p">Un email por línea (o separados por comas). Se añaden los que ya existen en tu CRM; de los demás te avisamos.</p><textarea id="ll-paste" class="ll-ta" rows="8" placeholder="ana@empresa.com&#10;luis@otra.com"></textarea>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llPasteGo()">Añadir</button>`, 520);
+    setTimeout(() => document.getElementById('ll-paste')?.focus(), 40);
+  }
+  async function llPasteGo() {
+    const txt = (document.getElementById('ll-paste') || {}).value || '', mails = [...new Set((txt.match(/[^\s,;<>"']+@[^\s,;<>"']+\.[^\s,;<>"']+/g) || []).map(x => x.toLowerCase()))];
+    if (!mails.length) { showBanner('No encontré ningún email válido.', 'info'); return; }
+    const by = new Map((_contacts || []).map(c => [String(c.email || '').toLowerCase(), c]));
+    const ids = mails.map(m => (by.get(m) || {}).id).filter(Boolean), missing = mails.filter(m => !by.has(m));
+    try {
+      let msg = '';
+      if (ids.length) { const d = await _llAddIds(ids); msg = `${d.added != null ? d.added : ids.length} añadido${(d.added != null ? d.added : ids.length) === 1 ? '' : 's'}`; }
+      llModalClose();
+      if (missing.length) { _llModal('Algunos emails no están en tu CRM', `<p class="ll-m__p">${msg ? msg + '. ' : ''}${missing.length} email${missing.length === 1 ? ' no está' : 's no están'} en tu CRM. Impórtalos primero (CSV) o añádelos uno a uno:</p><pre class="ll-pre">${esc(missing.join('\n'))}</pre>`, `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llModalClose()">Entendido</button>`, 520); }
+      else showBanner(msg || 'Listo', 'success');
+    } catch (e) { showBanner('No se pudo añadir: ' + e.message, 'error'); }
+  }
+  function llManual() {
+    const f = (k, l, ph) => `<label class="ll-f"><span>${l}</span><input id="llm-${k}" placeholder="${ph || ''}" autocomplete="off"></label>`;
+    _llModal('Añadir un prospecto manualmente', `<div class="ll-fg">${f('nombre', 'Nombre')}${f('apellido', 'Apellido')}${f('email', 'Email', 'nombre@empresa.com')}${f('empresa_nombre', 'Empresa')}${f('cargo', 'Título del puesto')}${f('linkedin', 'LinkedIn', 'linkedin.com/in/…')}</div><p class="ll-m__p" id="llm-err" style="color:#B42318"></p>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llManualGo()">Añadir a la secuencia</button>`, 520);
+    setTimeout(() => document.getElementById('llm-nombre')?.focus(), 40);
+  }
+  async function llManualGo() {
+    const g = k => ((document.getElementById('llm-' + k) || {}).value || '').trim(), id = _activeSeq, sq = _sequences.find(x => x.id === id) || {};
+    const body = { nombre: g('nombre'), apellido: g('apellido'), email: g('email'), empresa_nombre: g('empresa_nombre'), cargo: g('cargo'), linkedin: g('linkedin'), outbound_client_id: sq.outbound_client_id || null, fuente: 'manual' };
+    const err = document.getElementById('llm-err');
+    if (!body.nombre && !body.apellido && !body.email) { if (err) err.textContent = 'Escribe al menos un nombre o un email.'; return; }
+    try {
+      const r = await apiFetch(`${API}/lm/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const c = await r.json(); if (!r.ok) throw new Error(c.error || 'Error');
+      await _llAddIds([c.id]); llModalClose(); showBanner('Prospecto añadido a la secuencia', 'success');
+    } catch (e) { if (err) err.textContent = e.message; }
+  }
   // ═══════════ Editor de la secuencia (paso 1): vista de flujo estilo Lemlist o lista tradicional, con edición en el panel derecho ═══════════
   let _seqStage = '';
   let _sedView = (() => { try { return localStorage.getItem('lm_sed_view') === 'lista' ? 'lista' : 'flujo'; } catch (_) { return 'flujo'; } })();
@@ -25400,8 +25487,8 @@ const LeadManagerModule = (() => {
       { k: 3, l: 'Lanzar', n: '', ico: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', done: g.launched, locked: !g.launched && !(g.p1 && g.p2) },
       { k: 4, l: 'Rendimiento', n: '', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', done: false, locked: !g.launched },
     ];
-    const active = { 1: _seqStage === 'secuencia', 2: _seqStage === 'lista' || (!_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen), 3: false, 4: !_seqStage && _seqTab === 'metricas' && !_seqPasosOpen };
-    const viewing = _seqStage === 'secuencia' ? 1 : (active[2] ? 2 : active[4] ? 4 : 0);
+    const active = { 1: _seqStage === 'secuencia', 2: _seqStage === 'lista' || (!_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen), 3: _seqStage === 'lanzar', 4: !_seqStage && _seqTab === 'metricas' && !_seqPasosOpen };
+    const viewing = _seqStage === 'secuencia' ? 1 : _seqStage === 'lanzar' ? 3 : (active[2] ? 2 : active[4] ? 4 : 0);
     const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : (viewing ? viewing === x.k : cur === x.k)) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
         ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
     const falta = g.launched ? '' : (!g.p1 ? 'Crea al menos un paso' : !g.p2 ? 'Añade prospectos a la lista' : 'Todo listo para lanzar');
@@ -25439,10 +25526,9 @@ const LeadManagerModule = (() => {
       return;
     }
     if (k === 3) {
-      if (g.launched) { seqTab('tareas'); return; }
-      if (!g.p1) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
-      if (!g.p2) { showBanner('Primero añade prospectos a la lista (paso 2).', 'info'); return; }
-      if (await novaConfirm({ title: 'Lanzar la secuencia', message: `Se lanza «${esc(s.nombre)}» con ${g.lista} prospecto${g.lista === 1 ? '' : 's'}. Los envíos y tareas empiezan según su configuración.`, confirmText: 'Lanzar' })) seqSetEstado(id, 'activa');
+      if (!g.launched && !g.p1) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
+      if (!g.launched && !g.p2) { showBanner('Primero añade prospectos a la lista (paso 2).', 'info'); return; }
+      _seqStage = 'lanzar'; _seqPasosOpen = false; _renderBody();
       return;
     }
     if (k === 4) { if (!g.launched) { showBanner('El rendimiento se desbloquea al lanzar la secuencia (paso 3).', 'info'); return; } seqTab('metricas'); }
@@ -25473,6 +25559,7 @@ const LeadManagerModule = (() => {
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
     if (_seqStage === 'secuencia') { setTimeout(_sedMount, 0); return `${_seqTopbar(id, s, steps)}${_seqEditorHtml(id)}`; }
+    if (_seqStage === 'lanzar') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); if (_li.accs === null) _liLoad(); return `${_seqTopbar(id, s, steps)}${_lzHtml(id)}`; }
     if (_seqStage === 'lista') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); return `${_seqTopbar(id, s, steps)}${_llHtml(id)}`; }
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
@@ -42879,7 +42966,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
