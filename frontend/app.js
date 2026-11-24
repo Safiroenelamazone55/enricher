@@ -25234,7 +25234,7 @@ const LeadManagerModule = (() => {
     }
   }
   function _llHtml(id) {
-    const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), all = isE ? _llCoFilter(emp) : _llFiltered(id, rows), vis = _llCols();
+    const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), fRows = _llFiltered(id, rows), empBase = _llF.length ? _llCompanies(id, fRows).filter(c => !c.cola) : emp, empF = _llCoFilter(empBase), all = isE ? empF : fRows, vis = _llCols();
     const allc = _llAllOrdered(rows), cols = allc.filter(c => vis.has(c.k)), hidden = allc.filter(c => !vis.has(c.k));
     const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
     const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
@@ -25253,7 +25253,7 @@ const LeadManagerModule = (() => {
         <button class="ll-ico ll-hide-e" title="Historial de importación" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <button class="ll-btn ll-hide-e" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <div class="ll-seg" role="tablist"><button class="${!isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('contactos')">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} Contactos <i>${rows.length}</i></button><button class="${isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('empresas')">${_llI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18M3 9h6"/>', 14)} Empresas <i>${emp.length}</i></button></div>
+        <div class="ll-seg" role="tablist"><button class="${!isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('contactos')">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} Contactos <i>${fRows.length}</i></button><button class="${isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('empresas')">${_llI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18M3 9h6"/>', 14)} Empresas <i>${empF.length}</i></button></div>
         <span class="sp"></span>
         <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
       </div>
@@ -40423,7 +40423,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18"/>', 'Añadir una empresa manualmente', 'LeadManagerModule.openCompany()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar empresas (CSV)', "LeadManagerModule.exportCsv('companies')")}`, 330, 'right');
   }
   function cpNav(d) {
-    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(c => c.id), i = ids.indexOf(_contactView), n = ids[i + d];
+    const ids = _cpNavList(), i = ids.indexOf(_contactView), n = ids[i + d];
     if (i < 0 || n == null) return; openContactPage(n);
   }
   function _ctQFBarHtml() {
@@ -40816,7 +40816,21 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // ── Página completa de contacto (estilo Outreach) — Fase 1 ──
   // Al abrir una ficha o cambiar de página, arriba del todo: el que se desplaza es el panel .app-main (y su contenedor), no solo el cuerpo de la sección.
   function _toTop() { const b = $('lm2-body'); if (b) b.scrollTop = 0; const m = document.querySelector('.app-main'); if (m) m.scrollTop = 0; window.scrollTo(0, 0); }
+  let _cpNavIds = null, _coNavIds = null;
+  // Lista por la que se navega con las flechas de la ficha: la de la pantalla desde la que se abrió (ya filtrada), no todos los contactos.
+  function _cpNavList() {
+    if (_cpNavIds && _cpNavIds.includes(_contactView)) return _cpNavIds;
+    return (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(x => x.id);
+  }
+  function _coNavList() {
+    if (_coNavIds && _coNavIds.includes(_companyView)) return _coNavIds;
+    return (_coFilteredIds && _coFilteredIds.length) ? _coFilteredIds : (_companies || []).map(x => x.id);
+  }
   function openContactPage(id, taskCtx) {
+    if (_section !== 'contact-view') {
+      _cpNavIds = null;
+      if (_section === 'sequence' && _activeSeq && _seqStage === 'lista') { try { _cpNavIds = _llFiltered(_activeSeq, _llRows(_activeSeq)).map(r => r.cid); } catch (_) { _cpNavIds = null; } }
+    }
     // Si ya se estaba en otra ficha (navegando entre contactos vía "Anterior/Siguiente"
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
@@ -40949,7 +40963,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     const ini = full.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(x => x.id);
+    const ids = _cpNavList();
     const pos = ids.indexOf(id);
     const nCamp = Array.isArray(c.sequences) ? c.sequences.length : 0;
     const nTar = Array.isArray(_cpActs) ? _cpActs.filter(a => a.estado === 'pendiente').length : null;
@@ -42550,6 +42564,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // lista de Contactos y filtrar a mano.
   // ═══════════════════════════════════════════════════════════════
   function openCompanyPage(id) {
+    if (_section !== 'company-view') {
+      _coNavIds = null;
+      if (_section === 'sequence' && _activeSeq && _seqStage === 'lista') { try { const rws = _llRows(_activeSeq), fr = _llFiltered(_activeSeq, rws), base = _llF.length ? _llCompanies(_activeSeq, fr).filter(c => !c.cola) : _llCompanies(_activeSeq, rws); _coNavIds = _llCoFilter(base).map(c => c.id).filter(x => x != null); } catch (_) { _coNavIds = null; } }
+    }
     if (_section !== 'company-view') { _coFrom = _CP_FROM_LABEL[_section] ? _section : 'companies'; _coFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
     _companyView = id; _section = 'company-view'; _renderBody(); _toTop();
   }
@@ -42569,7 +42587,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   let _coTab = 'resumen';
   function coTab(t) { _coTab = t; _renderBody(); const b = document.querySelector('.cpm-body'); if (b) b.scrollTop = 0; }
   function coNav(d) {
-    const ids = (_coFilteredIds && _coFilteredIds.length) ? _coFilteredIds : (_companies || []).map(x => x.id), i = ids.indexOf(_companyView), n = ids[i + d];
+    const ids = _coNavList(), i = ids.indexOf(_companyView), n = ids[i + d];
     if (i < 0 || n == null) return; _companyView = n; _renderBody();
   }
   // Guardado en línea de la ficha de empresa (al salir del campo). Reenvía todos los campos para no borrar los que no se tocan.
@@ -42628,7 +42646,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <td class="client-meta">${k.email ? esc(k.email) : '—'}</td>
       </tr>`;
     }).join('');
-    const ids = (_coFilteredIds && _coFilteredIds.length) ? _coFilteredIds : (_companies || []).map(x => x.id);
+    const ids = _coNavList();
     const pos = ids.indexOf(id);
     const cliId = _coClienteId(id), cli = cliId ? (_clients || []).find(x => x.id === cliId) : null;
     const cliName = cli ? (cli.nombre || cli.empresa || '') : '';
