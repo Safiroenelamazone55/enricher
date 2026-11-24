@@ -22246,3 +22246,10 @@ body.ibx-lb-open{overflow:hidden}
 .cpm-dr { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid #E6E6E6; border-radius: 10px; background: #fff; color: #55657D; }
 .cpm-dr input { border: none; outline: none; background: transparent; font-family: inherit; font-size: 13px; color: #213856; width: 108px; }
 .cpm-ib.is-on { border-color: #2F6BFF; color: #2F6BFF; }
+
+.cpm-av--sq { border-radius: 9px; }
+.cpm-av--sm { width: 28px; height: 28px; font-size: 12px; }
+.cpm-ctr { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-radius: 8px; cursor: pointer; }
+.cpm-ctr:hover { background: #F4F6F8; }
+.cpm-ctr b { display: block; font-size: 14px; color: #213856; font-weight: 500; } .cpm-ctr span:not(.cpm-av) { font-size: 13px; color: #98A1AC; }
+#lm-co-page .cpm-res > .cpm-two { align-items: start; }

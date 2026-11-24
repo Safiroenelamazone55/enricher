@@ -42320,7 +42320,40 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     return `<div class="cp-f cp-f--full"><span class="cp-f__l">${label}</span><div class="cp-clamp${long ? ' cp-clamp--on' : ''}" style="white-space:pre-wrap;word-break:break-word">${esc(text)}</div>${long ? `<button type="button" class="cp-more" onclick="var d=this.previousElementSibling;d.classList.toggle('cp-clamp--on');this.textContent=d.classList.contains('cp-clamp--on')?'Ver más ▾':'Ver menos ▴'">Ver más ▾</button>` : ''}</div>`;
   }
   let _coTab = 'resumen';
-  function coTab(t) { _coTab = t; _renderBody(); }
+  function coTab(t) { _coTab = t; _renderBody(); const b = document.querySelector('.cpm-body'); if (b) b.scrollTop = 0; }
+  function coNav(d) {
+    const ids = (_coFilteredIds && _coFilteredIds.length) ? _coFilteredIds : (_companies || []).map(x => x.id), i = ids.indexOf(_companyView), n = ids[i + d];
+    if (i < 0 || n == null) return; _companyView = n; _renderBody();
+  }
+  // Guardado en línea de la ficha de empresa (al salir del campo). Reenvía todos los campos para no borrar los que no se tocan.
+  async function coSave(id) {
+    const page = document.getElementById('lm-co-page'); const c = (_companies || []).find(x => x.id === id); if (!page || !c) return;
+    const keys = ['nombre', 'dominio', 'website', 'industria', 'tamano', 'ingresos', 'telefono', 'linkedin', 'linkedin_sales_nav', 'ciudad', 'region', 'pais', 'fundada', 'direccion', 'codigo_postal', 'descripcion', 'tecnologias', 'funding', 'target_tier', 'segmento', 'analisis', 'notas'];
+    const payload = {}; keys.forEach(k => { payload[k] = c[k] == null ? '' : c[k]; });
+    try { (_lmActiveCustomFields('company') || []).forEach(f => { payload[f.field_key] = c[f.field_key] == null ? '' : c[f.field_key]; }); } catch (_) {}
+    page.querySelectorAll('[data-cof]').forEach(el => { payload[el.dataset.cof] = el.value.trim(); });
+    if (!payload.nombre && !payload.dominio) { showBanner('La empresa necesita nombre o dominio', 'error'); return; }
+    const before = {}; keys.forEach(k => { before[k] = c[k] == null ? '' : c[k]; });
+    try {
+      const res = await apiFetch(`${API}/lm/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      Object.assign(c, payload);
+      if (keys.some(k => String(before[k]) !== String(payload[k]))) { _coUndo.push({ id, before, after: payload }); if (_coUndo.length > 30) _coUndo.shift(); _coRedo = []; showBanner('✓ Guardado · Ctrl+Z para deshacer', 'success'); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function coMenu(ev, id) {
+    const I = d => _llI(d, 15);
+    _llPop(ev, `${_llMI(I('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'), 'Editar todos los campos', `LeadManagerModule.openCompany(${id})`)}
+      ${_llMI(I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>'), 'Añadir prospecto', `LeadManagerModule.openContact(null,${id})`)}
+      <div class="sed-pop__sep"></div>
+      ${_llMI(I('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'), 'Eliminar empresa', `LeadManagerModule.deleteCompany(${id},1)`)}`, 250, 'left');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || _section !== 'company-view') return;
+    if ([...document.querySelectorAll('.fin-pi-backdrop, #sed-pop, .cp-mark-menu')].some(el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed')) return;
+    const t = document.activeElement && document.activeElement.tagName; if (/^(INPUT|TEXTAREA|SELECT)$/.test(t || '')) { document.activeElement.blur(); return; }
+    _coBack();
+  });
   function _vCompanyPage(id) {
     const c = (_companies || []).find(x => x.id === id);
     if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_coFrom}')">‹ ${_CP_FROM_LABEL[_coFrom] || 'Empresas'}</button><h2 class="lm-sec-title">Empresa no encontrada</h2></div></div>`;
@@ -42348,52 +42381,84 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <td class="client-meta">${k.email ? esc(k.email) : '—'}</td>
       </tr>`;
     }).join('');
-    return `<div class="cp" id="lm-co-page">
-      <button class="lm-back lm-back--btn" onclick="LeadManagerModule._coBack()">← Atrás · ${_coFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_coFrom] || 'Empresas')}</button>
-      <div class="cp-head">
-        <div class="cp-ava cp-ava--co"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
-        <div class="cp-id">
-          <h2 class="cp-name">${esc(name)} ${c.codigo ? `<span class="lm-code lm-code--hd" title="Identificador único de la empresa">${esc(c.codigo)}</span>` : ''}</h2>
-          <div class="cp-sub">${c.dominio ? esc(c.dominio) : ''}${c.industria ? `${c.dominio ? ' · ' : ''}${esc(c.industria)}` : ''}</div>
-          <div class="cp-badges"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span><span class="lm-cnt-chip">${cts.length} contacto${cts.length !== 1 ? 's' : ''}</span>${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
+    const ids = (_coFilteredIds && _coFilteredIds.length) ? _coFilteredIds : (_companies || []).map(x => x.id);
+    const pos = ids.indexOf(id);
+    const cliId = _coClienteId(id), cli = cliId ? (_clients || []).find(x => x.id === cliId) : null;
+    const cliName = cli ? (cli.nombre || cli.empresa || '') : '';
+    const ini = (name[0] || '?').toUpperCase();
+    const curTab = _coTab === 'informacion' ? 'resumen' : _coTab;
+    const tabsDef = [['resumen', 'Resumen'], ['contactos', 'Contactos', cts.length], ['campanas', 'Campañas', _coSeqAgg(id).length], ['senales', 'Señales']];
+    const moreTabs = [['notas', 'Notas']];
+    const ib = (d, t, js) => `<button type="button" class="cpm-ib" title="${t}" aria-label="${t}" onclick="${js}">${_llI(d, 16)}</button>`;
+    const box = (label, inner) => `<div class="cpm-f"><span class="cpm-f__l">${label}</span>${inner}</div>`;
+    const F = (f, label, val, ico, extra) => box(label, `<span class="cpm-f__box"><i>${_llI(_CPI[ico] || _CPI.org, 15)}</i><input data-cof="${f}" value="${esc(val || '')}" placeholder="Añadir" onchange="LeadManagerModule.coSave(${id})">${extra || ''}</span>`);
+    const goB = (href, tip) => href ? `<a class="cpm-f__go" href="${esc(_urlFix(href))}" target="_blank" rel="noopener" title="${tip}">${_llI('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>', 14)}</a>` : '';
+    const dt = c.created_at ? new Date(c.created_at) : null;
+    const ago = dt && !isNaN(dt) ? (() => { const d = Math.floor((Date.now() - dt) / 864e5); return d <= 0 ? 'Hoy' : d === 1 ? 'Hace 1 día' : d < 30 ? `Hace ${d} días` : d < 365 ? `Hace ${Math.floor(d / 30)} mes${Math.floor(d / 30) > 1 ? 'es' : ''}` : `Hace ${Math.floor(d / 365)} año${Math.floor(d / 365) > 1 ? 's' : ''}`; })() : '';
+    const roBox = (label, ico, v, em) => box(label, `<span class="cpm-f__box cpm-f__box--ro"><i>${_llI(ico, 15)}</i><span class="cpm-f__v">${esc(v || '—')}</span>${em ? `<em>${em}</em>` : ''}</span>`);
+    const kv = (ico, l, v) => `<div class="cpm-kv"><span class="cpm-kv__l">${_llI(ico, 15)}${l}</span><span class="cpm-kv__v${v ? '' : ' is-empty'}">${v ? esc(v) : 'Sin dato'}</span></div>`;
+    const ctList = cts.length ? cts.map(k => { const kn = [k.nombre, k.apellido].filter(Boolean).join(' ') || (k.email || 'Sin nombre'); return `<div class="cpm-ctr" onclick="LeadManagerModule.openContactPage(${k.id})"><span class="cpm-av cpm-av--sm" style="background:${_llAvColor(kn)}">${esc(kn[0].toUpperCase())}</span><div><b>${esc(kn)}</b><span>${esc(k.cargo || '')}</span></div></div>`; }).join('') : '<div class="cp2-empty">Sin contactos aún.</div>';
+    const seqCard = `<div class="cpm-w"><div class="cpm-w__t">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 16)}<b>Campañas y secuencias</b></div><div class="cp-fields">${seqs || '<div class="ldh-none" style="padding:4px 2px">Ningún contacto de esta empresa está en una secuencia todavía.</div>'}</div></div>`;
+    const notesCard = (c.descripcion || c.analisis || c.notas) ? `<div class="cpm-w"><div class="cpm-w__t"><b>Notas y descripción</b></div><div class="cp-fields">${_coClampField('Descripción', c.descripcion)}${_coClampField('Análisis · por qué calificó', c.analisis)}${_coClampField('Notas', c.notas)}</div></div>` : '';
+    let body = '';
+    if (curTab === 'resumen') {
+      body = `<div class="cpm-res"><div class="cpm-two">
+        <div class="cpm-w"><div class="cpm-w__t">${_llI('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', 16)}<b>Campos</b></div>
+          ${kv(_CPI.org, 'Industria', c.industria)}${kv('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 'Tamaño', c.tamano)}${kv(_CPI.pin, 'Ubicación', [c.ciudad, c.region, c.pais].filter(Boolean).join(', '))}${kv(_CPI.user, 'Propietario', cliName)}${kv(_CPI.tag, 'Estado', est[0])}</div>
+        ${seqCard}</div>
+        <div class="cpm-w"><div class="cpm-w__t">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>', 16)}<b>Contactos</b><button class="cp-link2" style="margin-left:auto" onclick="LeadManagerModule.coTab('contactos')">Ver todo ›</button></div>${ctList}</div>
+        ${notesCard}</div>`;
+    } else if (curTab === 'contactos') {
+      body = `<div class="cpm-wh"><b>Contactos (${cts.length})</b><button class="cpm-btn" onclick="LeadManagerModule.openContact(null,${id})">Añadir contactos</button></div>${cts.length ? `<div class="cp-card"><div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt"><tbody>${contactRows}</tbody></table></div></div>` : `<div class="cpm-empty cpm-empty--big"><b>Sin contactos aún</b><span>Añade el primer contacto de esta empresa.</span></div>`}`;
+    } else if (curTab === 'campanas') {
+      body = `<div class="cpm-wh"><b>Campañas</b></div>${seqCard}`;
+    } else if (curTab === 'notas') {
+      body = `<div class="cpm-wh"><b>Notas y descripción</b></div><div class="cp-card">
+        ${[['descripcion', 'Descripción', c.descripcion], ['analisis', 'Análisis · por qué calificó', c.analisis], ['notas', 'Notas', c.notas]].map(([f, l, v]) => `<div class="cpm-f"><span class="cpm-f__l">${l}</span><textarea class="cp-notes" data-cof="${f}" placeholder="Escribe aquí… Se guarda al salir del campo." onchange="LeadManagerModule.coSave(${id})">${esc(v || '')}</textarea></div>`).join('')}</div>`;
+    } else {
+      body = `<div class="cpm-empty cpm-empty--big"><i>${_llI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>', 26)}</i><b>Sin señales por ahora</b><span>Las señales de compra (noticias, contrataciones) aparecerán aquí cuando conectemos una fuente.</span></div>`;
+    }
+    return `<div class="cpm-bd" onclick="LeadManagerModule._coBack()"></div>
+    <div class="cp cpm" id="lm-co-page">
+      <aside class="cpm-l">
+        <div class="cpm-hd"><span class="cpm-av cpm-av--sq" style="background:${_llAvColor(name)}">${esc(ini)}</span><b class="cpm-nm" title="${esc(name)}">${esc(name)}</b>${c.codigo ? `<span class="lm-code" title="Identificador único de la empresa">${esc(c.codigo)}</span>` : ''}<span style="flex:1"></span>
+          <button type="button" class="cpm-ib cpm-ib--bare" title="Más acciones" aria-label="Más acciones" onclick="LeadManagerModule.coMenu(event,${id})"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+        <div class="cpm-badges" style="margin-top:10px"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span><span class="lm-cnt-chip">${cts.length} contacto${cts.length !== 1 ? 's' : ''}</span></div>
+        <div class="cpm-act">
+          ${(c.website || c.dominio) ? `<a class="cpm-ib" href="${esc(_urlFix(c.website || c.dominio))}" target="_blank" rel="noopener" title="Abrir sitio web">${_llI('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>', 16)}</a>` : ''}
+          ${c.linkedin ? `<a class="cpm-ib" href="${esc(_urlFix(c.linkedin))}" target="_blank" rel="noopener" title="Abrir LinkedIn">${_llI('<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>', 16)}</a>` : ''}
+          ${c.linkedin_sales_nav ? `<a class="cpm-ib" href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">${_SN_ICO}</a>` : ''}
+          ${ib('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>', 'Añadir prospecto', `LeadManagerModule.openContact(null,${id})`)}
         </div>
-        <div class="cp-actions">
-          <button class="cp-act" onclick="LeadManagerModule.openCompany(${id})">✎ Editar</button>
-          <button class="cp-act" onclick="LeadManagerModule.openContact(null,${id})">＋ Prospecto</button>
-          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(_urlFix(c.linkedin))}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
-          ${c.linkedin_sales_nav ? `<a class="cp-act cp-act--in" href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">Sales Navigator ›</a>` : ''}
-          ${c.website ? `<a class="cp-act" href="${esc(_urlFix(c.website))}" target="_blank" rel="noopener">Sitio web ›</a>` : ''}
-          <button class="cp-act cp-act--danger" onclick="LeadManagerModule.deleteCompany(${id},1)">Eliminar</button>
+        <div class="cpm-card"><div class="cpm-card__t"><span>Campos de la empresa</span></div>
+          ${F('nombre', 'Nombre de la empresa', c.nombre, 'org')}
+          ${dt && !isNaN(dt) ? roBox('Fecha de añadido', _CPI.cal, dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), ago) : ''}
+          ${F('linkedin', 'Página de LinkedIn', c.linkedin, 'link', goB(c.linkedin, 'Abrir LinkedIn'))}
+          ${F('linkedin_sales_nav', 'URL de Salesnav', c.linkedin_sales_nav, 'link', goB(c.linkedin_sales_nav, 'Abrir en Sales Navigator'))}
+          ${roBox('Estado de la empresa', _CPI.tag, est[0])}
+          ${roBox('Propietario', _CPI.user, cliName)}
+          ${F('website', 'Sitio web', c.website, 'link', goB(c.website, 'Abrir sitio web'))}
+          ${F('dominio', 'Dominio', c.dominio, 'link')}
+          ${F('fundada', 'Fundada el', c.fundada, 'cal')}
+          ${F('industria', 'Subsector', c.industria, 'org')}
+          ${F('tamano', 'Número de empleados', c.tamano, 'user')}
+          ${F('ingresos', 'Ingresos', c.ingresos, 'tag')}
+          ${F('telefono', 'Teléfono', c.telefono, 'phone')}
+          ${F('ciudad', 'Ciudad', c.ciudad, 'pin')}${F('region', 'Región', c.region, 'pin')}${F('pais', 'País', c.pais, 'pin')}
+          ${F('direccion', 'Dirección', c.direccion, 'pin')}${F('codigo_postal', 'Código postal', c.codigo_postal, 'pin')}
+          ${F('tecnologias', 'Tecnologías', c.tecnologias, 'tag')}
+          ${F('segmento', 'Mercado / Segmento ICP', c.segmento, 'tag')}
+          ${F('target_tier', 'Target Tier / Focus', c.target_tier, 'tag')}
+          ${F('funding', 'Última ronda de financiación', c.funding, 'tag')}
         </div>
-      </div>
-      <div class="cp-grid">
-        <div class="cp-left">
-          <div class="cp-card"><div class="cp-card__t">Campos de empresa</div><div class="cp-fields cp-fields--one">
-            ${_coInfoRow('Dominio', c.dominio)}${_coInfoRow('Sitio web', c.website, 1)}${_coInfoRow('LinkedIn', c.linkedin, 1)}${_coInfoRow('Sales Navigator', c.linkedin_sales_nav, 1)}
-            ${_coInfoRow('Industria', c.industria)}${_coInfoRow('Nº empleados', c.tamano)}${_coInfoRow('Ingresos anuales', c.ingresos)}
-            ${_coInfoRow('Ciudad', c.ciudad)}${_coInfoRow('Región', c.region)}${_coInfoRow('País', c.pais)}
-            ${_coInfoRow('Teléfono', c.telefono)}${_coInfoRow('Año fundación', c.fundada)}${_coInfoRow('Funding', c.funding)}
-            ${_coInfoRow('Target Tier / Focus', c.target_tier)}${_coInfoRow('Segmento / ICP', c.segmento)}
-            ${_coInfoRow('Dirección', c.direccion)}${_coInfoRow('Código postal', c.codigo_postal)}${_coInfoRow('Tecnologías', c.tecnologias)}
-            ${_lmActiveCustomFields('company').map(f => _coInfoRow(f.label, c[f.field_key])).join('')}
-          </div></div>
+      </aside>
+      <section class="cpm-r">
+        <div class="cpm-tb">
+          <div class="cp-tabs cpm-tabs">${tabsDef.map(([k, l, n]) => `<button class="cp-tab${curTab === k ? ' active' : ''}" onclick="LeadManagerModule.coTab('${k}')">${l}${n != null ? ` <span class="cpm-n">${n}</span>` : ''}</button>`).join('')}<button class="cp-tab${curTab === 'notas' ? ' active' : ''}" onclick="LeadManagerModule.coTab('notas')">Notas</button></div>
+          <div class="cpm-pg"><span>Empresa ${pos + 1} de ${ids.length}</span><button class="cpm-ib" title="Empresa anterior" onclick="LeadManagerModule.coNav(-1)">${_llI('<path d="M12 19V5M5 12l7-7 7 7"/>', 15)}</button><button class="cpm-ib" title="Empresa siguiente" onclick="LeadManagerModule.coNav(1)">${_llI('<path d="M12 5v14M19 12l-7 7-7-7"/>', 15)}</button><span class="cpm-sep"></span><button class="cpm-ib cpm-ib--bare" title="Cerrar (Esc)" aria-label="Cerrar" onclick="LeadManagerModule._coBack()">${_llI('<path d="M18 6 6 18M6 6l12 12"/>', 16)}</button></div>
         </div>
-        <div class="cp-right">
-          <div class="cp-tabs">${[['resumen', 'Resumen'], ['contactos', `Contactos (${cts.length})`], ['campanas', 'Campañas'], ['notas', 'Notas']].map(([k, l]) => `<button class="cp-tab${_coTab === k ? ' active' : ''}" onclick="LeadManagerModule.coTab('${k}')">${l}</button>`).join('')}</div>
-          ${(_coTab === 'resumen' || _coTab === 'campanas') ? `<div class="cp-card"><div class="cp-card__t">Campañas y secuencias</div><div class="cp-fields">
-            ${seqs || '<div class="ldh-none" style="padding:4px 2px">Ningún contacto de esta empresa está en una secuencia todavía.</div>'}
-          </div></div>` : ''}
-          ${(_coTab === 'resumen' || _coTab === 'contactos') ? `<div class="cp-card"><div class="cp-card__t">Contactos (${cts.length}) <button class="cp-mini" title="Añadir prospecto a esta empresa" onclick="LeadManagerModule.openContact(null,${id})">＋</button></div>
-            ${cts.length ? `<div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt"><tbody>${contactRows}</tbody></table></div>`
-              : '<div class="ldh-none" style="padding:4px 2px 10px">Sin contactos aún.</div>'}
-          </div>` : ''}
-          ${(_coTab === 'resumen' || _coTab === 'notas') ? ((c.descripcion || c.analisis || c.notas) ? `<div class="cp-card"><div class="cp-card__t">Notas y descripción</div><div class="cp-fields">
-            ${_coClampField('Descripción', c.descripcion)}
-            ${_coClampField('Análisis · por qué calificó', c.analisis)}
-            ${_coClampField('Notas', c.notas)}
-          </div></div>` : (_coTab === 'notas' ? '<div class="cp-card"><div class="ldh-none" style="padding:4px 2px">Sin notas ni descripción. Añádelas desde «Editar».</div></div>' : '')) : ''}
-        </div>
-      </div>
+        <div class="cpm-body">${body}</div>
+      </section>
     </div>`;
   }
 
@@ -43592,7 +43657,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, cpMenu, cpAddMenu, cpMoreTabs, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
