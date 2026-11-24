@@ -24847,6 +24847,96 @@ const LeadManagerModule = (() => {
     if (list) list.style.display = 'none';
   }
   function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
+  // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
+  function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
+  function _seqProg(id, s, steps) {
+    const nContacts = Array.isArray(_seqContacts) ? _seqContacts.length : 0;
+    const nCos = (_seqCoStats && _seqCoStats.total) ? _seqCoStats.total : (Array.isArray(_seqPendingCos) ? _seqPendingCos.length : 0);
+    const lista = nContacts + nCos, launched = (s.estado || 'draft') !== 'draft';
+    return { pasos: steps.length, lista, nContacts, nCos, launched, p1: steps.length > 0, p2: lista > 0 };
+  }
+  function _seqTopbar(id, s, steps) {
+    const g = _seqProg(id, s, steps), cmp = _campaignName(s.campaign_id);
+    const fav = _seqFavs().includes(id);
+    const ic = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const est = s.estado || 'draft', col = _SEQ_VIVO[est] || _SEQ_VIVO.draft;
+    const lock = '<path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', check = '<polyline points="20 6 9 17 4 12"/>';
+    // cada paso: done / current / locked. Con la secuencia ya lanzada nada se bloquea y todo se ve normal.
+    const cur = g.launched ? 0 : (!g.p1 ? 1 : !g.p2 ? 2 : 3);
+    const ST = [
+      { k: 1, l: 'Secuencia', n: g.pasos ? g.pasos : '', ico: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', done: g.p1, locked: false },
+      { k: 2, l: 'Lista de prospectos', n: g.lista ? g.lista : '', ico: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', done: g.p2, locked: !g.launched && !g.p1 },
+      { k: 3, l: 'Lanzar', n: '', ico: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', done: g.launched, locked: !g.launched && !(g.p1 && g.p2) },
+      { k: 4, l: 'Rendimiento', n: '', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', done: false, locked: !g.launched },
+    ];
+    const active = { 1: _seqPasosOpen, 2: ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen, 3: false, 4: _seqTab === 'metricas' && !_seqPasosOpen };
+    const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : cur === x.k) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
+        ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
+    const falta = g.launched ? '' : (!g.p1 ? 'Crea al menos un paso' : !g.p2 ? 'Añade prospectos a la lista' : 'Todo listo para lanzar');
+    return `<div class="seqtop">
+      <div class="seqtop__row1">
+        <span class="seqtop__cmp">${ic('<path d="M3 11l18-8v18L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>', 16)}${s.campaign_id ? `<button title="Configuración de la campaña" onclick="LeadManagerModule.openCampaignConfig(${s.campaign_id})">${esc(cmp || 'Campaña')}</button>` : `<button class="is-none" title="Asignar una campaña" onclick="LeadManagerModule.openSequenceDrawer(${id})">Sin campaña · asignar</button>`}</span>
+        <span class="seqtop__seq" title="${esc(s.nombre)}">${esc(s.nombre)}</span>
+        <button class="seqtop__ib" title="${s.starts_on ? 'Inicio: ' + esc(String(s.starts_on).slice(0, 10)) : 'Fechas y horario'}" onclick="LeadManagerModule.seqTab('config')">${ic('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>')}</button>
+        <button class="seqtop__est" style="--c:${col}" onclick="LeadManagerModule.seqEstadoMenu(event,${id})"><i></i>${esc((_CC_SEQ_EST || {})[est] || est)} ${ic('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="seqtop__ib${fav ? ' is-fav' : ''}" title="Favorita" onclick="LeadManagerModule.seqFav(${id})">${ic('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>')}</button>
+        <button class="seqtop__ib" title="Configuración" onclick="${s.campaign_id ? `LeadManagerModule.openCampaignConfig(${s.campaign_id})` : `LeadManagerModule.openSequenceDrawer(${id})`}">${ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')}</button>
+        <button class="seqtop__ib" title="Más acciones" onclick="LeadManagerModule.seqMoreMenu(event,${id})">${ic('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>
+      </div>
+      <div class="seqtop__row2"><div class="seqtop__steps">${stepsHtml}</div>${g.launched ? '' : `<span class="seqtop__hint${g.p1 && g.p2 ? ' ok' : ''}">${g.p1 && g.p2 ? ic(check, 13) : ic('<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 13)} ${falta}</span>`}</div>
+    </div>`;
+  }
+  function seqFav(id) { const a = _seqFavs(), i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); try { localStorage.setItem('lm_seq_fav', JSON.stringify(a)); } catch (_) {} _renderBody(); }
+  async function seqSetEstado(id, estado) {
+    try {
+      const r = await apiFetch(`${API}/sequences/${id}/estado`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo cambiar el estado');
+      const sq = _sequences.find(x => x.id === id); if (sq) sq.estado = estado;
+      _renderBody();
+      showBanner(estado === 'activa' ? '🚀 Secuencia lanzada' : 'Estado: ' + ((_CC_SEQ_EST || {})[estado] || estado), 'success');
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function seqStep(id, k) {
+    const s = _sequences.find(x => x.id === id); if (!s) return;
+    const g = _seqProg(id, s, _seqSteps(id));
+    if (k === 1) { _seqPasosOpen = true; _renderBody(); if (!g.pasos) openStepDrawer(id); return; }
+    if (k === 2) {
+      if (!g.p1 && !g.launched) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
+      seqTab(g.nContacts === 0 && g.nCos > 0 ? 'empresas' : 'contactos');
+      if (!g.lista && !g.launched) setTimeout(() => seqAddContactOpen(id), 250);
+      return;
+    }
+    if (k === 3) {
+      if (g.launched) { seqTab('tareas'); return; }
+      if (!g.p1) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
+      if (!g.p2) { showBanner('Primero añade prospectos a la lista (paso 2).', 'info'); return; }
+      if (await novaConfirm({ title: 'Lanzar la secuencia', message: `Se lanza «${esc(s.nombre)}» con ${g.lista} prospecto${g.lista === 1 ? '' : 's'}. Los envíos y tareas empiezan según su configuración.`, confirmText: 'Lanzar' })) seqSetEstado(id, 'activa');
+      return;
+    }
+    if (k === 4) { if (!g.launched) { showBanner('El rendimiento se desbloquea al lanzar la secuencia (paso 3).', 'info'); return; } seqTab('metricas'); }
+  }
+  function seqEstadoMenu(ev, id) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const s = _sequences.find(x => x.id === id); if (!s) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
+    const it = (l, js) => `<button class="cp-mark-menu__b" onclick="${close}${js}">${l}</button>`;
+    const est = s.estado || 'draft';
+    const html = '<div class="cp-mark-menu__list">'
+      + (est === 'draft' ? it('🚀 Lanzar…', `LeadManagerModule.seqStep(${id},3)`) : '')
+      + (est === 'activa' ? it('II Pausar todo', `LeadManagerModule.seqPauseAll(${id})`) : '')
+      + (est === 'pausada' ? it('► Reactivar todo', `LeadManagerModule.seqResumeAll(${id})`) : '')
+      + (['activa', 'pausada'].includes(est) ? it('✓ Marcar como culminada', `LeadManagerModule.seqSetEstado(${id},'completada')`) : '')
+      + (est !== 'archivada' && est !== 'draft' ? it('Archivar', `LeadManagerModule.seqSetEstado(${id},'archivada')`) : '')
+      + (['completada', 'archivada'].includes(est) ? it('Reabrir como pausada', `LeadManagerModule.seqSetEstado(${id},'pausada')`) : '')
+      + '</div>';
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 220)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { menu.remove(); document.removeEventListener('click', f); }), 0);
+  }
   function _vSequenceDetail(id) {
     const s = _sequences.find(x => x.id === id);
     if (!s) return _vSequences();
@@ -24894,6 +24984,7 @@ const LeadManagerModule = (() => {
       </div>`
       : `<button class="seq-collapse-strip" onclick="LeadManagerModule.seqPasosToggle()" title="Mostrar secuencia">›</button>`;
     return `${backBtn}
+      ${_seqTopbar(id, s, steps)}
       <div class="seq-split${_seqPasosOpen ? '' : ' seq-split--closed'}">
         ${pasosCard}
         <div class="seq-split__right">
@@ -42256,7 +42347,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, seqStep, seqFav, seqSetEstado, seqEstadoMenu, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

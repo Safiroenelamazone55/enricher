@@ -11752,6 +11752,25 @@ app.post('/api/sequences/:id/duplicate', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'No se pudo duplicar la secuencia' });
   } finally { cx.release(); }
 });
+// Cambia SOLO el estado (lanzar / pausar / reabrir) sin tocar el resto de la secuencia. Para lanzar exige lo anterior: pasos y lista de prospectos.
+app.post('/api/sequences/:id/estado', requireAuth, async (req, res) => {
+  const estado = String((req.body || {}).estado || '');
+  if (!SEQ_ESTADOS.includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  try {
+    const uid = req.workspaceOwnerId, id = parseInt(req.params.id);
+    const { rows: [sq] } = await pool.query('SELECT id, estado FROM sequences WHERE id=$1 AND user_id=$2', [id, uid]);
+    if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    if (estado === 'activa' && sq.estado === 'draft') {
+      const { rows: [n] } = await pool.query(`SELECT
+        (SELECT COUNT(*) FROM sequence_steps WHERE sequence_id=$1)::int AS pasos,
+        ((SELECT COUNT(*) FROM lm_contact_sequences WHERE sequence_id=$1 AND user_id=$2) + (SELECT COUNT(*) FROM lm_company_sequences WHERE sequence_id=$1 AND user_id=$2))::int AS lista`, [id, uid]);
+      if (!n.pasos) return res.status(400).json({ error: 'Primero crea los pasos de la secuencia.' });
+      if (!n.lista) return res.status(400).json({ error: 'Primero añade prospectos a la lista.' });
+    }
+    await pool.query('UPDATE sequences SET estado=$1 WHERE id=$2 AND user_id=$3', [estado, id, uid]);
+    res.json({ ok: true, estado });
+  } catch (e) { console.error('[seq estado]', e.message); res.status(500).json({ error: 'No se pudo cambiar el estado' }); }
+});
 app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
