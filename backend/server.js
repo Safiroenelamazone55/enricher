@@ -6671,6 +6671,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, cs.paused_reason, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
         k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.ciudad, k.idioma, k.idiomas, f.kd AS disposition, co.nombre AS company_nombre,
+        k.email_status, k.email_verified_at, k.data_issue, k.import_batch, COALESCE(ms.msg_sent, 0) AS msg_sent, COALESCE(ms.msg_opened, 0) AS msg_opened, COALESCE(ms.msg_clicked, 0) AS msg_clicked, COALESCE(ms.msg_failed, 0) AS msg_failed, COALESCE(ms.msg_bounced, 0) AS msg_bounced,
         CASE WHEN COALESCE(k.disposition,'')<>'' AND f.kd IS NULL THEN k.disposition END AS prev_disposition,
         CASE WHEN f.kd IN ${TERMINAL} THEN f.kd
              WHEN c1.disposition IN ${TERMINAL} THEN c1.disposition
@@ -6685,6 +6686,12 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
       LEFT JOIN LATERAL (SELECT CASE WHEN k.disposition IN ('no_interesado','no_califica','no_contactar','no_es_persona','derivado') THEN k.disposition
         WHEN EXISTS(SELECT 1 FROM activities a2 WHERE a2.contact_id=k.id AND (a2.tipo IN ('respuesta','disposition_change') OR a2.nota LIKE 'Disposición:%') AND a2.fecha >= COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)) THEN k.disposition
         ELSE NULL END AS kd) f ON TRUE
+      LEFT JOIN LATERAL (SELECT COUNT(*) FILTER (WHERE m.sent_at IS NOT NULL)::int AS msg_sent,
+          COUNT(*) FILTER (WHERE m.estado = 'failed')::int AS msg_failed,
+          COUNT(*) FILTER (WHERE m.estado = 'bounced')::int AS msg_bounced,
+          COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM lm_message_events v WHERE v.message_id = m.id AND v.tipo = 'open'))::int AS msg_opened,
+          COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM lm_message_events v WHERE v.message_id = m.id AND v.tipo = 'click'))::int AS msg_clicked
+        FROM lm_messages m WHERE m.contact_id = k.id AND m.sequence_id = cs.sequence_id) ms ON TRUE
       LEFT JOIN lm_companies co ON co.id = k.company_id
       LEFT JOIN lm_contacts c1 ON c1.id = k.derivado_a
       LEFT JOIN lm_contacts c2 ON c2.id = c1.derivado_a

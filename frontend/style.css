@@ -22312,3 +22312,66 @@ body.ibx-lb-open{overflow:hidden}
 #lm2-body:has(> .seqtop) > .ll { min-height: 0; overflow: hidden; }
 #lm2-body:has(> .seqtop) > .ll .ll__tbl { flex: 1 1 auto; min-height: 0; overflow: auto; }
 #lm2-body:has(> .seqtop) > .rd, #lm2-body:has(> .seqtop) > .aj { padding: 16px 24px 40px; }
+
+/* Filtros de la lista de prospectos (réplica de Lemlist) */
+.ll-fp__v--i { padding-left: 4px; } .ll-fp__v--k { padding-left: 30px; } .ll-fp__v--op { padding: 8px 14px; }
+.ll-fp__v em { font-style: normal; color: #55657D; }
+.ll-fp__in { padding: 0 14px 8px 38px; } .ll-fp__in input { width: 100%; box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid #E6E6E6; border-radius: 10px; font: inherit; font-size: 14px; color: #213856; outline: none; } .ll-fp__in input:focus { border-color: #2F6BFF; }
+.ll-fp .btn[disabled] { opacity: .45; cursor: default; }
+.llc-wrap { display: flex; gap: 8px; padding: 6px 4px; }
+.llc { width: 290px; padding: 6px 10px; }
+.llc-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #213856; } .llc-h button { width: 28px; height: 28px; border: 1px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; font-size: 16px; } .llc-h b { text-transform: capitalize; font-weight: 600; }
+.llc-w, .llc-g { display: grid; grid-template-columns: repeat(7, 1fr); } .llc-w span { text-align: center; font-size: 12px; color: #98A1AC; padding: 4px 0; }
+.llc-d { height: 34px; border: none; background: transparent; font: inherit; font-size: 13px; color: #213856; cursor: pointer; border-radius: 8px; } .llc-d:hover { background: #F0F2F5; } .llc-d.is-mid { background: #E8F0FF; border-radius: 0; } .llc-d.is-on { background: #2F6BFF; color: #fff; } .llc-d.is-today:not(.is-on) { font-weight: 700; color: #2F6BFF; } .llc-d--o { height: 34px; }
+.llc-s { flex: 1; min-width: 0; padding: 6px 4px; border-left: 1px solid #EEF0F2; padding-left: 12px; }
+.llc-st { font-size: 12px; font-weight: 600; color: #55657D; margin-bottom: 6px; }
+.llc-sg { display: flex; flex-direction: column; align-items: flex-start; width: 100%; border: none; background: transparent; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-family: inherit; text-align: left; } .llc-sg:hover { background: #F0F2F5; } .llc-sg.is-on { background: #E8F0FF; } .llc-sg span { font-size: 14px; color: #213856; } .llc-sg em { font-style: normal; font-size: 12px; color: #98A1AC; }
+
+.ll-fp__l > .ll-search { flex: none; height: 32px; width: 100%; box-sizing: border-box; } .ll-fp__l .ll-fp__cl { flex: 1 1 auto; min-height: 0; }
+.ll-fp { grid-template-columns: 250px 1fr; }
+
+/* Panel de filtros idéntico al de Lemlist (medidas copiadas: 293+257 px, filas de 23 px a la izquierda, 36 px a la derecha, botones de 32 px) */
+.sed-pop.ll-pop:has(.ll-fp) { border-radius: 10px; border: .75px solid rgba(31,41,55,.1); box-shadow: 0 0 4px rgba(0,0,0,.04), 0 8px 16px rgba(0,0,0,.08); overflow: hidden; max-height: calc(100vh - 24px); }
+.ll-fp { grid-template-columns: 293px minmax(257px, 1fr); min-height: 0; max-height: none; height: min(620px, calc(100vh - 90px)); font-size: 14px; color: #213856; }
+.ll-fp__l { background: #FBFBFB; padding: 8px; gap: 4px; border-right: none; }
+.ll-fp__l > .ll-search { height: 32px; border: .75px solid #E6E6E6; border-radius: 10px; padding: 8px 16px; background: #fff; color: #98A1AC; }
+.ll-fp__cl { gap: .5px; }
+.ll-fp__c { text-align: center; height: 23px; padding: 1px 8px; font-weight: 500; color: #5A6472; border-radius: 10px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.ll-fp__c:hover:not(.on) { background: #F0F1F3; }
+.ll-fp__c.on { background: #316BFF; color: #fff; font-weight: 500; }
+.ll-fp__vl { padding: 16px; }
+.ll-fp__v { padding: 8px 0; gap: 8px; line-height: 20px; color: #213856; }
+.ll-fp__v input[type=checkbox], .ll-fp__v input[type=radio] { width: 16px; height: 16px; margin: 0; flex: none; accent-color: #316BFF; }
+.ll-fp__v--op { padding: 8px 0; }
+.ll-fp__in { padding: 0 0 8px 24px; }
+.ll-fp__ft { height: 48px; box-sizing: border-box; padding: 8px 16px; align-items: center; gap: 16px; border-top: none; }
+.ll-fp__ft .btn { height: 32px; border-radius: 10px; font-size: 14px; font-weight: 500; padding: 0 8px; box-sizing: border-box; }
+.ll-fp__ft .btn--ghost { background: transparent; color: #5A6472; border: .75px solid transparent; }
+.ll-fp__ft .btn--primary { background: #316BFF; color: #fff; border: .75px solid #316BFF; }
+.ll-fp__ft .btn[disabled] { opacity: .4; }
+
+.ll-fp__l { padding: 8px 19px 8px 8px; }
+
+/* Ajustes de la tabla (columnas) idéntico a Lemlist */
+.llcs-bd .ll-m { width: 501px; border-radius: 10px; border: .75px solid rgba(31,41,55,.1); }
+.llcs-bd .ll-m__hd { height: 53px; padding: 0 24px; box-sizing: border-box; border-bottom: none; } .llcs-bd .ll-m__hd b { font-size: 18px; font-weight: 600; color: #213856; }
+.llcs-bd .ll-m__bd { padding: 0 16px 8px; }
+.llcs-top { display: flex; align-items: center; gap: 8px; height: 24px; margin: 6px 0 12px; } .llcs-t { font-size: 16px; font-weight: 500; color: #213856; } .llcs-t i { font-style: normal; font-size: 14px; color: #98A1AC; margin-left: 6px; } .llcs-top .sp { flex: 1; }
+.llcs-b { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; font-size: 14px; color: #55657D; cursor: pointer; padding: 4px 8px; border-radius: 8px; } .llcs-b:hover { background: #F0F1F3; }
+.llcs-s { display: flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 12px; border: .75px solid #E6E6E6; border-radius: 10px; color: #98A1AC; margin-bottom: 8px; } .llcs-s:focus-within { border-color: #213856; } .llcs-s input { flex: 1; border: none; outline: none; font: inherit; font-size: 14px; color: #213856; background: transparent; }
+.llcs-l { height: 232px; overflow-y: auto; }
+.llcs-r { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 14px; color: #213856; } .llcs-r:hover { background: #F6F7F9; } .llcs-r[draggable="true"] { cursor: grab; }
+.llcs-n { display: inline-flex; align-items: center; gap: 12px; color: #213856; } .llcs-n svg { color: #98A1AC; flex: none; } .llcs-r.is-lock .llcs-n { color: #98A1AC; }
+.llcs-r.is-off .llcs-n span { color: #98A1AC; }
+.llcs-o button { width: 28px; height: 28px; border: none; background: none; color: #55657D; cursor: pointer; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; } .llcs-o button:hover { background: #E8EAEE; }
+.llcs-bd .ll-m__ft { display: flex; justify-content: space-between; align-items: center; height: 66px; box-sizing: border-box; padding: 0 16px; border-top: 1px solid #EEF0F2; }
+.llcs-fb { height: 32px; padding: 0 12px; border-radius: 10px; border: .75px solid #E6E6E6; background: #fff; color: #213856; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; } .llcs-fb--p { background: #316BFF; border-color: #316BFF; color: #fff; }
+/* Historial de importación idéntico a Lemlist */
+.llh-bd .ll-m { width: 1100px; max-width: 94vw; height: min(640px, 92vh); border-radius: 10px; }
+.llh-bd .ll-m__hd { padding: 0 16px; height: 56px; box-sizing: border-box; border-bottom: none; } .llh-bd .ll-m__hd b { font-size: 18px; font-weight: 600; color: #213856; }
+.llh-bd .ll-m__bd { flex: 1; padding: 0 16px 16px; overflow: auto; }
+.llh { border: .75px solid #E6E6E6; border-radius: 10px; min-height: 100%; box-sizing: border-box; }
+.llh-r { display: grid; grid-template-columns: 1.5fr 1.2fr 1.1fr 1.3fr 90px; align-items: center; gap: 12px; padding: 0 16px; height: 46px; font-size: 14px; color: #55657D; border-bottom: .75px solid #EEF0F2; } .llh-r:last-child { border-bottom: none; }
+.llh-h { height: 44px; font-size: 13px; color: #55657D; font-weight: 500; }
+.llh-m { display: inline-flex; align-items: center; gap: 8px; color: #55657D; } .llh-m b { font-weight: 600; color: #55657D; } .llh-o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.llh-a { text-align: right; } .llh-x { width: 28px; height: 28px; border: .75px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; color: #213856; } .llh-x:hover { background: #F6F7F9; }

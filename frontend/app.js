@@ -25090,6 +25090,19 @@ const LeadManagerModule = (() => {
     { k: 'paso', l: 'Paso' }, { k: 'resultado', l: 'Resultado' }, { k: 'propietario', l: 'Propietario' }, { k: 'incorporado', l: 'Fecha de incorporación' },
   ];
   const _LL_DEF = ['nombre_completo', 'email', 'estado', 'empresa', 'cargo', 'paso', 'propietario'];
+  const _LL_EXTRA = [{ k: 'ciudad', l: 'Ciudad' }, { k: 'region', l: 'Región' }, { k: 'seniority', l: 'Seniority' }, { k: 'departamento', l: 'Departamento' }, { k: 'prioridad', l: 'Prioridad del contacto' }, { k: 'tz', l: 'Zona horaria' }, { k: 'lista', l: 'Lista de contactos' }, { k: 'verificado', l: 'Fecha de verificación del email' }];
+  function _llAllCols(rows) {
+    rows = rows || _llRows(_activeSeq);
+    const vk = new Set(); rows.forEach(r => Object.keys(r.vars || {}).forEach(k => { if (String(r.vars[k] == null ? '' : r.vars[k]).trim()) vk.add(k); }));
+    return _LL_COLS.concat(_LL_EXTRA, [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).map(k => ({ k: 'v:' + k, l: k, varcol: true })));
+  }
+  function _llOrder() { try { const v = JSON.parse(localStorage.getItem('lm_ll_order') || 'null'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
+  function _llAllOrdered(rows) {
+    const all = _llAllCols(rows), byK = new Map(all.map(c => [c.k, c])), out = [];
+    _llOrder().forEach(k => { if (byK.has(k)) { out.push(byK.get(k)); byK.delete(k); } });
+    const res = out.concat([...byK.values()]), i = res.findIndex(c => c.k === 'nombre_completo'); if (i > 0) res.unshift(res.splice(i, 1)[0]);
+    return res;
+  }
   function _llCols() {
     let v = null; try { v = JSON.parse(localStorage.getItem('lm_ll_cols') || 'null'); } catch (_) {}
     const set = new Set(Array.isArray(v) ? v : _LL_DEF); set.add('nombre_completo');
@@ -25112,27 +25125,97 @@ const LeadManagerModule = (() => {
       else if (!email) est = 'sinemail'; else if (launched) est = 'ejecucion';
       const entreg = !email ? 'none' : (['valid', 'risky', 'catch-all', 'invalid'].includes(es) ? es : '');
       const N0 = _seqSteps(id).length;
-      return { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '' };
+      const r = { cid: e.contact_id, e, c, nombre: e.nombre || c.nombre || '', apellido: e.apellido || c.apellido || '', email, telefono: c.telefono || c.movil || '', linkedin: c.linkedin || '', empresa: e.company_nombre || c.company_nombre || c.empresa_nombre || '', cargo: e.cargo || c.cargo || '', pais: c.pais || '', estado: est, entreg, paso: e.estado === 'terminado' ? N0 : Math.min(Math.max(e.paso || 1, 1), Math.max(N0, 1)), npasos: N0, resultado: disp, propietario: _clientName(c.outbound_client_id || e.outbound_client_id) || '', incorporado: e.enrolled_at || e.created_at || '', ciudad: c.ciudad || e.ciudad || '', region: c.region || e.region || '', seniority: c.seniority || '', departamento: c.departamento || '', prioridad: c.contact_priority || '', lista: c.import_batch || e.import_batch || '', verificado: e.email_verified_at || c.email_verified_at || '', tz: _contactTz(c) || sq.timezone || '', sent: +e.msg_sent || 0, opened: +e.msg_opened || 0, clicked: +e.msg_clicked || 0, failed: +e.msg_failed || 0, bounced: +e.msg_bounced || 0, dissue: e.data_issue || c.data_issue || '', vars: (() => { const v = Object.assign({}, (c.raw && typeof c.raw === 'object') ? c.raw : {}); _lmActiveCustomFields('contact').forEach(f => { if (c[f.field_key]) v[f.label] = c[f.field_key]; }); return v; })() };
+      r.ests = _llEsts(r); return r;
     });
   }
-  const _LL_FDEF = [
-    { k: 'estado', l: 'Estado', t: 'sel', opts: () => Object.entries(_LL_EST).map(([v, a]) => [v, a[0]]) },
-    { k: 'entreg', l: 'Entregabilidad', t: 'sel', opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
-    { k: 'paso', l: 'Paso', t: 'sel', opts: (id) => _seqSteps(id).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
-    { k: 'propietario', l: 'Propietario', t: 'sel', opts: () => [...new Set((_clients || []).map(c => c.nombre))].map(n => [n, n]) },
-    { k: 'nombre', l: 'Nombre', t: 'txt' }, { k: 'apellido', l: 'Apellido', t: 'txt' }, { k: 'email', l: 'Email', t: 'txt' }, { k: 'telefono', l: 'Número de teléfono', t: 'txt' },
-    { k: 'linkedin', l: 'LinkedIn', t: 'txt' }, { k: 'empresa', l: 'Empresa', t: 'txt' }, { k: 'cargo', l: 'Título del puesto', t: 'txt' }, { k: 'pais', l: 'País', t: 'txt' },
+  // ── Filtros de la lista (réplica de Lemlist): Estado en árbol, texto con 10 operadores, listas, fechas con calendario y variables ──
+  const _LL_TREE = [
+    { k: 'enriqueciendo', l: 'Enriqueciendo' }, { k: 'enr_error', l: 'Error de enriquecimiento' },
+    { k: 'enr_ok', l: 'Enriquecimiento realizado', kids: [['e_valid', 'Entregable'], ['e_risky', 'Arriesgado'], ['e_invalid', 'No entregado'], ['e_unver', 'No verificado'], ['e_none', 'Email no encontrado']] },
+    { k: 'revisar', l: 'Revisar' }, { k: 'omitido', l: 'Omitido' }, { k: 'revisado', l: 'Revisado' },
+    { k: 'pausa', l: 'En pausa' }, { k: 'ejecucion', l: 'En ejecución' }, { k: 'pendiente', l: 'Pendiente de lanzar' },
+    { k: 'enviado', l: 'Enviado' }, { k: 'abiertos', l: 'Abiertos' }, { k: 'interactuo', l: 'Interactuó' }, { k: 'respondido', l: 'Respondido' },
+    { k: 'rebotados', l: 'Rebotados' }, { k: 'error', l: 'Error' }, { k: 'finalizado', l: 'Finalizado' },
+    { k: 'interesado', l: 'Interesado' }, { k: 'no_interesado', l: 'No interesado' }, { k: 'cancelar', l: 'Cancelar suscripción' },
   ];
+  const _LL_OPS = [['completado', 'Completado', 0], ['no_rellenado', 'No rellenado', 0], ['contiene', 'Contiene', 1], ['no_contiene', 'No contiene', 1], ['empieza', 'Empieza por', 1], ['termina', 'Termina con', 1], ['no_empieza', 'No empieza por', 1], ['no_termina', 'No termina con', 1], ['es', 'Es', 1], ['no_es', 'No es', 1]];
+  function _llEsts(r) {
+    const s = new Set(), dis = r.resultado;
+    if (r.dissue) { s.add('enr_error'); s.add('revisar'); } else s.add('revisado');
+    s.add(r.email ? 'e_' + (r.entreg === 'valid' ? 'valid' : (r.entreg === 'risky' || r.entreg === 'catch-all') ? 'risky' : r.entreg === 'invalid' ? 'invalid' : 'unver') : 'e_none');
+    if (r.estado === 'pausa') s.add('pausa'); if (r.estado === 'ejecucion') s.add('ejecucion'); if (r.estado === 'pendiente') s.add('pendiente'); if (r.estado === 'finalizado') s.add('finalizado');
+    if (r.sent > 0) s.add('enviado'); if (r.opened > 0) s.add('abiertos'); if (r.clicked > 0) s.add('interactuo');
+    if (r.estado === 'respondido' || ['respondio', 'aceptado', 'reunion', 'mas_adelante'].includes(dis)) s.add('respondido');
+    if (r.estado === 'rebotado' || r.bounced > 0) s.add('rebotados'); if (r.failed > 0) s.add('error');
+    if (r.estado === 'interesado') s.add('interesado'); if (r.estado === 'no_interesado') s.add('no_interesado'); if (dis === 'no_contactar') s.add('cancelar');
+    return [...s];
+  }
+  const _llUniq = (rows, g) => [...new Set(rows.map(g).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+  let _llFDc = null;
+  function _llFD(rows) {
+    rows = rows || _llRows(_activeSeq);
+    if (_llFDc && _llFDc.rows === rows) return _llFDc.defs;
+    const T = (k, l, get) => ({ k, l, t: 'txt', get: get || (r => r[k]) });
+    const defs = [
+      { k: 'estado', l: 'Estado', t: 'tree' },
+      T('nombre', 'Nombre'), T('apellido', 'Apellido'), T('email', 'Email'), T('telefono', 'Número de teléfono'), T('linkedin', 'LinkedIn'), T('empresa', 'Empresa'), T('cargo', 'Título del puesto'),
+      { k: 'propietario', l: 'Propietario', t: 'sel', get: r => r.propietario, opts: () => _llUniq(rows, r => r.propietario).map(v => [v, v]) },
+      { k: 'lista', l: 'Lista de contactos', t: 'sel', get: r => r.lista, opts: () => _llUniq(rows, r => r.lista).map(v => [v, v]) },
+      { k: 'incorporado', l: 'Fecha de incorporación a la campaña', t: 'date', get: r => r.incorporado },
+      { k: 'verificado', l: 'Fecha de verificación del email', t: 'date', get: r => r.verificado },
+      { k: 'prioridad', l: 'Prioridad del contacto', t: 'sel', get: r => r.prioridad, opts: () => _llUniq(rows, r => r.prioridad).map(v => [v, v]) },
+      { k: 'tz', l: 'Zona horaria', t: 'sel', get: r => r.tz, opts: () => _llUniq(rows, r => r.tz).map(v => [v, v]) },
+      T('pais', 'País'), T('ciudad', 'Ciudad'), T('region', 'Región'), T('seniority', 'Seniority'), T('departamento', 'Departamento'),
+      { k: 'paso', l: 'Paso de la secuencia', t: 'sel', get: r => String(r.paso), opts: (id) => _seqSteps(id || _activeSeq).map((st, i) => [String(i + 1), `Paso ${i + 1} · ${_sedTitle(st)}`]) },
+      { k: 'entreg', l: 'Entregabilidad', t: 'sel', get: r => r.entreg, opts: () => [['valid', 'Entregable'], ['risky', 'Arriesgado'], ['invalid', 'No entregado'], ['', 'No verificado'], ['none', 'Email no encontrado']] },
+    ];
+    const vk = new Set(); rows.forEach(r => Object.keys(r.vars || {}).forEach(k => { if (String(r.vars[k] == null ? '' : r.vars[k]).trim()) vk.add(k); }));
+    [...vk].sort((a, b) => a.localeCompare(b)).slice(0, 120).forEach(k => defs.push({ k: 'v:' + k, l: k, t: 'txt', get: r => (r.vars || {})[k], variable: true }));
+    _llFDc = { rows, defs }; return defs;
+  }
+  const _ymd = d => { const x = new Date(d); if (isNaN(x)) return ''; return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+  function _llTxt(v, op, q) {
+    v = String(v == null ? '' : v).trim().toLowerCase(); q = String(q || '').trim().toLowerCase();
+    switch (op) {
+      case 'completado': return v !== ''; case 'no_rellenado': return v === '';
+      case 'contiene': return v.includes(q); case 'no_contiene': return !v.includes(q);
+      case 'empieza': return v.startsWith(q); case 'termina': return v.endsWith(q);
+      case 'no_empieza': return !v.startsWith(q); case 'no_termina': return !v.endsWith(q);
+      case 'es': return v === q; case 'no_es': return v !== q;
+      default: return v.includes(q);
+    }
+  }
+  function _llMatch(f, r, defs) {
+    const d = defs.find(x => x.k === f.k); if (!d) return true;
+    if (d.t === 'tree') return (f.vals || []).some(k => (r.ests || []).includes(k));
+    if (d.t === 'sel') return (f.vals || []).includes(String(d.get(r) == null ? '' : d.get(r)));
+    if (d.t === 'date') { const v = _ymd(d.get(r)); if (!v) return false; return (!f.from || v >= f.from) && (!f.to || v <= f.to); }
+    return _llTxt(d.get(r), f.op || 'contiene', f.q);
+  }
   function _llFiltered(id, rows) {
-    const q = _llQ.toLowerCase();
+    const q = _llQ.toLowerCase(), defs = _llF.length ? _llFD(rows) : [];
     return rows.filter(r => {
       if (q && ![r.nombre, r.apellido, r.email, r.empresa, r.cargo, r.telefono, r.pais].join(' ').toLowerCase().includes(q)) return false;
-      return _llF.every(f => {
-        const v = String(f.k === 'paso' ? r.paso : r[f.k] == null ? '' : r[f.k]);
-        if (f.vals) return f.vals.includes(v);
-        return v.toLowerCase().includes(String(f.q || '').toLowerCase());
-      });
+      return _llF.every(f => _llMatch(f, r, defs));
     });
+  }
+  const _MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const _fmtD = ymd => { if (!ymd) return ''; const [y, m, d] = ymd.split('-').map(Number); return `${d} ${_MES[m - 1].slice(0, 3)} ${y}`; };
+  function _llDateSug() {
+    const t = new Date(); t.setHours(12, 0, 0, 0);
+    const add = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+    const mon = add(t, -((t.getDay() + 6) % 7));
+    const mStart = new Date(t.getFullYear(), t.getMonth(), 1, 12), pmStart = new Date(t.getFullYear(), t.getMonth() - 1, 1, 12), pmEnd = new Date(t.getFullYear(), t.getMonth(), 0, 12);
+    return [['Hoy', t, t], ['Esta semana', mon, t], ['Últimos 7 días', add(t, -7), t], ['Últimos 30 días', add(t, -30), t], ['Últimos 90 días', add(t, -90), t], ['Este mes', mStart, t], ['Este año', new Date(t.getFullYear(), 0, 1, 12), t], ['El mes pasado', pmStart, pmEnd], ['El año pasado', new Date(t.getFullYear() - 1, 0, 1, 12), new Date(t.getFullYear() - 1, 11, 31, 12)]].map(([l, a, b]) => [l, _ymd(a), _ymd(b)]);
+  }
+  function _llChipTxt(f, d, id) {
+    if (!d) return '';
+    if (d.t === 'tree') { const names = {}; _LL_TREE.forEach(n => { names[n.k] = n.l; (n.kids || []).forEach(([k, l]) => { names[k] = l; }); }); return (f.vals || []).map(v => names[v] || v).join(', '); }
+    if (d.t === 'sel') { const o = d.opts(id); return (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? x[1] : (v === '' ? 'No verificado' : v); }).join(', '); }
+    if (d.t === 'date') return (f.from === f.to || !f.to) ? _fmtD(f.from) : `${_fmtD(f.from)} → ${_fmtD(f.to)}`;
+    const op = _LL_OPS.find(x => x[0] === (f.op || 'contiene')) || _LL_OPS[2];
+    return op[1].toLowerCase() + (op[2] ? ` «${f.q}»` : '');
   }
   const _llI = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   function _llAvColor(t) { let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; }
@@ -25146,33 +25229,35 @@ const LeadManagerModule = (() => {
       case 'resultado': return r.resultado ? _dispoBadge(r.resultado) : '<span class="ll-dim">—</span>';
       case 'linkedin': return r.linkedin ? `<a href="${esc(/^https?:/i.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(String(r.linkedin).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : '<span class="ll-dim">—</span>';
       case 'incorporado': return r.incorporado ? new Date(r.incorporado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-      default: return r[k] ? esc(r[k]) : '<span class="ll-dim">—</span>';
+      case 'verificado': return r.verificado ? new Date(r.verificado).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '<span class="ll-dim">—</span>';
+      default: { const v = k.startsWith('v:') ? (r.vars || {})[k.slice(2)] : r[k]; return v ? esc(v) : '<span class="ll-dim">—</span>'; }
     }
   }
   function _llHtml(id) {
     const rows = _llRows(id), isE = _llMode === 'empresas', emp = _llCompanies(id, rows), all = isE ? _llCoFilter(emp) : _llFiltered(id, rows), vis = _llCols();
-    const cols = _LL_COLS.filter(c => vis.has(c.k)), hidden = _LL_COLS.filter(c => !vis.has(c.k));
+    const allc = _llAllOrdered(rows), cols = allc.filter(c => vis.has(c.k)), hidden = allc.filter(c => !vis.has(c.k));
     const pages = Math.max(1, Math.ceil(all.length / _LL_PAGE)); if (_llPage >= pages) _llPage = pages - 1;
     const view = all.slice(_llPage * _LL_PAGE, (_llPage + 1) * _LL_PAGE);
     const sinEmail = rows.filter(r => !r.email).length, nSel = _llSel.size;
     const allSel = !isE && view.length && view.every(r => _llSel.has(r.cid));
     const enrN = nSel || rows.length;
     const loading = !Array.isArray(_seqContacts);
-    const chips = _llF.map((f, i) => { const d = _LL_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts(id) : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : `contiene «${f.q}»`; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
+    const _fdAll = _llF.length ? _llFD(_llRows(id)) : [];
+    const chips = _llF.map((f, i) => { const d = _fdAll.find(x => x.k === f.k) || {}; const sep = d.t === 'txt' ? ' ' : ': '; return `<span class="ll-chip" onclick="LeadManagerModule.llFilterOpen(event,'${esc(f.k).replace(/'/g, "\\'")}')"><b>${esc(d.l || f.k)}</b>${sep}${esc(_llChipTxt(f, d, id))}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.llFilterDel(${i})">✕</button></span>`; }).join('');
     return `<div class="ll${isE ? ' ll--emp' : ''}">
       ${!isE && sinEmail && _llFBanner ? `<div class="ll-banner">${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16)}<span>${sinEmail} prospecto${sinEmail === 1 ? '' : 's'} de la lista no tiene${sinEmail === 1 ? '' : 'n'} email todavía. Nova puede buscarlo${sinEmail === 1 ? '' : 's'} y verificarlo${sinEmail === 1 ? '' : 's'} por ti.</span><button class="ll-banner__b" onclick="LeadManagerModule.llEnrich('find')">Encontrar emails</button><button class="ll-banner__x" title="Ocultar" onclick="LeadManagerModule.llBanner()">✕</button></div>` : ''}
       <div class="ll__bar">
         <label class="ll-search">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-q" placeholder="Buscar cualquier cosa" value="${esc(_llQ)}" autocomplete="off" oninput="LeadManagerModule.llSearch(this.value)"></label>
         <button class="ll-btn ll-hide-e${_llF.length ? ' is-on' : ''}" onclick="LeadManagerModule.llFilterOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_llF.length ? ` <i class="ll-n">${_llF.length}</i>` : ''}</button>
-        <button class="ll-ico ll-hide-e" title="Ajustes de la tabla (columnas)" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
-        <button class="ll-ico ll-hide-e" title="Historial de altas" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
+        <button class="ll-ico ll-hide-e" title="Configurar columnas" onclick="LeadManagerModule.llColsOpen()">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 16)}</button>
+        <button class="ll-ico ll-hide-e" title="Historial de importación" onclick="LeadManagerModule.llHistory()">${_llI('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.llCleanMenu(event)" title="Limpiar nombres, cargos, emails, teléfonos… con vista previa">${_llI('<path d="M19.4 4.6l-9.8 9.8"/><path d="M9.6 14.4c-2.7-.7-5 .9-5.6 3.9-.1.5.3.9.8.7 1.4-.4 2.3.1 3 .9.6.8 1.4 1.1 2.4.7 2-.8 2.3-3.3-.6-6.2z"/>', 14)} Limpiar ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <button class="ll-btn ll-hide-e" onclick="LeadManagerModule.llEnrichMenu(event)">${_llI('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>', 14)} Enriquecer ${enrN}<span class="ll-w"> prospecto${enrN === 1 ? '' : 's'}</span> ${_llI('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
         <div class="ll-seg" role="tablist"><button class="${!isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('contactos')">${_llI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 14)} Contactos <i>${rows.length}</i></button><button class="${isE ? 'on' : ''}" onclick="LeadManagerModule.llMode('empresas')">${_llI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18M3 9h6"/>', 14)} Empresas <i>${emp.length}</i></button></div>
         <span class="sp"></span>
         <button class="ll-pri" onclick="LeadManagerModule.llAddMenu(event)">${_llI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 15)} Añadir prospectos</button>
       </div>
-      ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Quitar filtros</button></div>` : ''}
+      ${chips ? `<div class="ll__chips">${chips}<button class="ll-clr" onclick="LeadManagerModule.llFilterClear()">Eliminar todos los filtros</button></div>` : ''}
       ${nSel ? `<div class="ll-selbar"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b><button onclick="LeadManagerModule.llBulk('pause')">Pausar</button><button onclick="LeadManagerModule.llBulk('resume')">Reanudar</button><button onclick="LeadManagerModule.llBulk('verify')">Verificar emails</button><button class="is-red" onclick="LeadManagerModule.llBulk('remove')">Quitar de la secuencia</button><span class="sp"></span><button title="Quitar la selección" onclick="LeadManagerModule.llSelClear()">✕</button></div>` : ''}
       ${isE ? _llCoTable(view, loading) : `      <div class="ll__tbl"><table class="ll-t"><thead><tr>
         <th class="ll-ck"><input type="checkbox" ${allSel ? 'checked' : ''} onchange="LeadManagerModule.llSelPage(this.checked)"></th>
@@ -25313,23 +25398,35 @@ const LeadManagerModule = (() => {
     document.body.appendChild(m); return m;
   }
   function llModalClose() { document.getElementById('ll-modal')?.remove(); }
-  // ── Ajustes de la tabla ──
-  let _llColDraft = null, _llColQ = '';
-  function llColsOpen() { _llColDraft = new Set(_llCols()); _llColQ = ''; _llColsPaint(); }
+  // ── Ajustes de la tabla (columnas: arrastrar para ordenar, ojo para mostrar/ocultar) ──
+  let _llColDraft = null, _llColOrd = [], _llColQ = '', _llDragK = '';
+  function llColsOpen() { _llColOrd = _llAllOrdered().map(c => c.k); _llColDraft = new Set(_llCols()); _llColQ = ''; _llColsPaint(); }
   function _llColsPaint() {
-    const q = _llColQ.toLowerCase(), list = _LL_COLS.filter(c => !q || c.l.toLowerCase().includes(q));
-    const body = `<div class="ll-cs__top"><span>Columnas <i class="ll-n">${_llColDraft.size} / ${_LL_COLS.length}</i></span><span class="sp"></span><button onclick="LeadManagerModule.llColsAll(true)">${_llI('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 14)} Mostrar todo</button><button onclick="LeadManagerModule.llColsAll(false)">${_llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/>', 14)} Ocultar todo</button></div>
-      <label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
-      <div class="ll-cs__l">${list.map(c => `<label class="ll-cs__r${c.lock ? ' is-lock' : ''}"><input type="checkbox" ${_llColDraft.has(c.k) ? 'checked' : ''} ${c.lock ? 'disabled' : ''} onchange="LeadManagerModule.llColsTick('${c.k}',this.checked)"><span>${esc(c.l)}</span>${c.lock ? _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 13) : ''}</label>`).join('')}</div>`;
-    const foot = `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
-    const had = document.getElementById('ll-modal'); if (had) { had.querySelector('.ll-m__bd').innerHTML = body; } else _llModal('Ajustes de la tabla', body, foot, 460);
+    const all = _llAllCols(), byK = new Map(all.map(c => [c.k, c])), q = _llColQ.toLowerCase();
+    const list = _llColOrd.map(k => byK.get(k)).filter(c => c && (!q || c.l.toLowerCase().includes(q)));
+    const eye = _llI('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 15), eyeOff = _llI('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>', 15);
+    const grip = '<svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>';
+    const lock = _llI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 14);
+    const body = `<div class="llcs-top"><span class="llcs-t">Columnas <i>${_llColDraft.size} / ${all.length}</i></span><span class="sp"></span><button type="button" class="llcs-b" onclick="LeadManagerModule.llColsAll(true)">${eye} Mostrar todo</button><button type="button" class="llcs-b" onclick="LeadManagerModule.llColsAll(false)">${eyeOff} Ocultar todo</button></div>
+      <label class="llcs-s">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="ll-cq" placeholder="Buscar" value="${esc(_llColQ)}" autocomplete="off" oninput="LeadManagerModule.llColsQ(this.value)"></label>
+      <div class="llcs-l">${list.map(c => { const lk = c.k === 'nombre_completo', on = _llColDraft.has(c.k); return `<div class="llcs-r${on ? '' : ' is-off'}${lk ? ' is-lock' : ''}" data-k="${esc(c.k)}" ${lk ? '' : 'draggable="true" ondragstart="LeadManagerModule.llColDrag(event)"'} ondragover="event.preventDefault()" ondrop="LeadManagerModule.llColDrop(event)"><span class="llcs-n">${lk ? lock : grip}<span>${esc(c.l)}</span></span>${lk ? '' : `<span class="llcs-o"><button type="button" title="${on ? 'Ocultar columna' : 'Mostrar columna'}" aria-label="${on ? 'Ocultar columna' : 'Mostrar columna'}" onclick="LeadManagerModule.llColsTick(this)">${on ? eye : eyeOff}</button></span>`}</div>`; }).join('') || '<div class="cp2-empty">Sin resultados.</div>'}</div>`;
+    const foot = `<button class="llcs-fb" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="llcs-fb llcs-fb--p" onclick="LeadManagerModule.llColsSave()">Guardar</button>`;
+    const had = document.getElementById('ll-modal');
+    if (had) { const l = had.querySelector('.llcs-l'), st = l ? l.scrollTop : 0; had.querySelector('.ll-m__bd').innerHTML = body; const l2 = had.querySelector('.llcs-l'); if (l2) l2.scrollTop = st; }
+    else _llModal('Ajustes de la tabla', body, foot, 501).classList.add('llcs-bd');
   }
   function llColsQ(v) { _llColQ = v; const pos = v.length; _llColsPaint(); const e = document.getElementById('ll-cq'); if (e) { e.focus(); e.setSelectionRange(pos, pos); } }
-  function llColsTick(k, on) { if (on) _llColDraft.add(k); else _llColDraft.delete(k); _llColsPaint(); }
-  function llColsAll(on) { _llColDraft = on ? new Set(_LL_COLS.map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
-  function llColsSave() { _llSaveCols(_llColDraft); llModalClose(); _llRepaint(); }
+  function llColsTick(el) { const k = el.closest('.llcs-r').dataset.k; if (_llColDraft.has(k)) _llColDraft.delete(k); else _llColDraft.add(k); _llColsPaint(); }
+  function llColsAll(on) { _llColDraft = on ? new Set(_llAllCols().map(c => c.k)) : new Set(['nombre_completo']); _llColsPaint(); }
+  function llColDrag(ev) { _llDragK = ev.currentTarget.dataset.k; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', _llDragK); } catch (_) {} }
+  function llColDrop(ev) {
+    ev.preventDefault(); const to = ev.currentTarget.dataset.k, from = _llDragK; _llDragK = '';
+    if (!from || from === to || to === 'nombre_completo') return;
+    const o = _llColOrd.filter(k => k !== from), i = o.indexOf(to); o.splice(i < 0 ? o.length : i, 0, from); _llColOrd = o; _llColsPaint();
+  }
+  function llColsSave() { _llSaveCols(_llColDraft); try { localStorage.setItem('lm_ll_order', JSON.stringify(_llColOrd)); } catch (_) {} llModalClose(); _llRepaint(); }
   function llColAdd(ev) {
-    const vis = _llCols(), hid = _LL_COLS.filter(c => !vis.has(c.k));
+    const vis = _llCols(), hid = _llAllOrdered().filter(c => !vis.has(c.k));
     _llPop(ev, `${_llMI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 'Crear columna personalizada', '', { off: true, badge: 'Próximamente' })}
       ${_llMI('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>', 'Crear columna de IA', '', { off: true, badge: 'Próximamente' })}
       <div class="sed-pop__g">COLUMNAS OCULTAS</div>
@@ -25338,39 +25435,83 @@ const LeadManagerModule = (() => {
   }
   function llColShow(k) { const set = _llCols(); set.add(k); _llSaveCols(set); _llRepaint(); }
   // ── Filtros ──
+  function _llNewDraft(k) {
+    const d = _llFD().find(x => x.k === k) || {}, ex = _llF.find(f => f.k === k), t = new Date();
+    if (ex) { const c = JSON.parse(JSON.stringify(ex)); if (d.t === 'date') c.month = (c.from || _ymd(t)).slice(0, 7); return c; }
+    return { k, vals: (d.t === 'tree' || d.t === 'sel') ? [] : undefined, op: d.t === 'txt' ? '' : undefined, q: '', from: '', to: '', month: _ymd(t).slice(0, 7) };
+  }
   function llFilterOpen(ev, key) {
     if (ev.stopPropagation) ev.stopPropagation();
-    const f0 = key ? _llF.find(f => f.k === key) : null;
-    const first = key || (_LL_FDEF[0] || {}).k;
-    _llDraft = f0 ? JSON.parse(JSON.stringify(f0)) : { k: first, vals: _LL_FDEF.find(x => x.k === first).t === 'sel' ? [] : undefined, q: '' };
-    window.__llAnchor = ev.currentTarget;
+    _llDraft = _llNewDraft(key || 'estado');
+    window.__llColQ = ''; window.__llAnchor = ev.currentTarget;
     _llFilterPaint(true);
   }
+  function _llFValid(dr, d) {
+    if (!d) return false;
+    if (d.t === 'tree' || d.t === 'sel') return (dr.vals || []).length > 0;
+    if (d.t === 'date') return !!dr.from;
+    const op = _LL_OPS.find(x => x[0] === dr.op); return !!op && (!op[2] || String(dr.q || '').trim() !== '');
+  }
+  function _llCalHtml(dr) {
+    const [Y, M] = dr.month.split('-').map(Number), first = new Date(Y, M - 1, 1), lead = (first.getDay() + 6) % 7, days = new Date(Y, M, 0).getDate();
+    const cells = []; for (let i = 0; i < lead; i++) cells.push('<span class="llc-d llc-d--o"></span>');
+    for (let d = 1; d <= days; d++) {
+      const ymd = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`, a = dr.from, b = dr.to || dr.from;
+      const on = a && (ymd === a || ymd === b), mid = a && b && ymd > a && ymd < b;
+      cells.push(`<button type="button" class="llc-d${on ? ' is-on' : ''}${mid ? ' is-mid' : ''}${ymd === _ymd(new Date()) ? ' is-today' : ''}" onclick="LeadManagerModule.llDateDay('${ymd}')">${d}</button>`);
+    }
+    return `<div class="llc"><div class="llc-h"><button type="button" onclick="LeadManagerModule.llDateMonth(-1)">‹</button><b>${_MES[M - 1]} ${Y}</b><button type="button" onclick="LeadManagerModule.llDateMonth(1)">›</button></div><div class="llc-w">${['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(x => `<span>${x}</span>`).join('')}</div><div class="llc-g">${cells.join('')}</div></div>
+      <div class="llc-s"><div class="llc-st">Sugerencias</div>${_llDateSug().map(([l, a, b]) => `<button type="button" class="llc-sg${dr.from === a && (dr.to || dr.from) === b ? ' is-on' : ''}" onclick="LeadManagerModule.llDateSug('${a}','${b}')"><span>${l}</span><em>${a === b ? _fmtD(a) : _fmtD(a) + ' – ' + _fmtD(b)}</em></button>`).join('')}</div>`;
+  }
   function _llFilterPaint(first) {
-    const id = _activeSeq, rows = _llRows(id), d = _LL_FDEF.find(x => x.k === _llDraft.k), q = (window.__llColQ || '').toLowerCase();
-    const left = _LL_FDEF.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${x.k}')">${esc(x.l)}</button>`).join('');
+    const id = _activeSeq, rows = _llRows(id), defs = _llFD(rows), d = defs.find(x => x.k === _llDraft.k) || defs[0], q = (window.__llColQ || '').toLowerCase();
+    const left = defs.filter(x => !q || x.l.toLowerCase().includes(q)).map(x => `<button class="ll-fp__c${x.k === _llDraft.k ? ' on' : ''}" onclick="LeadManagerModule.llFilterCol('${esc(x.k).replace(/'/g, "\\'")}')">${esc(x.l)}</button>`).join('') || '<div class="sed-pop__note">Sin columnas</div>';
     let right = '';
-    if (d.t === 'sel') {
-      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.k === 'paso' ? r.paso : r[d.k]) === v).length, vals = _llDraft.vals || [];
-      right = `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length && opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('');
-    } else right = `<div class="ll-fp__t"><small>Contiene</small><input id="ll-ft" value="${esc(_llDraft.q || '')}" placeholder="Valor…" autocomplete="off" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()"></div>`;
-    const html = `<div class="ll-fp"><div class="ll-fp__l"><label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 14)}<input placeholder="Buscar una columna" value="${esc(window.__llColQ || '')}" oninput="window.__llColQ=this.value;LeadManagerModule.llFilterColSearch()" autocomplete="off"></label><div class="ll-fp__cl">${left}</div></div><div class="ll-fp__r"><div class="ll-fp__vl">${right}</div><div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.llFilterApply()">Aplicar</button></div></div></div>`;
-    const m = document.getElementById('sed-pop');
-    if (!first && m) { m.innerHTML = html; return; }
+    const vals = _llDraft.vals || [];
+    if (d.t === 'tree') {
+      const cnt = k => rows.filter(r => (r.ests || []).includes(k)).length;
+      const leaves = _LL_TREE.flatMap(n => n.kids ? n.kids.map(x => x[0]) : [n.k]);
+      const allOn = leaves.every(k => vals.includes(k));
+      right = `<label class="ll-fp__v"><input type="checkbox" ${allOn ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + _LL_TREE.map(n => {
+        if (!n.kids) return `<label class="ll-fp__v ll-fp__v--i"><input type="checkbox" ${vals.includes(n.k) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${n.k}',this.checked)"> <span>${n.l} <em>(${cnt(n.k)})</em></span></label>`;
+        const on = n.kids.filter(x => vals.includes(x[0])).length, tot = n.kids.reduce((a, x) => a + cnt(x[0]), 0);
+        return `<label class="ll-fp__v ll-fp__v--i"><input type="checkbox" ${on === n.kids.length ? 'checked' : ''} ${on && on < n.kids.length ? 'data-ind="1"' : ''} onchange="LeadManagerModule.llFilterGroup('${n.k}',this.checked)"> <span>${n.l} <em>(${tot})</em></span></label>` + n.kids.map(([k, l]) => `<label class="ll-fp__v ll-fp__v--k"><input type="checkbox" ${vals.includes(k) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${k}',this.checked)"> <span>${l} <em>(${cnt(k)})</em></span></label>`).join('');
+      }).join('');
+    } else if (d.t === 'sel') {
+      const opts = d.opts(id), cnt = v => rows.filter(r => String(d.get(r) == null ? '' : d.get(r)) === v).length;
+      right = opts.length ? `<label class="ll-fp__v"><input type="checkbox" ${vals.length === opts.length ? 'checked' : ''} onchange="LeadManagerModule.llFilterAll(this.checked)"> <span>Todo</span></label>` + opts.map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" ${vals.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.llFilterTick('${esc(v).replace(/'/g, "\\'")}',this.checked)"> <span>${esc(l)} <em>(${cnt(v)})</em></span></label>`).join('') : '<div class="sed-pop__note" style="padding:16px">Todavía no hay valores en esta columna.</div>';
+    } else if (d.t === 'date') {
+      right = `<div class="llc-wrap">${_llCalHtml(_llDraft)}</div>`;
+    } else {
+      right = _LL_OPS.map(([k, l, needs]) => `<label class="ll-fp__v ll-fp__v--op"><input type="radio" name="llop" ${_llDraft.op === k ? 'checked' : ''} onchange="LeadManagerModule.llFilterOp('${k}')"> <span>${l}</span></label>${needs && _llDraft.op === k ? `<div class="ll-fp__in"><input id="ll-ft" value="${esc(_llDraft.q || '')}" autocomplete="off" oninput="LeadManagerModule.llFilterQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.llFilterApply()"></div>` : ''}`).join('');
+    }
+    const ok = _llFValid(_llDraft, d);
+    const html = `<div class="ll-fp"><div class="ll-fp__l"><label class="ll-search ll-search--full">${_llI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 14)}<input placeholder="Buscar una columna" value="${esc(window.__llColQ || '')}" oninput="window.__llColQ=this.value;LeadManagerModule.llFilterColSearch()" autocomplete="off"></label><div class="ll-fp__cl">${left}</div></div><div class="ll-fp__r"><div class="ll-fp__vl">${right}</div><div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="ll-fapply" ${ok ? '' : 'disabled'} onclick="LeadManagerModule.llFilterApply()">Aplicar</button></div></div></div>`;
+    const m = document.getElementById('sed-pop'), w = d.t === 'date' ? 880 : 551;
+    if (!first && m) { m.innerHTML = html; m.style.width = w + 'px'; m.querySelectorAll('input[data-ind]').forEach(i => { i.indeterminate = true; }); return; }
     document.getElementById('sed-pop')?.remove();
-    const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = '600px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
-    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 620)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    const pop = document.createElement('div'); pop.id = 'sed-pop'; pop.className = 'sed-pop ll-pop'; pop.style.width = w + 'px'; pop.innerHTML = html; pop.onclick = e => e.stopPropagation(); document.body.appendChild(pop);
+    pop.querySelectorAll('input[data-ind]').forEach(i => { i.indeterminate = true; });
+    const r = window.__llAnchor.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 20)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
     setTimeout(() => document.addEventListener('click', function f() { pop.remove(); document.removeEventListener('click', f); }), 0);
   }
   function llFilterColSearch() { const el = document.querySelector('#sed-pop .ll-fp__l input'); const pos = el ? el.selectionStart : 0; _llFilterPaint(false); const e2 = document.querySelector('#sed-pop .ll-fp__l input'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
-  function llFilterCol(k) { const ex = _llF.find(f => f.k === k), d = _LL_FDEF.find(x => x.k === k); _llDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' }; _llFilterPaint(false); }
+  function llFilterCol(k) { _llDraft = _llNewDraft(k); _llFilterPaint(false); }
   function llFilterTick(v, on) { const a = new Set(_llDraft.vals || []); if (on) a.add(v); else a.delete(v); _llDraft.vals = [...a]; _llFilterPaint(false); }
-  function llFilterAll(on) { const d = _LL_FDEF.find(x => x.k === _llDraft.k); _llDraft.vals = on ? d.opts(_activeSeq).map(o => o[0]) : []; _llFilterPaint(false); }
-  function llFilterQ(v) { _llDraft.q = v; }
+  function llFilterGroup(k, on) { const n = _LL_TREE.find(x => x.k === k); const a = new Set(_llDraft.vals || []); (n.kids || []).forEach(x => { if (on) a.add(x[0]); else a.delete(x[0]); }); _llDraft.vals = [...a]; _llFilterPaint(false); }
+  function llFilterAll(on) { const d = _llFD().find(x => x.k === _llDraft.k); _llDraft.vals = !on ? [] : d.t === 'tree' ? _LL_TREE.flatMap(n => n.kids ? n.kids.map(x => x[0]) : [n.k]) : d.opts(_activeSeq).map(o => o[0]); _llFilterPaint(false); }
+  function llFilterOp(op) { _llDraft.op = op; _llFilterPaint(false); const i = document.getElementById('ll-ft'); if (i) i.focus(); }
+  function llFilterQ(v) { _llDraft.q = v; const b = document.getElementById('ll-fapply'); if (b) b.disabled = !_llFValid(_llDraft, _llFD().find(x => x.k === _llDraft.k)); }
+  function llDateDay(ymd) { const dr = _llDraft; if (!dr.from || (dr.from && dr.to)) { dr.from = ymd; dr.to = ''; } else if (ymd < dr.from) { dr.to = dr.from; dr.from = ymd; } else dr.to = ymd; _llFilterPaint(false); }
+  function llDateMonth(n) { const [y, m] = _llDraft.month.split('-').map(Number), x = new Date(y, m - 1 + n, 1); _llDraft.month = _ymd(x).slice(0, 7); _llFilterPaint(false); }
+  function llDateSug(a, b) { _llDraft.from = a; _llDraft.to = b; _llDraft.month = a.slice(0, 7); _llFilterPaint(false); }
   function llFilterApply() {
-    const d = _LL_FDEF.find(x => x.k === _llDraft.k); document.getElementById('sed-pop')?.remove();
+    const d = _llFD().find(x => x.k === _llDraft.k); if (!d || !_llFValid(_llDraft, d)) return;
+    document.getElementById('sed-pop')?.remove();
     _llF = _llF.filter(f => f.k !== _llDraft.k);
-    if (d.t === 'sel' ? (_llDraft.vals || []).length : String(_llDraft.q || '').trim()) _llF.push(d.t === 'sel' ? { k: d.k, vals: _llDraft.vals } : { k: d.k, q: String(_llDraft.q).trim() });
+    if (d.t === 'tree' || d.t === 'sel') _llF.push({ k: d.k, vals: _llDraft.vals });
+    else if (d.t === 'date') _llF.push({ k: d.k, from: _llDraft.from, to: _llDraft.to || _llDraft.from });
+    else _llF.push({ k: d.k, op: _llDraft.op, q: String(_llDraft.q || '').trim() });
     _llPage = 0; _llRepaint();
   }
   function llFilterDel(i) { _llF.splice(i, 1); _llRepaint(); }
@@ -25390,19 +25531,31 @@ const LeadManagerModule = (() => {
     _llSel.clear(); _seqContacts = null; await _seqLoadContacts(id);
     showBanner(`${ok} de ${ids.length} prospecto${ids.length === 1 ? '' : 's'}: ${kind === 'remove' ? 'quitados' : kind === 'pause' ? 'pausados' : 'reanudados'}`, ok ? 'success' : 'error');
   }
-  // ── Historial de altas ──
-  function llHistory() {
-    const rows = _llRows(_activeSeq), g = new Map();
-    rows.forEach(r => { const d = r.incorporado ? String(r.incorporado).slice(0, 10) : '—'; if (!g.has(d)) g.set(d, []); g.get(d).push(r.cid); });
-    const list = [...g.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-    const body = list.length ? `<table class="ll-ht"><thead><tr><th>Método</th><th>Fecha</th><th>Información</th><th></th></tr></thead><tbody>${list.map(([d, ids]) => `<tr><td>Alta en la secuencia</td><td>${d === '—' ? '—' : new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td><td>${ids.length} prospecto${ids.length === 1 ? '' : 's'} añadido${ids.length === 1 ? '' : 's'}</td><td><button class="ll-ico" title="Quitar este grupo de la secuencia" onclick="LeadManagerModule.llHistDel('${d}')">${_llI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>', 15)}</button></td></tr>`).join('')}</tbody></table>` : '<p class="ll-m__p">Aún no se añadió ningún prospecto.</p>';
-    _llModal('Historial de altas', body, '', 720);
+  // ── Historial de importación (igual que Lemlist: método, origen, fecha, información y borrar) ──
+  const _FUENTE_LBL = { manual: 'Añadido manualmente', import: 'Importación', cola_empresas: 'Cola de empresas', cantera: 'Desde Cantera', apollo: 'Importar de Apollo', hubspot: 'Importar de HubSpot' };
+  function _llHistGroups(id) {
+    const g = new Map();
+    _llRows(id).forEach(r => {
+      const f = String(r.lista || '').trim(), src = String((r.c || {}).fuente || '').trim(), key = f ? 'f:' + f : 'u:' + (src || 'manual');
+      if (!g.has(key)) g.set(key, { key, file: f, fuente: src || 'manual', ids: [], first: null });
+      const o = g.get(key); o.ids.push(r.cid);
+      const d = (r.c || {}).created_at || r.incorporado; if (d && (!o.first || new Date(d) < new Date(o.first))) o.first = d;
+    });
+    return [...g.values()].sort((a, b) => new Date(b.first || 0) - new Date(a.first || 0));
   }
-  async function llHistDel(d) {
-    const id = _activeSeq, ids = _llRows(id).filter(r => (r.incorporado ? String(r.incorporado).slice(0, 10) : '—') === d).map(r => r.cid);
-    if (!ids.length || !(await novaConfirm({ title: 'Quitar este grupo', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia (siguen en tu CRM).`, confirmText: 'Quitar' }))) return;
+  function llHistory() {
+    const list = _llHistGroups(_activeSeq); window.__llHg = list;
+    const doc = _llI('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>', 16);
+    const fecha = d => { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' (' + x.toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit', hour12: true }) + ')'; };
+    const metodo = o => { if (o.file) return /\.xlsx?$/i.test(o.file) ? 'Importar de Excel' : /\.csv$/i.test(o.file) ? 'Importar de CSV' : 'Importar archivo'; return _FUENTE_LBL[o.fuente] || 'Añadido a la secuencia'; };
+    const body = list.length ? `<div class="llh"><div class="llh-r llh-h"><span>Método</span><span>Origen</span><span>Fecha</span><span>Información</span><span class="llh-a">Acciones</span></div>${list.map((o, i) => `<div class="llh-r"><span class="llh-m">${doc}<b>${esc(metodo(o))}</b></span><span class="llh-o" title="${esc(o.file)}">${esc(o.file || '—')}</span><span>${fecha(o.first)}</span><span>${o.ids.length} prospecto${o.ids.length === 1 ? '' : 's'} ${o.file ? 'importado' : 'añadido'}${o.ids.length === 1 ? '' : 's'}</span><span class="llh-a"><button type="button" class="llh-x" title="Quitar estos prospectos de la secuencia" onclick="LeadManagerModule.llHistDel(${i})">${_llI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>', 15)}</button></span></div>`).join('')}</div>` : '<p class="ll-m__p">Aún no se ha importado ningún prospecto.</p>';
+    _llModal('Historial de importación', body, '', 1100).classList.add('llh-bd');
+  }
+  async function llHistDel(i) {
+    const o = (window.__llHg || [])[i]; if (!o) return; const id = _activeSeq, ids = o.ids.slice();
+    if (!ids.length || !(await novaConfirm({ title: 'Quitar esta importación', message: `Se quitan ${ids.length} prospecto${ids.length === 1 ? '' : 's'} de esta secuencia${o.file ? ' (los que vinieron de «' + o.file + '»)' : ''}. Siguen en tu CRM.`, confirmText: 'Quitar' }))) return;
     for (const cid of ids) { try { await apiFetch(`${API}/lm/sequences/${id}/contacts/${cid}`, { method: 'DELETE' }); } catch (_) {} }
-    llModalClose(); _seqContacts = null; await _seqLoadContacts(id); showBanner('Grupo quitado de la secuencia', 'success');
+    llModalClose(); _seqContacts = null; await _seqLoadContacts(id); showBanner('Importación quitada de la secuencia', 'success');
   }
   // ── Alta de prospectos ──
   async function _llAddIds(ids) {
@@ -43756,7 +43909,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
