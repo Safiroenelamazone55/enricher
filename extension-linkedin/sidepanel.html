@@ -2,23 +2,50 @@
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Nova · LinkedIn</title>
 <style>
-:root{--ink:#0A2540;--mut:#64748B;--line:#E4E7DD;--ok:#00804C;--warn:#B45309;--err:#B42318;--bg:#F6F7ED}
-*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);padding:16px}
-h1{font-size:16px;margin:0 0 4px}p{margin:0 0 12px;color:var(--mut);font-size:12.5px}
-.card{background:#fff;border:1px solid var(--line);padding:14px;margin-bottom:12px}
-label{display:block;font-weight:600;font-size:12.5px;margin:10px 0 4px}input,select{width:100%;padding:8px;border:1px solid var(--line);font:inherit;background:#fff}
-button{font:inherit;font-weight:600;padding:9px 12px;border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
-button.pri{background:var(--ink);color:#fff}button:disabled{opacity:.5;cursor:default}.row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1}
-.st{padding:10px;border-left:4px solid var(--mut);background:#fff;font-size:13px}.st.ok{border-color:var(--ok)}.st.warn{border-color:var(--warn)}.st.err{border-color:var(--err)}.st.work{border-color:#1E5FA8}
-.pill{display:inline-block;padding:2px 8px;font-size:12px;font-weight:700;margin-bottom:8px}.pill.on{background:#EAF5EE;color:var(--ok)}.pill.off{background:#FFF7E6;color:var(--warn)}
-.step{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13px}.step i{width:22px;height:22px;border:1px solid #C9CEC0;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:12px;flex-shrink:0}.step.ok i{background:var(--ok);border-color:var(--ok);color:#fff}
-.li{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);margin:8px 0}.li b{display:block}.li small{color:var(--mut)}
-.in{width:34px;height:34px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
-small{color:var(--mut)}details summary{cursor:pointer;font-weight:600;font-size:12.5px}
+:root{--ink:#0A2540;--mut:#64748B;--line:#E6E8DF;--ok:#00804C;--okbg:#E7F5EE;--warn:#B45309;--warnbg:#FFF4DE;--err:#B42318;--errbg:#FDECEA;--work:#1E5FA8;--workbg:#E8F0FB;--bg:#F6F7ED}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);padding:0 0 24px;-webkit-font-smoothing:antialiased}
+.top{display:flex;align-items:center;gap:10px;padding:16px 16px 12px}
+.top img{width:34px;height:34px;border-radius:9px;display:block}
+.top h1{font-size:15px;margin:0;font-weight:700;letter-spacing:-.01em}.top small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+.wrap{padding:0 16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(10,37,64,.04)}
+.hero{display:flex;gap:12px;align-items:center}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--warn);flex:none;box-shadow:0 0 0 5px var(--warnbg)}
+.hero.on .dot{background:var(--ok);box-shadow:0 0 0 5px var(--okbg);animation:pulse 2.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(0,128,76,.08)}}
+.hero b{display:block;font-size:16px;letter-spacing:-.01em}.hero span{font-size:12.5px;color:var(--mut)}
+.msg{margin-top:14px;padding:10px 12px;border-radius:10px;font-size:13px;background:var(--bg);color:var(--ink);display:flex;gap:10px;align-items:flex-start}
+.msg::before{content:"";width:3px;align-self:stretch;border-radius:3px;background:var(--mut);flex:none}
+.msg.ok::before{background:var(--ok)}.msg.warn::before{background:var(--warn)}.msg.err::before{background:var(--err)}.msg.work::before{background:var(--work)}
+.msg.err{background:var(--errbg)}.msg.warn{background:var(--warnbg)}.msg.work{background:var(--workbg)}.msg.ok{background:var(--okbg)}
+.msg small{display:block;color:var(--mut);font-size:11.5px;margin-top:2px}
+.acct{display:flex;gap:10px;align-items:center;margin-top:12px;font-size:12.5px;color:var(--mut)}
+.acct i{width:26px;height:26px;border-radius:7px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font:800 12px/1 system-ui;flex:none;font-style:normal}
+.acct b{color:var(--ink);font-weight:600}
+.row{display:flex;gap:8px;margin-top:14px}.row>*{flex:1}
+button{font:inherit;font-weight:600;font-size:13.5px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;transition:background .15s,transform .05s}
+button:hover{background:#F1F3EA}button:active{transform:scale(.98)}
+button.pri{background:var(--ink);border-color:var(--ink);color:#fff}button.pri:hover{background:#12355c}
+button.go{background:var(--ok);border-color:var(--ok);color:#fff}button.go:hover{background:#006a3f}
+button:disabled{opacity:.5;cursor:default}
+.foot{margin:12px 2px 0;font-size:11.5px;color:var(--mut)}
+label{display:block;font-weight:600;font-size:12.5px;margin:12px 0 5px}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}input:focus,select:focus{outline:2px solid rgba(0,128,76,.25);border-color:var(--ok)}
+.step{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13px}
+.step i{width:22px;height:22px;border-radius:50%;border:1.5px solid #C9CEC0;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:12px;flex:none;color:var(--mut)}
+.step.ok i{background:var(--ok);border-color:var(--ok);color:#fff}
+.li{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:#FAFBF6}.li b{display:block}.li small{color:var(--mut)}
+.in{width:34px;height:34px;border-radius:8px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+small{color:var(--mut)}
+details.card{padding:0}details summary{cursor:pointer;font-weight:600;font-size:13px;padding:13px 16px;list-style:none;display:flex;justify-content:space-between;color:var(--mut)}
+details summary::-webkit-details-marker{display:none}details summary::after{content:"＋";font-weight:400}details[open] summary::after{content:"−"}
+details .in-d{padding:0 16px 16px}
 </style></head><body>
-<h1>Nova · LinkedIn</h1><p>Ejecuta en esta cuenta lo que Nova programa. Los topes y horarios los controla Nova.</p>
+<div class="top"><img src="icons/icon128.png" alt=""><div><h1>Nova · LinkedIn</h1><small>Ejecuta lo que Nova programa en tu cuenta</small></div></div>
+<div class="wrap">
 
-<!-- 1) Aún no vinculada: conectar con Nova, como «iniciar sesión» -->
+<!-- 1) Aún no vinculada -->
 <div class="card" id="conectar" hidden>
   <b>Conectar esta cuenta de LinkedIn con Nova</b>
   <div id="pasos" style="margin-top:8px"></div>
@@ -30,20 +57,24 @@ small{color:var(--mut)}details summary{cursor:pointer;font-weight:600;font-size:
       <label for="nombre">Nombre de la cuenta</label><input id="nombre" placeholder="Ej. LinkedIn de Jenny">
       <label for="cliente">Cliente outbound (opcional)</label><select id="cliente"></select>
     </div>
-    <p style="margin-top:10px"><small>Nova podrá enviar invitaciones, visitas y mensajes que tú programes (con topes), y leer aceptaciones y respuestas. Nunca recibe tu contraseña.</small></p>
+    <p style="margin:10px 0 0"><small>Nova podrá enviar invitaciones, visitas y mensajes que tú programes (con topes), y leer aceptaciones y respuestas. Nunca recibe tu contraseña.</small></p>
     <div class="row"><button id="vincular" class="pri">Permitir y conectar</button></div>
   </div>
   <div class="row" id="accion-extra" hidden><button id="abrir">Abrir</button><button id="reintentar">Reintentar</button></div>
-  <p id="err" style="color:var(--err);margin:10px 0 0"></p>
+  <p id="err" style="color:var(--err);margin:10px 0 0;font-size:12.5px"></p>
 </div>
 
 <!-- 2) Ya vinculada -->
-<div class="card" id="vinculada" hidden><span id="pill" class="pill off">En pausa</span>
-<div id="st" class="st">Cargando…</div>
-<div class="row"><button id="toggle" class="pri">Activar</button><button id="now">Comprobar ahora</button></div>
-<p style="margin-top:10px"><small>Se detiene sola si LinkedIn muestra un aviso, y Nova pausa la cuenta 48 h.</small></p></div>
+<div class="card" id="vinculada" hidden>
+  <div class="hero" id="hero"><span class="dot"></span><div><b id="pill">En pausa</b><span id="sub">Nada se ejecuta hasta que la actives</span></div></div>
+  <div class="acct" id="acct" hidden><i>in</i><div>Cuenta de LinkedIn en este Chrome<br><b id="acctslug"></b></div></div>
+  <div class="msg" id="st">Cargando…</div>
+  <div class="row"><button id="toggle" class="go">Activar</button><button id="now">Comprobar ahora</button></div>
+  <p class="foot">Se detiene sola si LinkedIn muestra un aviso, y Nova pausa la cuenta 48 h.</p>
+</div>
 
-<details class="card"><summary>Avanzado</summary>
-<label for="tok">Vincular con un token (solo si lo anterior no funciona)</label><input id="tok" type="password" placeholder="nvli_…" autocomplete="off">
-<div class="row"><button id="save">Guardar token</button><button id="desvincular">Desvincular este Chrome</button></div></details>
+<details class="card"><summary>Avanzado</summary><div class="in-d">
+<label for="tok" style="margin-top:0">Vincular con un token (solo si lo anterior no funciona)</label><input id="tok" type="password" placeholder="nvli_…" autocomplete="off">
+<div class="row"><button id="save">Guardar token</button><button id="desvincular">Desvincular este Chrome</button></div></div></details>
+</div>
 <script src="sidepanel.js"></script></body></html>

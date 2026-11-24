@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -35,6 +35,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'activar') { activar(!!m.datos).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });
@@ -45,6 +46,16 @@ async function api(path, body) {
   let d = {}; try { d = await r.json(); } catch (_) {}
   if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
   return d;
+}
+
+// Un solo interruptor: activa la extensión Y la cuenta en Nova (salvo pausas por restricción, que Nova no levanta sola)
+async function activar(on) {
+  if (!on) { await chrome.storage.local.set({ paused: true }); await setEstado({ msg: 'Pausada por ti. No se ejecuta nada.', nivel: 'warn', motivo: 'pausa_local' }); return { ok: true }; }
+  await chrome.storage.local.set({ paused: false });
+  let r = {}; try { r = await api('/ext/activar', {}); } catch (e) { r = { ok: false, error: e.message }; }
+  if (r && r.ok === false && !r.error) await setEstado({ msg: 'Nova mantiene esta cuenta en pausa: ' + (r.motivo || 'restricción'), nivel: 'err', motivo: 'cuenta_restringida' });
+  tick(true);
+  return { ok: true, nova: r };
 }
 
 async function sesionIniciada() {
@@ -111,7 +122,7 @@ async function tick(manual) {
     const r = await api('/ext/next', { version: VERSION, sesion, li_slug: slug });
     if (r.config && r.config.v !== undefined) await chrome.storage.local.set({ config: r.config });
     if (!sesion) return setEstado({ msg: 'Inicia sesión en LinkedIn en este Chrome.', nivel: 'warn' });
-    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug });
+    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug, motivo: r.motivo || '' });
     await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}`, nivel: 'work', accion: r.accion, slug });
     const res = await ejecutar(r.accion, r.modo);
     await api('/ext/result', { id: r.accion.id, ...res });
@@ -170,8 +181,7 @@ async function puente(orden, datos) {
   }
   if (orden === 'activar') {
     if (!token && !datos.token) return { error: 'sin_vincular' };
-    await chrome.storage.local.set({ paused: !datos.activa });
-    if (datos.activa) tick(true);
+    if (datos.activa) await activar(true); else await chrome.storage.local.set({ paused: true });
     return { ok: true, pausada: !datos.activa };
   }
   if (orden === 'estado') return { vinculada: !!token, pausada: paused, estado };

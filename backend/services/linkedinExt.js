@@ -612,6 +612,16 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     } catch (e) { console.error('[li] result', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
+  // Un solo interruptor: al pulsar «Activar» en la extensión también se activa la cuenta en Nova. NO levanta pausas por restricción/alerta (esas llevan fecha).
+  app.post('/api/li/ext/activar', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc;
+      if (a.estado === 'restringida' || (a.estado === 'pausada' && a.pausa_hasta && new Date(a.pausa_hasta) > new Date())) return res.json({ ok: false, estado: a.estado, motivo: a.motivo });
+      if (a.estado === 'pausada' || a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]);
+      res.json({ ok: true, estado: 'activa' });
+    } catch (e) { console.error('[li] activar', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
   // Alertas que la extensión ve en cualquier pestaña de LinkedIn (aunque no esté ejecutando nada): verificación, captcha, restricción, sesión cerrada.
   app.post('/api/li/ext/alert', liAuth, async (req, res) => {
     try {

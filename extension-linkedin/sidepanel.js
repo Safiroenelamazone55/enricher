@@ -6,10 +6,18 @@ const msg = (cmd, datos) => new Promise(res => { try { chrome.runtime.sendMessag
 
 async function pintarVinculada() {
   const { paused, estado } = await chrome.storage.local.get({ paused: true, estado: {} });
-  $('pill').textContent = paused ? 'En pausa' : 'Activa'; $('pill').className = 'pill ' + (paused ? 'off' : 'on');
-  $('toggle').textContent = paused ? 'Activar' : 'Pausar';
   const e = estado.msg ? estado : { msg: 'Listo.', nivel: 'ok' };
-  $('st').textContent = e.msg + (e.t ? ' · ' + new Date(e.t).toLocaleTimeString() : '') + (e.slug ? '  ·  Cuenta de LinkedIn en este Chrome: ' + e.slug : ''); $('st').className = 'st ' + (e.nivel || '');
+  const novaPausa = !paused && /^cuenta_(pausada|restringida)/.test(e.motivo || '');
+  const on = !paused && !novaPausa;
+  $('hero').className = 'hero' + (on ? ' on' : '');
+  $('pill').textContent = on ? 'Activa' : (novaPausa ? 'Pausada en Nova' : 'En pausa');
+  $('sub').textContent = on ? 'Ejecutando lo que Nova programe, con sus topes' : (novaPausa ? 'Nova mantiene esta cuenta en pausa' : 'Nada se ejecuta hasta que la actives');
+  $('toggle').textContent = paused ? 'Activar' : 'Pausar';
+  $('toggle').className = paused ? 'go' : 'pri';
+  $('st').className = 'msg ' + (e.nivel || '');
+  $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
+  $('acct').hidden = !e.slug;
+  if (e.slug) $('acctslug').textContent = 'linkedin.com/in/' + e.slug;
 }
 
 const paso = (ok, t) => `<div class="step${ok ? ' ok' : ''}"><i>${ok ? '✓' : '·'}</i><span>${t}</span></div>`;
@@ -60,8 +68,10 @@ $('save').onclick = async () => {
 $('desvincular').onclick = async () => { await chrome.storage.local.set({ token: '', paused: true, estado: {}, identidad: { slug: '', t: 0 } }); pintar(); conectar(); };
 $('toggle').onclick = async () => {
   const { paused } = await chrome.storage.local.get({ paused: true });
-  await chrome.storage.local.set({ paused: !paused }); pintarVinculada();
-  if (paused) chrome.runtime.sendMessage({ cmd: 'tick' });
+  $('toggle').disabled = true;
+  await msg('activar', paused);   // un solo interruptor: extensión + cuenta en Nova
+  $('toggle').disabled = false;
+  pintarVinculada();
 };
 $('now').onclick = () => chrome.runtime.sendMessage({ cmd: 'tick' }, () => pintarVinculada());
 chrome.storage.onChanged.addListener(() => pintar());
