@@ -44746,6 +44746,11 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
         <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
+    linkedin: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Nova · LinkedIn</div>
+      <div class="hrm-sc"><div class="hrm-sc__h">Conectar esta cuenta de LinkedIn a Nova</div>
+        <div class="hrm-sc__l">Detecta la cuenta abierta en este Chrome</div>
+        <div class="hrm-sc__l">Pides permiso y queda vinculada, sin tokens</div>
+        <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Invitaciones, visitas y mensajes con topes y horario</div></div></div>`,
     ofertas: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Manual · NovaCentrax</div>
       <div class="hrm-sc"><div class="hrm-sc__h">Oferta, ruta y mensajes en un solo lugar</div>
         <div class="hrm-sc__l">Qué vendes, a quién y por cuánto</div>
@@ -44783,6 +44788,9 @@ const HerramientasModule = (() => {
     { id: 'nova-ventana', nombre: 'Nova · Ventana de búsqueda', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'ventana',
       desc: 'Las búsquedas con IA y los perfiles de LinkedIn que abres desde Nova se muestran siempre en la misma ventana, a la derecha, en vez de abrir una nueva en cada clic.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> en el Chrome donde usas Nova, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Elige esa carpeta y recarga Nova con <b>Ctrl+F5</b>. No hay nada más que configurar.', 'Prueba con el botón <b>IA</b> de un contacto en Por corregir: la ventana de la derecha se reutiliza.'] },
+    { id: 'nova-linkedin', nombre: 'Nova · LinkedIn', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'linkedin',
+      desc: 'Conecta una cuenta de LinkedIn a Nova: ejecuta las invitaciones, visitas y mensajes de tus secuencias con topes y horarios, y detecta aceptaciones y respuestas. Una copia por cada perfil de Chrome.',
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí). Obtienes la carpeta <b>nova-linkedin</b>.', 'En <b>el perfil de Chrome de la cuenta de LinkedIn</b> que quieres conectar, abre <b>chrome://extensions</b>, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Inicia sesión en LinkedIn en ese mismo perfil.', 'En Nova, en ese mismo Chrome: menú <b>⋮ del cliente → Conectar remitente → + Añadir remitente → LinkedIn</b>. Nova detecta la extensión y la cuenta de LinkedIn, te pide permiso y la vincula, sin copiar ningún token.', 'Repite en cada perfil de Chrome: cada uno queda vinculado a su propia cuenta de LinkedIn. Para actualizar, descarga la versión nueva, reemplaza la carpeta y pulsa ↻ en chrome://extensions.'] },
     { id: 'nova-activity-web', nombre: 'Elevn Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
       desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
