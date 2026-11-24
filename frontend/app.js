@@ -23957,7 +23957,8 @@ const LeadManagerModule = (() => {
       <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días · modo <b>${a.modo === 'auto' ? 'automático' : 'asistido'}</b></span>
         <div class="li-btns">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(${a.id})">Ver cola</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReconnect(${a.id})">Reconectar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReconnect(${a.id})">Reconectar</button>
+          <button class="btn btn--ghost btn--sm li-del" onclick="LeadManagerModule.liDel(${a.id})">Eliminar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liEdit(${a.id})">Topes y horario</button>
           <button class="btn ${a.estado === 'activa' ? 'btn--ghost' : 'btn--primary'} btn--sm" onclick="LeadManagerModule.liToggle(${a.id}, '${a.estado === 'activa' ? 'pausar' : 'activar'}')">${a.estado === 'activa' ? 'Pausar' : 'Activar'}</button>
         </div></div></div>`;
   }

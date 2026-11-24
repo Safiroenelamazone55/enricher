@@ -21729,3 +21729,4 @@ body.ibx-lb-open{overflow:hidden}
 .snd-scroll { flex: 1; overflow-y: auto; padding: 8px 24px 28px; }
 .snd-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0 6px; }
 .snd-scroll .li-card { margin-top: 8px; }
+.li-btns .li-del { color: #B42318; }
