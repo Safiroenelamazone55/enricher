@@ -9700,7 +9700,7 @@ const CanteraGlobalModule = (() => {
     _restoreState();
     if (_extN) { _filtros.cliente = [_extN]; _extC = true; } else if (_extC) { _filtros.cliente = []; _extC = false; }   // filtro de cliente de Outreach (después de restaurar lo guardado)
     if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
-    if (!_cat) { try { const r = await apiFetch(`${API}/cantera/filtros/catalogo`); _cat = r.ok ? await r.json() : null; } catch { _cat = null; } }
+    if (!_cat) { try { const r = await apiFetch(`${API}/cantera/filtros/catalogo`); _cat = r.ok ? await r.json() : null; } catch { _cat = null; } if (_cat && _cat.grupos) _cat.grupos.forEach(g => _lfGrp.add(g)); }
     await _search(); el.innerHTML = _html();
   }
   function _buildFilterParams() {
@@ -9850,6 +9850,17 @@ const CanteraGlobalModule = (() => {
     const vistaToggle = _vistaFiltros === 'detallada'
       ? `<button class="cant-global-vista-tog" onclick="CanteraGlobalModule.setVistaFiltros('compacta')" title="Volver a la vista compacta, una columna">‹ Vista compacta</button>`
       : `<button class="cant-global-vista-tog" onclick="CanteraGlobalModule.setVistaFiltros('detallada')" title="Ver todas las secciones lado a lado, con menos scroll">Ver todo ›</button>`;
+    if (_cat) {
+      const qOpen = !_lfGrp.has('__quick');
+      const quick = `<div class="lf-grp"><button type="button" class="lf-grp__hd" onclick="CanteraGlobalModule.lfGrupo('__quick')"><span>Acceso rápido</span><span class="lf-chev${qOpen ? ' is-open' : ''}">⌃</span></button>
+        ${qOpen ? `<div class="lf-grp__bd lf-quick">
+          <div class="lf-quick__row"><span>${_savedIco()} Búsquedas guardadas${savedShown.length ? ` <em>${savedShown.length}</em>` : ''}</span><button type="button" title="Guardar los filtros actuales" onclick="CanteraGlobalModule.guardarFiltroActual()">＋</button></div>
+          ${savedShown.map(({ f, i }) => `<div class="lf-quick__sv"><button onclick="CanteraGlobalModule.aplicarFiltroGuardado(${i})" title="Aplicar">${esc(f.nombre)}</button><button class="x" title="Eliminar" onclick="CanteraGlobalModule.borrarFiltroGuardado(${i})">✕</button></div>`).join('')}
+          <div class="lf-quick__f"><label>Buscar</label><input type="text" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></div>
+          <div class="lf-quick__f"><label>Dónde está</label><select onchange="CanteraGlobalModule.setOrigen(this.value)"><option value="">Todos</option><option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option><option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option></select></div>
+        </div>` : ''}</div>`;
+      return `${_lfBody(quick)}<div class="lf-clear"><button ${_hasActiveFiltros() ? '' : 'disabled'} onclick="CanteraGlobalModule.clearAll()">Borrar todos los filtros</button></div>`;
+    }
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
         <div style="display:flex;align-items:center;gap:8px">
@@ -9911,11 +9922,13 @@ const CanteraGlobalModule = (() => {
       ${!open && total ? `<div class="lf-it__bd"><div class="tag-list">${chips}</div></div>` : ''}
     </div>`;
   }
-  function _lfBody() {
+  const _savedIco = () => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+  function _lfBody(quick) {
     const vis = _lfVisibles(), tab = _vista === 'empresa' ? 'e' : 'p', q = _lfFq.trim();
     const grupos = _cat.grupos.map(g => ({ g, items: vis.filter(d => d.grupo === g) })).filter(x => x.items.length);
-    return `<div class="lf-tabs"><button type="button" class="${tab === 'p' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('p')">Personas</button><button type="button" class="${tab === 'e' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('e')">Empresas</button></div>
+    return `<div class="lf-tabs"><button type="button" class="${tab === 'p' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('p')">Personas</button><button type="button" class="${tab === 'e' ? 'is-on' : ''}" onclick="CanteraGlobalModule.lfTab('e')">Empresas</button><span class="sp"></span><button type="button" class="lf-tabs__hide" title="Ocultar filtros" onclick="CanteraGlobalModule.toggleCollapse()">‹</button></div>
       <div class="lf-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" id="lf-q" placeholder="Filtros de búsqueda…" value="${esc(_lfFq)}" oninput="CanteraGlobalModule.lfBuscar(this.value)">${q ? '<button type="button" onclick="CanteraGlobalModule.lfBuscar(\'\')" title="Quitar">✕</button>' : ''}</div>
+      ${quick || ''}
       ${grupos.length ? grupos.map(({ g, items }) => {
         const abierto = q ? true : !_lfGrp.has(g), act = items.filter(d => _lfInc(d).length + _lfExc(d).length).length;
         return `<div class="lf-grp"><button type="button" class="lf-grp__hd" onclick="CanteraGlobalModule.lfGrupo('${esc(g).replace(/'/g, "\\'")}')"><span>${esc(g)}</span>${act ? `<span class="lf-n">${act}</span>` : ''}<span class="lf-chev${abierto ? ' is-open' : ''}">⌃</span></button>${abierto ? `<div class="lf-grp__bd">${items.map(_lfItem).join('')}</div>` : ''}</div>`;
@@ -10062,10 +10075,10 @@ const CanteraGlobalModule = (() => {
   }
   function _html() {
     const cols = _globalCols().filter(c => _loadVisibleCols().has(c.key));
-    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
-      ${_vistaTabsHtml()}
-      <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
-        ${_collapsed ? '' : `<div class="cant-global-panel${_vistaFiltros === 'detallada' ? ' cant-global-panel--detail' : ''}">${_panelHtml()}</div>`}
+    return `${_cat ? '' : `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
+      ${_vistaTabsHtml()}`}
+      <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}${_cat ? ' cant-global-layout--lf' : ''}">
+        ${_collapsed ? '' : `<div class="cant-global-panel${_cat ? ' cant-global-panel--lf' : _vistaFiltros === 'detallada' ? ' cant-global-panel--detail' : ''}">${_panelHtml()}</div>`}
         <div class="cant-global-results">
           <div class="cant-global-toolbar" style="position:relative">
             <div style="display:flex;align-items:center;gap:12px">

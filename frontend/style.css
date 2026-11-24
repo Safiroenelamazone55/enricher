@@ -21874,3 +21874,28 @@ body.ibx-lb-open{overflow:hidden}
 .ibx2-status { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: var(--text-muted); font-size: .7rem; }
 .ibx2-status:hover { filter: brightness(.92); }
 .ibx2-status__none { border: 1px dashed var(--border); padding: 0 6px; border-radius: 10px; }
+
+/* Base global estilo Lemlist: panel de filtros fijo de 420 px con scroll propio, resultados a todo el ancho restante */
+.cant-global-layout--lf { gap: 16px; align-items: flex-start; }
+.cant-global-panel--lf { flex: 0 0 420px; width: 420px; max-width: 42vw; padding: 0 4px 0 0; border: 0; background: transparent; position: sticky; top: 8px; max-height: calc(100vh - 110px); overflow-y: auto; }
+.cant-global-panel--lf::-webkit-scrollbar { width: 6px; } .cant-global-panel--lf::-webkit-scrollbar-thumb { background: #CBD0C4; }
+.cant-global-panel--lf .lf-tabs { display: flex; align-items: center; gap: 4px; margin: 0 0 10px; padding: 0 4px; background: transparent; border-bottom: 0; }
+.cant-global-panel--lf .lf-tabs button { font-size: .9rem; padding: 8px 12px; border-bottom: 2px solid transparent; margin: 0; }
+.cant-global-panel--lf .lf-tabs button.is-on { background: var(--surface-secondary, #F1F3EA); border-color: #0A2540; }
+.lf-tabs .sp { flex: 1; } .lf-tabs .lf-tabs__hide { padding: 6px 10px; color: #64748B; }
+.cant-global-panel--lf .lf-search { margin-bottom: 10px; border-radius: 8px; }
+.cant-global-panel--lf .lf-grp { border-radius: 10px; margin-bottom: 8px; }
+.cant-global-panel--lf .lf-grp__hd { padding: 14px 16px; font-size: .95rem; }
+.cant-global-panel--lf .lf-it__hd { padding: 9px 10px; font-size: .88rem; }
+.lf-quick__row { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px; font-size: .88rem; }
+.lf-quick__row span { display: inline-flex; align-items: center; gap: 10px; }
+.lf-quick__row em { font-style: normal; font-size: .7rem; font-weight: 700; background: #00804C; color: #fff; padding: 0 6px; }
+.lf-quick__row button { border: 0; background: transparent; font-size: 1.2rem; cursor: pointer; color: #64748B; }
+.lf-quick__sv { display: flex; align-items: center; padding: 2px 8px 2px 34px; }
+.lf-quick__sv button:first-child { flex: 1; text-align: left; border: 0; background: transparent; font: inherit; font-size: .84rem; padding: 5px 0; cursor: pointer; color: #0A2540; }
+.lf-quick__sv .x { border: 0; background: none; color: #8C97A3; cursor: pointer; }
+.lf-quick__f { padding: 6px 8px 2px; } .lf-quick__f label { display: block; font-size: .72rem; font-weight: 700; color: #64748B; margin-bottom: 3px; }
+.lf-quick__f input, .lf-quick__f select { width: 100%; box-sizing: border-box; border: 1px solid var(--border, #E4E7DD); padding: 8px 10px; font: inherit; font-size: .84rem; background: #fff; }
+.lf-clear { padding: 4px 4px 14px; } .lf-clear button { border: 0; background: none; color: #64748B; font: inherit; font-size: .8rem; cursor: pointer; text-decoration: underline; } .lf-clear button:disabled { opacity: .4; cursor: default; }
+.cant-global-layout--lf .cant-global-results { min-width: 0; flex: 1 1 0; }
+@media (max-width: 1100px) { .cant-global-panel--lf { position: static; width: 100%; max-width: none; max-height: none; flex-basis: auto; } }
