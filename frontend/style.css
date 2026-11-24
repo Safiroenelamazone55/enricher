@@ -22277,3 +22277,10 @@ body.ibx-lb-open{overflow:hidden}
 
 .cpm-mres { max-height: 300px; overflow-y: auto; }
 #ll-modal { z-index: 1200; }
+
+/* Fondo de Nova (crema) en las pantallas estilo Lemlist: los contenedores no se pintan de blanco; solo las tarjetas */
+.tk, .ll, .aj, .lz { background: transparent; border-color: transparent; }
+.tk .vw, .ll__bar, .ll-head, .lz-left, .lz-right { background: transparent; }
+.cpm, .cpm-l, .cpm-r, .cpm-tb { background: var(--bg, #FAF8F5); }
+.cpm-tb { border-bottom-color: var(--border, #EAE7E2); }
+.cpm-l { border-right-color: var(--border, #EAE7E2); }
