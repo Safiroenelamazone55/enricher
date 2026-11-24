@@ -30372,9 +30372,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   // ── Definición de los campos filtrables (los de Lemlist primero; después los propios de Nova) ──
   const _TK_IC = { A: 'M4 7V4h16v3M9 20h6M12 4v16', score: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z', check: 'M20 6 9 17l-5-5', estado: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', alert: 'M12 8v4M12 16h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z', eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', cal: 'M3 4h18v18H3zM16 2v4M8 2v4M3 10h18', user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', send: 'm22 2-7 20-4-9-9-4zM22 2 11 13', tag: 'M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0l-7.17-7.17a2 2 0 0 1 0-2.83l7.17-7.17a2 2 0 0 1 2.83 0l7.17 7.17a2 2 0 0 1 0 2.83z', org: 'M4 2h16v20H4zM9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01' };
+  // Puntuación como llama (igual que Lemlist): Alto/Medio/Bajo en naranja-rojo con distinta intensidad, Muy bajo en gris
+  const _TK_FIRE = { alto: ['#DE5837', 1], medio: ['#DE5837', .8], bajo: ['#DE5837', .6], muybajo: ['#B7BEC6', 1] };
+  const _tkFire = (lv, w) => { const f = _TK_FIRE[lv] || _TK_FIRE.muybajo; return `<svg class="tk-fire" width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="${f[0]}" stroke-opacity="${f[1]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`; };
   const _TK_FDEF = [
     { k: 'titulo', l: 'Título de la tarea', ic: _TK_IC.A, t: 'txt', get: r => r.titulo },
-    { k: 'score', l: 'Puntuación del prospecto', ic: _TK_IC.score, t: 'sel', get: r => r.score, opts: () => [['alto', 'Alto', '91 a 100'], ['medio', 'Medio', '71 a 90'], ['bajo', 'Bajo', '51 a 70'], ['muybajo', 'Muy bajo', '0 a 50']] },
+    { k: 'score', l: 'Puntuación del prospecto', ic: _TK_IC.score, t: 'sel', get: r => r.score, opts: () => [['alto', '91 a 100', 'Alto'], ['medio', '71 a 90', 'Medio'], ['bajo', '51 a 70', 'Bajo'], ['muybajo', '0 a 50', 'Muy bajo']] },
     { k: 'tipo', l: 'Tipo de tarea', ic: _TK_IC.check, t: 'sel', get: r => r.tipo, opts: () => Object.entries(_TK_TIPO).map(([v, l]) => [v, l]) },
     { k: 'estado', l: 'Estado', ic: _TK_IC.estado, t: 'sel', get: r => r.estado, opts: () => [['venc', 'Vencimiento'], ['prox', 'Próximamente'], ['pausa', 'En pausa'], ['hecho', 'Hecho'], ['ign', 'Ignorado']] },
     { k: 'prio', l: 'Prioridad', ic: _TK_IC.alert, t: 'sel', get: r => r.prio, opts: () => [['ninguno', 'Ninguno'], ['baja', 'Baja'], ['medio', 'Medio'], ['alto', 'Alto']] },
@@ -30468,7 +30471,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   const _tkIsAdv = () => _tk.tree && (_tk.tree.op === 'o' || _tk.tree.items.some(i => i.items));
   function _tkValTxt(f, d) {
     if (_tkNoVal(f.op)) return '';
-    if (d.t === 'sel') { const o = d.opts(), names = (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? x[1] : v; }); return names.length ? { first: names[0], more: names.length - 1 } : { first: '', more: 0 }; }
+    if (d.t === 'sel') { const o = d.opts(), sc = d.k === 'score', names = (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? (sc ? x[2] : x[1]) : v; }); return names.length ? { first: names[0], more: names.length - 1, ic: sc ? _tkFire(f.vals[0], 16) : '' } : { first: '', more: 0 }; }
     if (d.t === 'date') {
       if (f.op === 'rel') { const m = _TK_MODE.find(x => x[0] === f.rel.mode)[1].toLowerCase(), u = _TK_UNIT.find(x => x[0] === f.rel.unit)[1].toLowerCase(); return { first: f.rel.mode === 'esto' ? `${f.rel.unit === 'dia' ? 'este' : f.rel.unit === 'semana' || f.rel.unit === 'trim' ? 'esta' : f.rel.unit === 'mes' ? 'este' : 'este'} ${u}`.replace('esta día', 'este día') : `${m} ${f.rel.n} ${f.rel.n > 1 ? ({ dia: 'días', semana: 'semanas', mes: 'meses', trim: 'trimestres', anio: 'años' })[f.rel.unit] : u}`, more: 0 }; }
       if (f.op === 'entre') return { first: f.d1 || f.d2 ? `${_fmtD(f.d1) || '…'} – ${_fmtD(f.d2) || '…'}` : '', more: 0 };
@@ -30479,7 +30482,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _tkChip(f) {
     const d = _TK_FDEF.find(x => x.k === f.k); if (!d) return '';
     const ops = _TK_OPS[d.t], op = ops.find(o => o[0] === f.op) || ops[0], vt = _tkValTxt(f, d), I = _llI;
-    return `<span class="tkf" data-id="${f.id}"><button class="tkf__f" onclick="LeadManagerModule.tkFieldMenu(event,'${f.id}')">${I(`<path d="${d.ic}"/>`, 14)}<span>${esc(d.l)}</span></button><button class="tkf__o" onclick="LeadManagerModule.tkOpMenu(event,'${f.id}')">${op[1]}</button>${_tkNoVal(f.op) ? '' : `<button class="tkf__v${vt.first ? '' : ' is-ph'}" onclick="LeadManagerModule.tkValMenu(event,'${f.id}')">${vt.first ? esc(vt.first) : (d.t === 'sel' ? 'Seleccionar valor' : d.t === 'date' ? 'Seleccionar fecha' : 'Escriba y pulse Intro')}${vt.more > 0 ? `<i>+${vt.more}</i>` : ''}</button>`}<button class="tkf__m" title="Más" onclick="LeadManagerModule.tkChipMenu(event,'${f.id}')">${I('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>', 14)}</button></span>`;
+    return `<span class="tkf" data-id="${f.id}"><button class="tkf__f" onclick="LeadManagerModule.tkFieldMenu(event,'${f.id}')">${I(`<path d="${d.ic}"/>`, 14)}<span>${esc(d.l)}</span></button><button class="tkf__o" onclick="LeadManagerModule.tkOpMenu(event,'${f.id}')">${op[1]}</button>${_tkNoVal(f.op) ? '' : `<button class="tkf__v${vt.first ? '' : ' is-ph'}" onclick="LeadManagerModule.tkValMenu(event,'${f.id}')">${vt.ic || ''}${vt.first ? esc(vt.first) : (d.t === 'sel' ? 'Seleccionar valor' : d.t === 'date' ? 'Seleccionar fecha' : 'Escriba y pulse Intro')}${vt.more > 0 ? `<i>+${vt.more}</i>` : ''}</button>`}<button class="tkf__m" title="Más" onclick="LeadManagerModule.tkChipMenu(event,'${f.id}')">${I('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>', 14)}</button></span>`;
   }
   function _tkFilterBar() {
     const I = _llI, n = _tkCount(_tk.tree), adv = _tkIsAdv();
@@ -30502,7 +30505,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (k === 'titulo') { const t = _TOUCH[r.tipo] || _TOUCH.task; return `<div class="ll-name"><span class="sed-node__ic" style="width:28px;height:28px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(r.titulo)}</b></div>`; }
       if (k === 'due') return _tkDue(r.due, r.hora);
       if (k === 'campo') return nm ? `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>${esc(nm)}</div>` : '<span class="ll-dim">—</span>';
-      if (k === 'score') { const x = sc[r.score]; return x ? `<span class="tk-sc"><i style="background:${x[1]}"></i>${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
+      if (k === 'score') { const x = sc[r.score]; return x ? `<span class="tk-sc">${_tkFire(r.score, 16)}${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
       if (k === 'cargo') return c.cargo ? esc(c.cargo) : '<span class="ll-dim">—</span>';
       if (k === 'empresa') return esc(c.company_nombre || c.empresa_nombre || '') || '<span class="ll-dim">—</span>';
       if (k === 'origen') return r.origen ? esc(r.origen) : '<span class="ll-dim">—</span>';
@@ -30576,7 +30579,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function tkSetQ(id, v) { const f = _tkFind(id); if (!f) return; f.q = String(v || '').trim(); document.getElementById('sed-pop')?.remove(); _tkRefresh(); }
   function _tkSelHtml(f, d, q) {
     const opts = d.opts().filter(o => !q || String(o[1]).toLowerCase().includes(q.toLowerCase())), groups = {};
-    const row = ([v, l, hint]) => `<label class="tk-opt"><input type="checkbox" ${(f.vals || []).includes(v) ? 'checked' : ''} onchange="LeadManagerModule.tkTick('${f.id}',this.dataset.v,this.checked)" data-v="${esc(v)}"><span>${esc(l)}</span>${hint ? `<em>${esc(hint)}</em>` : ''}</label>`;
+    const row = ([v, l, hint]) => `<label class="tk-opt"><input type="checkbox" ${(f.vals || []).includes(v) ? 'checked' : ''} onchange="LeadManagerModule.tkTick('${f.id}',this.dataset.v,this.checked)" data-v="${esc(v)}">${d.k === 'score' ? _tkFire(v, 16) : ''}<span>${esc(l)}</span>${hint ? `<em>${esc(hint)}</em>` : ''}</label>`;
     const list = d.grupo ? `<div class="tk-grp">${esc(d.grupo)}</div>` + opts.map(row).join('') : opts.map(row).join('');
     return `<div class="sed-pop__q"><input id="tk-vq" placeholder="Buscar" value="${esc(q || '')}" autocomplete="off" oninput="LeadManagerModule.tkSelQ(this.value)"></div><div class="tk-optl">${list || '<div class="sed-pop__note">Sin resultados</div>'}</div>`;
   }

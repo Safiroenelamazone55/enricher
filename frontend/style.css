@@ -22410,3 +22410,6 @@ body.ibx-lb-open{overflow:hidden}
 .tka-g { flex: 1; border: .75px solid #E6E6E6; border-radius: 10px; padding: 10px; background: #FBFBFB; }
 .tka-ft { display: flex; align-items: center; gap: 14px; border-top: .75px solid #EEF0F2; padding: 8px 0 4px; margin-top: 4px; } .tka-ft .sp { flex: 1; }
 .tka-add { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; font-size: 14px; color: #55657D; cursor: pointer; padding: 4px 2px; } .tka-add:hover { color: #213856; } .tka-red { color: #C4342B; }
+
+.tkf__v .tk-fire { flex: none; } .tk-opt .tk-fire { flex: none; }
+.tk-sc .tk-fire { flex: none; }
