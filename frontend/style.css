@@ -22253,3 +22253,10 @@ body.ibx-lb-open{overflow:hidden}
 .cpm-ctr:hover { background: #F4F6F8; }
 .cpm-ctr b { display: block; font-size: 14px; color: #213856; font-weight: 500; } .cpm-ctr span:not(.cpm-av) { font-size: 13px; color: #98A1AC; }
 #lm-co-page .cpm-res > .cpm-two { align-items: start; }
+
+.cpm-card__t { display: flex; align-items: center; justify-content: space-between; }
+.cpm-card__a { display: inline-flex; gap: 2px; margin: -6px -4px -6px 0; }
+.cpm-cfg { padding: 14px; max-height: 70vh; overflow-y: auto; }
+.cpm-cfg__t { font-weight: 600; color: #213856; margin-bottom: 6px; }
+.cpm-cfg p { font-size: 12.5px; color: #55657D; margin: 0 0 10px; }
+.cpm-cfg .cf-col__t { display: none; }

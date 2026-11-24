@@ -39679,6 +39679,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const f = arr.find(x => x.field_key === fieldKey);
       if (f) f.label = label; else arr.push({ entity, field_key: fieldKey, label });
       showBanner(label ? `✓ “${label}” activado` : 'Campo desactivado', 'success');
+      if (_section === 'contact-view' || _section === 'company-view') { try { const rr0 = await apiFetch(`${API}/lm/custom-fields`); if (rr0.ok) _lmCustomFields = await rr0.json(); } catch (_) {} _renderBody(); return; }
       try { const rr = await apiFetch(`${API}/lm/custom-fields`); if (rr.ok) { _lmCustomFields = await rr.json(); const card = el.closest('.cp-card'); if (card) card.outerHTML = _cfFieldsCard(); } } catch (_) {}
     } catch (e) {
       const prev = ((_lmCustomFields[entity] || []).find(x => x.field_key === fieldKey) || {}).label || '';
@@ -40674,6 +40675,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_llMI(I('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'), (c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? 'Ver deal' : 'Crear deal', `LeadManagerModule.dlOpen(${id})`)}
       ${_llMI(I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'), 'Reunión', `LeadManagerModule.mtOpen(${id})`)}
       ${_llMI(I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'), 'No es la persona / Derivó a otro', `LeadManagerModule.cpMoreMenu(event,${id})`)}
+      ${_llMI(I('<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>'), 'Darse de baja (no contactar)', `if(confirm('¿Marcar a este contacto como NO CONTACTAR? Se pausan sus secuencias.'))LeadManagerModule.ibResolveDisp(${id},'no_contactar')`)}
       <div class="sed-pop__sep"></div>
       ${_llMI(I('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'), 'Eliminar contacto', `LeadManagerModule.cpDelete(${id})`)}`, 270, 'left');
   }
@@ -40684,6 +40686,30 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _llPop(ev, opts.map(([k, l]) => _llMI('', (k === _cpActType ? '✓ ' : '') + l, `LeadManagerModule.cpActType('${k}')`)).join(''), 230, 'right');
   }
   function cpActType(k) { _cpActType = k; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.getElementById('sed-pop')?.remove(); }
+  // Engranaje y «＋» del panel de campos (como Lemlist): renombrar/activar campos personalizados y crear uno nuevo.
+  function _cpFieldTools(entity) {
+    return `<span class="cpm-card__a"><button type="button" class="cpm-ib cpm-ib--bare" title="Configurar campos" aria-label="Configurar campos" onclick="LeadManagerModule.cpFieldsCfg(event,'${entity}')">${_llI('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>', 15)}</button><button type="button" class="cpm-ib cpm-ib--bare" title="Añadir un campo" aria-label="Añadir un campo" onclick="LeadManagerModule.cpFieldNew(event,'${entity}')">${_llI('<path d="M12 5v14M5 12h14"/>', 16)}</button></span>`;
+  }
+  function cpFieldsCfg(ev, entity) {
+    _llPop(ev, `<div class="cpm-cfg"><div class="cpm-cfg__t">Campos personalizados · ${entity === 'company' ? 'empresas' : 'contactos'}</div><p>Ponle nombre a un campo para que aparezca en la ficha, los filtros, la importación y la exportación. Vacío = no se usa.</p>${_cfCol(entity, '')}</div>`, 420, 'right');
+  }
+  function cpFieldNew(ev, entity) {
+    _llPop(ev, `<div class="cpm-cfg"><div class="cpm-cfg__t">Nuevo campo</div><input id="cpm-nf" class="form-input" placeholder="Nombre del campo (ej. Presupuesto)" onkeydown="if(event.key==='Enter')LeadManagerModule.cpFieldCreate('${entity}')"><button class="cpm-btn" style="margin-top:10px;width:100%;justify-content:center" onclick="LeadManagerModule.cpFieldCreate('${entity}')">Crear campo</button></div>`, 280, 'right');
+    setTimeout(() => document.getElementById('cpm-nf')?.focus(), 30);
+  }
+  async function cpFieldCreate(entity) {
+    const label = (document.getElementById('cpm-nf')?.value || '').trim(); if (!label) return;
+    const used = new Set((_lmCustomFields[entity] || []).filter(f => (f.label || '').trim() || f.n).map(f => f.field_key));
+    if ((_lmCustomFields[entity] || []).some(f => (f.label || '').trim().toLowerCase() === label.toLowerCase())) { showBanner('Ese campo ya existe', 'error'); return; }
+    const key = LM_CUSTOM_KEYS.find(k => !used.has(k));
+    if (!key) { showBanner('Ya usaste los 10 campos personalizados. Libera uno desde el engranaje.', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/lm/custom-fields`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity, field_key: key, label }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear el campo');
+      const rr = await apiFetch(`${API}/lm/custom-fields`); if (rr.ok) { const j = await rr.json(); _lmCustomFields = { company: j.company || [], contact: j.contact || [] }; }
+      document.getElementById('sed-pop')?.remove(); showBanner(`✓ Campo «${label}» creado`, 'success'); _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function cpMoreTabs(ev) { _llPop(ev, [['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => _llMI('', l, `LeadManagerModule.cpTab('${k}')`)).join(''), 180, 'left'); }
   function cpAddMenu(ev) {
     _llPop(ev, ['nota|Registrar nota', 'llamada|Registrar llamada', 'tarea|Crear tarea', 'reunion|Registrar reunión', 'email_enviado|Registrar email', 'linkedin_msg|Registrar mensaje de LinkedIn'].map(x => { const [k, l] = x.split('|'); return _llMI('', l, `LeadManagerModule.cpActOpen('${k}')`); }).join(''), 220, 'right');
@@ -40778,7 +40804,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const stBox = box('Estado del contacto', `<span class="cpm-f__box"><select onchange="LeadManagerModule.cpSetStage(${id},this.value)">${stOpts}</select></span>`);
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
     const coBox = box('Empresa asociada', `<span class="cpm-f__box"><i>${_llI(_CPI.org, 15)}</i><select data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select>${c.company_id ? `<button type="button" class="cpm-f__go" title="Abrir ficha de la empresa" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">${_llI('<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', 14)}</button>` : ''}</span>`);
-    return `<div class="cpm-card"><div class="cpm-card__t"><span>Campos de contacto</span></div>
+    return `<div class="cpm-card"><div class="cpm-card__t"><span>Campos de contacto</span>${_cpFieldTools('contact')}</div>
       ${emailBox}
       ${F('email_personal', 'Email personal', c.email_personal, 'mail')}
       ${F('telefono', 'Teléfono principal', c.telefono, 'phone', c.telefono ? _infoCopyBtn(c.telefono, 'Copiar teléfono') : '')}
@@ -40791,6 +40817,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${F('ciudad', 'Ciudad', c.ciudad, 'pin')}${F('region', 'Región', c.region, 'pin')}${F('pais', 'País', c.pais, 'pin')}
       ${F('fuente', 'Fuente', c.fuente, 'tag')}
       ${coBox}
+      ${_lmActiveCustomFields('contact').map(f => F(f.field_key, esc(f.label), c[f.field_key], 'tag')).join('')}
     </div>`;
   }
   // Segunda tarjeta del panel izquierdo: variables (datos importados sin mapear) con buscador, como las variables de campaña de Lemlist.
@@ -42430,7 +42457,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           ${c.linkedin_sales_nav ? `<a class="cpm-ib" href="${esc(_urlFix(c.linkedin_sales_nav))}" target="_blank" rel="noopener" title="Abrir en Sales Navigator">${_SN_ICO}</a>` : ''}
           ${ib('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>', 'Añadir prospecto', `LeadManagerModule.openContact(null,${id})`)}
         </div>
-        <div class="cpm-card"><div class="cpm-card__t"><span>Campos de la empresa</span></div>
+        <div class="cpm-card"><div class="cpm-card__t"><span>Campos de la empresa</span>${_cpFieldTools('company')}</div>
           ${F('nombre', 'Nombre de la empresa', c.nombre, 'org')}
           ${dt && !isNaN(dt) ? roBox('Fecha de añadido', _CPI.cal, dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), ago) : ''}
           ${F('linkedin', 'Página de LinkedIn', c.linkedin, 'link', goB(c.linkedin, 'Abrir LinkedIn'))}
@@ -42450,6 +42477,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           ${F('segmento', 'Mercado / Segmento ICP', c.segmento, 'tag')}
           ${F('target_tier', 'Target Tier / Focus', c.target_tier, 'tag')}
           ${F('funding', 'Última ronda de financiación', c.funding, 'tag')}
+          ${_lmActiveCustomFields('company').map(f => F(f.field_key, esc(f.label), c[f.field_key], 'tag')).join('')}
         </div>
       </aside>
       <section class="cpm-r">
@@ -43657,7 +43685,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpFieldsCfg, cpFieldNew, cpFieldCreate, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
