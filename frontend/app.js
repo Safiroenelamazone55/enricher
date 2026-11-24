@@ -24028,7 +24028,7 @@ const LeadManagerModule = (() => {
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
-    _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
+    _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; { const _sq0 = (_sequences || []).find(x => x.id === id); _seqStage = (_sq0 && (_sq0.estado || 'draft') === 'draft') ? 'secuencia' : ''; }
     _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqApprovals = null; _seqPendingNoEmail = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
@@ -24847,100 +24847,282 @@ const LeadManagerModule = (() => {
     if (list) list.style.display = 'none';
   }
   function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
-  // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
-  function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
-  function _seqProg(id, s, steps) {
-    const nContacts = Array.isArray(_seqContacts) ? _seqContacts.length : 0;
-    const nCos = (_seqCoStats && _seqCoStats.total) ? _seqCoStats.total : (Array.isArray(_seqPendingCos) ? _seqPendingCos.length : 0);
-    const lista = nContacts + nCos, launched = (s.estado || 'draft') !== 'draft';
-    return { pasos: steps.length, lista, nContacts, nCos, launched, p1: steps.length > 0, p2: lista > 0 };
+  // ═══════════ Editor de la secuencia (paso 1): vista de flujo estilo Lemlist o lista tradicional, con edición en el panel derecho ═══════════
+  let _seqStage = '';
+  let _sedView = (() => { try { return localStorage.getItem('lm_sed_view') === 'lista' ? 'lista' : 'flujo'; } catch (_) { return 'flujo'; } })();
+  let _sedSel = 0, _sedZoom = 1, _sedPanel = true, _sedDirty = false;
+  const _SED_CAT = [
+    ['Más usado', [['Email', 'email', 'inicial'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Visitar el perfil', 'linkedin', 'visita']]],
+    ['LinkedIn', [['Retirar invitación', null], ['Visitar el perfil', 'linkedin', 'visita'], ['Invitación con nota', 'linkedin', 'invite_nota'], ['Invitación sin nota', 'linkedin', 'invite'], ['Mensaje de chat', 'linkedin', 'mensaje'], ['Mensaje de voz', null], ['Seguir al usuario', 'linkedin', 'follow'], ['Mensaje InMail', 'linkedin', 'inmail'], ['Reaccionar a la última publicación', 'linkedin', 'like'], ['Comentar la última publicación', 'linkedin', 'comentario'], ['Avalar aptitud', null]]],
+    ['Otros canales', [['Mensaje de chat de WhatsApp', 'whatsapp', 'mensaje'], ['Llamada de WhatsApp', 'whatsapp', 'llamada'], ['SMS', null], ['Email', 'email', 'inicial'], ['Email de seguimiento', 'email', 'seguimiento'], ['Llamar', 'call', 'llamada']]],
+    ['Otros pasos', [['Tarea manual', 'task', ''], ['Llamar a una API', null], ['Enviar a otra secuencia', null], ['Secuencia final', null]]],
+  ];
+  const _SED_COND = [['Condición sobre el paso anterior', [['Si no respondió', 'no_reply'], ['Si respondió (o aceptó la conexión)', 'replied'], ['Email abierto', 'opened'], ['Email no abierto', 'not_opened'], ['Hizo clic en el enlace', 'clicked'], ['No hizo clic', 'not_clicked']]],
+    ['Información del prospecto', [['Está en la red de LinkedIn (1.º)', null], ['Tiene dirección de email', null], ['Tiene URL de LinkedIn', null], ['Variable de prospecto', null], ['Tiene número de teléfono', null]]],
+    ['Otras', [['Pistas paralelas', null], ['Ha reservado una reunión', null]]]];
+  const _sedI = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  function _sedGap(steps, i) { return i ? Math.max(0, (Number(steps[i].dia) || 0) - (Number(steps[i - 1].dia) || 0)) : Math.max(0, (Number(steps[0].dia) || 1) - 1); }
+  function _sedTitle(st) { return st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || _TOUCH.email)[0]; }
+  function _sedNode(st, i, steps) {
+    const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st);
+    const hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente');
+    const vs = _sflVers(st);
+    return `<div class="sed-link"><button type="button" class="sed-plus" title="Añadir un paso aquí" onclick="LeadManagerModule.sedAddMenu(event,${i})">+</button></div>
+      <div class="sed-node${_sedSel === st.id ? ' is-on' : ''}" onclick="LeadManagerModule.sedSel(${st.id})">
+        <div class="sed-node__hd" onclick="event.stopPropagation();LeadManagerModule.sedDelay(event,${st.id})" title="Cambiar la espera antes de este paso"><span>${hd}</span>${cb ? `<span class="sed-node__cond">${cb}</span>` : ''}<i>${_sedI('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 12)}</i></div>
+        <div class="sed-node__bd"><span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 18)}</span><span class="sed-node__t">${esc(_sedTitle(st))}</span>
+          ${st.canal === 'email' && !_stepHasCopy(st) ? '<span class="sed-node__warn" title="Este email aún no tiene mensaje">!</span>' : ''}
+          <button type="button" class="sed-node__more" onclick="event.stopPropagation();LeadManagerModule.sedStepMenu(event,${st.id})" title="Más">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button></div>
+        ${vs ? `<div class="sed-node__vs">${vs.map((v, k) => `<span>${String.fromCharCode(65 + k)} · ${esc(v.nombre || 'Versión ' + String.fromCharCode(65 + k))}</span>`).join('')}</div>` : ''}
+      </div>`;
   }
-  function _seqTopbar(id, s, steps) {
-    const g = _seqProg(id, s, steps), cmp = _campaignName(s.campaign_id);
-    const fav = _seqFavs().includes(id);
-    const ic = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-    const est = s.estado || 'draft', col = _SEQ_VIVO[est] || _SEQ_VIVO.draft;
-    const lock = '<path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', check = '<polyline points="20 6 9 17 4 12"/>';
-    // cada paso: done / current / locked. Con la secuencia ya lanzada nada se bloquea y todo se ve normal.
-    const cur = g.launched ? 0 : (!g.p1 ? 1 : !g.p2 ? 2 : 3);
-    const ST = [
-      { k: 1, l: 'Secuencia', n: g.pasos ? g.pasos : '', ico: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', done: g.p1, locked: false },
-      { k: 2, l: 'Lista de prospectos', n: g.lista ? g.lista : '', ico: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', done: g.p2, locked: !g.launched && !g.p1 },
-      { k: 3, l: 'Lanzar', n: '', ico: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', done: g.launched, locked: !g.launched && !(g.p1 && g.p2) },
-      { k: 4, l: 'Rendimiento', n: '', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', done: false, locked: !g.launched },
-    ];
-    const active = { 1: _seqPasosOpen, 2: ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen, 3: false, 4: _seqTab === 'metricas' && !_seqPasosOpen };
-    const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : cur === x.k) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
-        ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
-    const falta = g.launched ? '' : (!g.p1 ? 'Crea al menos un paso' : !g.p2 ? 'Añade prospectos a la lista' : 'Todo listo para lanzar');
-    return `<div class="seqtop">
-      <div class="seqtop__row1">
-        <span class="seqtop__cmp">${ic('<path d="M3 11l18-8v18L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>', 16)}${s.campaign_id ? `<button title="Configuración de la campaña" onclick="LeadManagerModule.openCampaignConfig(${s.campaign_id})">${esc(cmp || 'Campaña')}</button>` : `<button class="is-none" title="Asignar una campaña" onclick="LeadManagerModule.openSequenceDrawer(${id})">Sin campaña · asignar</button>`}</span>
-        <span class="seqtop__seq" title="${esc(s.nombre)}">${esc(s.nombre)}</span>
-        <button class="seqtop__ib" title="${s.starts_on ? 'Inicio: ' + esc(String(s.starts_on).slice(0, 10)) : 'Fechas y horario'}" onclick="LeadManagerModule.seqTab('config')">${ic('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>')}</button>
-        <button class="seqtop__est" style="--c:${col}" onclick="LeadManagerModule.seqEstadoMenu(event,${id})"><i></i>${esc((_CC_SEQ_EST || {})[est] || est)} ${ic('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
-        <button class="seqtop__ib${fav ? ' is-fav' : ''}" title="Favorita" onclick="LeadManagerModule.seqFav(${id})">${ic('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>')}</button>
-        <button class="seqtop__ib" title="Configuración" onclick="${s.campaign_id ? `LeadManagerModule.openCampaignConfig(${s.campaign_id})` : `LeadManagerModule.openSequenceDrawer(${id})`}">${ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')}</button>
-        <button class="seqtop__ib" title="Más acciones" onclick="LeadManagerModule.seqMoreMenu(event,${id})">${ic('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>
+  function _sedFlow(id, s, steps) {
+    const cli = _clientName(s.outbound_client_id) || '—';
+    const ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '·';
+    const sch = _seqTzChip(s);
+    return `<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
+        <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
+          <div class="sed-start__c"><small>Remitente</small><span class="sed-start__av" title="${esc(cli)}">${esc(ini)}</span></div>
+          <div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${sch ? sch : 'Planificación predeterminada'}</span></div>
+        </div>
+        ${steps.map((x, i) => _sedNode(x, i, steps)).join('')}
+        <div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>
       </div>
-      <div class="seqtop__row2"><div class="seqtop__steps">${stepsHtml}</div>${g.launched ? '' : `<span class="seqtop__hint${g.p1 && g.p2 ? ' ok' : ''}">${g.p1 && g.p2 ? ic(check, 13) : ic('<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 13)} ${falta}</span>`}</div>
+      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
+  }
+  function _sedList(id, s, steps) {
+    const states = steps.length ? _stepStates(steps) : [], prog = steps.length ? _stepRealProgress(steps) : [];
+    const rows = steps.map((st, i) => _stepRow(st, states[i], prog[i]).replace(`onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})"`, `onclick="LeadManagerModule.sedSel(${st.id})"`).replace('class="lm-step ', `class="lm-step${_sedSel === st.id ? ' sed-sel' : ''} `)).join('');
+    return `<div class="sed-listwrap"><div class="lm-seq-tl">${rows || `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero.</span></div>`}</div>
+      <button type="button" class="sed-addpill sed-addpill--list" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>`;
+  }
+  function _seqEditorHtml(id) {
+    const s = _sequences.find(x => x.id === id), steps = _seqSteps(id);
+    if (!steps.some(x => x.id === _sedSel)) _sedSel = steps.length ? steps[0].id : 0;
+    const st = steps.find(x => x.id === _sedSel), t = st ? (_TOUCH[st.canal] || _TOUCH.email) : null;
+    return `<div class="sed">
+      <div class="sed__bar">
+        <div class="sed__seg" role="tablist"><button class="${_sedView === 'flujo' ? 'on' : ''}" onclick="LeadManagerModule.sedView('flujo')" title="Vista de flujo">${_sedI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/>', 15)} Flujo</button><button class="${_sedView === 'lista' ? 'on' : ''}" onclick="LeadManagerModule.sedView('lista')" title="Vista de lista">${_sedI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>', 15)} Lista</button></div>
+        <span class="sed__n">${steps.length} paso${steps.length === 1 ? '' : 's'}${steps.length ? ' · ' + steps[steps.length - 1].dia + ' días' : ''}</span><span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowOpen(${id})" title="Abrir el flujo a pantalla completa (modo anterior)">Pantalla completa</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button>
+      </div>
+      <div class="sed__main${_sedPanel ? '' : ' is-closed'}">
+        <div class="sed__left">${_sedView === 'flujo' ? _sedFlow(id, s, steps) : _sedList(id, s, steps)}</div>
+        <div class="sed__right">
+          <div class="sed__rh">${st ? `<span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 16)}</span><b>${esc(_sedTitle(st))}</b>` : '<b>Sin paso seleccionado</b>'}<span class="sp"></span>
+            ${st ? `<button class="seqtop__ib" title="Más" onclick="LeadManagerModule.sedStepMenu(event,${st.id})">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}
+            <button class="seqtop__ib" title="${_sedPanel ? 'Ocultar el panel' : 'Mostrar el panel'}" onclick="LeadManagerModule.sedPanel()">${_sedI('<path d="M13 5l7 7-7 7M4 5v14"/>', 15)}</button></div>
+          <div class="sed__rb" id="sed-form">${st ? '' : `<div class="sed-empty"><div class="sed-empty__ic">🪜</div><b>Empieza tu secuencia</b><p>Añade el primer paso y edítalo aquí mismo.</p><div class="sed-empty__b"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAdd(0,'email','inicial','Email')">Email</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','visita','Visitar el perfil')">Visitar el perfil</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.sedAdd(0,'linkedin','invite_nota','Invitación con nota')">Invitación con nota</button></div></div>`}</div>
+        </div>
+      </div>
     </div>`;
   }
-  function seqFav(id) { const a = _seqFavs(), i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); try { localStorage.setItem('lm_seq_fav', JSON.stringify(a)); } catch (_) {} _renderBody(); }
-  async function seqSetEstado(id, estado) {
+  function _sedMount() {
+    _sedDirty = false;
+    const host = document.getElementById('sed-form'); if (!host || !_seqStage || !_sedSel) return;
+    const st = _steps.find(x => x.id === _sedSel); if (!st) return;
+    openStepDrawer(st.sequence_id, st.id, host);
+    host.oninput = host.onchange = () => { _sedDirty = true; };
+  }
+  async function sedSel(id) {
+    if (id === _sedSel) return;
+    if (_sedDirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Este paso tiene cambios sin guardar. Si cambias de paso se pierden.', confirmText: 'Descartar' }))) return;
+    _sedSel = id; _renderBody();
+  }
+  function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v); } catch (_) {} _renderBody(); }
+  function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
+  function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
+  function sedCenter() { const c = document.getElementById('sed-canvas'); if (c) c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); }
+  function _sedPop(ev, html, wide) {
+    ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
+    const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop'; if (wide) m.style.width = wide + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
+    document.body.appendChild(m);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
+    m.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+    return m;
+  }
+  let _sedAddIdx = 0, _sedAddTab = 'pasos';
+  function sedAddMenu(ev, idx) { _sedAddIdx = idx; _sedAddTab = 'pasos'; _sedPop(ev, _sedAddHtml(), 300); setTimeout(() => document.getElementById('sed-q')?.focus(), 30); }
+  function _sedAddHtml() {
+    const cat = _sedAddTab === 'pasos' ? _SED_CAT : _SED_COND;
+    const body = cat.map(([g, items]) => `<div class="sed-pop__g" data-g>${esc(g)}</div>${items.map(it => {
+      if (_sedAddTab === 'pasos') { const [l, canal, acc] = it; const t = canal ? _TOUCH[canal] : null; return canal ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedAdd(${_sedAddIdx},'${canal}','${acc}','${esc(l).replace(/'/g, "\\'")}')"><span style="color:${t[1]}">${_sedI(_stepIcoPath({ canal, accion: acc }), 15)}</span>${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', 15)}${esc(l)}<em>Próximamente</em></button>`; }
+      const [l, cond] = it; return cond ? `<button class="sed-pop__i" data-n="${esc(l.toLowerCase())}" onclick="LeadManagerModule.sedCond(${_sedAddIdx},'${cond}')">${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}</button>` : `<button class="sed-pop__i is-off" data-n="${esc(l.toLowerCase())}" disabled>${_sedI('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', 15)}${esc(l)}<em>Próximamente</em></button>`;
+    }).join('')}`).join('');
+    return `<div class="sed-pop__q"><input id="sed-q" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.sedAddSearch(this.value)"></div>
+      <div class="sed-pop__tabs"><button class="${_sedAddTab === 'pasos' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('pasos')">Pasos</button><button class="${_sedAddTab === 'cond' ? 'on' : ''}" onclick="LeadManagerModule.sedAddTab('cond')">Condiciones</button></div>
+      <div class="sed-pop__b" id="sed-popb">${body}${_sedAddTab === 'cond' ? '<p class="sed-pop__note">Una condición se aplica al <b>paso que viene después</b> del «+»: solo se hace si se cumple.</p>' : ''}</div>`;
+  }
+  function sedAddTab(t) { _sedAddTab = t; const m = document.getElementById('sed-pop'); if (m) { m.innerHTML = _sedAddHtml(); document.getElementById('sed-q')?.focus(); } }
+  function sedAddSearch(q) {
+    q = String(q || '').toLowerCase().trim();
+    document.querySelectorAll('#sed-popb .sed-pop__i').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; });
+    document.querySelectorAll('#sed-popb [data-g]').forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute('data-g') && n.classList.contains('sed-pop__i')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; } g.style.display = any ? '' : 'none'; });
+  }
+  async function _sedApi(path, body) {
+    const r = await apiFetch(`${API}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error'); return d;
+  }
+  async function _sedEnroladosAviso(idx, steps) {
+    const sq = _sequences.find(x => x.id === _activeSeq); const g = sq ? _seqProg(sq.id, sq, steps) : { lista: 0 };
+    if (!g.lista || idx >= steps.length) return true;
+    return novaConfirm({ title: 'Insertar un paso en medio', message: 'Esta secuencia ya tiene prospectos. Si insertas un paso antes del final, los que ya avanzaron pueden quedar desfasados un paso. ¿Insertarlo igual?', confirmText: 'Insertar' });
+  }
+  async function _sedInsert(idx, fields) {
+    const id = _activeSeq, steps = _seqSteps(id);
+    if (!(await _sedEnroladosAviso(idx, steps))) return;
+    const dia = idx <= 0 ? ((steps[0] && steps[0].dia) || 1) : steps[Math.min(idx, steps.length) - 1].dia;
     try {
-      const r = await apiFetch(`${API}/sequences/${id}/estado`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || 'No se pudo cambiar el estado');
-      const sq = _sequences.find(x => x.id === id); if (sq) sq.estado = estado;
-      _renderBody();
-      showBanner(estado === 'activa' ? '🚀 Secuencia lanzada' : 'Estado: ' + ((_CC_SEQ_EST || {})[estado] || estado), 'success');
-    } catch (e) { showBanner(e.message, 'error'); }
+      const row = await _sedApi('/sequence-steps', { sequence_id: id, dia, orden: idx <= 0 ? -1 : (steps[Math.min(idx, steps.length) - 1].orden || 0), plantilla: '', variants: [], variant_mode: 'off', variant_field: '', ...fields });
+      const ids = steps.map(x => x.id); ids.splice(Math.min(Math.max(idx, 0), ids.length), 0, row.id);
+      await _sedApi(`/sequences/${id}/steps/reorder`, { ids });
+      _sedSel = row.id; await load();
+    } catch (e) { showBanner('No se pudo añadir el paso: ' + e.message, 'error'); }
   }
-  async function seqStep(id, k) {
-    const s = _sequences.find(x => x.id === id); if (!s) return;
-    const g = _seqProg(id, s, _seqSteps(id));
-    if (k === 1) { _seqPasosOpen = true; _renderBody(); if (!g.pasos) openStepDrawer(id); return; }
-    if (k === 2) {
-      if (!g.p1 && !g.launched) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
-      seqTab(g.nContacts === 0 && g.nCos > 0 ? 'empresas' : 'contactos');
-      if (!g.lista && !g.launched) setTimeout(() => seqAddContactOpen(id), 250);
-      return;
-    }
-    if (k === 3) {
-      if (g.launched) { seqTab('tareas'); return; }
-      if (!g.p1) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
-      if (!g.p2) { showBanner('Primero añade prospectos a la lista (paso 2).', 'info'); return; }
-      if (await novaConfirm({ title: 'Lanzar la secuencia', message: `Se lanza «${esc(s.nombre)}» con ${g.lista} prospecto${g.lista === 1 ? '' : 's'}. Los envíos y tareas empiezan según su configuración.`, confirmText: 'Lanzar' })) seqSetEstado(id, 'activa');
-      return;
-    }
-    if (k === 4) { if (!g.launched) { showBanner('El rendimiento se desbloquea al lanzar la secuencia (paso 3).', 'info'); return; } seqTab('metricas'); }
+  async function sedAdd(idx, canal, accion, titulo) { document.getElementById('sed-pop')?.remove(); await _sedInsert(idx, { canal, accion, titulo: titulo || '' }); }
+  async function sedCond(idx, cond) {
+    document.getElementById('sed-pop')?.remove();
+    const steps = _seqSteps(_activeSeq), st = steps[idx];
+    if (!st) { showBanner('Añade primero un paso después del «+»: la condición se aplica a ese paso.', 'info'); return; }
+    const prev = idx ? steps[idx - 1] : null;
+    try { await _putStepPatch(st, { cond, cond_step_id: prev ? prev.id : null }); _sedSel = st.id; await load(); showBanner('Condición aplicada al paso', 'success'); } catch (e) { showBanner(e.message, 'error'); }
   }
-  function seqEstadoMenu(ev, id) {
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const s = _sequences.find(x => x.id === id); if (!s) return;
-    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
-    const it = (l, js) => `<button class="cp-mark-menu__b" onclick="${close}${js}">${l}</button>`;
-    const est = s.estado || 'draft';
-    const html = '<div class="cp-mark-menu__list">'
-      + (est === 'draft' ? it('🚀 Lanzar…', `LeadManagerModule.seqStep(${id},3)`) : '')
-      + (est === 'activa' ? it('II Pausar todo', `LeadManagerModule.seqPauseAll(${id})`) : '')
-      + (est === 'pausada' ? it('► Reactivar todo', `LeadManagerModule.seqResumeAll(${id})`) : '')
-      + (['activa', 'pausada'].includes(est) ? it('✓ Marcar como culminada', `LeadManagerModule.seqSetEstado(${id},'completada')`) : '')
-      + (est !== 'archivada' && est !== 'draft' ? it('Archivar', `LeadManagerModule.seqSetEstado(${id},'archivada')`) : '')
-      + (['completada', 'archivada'].includes(est) ? it('Reabrir como pausada', `LeadManagerModule.seqSetEstado(${id},'pausada')`) : '')
-      + '</div>';
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
-    document.body.appendChild(menu);
-    const r = ev.currentTarget.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 220)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
-    setTimeout(() => document.addEventListener('click', function f() { menu.remove(); document.removeEventListener('click', f); }), 0);
+  async function _putStepPatch(st, patch) {
+    const b = { sequence_id: st.sequence_id, dia: st.dia, canal: st.canal, titulo: st.titulo || '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', orden: st.orden || 0, hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, reply_to_prev: !!st.reply_to_prev, post_dias: st.post_dias || '', reaccion: st.reaccion || '', reply_to_step_id: st.reply_to_step_id || null, ...patch };
+    const r = await apiFetch(`${API}/sequence-steps/${st.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
   }
+  function sedDelay(ev, stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
+    const gap = _sedGap(steps, i);
+    _sedPop(ev, `<div class="sed-dl"><small>Esperar durante</small><div class="sed-dl__r"><button onclick="LeadManagerModule.sedDlStep(-1)">−</button><input id="sed-dl-n" type="number" min="0" value="${gap}" oninput="LeadManagerModule.sedDlStep(0)"><button onclick="LeadManagerModule.sedDlStep(1)">+</button><span>días</span></div>
+      <label class="sed-dl__sw"><input type="checkbox" id="sed-dl-now"${gap ? '' : ' checked'} onchange="LeadManagerModule.sedDlNow(this.checked)"> Enviar inmediatamente</label>
+      <button class="btn btn--primary btn--sm" style="width:100%;margin-top:8px" onclick="LeadManagerModule.sedDlApply(${stepId})">Aplicar</button></div>`, 240);
+  }
+  function sedDlStep(d) { const n = document.getElementById('sed-dl-n'); if (!n) return; n.value = Math.max(0, (parseInt(n.value) || 0) + d); const c = document.getElementById('sed-dl-now'); if (c) c.checked = !(parseInt(n.value) > 0); }
+  function sedDlNow(on) { const n = document.getElementById('sed-dl-n'); if (n && on) n.value = 0; if (n && !on && !(parseInt(n.value) > 0)) n.value = 1; }
+  async function sedDlApply(stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return;
+    const want = Math.max(0, parseInt(document.getElementById('sed-dl-n')?.value) || 0), delta = want - _sedGap(steps, i);
+    document.getElementById('sed-pop')?.remove();
+    if (!delta) return;
+    try { await _sedApi(`/sequences/${_activeSeq}/steps/shift`, { from_id: stepId, delta }); await load(); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function sedStepMenu(ev, stepId) {
+    const it = (l, js, red) => `<button class="sed-pop__i${red ? ' is-red' : ''}" onclick="document.getElementById('sed-pop').remove();${js}">${l}</button>`;
+    _sedPop(ev, it('Añadir un tiempo de espera antes de este paso', `LeadManagerModule.sedDelay({stopPropagation(){},currentTarget:document.querySelector('.sed-node.is-on .sed-node__hd')||document.querySelector('.sed__rh')},${stepId})`)
+      + it('Duplicar el paso', `LeadManagerModule.sedDup(${stepId})`)
+      + it('Ajustes avanzados (ventana)…', `LeadManagerModule.openStepDrawer(${_activeSeq},${stepId})`)
+      + '<div class="sed-pop__sep"></div>' + it('Eliminar el paso', `LeadManagerModule.confirmDeleteStep(${stepId})`, true), 270);
+  }
+  async function sedDup(stepId) {
+    const steps = _seqSteps(_activeSeq), i = steps.findIndex(x => x.id === stepId); if (i < 0) return; const st = steps[i];
+    try {
+      const row = await _sedApi('/sequence-steps', { sequence_id: st.sequence_id, dia: st.dia, orden: st.orden || 0, canal: st.canal, titulo: st.titulo ? st.titulo + ' (copia)' : '', asunto: st.asunto || '', plantilla: st.plantilla || '', variants: Array.isArray(st.variants) ? st.variants : [], variant_mode: st.variant_mode || 'off', variant_field: st.variant_field || '', hora: st.hora || '', cond: st.cond || '', cond_step_id: st.cond_step_id || null, accion: st.accion || '', cc_off: !!st.cc_off, post_dias: st.post_dias || '', reaccion: st.reaccion || '' });
+      const ids = steps.map(x => x.id); ids.splice(i + 1, 0, row.id);
+      await _sedApi(`/sequences/${_activeSeq}/steps/reorder`, { ids });
+      _sedSel = row.id; await load();
+    } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); }
+  }
+  // ── Barra superior de la secuencia: campaña + estado, y los 4 pasos en orden (Secuencia → Lista → Lanzar → Rendimiento) ──
+  function _seqFavs() { try { return JSON.parse(localStorage.getItem('lm_seq_fav') || '[]'); } catch (_) { return []; } }
+  function _seqProg(id, s, steps) {
+    const nContacts = Array.isArray(_seqContacts) ? _seqContacts.length : 0;
+    const nCos = (_seqCoStats && _seqCoStats.total) ? _seqCoStats.total : (Array.isArray(_seqPendingCos) ? _seqPendingCos.length : 0);
+    const lista = nContacts + nCos, launched = (s.estado || 'draft') !== 'draft';
+    return { pasos: steps.length, lista, nContacts, nCos, launched, p1: steps.length > 0, p2: lista > 0 };
+  }
+  function _seqTopbar(id, s, steps) {
+    const g = _seqProg(id, s, steps), cmp = _campaignName(s.campaign_id);
+    const fav = _seqFavs().includes(id);
+    const ic = (d, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const est = s.estado || 'draft', col = _SEQ_VIVO[est] || _SEQ_VIVO.draft;
+    const lock = '<path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', check = '<polyline points="20 6 9 17 4 12"/>';
+    // cada paso: done / current / locked. Con la secuencia ya lanzada nada se bloquea y todo se ve normal.
+    const cur = g.launched ? 0 : (!g.p1 ? 1 : !g.p2 ? 2 : 3);
+    const ST = [
+      { k: 1, l: 'Secuencia', n: g.pasos ? g.pasos : '', ico: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h6"/>', done: g.p1, locked: false },
+      { k: 2, l: 'Lista de prospectos', n: g.lista ? g.lista : '', ico: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', done: g.p2, locked: !g.launched && !g.p1 },
+      { k: 3, l: 'Lanzar', n: '', ico: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', done: g.launched, locked: !g.launched && !(g.p1 && g.p2) },
+      { k: 4, l: 'Rendimiento', n: '', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', done: false, locked: !g.launched },
+    ];
+    const active = { 1: _seqStage === 'secuencia', 2: !_seqStage && ['contactos', 'empresas'].includes(_seqTab) && !_seqPasosOpen, 3: false, 4: !_seqStage && _seqTab === 'metricas' && !_seqPasosOpen };
+    const viewing = _seqStage === 'secuencia' ? 1 : (active[2] ? 2 : active[4] ? 4 : 0);
+    const stepsHtml = ST.map((x, i) => `${i ? '<span class="seqtop__sep">›</span>' : ''}<button class="seqtop__st${x.locked ? ' is-locked' : ''}${g.launched ? '' : (x.done ? ' is-done' : '')}${(g.launched ? active[x.k] : (viewing ? viewing === x.k : cur === x.k)) ? ' is-cur' : ''}" onclick="LeadManagerModule.seqStep(${id},${x.k})" title="${x.locked ? 'Completa primero el paso anterior' : ''}">
+        ${!g.launched && x.done ? `<i class="seqtop__ok">${ic(check, 11)}</i>` : x.locked ? ic(lock, 14) : ic(x.ico, 14)}<span>${x.l}</span>${x.n !== '' ? `<em>${x.n}</em>` : ''}</button>`).join('');
+    const falta = g.launched ? '' : (!g.p1 ? 'Crea al menos un paso' : !g.p2 ? 'Añade prospectos a la lista' : 'Todo listo para lanzar');
+    return `<div class="seqtop">
+      <div class="seqtop__row1">
+        <span class="seqtop__cmp">${ic('<path d="M3 11l18-8v18L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>', 16)}${s.campaign_id ? `<button title="Configuración de la campaña" onclick="LeadManagerModule.openCampaignConfig(${s.campaign_id})">${esc(cmp || 'Campaña')}</button>` : `<button class="is-none" title="Asignar una campaña" onclick="LeadManagerModule.openSequenceDrawer(${id})">Sin campaña · asignar</button>`}</span>
+        <span class="seqtop__seq" title="${esc(s.nombre)}">${esc(s.nombre)}</span>
+        <button class="seqtop__ib" title="${s.starts_on ? 'Inicio: ' + esc(String(s.starts_on).slice(0, 10)) : 'Fechas y horario'}" onclick="LeadManagerModule.seqTab('config')">${ic('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>')}</button>
+        <button class="seqtop__est" style="--c:${col}" onclick="LeadManagerModule.seqEstadoMenu(event,${id})"><i></i>${esc((_CC_SEQ_EST || {})[est] || est)} ${ic('<polyline points="6 9 12 15 18 9"/>', 12)}</button>
+        <button class="seqtop__ib${fav ? ' is-fav' : ''}" title="Favorita" onclick="LeadManagerModule.seqFav(${id})">${ic('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>')}</button>
+        <button class="seqtop__ib" title="Configuración" onclick="${s.campaign_id ? `LeadManagerModule.openCampaignConfig(${s.campaign_id})` : `LeadManagerModule.openSequenceDrawer(${id})`}">${ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')}</button>
+        <button class="seqtop__ib" title="Más acciones" onclick="LeadManagerModule.seqMoreMenu(event,${id})">${ic('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>
+      </div>
+      <div class="seqtop__row2"><div class="seqtop__steps">${stepsHtml}</div>${g.launched ? '' : `<span class="seqtop__hint${g.p1 && g.p2 ? ' ok' : ''}">${g.p1 && g.p2 ? ic(check, 13) : ic('<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 13)} ${falta}</span>`}</div>
+    </div>`;
+  }
+  function seqFav(id) { const a = _seqFavs(), i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); try { localStorage.setItem('lm_seq_fav', JSON.stringify(a)); } catch (_) {} _renderBody(); }
+  async function seqSetEstado(id, estado) {
+    try {
+      const r = await apiFetch(`${API}/sequences/${id}/estado`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo cambiar el estado');
+      const sq = _sequences.find(x => x.id === id); if (sq) sq.estado = estado;
+      _renderBody();
+      showBanner(estado === 'activa' ? '🚀 Secuencia lanzada' : 'Estado: ' + ((_CC_SEQ_EST || {})[estado] || estado), 'success');
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function seqStep(id, k) {
+    const s = _sequences.find(x => x.id === id); if (!s) return;
+    const g = _seqProg(id, s, _seqSteps(id));
+    if (k === 1) { _seqStage = 'secuencia'; _seqPasosOpen = false; _renderBody(); return; }
+    if (k === 2) {
+      if (!g.p1 && !g.launched) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
+      seqTab(g.nContacts === 0 && g.nCos > 0 ? 'empresas' : 'contactos');
+      if (!g.lista && !g.launched) setTimeout(() => seqAddContactOpen(id), 250);
+      return;
+    }
+    if (k === 3) {
+      if (g.launched) { seqTab('tareas'); return; }
+      if (!g.p1) { showBanner('Primero crea los pasos de la secuencia (paso 1).', 'info'); return; }
+      if (!g.p2) { showBanner('Primero añade prospectos a la lista (paso 2).', 'info'); return; }
+      if (await novaConfirm({ title: 'Lanzar la secuencia', message: `Se lanza «${esc(s.nombre)}» con ${g.lista} prospecto${g.lista === 1 ? '' : 's'}. Los envíos y tareas empiezan según su configuración.`, confirmText: 'Lanzar' })) seqSetEstado(id, 'activa');
+      return;
+    }
+    if (k === 4) { if (!g.launched) { showBanner('El rendimiento se desbloquea al lanzar la secuencia (paso 3).', 'info'); return; } seqTab('metricas'); }
+  }
+  function seqEstadoMenu(ev, id) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const s = _sequences.find(x => x.id === id); if (!s) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());";
+    const it = (l, js) => `<button class="cp-mark-menu__b" onclick="${close}${js}">${l}</button>`;
+    const est = s.estado || 'draft';
+    const html = '<div class="cp-mark-menu__list">'
+      + (est === 'draft' ? it('🚀 Lanzar…', `LeadManagerModule.seqStep(${id},3)`) : '')
+      + (est === 'activa' ? it('II Pausar todo', `LeadManagerModule.seqPauseAll(${id})`) : '')
+      + (est === 'pausada' ? it('► Reactivar todo', `LeadManagerModule.seqResumeAll(${id})`) : '')
+      + (['activa', 'pausada'].includes(est) ? it('✓ Marcar como culminada', `LeadManagerModule.seqSetEstado(${id},'completada')`) : '')
+      + (est !== 'archivada' && est !== 'draft' ? it('Archivar', `LeadManagerModule.seqSetEstado(${id},'archivada')`) : '')
+      + (['completada', 'archivada'].includes(est) ? it('Reabrir como pausada', `LeadManagerModule.seqSetEstado(${id},'pausada')`) : '')
+      + '</div>';
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 220)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function f() { menu.remove(); document.removeEventListener('click', f); }), 0);
+  }
   function _vSequenceDetail(id) {
     const s = _sequences.find(x => x.id === id);
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
+    if (_seqStage === 'secuencia') { setTimeout(_sedMount, 0); return `${_seqTopbar(id, s, steps)}${_seqEditorHtml(id)}`; }
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
@@ -27430,7 +27612,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       </div>
       <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas' || t === 'config' || t === 'info') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  function seqTab(t) { _seqStage = ''; _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas' || t === 'config' || t === 'info') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -37851,7 +38033,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
 
   // ── Paso de secuencia: drawer ──
   let _stepOpenSeq = null, _stepOpenId = null, _stepReplyTo = null;
-  function openStepDrawer(seqId, stepId) {
+  function openStepDrawer(seqId, stepId, inlineHost) {
     _stepOpenSeq = seqId; _stepOpenId = stepId || null;
     _stepReplyTo = stepId ? ((_steps.find(x => x.id === stepId) || {}).reply_to_step_id || null) : null;
     setTimeout(() => _stepReplyPickRender(), 0);
@@ -37871,8 +38053,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload();
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
     document.getElementById('lm-step-modal')?.remove();
-    const m = document.createElement('div'); m.id = 'lm-step-modal'; m.className = 'fin-pi-backdrop';
-    m.onclick = e => { if (e.target === m) closeStepDrawer(); };
+    const m = document.createElement('div'); m.id = 'lm-step-modal'; m.className = inlineHost ? 'fin-pi-inline' : 'fin-pi-backdrop';
+    if (!inlineHost) m.onclick = e => { if (e.target === m) closeStepDrawer(); };
     const canalOpts = _CANALES.map(c => `<option value="${c}"${st?.canal === c ? ' selected' : ''}>${_TOUCH[c][0]}</option>`).join('');
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
@@ -37904,10 +38086,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeStepDrawer()">Cancelar</button>
         <button class="btn btn--primary btn--sm" id="step-save" onclick="LeadManagerModule.saveStep(${seqId},${st ? st.id : 'null'})">${st ? 'Guardar' : 'Añadir paso'}</button>
       </div></div></div>`;
-    document.body.appendChild(m);
+    (inlineHost || document.body).appendChild(m);
     _stepRenderMsg();
     stepDiaCal(seqId);
-    setTimeout(() => $('step-titulo')?.focus(), 60);
+    if (!inlineHost) setTimeout(() => $('step-titulo')?.focus(), 60);
     stepCondChange();   // deja la ayuda y las opciones de la condición según el paso de referencia
   }
   // Fecha calendario en vivo junto al "Día (relativo)" del editor de paso.
@@ -42346,7 +42528,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, seqStep, seqFav, seqSetEstado, seqEstadoMenu, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

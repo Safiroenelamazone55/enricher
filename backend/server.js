@@ -11860,6 +11860,30 @@ app.post('/api/sequences/:id/resume-all', requireAuth, async (req, res) => {
   } catch (err) { console.error('[seq] resume-all error:', err.message); res.status(500).json({ error: 'Error al reactivar todo' }); }
 });
 
+// Editor de secuencia: fija el orden de los pasos (orden = posición) y mueve días de un paso en adelante (cambio de espera).
+app.post('/api/sequences/:id/steps/reorder', requireAuth, async (req, res) => {
+  try {
+    const ids = (Array.isArray((req.body || {}).ids) ? req.body.ids : []).map(x => parseInt(x)).filter(Boolean);
+    const { rows } = await pool.query('SELECT id FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    const mine = new Set(rows.map(r => r.id));
+    if (!ids.length || ids.some(i => !mine.has(i))) return res.status(400).json({ error: 'Pasos inválidos' });
+    for (let i = 0; i < ids.length; i++) await pool.query('UPDATE sequence_steps SET orden=$1 WHERE id=$2', [i + 1, ids[i]]);
+    res.json({ ok: true });
+  } catch (e) { console.error('[steps reorder]', e.message); res.status(500).json({ error: 'No se pudo reordenar' }); }
+});
+app.post('/api/sequences/:id/steps/shift', requireAuth, async (req, res) => {
+  try {
+    const fromId = parseInt((req.body || {}).from_id), delta = parseInt((req.body || {}).delta) || 0;
+    const { rows } = await pool.query('SELECT id, dia FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC', [req.params.id, req.workspaceOwnerId]);
+    const i = rows.findIndex(r => r.id === fromId);
+    if (i < 0) return res.status(404).json({ error: 'Paso no encontrado' });
+    // un paso no puede quedar antes del anterior: se limita el retroceso a la espera actual
+    const prevDia = i ? rows[i - 1].dia : 1;
+    const d = Math.max(delta, prevDia - rows[i].dia);
+    if (d) for (let k = i; k < rows.length; k++) await pool.query('UPDATE sequence_steps SET dia=GREATEST(1, dia + $1) WHERE id=$2', [d, rows[k].id]);
+    res.json({ ok: true, delta: d });
+  } catch (e) { console.error('[steps shift]', e.message); res.status(500).json({ error: 'No se pudo cambiar la espera' }); }
+});
 app.get('/api/sequence-steps', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [req.workspaceOwnerId]);
