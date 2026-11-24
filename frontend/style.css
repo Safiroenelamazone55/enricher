@@ -22378,3 +22378,6 @@ body.ibx-lb-open{overflow:hidden}
 
 .ll-fp { height: var(--llfp-h, min(620px, calc(100vh - 90px))); }
 .sed-pop.ll-pop:has(.ll-fp) { max-height: calc(100vh - 16px); }
+
+.cpm-fxi { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+.cpm-f__box .lm-fx-i { margin: 0; }

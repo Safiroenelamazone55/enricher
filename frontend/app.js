@@ -28013,6 +28013,32 @@ ${rhead}${foot}
     return _fixList().filter(x => (x.seqs || []).some(s => s.id === id));
   }
   function _seqFixRowsHtml(id) { const l = _fixOfSeq(id); return l.length ? _fixSectionHtml(l) : ''; }
+  // Iconos «IA» y «Buscar» (los mismos de «Por corregir»): abren Google en una ventana al lado para encontrar el email. Misma función fxPop y mismas consultas.
+  function _fxSearchIcons(c) {
+    const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
+    if (!nm) return '';
+    const co = (_companies || []).find(x => String(x.id) === String(c.company_id));
+    const empresa = c.company_nombre || c.empresa_nombre || (co && co.nombre) || '';
+    const q = encodeURIComponent('"' + nm + '" ' + empresa);
+    const fx = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '')); };
+    // Búsquedas para casos difíciles. dom = dominio de la empresa (ficha o sitio web).
+    const dom = String((co && (co.dominio || co.website)) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[\/?#\s]/)[0];
+    const cargoTxt = String(c.cargo || '').trim();
+    const _ok = v => { v = String(v || '').trim(); return v && !/^(n\/?a|na|-|—|null|undefined)$/i.test(v) ? v : ''; };
+    const lugar = (_ok(co && co.ciudad) || _ok(co && co.pais)) ? [_ok(co && co.ciudad), _ok(co && co.pais)].filter(Boolean).join(', ') : [_ok(c.ciudad), _ok(c.pais)].filter(Boolean).join(', ');   // la ubicación de la EMPRESA manda sobre la de la persona
+    const pais = _ok(co && co.pais) || _ok(c.pais), who = empresa || 'that company';
+    const coLi = fx(co && co.linkedin), pLi = /linkedin\.com\/in\//i.test(c.linkedin || '') ? fx(c.linkedin) : '';
+    const qAI = encodeURIComponent('Goal: most likely business email for ' + nm + (cargoTxt ? ' (' + cargoTxt + ')' : '') + ' at ' + who + (dom ? ' (website: ' + dom + ')' : '') + (lugar ? ', based in ' + lugar : '') + '. '
+      + 'TARGET COMPANY = exactly ' + who + (coLi ? ' (LinkedIn company page: ' + coLi + ')' : '') + (pLi ? '; LinkedIn profile of the person: ' + pLi : '') + '. Research it FIRST; the other companies of this person are NOT the target, even if more prominent. If its website is unknown, find THIS company website via its LinkedIn page. '
+      + 'Method: 1) Look for ' + nm + ' email directly. 2) If not public, find OTHER employees of ' + who + (pais ? ' in ' + pais : '') + ' with a public business email (company site, directories, press, LinkedIn, RocketReach, Apollo). 3) Check the email DOMAIN actually used (may differ from the website) and its STRUCTURE (first.last@, flast@, first@...). 4) Pick the dominant domain + structure and build the email for ' + nm + ' (handle accents, double surnames and hyphens; list surname variants and say which one the examples use). '
+      + 'VERIFY the company matches' + (pais ? ' the country (' + pais + ')' : ' the country') + (lugar ? ', the area (' + lugar + ')' : '') + (dom ? ' and the website ' + dom : '') + '; similar names elsewhere are NOT valid (say so); if unsure, propose no email. '
+      + 'Answer in Spanish. LINE 1: ONLY the email address, nothing else (no emoji, icon, label, dash or percentage), so it can be copied with a double click. LINE 2: ONLY the certainty, e.g. 85%. If you cannot recommend one: line 1 = sin recomendación, line 2 = 0%. Then: 0) Empresa verificada: sí/no y por qué; 1) Email recomendado; 2) Certeza % y por qué; 3) Dominio y estructura; 4) Ejemplos de otros empleados (nombre, cargo, correo); 5) Otros correos encontrados. If fewer than 2 examples, say certainty is low. Only if there is no email for ' + who + ', add at the end SEGUNDA OPCIÓN «Otra empresa de la persona (no es la vinculada)» with company, email and certainty (never in the first line).');
+    // Operadores moderados: nombre exacto + empresa SIN comillas (los acentos/abreviaturas rompen la coincidencia exacta) + «@dominio» + palabra de contacto. Sin exclusiones que dejen la búsqueda en cero.
+    const qOp = encodeURIComponent('"' + nm + '" ' + (empresa ? empresa + ' ' : '') + (dom ? '"@' + dom + '" ' : '') + '(email OR correo OR contacto)');
+    const mk = (title, ico, href, lbl) => '<a class="lm-fx-i lm-fx-i--lbl" title="' + esc(title) + '" href="' + href + '" target="_blank" rel="noopener" onclick="return LeadManagerModule.fxPop(event,this)">' + ico + '<b>' + lbl + '</b></a>';
+    return mk('Búsqueda inteligente (Google con IA): busca su email; si no es público, deduce el formato con otros empleados de la empresa y propone uno', NI('sparkles', 14), 'https://www.google.com/search?hl=es&q=' + qAI, 'IA')
+      + mk('Búsqueda con operadores: nombre exacto + empresa + «@dominio» + email/correo', NI('search', 14), 'https://www.google.com/search?q=' + qOp, 'Buscar');
+  }
   function _fixSectionHtml(listOverride) {
     const _all = !listOverride && _fixScopeAll, _tot = listOverride ? 0 : _fixAllF().length;
     const list = listOverride || (_all ? _fixAllF() : _fixF()); if (!list.length && !_tot) return '';
@@ -41026,7 +41052,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const box = (label, inner) => `<div class="cpm-f"><span class="cpm-f__l">${label}</span>${inner}</div>`;
     const F = (f, label, val, ico, extra) => box(label, `<span class="cpm-f__box"><i>${_llI(_CPI[ico] || _CPI.user, 15)}</i><input data-f="${f}" value="${esc(val || '')}" placeholder="Añadir" onchange="LeadManagerModule.cpSave(${id})">${extra || ''}</span>`);
     const goBtn = (href, tip, svg) => `<a class="cpm-f__go" href="${esc(_goUrl(href))}" target="_blank" rel="noopener" title="${tip}" onclick="event.stopPropagation()">${svg}</a>`;
-    const emailBox = box('Emails', `<span class="cpm-f__box"><i>${_llI(_CPI.mail, 15)}</i><input data-f="email" value="${esc(c.email || '')}" placeholder="Añadir email" onchange="LeadManagerModule.cpSave(${id})">${c.email ? _infoCopyBtn(c.email, 'Copiar email') : `<button type="button" class="ll-find" onclick="LeadManagerModule.llFindEmail(${id})">ENCONTRAR EMAIL</button>`}</span>`);
+    const emailBox = box('Emails', `<span class="cpm-f__box"><i>${_llI(_CPI.mail, 15)}</i><input data-f="email" value="${esc(c.email || '')}" placeholder="Añadir email" onchange="LeadManagerModule.cpSave(${id})">${c.email ? _infoCopyBtn(c.email, 'Copiar email') : ''}<span class="cpm-fxi">${_fxSearchIcons(c)}</span></span>`);
     const dt = c.created_at ? new Date(c.created_at) : null;
     const ago = dt && !isNaN(dt) ? (() => { const d = Math.floor((Date.now() - dt) / 864e5); return d <= 0 ? 'Hoy' : d === 1 ? 'Hace 1 día' : d < 30 ? `Hace ${d} días` : d < 365 ? `Hace ${Math.floor(d / 30)} mes${Math.floor(d / 30) > 1 ? 'es' : ''}` : `Hace ${Math.floor(d / 365)} año${Math.floor(d / 365) > 1 ? 's' : ''}`; })() : '';
     const dateBox = dt && !isNaN(dt) ? box('Fecha de añadido', `<span class="cpm-f__box cpm-f__box--ro"><i>${_llI(_CPI.cal, 15)}</i><span class="cpm-f__v">${dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</span><em>${ago}</em></span>`) : '';
