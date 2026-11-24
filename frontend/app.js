@@ -30278,9 +30278,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="ibx-conv__hd">
         <div class="ibx-av">${esc(ini)}</div>
         <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
-        <div class="ibx-conv__seq">${seqInfo}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div></div>
+        <div class="ibx-conv__seq">${seqInfo} <button class="ibx2-status" title="Cambiar el resultado de esta respuesta" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})">${c.disposition ? _dispoBadge(c.disposition) : '<span class="ibx2-status__none">Sin etiqueta</span>'} ▾</button></div></div>
         ${_ibPagerHtml()}
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
         ${c.id ? `<button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})" title="Resolver respuesta">⋮</button>` : ''}
       </div>
       <div class="ibx-msgs" id="ibx-msgs">${curMsg ? _ibMsg(curMsg) : '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
@@ -31093,7 +31092,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     }
     return `<aside class="ibx-side">
       <div class="ibx2-top"><div class="ibx-av">${esc(ini)}</div><b>${esc(nm)}</b><span class="sp"></span>
-        ${c.id ? `<button class="ibx2-ib" title="Resolver respuesta" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})">${_ibSvg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}</div>
+        ${c.id ? `<button class="ibx2-ib" title="Resolver respuesta" onclick="LeadManagerModule.ibContactMenu(event)">${_ibSvg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}</div>
       ${c.cargo || c.empresa ? `<div class="ibx2-head2">${esc(c.cargo || '')}${c.cargo && c.empresa ? ' en ' : ''}${c.empresa ? `<span class="ibx2-co ibx2-co--pill"><i>${esc(c.empresa[0].toUpperCase())}</i>${esc(c.empresa)}</span>` : ''}</div>` : ''}
       <div class="ibx2-acts">
         <button class="ibx2-add" onclick="LeadManagerModule.ibSeqPick(event)">${I('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>', 14)} Agregar a secuencia</button>
@@ -31105,6 +31104,16 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="ibx2-tabs">${[['general', 'General', 0], ['actividad', 'Actividad', 0], ['campanas', 'Secuencias', seqs.length], ['tareas', 'Tareas', tareas.length]].map(([k, l, n]) => `<button class="${_ibSideTab === k ? 'on' : ''}" onclick="LeadManagerModule.ibSideTab('${k}')">${l}${n ? ` <em>${n}</em>` : ''}</button>`).join('')}</div>
       <div class="ibx2-body">${body}</div>
     </aside>`;
+  }
+  function ibContactMenu(ev) {
+    const c = (_ibThread && _ibThread.contact) || {}; if (!c.id) return;
+    const liUrl = c.linkedin ? (/^https?:/i.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin) : '';
+    _ibPop(ev, () => _ibItem(`LeadManagerModule.openContactPage(${c.id})`, 'Ver ficha completa')
+      + _ibItem("LeadManagerModule.ibSeqPick({stopPropagation(){},currentTarget:document.querySelector('.ibx2-add')})", 'Agregar a secuencia…')
+      + '<div class="chat-ctx-sep"></div>'
+      + (c.email ? _ibItem(`LeadManagerModule.ibCopy('${esc(c.email)}')`, 'Copiar email') : '')
+      + (c.telefono ? _ibItem(`LeadManagerModule.ibCopy('${esc(c.telefono)}')`, 'Copiar teléfono') : '')
+      + (liUrl ? _ibItem(`window.open('${esc(liUrl)}','_blank','noopener')`, 'Abrir LinkedIn') : ''));
   }
   function ibCopy(t) { try { navigator.clipboard.writeText(t); showBanner('Copiado', 'success'); } catch (_) {} }
   function ibSeqPick(ev) {
@@ -42276,7 +42285,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibFilRow, ibFilMenu, ibFilSearch, ibFilPick, ibFilEdit, ibFilOp, ibFilVal, ibFilTick, ibFilCancel, ibFilApply, ibFilDel, ibCopy, ibSeqPick, ibSeqAdd, ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibContactMenu, ibFilRow, ibFilMenu, ibFilSearch, ibFilPick, ibFilEdit, ibFilOp, ibFilVal, ibFilTick, ibFilCancel, ibFilApply, ibFilDel, ibCopy, ibSeqPick, ibSeqAdd, ibOpen, ibTab, ibEnvFilter, ibCli, ibDisp, ibViewMenu, ibCliMenu, ibMoreMenu, ibToggleSearch, ibSearch, ibSideTab, ibQuick, _ibSetDisp, ibAbrirFiltros, ibSend, ibSaveNote, ibForward, ibFwdScope, ibFwdOpen, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, taskAfterResolve, refShowForm, ldReferExisting, cpMoreMenu, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
