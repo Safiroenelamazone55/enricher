@@ -30337,148 +30337,302 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _renderBody();
   }
   // ═══════════ Tareas (estilo Lemlist): vistas en pestañas, filtros editables, columnas, crear tarea e iniciar tareas ═══════════
-  const _tk = { view: 'mis', q: '', f: [], filtOpen: false, dirty: false, classic: false, cols: null };
+  // ═══════════ Tareas (réplica de Lemlist): vistas definidas por filtros, chips editables, filtro avanzado ═══════════
+  const _tk = { view: 'mis', q: '', tree: null, filtOpen: true, classic: false, cols: null, cur: 'mis', seq: 0 };
   const _TK_VIEWS = [['mis', 'Mis tareas', 'M13 2 3 14h9l-1 8 10-12h-9l1-8z'], ['llamadas', 'Llamadas', 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z'], ['revisar', 'Para revisar', 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'], ['calientes', 'Prospectos calientes', 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'], ['respuestas', 'Respuestas de prospectos', 'M9 14 4 9l5-5M20 20v-7a4 4 0 0 0-4-4H4'], ['todas', 'Todas las tareas', 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01']];
-  const _TK_COLS = [['titulo', 'Tipo de tarea y título', 1], ['due', 'Fecha de vencimiento'], ['campo', 'Campo asociado'], ['score', 'Puntuación'], ['cargo', 'Título del puesto'], ['empresa', 'Empresa'], ['origen', 'Origen de la campaña'], ['prioridad', 'Prioridad']];
+  const _TK_COLS = [['titulo', 'Tipo de tarea y título', 1], ['due', 'Fecha de vencimiento'], ['campo', 'Campo asociado'], ['score', 'Puntuación del prospecto'], ['cargo', 'Título del puesto'], ['empresa', 'Empresa'], ['origen', 'Origen de la campaña'], ['prioridad', 'Prioridad']];
   const _TK_DEF = ['titulo', 'due', 'campo', 'score', 'cargo', 'empresa'];
   function _tkCols() { if (_tk.cols) return _tk.cols; let v = null; try { v = JSON.parse(localStorage.getItem('lm_tk_cols') || 'null'); } catch (_) {} _tk.cols = new Set(Array.isArray(v) ? v : _TK_DEF); _tk.cols.add('titulo'); return _tk.cols; }
   function _tkViews() { try { return JSON.parse(localStorage.getItem('lm_tk_views') || '[]') || []; } catch (_) { return []; } }
-  const _TK_TIPO = { linkedin: 'LinkedIn', email: 'Email', call: 'Llamada', whatsapp: 'WhatsApp', task: 'Tarea manual', revisar: 'Revisar' };
+  const _TK_TIPO = { call: 'Llamar', email: 'Email', linkedin: 'LinkedIn', sms: 'SMS', whatsapp: 'WhatsApp', task: 'Manual', revisar: 'Revisar' };
+  const _tkRead = () => { try { return new Set(JSON.parse(localStorage.getItem('lm_tk_read') || '[]')); } catch (_) { return new Set(); } };
+  function _tkMarkRead(key) { const rs = _tkRead(); if (rs.has(key)) return; rs.add(key); try { localStorage.setItem('lm_tk_read', JSON.stringify([...rs].slice(-3000))); } catch (_) {} }
+  const _tkScore = c => { c = c || {}; if (['interesado', 'reunion'].includes(c.disposition)) return 'alto'; const p = String(c.contact_priority || '').toLowerCase(); return p === 'alta' ? 'alto' : p === 'media' ? 'medio' : p === 'baja' ? 'bajo' : (c.id ? 'muybajo' : ''); };
+  const _tkPrio = n => { const m = /Prioridad (alta|media|baja)/i.exec(n || ''); return m ? { alta: 'alto', media: 'medio', baja: 'baja' }[m[1].toLowerCase()] : 'ninguno'; };
   function _tkRows() {
-    const today = _dayOf(new Date()), byId = new Map((_contacts || []).map(c => [c.id, c])), out = [];
+    const today = _dayOf(new Date()), lim7 = new Date(today.getTime() + 8 * 864e5 - 1), eod = new Date(today.getTime() + 864e5 - 1), byId = new Map((_contacts || []).map(c => [c.id, c])), out = [], rd = _tkRead();
+    const seqOf = id => (_sequences || []).find(x => x.id === id) || {};
+    const estOf = d => d <= eod ? 'venc' : d <= lim7 ? 'prox' : '';
+    const camp = id => { const sq = seqOf(id); return sq.campaign_id ? String(sq.campaign_id) : ''; };
     _allSeqTasks().forEach(t => {
-      const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task'].includes(st.canal) ? st.canal : 'task');
-      out.push({ kind: 'seq', key: 's' + t.sq.id + '-' + c.id, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: (_sequences || []).find(x => x.id === t.sq.id)?.nombre || t.sq.nombre || '', accion: _accionLabel(st.canal, st.accion) || '', prio: '' });
+      const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task', 'sms'].includes(st.canal) ? st.canal : 'task'), key = 's' + t.sq.id + '-' + c.id;
+      out.push({ kind: 'seq', key, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: seqOf(t.sq.id).nombre || t.sq.nombre || '', campId: camp(t.sq.id), accion: _accionLabel(st.canal, st.accion) || '', prio: 'ninguno', estado: estOf(t.due), lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
     });
-    (_activities || []).filter(a => a.estado === 'pendiente' && a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
-      const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || '');
-      out.push({ kind: 'act', key: 'a' + a.id, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.tipo === 'llamada' ? 'call' : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due: new Date(a.fecha), hora: '', c, cid: a.contact_id, act: a, origen: '', prio: '', resp: a.tipo === 'revisar_respuesta' });
+    (_activities || []).filter(a => a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
+      const pend = a.estado === 'pendiente', tipoOk = /^(tarea|followup|llamada|revisar_|seguimiento_inactivo)/.test(a.tipo || '');
+      if (!pend && !tipoOk) return;
+      const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || ''), due = new Date(a.fecha), key = 'a' + a.id;
+      if (!pend && due < new Date(Date.now() - 45 * 864e5)) return;
+      out.push({ kind: 'act', key, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.canal === 'call' || a.tipo === 'llamada' ? 'call' : ['email', 'linkedin', 'whatsapp', 'sms'].includes(a.canal) ? a.canal : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due, hora: '', c, cid: a.contact_id, act: a, origen: '', campId: '', prio: _tkPrio(a.nota), resp: a.tipo === 'revisar_respuesta', estado: pend ? estOf(due) : 'hecho', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
     });
-    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting' && (!_gcli || (_apCliOk(a) && byId.has(a.contact_id)))).forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
-    return out.sort((a, b) => a.due - b.due);
+    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting' && (!_gcli || (_apCliOk(a) && byId.has(a.contact_id)))).forEach(a => { const c = byId.get(a.contact_id) || {}, key = 'p' + a.id; out.push({ kind: 'ap', key, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: seqOf(a.sequence_id).nombre || '', campId: camp(a.sequence_id), prio: 'ninguno', estado: 'venc', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' }); });
+    return out.sort((x, y) => x.due - y.due);
   }
-  function _tkPreset(v, r, today) {
-    const over = r.due <= new Date(today.getTime() + 864e5 - 1);
-    if (v === 'mis') return over && r.kind !== 'ap' || (r.kind === 'ap');
-    if (v === 'llamadas') return r.tipo === 'call';
-    if (v === 'revisar') return r.tipo === 'revisar';
-    if (v === 'calientes') return ['interesado', 'reunion'].includes((r.c || {}).disposition);
-    if (v === 'respuestas') return !!r.resp;
-    return true;
-  }
+  // ── Definición de los campos filtrables (los de Lemlist primero; después los propios de Nova) ──
+  const _TK_IC = { A: 'M4 7V4h16v3M9 20h6M12 4v16', score: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z', check: 'M20 6 9 17l-5-5', estado: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', alert: 'M12 8v4M12 16h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z', eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', cal: 'M3 4h18v18H3zM16 2v4M8 2v4M3 10h18', user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', send: 'm22 2-7 20-4-9-9-4zM22 2 11 13', tag: 'M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0l-7.17-7.17a2 2 0 0 1 0-2.83l7.17-7.17a2 2 0 0 1 2.83 0l7.17 7.17a2 2 0 0 1 0 2.83z', org: 'M4 2h16v20H4zM9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01' };
   const _TK_FDEF = [
-    { k: 'titulo', l: 'Título de la tarea', t: 'txt', get: r => r.titulo },
-    { k: 'tipo', l: 'Tipo de tarea', t: 'sel', opts: () => Object.entries(_TK_TIPO), get: r => r.tipo },
-    { k: 'estado', l: 'Estado', t: 'sel', opts: () => [['venc', 'Vencida'], ['hoy', 'Para hoy'], ['prox', 'Próximas']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : 'prox' },
-    { k: 'venc', l: 'Fecha de vencimiento', t: 'sel', opts: () => [['venc', 'Vencidas'], ['hoy', 'Hoy'], ['7', 'Próximos 7 días'], ['mas', 'Más adelante']], get: (r, today) => r.due < today ? 'venc' : r.due.getTime() === today.getTime() ? 'hoy' : r.due <= new Date(today.getTime() + 7 * 864e5) ? '7' : 'mas' },
-    { k: 'canal', l: 'Canal', t: 'sel', opts: () => [['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['call', 'Llamada'], ['task', 'Tarea manual']], get: r => r.tipo },
-    { k: 'accion', l: 'Paso / acción', t: 'sel', opts: () => [...new Set(_tkRows().map(r => r.accion).filter(Boolean))].sort().map(x => [x, x]), get: r => r.accion || '' },
-    { k: 'import', l: 'Archivo de importación', t: 'sel', opts: () => [...new Set((_contacts || []).map(c => c.import_batch).filter(Boolean))].sort().map(x => [x, x]), get: r => (r.c || {}).import_batch || '' },
-    { k: 'fuente', l: 'Fuente del contacto', t: 'sel', opts: () => [...new Set((_contacts || []).map(c => c.fuente).filter(Boolean))].sort().map(x => [x, x]), get: r => (r.c || {}).fuente || '' },
-    { k: 'prop', l: 'Cliente (propietario)', t: 'sel', opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), get: r => String((r.c || {}).outbound_client_id || '') },
-    { k: 'campana', l: 'Campaña', t: 'sel', opts: () => (_campaigns || []).map(c => [String(c.id), [c.codigo, c.nombre].filter(Boolean).join(' · ')]), get: r => { const sq = (_sequences || []).find(x => x.id === r.seqId); return sq ? String(sq.campaign_id || '') : ''; } },
-    { k: 'secuencia', l: 'Secuencia', t: 'sel', opts: () => (_sequences || []).map(x => [String(x.id), [x.codigo, x.nombre].filter(Boolean).join(' · ')]), get: r => String(r.seqId || '') },
-    { k: 'origen', l: 'Origen de la campaña', t: 'sel', opts: () => (_sequences || []).map(x => [x.nombre, x.nombre]), get: r => r.origen },
-    { k: 'empresa', l: 'Empresa', t: 'txt', get: r => (r.c || {}).company_nombre || (r.c || {}).empresa_nombre || '' },
-    { k: 'contacto', l: 'Campo asociado (contacto)', t: 'txt', get: r => [(r.c || {}).nombre, (r.c || {}).apellido].filter(Boolean).join(' ') },
+    { k: 'titulo', l: 'Título de la tarea', ic: _TK_IC.A, t: 'txt', get: r => r.titulo },
+    { k: 'score', l: 'Puntuación del prospecto', ic: _TK_IC.score, t: 'sel', get: r => r.score, opts: () => [['alto', 'Alto', '91 a 100'], ['medio', 'Medio', '71 a 90'], ['bajo', 'Bajo', '51 a 70'], ['muybajo', 'Muy bajo', '0 a 50']] },
+    { k: 'tipo', l: 'Tipo de tarea', ic: _TK_IC.check, t: 'sel', get: r => r.tipo, opts: () => Object.entries(_TK_TIPO).map(([v, l]) => [v, l]) },
+    { k: 'estado', l: 'Estado', ic: _TK_IC.estado, t: 'sel', get: r => r.estado, opts: () => [['venc', 'Vencimiento'], ['prox', 'Próximamente'], ['pausa', 'En pausa'], ['hecho', 'Hecho'], ['ign', 'Ignorado']] },
+    { k: 'prio', l: 'Prioridad', ic: _TK_IC.alert, t: 'sel', get: r => r.prio, opts: () => [['ninguno', 'Ninguno'], ['baja', 'Baja'], ['medio', 'Medio'], ['alto', 'Alto']] },
+    { k: 'lect', l: 'Estado de lectura', ic: _TK_IC.eye, t: 'sel', get: r => r.lect, opts: () => [['leido', 'Leído'], ['noleido', 'No leído']] },
+    { k: 'due', l: 'Fecha de vencimiento', ic: _TK_IC.cal, t: 'date', get: r => r.due },
+    { k: 'prop', l: 'Propietario', ic: _TK_IC.user, t: 'sel', get: r => r.owner, opts: () => [['me', 'Mis tareas', 'Asignado a mí'], ['otros', 'Tareas de los compañeros de equipo', 'Asignado a otros'], ['sin', 'Tareas sin asignar', 'Sin propietario']] },
+    { k: 'origen', l: 'Origen de la campaña', ic: _TK_IC.send, t: 'sel', get: r => r.campId, opts: () => (_campaigns || []).map(c => [String(c.id), [c.codigo, c.nombre].filter(Boolean).join(' · ')]), grupo: 'Mis campañas' },
+    // Propios de Nova
+    { k: 'cli', l: 'Cliente outbound', ic: _TK_IC.org, t: 'sel', get: r => String((r.c || {}).outbound_client_id || ''), opts: () => (_clients || []).map(c => [String(c.id), c.nombre]), nova: 1 },
+    { k: 'secuencia', l: 'Secuencia', ic: _TK_IC.send, t: 'sel', get: r => String(r.seqId || ''), opts: () => (_sequences || []).map(x => [String(x.id), [x.codigo, x.nombre].filter(Boolean).join(' · ')]), nova: 1 },
+    { k: 'accion', l: 'Paso / acción', ic: _TK_IC.check, t: 'sel', get: r => r.accion || '', opts: () => [...new Set(_tkRows().map(r => r.accion).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
+    { k: 'import', l: 'Archivo de importación', ic: _TK_IC.tag, t: 'sel', get: r => (r.c || {}).import_batch || '', opts: () => [...new Set((_contacts || []).map(c => c.import_batch).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
+    { k: 'fuente', l: 'Fuente del contacto', ic: _TK_IC.tag, t: 'sel', get: r => (r.c || {}).fuente || '', opts: () => [...new Set((_contacts || []).map(c => c.fuente).filter(Boolean))].sort().map(x => [x, x]), nova: 1 },
+    { k: 'empresa', l: 'Empresa', ic: _TK_IC.org, t: 'txt', get: r => (r.c || {}).company_nombre || (r.c || {}).empresa_nombre || '', nova: 1 },
+    { k: 'contacto', l: 'Campo asociado (contacto)', ic: _TK_IC.user, t: 'txt', get: r => [(r.c || {}).nombre, (r.c || {}).apellido].filter(Boolean).join(' '), nova: 1 },
   ];
+  const _TK_OPS = {
+    sel: [['es', 'es'], ['no_es', 'no es'], ['vacio', 'está vacío'], ['novacio', 'no está vacío']],
+    txt: [['contiene', 'contiene'], ['no_contiene', 'no contiene'], ['es', 'es'], ['no_es', 'no es'], ['empieza', 'empieza por'], ['termina', 'termina con'], ['vacio', 'está vacío'], ['novacio', 'no está vacío']],
+    date: [['es', 'es'], ['antes', 'es anterior a'], ['despues', 'es posterior a'], ['antes_i', 'es el o anterior a'], ['despues_i', 'es el o posterior al'], ['entre', 'está entre'], ['rel', 'es relativo a'], ['vacio', 'está vacío'], ['novacio', 'no está vacío']],
+  };
+  const _TK_UNIT = [['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes'], ['trim', 'Trimestre'], ['anio', 'Año']], _TK_MODE = [['esto', 'Esto'], ['ultimo', 'Último'], ['siguiente', 'Siguiente'], ['pasado', 'Pasado'], ['masde', 'Más de']];
+  const _tkNoVal = op => op === 'vacio' || op === 'novacio';
+  let _tkId = 1; const _tkNew = c => Object.assign({ id: 'f' + (_tkId++), op: '', vals: [], q: '', d1: '', d2: '', rel: { mode: 'esto', n: 1, unit: 'semana' } }, c);
+  function _tkMk(arr) { return { op: 'y', items: arr.map(c => _tkNew(c)) }; }
+  const _TK_ME = { k: 'prop', op: 'es', vals: ['me'] }, _TK_EST = { k: 'estado', op: 'es', vals: ['venc', 'prox'] };
+  function _tkVTree(v) {
+    const D = {
+      mis: [_TK_ME, _TK_EST], llamadas: [_TK_ME, { k: 'tipo', op: 'es', vals: ['call'] }, _TK_EST], revisar: [_TK_ME, { k: 'tipo', op: 'es', vals: ['revisar'] }, _TK_EST],
+      calientes: [_TK_ME, { k: 'score', op: 'es', vals: ['alto', 'medio'] }, _TK_EST], respuestas: [_TK_ME, { k: 'titulo', op: 'contiene', q: 'Revisar respuesta' }, _TK_EST], todas: [],
+    };
+    return _tkMk(JSON.parse(JSON.stringify(D[v] || [])));
+  }
+  const _tkSig = t => JSON.stringify(t, (k, v) => k === 'id' ? undefined : v);
+  function _tkBase() {
+    if (String(_tk.view).startsWith('c:')) { const x = _tkViews().find(y => y.id === _tk.view.slice(2)); return x ? _tkSig(x.tree || _tkMk([])) : _tkSig(_tkMk([])); }
+    return _tkSig(_tkVTree(_tk.view));
+  }
+  function _tkInit() { if (!_tk.tree) _tk.tree = _tkVTree(_tk.view); }
+  const _tkDirty = () => !!_tk.tree && _tkSig(_tk.tree) !== _tkBase();
+  // ── Evaluación ──
+  function _tkRelRange(rel, today) {
+    const n = Math.max(1, parseInt(rel.n) || 1), u = rel.unit, t = new Date(today); t.setHours(12, 0, 0, 0);
+    const startOf = (d, unit) => { const x = new Date(d); x.setHours(12, 0, 0, 0); if (unit === 'semana') x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); else if (unit === 'mes') x.setDate(1); else if (unit === 'trim') { x.setDate(1); x.setMonth(Math.floor(x.getMonth() / 3) * 3); } else if (unit === 'anio') { x.setDate(1); x.setMonth(0); } return x; };
+    const add = (d, k, unit) => { const x = new Date(d); if (unit === 'dia') x.setDate(x.getDate() + k); else if (unit === 'semana') x.setDate(x.getDate() + 7 * k); else if (unit === 'mes') x.setMonth(x.getMonth() + k); else if (unit === 'trim') x.setMonth(x.getMonth() + 3 * k); else x.setFullYear(x.getFullYear() + k); return x; };
+    const endOf = (d, unit) => { const x = add(startOf(d, unit), 1, unit); x.setDate(x.getDate() - 1); return x; };
+    const m = rel.mode;
+    if (m === 'esto') return [_ymd(startOf(t, u)), _ymd(endOf(t, u))];
+    if (m === 'ultimo') return [_ymd(add(t, -n, u)), _ymd(t)];
+    if (m === 'siguiente') return [_ymd(t), _ymd(add(t, n, u))];
+    if (m === 'pasado') { const p = add(startOf(t, u), -1, u); return [_ymd(startOf(p, u)), _ymd(endOf(p, u))]; }
+    return ['', _ymd(add(t, -n, u))];   // más de n unidades atrás
+  }
+  function _tkEv(f, r, today) {
+    const d = _TK_FDEF.find(x => x.k === f.k); if (!d) return true;
+    const raw = d.get(r, today), v = raw == null ? '' : raw;
+    if (d.t === 'date') {
+      const dv = v ? _ymd(v) : ''; if (f.op === 'vacio') return !dv; if (f.op === 'novacio') return !!dv; if (!dv) return false;
+      switch (f.op) { case 'es': return !f.d1 || dv === f.d1; case 'antes': return !f.d1 || dv < f.d1; case 'despues': return !f.d1 || dv > f.d1; case 'antes_i': return !f.d1 || dv <= f.d1; case 'despues_i': return !f.d1 || dv >= f.d1; case 'entre': return (!f.d1 || dv >= f.d1) && (!f.d2 || dv <= f.d2); case 'rel': { const [a, b] = _tkRelRange(f.rel, today); return (!a || dv >= a) && (!b || dv <= b); } default: return true; }
+    }
+    const sv = String(v);
+    if (f.op === 'vacio') return sv === ''; if (f.op === 'novacio') return sv !== '';
+    if (d.t === 'sel') { if (!(f.vals || []).length) return true; const has = f.vals.includes(sv); return f.op === 'no_es' ? !has : has; }
+    const q = String(f.q || '').trim().toLowerCase(), lv = sv.toLowerCase();
+    if (!q) return true;
+    switch (f.op) { case 'no_contiene': return !lv.includes(q); case 'es': return lv === q; case 'no_es': return lv !== q; case 'empieza': return lv.startsWith(q); case 'termina': return lv.endsWith(q); default: return lv.includes(q); }
+  }
+  function _tkEvTree(n, r, today) {
+    if (!n.items) return _tkEv(n, r, today);
+    if (!n.items.length) return true;
+    return n.op === 'o' ? n.items.some(i => _tkEvTree(i, r, today)) : n.items.every(i => _tkEvTree(i, r, today));
+  }
   function _tkApply(rows, today) {
-    const q = _tk.q.toLowerCase();
-    return rows.filter(r => _tkPreset(_tk.view, r, today)).filter(r => !q || [r.titulo, (r.c || {}).nombre, (r.c || {}).apellido, (r.c || {}).company_nombre, r.origen].join(' ').toLowerCase().includes(q))
-      .filter(r => _tk.f.every(f => { const d = _TK_FDEF.find(x => x.k === f.k); if (!d) return true; const v = String(d.get(r, today) || ''); return f.vals ? f.vals.includes(v) : v.toLowerCase().includes(String(f.q || '').toLowerCase()); }));
+    _tkInit(); const q = _tk.q.toLowerCase();
+    return rows.filter(r => _tkEvTree(_tk.tree, r, today)).filter(r => !q || [r.titulo, (r.c || {}).nombre, (r.c || {}).apellido, (r.c || {}).company_nombre, r.origen].join(' ').toLowerCase().includes(q));
   }
   function _tkDue(d, hora) {
     const today = _dayOf(new Date()), x = _dayOf(d), diff = Math.round((x - today) / 864e5), nm = diff === 0 ? 'Hoy' : diff === -1 ? 'Ayer' : diff === 1 ? 'Mañana' : x.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
     const h = hora || (d.getHours() || d.getMinutes() ? d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
     return `<span class="${diff < 0 ? 'tk-over' : ''}">${nm}${h ? ', ' + h : ''}</span>`;
   }
+  // ── Chips ──
+  function _tkFind(id, n) { n = n || _tk.tree; if (n.id === id) return n; for (const i of (n.items || [])) { const r = _tkFind(id, i); if (r) return r; } return null; }
+  function _tkParent(id, n) { n = n || _tk.tree; for (const i of (n.items || [])) { if (i.id === id) return n; const r = i.items ? _tkParent(id, i) : null; if (r) return r; } return null; }
+  function _tkCount(n) { return n.items ? n.items.reduce((a, i) => a + _tkCount(i), 0) : 1; }
+  const _tkIsAdv = () => _tk.tree && (_tk.tree.op === 'o' || _tk.tree.items.some(i => i.items));
+  function _tkValTxt(f, d) {
+    if (_tkNoVal(f.op)) return '';
+    if (d.t === 'sel') { const o = d.opts(), names = (f.vals || []).map(v => { const x = o.find(y => y[0] === v); return x ? x[1] : v; }); return names.length ? { first: names[0], more: names.length - 1 } : { first: '', more: 0 }; }
+    if (d.t === 'date') {
+      if (f.op === 'rel') { const m = _TK_MODE.find(x => x[0] === f.rel.mode)[1].toLowerCase(), u = _TK_UNIT.find(x => x[0] === f.rel.unit)[1].toLowerCase(); return { first: f.rel.mode === 'esto' ? `${f.rel.unit === 'dia' ? 'este' : f.rel.unit === 'semana' || f.rel.unit === 'trim' ? 'esta' : f.rel.unit === 'mes' ? 'este' : 'este'} ${u}`.replace('esta día', 'este día') : `${m} ${f.rel.n} ${f.rel.n > 1 ? ({ dia: 'días', semana: 'semanas', mes: 'meses', trim: 'trimestres', anio: 'años' })[f.rel.unit] : u}`, more: 0 }; }
+      if (f.op === 'entre') return { first: f.d1 || f.d2 ? `${_fmtD(f.d1) || '…'} – ${_fmtD(f.d2) || '…'}` : '', more: 0 };
+      return { first: _fmtD(f.d1), more: 0 };
+    }
+    return { first: f.q || '', more: 0 };
+  }
+  function _tkChip(f) {
+    const d = _TK_FDEF.find(x => x.k === f.k); if (!d) return '';
+    const ops = _TK_OPS[d.t], op = ops.find(o => o[0] === f.op) || ops[0], vt = _tkValTxt(f, d), I = _llI;
+    return `<span class="tkf" data-id="${f.id}"><button class="tkf__f" onclick="LeadManagerModule.tkFieldMenu(event,'${f.id}')">${I(`<path d="${d.ic}"/>`, 14)}<span>${esc(d.l)}</span></button><button class="tkf__o" onclick="LeadManagerModule.tkOpMenu(event,'${f.id}')">${op[1]}</button>${_tkNoVal(f.op) ? '' : `<button class="tkf__v${vt.first ? '' : ' is-ph'}" onclick="LeadManagerModule.tkValMenu(event,'${f.id}')">${vt.first ? esc(vt.first) : (d.t === 'sel' ? 'Seleccionar valor' : d.t === 'date' ? 'Seleccionar fecha' : 'Escriba y pulse Intro')}${vt.more > 0 ? `<i>+${vt.more}</i>` : ''}</button>`}<button class="tkf__m" title="Más" onclick="LeadManagerModule.tkChipMenu(event,'${f.id}')">${I('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>', 14)}</button></span>`;
+  }
+  function _tkFilterBar() {
+    const I = _llI, n = _tkCount(_tk.tree), adv = _tkIsAdv();
+    const left = adv ? `<span class="tkf tkf--adv" onclick="LeadManagerModule.tkAdvOpen(event)"><button class="tkf__f">Filtros avanzados <i class="ll-n">${n}</i></button><button class="tkf__m" title="Quitar filtros avanzados" onclick="event.stopPropagation();LeadManagerModule.tkClearAll()">${I('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></span>` : _tk.tree.items.map(_tkChip).join('');
+    const dirty = _tkDirty();
+    return `<div class="tkbar">${left}<button class="tkf__plus" title="Añadir filtro" onclick="LeadManagerModule.tkAddMenu(event)">${I('<path d="M12 5v14M5 12h14"/>', 15)}</button>${_tk.tree.items.length ? `<button class="tkbar__del" onclick="LeadManagerModule.tkClearAll()">Eliminar</button>` : ''}${dirty ? `<span class="sp"></span><button class="tkbar__lnk" onclick="LeadManagerModule.tkDiscard()">Descartar cambios</button><button class="ll-btn" onclick="LeadManagerModule.tkSaveView()">Guardar como vista nueva</button>` : ''}</div>`;
+  }
   function _vTasks() {
     if (_tk.classic) return `<div class="tk-back"><button class="ll-btn" onclick="LeadManagerModule.tkClassic(false)">‹ Volver a la vista de tareas</button></div>${_vTasksClassic()}`;
     if (_apList === null) _apReload();
+    _tkInit();
     const I = _llI, today = _dayOf(new Date()), rows = _tkRows(), all = _tkApply(rows, today), cols = _TK_COLS.filter(c => _tkCols().has(c[0]));
-    const cnt = v => v === 'todas' ? rows.length : rows.filter(r => _tkPreset(v, r, today)).length;
+    const cnt = v => rows.filter(r => _tkEvTree(_tkVTree(v), r, today)).length;
     const custom = _tkViews();
-    const strip = `<div class="vw">${_TK_VIEWS.map(([k, l, d]) => `<button class="vw-t${_tk.view === k ? ' on' : ''}" onclick="LeadManagerModule.tkView('${k}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg><span>${l}</span><i>${cnt(k)}</i></button>`).join('')}${custom.map(v => `<button class="vw-t${_tk.view === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.tkView('c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" onclick="event.stopPropagation();LeadManagerModule.tkViewDel('${v.id}')">✕</span></button>`).join('')}</div>`;
-    const first = all[0], nSeq = all.filter(r => r.kind === 'seq').length;
-    const chips = _tk.f.map((f, i) => { const d = _TK_FDEF.find(x => x.k === f.k) || {}; const txt = f.vals ? f.vals.map(v => { const o = (d.opts ? d.opts() : []).find(x => x[0] === v); return o ? o[1] : v; }).join(', ') : '«' + f.q + '»'; return `<span class="ll-chip" onclick="LeadManagerModule.tkFilterOpen(event,'${f.k}')"><b>${esc(d.l || f.k)}</b> ${f.vals ? 'es' : 'contiene'} ${esc(txt)}<button title="Quitar" onclick="event.stopPropagation();LeadManagerModule.tkFilterDel(${i})">✕</button></span>`; }).join('');
-    const filtRow = (_tk.filtOpen || _tk.f.length) ? `<div class="ll__chips">${chips}<button class="ll-clr" id="tk-addf" onclick="LeadManagerModule.tkFilterOpen(event)">＋ Añadir filtro</button>${_tk.f.length ? `<button class="ll-clr" onclick="LeadManagerModule.tkFilterClear()">Eliminar</button>` : ''}${_tk.dirty ? `<span class="sp"></span><button class="ll-clr" onclick="LeadManagerModule.tkDiscard()">Descartar cambios</button><button class="ll-btn" onclick="LeadManagerModule.tkSaveView()">Guardar como vista nueva</button>` : ''}</div>` : '';
+    const strip = `<div class="vw">${_TK_VIEWS.map(([k, l, d]) => `<button class="vw-t${_tk.view === k ? ' on' : ''}" onclick="LeadManagerModule.tkView('${k}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg><span>${l}</span><i>${cnt(k)}</i></button>`).join('')}${custom.map(v => `<button class="vw-t${_tk.view === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.tkView('c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" onclick="event.stopPropagation();LeadManagerModule.tkViewDel('${v.id}')">✕</span></button>`).join('')}<button class="vw-t vw-plus" title="Nueva vista" onclick="LeadManagerModule.tkNewView()">${I('<path d="M12 5v14M5 12h14"/>', 15)}</button></div>`;
+    const first = all[0], nF = _tkCount(_tk.tree);
+    const sc = { alto: ['Alto', '#DC2626'], medio: ['Medio', '#F59E0B'], bajo: ['Bajo', '#2F6BFF'], muybajo: ['Muy bajo', '#98A1AC'] }, pr = { alto: ['Alto', '#DC2626'], medio: ['Medio', '#F59E0B'], baja: ['Baja', '#2F6BFF'] };
     const cell = (k, r) => {
       const c = r.c || {}, nm = [c.nombre, c.apellido].filter(Boolean).join(' ');
-      if (k === 'titulo') { const t = _TOUCH[r.tipo] || _TOUCH.task; return `<div class="ll-name"><span class="sed-node__ic" style="width:28px;height:28px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><b>${esc(r.titulo)}</b></div>`; }
+      if (k === 'titulo') { const t = _TOUCH[r.tipo] || _TOUCH.task; return `<div class="ll-name"><span class="sed-node__ic" style="width:28px;height:28px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(r.titulo)}</b></div>`; }
       if (k === 'due') return _tkDue(r.due, r.hora);
       if (k === 'campo') return nm ? `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>${esc(nm)}</div>` : '<span class="ll-dim">—</span>';
-      if (k === 'score') return '<span class="ll-dim">—</span>';
+      if (k === 'score') { const x = sc[r.score]; return x ? `<span class="tk-sc"><i style="background:${x[1]}"></i>${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
       if (k === 'cargo') return c.cargo ? esc(c.cargo) : '<span class="ll-dim">—</span>';
       if (k === 'empresa') return esc(c.company_nombre || c.empresa_nombre || '') || '<span class="ll-dim">—</span>';
       if (k === 'origen') return r.origen ? esc(r.origen) : '<span class="ll-dim">—</span>';
+      if (k === 'prioridad') { const x = pr[r.prio]; return x ? `<span class="tk-sc"><i style="background:${x[1]}"></i>${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
       return '<span class="ll-dim">—</span>';
     };
     const body = all.slice(0, 200).map(r => `<tr onclick="LeadManagerModule.tkOpen('${r.key}')">${cols.map(c => `<td>${cell(c[0], r)}</td>`).join('')}</tr>`).join('');
     return `<div class="tk">${strip}
       <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="tk-q" placeholder="Buscar una tarea…" value="${esc(_tk.q)}" autocomplete="off" oninput="LeadManagerModule.tkSearch(this.value)"></label>
-        <button class="ll-btn${_tk.f.length ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${_tk.f.length ? ` <i class="ll-n">${_tk.f.length}</i>` : ''}</button><span class="sp"></span>
+        <button class="ll-btn${nF ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${nF ? ` <i class="ll-n">${nF}</i>` : ''}</button><span class="sp"></span>
         <button class="ll-ico" title="Columnas" onclick="LeadManagerModule.tkColsMenu(event)">${I('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.tkClassic(true)" title="Vista con aprobaciones, correcciones y prioridad">Vista clásica</button>
         <button class="ll-btn" onclick="LeadManagerModule.tkCreate()">${I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Crear tarea</button>
         <button class="ll-pri" ${first ? '' : 'disabled'} onclick="LeadManagerModule.tkStart()">${I('<polygon points="5 3 19 12 5 21 5 3"/>', 14)} Iniciar ${all.length} tarea${all.length === 1 ? '' : 's'}</button></div>
-      ${filtRow}
-      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length}" class="ll-empty">${rows.length ? 'No hay tareas en esta vista.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
+      ${_tk.filtOpen ? _tkFilterBar() : ''}
+      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length}" class="ll-empty">${rows.length ? 'No tienes ninguna tarea con este estado.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
       <div class="ll__foot"><span><b>${all.length ? 1 : 0} - ${Math.min(200, all.length)}</b> de ${all.length}</span></div></div>`;
   }
   function tkView(v) {
-    if (v.startsWith('c:')) { const x = _tkViews().find(y => y.id === v.slice(2)); if (!x) return; _tk.view = x.base || 'todas'; _tk.f = JSON.parse(JSON.stringify(x.f || [])); _tk.q = x.q || ''; _tk.view = x.base || 'todas'; _tk.cur = v; _tk.dirty = false; _tk.filtOpen = !!_tk.f.length; }
-    else { _tk.view = v; _tk.f = []; _tk.q = ''; _tk.cur = v; _tk.dirty = false; _tk.filtOpen = false; }
-    _renderBody();
+    if (v.startsWith('c:')) { const x = _tkViews().find(y => y.id === v.slice(2)); if (!x) return; _tk.view = v; _tk.tree = JSON.parse(JSON.stringify(x.tree || _tkMk([]))); _tk.q = x.q || ''; }
+    else { _tk.view = v; _tk.tree = _tkVTree(v); _tk.q = ''; }
+    _tk.cur = v; document.getElementById('tk-adv')?.remove(); _renderBody();
   }
   function tkSearch(v) { _tk.q = String(v || '').trim(); const el = document.getElementById('tk-q'), pos = el ? el.selectionStart : 0; _renderBody(); const e2 = document.getElementById('tk-q'); if (e2) { e2.focus(); try { e2.setSelectionRange(pos, pos); } catch (_) {} } }
   function tkFiltToggle() { _tk.filtOpen = !_tk.filtOpen; _renderBody(); }
   function tkClassic(on) { _tk.classic = !!on; _renderBody(); }
   function tkDiscard() { tkView(_tk.cur || _tk.view); }
-  function tkFilterClear() { _tk.f = []; _tk.dirty = true; _renderBody(); }
-  function tkFilterDel(i) { _tk.f.splice(i, 1); _tk.dirty = true; _renderBody(); }
-  let _tkDraft = null;
-  function tkFilterOpen(ev, key) {
-    if (ev.stopPropagation) ev.stopPropagation();
-    window.__tkAnchor = ev.currentTarget || document.getElementById('tk-addf');
-    if (!key) { _llPop(ev, `<div class="sed-pop__q"><input id="tk-fq" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.tkFilterSearch(this.value)"></div><div id="tk-fl">${_TK_FDEF.map(d => `<button class="sed-pop__i" data-n="${esc(d.l.toLowerCase())}" onclick="LeadManagerModule.tkFilterPick('${d.k}')">${esc(d.l)}</button>`).join('')}</div>`, 270); setTimeout(() => document.getElementById('tk-fq')?.focus(), 30); return; }
-    _tkEdit(key);
+  function tkClearAll() { _tkInit(); _tk.tree = _tkMk([]); document.getElementById('tk-adv')?.remove(); _renderBody(); }
+  const _tkRefresh = () => { _renderBody(); if (document.getElementById('tk-adv')) tkAdvPaint(); };
+  // Menús de cada chip
+  function _tkAnchorPop(ev, html, w, align) { _llPop(ev, html, w, align); }
+  function tkAddMenu(ev, groupId) {
+    window.__tkGroup = groupId || null;
+    const list = _TK_FDEF.map(d => `<button class="sed-pop__i" data-n="${esc(d.l.toLowerCase())}" onclick="LeadManagerModule.tkAddPick('${d.k}')">${_llI(`<path d="${d.ic}"/>`, 15)}<span>${esc(d.l)}</span></button>${d.k === 'prop' ? '' : ''}`);
+    const lemEnd = _TK_FDEF.findIndex(d => d.nova);
+    list.splice(lemEnd, 0, '<div class="sed-pop__sep"></div>');
+    _tkAnchorPop(ev, `<div class="sed-pop__q"><input id="tk-fq" placeholder="Buscar…" autocomplete="off" oninput="LeadManagerModule.tkFilterSearch(this.value)"></div><div id="tk-fl">${list.join('')}<div class="sed-pop__sep"></div><button class="sed-pop__i" onclick="LeadManagerModule.tkAdvOpen(event)">${_llI('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 15)}<span>Filtro avanzado</span></button></div>`, 270, 'left');
+    setTimeout(() => document.getElementById('tk-fq')?.focus(), 30);
   }
-  function tkFilterSearch(q) { q = String(q || '').toLowerCase().trim(); document.querySelectorAll('#tk-fl .sed-pop__i').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; }); }
-  function tkFilterPick(k) { document.getElementById('sed-pop')?.remove(); _tkEdit(k); }
-  function _tkEdit(k) {
-    const d = _TK_FDEF.find(x => x.k === k), ex = _tk.f.find(f => f.k === k); _tkDraft = ex ? JSON.parse(JSON.stringify(ex)) : { k, vals: d.t === 'sel' ? [] : undefined, q: '' };
-    const body = d.t === 'sel' ? `<div class="ll-fp__vl">${d.opts().map(([v, l]) => `<label class="ll-fp__v"><input type="checkbox" value="${esc(v)}" ${(_tkDraft.vals || []).includes(v) ? 'checked' : ''} onchange="LeadManagerModule.tkTick(this)"> <span>${esc(l)}</span></label>`).join('')}</div>` : `<div class="ll-fp__t" style="padding:12px"><small>Contiene</small><input id="tk-fv" value="${esc(_tkDraft.q || '')}" oninput="LeadManagerModule.tkDraftQ(this.value)" onkeydown="if(event.key==='Enter')LeadManagerModule.tkFilterApply()" autocomplete="off"></div>`;
-    const a = window.__tkAnchor || document.querySelector('.tk .ll__bar'); const m = document.createElement('div');
-    document.getElementById('sed-pop')?.remove(); m.id = 'sed-pop'; m.className = 'sed-pop ll-pop'; m.style.width = '280px'; m.onclick = e => e.stopPropagation();
-    m.innerHTML = `<div class="sed-pop__g" style="font-size:13px">${esc(d.l)}</div>${body}<div class="ll-fp__ft"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('sed-pop').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.tkFilterApply()">Aplicar</button></div>`;
-    document.body.appendChild(m); const r = a.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 300)) + 'px'; m.style.top = (r.bottom + 6) + 'px';
-    setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+  function tkFilterSearch(q) { q = String(q || '').toLowerCase().trim(); document.querySelectorAll('#tk-fl .sed-pop__i[data-n]').forEach(b => { b.style.display = !q || b.dataset.n.includes(q) ? '' : 'none'; }); }
+  function tkAddPick(k) {
+    _tkInit(); const d = _TK_FDEF.find(x => x.k === k), f = _tkNew({ k, op: _TK_OPS[d.t][0][0] });
+    if (d.t === 'date') { f.op = 'rel'; f.rel = { mode: 'esto', n: 1, unit: 'semana' }; }
+    const g = window.__tkGroup ? _tkFind(window.__tkGroup) : _tk.tree; (g && g.items ? g : _tk.tree).items.push(f);
+    document.getElementById('sed-pop')?.remove(); _tkRefresh();
+    setTimeout(() => { const el = document.querySelector(`.tkf[data-id="${f.id}"] .tkf__v`); if (el) el.click(); }, 60);
   }
-  function tkTick(el) { const a = new Set(_tkDraft.vals || []); if (el.checked) a.add(el.value); else a.delete(el.value); _tkDraft.vals = [...a]; }
-  function tkDraftQ(v) { _tkDraft.q = v; }
-  function tkFilterApply() {
-    const d = _TK_FDEF.find(x => x.k === _tkDraft.k); document.getElementById('sed-pop')?.remove();
-    _tk.f = _tk.f.filter(f => f.k !== _tkDraft.k);
-    if (d.t === 'sel' ? (_tkDraft.vals || []).length : String(_tkDraft.q || '').trim()) _tk.f.push(d.t === 'sel' ? { k: d.k, vals: _tkDraft.vals } : { k: d.k, q: String(_tkDraft.q).trim() });
-    _tk.dirty = true; _tk.filtOpen = true; _renderBody();
+  function tkFieldMenu(ev, id) {
+    const f = _tkFind(id); if (!f) return;
+    _tkAnchorPop(ev, `<div id="tk-fl">${_TK_FDEF.map(d => `<button class="sed-pop__i${d.k === f.k ? ' is-on' : ''}" onclick="LeadManagerModule.tkSetField('${id}','${d.k}')">${_llI(`<path d="${d.ic}"/>`, 15)}<span>${esc(d.l)}</span></button>`).join('')}</div>`, 260, 'left');
   }
+  function tkSetField(id, k) { const f = _tkFind(id), d = _TK_FDEF.find(x => x.k === k); if (!f || !d) return; if (f.k !== k) { f.k = k; f.op = d.t === 'date' ? 'rel' : _TK_OPS[d.t][0][0]; f.vals = []; f.q = ''; f.d1 = f.d2 = ''; } document.getElementById('sed-pop')?.remove(); _tkRefresh(); }
+  function tkOpMenu(ev, id) {
+    const f = _tkFind(id), d = f && _TK_FDEF.find(x => x.k === f.k); if (!d) return;
+    _tkAnchorPop(ev, _TK_OPS[d.t].map(([k, l]) => `<button class="sed-pop__i${k === f.op ? ' is-on' : ''}" onclick="LeadManagerModule.tkSetOp('${id}','${k}')"><span>${l}</span></button>`).join(''), 210, 'left');
+  }
+  function tkSetOp(id, op) { const f = _tkFind(id); if (!f) return; f.op = op; document.getElementById('sed-pop')?.remove(); _tkRefresh(); }
+  function tkChipMenu(ev, id) {
+    _tkAnchorPop(ev, `${_tkIsAdv() ? '' : `<button class="sed-pop__i" onclick="LeadManagerModule.tkAdvOpen(event)">${_llI('<path d="M5 12h14M13 6l6 6-6 6"/>', 15)}<span>Convertir a avanzado</span></button>`}<button class="sed-pop__i is-red" onclick="LeadManagerModule.tkDelFilter('${id}')">${_llI('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>', 15)}<span>Eliminar filtro</span></button>`, 230, 'left');
+  }
+  function tkDelFilter(id) { const p = _tkParent(id); if (p) p.items = p.items.filter(i => i.id !== id); document.getElementById('sed-pop')?.remove(); _tkRefresh(); }
+  // Valores
+  function tkValMenu(ev, id) {
+    const f = _tkFind(id), d = f && _TK_FDEF.find(x => x.k === f.k); if (!d) return; if (ev.stopPropagation) ev.stopPropagation();
+    window.__tkVal = id;
+    if (d.t === 'sel') { _tkAnchorPop(ev, _tkSelHtml(f, d, ''), 300, 'left'); setTimeout(() => document.getElementById('tk-vq')?.focus(), 30); return; }
+    if (d.t === 'date') { _tkAnchorPop(ev, _tkDateHtml(f), f.op === 'rel' ? 330 : 310, 'left'); return; }
+    _tkAnchorPop(ev, `<div class="sed-pop__q"><input id="tk-vt" placeholder="Escriba y pulse Intro" value="${esc(f.q || '')}" autocomplete="off" onkeydown="if(event.key==='Enter')LeadManagerModule.tkSetQ('${id}',this.value)"></div>`, 270, 'left');
+    setTimeout(() => document.getElementById('tk-vt')?.focus(), 30);
+  }
+  function tkSetQ(id, v) { const f = _tkFind(id); if (!f) return; f.q = String(v || '').trim(); document.getElementById('sed-pop')?.remove(); _tkRefresh(); }
+  function _tkSelHtml(f, d, q) {
+    const opts = d.opts().filter(o => !q || String(o[1]).toLowerCase().includes(q.toLowerCase())), groups = {};
+    const row = ([v, l, hint]) => `<label class="tk-opt"><input type="checkbox" ${(f.vals || []).includes(v) ? 'checked' : ''} onchange="LeadManagerModule.tkTick('${f.id}',this.dataset.v,this.checked)" data-v="${esc(v)}"><span>${esc(l)}</span>${hint ? `<em>${esc(hint)}</em>` : ''}</label>`;
+    const list = d.grupo ? `<div class="tk-grp">${esc(d.grupo)}</div>` + opts.map(row).join('') : opts.map(row).join('');
+    return `<div class="sed-pop__q"><input id="tk-vq" placeholder="Buscar" value="${esc(q || '')}" autocomplete="off" oninput="LeadManagerModule.tkSelQ(this.value)"></div><div class="tk-optl">${list || '<div class="sed-pop__note">Sin resultados</div>'}</div>`;
+  }
+  function tkSelQ(v) { const id = window.__tkVal, f = _tkFind(id), d = f && _TK_FDEF.find(x => x.k === f.k), pop = document.getElementById('sed-pop'); if (!pop || !d) return; const pos = v.length; pop.innerHTML = _tkSelHtml(f, d, v); const i = document.getElementById('tk-vq'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }
+  function tkTick(id, v, on) { const f = _tkFind(id); if (!f) return; const a = new Set(f.vals || []); if (on) a.add(v); else a.delete(v); f.vals = [...a]; _tkRefresh(); }
+  // Fecha: calendario + relativo
+  function _tkDateHtml(f) {
+    const mo = f.mon || (f.d1 || _ymd(new Date())).slice(0, 7), [Y, M] = mo.split('-').map(Number), first = new Date(Y, M - 1, 1), lead = (first.getDay() + 6) % 7, days = new Date(Y, M, 0).getDate();
+    let a = f.d1, b = f.d2 || f.d1;
+    if (f.op === 'rel') { const rg = _tkRelRange(f.rel, new Date()); a = rg[0]; b = rg[1]; }
+    const cells = []; for (let i = 0; i < lead; i++) cells.push('<span class="llc-d llc-d--o"></span>');
+    const prev = Y + '-' + String(M).padStart(2, '0');
+    for (let d = 1; d <= days; d++) { const ymd = `${prev}-${String(d).padStart(2, '0')}`, on = a && (ymd === a || ymd === b) && f.op !== 'rel', mid = a && b && ymd >= a && ymd <= b; cells.push(`<button type="button" class="llc-d${on ? ' is-on' : ''}${mid && !on ? ' is-mid' : ''}${ymd === _ymd(new Date()) ? ' is-today' : ''}" onclick="LeadManagerModule.tkDay('${f.id}','${ymd}')">${d}</button>`); }
+    const rel = f.op === 'rel' ? `<div class="tk-rel"><select onchange="LeadManagerModule.tkRel('${f.id}','mode',this.value)">${_TK_MODE.map(([k, l]) => `<option value="${k}"${f.rel.mode === k ? ' selected' : ''}>${l}</option>`).join('')}</select>${f.rel.mode !== 'esto' && f.rel.mode !== 'pasado' ? `<input type="number" min="1" value="${f.rel.n}" onchange="LeadManagerModule.tkRel('${f.id}','n',this.value)">` : ''}<select onchange="LeadManagerModule.tkRel('${f.id}','unit',this.value)">${_TK_UNIT.map(([k, l]) => `<option value="${k}"${f.rel.unit === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
+    return `<div class="tk-cal">${rel}<div class="llc-h"><button type="button" onclick="LeadManagerModule.tkMon('${f.id}',-1)">‹</button><b>${_MES[M - 1]} ${Y}</b><button type="button" onclick="LeadManagerModule.tkMon('${f.id}',1)">›</button></div><div class="llc-w">${['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(x => `<span>${x}</span>`).join('')}</div><div class="llc-g">${cells.join('')}</div></div>`;
+  }
+  function _tkDateRepaint(f) { const pop = document.getElementById('sed-pop'); if (pop) pop.innerHTML = _tkDateHtml(f); _tkRefresh0(); }
+  const _tkRefresh0 = () => { _renderBody(); if (document.getElementById('tk-adv')) tkAdvPaint(); };
+  function tkDay(id, ymd) { const f = _tkFind(id); if (!f) return; if (f.op === 'rel') { f.op = 'es'; f.d1 = ymd; f.d2 = ''; } else if (f.op === 'entre') { if (!f.d1 || (f.d1 && f.d2)) { f.d1 = ymd; f.d2 = ''; } else if (ymd < f.d1) { f.d2 = f.d1; f.d1 = ymd; } else f.d2 = ymd; } else { f.d1 = ymd; } _tkDateRepaint(f); }
+  function tkMon(id, n) { const f = _tkFind(id); if (!f) return; const [y, m] = (f.mon || (f.d1 || _ymd(new Date())).slice(0, 7)).split('-').map(Number); f.mon = _ymd(new Date(y, m - 1 + n, 1)).slice(0, 7); const pop = document.getElementById('sed-pop'); if (pop) pop.innerHTML = _tkDateHtml(f); }
+  function tkRel(id, k, v) { const f = _tkFind(id); if (!f) return; f.rel[k] = k === 'n' ? Math.max(1, parseInt(v) || 1) : v; _tkDateRepaint(f); }
+  // Filtro avanzado: lista con Y/O y grupos
+  function _tkAdvNode(n, depth) {
+    const rows = n.items.map((it, i) => {
+      const lead = i === 0 ? (depth === 0 ? '<span class="tka-w">DÓNDE</span>' : '<span class="tka-w">DÓNDE</span>') : (i === 1 ? `<select class="tka-c" onchange="LeadManagerModule.tkConn('${n.id || 'root'}',this.value)"><option value="y"${n.op === 'y' ? ' selected' : ''}>Y</option><option value="o"${n.op === 'o' ? ' selected' : ''}>O</option></select>` : `<span class="tka-w">${n.op === 'y' ? 'Y' : 'O'}</span>`);
+      if (it.items) return `<div class="tka-r">${lead}<div class="tka-g">${_tkAdvNode(it, depth + 1)}<button class="tka-add" onclick="LeadManagerModule.tkGroupDel('${it.id}')">${_llI('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', 13)} Eliminar grupo</button></div></div>`;
+      return `<div class="tka-r">${lead}${_tkChip(it)}</div>`;
+    }).join('');
+    return `${rows}<div class="tka-ft"><button class="tka-add" onclick="LeadManagerModule.tkAddMenu(event,'${n.id || 'root'}')">${_llI('<path d="M12 5v14M5 12h14"/>', 14)} Añadir filtro</button>${depth === 0 ? `<button class="tka-add" onclick="LeadManagerModule.tkAddGroup('root')">${_llI('<path d="M12 5v14M5 12h14"/>', 14)} Añadir grupo de filtros</button><span class="sp"></span><button class="tka-add tka-red" onclick="LeadManagerModule.tkClearAll()">${_llI('<path d="M18 6 6 18M6 6l12 12"/>', 14)} Eliminar</button>` : ''}</div>`;
+  }
+  function tkAdvOpen(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation(); document.getElementById('sed-pop')?.remove(); _tkInit();
+    window.__tkAdvAnchor = (ev && ev.currentTarget) || document.querySelector('.tkbar'); tkAdvPaint(true); _renderBody0();
+  }
+  const _renderBody0 = () => { _renderBody(); if (document.getElementById('tk-adv')) tkAdvPaint(); };
+  function tkAdvPaint(first) {
+    let pop = document.getElementById('tk-adv');
+    if (!pop) { pop = document.createElement('div'); pop.id = 'tk-adv'; pop.className = 'tk-adv'; document.body.appendChild(pop); pop.onclick = e => e.stopPropagation(); setTimeout(() => document.addEventListener('click', function f(e) { if (e.target.closest('#sed-pop')) return; pop.remove(); document.removeEventListener('click', f); }), 0); }
+    pop.innerHTML = _tkAdvNode(_tk.tree, 0);
+    if (first) { const bar = document.querySelector('.tkbar'), r = bar ? bar.getBoundingClientRect() : { left: 80, bottom: 150 }; pop.style.left = Math.max(8, r.left) + 'px'; pop.style.top = (r.bottom + 6) + 'px'; }
+  }
+  function tkConn(id, v) { const n = id === 'root' ? _tk.tree : _tkFind(id); if (n) n.op = v; _tkRefresh(); }
+  function tkAddGroup() { _tkInit(); _tk.tree.items.push({ id: 'g' + (_tkId++), op: 'y', items: [] }); _tkRefresh(); }
+  function tkGroupDel(id) { const p = _tkParent(id); if (p) p.items = p.items.filter(i => i.id !== id); _tkRefresh(); }
   function tkSaveView() {
     _llModal('Guardar vista', `<label class="ll-f"><span>Nombre de la vista</span><input id="tkv-nm" placeholder="Ej. LinkedIn vencidas" autocomplete="off"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.tkSaveGo()">Guardar</button>`, 440);
     setTimeout(() => document.getElementById('tkv-nm')?.focus(), 40);
   }
+  function tkNewView() { _tk.newEmpty = true; tkSaveView(); }
   function tkSaveGo() {
     const nm = ((document.getElementById('tkv-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la vista.', 'info'); return; }
-    const arr = _tkViews(), base = String(_tk.view).startsWith('c:') ? 'todas' : _tk.view; arr.push({ id: String(Date.now()), nombre: nm, base, f: JSON.parse(JSON.stringify(_tk.f)), q: _tk.q });
+    const arr = _tkViews(), tree = _tk.newEmpty ? _tkMk([]) : JSON.parse(JSON.stringify(_tk.tree)); _tk.newEmpty = false;
+    arr.push({ id: String(Date.now()), nombre: nm, tree, q: _tk.q });
     try { localStorage.setItem('lm_tk_views', JSON.stringify(arr)); } catch (_) {}
-    llModalClose(); _tk.view = 'c:' + arr[arr.length - 1].id; _tk.cur = _tk.view; _tk.dirty = false; _renderBody(); showBanner('Vista guardada', 'success');
+    llModalClose(); _tk.view = 'c:' + arr[arr.length - 1].id; _tk.cur = _tk.view; _tk.tree = JSON.parse(JSON.stringify(tree)); _renderBody(); showBanner('Vista guardada', 'success');
   }
-  function tkViewDel(id) { try { localStorage.setItem('lm_tk_views', JSON.stringify(_tkViews().filter(x => x.id !== id))); } catch (_) {} if (_tk.view === 'c:' + id) { _tk.view = 'mis'; _tk.f = []; } _renderBody(); }
+  function tkViewDel(id) { try { localStorage.setItem('lm_tk_views', JSON.stringify(_tkViews().filter(x => x.id !== id))); } catch (_) {} if (_tk.view === 'c:' + id) { _tk.view = 'mis'; _tk.tree = _tkVTree('mis'); } _renderBody(); }
   function tkColsMenu(ev) {
     _llPop(ev, `<div class="sed-pop__g">Columnas visibles</div>${_TK_COLS.map(([k, l, lock]) => `<label class="ll-cs__r${lock ? ' is-lock' : ''}" style="padding:8px 14px"><input type="checkbox" ${_tkCols().has(k) ? 'checked' : ''} ${lock ? 'disabled' : ''} onchange="LeadManagerModule.tkColTick('${k}',this.checked)"><span>${l}</span></label>`).join('')}`, 260, 'right');
   }
   function tkColTick(k, on) { const set = _tkCols(); if (on) set.add(k); else set.delete(k); try { localStorage.setItem('lm_tk_cols', JSON.stringify([...set])); } catch (_) {} _renderBody(); }
   function tkOpen(key) {
-    const r = _tkRows().find(x => x.key === key); if (!r) return;
+    const r = _tkRows().find(x => x.key === key); if (!r) return; _tkMarkRead(key);
     if (r.kind === 'seq') { seqTaskOpen(r.seqId, r.cid); return; }
     if (r.kind === 'ap') { _tk.classic = true; _taskStat = 'approve'; _renderBody(); return; }
     openContactPage(r.cid);
@@ -44033,7 +44187,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterClear, tkFilterDel, tkFilterOpen, tkFilterSearch, tkFilterPick, tkTick, tkDraftQ, tkFilterApply, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
