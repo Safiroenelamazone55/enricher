@@ -4871,6 +4871,73 @@ app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) { console.error('[lm-ct] PUT', err.message); res.status(500).json({ error: 'Error al actualizar contacto' }); }
 });
+// Combinar contactos (ficha → «Combinar con otro contacto»): el contacto :id se fusiona DENTRO de into_id.
+// Todo lo que apuntaba al origen (secuencias, mensajes, actividades, tareas…) pasa al destino; los campos vacíos del destino se completan con los del origen.
+app.post('/api/lm/contacts/:id/merge', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, src = parseInt(req.params.id), dst = parseInt((req.body || {}).into_id);
+  if (!src || !dst || src === dst) return res.status(400).json({ error: 'Elige otro contacto con el que combinar' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM lm_contacts WHERE id = ANY($1::int[]) AND user_id=$2 FOR UPDATE', [[src, dst], uid]);
+    const S = rows.find(r => r.id === src), D = rows.find(r => r.id === dst);
+    if (!S || !D) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Contacto no encontrado' }); }
+    // Todas las tablas/columnas que apuntan a un contacto: claves foráneas + columnas llamadas contact_id sin FK.
+    const { rows: fk } = await client.query(`SELECT cl.relname AS tbl, a.attname AS col FROM pg_constraint c
+        JOIN pg_class cl ON cl.oid = c.conrelid JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+       WHERE c.contype = 'f' AND c.confrelid = 'lm_contacts'::regclass AND array_length(c.conkey, 1) = 1`);
+    const { rows: nofk } = await client.query(`SELECT table_name AS tbl, column_name AS col FROM information_schema.columns
+       WHERE table_schema = 'public' AND column_name = 'contact_id' AND data_type IN ('integer', 'bigint')`);
+    const seen = new Set(), targets = [];
+    [...fk, ...nofk].forEach(t => { const k = t.tbl + '.' + t.col; if (!seen.has(k) && t.tbl !== 'lm_contacts') { seen.add(k); targets.push(t); } });
+    // referencias dentro de lm_contacts (derivado_a, referred_by…)
+    fk.filter(t => t.tbl === 'lm_contacts').forEach(t => targets.push(t));
+    const moved = {}, dropped = {};
+    let sp = 0;
+    for (const t of targets) {
+      const q = `"${t.tbl}"`, c = `"${t.col}"`;
+      const sv = 'sp' + (++sp);
+      await client.query('SAVEPOINT ' + sv);
+      try {
+        const r = await client.query(`UPDATE ${q} SET ${c} = $1 WHERE ${c} = $2`, [dst, src]);
+        if (r.rowCount) moved[t.tbl] = (moved[t.tbl] || 0) + r.rowCount;
+        await client.query('RELEASE SAVEPOINT ' + sv);
+      } catch (e) {
+        await client.query('ROLLBACK TO SAVEPOINT ' + sv);
+        if (e.code !== '23505') throw e;
+        // choque de unicidad (p. ej. los dos están en la misma secuencia): fila a fila; si choca, se descarta la del origen
+        const { rows: ids } = await client.query(`SELECT ctid::text AS id FROM ${q} WHERE ${c} = $1`, [src]);
+        for (const row of ids) {
+          const sv2 = 'sp' + (++sp);
+          await client.query('SAVEPOINT ' + sv2);
+          try { await client.query(`UPDATE ${q} SET ${c} = $1 WHERE ctid = $2::tid`, [dst, row.id]); moved[t.tbl] = (moved[t.tbl] || 0) + 1; await client.query('RELEASE SAVEPOINT ' + sv2); }
+          catch (e2) {
+            await client.query('ROLLBACK TO SAVEPOINT ' + sv2);
+            if (e2.code !== '23505') throw e2;
+            await client.query(`DELETE FROM ${q} WHERE ctid = $1::tid`, [row.id]); dropped[t.tbl] = (dropped[t.tbl] || 0) + 1;
+          }
+        }
+      }
+    }
+    // completar los campos vacíos del destino con los del origen
+    const { rows: cols } = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'lm_contacts' AND data_type = 'text'`);
+    const have = new Set(cols.map(x => x.column_name));
+    const fill = ['nombre', 'apellido', 'email', 'email_personal', 'telefono', 'movil', 'cargo', 'seniority', 'departamento', 'linkedin', 'linkedin_sales_nav', 'empresa_nombre', 'ciudad', 'region', 'pais', 'notas', 'contact_priority', 'buyer_role'].filter(k => have.has(k));
+    const upd = {}; fill.forEach(k => { if (!String(D[k] || '').trim() && String(S[k] || '').trim()) upd[k] = S[k]; });
+    if (!D.company_id && S.company_id) upd.company_id = S.company_id;
+    if (!D.outbound_client_id && S.outbound_client_id) upd.outbound_client_id = S.outbound_client_id;
+    const keys = Object.keys(upd);
+    if (keys.length) await client.query(`UPDATE lm_contacts SET ${keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ')}, updated_at = NOW() WHERE id = $1`, [dst, ...keys.map(k => upd[k])]);
+    await client.query(`UPDATE lm_contacts SET raw = COALESCE($2::jsonb, '{}'::jsonb) || COALESCE(raw, '{}'::jsonb) WHERE id = $1`, [dst, JSON.stringify(S.raw || {})]);
+    await client.query('DELETE FROM lm_contacts WHERE id = $1 AND user_id = $2', [src, uid]);
+    await client.query('COMMIT');
+    res.json({ ok: true, into_id: dst, moved, dropped, filled: keys });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[lm-ct] merge', e.message);
+    res.status(500).json({ error: 'No se pudo combinar los contactos' });
+  } finally { client.release(); }
+});
 app.delete('/api/lm/contacts/:id', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query(`DELETE FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);

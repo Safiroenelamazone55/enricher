@@ -40675,6 +40675,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_llMI(I('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'), (c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? 'Ver deal' : 'Crear deal', `LeadManagerModule.dlOpen(${id})`)}
       ${_llMI(I('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'), 'Reunión', `LeadManagerModule.mtOpen(${id})`)}
       ${_llMI(I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'), 'No es la persona / Derivó a otro', `LeadManagerModule.cpMoreMenu(event,${id})`)}
+      ${_llMI(I('<path d="M18 6 6 18"/><path d="M6 6c6 0 12 6 12 12"/>'), 'Combinar con otro contacto', `LeadManagerModule.cpMergeOpen(${id})`)}
       ${_llMI(I('<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>'), 'Darse de baja (no contactar)', `if(confirm('¿Marcar a este contacto como NO CONTACTAR? Se pausan sus secuencias.'))LeadManagerModule.ibResolveDisp(${id},'no_contactar')`)}
       <div class="sed-pop__sep"></div>
       ${_llMI(I('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'), 'Eliminar contacto', `LeadManagerModule.cpDelete(${id})`)}`, 270, 'left');
@@ -40736,6 +40737,34 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     }
     const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView));
     if (pop && act !== 'reset') pop.innerHTML = _cpBoardMenuHtml(); else if (act === 'reset') _renderBody();
+  }
+  // ── Combinar con otro contacto ──
+  let _cpMergeFrom = null;
+  function cpMergeOpen(id) {
+    _cpMergeFrom = id; document.getElementById('sed-pop')?.remove();
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
+    _llModal('Combinar con otro contacto', `<p style="margin:0 0 10px;color:#55657D;font-size:13.5px"><b>${esc(nm)}</b> se fusionará dentro del contacto que elijas: su historial, secuencias, mensajes y tareas pasan al elegido, y sus datos solo rellenan lo que ahí esté vacío. <b>No se puede deshacer.</b></p>
+      <div class="cpm-search">${_llI('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', 15)}<input id="cpm-mq" placeholder="Buscar por nombre, email o empresa" oninput="LeadManagerModule.cpMergeSearch(this.value)" autofocus></div>
+      <div id="cpm-mres" class="cpm-mres"><div class="cp2-empty">Escribe al menos 2 letras para buscar.</div></div>`, '', 520);
+    setTimeout(() => document.getElementById('cpm-mq')?.focus(), 30);
+  }
+  function cpMergeSearch(q) {
+    q = String(q || '').trim().toLowerCase(); const el = document.getElementById('cpm-mres'); if (!el) return;
+    if (q.length < 2) { el.innerHTML = '<div class="cp2-empty">Escribe al menos 2 letras para buscar.</div>'; return; }
+    const list = (_contacts || []).filter(x => x.id !== _cpMergeFrom && ([x.nombre, x.apellido, x.email, x.email_personal, x.company_nombre, x.empresa_nombre].filter(Boolean).join(' ').toLowerCase().includes(q))).slice(0, 25);
+    el.innerHTML = list.length ? list.map(x => { const n = [x.nombre, x.apellido].filter(Boolean).join(' ') || x.email || 'Sin nombre'; return `<div class="cpm-ctr" onclick="LeadManagerModule.cpMergeDo(${x.id})"><span class="cpm-av cpm-av--sm" style="background:${_llAvColor(n)}">${esc(n[0].toUpperCase())}</span><div><b>${esc(n)}</b><span>${esc([x.cargo, x.company_nombre || x.empresa_nombre, x.email].filter(Boolean).join(' · '))}</span></div></div>`; }).join('') : '<div class="cp2-empty">Sin resultados.</div>';
+  }
+  async function cpMergeDo(intoId) {
+    const from = _cpMergeFrom; const a = _contacts.find(x => x.id === from), b = _contacts.find(x => x.id === intoId); if (!a || !b) return;
+    const nm = x => [x.nombre, x.apellido].filter(Boolean).join(' ') || x.email || 'contacto';
+    if (!confirm(`¿Combinar «${nm(a)}» dentro de «${nm(b)}»?\n\nEl primero desaparece y todo su historial pasa al segundo. No se puede deshacer.`)) return;
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/${from}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ into_id: intoId }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'No se pudo combinar');
+      llModalClose(); await _reloadContacts(); _contactView = intoId; _cpActs = null; _cpHistFor = null; _renderBody(); _cpReloadActs(intoId);
+      showBanner('✓ Contactos combinados', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function cpMoreTabs(ev) { _llPop(ev, [['reuniones', 'Reuniones'], ['notas', 'Notas'], ['facturas', 'Facturas']].map(([k, l]) => _llMI('', l, `LeadManagerModule.cpTab('${k}')`)).join(''), 180, 'left'); }
   function cpAddMenu(ev) {
@@ -43716,7 +43745,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpSeqMenu, cpBoardMenu, cpBoardSet, cpFieldsCfg, cpFieldNew, cpFieldCreate, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coTab, coNav, coSave, coMenu, cpMenu, cpAddMenu, cpMoreTabs, cpSeqMenu, cpMergeOpen, cpMergeSearch, cpMergeDo, cpBoardMenu, cpBoardSet, cpFieldsCfg, cpFieldNew, cpFieldCreate, cpActRange, cpActFilterMenu, cpActType, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,

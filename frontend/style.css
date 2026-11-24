@@ -22274,3 +22274,6 @@ body.ibx-lb-open{overflow:hidden}
 .cpm-bm label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .cpm-bm button { width: 26px; height: 26px; border: 1px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; margin-left: 4px; }
 .cpm-bm button:disabled { opacity: .35; cursor: default; }
+
+.cpm-mres { max-height: 300px; overflow-y: auto; }
+#ll-modal { z-index: 1200; }
