@@ -24027,7 +24027,7 @@ const LeadManagerModule = (() => {
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
-    _rd.data = null; _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; { const _sq0 = (_sequences || []).find(x => x.id === id); _seqStage = (_sq0 && (_sq0.estado || 'draft') === 'draft') ? 'secuencia' : ''; }
+    _rd.data = null; _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; { const _sq0 = (_sequences || []).find(x => x.id === id); _seqStage = 'secuencia'; }
     _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqApprovals = null; _seqPendingNoEmail = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
@@ -25708,6 +25708,7 @@ const LeadManagerModule = (() => {
     const s = _sequences.find(x => x.id === id);
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
+    if (!_seqStage) _seqStage = 'secuencia';   // la vista antigua (pasos + pestañas) ya no existe: siempre se abre el editor
     if (_seqStage === 'secuencia') { setTimeout(_sedMount, 0); return `${_seqTopbar(id, s, steps)}${_seqEditorHtml(id)}`; }
     if (_seqStage === 'ajustes') { if (!Array.isArray(_seqContacts)) _seqLoadContacts(id); if (_seqTab !== 'info') _seqTab = 'config'; return `${_seqTopbar(id, s, steps)}${_ajHtml(id)}`; }
     if (_seqStage === 'rendimiento') { if (!_rd.data && !_rd.busy) _rdLoad(id); return `${_seqTopbar(id, s, steps)}${_rdHtml(id)}`; }
