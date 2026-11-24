@@ -22123,3 +22123,16 @@ body.ibx-lb-open{overflow:hidden}
 .vw-add { width: 30px; height: 30px; border: 1px dashed #C9D0DB; background: none; border-radius: 8px; font-size: 18px; color: #6B7A90; cursor: pointer; flex: 0 0 auto; } .vw-add:hover { border-color: #2563EB; color: #2563EB; }
 .cp-pg { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 13px; color: #55657D; margin-bottom: 6px; } .cp-pg button { width: 28px; height: 28px; border: 1px solid #E6E6E6; background: #fff; border-radius: 8px; cursor: pointer; }
 #lm-ct-qf .ll-btn, #lm-ct-qf .ll-pri, #lm-co-qf .ll-btn, #lm-co-qf .ll-pri { height: 32px; }
+
+/* ── Informes ── */
+.inf { color: #213856; font-size: 14px; display: flex; flex-direction: column; gap: 16px; }
+.inf-tabs { display: flex; gap: 4px; border-bottom: 1px solid #E6E6E6; } .inf-tabs button { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 15px; padding: 10px 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: #6B7A90; cursor: pointer; } .inf-tabs button.on { color: #213856; font-weight: 600; border-bottom-color: #213856; background: #F6F7F9; border-radius: 8px 8px 0 0; }
+.inf-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .inf-filters .rd-sel { width: auto; min-width: 170px; } .inf-filters .sp { flex: 1; }
+.inf-fn__r { display: grid; grid-template-columns: 130px 1fr 60px 50px; align-items: center; gap: 12px; padding: 7px 0; } .inf-fn__r > div { height: 12px; background: #EEF1F6; border-radius: 6px; overflow: hidden; } .inf-fn__r i { display: block; height: 100%; background: linear-gradient(90deg, #7FA8FF, #2563EB); } .inf-fn__r em { font-style: normal; color: #8794A8; font-size: 13px; }
+.inf-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } .inf-two h4 { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 14px; }
+.inf-rk { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 1px solid #E6E6E6; border-radius: 10px; margin-bottom: 6px; cursor: pointer; } .inf-rk:hover { border-color: #2563EB; } .inf-rk small { display: block; color: #8794A8; font-size: 12px; }
+.inf-bars { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 10px; } .inf-bars > div { flex: 1; min-width: 14px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; } .inf-bars i { width: 100%; background: #5B8DEF; border-radius: 4px 4px 0 0; } .inf-bars small { font-size: 10px; color: #8794A8; margin-top: 4px; }
+.inf-mini { height: 8px; background: #EEF1F6; border-radius: 4px; overflow: hidden; min-width: 90px; } .inf-mini i { display: block; height: 100%; background: #2563EB; }
+.inf-prob { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .inf-prob > div { border: 1px solid #E6E6E6; border-radius: 10px; padding: 14px; cursor: pointer; } .inf-prob > div:hover { border-color: #2563EB; } .inf-prob b { display: block; font-size: 24px; } .inf-prob span { color: #55657D; font-size: 13px; }
+.inf-kpis { grid-template-columns: repeat(3, 1fr); } .rd-card__sub { color: #8794A8; margin: -6px 0 10px; }
+@media (max-width: 1000px) { .inf-two, .inf-prob, .inf-kpis { grid-template-columns: 1fr; } }

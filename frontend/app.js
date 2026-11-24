@@ -23325,7 +23325,7 @@ const LeadManagerModule = (() => {
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'x-datos',              l: 'Tabla de datos',       g: 'Datos', x: 1 },
-    { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
+    { k: 'reports',    l: 'Informes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
     { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
     // Cantera y Datos viven dentro de Outreach (mismo recorrido: prospectar → preparar → enviar). Cada una abre su pantalla de siempre dentro de este panel.
@@ -35472,7 +35472,88 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _repKpi(iconKey, n, l, color) {
     return `<div class="rep-kpi"><span class="rep-kpi__i" style="background:${color}1a;color:${color}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_REP_ICON[iconKey] || ''}</svg></span><div class="rep-kpi__b"><div class="rep-kpi__v" data-count="${n}">0</div><div class="rep-kpi__l">${l}</div></div></div>`;
   }
-  function _vReports() {
+  // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas, con periodo y filtros ═══════════
+  const _inf = { tab: 'overview', preset: '30', from: '', to: '', disp: '', camp: 0, cli: 0, data: null, busy: false, met: 'resp', gran: 'W' };
+  function _infRange() {
+    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5)), mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    switch (_inf.preset) { case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; default: return [_inf.from || back(29), _inf.to || t]; }
+  }
+  async function _infLoad() {
+    _inf.busy = true; const [f, t] = _infRange();
+    try { const r = await apiFetch(`${API}/lm/dashboard?from=${f}&to=${t}${_inf.camp ? '&campaign=' + _inf.camp : ''}${_inf.cli ? '&client=' + _inf.cli : ''}`); _inf.data = r.ok ? await r.json() : { error: true }; } catch (_) { _inf.data = { error: true }; }
+    _inf.busy = false; if (_section === 'reports') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _renderBody(); }
+  }
+  function infSet(k, v) { if (k === 'camp' || k === 'cli') { _inf[k] = parseInt(v) || 0; _inf.data = null; } else _inf[k] = v; _renderBody(); }
+  function infPreset(k) { _inf.preset = k; _inf.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  function infDateOpen(ev) { const [f, t] = _infRange(); _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="inf-f" value="${f}"></label><label>Hasta<input type="date" id="inf-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.infDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${_RD_PRE.filter(x => x[0] !== 'todo').map(([k, l]) => `<button class="sed-pop__i${_inf.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.infPreset('${k}')">${l}</button>`).join('')}</div>`, 320); }
+  function infDateApply() { const f = (document.getElementById('inf-f') || {}).value, t = (document.getElementById('inf-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _inf.preset = 'custom'; _inf.from = f; _inf.to = t; _inf.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  function _vReports() {
+    const I = _llI;
+    if (!_inf.data && !_inf.busy) _infLoad();
+    const d = _inf.data, [f, t] = _infRange(), fm = x => new Date(x + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+    const TABS = [['overview', 'Overview', 'M18 20V10M12 20V4M6 20v-6'], ['campaigns', 'Campañas', 'M22 2 11 13M22 2l-7 20-4-9-9-4z'], ['activity', 'Actividad', 'M22 12h-4l-3 9L9 3l-3 9H2'], ['team', 'Equipo', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'], ['calls', 'Llamadas', 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z']];
+    const bar = `<div class="inf-tabs">${TABS.map(([k, l, ic]) => `<button class="${_inf.tab === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('tab','${k}')">${I(`<path d="${ic}"/>`, 15)} ${l}</button>`).join('')}</div>
+      <div class="inf-filters"><button class="rd-sel rd-date" onclick="LeadManagerModule.infDateOpen(event)"><span>${fm(f)} → ${fm(t)}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
+        <select class="rd-sel" onchange="LeadManagerModule.infSet('disp',this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(x => `<option value="${x[0]}"${_inf.disp === x[0] ? ' selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
+        <select class="rd-sel" onchange="LeadManagerModule.infSet('camp',this.value)"><option value="0">Todas las campañas</option>${(_campaigns || []).map(c => `<option value="${c.id}"${_inf.camp === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+        <select class="rd-sel" onchange="LeadManagerModule.infSet('cli',this.value)"><option value="0">Todos los clientes</option>${(_clients || []).map(c => `<option value="${c.id}"${_inf.cli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+        <span class="sp"></span><button class="ll-pri" onclick="LeadManagerModule.infExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 15)} Exportar</button></div>`;
+    let body;
+    if (!d) body = '<div class="ll-empty">Cargando informe…</div>';
+    else if (d.error || !d.kpi) body = '<div class="ll-empty">No se pudo cargar el informe.</div>';
+    else body = _inf.tab === 'campaigns' ? _infCampaigns(d) : _inf.tab === 'activity' ? _infActivity() : _inf.tab === 'team' ? _infTeam(d) : _inf.tab === 'calls' ? _infCalls() : _infOverview(d);
+    return `<div class="inf">${bar}${body}</div>`;
+  }
+  const _infPct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
+  function _infOverview(d) {
+    const fn = d.funnel || {}, c = d.kpi.cur, seqs = d.seqs || [], I = _llI;
+    const FN = [['Enrolados', fn.enrolados || 0], ['Contactados', fn.contactados || 0], ['Respondieron', fn.respondieron || 0], ['Reunión', fn.reuniones || 0]], mx = Math.max(1, ...FN.map(x => x[1]));
+    const funnel = `<div class="rd-card"><h3>Resumen del embudo de prospectos</h3><div class="inf-fn">${FN.map(([l, v], i) => `<div class="inf-fn__r"><span>${l}</span><div><i style="width:${Math.round(v / mx * 100)}%"></i></div><b>${v}</b><em>${i ? _infPct(v, FN[i - 1][1]) + '%' : ''}</em></div>`).join('')}</div></div>`;
+    const metric = { resp: ['Porcentaje de respuesta %', s => _infPct(s.respuestas || 0, s.contactados || 0)], int: ['Interesado %', s => _infPct(s.reuniones || s.meetings || 0, s.contactados || 0)], bounce: ['Porcentaje de bounce %', null] }[_inf.met];
+    const rows = seqs.filter(s => (s.contactados || 0) > 0);
+    let cls;
+    if (_inf.met === 'bounce') cls = `<div class="rd-none">Rebotes de la campaña: <b>${_infPct(c.bounced || 0, c.sent || 0)}%</b> (${c.bounced || 0} de ${c.sent || 0} emails enviados)</div>`;
+    else { const sorted = [...rows].sort((a, b) => metric[1](b) - metric[1](a)), best = sorted.slice(0, 3), worst = [...sorted].reverse().slice(0, 3).filter(x => !best.includes(x) || sorted.length <= 3);
+      const li = (x, k) => `<div class="inf-rk" onclick="LeadManagerModule.openSequence(${x.id})"><span>${esc(x.nombre)}<small>${esc(x.cliente || '')}</small></span><b>${metric[1](x)}%</b></div>`;
+      cls = `<div class="inf-two"><div><h4>${I('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17M14 14.66V17M18 2H6v7a6 6 0 0 0 12 0V2z"/>', 15)} Mejor rendimiento</h4>${best.length ? best.map(li).join('') : '<div class="rd-none">Tus campañas principales aparecerán aquí</div>'}</div><div><h4>${I('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>', 15)} Requiere atención</h4>${worst.length ? worst.map(li).join('') : '<div class="rd-none">Las campañas a las que deberías prestar atención aparecen aquí</div>'}</div></div>`; }
+    const classCard = `<div class="rd-card"><h3>Clasificación de las campañas</h3><div class="rd-tabs">${[['resp', 'Porcentaje de respuesta %'], ['int', 'Interesado %'], ['bounce', 'Porcentaje de bounce %']].map(([k, l]) => `<button class="${_inf.met === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('met','${k}')">${l}</button>`).join('')}</div>${cls}</div>`;
+    const daily = d.daily || [], bucket = dt => { const x = new Date(String(dt).slice(0, 10) + 'T12:00:00'); if (_inf.gran === 'M') return x.toISOString().slice(0, 7); if (_inf.gran === 'W') { const m = new Date(x); m.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return m.toISOString().slice(0, 10); } return x.toISOString().slice(0, 10); };
+    const bk = new Map(); daily.forEach(r => bk.set(bucket(r.d), (bk.get(bucket(r.d)) || 0) + (r.n || 0)));
+    const keys = [...bk.keys()].sort(), mxb = Math.max(1, ...bk.values());
+    const timeCard = `<div class="rd-card"><div class="rd-card__hd"><h3>Actividad a lo largo del tiempo</h3><div class="ll-seg">${[['D', 'D'], ['W', 'S'], ['M', 'M']].map(([k, l]) => `<button class="${_inf.gran === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('gran','${k}')">${l}</button>`).join('')}</div></div>${keys.length ? `<div class="inf-bars">${keys.map(k => `<div title="${k}: ${bk.get(k)} toques"><i style="height:${Math.max(4, Math.round(bk.get(k) / mxb * 100))}%"></i><small>${k.slice(5)}</small></div>`).join('')}</div>` : '<div class="rd-none">No se han encontrado datos, prueba con otros filtros</div>'}</div>`;
+    const today = new Date(new Date().toDateString()), pend = (_activities || []).filter(a => a.estado === 'pendiente'), due = pend.filter(a => new Date(a.fecha) <= new Date());
+    const tasksCard = `<div class="rd-card"><h3>Tareas</h3><div class="rd-g3"><div class="rd-stat"><div><div class="rd-stat__v"><b>${pend.length}</b></div><div class="rd-stat__l">Pendientes</div></div></div><div class="rd-stat"><div><div class="rd-stat__v"><b>${due.length}</b></div><div class="rd-stat__l">Vencidas o de hoy</div></div></div><div class="rd-stat"><div><div class="rd-stat__v"><b>${(_activities || []).filter(a => a.estado === 'hecha' && new Date(a.fecha) >= today).length}</b></div><div class="rd-stat__l">Hechas hoy</div></div></div></div></div>`;
+    const ch = d.channels || [], tot = ch.reduce((n, r) => n + r.touches, 0);
+    const chCard = `<div class="rd-card"><h3>Rendimiento por canal</h3><div class="rd-card__sub">Prospectos alcanzados por canal</div>${ch.length ? `<table class="rd-t"><thead><tr><th>Canal</th><th>Toques</th><th>Prospectos</th><th></th></tr></thead><tbody>${ch.map(r => `<tr><td>${esc((_DASH_CH[r.ch] || _DASH_CH.otros)[0])}</td><td><b>${r.touches}</b></td><td>${r.contacted}</td><td><div class="inf-mini"><i style="width:${_infPct(r.touches, tot)}%"></i></div></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin datos</div>'}</div>`;
+    const cs = _contacts || [], prob = [['Sin email', cs.filter(x => !x.email).length], ['Email rebotado', cs.filter(x => ['invalid', 'bounced'].includes(x.email_status)).length], ['Sin LinkedIn', cs.filter(x => !x.linkedin).length], ['Con dato por corregir', cs.filter(x => x.data_issue).length]];
+    const probCard = `<div class="rd-card"><h3>Problemas de prospectos</h3><div class="inf-prob">${prob.map(([l, n]) => `<div onclick="LeadManagerModule.go('contacts')"><b>${n}</b><span>${l}</span></div>`).join('')}</div></div>`;
+    const stats = `<div class="rd-g3 inf-kpis">${[['Prospectos contactados', c.contacted], ['Tasa de respuesta', _infPct(c.replies, c.contacted) + '%'], ['Invitaciones aceptadas', c.accepts], ['Reuniones', c.meetings], ['Emails enviados', c.sent || 0], ['Rebotes', c.bounced || 0]].map(([l, v]) => `<div class="rd-stat"><div><div class="rd-stat__v"><b>${v}</b></div><div class="rd-stat__l">${l}</div></div></div>`).join('')}</div>`;
+    return `${stats}${funnel}<div class="rd-g2">${classCard}${timeCard}</div>${tasksCard}<div class="rd-g2">${chCard}${probCard}</div>`;
+  }
+  function _infCampaigns(d) {
+    const rows = d.seqs || [];
+    return `<div class="rd-card"><h3>Campañas y secuencias</h3>${rows.length ? `<table class="rd-t"><thead><tr><th>Secuencia</th><th>Cliente</th><th>Enrolados</th><th>Activos</th><th>Contactados</th><th>Respuestas</th><th>% resp.</th><th>Reuniones</th></tr></thead><tbody>${rows.map(x => `<tr onclick="LeadManagerModule.openSequence(${x.id})" style="cursor:pointer"><td><b>${esc(x.nombre)}</b></td><td>${esc(x.cliente || '—')}</td><td>${x.enrolados || 0}</td><td>${x.activos || 0}</td><td>${x.contactados || 0}</td><td>${x.respuestas || 0}</td><td>${_infPct(x.respuestas || 0, x.contactados || 0)}%</td><td>${x.reuniones || x.meetings || 0}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados con estos filtros</div>'}</div>`;
+  }
+  function _infActs(types) {
+    const [f, t] = _infRange(), byId = new Map((_contacts || []).map(c => [c.id, c]));
+    return (_activities || []).filter(a => a.estado === 'hecha' && String(a.fecha).slice(0, 10) >= f && String(a.fecha).slice(0, 10) <= t && (!types || types(a))).filter(a => !_inf.disp || (byId.get(a.contact_id) || {}).disposition === _inf.disp)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 80).map(a => ({ a, c: byId.get(a.contact_id) || {} }));
+  }
+  function _infActTable(rows) {
+    return rows.length ? `<table class="rd-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Prospecto</th><th>Detalle</th></tr></thead><tbody>${rows.map(({ a, c }) => `<tr ${a.contact_id ? `onclick="LeadManagerModule.openContactPage(${a.contact_id})" style="cursor:pointer"` : ''}><td>${new Date(a.fecha).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(a.tipo || '').replace(/_/g, ' '))}</td><td>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || '—')}</td><td>${esc(String(a.nota || '').slice(0, 90))}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin actividad en este periodo</div>';
+  }
+  function _infActivity() { return `<div class="rd-card"><h3>Actividad reciente</h3>${_infActTable(_infActs())}</div>`; }
+  function _infCalls() { const rows = _infActs(a => a.tipo === 'llamada' || /llamada/i.test(a.canal || '')); return `<div class="rd-card"><h3>Llamadas</h3><div class="rd-g3"><div class="rd-stat"><div><div class="rd-stat__v"><b>${rows.length}</b></div><div class="rd-stat__l">Llamadas en el periodo</div></div></div></div><div style="height:12px"></div>${_infActTable(rows)}</div>`; }
+  function _infTeam(d) {
+    const rows = d.clients || [];
+    return `<div class="rd-card"><h3>Equipo y clientes</h3>${rows.length ? `<table class="rd-t"><thead><tr><th>Cliente</th><th>Contactos</th><th>Contactados</th><th>Respuestas</th><th>% resp.</th><th>Reuniones</th></tr></thead><tbody>${rows.map(x => `<tr><td><b>${esc(x.nombre)}</b></td><td>${x.contactos || 0}</td><td>${x.contactados || 0}</td><td>${x.respuestas || 0}</td><td>${_infPct(x.respuestas || 0, x.contactados || 0)}%</td><td>${x.reuniones || x.meetings || 0}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados con estos filtros</div>'}</div>`;
+  }
+  function infExport() {
+    const d = _inf.data; if (!d || !d.seqs) { showBanner('Espera a que cargue el informe.', 'info'); return; }
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', rows = [['Secuencia', 'Cliente', 'Enrolados', 'Activos', 'Contactados', 'Respuestas', 'Reuniones'], ...d.seqs.map(x => [x.nombre, x.cliente || '', x.enrolados || 0, x.activos || 0, x.contactados || 0, x.respuestas || 0, x.reuniones || x.meetings || 0])];
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'informe-campanas.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+  function _vReportsOld() {
     const acts = _activities || [];
     const done = acts.filter(a => a.estado === 'hecha');
     const today = _dayOf(new Date());
@@ -39855,73 +39936,73 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   function ctQFSet(k, v) { _ctQF[k] = v || ''; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
   function ctQFClear() { _ctQF = { cliente: '', seq: '', campana: '', estado: '', pais: '' }; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
-  // ═══════════ Vistas guardadas (pestañas) + acciones estilo Lemlist para Contactos y Empresas ═══════════
-  const _vw = { ct: 'todos', co: 'todos' };
-  const _VW_PRE = {
-    ct: [['todos', 'Todos los contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2|c9,7,4'], ['calientes', 'Contactos calientes', 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'], ['respondido', 'Respondido recientemente', 'M9 14 4 9l5-5|M20 20v-7a4 4 0 0 0-4-4H4'], ['activo', 'Activo en la campaña', 'M13 2 3 14h9l-1 8 10-12h-9l1-8z'], ['sinemail', 'Sin email', 'M4 4h16v16H4z|M22 6l-10 7L2 6']],
-    co: [['todos', 'Todas las empresas', 'M4 3h16v18H4z|M9 3v18'], ['conctos', 'Con contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'], ['sinctos', 'Sin contactos', 'M18 6 6 18M6 6l12 12'], ['resp', 'Con respuestas', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']],
-  };
-  function _vwCustom(k) { try { return (JSON.parse(localStorage.getItem('lm_vw_' + k) || '[]') || []); } catch (_) { return []; } }
-  function _vwPred(k, v) {
-    const cts = (c) => Array.isArray(c.sequences) ? c.sequences : [];
-    if (k === 'ct') {
-      if (v === 'calientes') return c => ['interesado', 'reunion'].includes(c.disposition);
-      if (v === 'respondido') return c => ['respondio', 'aceptado'].includes(c.disposition);
-      if (v === 'activo') return c => cts(c).some(x => x.estado === 'activo');
-      if (v === 'sinemail') return c => !c.email;
-      return null;
-    }
-    const nBy = new Map(); (_contacts || []).forEach(c => { if (c.company_id != null) { const o = nBy.get(c.company_id) || { n: 0, r: 0 }; o.n++; if (['respondio', 'interesado', 'reunion', 'aceptado'].includes(c.disposition)) o.r++; nBy.set(c.company_id, o); } });
-    if (v === 'conctos') return c => (nBy.get(c.id) || { n: 0 }).n > 0;
-    if (v === 'sinctos') return c => !(nBy.get(c.id) || { n: 0 }).n;
-    if (v === 'resp') return c => (nBy.get(c.id) || { r: 0 }).r > 0;
-    return null;
-  }
-  function _vwStripHtml(k) {
-    const list = k === 'ct' ? (_contacts || []) : (_companies || []), cur = _vw[k];
-    const ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${String(d).split('|').filter(x => !/^c\d/.test(x)).map(x => `<path d="${x}"/>`).join('')}</svg>`;
-    const tabs = _VW_PRE[k].map(([id, l, d]) => { const pr = id === 'todos' ? null : _vwPred(k, id), n = pr ? list.filter(pr).length : list.length; return `<button class="vw-t${cur === id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','${id}')">${ico(d)}<span>${l}</span><i>${n}</i></button>`; }).join('');
-    const cu = _vwCustom(k).map(v => `<button class="vw-t${cur === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" title="Eliminar la vista" onclick="event.stopPropagation();LeadManagerModule.vwDel('${k}','${v.id}')">✕</span></button>`).join('');
-    return `<div class="vw">${tabs}${cu}<button class="vw-add" title="Guardar la búsqueda y los filtros actuales como una vista" onclick="LeadManagerModule.vwSave('${k}')">+</button></div>`;
-  }
-  function _vwRepaint(k) {
-    const w = document.getElementById('lm-vw-wrap'); if (w) w.innerHTML = _vwStripHtml(k);
-    if (k === 'ct') { _renderContacts(); } else if (typeof _renderCompanies === 'function') { _renderCompanies(); }
-  }
-  function vwSet(k, v) {
-    if (v.startsWith('c:')) {
-      const x = _vwCustom(k).find(y => y.id === v.slice(2)); if (!x) return;
-      if (k === 'ct') { _ctQF = Object.assign({ cliente: '', seq: '', campana: '', estado: '', pais: '' }, x.qf || {}); _ctQuery = x.q || ''; _ctFilters = (x.filters || []).slice(); _vw.ct = 'todos'; _vw.ctCustom = v; _vRenderCtFiltersBar(); }
-      _vw[k] = 'todos'; _vwRepaintStrip(k, v); return;
-    }
-    _vw[k] = v; _vwRepaint(k);
-  }
-  function _vwRepaintStrip(k, activeCustom) { const w = document.getElementById('lm-vw-wrap'); if (w) { w.innerHTML = _vwStripHtml(k).replace(`vw-t${''}`, 'vw-t'); } if (k === 'ct') _renderContacts(); else if (typeof _renderCompanies === 'function') _renderCompanies(); }
-  function vwSave(k) {
-    _llModal('Guardar vista', `<p class="ll-m__p">Se guarda la búsqueda y los filtros que tienes ahora${k === 'ct' ? '' : ' (solo para contactos)'} como una pestaña.</p><label class="ll-f"><span>Nombre de la vista</span><input id="vw-nm" placeholder="Ej. Directores en Alemania" autocomplete="off"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.vwSaveGo('${k}')">Guardar</button>`, 460);
-    setTimeout(() => document.getElementById('vw-nm')?.focus(), 40);
-  }
-  function vwSaveGo(k) {
-    const nm = ((document.getElementById('vw-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la vista.', 'info'); return; }
-    if (k !== 'ct') { llModalClose(); showBanner('Las vistas guardadas por ahora son para contactos.', 'info'); return; }
-    const arr = _vwCustom(k); arr.push({ id: String(Date.now()), nombre: nm, qf: Object.assign({}, _ctQF), q: _ctQuery, filters: (_ctFilters || []).slice() });
-    try { localStorage.setItem('lm_vw_' + k, JSON.stringify(arr)); } catch (_) {}
-    llModalClose(); _vwRepaint(k); showBanner('Vista guardada', 'success');
-  }
-  function vwDel(k, id) { try { localStorage.setItem('lm_vw_' + k, JSON.stringify(_vwCustom(k).filter(x => x.id !== id))); } catch (_) {} _vwRepaint(k); }
-  // Limpiar y Añadir contactos/empresas (misma barra que la Lista de prospectos)
-  function ctCleanMenu(ev) { _dgEntity = 'contacts'; _dgSel = new Set(_ctSel.size ? [..._ctSel] : (_ctFilteredIds || _contacts.map(c => c.id))); if (!_dgSel.size) { showBanner('No hay contactos para limpiar.', 'info'); return; } dgCleanMenu(ev); }
-  function coCleanMenu(ev) { _dgEntity = 'companies'; _dgSel = new Set((typeof _coSel !== 'undefined' && _coSel.size) ? [..._coSel] : _coVisible().map(c => c.id)); if (!_dgSel.size) { showBanner('No hay empresas para limpiar.', 'info'); return; } dgCleanMenu(ev); }
-  function ctAddMenu(ev) {
-    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un contacto manualmente', 'LeadManagerModule.openContact()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar contactos (CSV)', "LeadManagerModule.exportCsv('contacts')")}${_llMI('', 'Sincronizar con un CRM', '', { off: true, badge: 'Próximamente' })}`, 330, 'right');
-  }
-  function coAddMenu(ev) {
-    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18"/>', 'Añadir una empresa manualmente', 'LeadManagerModule.openCompany()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar empresas (CSV)', "LeadManagerModule.exportCsv('companies')")}`, 330, 'right');
-  }
-  function cpNav(d) {
-    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(c => c.id), i = ids.indexOf(_contactView), n = ids[i + d];
-    if (i < 0 || n == null) return; openContactPage(n);
-  }
+  // ═══════════ Vistas guardadas (pestañas) + acciones estilo Lemlist para Contactos y Empresas ═══════════
+  const _vw = { ct: 'todos', co: 'todos' };
+  const _VW_PRE = {
+    ct: [['todos', 'Todos los contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2|c9,7,4'], ['calientes', 'Contactos calientes', 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z'], ['respondido', 'Respondido recientemente', 'M9 14 4 9l5-5|M20 20v-7a4 4 0 0 0-4-4H4'], ['activo', 'Activo en la campaña', 'M13 2 3 14h9l-1 8 10-12h-9l1-8z'], ['sinemail', 'Sin email', 'M4 4h16v16H4z|M22 6l-10 7L2 6']],
+    co: [['todos', 'Todas las empresas', 'M4 3h16v18H4z|M9 3v18'], ['conctos', 'Con contactos', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'], ['sinctos', 'Sin contactos', 'M18 6 6 18M6 6l12 12'], ['resp', 'Con respuestas', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']],
+  };
+  function _vwCustom(k) { try { return (JSON.parse(localStorage.getItem('lm_vw_' + k) || '[]') || []); } catch (_) { return []; } }
+  function _vwPred(k, v) {
+    const cts = (c) => Array.isArray(c.sequences) ? c.sequences : [];
+    if (k === 'ct') {
+      if (v === 'calientes') return c => ['interesado', 'reunion'].includes(c.disposition);
+      if (v === 'respondido') return c => ['respondio', 'aceptado'].includes(c.disposition);
+      if (v === 'activo') return c => cts(c).some(x => x.estado === 'activo');
+      if (v === 'sinemail') return c => !c.email;
+      return null;
+    }
+    const nBy = new Map(); (_contacts || []).forEach(c => { if (c.company_id != null) { const o = nBy.get(c.company_id) || { n: 0, r: 0 }; o.n++; if (['respondio', 'interesado', 'reunion', 'aceptado'].includes(c.disposition)) o.r++; nBy.set(c.company_id, o); } });
+    if (v === 'conctos') return c => (nBy.get(c.id) || { n: 0 }).n > 0;
+    if (v === 'sinctos') return c => !(nBy.get(c.id) || { n: 0 }).n;
+    if (v === 'resp') return c => (nBy.get(c.id) || { r: 0 }).r > 0;
+    return null;
+  }
+  function _vwStripHtml(k) {
+    const list = k === 'ct' ? (_contacts || []) : (_companies || []), cur = _vw[k];
+    const ico = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${String(d).split('|').filter(x => !/^c\d/.test(x)).map(x => `<path d="${x}"/>`).join('')}</svg>`;
+    const tabs = _VW_PRE[k].map(([id, l, d]) => { const pr = id === 'todos' ? null : _vwPred(k, id), n = pr ? list.filter(pr).length : list.length; return `<button class="vw-t${cur === id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','${id}')">${ico(d)}<span>${l}</span><i>${n}</i></button>`; }).join('');
+    const cu = _vwCustom(k).map(v => `<button class="vw-t${cur === 'c:' + v.id ? ' on' : ''}" onclick="LeadManagerModule.vwSet('${k}','c:${v.id}')"><span>${esc(v.nombre)}</span><span class="vw-x" title="Eliminar la vista" onclick="event.stopPropagation();LeadManagerModule.vwDel('${k}','${v.id}')">✕</span></button>`).join('');
+    return `<div class="vw">${tabs}${cu}<button class="vw-add" title="Guardar la búsqueda y los filtros actuales como una vista" onclick="LeadManagerModule.vwSave('${k}')">+</button></div>`;
+  }
+  function _vwRepaint(k) {
+    const w = document.getElementById('lm-vw-wrap'); if (w) w.innerHTML = _vwStripHtml(k);
+    if (k === 'ct') { _renderContacts(); } else if (typeof _renderCompanies === 'function') { _renderCompanies(); }
+  }
+  function vwSet(k, v) {
+    if (v.startsWith('c:')) {
+      const x = _vwCustom(k).find(y => y.id === v.slice(2)); if (!x) return;
+      if (k === 'ct') { _ctQF = Object.assign({ cliente: '', seq: '', campana: '', estado: '', pais: '' }, x.qf || {}); _ctQuery = x.q || ''; _ctFilters = (x.filters || []).slice(); _vw.ct = 'todos'; _vw.ctCustom = v; _vRenderCtFiltersBar(); }
+      _vw[k] = 'todos'; _vwRepaintStrip(k, v); return;
+    }
+    _vw[k] = v; _vwRepaint(k);
+  }
+  function _vwRepaintStrip(k, activeCustom) { const w = document.getElementById('lm-vw-wrap'); if (w) { w.innerHTML = _vwStripHtml(k).replace(`vw-t${''}`, 'vw-t'); } if (k === 'ct') _renderContacts(); else if (typeof _renderCompanies === 'function') _renderCompanies(); }
+  function vwSave(k) {
+    _llModal('Guardar vista', `<p class="ll-m__p">Se guarda la búsqueda y los filtros que tienes ahora${k === 'ct' ? '' : ' (solo para contactos)'} como una pestaña.</p><label class="ll-f"><span>Nombre de la vista</span><input id="vw-nm" placeholder="Ej. Directores en Alemania" autocomplete="off"></label>`, `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.llModalClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.vwSaveGo('${k}')">Guardar</button>`, 460);
+    setTimeout(() => document.getElementById('vw-nm')?.focus(), 40);
+  }
+  function vwSaveGo(k) {
+    const nm = ((document.getElementById('vw-nm') || {}).value || '').trim(); if (!nm) { showBanner('Ponle un nombre a la vista.', 'info'); return; }
+    if (k !== 'ct') { llModalClose(); showBanner('Las vistas guardadas por ahora son para contactos.', 'info'); return; }
+    const arr = _vwCustom(k); arr.push({ id: String(Date.now()), nombre: nm, qf: Object.assign({}, _ctQF), q: _ctQuery, filters: (_ctFilters || []).slice() });
+    try { localStorage.setItem('lm_vw_' + k, JSON.stringify(arr)); } catch (_) {}
+    llModalClose(); _vwRepaint(k); showBanner('Vista guardada', 'success');
+  }
+  function vwDel(k, id) { try { localStorage.setItem('lm_vw_' + k, JSON.stringify(_vwCustom(k).filter(x => x.id !== id))); } catch (_) {} _vwRepaint(k); }
+  // Limpiar y Añadir contactos/empresas (misma barra que la Lista de prospectos)
+  function ctCleanMenu(ev) { _dgEntity = 'contacts'; _dgSel = new Set(_ctSel.size ? [..._ctSel] : (_ctFilteredIds || _contacts.map(c => c.id))); if (!_dgSel.size) { showBanner('No hay contactos para limpiar.', 'info'); return; } dgCleanMenu(ev); }
+  function coCleanMenu(ev) { _dgEntity = 'companies'; _dgSel = new Set((typeof _coSel !== 'undefined' && _coSel.size) ? [..._coSel] : _coVisible().map(c => c.id)); if (!_dgSel.size) { showBanner('No hay empresas para limpiar.', 'info'); return; } dgCleanMenu(ev); }
+  function ctAddMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un contacto manualmente', 'LeadManagerModule.openContact()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar contactos (CSV)', "LeadManagerModule.exportCsv('contacts')")}${_llMI('', 'Sincronizar con un CRM', '', { off: true, badge: 'Próximamente' })}`, 330, 'right');
+  }
+  function coAddMenu(ev) {
+    _llPop(ev, `${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV o Excel', 'LeadManagerModule.openImportPicker()')}${_llMI('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 3v18"/>', 'Añadir una empresa manualmente', 'LeadManagerModule.openCompany()')}${_llMI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar en la base de datos de prospectos', 'LeadManagerModule.llGoBase()')}<div class="sed-pop__sep"></div>${_llMI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 'Exportar empresas (CSV)', "LeadManagerModule.exportCsv('companies')")}`, 330, 'right');
+  }
+  function cpNav(d) {
+    const ids = (_ctFilteredIds && _ctFilteredIds.length) ? _ctFilteredIds : (_contacts || []).map(c => c.id), i = ids.indexOf(_contactView), n = ids[i + d];
+    if (i < 0 || n == null) return; openContactPage(n);
+  }
   function _ctQFBarHtml() {
     const opt = (k, label, items, cur) => `<label class="dash-f${cur ? ' is-on' : ''}"><select onchange="LeadManagerModule.ctQFSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${items}</select></label>`;
     const o = _ctQFOptions();
@@ -43176,7 +43257,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
