@@ -12052,9 +12052,10 @@ app.get('/api/lm/deliverability', requireAuth, async (req, res) => {
     const isD = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
     const now = new Date(), to = isD(req.query.to) ? req.query.to : now.toISOString().slice(0, 10), from = isD(req.query.from) ? req.query.from : new Date(now.getTime() - 29 * 864e5).toISOString().slice(0, 10);
     const gran = ['D', 'W', 'M'].includes(req.query.gran) ? req.query.gran : 'D', fMb = parseInt(req.query.mailbox) || 0, fPv = String(req.query.provider || ''), fDm = String(req.query.domain || '').toLowerCase();
-    const { rows: mbs } = await pool.query('SELECT id, email, provider, estado, outbound_client_id FROM lm_mailboxes WHERE user_id=$1 ORDER BY email', [uid]);
+    const cli = parseInt(req.query.client) || 0;   // filtro global de cliente outbound
+    const { rows: mbs } = await pool.query('SELECT id, email, provider, estado, outbound_client_id FROM lm_mailboxes WHERE user_id=$1' + (cli ? ' AND outbound_client_id=$2' : '') + ' ORDER BY email', cli ? [uid, cli] : [uid]);
     const { rows } = await pool.query(`SELECT m.id, m.estado, m.sent_at, m.error, m.mailbox_id, m.to_email FROM lm_messages m
-        WHERE m.user_id=$1 AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN $2::date AND $3::date AND m.estado IN ('sent','replied','bounced','failed')`, [uid, from, to]);
+        WHERE m.user_id=$1 AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN $2::date AND $3::date AND m.estado IN ('sent','replied','bounced','failed')` + (cli ? ` AND (m.mailbox_id IN (SELECT id FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$4) OR m.sequence_id IN (SELECT id FROM sequences WHERE user_id=$1 AND outbound_client_id=$4))` : ''), cli ? [uid, from, to, cli] : [uid, from, to]);
     const mbById = new Map(mbs.map(x => [x.id, x]));
     const domOf = e => String(e || '').split('@')[1] ? String(e).split('@')[1].toLowerCase().trim() : '';
     const provOf = d => /(^|\.)gmail\.com$|googlemail\.com$/.test(d) ? 'Gmail' : /outlook\.|hotmail\.|live\.|msn\.com$/.test(d) ? 'Outlook' : /yahoo\./.test(d) ? 'Yahoo' : /icloud\.|me\.com$/.test(d) ? 'iCloud' : d ? 'Corporativo / otros' : 'Desconocido';

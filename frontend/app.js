@@ -23569,7 +23569,7 @@ const LeadManagerModule = (() => {
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
     _gcClose(true);
-    _gcli = id || null; _callsData = null;
+    _gcli = id || null; _callsData = null; try { _inf.cli = _gcli || 0; _inf.data = null; _dv.data = null; } catch (_) {}
     try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
     _refreshNav();
     const body = $('lm2-body'); if (body) body.style.opacity = '.5';
@@ -30350,11 +30350,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const c = t.c, st = t.st, canal = st.canal === 'whatsapp' ? 'whatsapp' : (['email', 'linkedin', 'call', 'task'].includes(st.canal) ? st.canal : 'task');
       out.push({ kind: 'seq', key: 's' + t.sq.id + '-' + c.id, tipo: canal, titulo: st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || [''])[0], due: t.due, hora: st.hora || '', c, cid: c.id, seqId: t.sq.id, origen: (_sequences || []).find(x => x.id === t.sq.id)?.nombre || t.sq.nombre || '', accion: _accionLabel(st.canal, st.accion) || '', prio: '' });
     });
-    (_activities || []).filter(a => a.estado === 'pendiente' && a.contact_id).forEach(a => {
+    (_activities || []).filter(a => a.estado === 'pendiente' && a.contact_id && (!_gcli || byId.has(a.contact_id))).forEach(a => {
       const c = byId.get(a.contact_id) || {}, rev = /^revisar_|seguimiento_inactivo/.test(a.tipo || '');
       out.push({ kind: 'act', key: 'a' + a.id, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.tipo === 'llamada' ? 'call' : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due: new Date(a.fecha), hora: '', c, cid: a.contact_id, act: a, origen: '', prio: '', resp: a.tipo === 'revisar_respuesta' });
     });
-    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting').forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
+    if (Array.isArray(_apList)) _apList.filter(a => a.estado === 'awaiting' && (!_gcli || (_apCliOk(a) && byId.has(a.contact_id)))).forEach(a => { const c = byId.get(a.contact_id) || {}; out.push({ kind: 'ap', key: 'p' + a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: (_sequences || []).find(x => x.id === a.sequence_id)?.nombre || '', prio: '' }); });
     return out.sort((a, b) => a.due - b.due);
   }
   function _tkPreset(v, r, today) {
@@ -35946,7 +35946,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   async function _dvLoad() {
     _dv.busy = true; const [f, t] = _dvRange();
-    try { const r = await apiFetch(`${API}/lm/deliverability?from=${f}&to=${t}&gran=${_dv.gran}&mailbox=${_dv.mb}&provider=${encodeURIComponent(_dv.pv)}&domain=${encodeURIComponent(_dv.dm)}`); _dv.data = r.ok ? await r.json() : { error: true }; } catch (_) { _dv.data = { error: true }; }
+    try { const r = await apiFetch(`${API}/lm/deliverability?from=${f}&to=${t}&gran=${_dv.gran}&mailbox=${_dv.mb}&provider=${encodeURIComponent(_dv.pv)}&domain=${encodeURIComponent(_dv.dm)}${_gcli ? '&client=' + _gcli : ''}`); _dv.data = r.ok ? await r.json() : { error: true }; } catch (_) { _dv.data = { error: true }; }
     _dv.busy = false; if (_section === 'deliverability') _renderBody();
   }
   function dvSet(k, v) { if (k === 'tab') _dv.tab = v; else { _dv[k] = k === 'mb' ? (parseInt(v) || 0) : v; _dv.data = null; } _renderBody(); }
@@ -36005,6 +36005,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     switch (_inf.preset) { case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; default: return [_inf.from || back(29), _inf.to || t]; }
   }
   async function _infLoad() {
+    if (_gcli) _inf.cli = _gcli;
     _inf.busy = true; const [f, t] = _infRange();
     try { const r = await apiFetch(`${API}/lm/dashboard?from=${f}&to=${t}${_inf.camp ? '&campaign=' + _inf.camp : ''}${_inf.cli ? '&client=' + _inf.cli : ''}`); _inf.data = r.ok ? await r.json() : { error: true }; } catch (_) { _inf.data = { error: true }; }
     _inf.busy = false; if (_section === 'reports') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _renderBody(); }
