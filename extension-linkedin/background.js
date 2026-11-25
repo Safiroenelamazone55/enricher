@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.9.6';
+const VERSION = '0.9.7';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -166,7 +166,7 @@ async function tickInner(manual) {
     if (r.config && r.config.v !== undefined) await chrome.storage.local.set({ config: r.config });
     if (!sesion) { await logErr('aviso', 'sin_sesion_linkedin', 'No hay sesión de LinkedIn iniciada en este Chrome'); return setEstado({ msg: 'Inicia sesión en LinkedIn en este Chrome.', nivel: 'warn' }); }
     if (!r.accion && ['cuenta_distinta', 'sesion_cerrada'].includes(r.motivo)) await logErr('error', r.motivo, traducir(r.motivo), { slug });
-    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug, motivo: r.motivo || '', resumen: r.resumen || null, modo: r.modo || '' });
+    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug, motivo: r.motivo || '', resumen: r.resumen || null, ...(r.modo ? { modo: r.modo } : {}) });
     await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}` + (r.modo === 'auto' ? ' (automático)' : ' (asistido: tú pulsas «Enviar» si es invitación o mensaje)'), nivel: 'work', accion: r.accion, slug, modo: r.modo || '' });
     // Si abrir la página o hablar con ella falla, igual se informa a Nova (si no, la acción quedaría «en curso» y se daría por fallida a los 10 min)
     let res; try { res = await ejecutar(r.accion, r.modo); } catch (e) { res = { codigo: 'fallo', error: /tard/i.test(e.message) ? 'pagina_lenta' : 'excepcion_extension', detalle: String(e && e.message || e).slice(0, 200) }; }

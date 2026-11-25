@@ -24524,7 +24524,7 @@ const LeadManagerModule = (() => {
         <div><span>Acciones totales hoy</span>${_liBar(h.total_hoy || 0, f.total || 0)}</div>
         <div><span>Calentamiento</span><b class="li-w">${f.calentando ? 'Día ' + (f.dia_calentamiento + 1) + ' de ' + a.ramp_dias : 'Completado'}</b></div>
       </div>
-      <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días · modo <b>${a.modo === 'auto' ? 'automático' : 'asistido'}</b></span>
+      <div class="li-foot"><span class="li-sub">${a.cola || 0} en cola · ${a.fallos_7d || 0} fallos en 7 días</span>
         <div class="li-btns">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liSel(${a.id})">Ver cola</button>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.liReconnect(${a.id})">Reconectar</button>
@@ -24677,7 +24677,6 @@ const LeadManagerModule = (() => {
     const ok = a.estado === 'activa' && a.conectada;
     return `<div class="cc-card">
       <div class="cc-hd2"><h4>${esc(a.nombre)}</h4><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(a.estado === 'activa' ? (a.conectada ? 'Activa' : 'Extensión sin conexión') : (a.estado || '—'))}</span></div>
-      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Modo</span><select class="form-input" id="lim-li-modo-${a.id}"><option value="asistido"${a.modo !== 'auto' ? ' selected' : ''}>Asistido: la extensión deja el texto escrito y tú pulsas «Enviar»</option><option value="auto"${a.modo === 'auto' ? ' selected' : ''}>Automático: la extensión envía sola</option></select></label>
       <div class="li-form">${f('inv_dia', 'Invitaciones por día', 40, 'Recomendado: 20')}${f('inv_semana', 'Invitaciones por semana', 150, 'Recomendado: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Recomendado: 30')}${f('vis_dia', 'Visitas por día', 60, 'Recomendado: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Recomendado: 100')}${f('inmail_dia', 'InMail por día', 30, 'Recomendado: 5')}${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}</div>
       <p class="li-p" style="margin-top:8px">El horario, los días de envío y el calentamiento con más detalle están en «Topes y horario» (Remitentes de la campaña).</p>
       <div class="ctu-err" id="lim-li-e-${a.id}"></div>
@@ -24686,9 +24685,8 @@ const LeadManagerModule = (() => {
   async function limLiSave(id) {
     const g = k => document.getElementById(`lim-li-${k}-${id}`).value;
     const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
-    const body = { nombre: a.nombre, modo: g('modo'), plan: a.plan, tz: a.tz, ramp_activo: a.ramp_activo, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max };
+    const body = { nombre: a.nombre, plan: a.plan, tz: a.tz, ramp_activo: a.ramp_activo, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max };
     ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin'].forEach(k => { body[k] = Number(g(k)); });
-    if (body.modo === 'auto' && a.modo !== 'auto' && !(await novaConfirm({ title: 'Modo automático', message: 'La extensión enviará sin que pulses nada. LinkedIn puede restringir la cuenta si detecta automatización. ¿Seguro?', ok: 'Sí, automático', tone: 'danger' }))) return;
     const errEl = document.getElementById(`lim-li-e-${id}`), msg = document.getElementById(`lim-li-msg-${id}`);
     try {
       const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -24828,7 +24826,6 @@ const LeadManagerModule = (() => {
       <div class="fin-pi-form li-form">
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre</span><input class="form-input" id="li-f-nombre" value="${esc(a.nombre)}"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Plan de LinkedIn de esta cuenta</span><select class="form-input" id="li-f-plan"><option value="gratis"${a.plan !== 'premium' ? ' selected' : ''}>Gratuito (solo 3 invitaciones con nota por mes)</option><option value="premium"${a.plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator (sin tope de notas)</option></select></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Modo</span><select class="form-input" id="li-f-modo"><option value="asistido"${a.modo !== 'auto' ? ' selected' : ''}>Asistido: la extensión deja el texto escrito y yo pulso «Enviar» (recomendado)</option><option value="auto"${a.modo === 'auto' ? ' selected' : ''}>Automático: la extensión envía sola (más riesgo para la cuenta)</option></select></label>
         ${f('inv_dia', 'Invitaciones por día', 40, 'Recomendado: 20')}${f('inv_semana', 'Invitaciones por semana (7 días)', 150, 'Recomendado: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Recomendado: 30')}${f('vis_dia', 'Visitas por día', 60, 'Recomendado: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Recomendado: 100')}${f('inmail_dia', 'InMail por día', 30, 'Recomendado: 5')}
         ${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}${f('gap_min', 'Espera mínima entre acciones (s)', 3600)}${f('gap_max', 'Espera máxima entre acciones (s)', 7200)}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria</span><input class="form-input" id="li-f-tz" value="${esc(a.tz)}"></label>
@@ -24840,9 +24837,8 @@ const LeadManagerModule = (() => {
   }
   async function liSave(id) {
     const g = k => document.getElementById('li-f-' + k).value;
-    const body = { nombre: g('nombre'), modo: g('modo'), plan: g('plan'), tz: g('tz'), ramp_activo: g('ramp') === '1', dias: [...document.querySelectorAll('.li-d:checked')].map(x => Number(x.value)) };
+    const body = { nombre: g('nombre'), plan: g('plan'), tz: g('tz'), ramp_activo: g('ramp') === '1', dias: [...document.querySelectorAll('.li-d:checked')].map(x => Number(x.value)) };
     ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'gap_min', 'gap_max'].forEach(k => { body[k] = Number(g(k)); });
-    if (body.modo === 'auto' && !(await novaConfirm({ title: 'Modo automático', message: 'La extensión enviará sin que pulses nada. LinkedIn puede restringir la cuenta si detecta automatización. ¿Seguro?', ok: 'Sí, automático', tone: 'danger' }))) return;
     const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) { document.getElementById('li-e').textContent = (await r.json()).error || 'Error'; return; }
     document.getElementById('li-modal')?.remove(); _liLoad();
@@ -24913,6 +24909,13 @@ const LeadManagerModule = (() => {
     return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { desc: 'En cuanto añadas un prospecto a una secuencia de esta campaña que todavía esté en borrador, se lanza sola — no hace falta pulsar «Lanzar secuencia» cada vez.' })}</div>
       <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
         <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
+        <div class="cc-field" style="margin-bottom:14px"><span class="cc-lbl">LinkedIn: ¿cómo se ejecutan las invitaciones, visitas y mensajes?</span>
+          <select class="form-input" onchange="LeadManagerModule.ccSetRep('planificacion.li_modo', this.value)">
+            <option value="manual"${p.li_modo === 'manual' ? ' selected' : ''}>Manual: yo los hago desde las tareas</option>
+            <option value="asistido"${p.li_modo === 'asistido' || !p.li_modo ? ' selected' : ''}>Asistido: la extensión abre el perfil y deja el texto; yo pulso «Enviar»</option>
+            <option value="auto"${p.li_modo === 'auto' ? ' selected' : ''}>Automático: la extensión lo envía sola (más riesgo para la cuenta)</option>
+          </select>
+          <span class="cc-note" style="display:block;margin-top:6px">${p.li_modo === 'auto' ? 'La siguiente tarea de LinkedIn de esta campaña saldrá sola, dentro de los topes y el horario de la cuenta.' : p.li_modo === 'manual' ? 'Los pasos de LinkedIn aparecen como tareas para ti. La extensión no los ejecuta.' : 'La extensión te lleva a cada perfil; tú confirmas el envío.'} Se aplica a todas las secuencias de la campaña al guardar.</span></div>
         <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
           <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
         <p class="cc-note">Horario de envío: de <b>${g.window_start != null ? g.window_start : 9}:00</b> a <b>${g.window_end != null ? g.window_end : 18}:00</b>${g.send_weekends ? ' (incluye fines de semana)' : ''}. Ese horario es global para todo Nova y se cambia en Configuración de envío.</p></div>

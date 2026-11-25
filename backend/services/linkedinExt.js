@@ -225,6 +225,10 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS snapshot TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS datos JSONB`);
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS linkedin_auto BOOLEAN NOT NULL DEFAULT FALSE`).catch(() => {});
+  // Modo de LinkedIn POR CAMPAÑA/SECUENCIA ('asistido' | 'auto'); antes era de la cuenta. Migración única: hereda 'auto' si la cuenta del cliente lo era.
+  const { rows: [hadCol] } = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name='sequences' AND column_name='li_modo'`).catch(() => ({ rows: [] }));
+  await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS li_modo TEXT NOT NULL DEFAULT 'asistido'`).catch(() => {});
+  if (!hadCol) await pool.query(`UPDATE sequences s SET li_modo='auto' WHERE s.linkedin_auto AND EXISTS (SELECT 1 FROM li_accounts a WHERE a.outbound_client_id = s.outbound_client_id AND a.modo='auto')`).catch(() => {});
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_li_accounts_token ON li_accounts (token_hash)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS li_actions (
     id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, account_id INTEGER NOT NULL REFERENCES li_accounts(id) ON DELETE CASCADE,
@@ -633,14 +637,17 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (a.estado !== 'activa') { await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]); a.estado = 'activa'; a.pausa_hasta = null; }
       const { rows: [enCurso] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='taken' LIMIT 1`, [a.id]);
       if (enCurso) return res.json({ accion: null, espera_s: 60, motivo: 'accion_en_curso' });
-      const sinAccion = async (espera_s, motivo) => res.json({ accion: null, espera_s, motivo, modo: a.modo, resumen: await resumenCola(pool, a, new Date()), config: CONFIG });
+      let modoRes = null;   // el modo es de la campaña (secuencia) de la acción, no de la cuenta
+      const sinAccion = async (espera_s, motivo) => res.json({ accion: null, espera_s, motivo, modo: modoRes, resumen: await resumenCola(pool, a, new Date()), config: CONFIG });
       const hist = await historial(pool, a, now);
       const { rows: cola } = await pool.query(`SELECT * FROM li_actions WHERE account_id=$1 AND estado='queued' AND (not_before IS NULL OR not_before <= NOW()) ORDER BY id LIMIT 30`, [a.id]);
       if (!cola.length) return sinAccion(60, 'cola_vacia');
       // El horario (días, hora de inicio/fin, pausa) se mide en la zona horaria de la CAMPAÑA (la de su secuencia), no en la de la cuenta; si la secuencia no tiene, vale la de la cuenta.
       const seqIds = [...new Set(cola.map(q => q.sequence_id).filter(Boolean))];
       const tzSeq = {};
-      if (seqIds.length) (await pool.query(`SELECT id, timezone FROM sequences WHERE id = ANY($1::int[])`, [seqIds])).rows.forEach(r => { if (r.timezone) tzSeq[r.id] = r.timezone; });
+      const modoSeq = {};
+      if (seqIds.length) (await pool.query(`SELECT id, timezone, li_modo FROM sequences WHERE id = ANY($1::int[])`, [seqIds])).rows.forEach(r => { if (r.timezone) tzSeq[r.id] = r.timezone; modoSeq[r.id] = r.li_modo === 'auto' ? 'auto' : 'asistido'; });
+      modoRes = modoSeq[cola[0].sequence_id] || 'asistido';
       let mejor = null, espera = 3600, motivo = ''; const oks = [];
       const rnd = Math.random();
       for (const q of cola) {
@@ -658,7 +665,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (!mejor) return sinAccion(espera, motivo);
       const { rowCount } = await pool.query(`UPDATE li_actions SET estado='taken', taken_at=NOW() WHERE id=$1 AND estado='queued'`, [mejor.id]);
       if (!rowCount) return res.json({ accion: null, espera_s: 15, motivo: 'reintentar' });
-      res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto }, modo: a.modo, config: CONFIG });
+      res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto }, modo: modoSeq[mejor.sequence_id] || 'asistido', config: CONFIG });
     } catch (e) { console.error('[li] next', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -795,11 +802,11 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   // «LinkedIn automático» por secuencia + feed de eventos para el panel
   app.put('/api/li/sequence/:id', requireAuth, async (req, res) => {
     try {
-      const auto = !!(req.body || {}).auto;
-      const { rows: [sq] } = await pool.query(`UPDATE sequences SET linkedin_auto=$3 WHERE id=$1 AND user_id=$2 RETURNING id, linkedin_auto, outbound_client_id`, [parseInt(req.params.id, 10), req.workspaceOwnerId, auto]);
+      const mb = (req.body || {}).modo, modo = mb === 'auto' ? 'auto' : 'asistido', auto = mb ? mb !== 'manual' : !!(req.body || {}).auto;
+      const { rows: [sq] } = await pool.query(`UPDATE sequences SET linkedin_auto=$3, li_modo=$4 WHERE id=$1 AND user_id=$2 RETURNING id, linkedin_auto, li_modo, outbound_client_id`, [parseInt(req.params.id, 10), req.workspaceOwnerId, auto, modo]);
       if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
       const { rows: [cu] } = await pool.query(`SELECT COUNT(*)::int AS n FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2`, [req.workspaceOwnerId, sq.outbound_client_id || 0]);
-      res.json({ ok: true, auto: sq.linkedin_auto, cuentas_del_cliente: cu.n });
+      res.json({ ok: true, auto: sq.linkedin_auto, modo: sq.li_modo, cuentas_del_cliente: cu.n });
     } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
   });
   app.get('/api/li/events', requireAuth, async (req, res) => {
