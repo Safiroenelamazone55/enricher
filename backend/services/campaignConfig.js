@@ -20,7 +20,7 @@ const DEFAULTS = {
   tracking: { aperturas: true, clics: true, respuestas: true },
   remitentes: { modo: 'equilibrado' },
   planificacion: { li_modo: 'asistido', li_plan: 'gratis', lanzamiento_auto: false, dias: [1, 2, 3, 4, 5], cada_min: 5, zona: '', fecha_fin: '', al_finalizar: 'terminar', vacaciones_pais: '', vacaciones: [] },
-  general: { etiquetas: [], compartir: false, baja: 'email', enlace_baja: false },
+  general: { etiquetas: [], compartir: false, baja: 'email', enlace_baja: true },
 };
 const PROGRESOS = ['continuar', 'pausar', 'finalizar'];
 

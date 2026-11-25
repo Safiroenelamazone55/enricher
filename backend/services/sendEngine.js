@@ -271,7 +271,9 @@ async function _unsubFooter(pool, contactId, sequenceId, apiBase) {
     const { rows: [sq] } = await pool.query(`SELECT campaign_id FROM sequences WHERE id=$1`, [sequenceId]);
     if (!sq || !sq.campaign_id) return '';
     const cfg = await require('./campaignConfig').configGuardada(pool, sq.campaign_id);
-    if (!cfg || !cfg.general || !cfg.general.enlace_baja) return '';
+    // Por defecto el enlace de baja va ACTIVO; solo se omite si la campaña lo apagó a propósito en su configuración.
+    const baja = cfg && cfg.general ? cfg.general : { enlace_baja: true, baja: 'email' };
+    if (!baja.enlace_baja) return '';
     let { rows: [k] } = await pool.query(`SELECT unsub_token, idioma FROM lm_contacts WHERE id=$1`, [contactId]);
     let token = k && k.unsub_token;
     if (!token) {
@@ -280,7 +282,7 @@ async function _unsubFooter(pool, contactId, sequenceId, apiBase) {
       ({ rows: [k] } = await pool.query(`SELECT unsub_token, idioma FROM lm_contacts WHERE id=$1`, [contactId]));
       token = (k && k.unsub_token) || token;
     }
-    const all = (cfg.general.baja === 'todo') ? '1' : '0';
+    const all = (baja.baja === 'todo') ? '1' : '0';
     const url = `${apiBase}/u/${token}?all=${all}`;
     // Bilingüe según el idioma del CONTACTO (no el del remitente): la mayoría de clientes prospectan en inglés.
     const en = String((k && k.idioma) || '').toLowerCase().startsWith('en');
