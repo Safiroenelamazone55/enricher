@@ -22669,3 +22669,7 @@ body.ibx-lb-open{overflow:hidden}
 .cap-es { font-size: .76rem; color: var(--text-secondary); } .cap-es.is-q { color: var(--text); font-weight: 700; }
 .cap-tr { grid-template-columns: 64px 54px minmax(220px, 2.4fr) 86px 84px; }
 @media (max-width: 720px) { .cap-bn { flex-direction: column; align-items: flex-start; } .cap-tr { grid-template-columns: 56px 40px 1fr; } }
+
+/* Capacidad: gráfico con los colores de antes (verde = se hace, naranja = espera) */
+.cap-stk .cap-h, .cap-leg i.cap-h { background: #2E8B6A; } .cap-stk .cap-q, .cap-leg i.cap-q { background: #F59E0B; }
+.cap-mb i, .cap-mb i.w, .cap-mb i.q { background: #2E8B6A; }
