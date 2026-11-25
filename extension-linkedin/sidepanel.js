@@ -19,6 +19,7 @@ async function pintarVinculada() {
   $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
   $('acctslug').textContent = e.slug ? 'linkedin.com/in/' + e.slug : 'Leyendo cuenta…';
   pintarExtra(on ? e : { ...e, resumen: null });
+  pintarProx(false);
 }
 
 const TIPO = { visit: 'Visitar perfil', invite: 'Enviar invitación', message: 'Enviar mensaje', inmail: 'Enviar InMail' };
@@ -31,13 +32,7 @@ function pintarExtra(e) {
   const partes = [pt.visit && pt.visit + ' visitas', pt.invite && pt.invite + ' invitaciones', pt.message && pt.message + ' mensajes', pt.inmail && pt.inmail + ' InMail'].filter(Boolean).join(' · ');
   const hoy = prox.filter(p => p.hoy), luego = prox.filter(p => !p.hoy);
   const fila = p => '<div class="nx"><span class="tm">~' + hora(p.ts) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span></div>';
-  let h = '<div class="sec">Próximas acciones de hoy' + (hoy.length ? '<span class="ct">' + hoy.length + '</span>' : '') + '</div>';
-  if (!r.en_cola) h += '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
-  else {
-    h += '<div class="nxl">' + (hoy.length ? hoy.map(fila).join('') : '<div class="nx"><span class="nm" style="color:var(--mut)">Nada más por hoy: lo siguiente sale en el próximo horario.</span></div>')
-      + (luego.length ? '<div class="nx sep">Después</div>' + luego.map(fila).join('') : '') + '</div>'
-      + '<p class="foot">Horas estimadas: cambian un poco cada vez a propósito' + (r.en_cola > prox.length ? ' · y ' + (r.en_cola - prox.length) + ' más en cola' : '') + '.</p>';
-  }
+  let h = '';
   let cuando, sub;
   if (v.en_ventana) { cuando = 'Trabajando'; sub = 'hasta las ' + esc(v.finTxt || hh(v.fin)); }
   else if (v.descanso) { cuando = 'Descanso'; sub = 'vuelve a las ' + esc(v.hora) + ' (faltan ' + faltan(v.ts) + ')'; }
@@ -46,6 +41,22 @@ function pintarExtra(e) {
   h += '<div class="sec">Resumen</div><div class="tiles"><div class="tile"><small>En cola</small><b>' + r.en_cola + '</b><span>' + (partes || 'vacía') + '</span></div><div class="tile"><small>Horario</small><b>' + cuando + '</b><span>' + sub + '</span></div></div>';
   if (e.modo !== 'auto') h += '<details class="card" style="margin-top:14px"><summary>Qué pasa en modo asistido</summary><div class="in-d">La extensión abre cada perfil en una pestaña de LinkedIn. <b>Las visitas se hacen solas.</b> En invitaciones y mensajes deja el texto escrito y <b>tú pulsas «Enviar»</b>; luego sigue con la siguiente. Mantén este Chrome abierto con LinkedIn iniciado.</div></details>';
   box.innerHTML = h;
+}
+let _proxT = 0;
+async function pintarProx(forzar) {
+  const box = $('prox'); if (!box) return;
+  if (!forzar && Date.now() - _proxT < 15000) return;
+  _proxT = Date.now();
+  const r = await msg('cola');
+  if (!r || r.error) { box.innerHTML = '<div class="sec">Próximas acciones de hoy</div><div class="vacio">No pude cargar la lista (' + esc((r && r.error) || 'sin respuesta') + ').</div>'; return; }
+  const hora = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const hoy = r.cola.filter(p => p.hoy), ver = hoy.slice(0, 6);
+  const fila = p => '<div class="nx' + (p.en_curso ? ' cur' : '') + '"><span class="tm">' + (p.en_curso ? 'ahora' : '~' + hora(p.ts)) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span></div>';
+  let h = '<div class="sec">Próximas acciones de hoy' + (hoy.length ? '<span class="ct">' + hoy.length + '</span>' : '') + '</div>';
+  if (!r.total) h += '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
+  else h += '<div class="nxl">' + (ver.length ? ver.map(fila).join('') : '<div class="nx"><span class="nm" style="color:var(--mut)">Nada más por hoy: lo siguiente sale en el próximo horario (' + r.total + ' en cola).</span></div>') + '<button class="vermas" id="vermas">Ver toda la lista (' + r.total + (r.total >= 80 ? '+' : '') + ') →</button></div><p class="foot">Horas estimadas: cambian un poco cada vez a propósito.</p>';
+  box.innerHTML = h;
+  const vm = $('vermas'); if (vm) vm.onclick = () => mostrarPestana('lista');
 }
 setInterval(() => { pintar(); if (pestana === 'lista') pintarLista(); }, 30000);
 
@@ -129,6 +140,8 @@ async function pintar() {
   pintarErrores();
 }
 
+chrome.storage.local.get({ lanzadorOculto: false }, r => { $('vlanz').checked = !r.lanzadorOculto; });
+$('vlanz').onchange = () => chrome.storage.local.set({ lanzadorOculto: !$('vlanz').checked });
 $('cuenta').onchange = () => { $('nueva').hidden = !!$('cuenta').value; };
 $('abrir').onclick = () => { if (accion) chrome.tabs.create({ url: accion }); };
 $('reintentar').onclick = conectar;

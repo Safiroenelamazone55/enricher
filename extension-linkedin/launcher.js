@@ -12,6 +12,8 @@
     .tab{position:fixed;right:0;width:46px;height:46px;border-radius:12px 0 0 12px;background:#fff;box-shadow:-2px 2px 12px rgba(20,30,60,.28);border:1px solid #E3E6EC;border-right:0;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:width .15s,box-shadow .15s}
     .tab:hover{width:54px;box-shadow:-3px 3px 16px rgba(20,30,60,.38)}
     .tab img{width:34px;height:34px;border-radius:9px;pointer-events:none;display:block}
+    .tab .hide{position:absolute;top:-7px;left:-7px;width:18px;height:18px;border-radius:50%;background:#577090;color:#fff;font:700 12px/18px system-ui;text-align:center;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+    .tab:hover .hide{display:block}
     .tab .dot{position:absolute;top:4px;left:5px;width:10px;height:10px;border-radius:50%;background:#12805C;border:2px solid #fff;display:none}
     .tab.on .dot{display:block}
     .panel{position:fixed;top:0;right:0;height:100vh;width:480px;max-width:92vw;background:#FBFBFB;box-shadow:-6px 0 28px rgba(20,30,60,.28);border-left:1px solid #E3E6EC;display:none;flex-direction:column}
@@ -21,7 +23,7 @@
     .bar button:hover{background:#F0F2F6}
     iframe{border:0;flex:1;width:100%}
   </style>
-  <div class="tab" id="tab" title="FLOW · abrir (arrastra para subir o bajar)"><span class="dot"></span><img src="${logo}" alt="FLOW"></div>
+  <div class="tab" id="tab" title="FLOW · abrir (arrastra para subir o bajar)"><span class="hide" id="hide" title="Ocultar (se vuelve a mostrar desde el panel de FLOW → Avanzado)">×</span><span class="dot"></span><img src="${logo}" alt="FLOW"></div>
   <div class="panel" id="panel"><div class="bar"><span>FLOW</span><button id="x" title="Cerrar">×</button></div></div>`;
   const tab = sh.getElementById('tab'), panel = sh.getElementById('panel');
   let frame = null, top = 190;
@@ -32,6 +34,10 @@
     if (on) { if (!frame) { frame = document.createElement('iframe'); frame.src = chrome.runtime.getURL('sidepanel.html?p=2'); panel.appendChild(frame); } panel.classList.add('open'); tab.style.display = 'none'; }
     else { panel.classList.remove('open'); tab.style.display = 'flex'; }
   };
+  sh.getElementById('hide').addEventListener('pointerdown', e => { e.stopPropagation(); });
+  sh.getElementById('hide').addEventListener('pointerup', e => { e.stopPropagation(); try { chrome.storage.local.set({ lanzadorOculto: true }); } catch (_) {} });
+  const visible = () => { try { chrome.storage.local.get({ lanzadorOculto: false }, r => { host.style.display = r.lanzadorOculto ? 'none' : ''; }); } catch (_) {} };
+  visible(); try { chrome.storage.onChanged.addListener(visible); } catch (_) {}
   sh.getElementById('x').onclick = () => abrir(false);
   let drag = null;
   tab.addEventListener('pointerdown', e => { drag = { y: e.clientY, t: top, moved: false }; tab.setPointerCapture(e.pointerId); });
