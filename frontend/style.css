@@ -22650,3 +22650,10 @@ body.ibx-lb-open{overflow:hidden}
 .cap-mb i { display: block; height: 100%; background: #2E8B6A; border-radius: 99px; } .cap-mb i.w { background: #F59E0B; } .cap-mb i.q { background: #D9381E; }
 .cap-mv { color: var(--text-secondary); white-space: nowrap; } .cap-mv b { color: var(--text); } .cap-mv u { text-decoration: none; color: #B42318; font-weight: 700; }
 .cap-no { color: var(--text-secondary); font-size: .76rem; }
+
+.cap-occ { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 4px 0 12px; background: var(--bg, #F6F7F8); }
+.cap-occ__t { font-size: .8rem; color: var(--text-secondary); margin-bottom: 6px; line-height: 1.5; } .cap-occ__t b, .cap-occ__s b { color: var(--text); }
+.cap-occ__s { font-size: .8rem; color: var(--text); margin-bottom: 8px; line-height: 1.5; }
+.cap-occ__tb { background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+.cap-occ__r { display: grid; grid-template-columns: 1.2fr 1fr 1.3fr 1fr; gap: 8px; padding: 6px 10px; font-size: .78rem; border-top: 1px solid var(--border); } .cap-occ__r:first-child { border-top: 0; }
+.cap-occ__h { font-weight: 700; font-size: .68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; background: #fff; }

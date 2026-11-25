@@ -666,7 +666,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       let modoRes = null;   // el modo es de la campaña (secuencia) de la acción, no de la cuenta
       const sinAccion = async (espera_s, motivo) => res.json({ accion: null, espera_s, motivo, modo: modoRes, resumen: await resumenCola(pool, a, new Date()), config: CONFIG });
       const hist = await historial(pool, a, now);
-      const { rows: cola } = await pool.query(`SELECT * FROM li_actions WHERE account_id=$1 AND estado='queued' AND (not_before IS NULL OR not_before <= NOW()) ORDER BY id LIMIT 30`, [a.id]);
+      // Reparto justo: se mezclan las secuencias (las 6 más antiguas de cada una, de la 1.ª a la 6.ª) para que una campaña con 80 acciones en cola no deje sin turno a otra recién activada
+      const { rows: cola } = await pool.query(`SELECT * FROM (SELECT x.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(x.sequence_id, 0) ORDER BY x.id) AS rn FROM li_actions x WHERE x.account_id=$1 AND x.estado='queued' AND (x.not_before IS NULL OR x.not_before <= NOW())) q WHERE q.rn <= 6 ORDER BY q.rn, q.id LIMIT 30`, [a.id]);
       if (!cola.length) return sinAccion(60, 'cola_vacia');
       // El horario (días, hora de inicio/fin, pausa) se mide en la zona horaria de la CAMPAÑA (la de su secuencia), no en la de la cuenta; si la secuencia no tiene, vale la de la cuenta.
       const seqIds = [...new Set(cola.map(q => q.sequence_id).filter(Boolean))];
@@ -824,7 +825,24 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const a0 = cuentas[0];
       const ramp = a0 && a0.ramp_activo ? { activo: true, inicio: a0.ramp_inicio, paso: a0.ramp_paso, dias: a0.ramp_dias, dia_actual: Math.max(0, daysBetween(String(a0.ramp_desde || '').slice(0, 10) || localParts(new Date(), a0.tz).ymd, localParts(new Date(), a0.tz).ymd)), total_nuevo: DEF.total_nuevo } : { activo: false };
       const { rows: [ct] } = await pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE estado='activo')::int AS activos FROM lm_contact_sequences WHERE sequence_id=$1`, [sid]);
-      res.json({ steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+      // Los límites son del CLIENTE (sus cuentas de LinkedIn), no de la campaña: lo que ya consumen las demás secuencias automáticas activas se descuenta
+      const { rows: otras } = await pool.query(`SELECT s.id, s.nombre, s.drip_per_day, (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND x.estado='activo') AS activos FROM sequences s WHERE s.user_id=$1 AND s.outbound_client_id=$2 AND s.id<>$3 AND s.estado='activa' AND s.linkedin_auto`, [uid, sq.outbound_client_id || 0, sid]);
+      const reservado = { inv: 0, vis: 0, msg: 0, inmail: 0, react: 0, follow: 0, comment: 0 };
+      const MAPA = { visita: 'vis', invite: 'inv', invite_nota: 'inv', mensaje: 'msg', inmail: 'inmail', like: 'react', follow: 'follow', comentario: 'comment' };
+      for (const o of otras) {
+        const { rows: os } = await pool.query(`SELECT st.accion, st.cond, c.canal AS cond_canal FROM sequence_steps st LEFT JOIN sequence_steps c ON c.id = st.cond_step_id WHERE st.sequence_id=$1 AND st.canal='linkedin'`, [o.id]);
+        const ritmo = o.drip_per_day || Math.min(10, o.activos || 0);
+        for (const p of os) { const k = MAPA[p.accion]; if (!k) continue; const f = p.cond === 'replied' ? 0.3 : p.cond === 'no_reply' ? 0.7 : 1; reservado[k] += ritmo * f; }
+      }
+      const real7d = { inv: 0, vis: 0, msg: 0, inmail: 0, react: 0, follow: 0, comment: 0 };
+      if (cuentas.length) {
+        const { rows: rr } = await pool.query(`SELECT tipo, COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='done' AND sequence_id IS DISTINCT FROM $2 AND done_at > NOW() - INTERVAL '7 days' AND tipo IN ('visit','invite','message','inmail','react','follow','comment') GROUP BY tipo`, [cuentas.map(a => a.id), sid]);
+        const T = { visit: 'vis', invite: 'inv', message: 'msg', inmail: 'inmail', react: 'react', follow: 'follow', comment: 'comment' };
+        rr.forEach(r => { real7d[T[r.tipo]] = +(r.n / 5).toFixed(1); });
+      }
+      Object.keys(reservado).forEach(k => { reservado[k] = Math.round(Math.max(reservado[k], real7d[k]) * 10) / 10; });
+      const { rows: [qo] } = cuentas.length ? await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='queued' AND sequence_id IS DISTINCT FROM $2`, [cuentas.map(a => a.id), sid]) : { rows: [{ n: 0 }] };
+      res.json({ otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
     } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
   });
 
