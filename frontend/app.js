@@ -24618,21 +24618,23 @@ const LeadManagerModule = (() => {
   // cuenta de LinkedIn de este cliente, todo en un solo lugar (en vez de abrir un modal por
   // remitente). Lo demás de esa pantalla (facturación, integraciones, etc.) es de cuenta, no
   // de cliente — eso se hará más adelante en la Configuración del módulo Outreach. ──
-  let _lim = { id: 0, mail: [], ramp: {}, li: [] };
-  async function openClientLimits(clientId) {
-    _lim = { id: clientId, mail: [], ramp: {}, li: [] };
+  let _lim = { id: 0, mail: [], ramp: {}, li: [], tab: 'linkedin' };
+  async function openClientLimits(clientId, tab) {
+    _lim = { id: clientId, mail: [], ramp: {}, li: [], tab: tab || 'linkedin' };
     document.getElementById('lim-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lim-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box lim-box"><div class="fin-pi-box__hd"><h3>Límites · ${esc((_clients.find(c => c.id === clientId) || {}).nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('lim-modal').remove()">✕</button></div><div class="lim-scroll" id="lim-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
+    m.innerHTML = `<div class="fin-pi-box lim-box lim2"><button class="lim2-x" title="Cerrar" onclick="document.getElementById('lim-modal').remove()">✕</button>
+      <nav class="lim2-nav" id="lim-nav"></nav><div class="lim2-main" id="lim-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
     document.body.appendChild(m);
     await _limLoad(clientId);
   }
+  function limTab(t) { _lim.tab = t; _limPaint(); }
   async function _limLoad(clientId) {
     try {
       const [emR] = await Promise.all([
         apiFetch(`${API}/outbound-clients/${clientId}/senders`),
-        Array.isArray(_li.accs) ? Promise.resolve() : _liLoad(),
+        _liLoad(),
       ]);
       const em = emR.ok ? await emR.json() : { email: [] };
       _lim.mail = em.email || [];
@@ -24644,25 +24646,28 @@ const LeadManagerModule = (() => {
     _limPaint();
   }
   function _limPaint() {
-    const root = document.getElementById('lim-root'); if (!root) return;
-    const mailHtml = _lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>';
-    const liHtml = _lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="cc-empty">Este cliente no tiene cuentas de LinkedIn conectadas.</div>';
-    root.innerHTML = `<p class="li-p" style="margin:0 0 14px">Los topes diarios y el calentamiento de cada remitente de este cliente, en un solo lugar.</p>
-      <div class="cc-grp">Email</div>${mailHtml}
-      <div class="cc-grp">LinkedIn</div>${liHtml}`;
+    const root = document.getElementById('lim-root'), nav = document.getElementById('lim-nav'); if (!root || !nav) return;
+    const cli = (_clients.find(c => c.id === _lim.id) || {}).nombre || '';
+    const it = (t, ico, lbl, n) => `<button class="lim2-i${_lim.tab === t ? ' on' : ''}" onclick="LeadManagerModule.limTab('${t}')"><span>${ico}</span>${lbl}${n ? `<em>${n}</em>` : ''}</button>`;
+    nav.innerHTML = `<div class="lim2-g">Límites del cliente</div><div class="lim2-who">${esc(cli)}</div>${it('linkedin', '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9.75h4V21H3zM9.5 9.75h3.8v1.6h.06c.53-1 1.82-2 3.74-2 4 0 4.7 2.6 4.7 6V21h-4v-4.9c0-1.2 0-2.7-1.7-2.7s-1.9 1.3-1.9 2.6V21h-4z"/></svg>', 'LinkedIn', _lim.li.length)}${it('email', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>', 'Email', _lim.mail.length)}
+      <div class="lim2-note">Estos límites son de las <b>cuentas del cliente</b>. Los comparten todas sus campañas y secuencias, y la pestaña «Capacidad» de cada secuencia los usa para calcular la cola.</div>`;
+    if (_lim.tab === 'email') {
+      root.innerHTML = `<h3 class="lim2-t">Email</h3><p class="lim2-p">Límite diario y calentamiento de cada buzón de este cliente.</p>${_lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>'}`;
+    } else {
+      root.innerHTML = `<h3 class="lim2-t">LinkedIn</h3><p class="lim2-p">Cuántas acciones puede hacer cada cuenta de LinkedIn al día y cómo se calienta si es nueva.</p>${_lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="cc-empty">Este cliente no tiene cuentas de LinkedIn conectadas.</div>'}`;
+    }
   }
   function _limMailCard(mb) {
     const d = _lim.ramp[mb.id];
-    if (!d) return `<div class="cc-card"><div class="cc-hd2"><h4>${esc(mb.email)}</h4></div><p class="li-p">No se pudo cargar.</p></div>`;
-    const fld = (id, lbl, v, hint) => `<label class="mbh-f"><span>${lbl}</span><input id="${id}" type="number" min="1" value="${v}"><small>${hint}</small></label>`;
+    if (!d) return `<div class="lim2-card"><div class="lim2-ch"><b>${esc(mb.email)}</b></div><p class="lim2-p">No se pudo cargar.</p></div>`;
+    const row = (lbl, hint, inp) => `<div class="lim2-r"><div><b>${lbl}</b>${hint ? `<small>${hint}</small>` : ''}</div>${inp}</div>`;
+    const num = (id, v, ph) => `<input class="lim2-in" id="${id}" type="number" min="1" value="${v == null ? '' : v}" ${ph ? 'placeholder="' + ph + '"' : ''}>`;
     const ok = ['ok', 'conectado', 'activo'].includes(mb.estado);
-    return `<div class="cc-card">
-      <div class="cc-hd2"><h4>${esc(mb.email)}</h4><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(mb.estado || '—')}</span></div>
-      <div class="mbh-sw"><label class="rp-sw"><input type="checkbox" id="lim-mb-on-${mb.id}"${d.ramp_on ? ' checked' : ''}><span></span></label><b>${d.ramp_on ? 'Calentamiento activo' : 'Calentamiento apagado'}</b></div>
-      <div class="mbh-lim"><label class="mbh-f"><span>Límite diario de este buzón</span><input id="lim-mb-limit-${mb.id}" type="number" min="1" value="${d.daily_limit || ''}" placeholder="Auto (${d.ramp_cap})"></label></div>
-      <div class="mbh-fields">${fld('lim-mb-start-' + mb.id, 'Empieza en', d.ramp_start, 'envíos por día')}${fld('lim-mb-step-' + mb.id, 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('lim-mb-target-' + mb.id, 'Meta', d.ramp_target, 'envíos por día')}</div>
-      ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> · enviados hoy <b>${d.sent_today}</b></div>` : ''}
-      <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limMbSave(${mb.id})">Guardar</button><span id="lim-mb-msg-${mb.id}" class="mbh-msg"></span></div></div>`;
+    return `<div class="lim2-card"><div class="lim2-ch"><b>${esc(mb.email)}</b><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(mb.estado || '—')}</span></div>
+      <div class="lim2-r"><div><b>Calentamiento ${d.ramp_on ? 'activo' : 'apagado'}</b><small>Empieza con pocos envíos y sube cada semana hasta la meta.</small></div><label class="rp-sw"><input type="checkbox" id="lim-mb-on-${mb.id}"${d.ramp_on ? ' checked' : ''}><span></span></label></div>
+      ${row('Límite diario de este buzón', 'Vacío = automático', num('lim-mb-limit-' + mb.id, d.daily_limit || '', 'Auto (' + d.ramp_cap + ')'))}${row('Empieza en', 'envíos por día', num('lim-mb-start-' + mb.id, d.ramp_start))}${row('Sube cada semana', 'envíos más por día', num('lim-mb-step-' + mb.id, d.ramp_step))}${row('Meta', 'envíos por día', num('lim-mb-target-' + mb.id, d.ramp_target))}
+      ${d.ramp_on ? `<div class="lim2-st"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> · enviados hoy <b>${d.sent_today}</b></div>` : ''}
+      <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limMbSave(${mb.id})">Guardar</button><span id="lim-mb-msg-${mb.id}" class="mbh-msg"></span></div></div>`;
   }
   async function limMbSave(mbId) {
     const v = id => parseInt(document.getElementById(id)?.value);
@@ -24677,27 +24682,43 @@ const LeadManagerModule = (() => {
     } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
   }
   function _limLiCard(a) {
-    const f = (k, l, mx, hint) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${l}</span><input class="form-input" type="number" min="0" max="${mx}" id="lim-li-${k}-${a.id}" value="${a[k]}">${hint ? `<span class="li-hint">${hint}</span>` : ''}</label>`;
+    const row = (lbl, hint, inp) => `<div class="lim2-r"><div><b>${lbl}</b>${hint ? `<small>${hint}</small>` : ''}</div>${inp}</div>`;
+    const num = (k, mx, mn) => `<input class="lim2-in" type="number" min="${mn || 0}" max="${mx}" id="lim-li-${k}-${a.id}" value="${a[k]}">`;
     const ok = a.estado === 'activa' && a.conectada;
-    return `<div class="cc-card">
-      <div class="cc-hd2"><h4>${esc(a.nombre)}</h4><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(a.estado === 'activa' ? (a.conectada ? 'Activa' : 'Extensión sin conexión') : (a.estado || '—'))}</span></div>
-      <div class="li-form">${f('inv_dia', 'Invitaciones por día', 40, 'Recomendado: 20')}${f('inv_semana', 'Invitaciones por semana', 150, 'Recomendado: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Recomendado: 30')}${f('vis_dia', 'Visitas por día', 60, 'Recomendado: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Recomendado: 100')}${f('inmail_dia', 'InMail por día', 30, 'Recomendado: 5')}${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}</div>
-      <p class="li-p" style="margin-top:8px">El horario, los días de envío y el calentamiento con más detalle están en «Topes y horario» (Remitentes de la campaña).</p>
+    const dia = Math.max(0, Math.floor((Date.now() - new Date(a.ramp_desde || Date.now()).getTime()) / 864e5));
+    const dur = a.ramp_dias || 0, calentando = a.ramp_activo && dia < dur;
+    const hoy = a.ramp_activo ? Math.min(a.inv_dia, (a.ramp_inicio || 5) + (a.ramp_paso || 0) * dia) : a.inv_dia;
+    const estado = !a.ramp_activo ? 'Calentamiento apagado: se usan los límites completos desde el primer día.' : calentando ? `<b>Día ${dia + 1} de ${dur}</b> · hoy puede enviar hasta <b>${hoy}</b> invitaciones (y no más de 50 acciones en total).` : `<b>Calentamiento terminado</b> (${dur} días): usa los límites completos.`;
+    return `<div class="lim2-card"><div class="lim2-ch"><b>${esc(a.nombre)}</b><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(a.estado === 'activa' ? (a.conectada ? 'Activa' : 'Extensión sin conexión') : (a.estado || '—'))}</span></div>
+      <div class="lim2-sec">Límites diarios</div>
+      ${row('Invitaciones por día', 'Recomendado: 20', num('inv_dia', 40))}${row('Invitaciones por semana', 'Recomendado: ~100', num('inv_semana', 150))}${row('Mensajes por día', 'Recomendado: 30', num('msg_dia', 60))}${row('Visitas por día', 'Recomendado: 30', num('vis_dia', 60))}${row('InMail por día', 'Recomendado: 5', num('inmail_dia', 30))}${row('Acciones totales por día', 'Todas juntas. Recomendado: 100', num('total_dia', 150))}
+      <div class="lim2-sec">Calentamiento <small>(cuentas nuevas)</small></div>
+      <div class="lim2-r"><div><b>Calentamiento ${a.ramp_activo ? 'activo' : 'apagado'}</b><small>Empieza con pocas acciones y sube cada día hasta tus límites.</small></div><label class="rp-sw"><input type="checkbox" id="lim-li-ramp_activo-${a.id}"${a.ramp_activo ? ' checked' : ''}><span></span></label></div>
+      ${row('Invitaciones el primer día', '', num('ramp_inicio', 20, 1))}${row('Sube cada día', 'invitaciones más por día', num('ramp_paso', 5))}${row('Días de calentamiento', 'Después se usan los límites completos', num('ramp_dias', 60))}
+      <div class="lim2-st">${estado}</div>
+      <div class="lim2-sec">Horario</div>
+      ${row('Desde la hora', 'En la zona de la cuenta', num('hora_ini', 23))}${row('Hasta la hora', '', num('hora_fin', 24))}
+      <p class="lim2-p">Los días de envío y la zona horaria de cada campaña están en la configuración de esa campaña.</p>
       <div class="ctu-err" id="lim-li-e-${a.id}"></div>
-      <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
+      <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><button class="btn btn--ghost btn--sm" title="Vuelve a empezar el calentamiento desde el día 1" onclick="LeadManagerModule.limLiRestart(${a.id})">Reiniciar calentamiento</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
   }
   async function limLiSave(id) {
     const g = k => document.getElementById(`lim-li-${k}-${id}`).value;
     const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
-    const body = { nombre: a.nombre, plan: a.plan, tz: a.tz, ramp_activo: a.ramp_activo, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max };
-    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin'].forEach(k => { body[k] = Number(g(k)); });
+    const body = { nombre: a.nombre, plan: a.plan, tz: a.tz, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max, ramp_activo: !!document.getElementById(`lim-li-ramp_activo-${id}`).checked };
+    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'ramp_inicio', 'ramp_paso', 'ramp_dias'].forEach(k => { body[k] = Number(g(k)); });
     const errEl = document.getElementById(`lim-li-e-${id}`), msg = document.getElementById(`lim-li-msg-${id}`);
     try {
       const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error');
-      await _liLoad(); _lim.li = (_li.accs || []).filter(x => x.outbound_client_id === _lim.id);
-      if (msg) msg.textContent = '✓ Guardado'; if (errEl) errEl.textContent = '';
+      await _liLoad(); _lim.li = (_li.accs || []).filter(x => x.outbound_client_id === _lim.id); _cap.data = null; _limPaint();
+      const m2 = document.getElementById(`lim-li-msg-${id}`); if (m2) m2.textContent = '✓ Guardado';
     } catch (e) { if (errEl) errEl.textContent = e.message; }
+  }
+  async function limLiRestart(id) {
+    if (!(await novaConfirm({ title: 'Reiniciar el calentamiento', message: 'La cuenta volverá al día 1: empezará con pocas acciones y subirá de nuevo hasta sus límites.', ok: 'Reiniciar' }))) return;
+    await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'reiniciar_calentamiento' }) });
+    await _liLoad(); _lim.li = (_li.accs || []).filter(x => x.outbound_client_id === _lim.id); _cap.data = null; _limPaint();
   }
   // ── Conectar una cuenta de LinkedIn como «Iniciar sesión con Google»: Nova habla con la extensión, se ve qué LinkedIn hay abierto, se pide permiso y listo ──
   const _liw = { client: '', nombre: '', reconectar: 0, timer: null, estado: '' };
@@ -45492,7 +45513,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
