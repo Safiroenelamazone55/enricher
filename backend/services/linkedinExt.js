@@ -103,6 +103,14 @@ function proximaVentana(a, now) {
   }
   return { en_ventana: false, sin_dias: true };
 }
+// Si una hora estimada cae dentro de la pausa de descanso de ese día, se mueve al final de la pausa (así las horas estimadas no prometen trabajo durante el descanso)
+function saltarPausa(ms, a) {
+  for (let i = 0; i < 3; i++) {
+    const lp = localParts(new Date(ms), a.tz), pd = perfilDia(a, lp.ymd);
+    if (pd.pausa && lp.hour >= pd.pausa[0] && lp.hour < pd.pausa[1]) ms += Math.ceil((pd.pausa[1] - lp.hour) * 3600e3) + 60e3; else break;
+  }
+  return ms;
+}
 // Lo que la persona ve en el panel cuando no hay nada que hacer AHORA: cuánto hay en cola, qué viene y cuándo empieza.
 async function resumenCola(pool, a, now) {
   const [{ rows: [c] }, { rows: prox }] = await Promise.all([
@@ -116,7 +124,8 @@ async function resumenCola(pool, a, now) {
   let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
   if (ptr && !ptr.en_ventana && ptr.ts) t0 = Math.max(t0, new Date(ptr.ts).getTime());
   const lpHoy = localParts(now, tzR), pdHoy = perfilDia(aR, lpHoy.ymd);
-  const proxEst = prox.map((r, i) => { const ts = new Date(t0 + i * gapS * 1000), lp = localParts(ts, tzR); return { tipo: r.tipo, quien: r.nombre || r.slug, ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; });
+  let cur = t0;
+  const proxEst = prox.map((r, i) => { cur = saltarPausa(cur, aR); const ts = new Date(cur), lp = localParts(ts, tzR); cur += gapS * 1000 * (0.85 + (i % 3) * 0.15); return { tipo: r.tipo, quien: r.nombre || r.slug, ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; });
   return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: proxEst, ventana: proximaVentana(tzPrim ? { ...a, tz: tzPrim } : a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
 }
 
@@ -778,9 +787,10 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
       if (ptr && !ptr.en_ventana && ptr.ts) t0 = Math.max(t0, new Date(ptr.ts).getTime());
       const lpHoy = localParts(now, tz), pdHoy = perfilDia(aR, lpHoy.ymd);
+      let cur = t0;
       res.json({
         hechas: hechas.map(r => ({ tipo: r.tipo, estado: r.estado, quien: r.nombre || r.slug, campana: r.campana || '', t: r.done_at })),
-        cola: cola.map((r, i) => { const ts = new Date(t0 + i * gapS * 1000), lp = localParts(ts, tz); return { tipo: r.tipo, quien: r.nombre || r.slug, campana: r.campana || '', en_curso: r.estado === 'taken', ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; }),
+        cola: cola.map((r, i) => { cur = saltarPausa(cur, aR); const ts = new Date(cur), lp = localParts(ts, tz); cur += gapS * 1000 * (0.85 + (i % 3) * 0.15); return { tipo: r.tipo, quien: r.nombre || r.slug, campana: r.campana || '', en_curso: r.estado === 'taken', ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; }),
         total: cola.length,
       });
     } catch (e) { console.error('[li] cola', e.message); res.status(500).json({ error: 'Error' }); }
