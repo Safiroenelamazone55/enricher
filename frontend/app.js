@@ -24618,9 +24618,9 @@ const LeadManagerModule = (() => {
   // cuenta de LinkedIn de este cliente, todo en un solo lugar (en vez de abrir un modal por
   // remitente). Lo demás de esa pantalla (facturación, integraciones, etc.) es de cuenta, no
   // de cliente — eso se hará más adelante en la Configuración del módulo Outreach. ──
-  let _lim = { id: 0, mail: [], ramp: {}, li: [], tab: 'linkedin' };
+  let _lim = { id: 0, mail: [], ramp: {}, li: [], tab: 'senders' };
   async function openClientLimits(clientId, tab) {
-    _lim = { id: clientId, mail: [], ramp: {}, li: [], tab: tab || 'linkedin' };
+    _lim = { id: clientId, mail: [], ramp: {}, li: [], tab: tab || 'senders' };
     document.getElementById('lim-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lim-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
@@ -24659,21 +24659,22 @@ const LeadManagerModule = (() => {
       po: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
     };
     nav.innerHTML = `<div class="lim2-g">Ajustes del cliente</div><div class="lim2-who">${esc(cli)}</div>
-      <div class="lim2-g lim2-g2">Límites</div>${it('linkedin', I.li, 'LinkedIn', _lim.li.length)}${it('email', I.em, 'Email', _lim.mail.length)}
-      <div class="lim2-g lim2-g2">Remitentes</div>${ac('senders', I.plug, 'Conectar remitente')}
+      <div class="lim2-g lim2-g2">Remitentes</div>${it('senders', I.plug, 'Remitentes conectados', _lim.mail.length + _lim.li.length)}
+      <div class="lim2-g lim2-g2">Límites</div>${it('linkedin', I.li, 'LinkedIn', '')}${it('email', I.em, 'Email', '')}
       <div class="lim2-g lim2-g2">Cliente</div>${ac('edit', I.ed, 'Editar cliente')}${ac('portal', I.po, 'Portal del cliente')}
       <div class="lim2-note">Los límites son de las <b>cuentas del cliente</b>: los comparten todas sus campañas, y la pestaña «Capacidad» de cada secuencia los usa para calcular la cola.</div>`;
   }
   function limAct(k) {
     const id = _lim.id; document.getElementById('lim-modal')?.remove();
-    if (k === 'senders') openClientSenders(id);
-    else if (k === 'edit') openClientDrawer(id);
+    if (k === 'edit') openClientDrawer(id);
     else if (k === 'portal') { openClient(id); setTimeout(() => _clientGoTab('Portal'), 80); }
   }
   function _limPaint() {
     const root = document.getElementById('lim-root'); if (!root) return;
-    if (_lim.tab === 'linkedin' && !_lim.li.length && _lim.mail.length && !_lim.elegida) { _lim.tab = 'email'; }
     _limNav();
+    if (_lim.tab === 'senders') {
+      root.innerHTML = '<div id="snd-root"></div>'; _snd.id = _lim.id; _snd.data = null; _sndPaint(); return;
+    }
     if (_lim.tab === 'email') {
       root.innerHTML = `<h3 class="lim2-t">Email</h3><p class="lim2-p">Límite diario y calentamiento de cada buzón de este cliente.</p>${_lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>'}`;
     } else {
@@ -26546,8 +26547,8 @@ const LeadManagerModule = (() => {
       ? `<div class="cap-sum"><b>Cabe sin retrasos.</b> Terminan hacia ${finTxt}.</div>`
       : `<div class="cap-sum"><b>Se forma cola desde el ${_capF(r.dias[r.primerCola].fecha)}</b> · pico de ${Math.round(r.colaMax)} acciones esperando · el límite que frena: ${cuello || '—'} · terminan ${finTxt}.${r.max ? ` Sin cola: <b>máx. ${r.max} contactos por día</b> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.capUsarMax()">Usar ${r.max}</button>` : ''}</div>`;
     return `<div class="cap-top"><div class="cap-h1"><b>Capacidad de la secuencia</b><span>Simula día a día cuántas acciones de LinkedIn caben en los límites de ${esc(cli)}.</span></div></div>
-      <div class="cap-bn"><div><b>Límites de ${esc(cli)}</b><span>Visitas ${c.vis} · Invitaciones ${c.inv} (${c.inv_semana} por semana) · Mensajes ${c.msg} · InMail ${c.inmail} · Total ${c.total} al día${d.sin_cuenta ? '. Aún no hay cuenta de LinkedIn conectada: son los recomendados.' : ''}${ocuTxt ? '. Otras campañas del cliente ya usan: ' + ocuTxt + '.' : ''}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid})">Editar límites del cliente</button><button class="btn btn--ghost btn--sm" title="Volver a leer los límites" onclick="LeadManagerModule.capRefresh()">↻</button></div></div>
-      <div class="cap-bn"><div><b>Calentamiento: ${P.calentar ? 'activo' : 'apagado'}</b><span>${P.calentar ? 'Los primeros ' + rdB.dias + ' días la cuenta trabaja por debajo de sus límites (invitaciones: ' + rdB.inicio + ' el primer día, +' + rdB.paso + ' cada día; total máx. ' + rdB.total_nuevo + ').' + (d.sin_cuenta ? ' Se supone una cuenta nueva que empieza hoy.' : ' Esta cuenta va por el día ' + Math.min((rdB.dia_actual || 0) + 1, rdB.dias) + '.') : 'Se usan los límites completos desde el primer día.'}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid})">Editar en límites del cliente</button></div></div>
+      <div class="cap-bn"><div><b>Límites de ${esc(cli)}</b><span>Visitas ${c.vis} · Invitaciones ${c.inv} (${c.inv_semana} por semana) · Mensajes ${c.msg} · InMail ${c.inmail} · Total ${c.total} al día${d.sin_cuenta ? '. Aún no hay cuenta de LinkedIn conectada: son los recomendados.' : ''}${ocuTxt ? '. Otras campañas del cliente ya usan: ' + ocuTxt + '.' : ''}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'linkedin')">Editar límites del cliente</button><button class="btn btn--ghost btn--sm" title="Volver a leer los límites" onclick="LeadManagerModule.capRefresh()">↻</button></div></div>
+      <div class="cap-bn"><div><b>Calentamiento: ${P.calentar ? 'activo' : 'apagado'}</b><span>${P.calentar ? 'Los primeros ' + rdB.dias + ' días la cuenta trabaja por debajo de sus límites (invitaciones: ' + rdB.inicio + ' el primer día, +' + rdB.paso + ' cada día; total máx. ' + rdB.total_nuevo + ').' + (d.sin_cuenta ? ' Se supone una cuenta nueva que empieza hoy.' : ' Esta cuenta va por el día ' + Math.min((rdB.dia_actual || 0) + 1, rdB.dias) + '.') : 'Se usan los límites completos desde el primer día.'}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'linkedin')">Editar en límites del cliente</button></div></div>
       <div class="cap-form">${inp('contactos', 'Contactos', '', 80)}${inp('drip', 'Entran por día', '', 70)}${inp('acep', 'Aceptan', '%', 60)}${inp('resp', 'Responden', '%', 60)}${inp('dias', 'Días', '', 60)}</div>
       ${resumen}
       <div class="cap-chart"><div class="cap-leg"><i class="cap-h"></i>Se hacen ese día <i class="cap-q"></i>Esperan al día siguiente</div><div class="cap-cols">${bars}</div></div>
@@ -34540,7 +34541,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <div class="ai-set__grid">
           ${row('mail', 'Conecta tu email de envío', 'Gmail, Outlook o SMTP', mbOk, 'Conectar', `LeadManagerModule.mbManageOpen(${cid})`)}
           ${row('link', 'Conecta tu LinkedIn', 'Con la extensión de Nova', liOk, 'Conectar', `LeadManagerModule.liConnectFor(${cid})`)}
-          ${row('server', 'Configura tu infraestructura de envío', 'Buzones, topes diarios y calentamiento', false, 'Configurar', `LeadManagerModule.openClientLimits(${cid})`)}
+          ${row('server', 'Configura tu infraestructura de envío', 'Buzones, topes diarios y calentamiento', false, 'Configurar', `LeadManagerModule.openClientLimits(${cid},'linkedin')`)}
           ${row('chat', 'Conecta WhatsApp', 'Línea para mensajes y llamadas', waOk, 'Conectar', `LeadManagerModule.wamOpen(${cid})`)}
         </div></div>
     </div>`;
