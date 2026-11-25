@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.9.0';
+const VERSION = '0.9.1';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -55,6 +55,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'activar') { activar(!!m.datos).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'probar') { probar().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'cola') { api('/ext/cola', {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });

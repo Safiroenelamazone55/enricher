@@ -721,6 +721,29 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   });
 
   // Un solo interruptor: al pulsar «Activar» en la extensión también se activa la cuenta en Nova. NO levanta pausas por restricción/alerta (esas llevan fecha).
+  // Lista de Outreach completa para el panel de la extensión: lo ya hecho hoy + toda la cola con hora estimada y campaña.
+  app.post('/api/li/ext/cola', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, now = new Date();
+      const { rows: hechas } = await pool.query(`SELECT q.tipo, q.estado, q.done_at, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana
+        FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
+        WHERE q.account_id=$1 AND q.tipo IN ('visit','invite','message','inmail') AND q.estado IN ('done','failed','skipped') AND q.done_at > NOW() - INTERVAL '24 hours' ORDER BY q.done_at DESC LIMIT 25`, [a.id]);
+      const { rows: cola } = await pool.query(`SELECT q.id, q.sequence_id, q.tipo, q.estado, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana, s.timezone AS tz
+        FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
+        WHERE q.account_id=$1 AND q.estado IN ('queued','taken') AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 80`, [a.id]);
+      const tz = (cola[0] && cola[0].tz) || a.tz, aR = { ...a, tz }, ptr = proximaVentana(aR, now);
+      const gapS = Math.max(60, await mediaReparto(pool, aR, cola[0] ? cola[0].tipo : 'visit', false) || ((a.gap_min || 300) + (a.gap_max || 1200)) / 2);
+      let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
+      if (ptr && !ptr.en_ventana && ptr.ts) t0 = Math.max(t0, new Date(ptr.ts).getTime());
+      const lpHoy = localParts(now, tz), pdHoy = perfilDia(aR, lpHoy.ymd);
+      res.json({
+        hechas: hechas.map(r => ({ tipo: r.tipo, estado: r.estado, quien: r.nombre || r.slug, campana: r.campana || '', t: r.done_at })),
+        cola: cola.map((r, i) => { const ts = new Date(t0 + i * gapS * 1000), lp = localParts(ts, tz); return { tipo: r.tipo, quien: r.nombre || r.slug, campana: r.campana || '', en_curso: r.estado === 'taken', ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; }),
+        total: cola.length,
+      });
+    } catch (e) { console.error('[li] cola', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
   app.post('/api/li/ext/activar', liAuth, async (req, res) => {
     try {
       const a = req.liAcc;

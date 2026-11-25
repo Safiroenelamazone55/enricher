@@ -86,6 +86,7 @@ details .in-d{padding:0 18px 18px}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:11px}.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}.tile small{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}.tile b{font-size:19px;font-weight:700;display:block;line-height:1.25}.tile span{font-size:14px;color:var(--mut)}
 .acts{display:flex;gap:11px;margin-top:20px}.acts button{flex:1}
 .vacio{background:#fff;border:1px dashed #D6DBE3;border-radius:12px;padding:18px;color:var(--mut);text-align:center}
+.bd.bl{background:var(--blue)}.nx .cp{font-size:13px;color:var(--mut);flex:none;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nx.hecha{opacity:.72}.nx .ok{color:var(--ok);font-weight:700;flex:none;width:20px}.nx .ko{color:var(--err);font-weight:700;flex:none;width:20px}.nx.cur{background:var(--workbg)}
 </style></head><body>
 <div class="top"><img src="icons/icon128.png" alt=""><div class="brand">FLOW<small>· secuencias y tareas</small></div><span class="sp"></span><button class="lat" id="lateral" hidden title="Abrir esta ventana como panel lateral fijo">Panel lateral</button></div>
 <div class="wrap">
@@ -112,7 +113,14 @@ details .in-d{padding:0 18px 18px}
   </div>
 </div>
 
-<div class="tabs" id="tabs" hidden><button id="t-estado" class="on">Estado</button><button id="t-err">Errores <span id="nerr" class="bd" hidden></span></button></div>
+<div class="tabs" id="tabs" hidden><button id="t-estado" class="on">Estado</button><button id="t-lista">Lista Outreach <span id="nlista" class="bd bl" hidden></span></button><button id="t-err">Errores <span id="nerr" class="bd" hidden></span></button></div>
+
+<!-- Pestaña Lista Outreach -->
+<div id="tab-lista" hidden>
+  <div class="sec" style="margin-top:0">Lista de Outreach <span class="ct" id="lista-ct"></span></div>
+  <p class="lead" style="margin:0 0 12px;font-size:15px">Todo lo que esta cuenta va a hacer, en orden, con la hora estimada (cambia un poco a propósito) y su campaña.</p>
+  <div id="lista-body"><div class="vacio">Cargando…</div></div>
+</div>
 
 <!-- Pestaña Errores -->
 <div id="tab-errores" hidden>

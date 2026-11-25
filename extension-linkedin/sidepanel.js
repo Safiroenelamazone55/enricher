@@ -47,7 +47,7 @@ function pintarExtra(e) {
   if (e.modo !== 'auto') h += '<details class="card" style="margin-top:14px"><summary>Qué pasa en modo asistido</summary><div class="in-d">La extensión abre cada perfil en una pestaña de LinkedIn. <b>Las visitas se hacen solas.</b> En invitaciones y mensajes deja el texto escrito y <b>tú pulsas «Enviar»</b>; luego sigue con la siguiente. Mantén este Chrome abierto con LinkedIn iniciado.</div></details>';
   box.innerHTML = h;
 }
-setInterval(() => { pintar(); }, 30000);
+setInterval(() => { pintar(); if (pestana === 'lista') pintarLista(); }, 30000);
 
 const paso = (ok, t) => `<div class="step${ok ? ' ok' : ''}"><i>${ok ? '✓' : '·'}</i><span>${t}</span></div>`;
 
@@ -76,9 +76,25 @@ const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&am
 let pestana = 'estado';
 function mostrarPestana(p) {
   pestana = p;
-  $('t-estado').className = p === 'estado' ? 'on' : ''; $('t-err').className = p === 'errores' ? 'on' : '';
-  $('tab-estado').hidden = p !== 'estado'; $('tab-errores').hidden = p !== 'errores';
+  $('t-estado').className = p === 'estado' ? 'on' : ''; $('t-lista').className = p === 'lista' ? 'on' : ''; $('t-err').className = p === 'errores' ? 'on' : '';
+  $('tab-estado').hidden = p !== 'estado'; $('tab-lista').hidden = p !== 'lista'; $('tab-errores').hidden = p !== 'errores';
   if (p === 'errores') pintarErrores();
+  if (p === 'lista') pintarLista();
+}
+async function pintarLista() {
+  const r = await msg('cola');
+  const box = $('lista-body');
+  if (!r || r.error) { box.innerHTML = '<div class="vacio">No pude cargar la lista (' + esc((r && r.error) || 'sin respuesta') + '). Reintenta en un momento.</div>'; return; }
+  const hora = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const fila = p => '<div class="nx' + (p.en_curso ? ' cur' : '') + '"><span class="tm">' + (p.en_curso ? 'ahora' : '~' + hora(p.ts)) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span>' + (p.campana ? '<span class="cp" title="' + esc(p.campana) + '">' + esc(p.campana) + '</span>' : '') + '</div>';
+  const hoy = r.cola.filter(p => p.hoy), luego = r.cola.filter(p => !p.hoy);
+  const hechas = (r.hechas || []).map(p => '<div class="nx hecha"><span class="tm">' + hora(p.t) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span><span class="' + (p.estado === 'done' ? 'ok' : 'ko') + '">' + (p.estado === 'done' ? '✓' : p.estado === 'skipped' ? '↷' : '✕') + '</span></div>').join('');
+  $('lista-ct').textContent = r.total + (r.total >= 80 ? '+' : '') + ' en cola';
+  let h = '';
+  if (hoy.length) h += '<div class="nxl">' + '<div class="nx sep">Por hacer hoy</div>' + hoy.map(fila).join('') + '</div>';
+  if (luego.length) h += '<div class="nxl" style="margin-top:12px"><div class="nx sep">Después</div>' + luego.map(fila).join('') + '</div>';
+  if (hechas) h += '<div class="nxl" style="margin-top:12px"><div class="nx sep">Hechas en las últimas 24 h</div>' + hechas + '</div>';
+  box.innerHTML = h || '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
 }
 const fechaE = t => new Date(t).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 async function pintarErrores() {
@@ -97,6 +113,7 @@ async function informe() {
 }
 $('t-estado').onclick = () => mostrarPestana('estado');
 $('t-err').onclick = () => mostrarPestana('errores');
+$('t-lista').onclick = () => mostrarPestana('lista');
 $('copiar').onclick = async () => {
   const txt = await informe();
   try { await navigator.clipboard.writeText(txt); } catch (_) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
