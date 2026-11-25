@@ -24659,10 +24659,9 @@ const LeadManagerModule = (() => {
       po: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
     };
     nav.innerHTML = `<div class="lim2-g">Ajustes del cliente</div><div class="lim2-who">${esc(cli)}</div>
-      <div class="lim2-g lim2-g2">Remitentes</div>${it('senders', I.plug, 'Remitentes conectados', _lim.mail.length + _lim.li.length)}
+      <div class="lim2-g lim2-g2">Remitentes</div>${it('senders', I.plug, 'Remitentes', '')}
       <div class="lim2-g lim2-g2">Límites</div>${it('linkedin', I.li, 'LinkedIn', '')}${it('email', I.em, 'Email', '')}
-      <div class="lim2-g lim2-g2">Cliente</div>${ac('edit', I.ed, 'Editar cliente')}${ac('portal', I.po, 'Portal del cliente')}
-      <div class="lim2-note">Los límites son de las <b>cuentas del cliente</b>: los comparten todas sus campañas, y la pestaña «Capacidad» de cada secuencia los usa para calcular la cola.</div>`;
+      <div class="lim2-g lim2-g2">Cliente</div>${ac('edit', I.ed, 'Editar cliente')}${ac('portal', I.po, 'Portal del cliente')}`;
   }
   function limAct(k) {
     const id = _lim.id; document.getElementById('lim-modal')?.remove();
@@ -24676,9 +24675,9 @@ const LeadManagerModule = (() => {
       root.innerHTML = '<div id="snd-root"></div>'; _snd.id = _lim.id; _snd.data = null; _sndPaint(); return;
     }
     if (_lim.tab === 'email') {
-      root.innerHTML = `<h3 class="lim2-t">Email</h3><p class="lim2-p">Límite diario y calentamiento de cada buzón de este cliente.</p>${_lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>'}`;
+      root.innerHTML = `<h3 class="lim2-t">Email</h3><p class="lim2-p">Límite diario y calentamiento de cada buzón de este cliente. Son de las cuentas del cliente y los comparten todas sus campañas.</p>${_lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>'}`;
     } else {
-      root.innerHTML = `<h3 class="lim2-t">LinkedIn</h3><p class="lim2-p">Cuántas acciones puede hacer cada cuenta de LinkedIn al día y cómo se calienta si es nueva.</p>${_lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="cc-empty">Este cliente no tiene cuentas de LinkedIn conectadas.</div>'}`;
+      root.innerHTML = `<h3 class="lim2-t">LinkedIn</h3><p class="lim2-p">Cuántas acciones puede hacer cada cuenta de LinkedIn al día y cómo se calienta si es nueva. Son de las cuentas del cliente y los comparten todas sus campañas; la pestaña «Capacidad» de cada secuencia los usa para calcular la cola.</p>${_lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="cc-empty">Este cliente no tiene cuentas de LinkedIn conectadas.</div>'}`;
     }
   }
   function _limMailCard(mb) {

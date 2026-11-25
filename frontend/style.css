@@ -22724,3 +22724,42 @@ body.ibx-lb-open{overflow:hidden}
 .lim2-ft { margin-top: 18px; }
 .lim2-main .cc-grp { font-size: .78rem; } .lim2-main .cc-card, .lim2-main .cc-snd { background: #FBFAF7; }
 .lim2-x { top: 16px; right: 18px; font-size: 1.1rem; }
+
+/* ══ Ajustes del cliente · pulido final: una sola escala tipográfica y filas de la misma altura (referencia: «Ajustes de la cuenta» de lemlist) ══ */
+.lim2 { font-size: 16px; line-height: 1.45; color: #0B1220; }
+.lim2 * { font-family: inherit; }
+.lim2-nav { width: 268px; padding: 26px 14px; }
+.lim2-g { font-size: 14px; font-weight: 400; color: #7B8494; padding: 0 12px 8px; }
+.lim2-g2 { margin-top: 22px; }
+.lim2-who { font-size: 16px; font-weight: 600; padding: 0 12px 6px; }
+.lim2-i { font-size: 16px; font-weight: 400; min-height: 44px; white-space: nowrap; gap: 12px; color: #1F2A3D; }
+.lim2-i.on { font-weight: 500; }
+.lim2-i span { width: 20px; justify-content: center; }
+.lim2-i em { font-size: 13px; }
+.lim2-main { padding: 34px 44px 40px; font-size: 16px; }
+.lim2-t { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+.lim2-p { font-size: 16px; line-height: 1.5; color: #6B7280; margin: 0 0 22px; }
+.lim2-card { padding: 6px 28px 24px; }
+.lim2-ch { font-size: 17px; font-weight: 600; padding: 18px 0 12px; }
+.lim2-sec { font-size: 14px; font-weight: 600; color: #7B8494; text-transform: none; letter-spacing: 0; margin: 22px 0 2px; }
+.lim2-sec small { font-size: 14px; font-weight: 400; }
+.lim2-r { grid-template-columns: 1fr 180px; gap: 20px; padding: 14px 0; min-height: 68px; }
+.lim2-r b { font-size: 16px; font-weight: 500; } .lim2-r small { font-size: 15px; color: #8A93A3; margin-top: 2px; }
+.lim2-in { height: 44px; font-size: 16px; }
+.lim2-st { font-size: 15px; } .lim2-ft .btn { height: 40px; font-size: 15px; }
+/* lista de remitentes que vive dentro del modal: misma escala */
+.lim2-main .snd-top { padding: 0 0 6px; gap: 20px; } .lim2-main .snd-top p { font-size: 16px !important; color: #6B7280; line-height: 1.5; }
+.lim2-main .cc-grp { font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0; color: #7B8494; margin: 26px 0 8px; }
+.lim2-main .cc-snd { min-height: 72px; padding: 14px 4px; gap: 14px; border-top: 1px solid #ECE7DF; background: transparent; }
+.lim2-main .cc-snd__ic { width: 36px; height: 36px; border-radius: 9px; font-size: 1rem; }
+.lim2-main .cc-row__t b { font-size: 16px; font-weight: 500; } .lim2-main .cc-row__t small { font-size: 15px; color: #8A93A3; display: block; margin-top: 1px; }
+.lim2-main .cc-chip { font-size: 14px; padding: 4px 12px; border-radius: 99px; }
+.lim2-main .btn--sm { height: 38px; font-size: 15px; padding: 0 16px; }
+.lim2-main .cc-empty, .lim2-main .cc-row.is-off { font-size: 15px; color: #8A93A3; padding: 18px 4px; }
+.lim2-main .li-card { background: #FBFAF7; border: 1px solid #E6E1D8; border-radius: 14px; padding: 20px 26px; margin: 4px 0 18px; }
+.lim2-main .li-card__hd b { font-size: 17px; font-weight: 600; } .lim2-main .li-sub { font-size: 15px; color: #8A93A3; }
+.lim2-main .li-pill { font-size: 14px; padding: 4px 12px; border-radius: 99px; }
+.lim2-main .li-grid { gap: 20px 28px; margin: 18px 0; } .lim2-main .li-grid > div > span { font-size: 15px; color: #6B7280; margin-bottom: 8px; }
+.lim2-main .li-bar { height: 7px; width: 62%; border-radius: 99px; } .lim2-main .li-bar i { border-radius: 99px; } .lim2-main .li-bar__t { font-size: 15px; font-weight: 600; } .lim2-main .li-w { font-size: 16px; }
+.lim2-main .li-foot { padding-top: 16px; border-top: 1px solid #ECE7DF; } .lim2-main .li-motivo { font-size: 15px; }
+.lim2-main .li-ev, .lim2-main .li-tr { font-size: 15px; }
