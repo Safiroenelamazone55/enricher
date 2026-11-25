@@ -19,6 +19,10 @@ async function pintarVinculada() {
   $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
   $('acctslug').textContent = e.slug ? 'linkedin.com/in/' + e.slug : 'Leyendo cuenta…';
   pintarExtra(on ? e : { ...e, resumen: null });
+  const md = $('modo');
+  if (e.modo === 'auto') { md.className = 'modo au'; md.innerHTML = '<b>Automático</b><span>FLOW envía invitaciones y mensajes por sí solo, dentro de los topes y el horario. No tienes que pulsar nada.</span>'; }
+  else if (e.modo) { md.className = 'modo as'; md.innerHTML = '<b>Asistido</b><span>Las visitas se hacen solas. En invitaciones y mensajes FLOW deja el texto escrito y <u>tú pulsas «Enviar»</u>.</span>'; }
+  else { md.className = 'modo nd'; md.innerHTML = '<b>Detectando…</b><span>Se confirma en la próxima comprobación con Nova.</span>'; }
   pintarProx(false);
 }
 

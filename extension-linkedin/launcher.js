@@ -30,9 +30,15 @@
   const clamp = v => Math.max(60, Math.min(window.innerHeight - 60, v));
   const place = () => { tab.style.top = clamp(top) + 'px'; };
   try { chrome.storage.local.get({ lanzadorTop: 190 }, r => { top = Number(r.lanzadorTop) || 190; place(); }); } catch (_) { place(); }
+  // Al abrir, la página se empuja a la izquierda (margen derecho en <html>) para que el panel no tape nada.
+  const ANCHO = 480, empujar = on => {
+    const el = document.documentElement;
+    if (on) { el.style.setProperty('transition', 'margin-right .15s', 'important'); el.style.setProperty('margin-right', Math.min(ANCHO, window.innerWidth * 0.92) + 'px', 'important'); }
+    else { el.style.removeProperty('margin-right'); setTimeout(() => el.style.removeProperty('transition'), 250); }
+  };
   const abrir = on => {
-    if (on) { if (!frame) { frame = document.createElement('iframe'); frame.src = chrome.runtime.getURL('sidepanel.html?p=2'); panel.appendChild(frame); } panel.classList.add('open'); tab.style.display = 'none'; }
-    else { panel.classList.remove('open'); tab.style.display = 'flex'; }
+    if (on) { if (!frame) { frame = document.createElement('iframe'); frame.src = chrome.runtime.getURL('sidepanel.html?p=2'); panel.appendChild(frame); } panel.classList.add('open'); tab.style.display = 'none'; empujar(true); }
+    else { panel.classList.remove('open'); tab.style.display = 'flex'; empujar(false); }
   };
   sh.getElementById('hide').addEventListener('pointerdown', e => { e.stopPropagation(); });
   sh.getElementById('hide').addEventListener('pointerup', e => { e.stopPropagation(); try { chrome.storage.local.set({ lanzadorOculto: true }); } catch (_) {} });
