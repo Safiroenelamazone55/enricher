@@ -264,6 +264,32 @@ function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }
   return out;
 }
 
+// ── Enlace de baja (opt-out): solo si la campaña del paso lo tiene activado (Configuración de la campaña → General) ──
+async function _unsubFooter(pool, contactId, sequenceId, apiBase) {
+  try {
+    if (!sequenceId || !contactId || !apiBase) return '';
+    const { rows: [sq] } = await pool.query(`SELECT campaign_id FROM sequences WHERE id=$1`, [sequenceId]);
+    if (!sq || !sq.campaign_id) return '';
+    const cfg = await require('./campaignConfig').configGuardada(pool, sq.campaign_id);
+    if (!cfg || !cfg.general || !cfg.general.enlace_baja) return '';
+    let { rows: [k] } = await pool.query(`SELECT unsub_token, idioma FROM lm_contacts WHERE id=$1`, [contactId]);
+    let token = k && k.unsub_token;
+    if (!token) {
+      token = crypto.randomBytes(16).toString('hex');
+      await pool.query(`UPDATE lm_contacts SET unsub_token=$1 WHERE id=$2 AND unsub_token IS NULL`, [token, contactId]);
+      ({ rows: [k] } = await pool.query(`SELECT unsub_token, idioma FROM lm_contacts WHERE id=$1`, [contactId]));
+      token = (k && k.unsub_token) || token;
+    }
+    const all = (cfg.general.baja === 'todo') ? '1' : '0';
+    const url = `${apiBase}/u/${token}?all=${all}`;
+    // Bilingüe según el idioma del CONTACTO (no el del remitente): la mayoría de clientes prospectan en inglés.
+    const en = String((k && k.idioma) || '').toLowerCase().startsWith('en');
+    const texto = en ? 'If you no longer wish to receive these emails, ' : 'Si no deseas seguir recibiendo estos correos, ';
+    const liga = en ? 'click here to unsubscribe' : 'haz clic aquí para darte de baja';
+    return `<div style="margin-top:18px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif">${texto}<a href="${url}" style="color:#9CA3AF;text-decoration:underline">${liga}</a>.</div>`;
+  } catch (e) { console.warn('[send-engine] unsub footer', e.message); return ''; }
+}
+
 // Hora y día actuales en el timezone del workspace.
 const _WDX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 function _localNow(tz, at) {
@@ -470,8 +496,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.email_personal, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id, k.idioma, k.idiomas,
-           k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
-           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id, s.track_opens AS seq_track_opens, s.track_clicks AS seq_track_clicks
+           k.email_status, k.disposition, k.li_aceptado_at, k.email_opt_out, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days, s.idioma_faltante,
+           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id, s.track_opens AS seq_track_opens, s.track_clicks AS seq_track_clicks, s.campaign_id
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -608,6 +634,16 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '1 hour' WHERE id=$1`, [enr.enr_id]);
       return false;
     }
+    // Feriado del país que la campaña eligió para "pausar durante las vacaciones" (Configuración de la campaña → Planificaciones).
+    // Por calendario LOCAL del prospecto, no del servidor: un feriado de EE. UU. nunca pausa una campaña configurada para Perú, y viceversa.
+    try {
+      const feriado = await require('./campaignConfig').holidayHoy(pool, enr.campaign_id, tz);
+      if (feriado) {
+        await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '6 hours' WHERE id=$1`, [enr.enr_id]);
+        console.log(`[send-engine] feriado (${feriado}) → pausa el envío de hoy, secuencia ${enr.sequence_id}`);
+        return false;
+      }
+    } catch (e) { console.warn('[send-engine] holidayHoy', e.message); }
   }
 
   // ── Paso email: guardas ──
@@ -624,6 +660,15 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   if (enr.email_status === 'invalid') {
     await _pauseEnrollment(pool, enr, 'email_invalido',
       `[${enr.seq_nombre}] Email de ${enr.nombre || enr.email} rebotó antes — corregir para reanudar`);
+    return false;
+  }
+  // Baja SOLO del email (el contacto se dio de baja desde el enlace de un correo, con el modo
+  // "solo este canal"): este paso de email se omite, pero la secuencia sigue para LinkedIn/WhatsApp.
+  if (enr.email_opt_out) {
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','email',$3,NOW(),'hecha')`,
+      [uid, enr.contact_id, `[${enr.seq_nombre} · paso ${enr.paso}] Email omitido: el contacto se dio de baja de este canal`]);
+    await _advance(pool, enr, steps, curIdx);
     return false;
   }
   if (await emailDomainDead(enr.email)) {
@@ -713,10 +758,11 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   // Así cada cliente tiene su propia firma personalizada.
   const firmaEfectiva = (mbx && (mbx.signature_html || (mbx.signatures && Object.keys(mbx.signatures).length))) ? (pickSignature(mbx.signature_html, mbx.signatures, enr.idioma, variantName) || cfg.firma) : cfg.firma;
 
-  const html = buildHtml({
+  let html = buildHtml({
     text: cuerpoTxt, firma: firmaEfectiva, trackToken: token, apiBase,
     trackOpens: enr.seq_track_opens ?? cfg.track_opens, trackClicks: enr.seq_track_clicks ?? cfg.track_clicks,
   });
+  html += await _unsubFooter(pool, enr.contact_id, enr.sequence_id, apiBase);
 
   // Reply threading: si el paso pide encadenar (reply_to_prev), buscar el último
   // smtp_message_id del contacto en esta secuencia y prefijar "Re: " al asunto si
@@ -808,7 +854,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 // a propósito (p. ej. la ventana recomendada del país del prospecto).
 async function _flushScheduled(pool, apiBase) {
   const { rows: due } = await pool.query(`
-    SELECT m.id, m.user_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.in_reply_to, m.mailbox_id,
+    SELECT m.id, m.user_id, m.contact_id, m.sequence_id, m.asunto, m.cuerpo, m.to_email, m.in_reply_to, m.mailbox_id,
            COALESCE(m.cc_emails,'') AS cc_emails, m.track_token,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
@@ -830,11 +876,12 @@ async function _flushScheduled(pool, apiBase) {
         throw new Error('El buzón ya no está conectado');
       }
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
-      const html = buildHtml({
+      let html = buildHtml({
         text: m.cuerpo, firma: m.con_firma ? pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma) : '', trackToken: m.track_token, apiBase,
         trackOpens: !!(apiBase && m.track_token && m.track_opens),
         trackClicks: !!(apiBase && m.track_token && m.track_clicks),
       });
+      html += await _unsubFooter(pool, m.contact_id, m.sequence_id, apiBase);
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
                    smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder,
                    auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,
@@ -963,7 +1010,7 @@ async function _flushApproved(pool, apiBase) {
            mb.signature_html AS mb_signature, mb.signatures AS mb_signatures, k.idioma AS k_idioma, mb.from_name AS mb_from_name,
            cfg.from_name AS cfg_from_name, cfg.firma, COALESCE(s.track_opens, cfg.track_opens) AS track_opens, COALESCE(s.track_clicks, cfg.track_clicks) AS track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
-           s.send_days, s.timezone AS seq_timezone,
+           s.send_days, s.timezone AS seq_timezone, s.campaign_id,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
            COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev, st.reply_to_step_id AS reply_to_step_id,
            k.disposition AS k_disposition
@@ -1042,6 +1089,10 @@ async function _flushApproved(pool, apiBase) {
       if (hour < (m.window_start ?? 9) || hour >= (m.window_end ?? 18)) continue;
       if (weekend && !m.send_weekends) continue;
       if (_sanSendDays(m.send_days)[wdIdx] !== '1') continue;
+      try {
+        const feriado = await require('./campaignConfig').holidayHoy(pool, m.campaign_id, m.seq_timezone || m.timezone);
+        if (feriado) { console.log(`[send-engine] approved SKIP → feriado (${feriado})`); continue; }
+      } catch (e) { console.warn('[send-engine] holidayHoy (approved)', e.message); }
       // Guarda de opt-out: si el contacto quedó "no interesado"/"no contactar" DESPUÉS de
       // aprobar el borrador (o de crearlo), el email aprobado NO sale jamás.
       if (['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado'].includes(m.k_disposition)) {
@@ -1061,10 +1112,11 @@ async function _flushApproved(pool, apiBase) {
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       // Firma: la del buzón pisa a la del user (misma regla que el auto-sender).
       const firmaEfectiva = pickSignature(m.mb_signature, m.mb_signatures, m.k_idioma, m.variant) || m.firma;
-      const html = buildHtml({
+      let html = buildHtml({
         text: m.cuerpo, firma: firmaEfectiva, trackToken: m.track_token, apiBase,
         trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,
       });
+      html += await _unsubFooter(pool, m.contact_id, m.sequence_id, apiBase);
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
                    smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder,
                    auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,

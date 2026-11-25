@@ -105,7 +105,8 @@
 
   async function visitar() {
     if (!estadoPerfil().hayPerfil) return R('omitida', 'perfil_no_encontrado');
-    for (let i = 0; i < 3; i++) { window.scrollBy({ top: rnd(250, 700), behavior: 'smooth' }); await sleep(rnd(1200, 3200)); }
+    const n = Math.round(rnd(2, 5));   // número de desplazamientos distinto cada vez, con alguna vuelta hacia arriba y pausas largas de lectura
+    for (let i = 0; i < n; i++) { window.scrollBy({ top: (Math.random() < 0.18 ? -1 : 1) * rnd(180, 760), behavior: 'smooth' }); await sleep(rnd(1100, 4200) + (Math.random() < 0.15 ? rnd(2500, 6000) : 0)); }
     const av = avisoLinkedIn(); if (av) return porAviso(av);
     return R('ok');
   }

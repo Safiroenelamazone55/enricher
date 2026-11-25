@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261125n"/>
+  <link rel="stylesheet" href="style.css?v=20261126d"/>
   <link rel="stylesheet" href="mobile.css?v=24"/>
   <link rel="stylesheet" href="contenido.css?v=4"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -350,6 +350,10 @@
       </button>
       <button class="snav-mod" data-module="inicios" onclick="selectModule('inicios')" data-tip="Inicios de cliente" aria-label="Inicios de cliente">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg>
+      </button>
+      <!-- Soluciones: productos propios de pago (extensiones/apps con licencia) que Nova vende por fuera — gestión de licencias. -->
+      <button class="snav-mod" data-module="soluciones" onclick="selectModule('soluciones')" data-tip="Soluciones" aria-label="Soluciones">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
       </button>
     </div>
     <div class="snav-rail__spacer"></div>
@@ -730,6 +734,15 @@
         <button class="snav-item" data-tab="inicios" data-tooltip="Inicios de cliente">
           <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg></span>
           <span class="snav-item__label">Inicios de cliente</span>
+        </button>
+      </div>
+
+      <!-- Soluciones: productos propios que Nova vende por fuera (extensiones/apps de pago). Por ahora solo el LinkedIn Sales Scraper. -->
+      <div class="snav-group" data-module="soluciones" id="snav-body-soluciones">
+        <div class="snav-cat">Productos</div>
+        <button class="snav-item" data-tab="soluciones" data-tooltip="Soluciones">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+          <span class="snav-item__label">Soluciones</span>
         </button>
       </div>
 
@@ -2186,6 +2199,10 @@
     <div class="pane" id="pane-herramientas">
       <div id="herramientas-body"></div>
     </div><!-- /pane-herramientas -->
+
+    <div class="pane" id="pane-soluciones">
+      <div id="soluciones-body"></div>
+    </div><!-- /pane-soluciones -->
     <div class="pane" id="pane-contenido-hoy"><div id="contenido-hoy-body"></div></div>
     <div class="pane" id="pane-contenido-estrategia"><div id="contenido-estrategia-body"></div></div>
     <div class="pane" id="pane-contenido-ideas"><div id="contenido-ideas-body"></div></div>
@@ -2596,6 +2613,10 @@
     <button class="snav-mod ws-mod" data-module="inicios" onclick="selectModule('inicios');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg></span>
       <span class="ws-mod__lbl">Inicios de cliente</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="soluciones" onclick="selectModule('soluciones');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+      <span class="ws-mod__lbl">Soluciones</span><span class="ws-mod__chk"></span>
     </button>
   </div>
 
@@ -3578,7 +3599,7 @@
   })();
 </script>
 
-<script src="app.js?v=20261125n"></script>
+<script src="app.js?v=20261126d"></script>
 <script src="worldclock.js?v=4"></script>
 <script src="agentes.js?v=4"></script>
 <script src="spaces.js?v=20261103p"></script>

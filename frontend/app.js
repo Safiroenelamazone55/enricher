@@ -1,3 +1,5 @@
+// El arranque limpia la URL (history.replaceState): se guarda aquí la original para los enlaces directos (campaña, informe con filtros).
+window.__novaQS = window.__novaQS || window.location.search;
 // Fecha de hoy en hora LOCAL (YYYY-MM-DD). new Date().toISOString() es UTC: desde las 19:00 en Lima ya marcaba el día siguiente.
 function _userTZ() { return (window._authUser && window._authUser.timezone) || 'America/Lima'; }
 function _localISO(d) { try { return (d || new Date()).toLocaleDateString('en-CA', { timeZone: _userTZ() }); } catch (_) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); } }
@@ -809,7 +811,7 @@ const MatchSuggest = (() => {
   return { close: _close };
 })();
 
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', inicios: 'Inicios de cliente', contenido: 'Contenido', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', inicios: 'Inicios de cliente', soluciones: 'Soluciones', contenido: 'Contenido', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -901,6 +903,9 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>' },
   { id: 'inicios',         tab: 'inicios',        name: 'Inicios de cliente', desc: 'Formulario de inicio por cliente: datos, accesos y acuerdos antes del portal', color: 'blue',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/></svg>' },
+  // Soluciones: productos propios de pago que Nova vende por fuera (extensiones/apps con licencia) — gestión de licencias. Por ahora solo el LinkedIn Sales Scraper.
+  { id: 'soluciones',      tab: 'soluciones',     name: 'Soluciones',     desc: 'Productos propios de pago: licencias, claves y soporte', color: 'purple',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
@@ -939,6 +944,7 @@ function _buildHomeIcons() {
     plantillas: d2(`${df('p', INK)}<rect x="9" y="5" width="27" height="35" rx="8" fill="${MINT}"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#p0)"/><rect x="15" y="11" width="27" height="33" rx="8" fill="url(#ph)"/><rect x="21" y="22" width="15" height="4" rx="2" fill="${LIM[0]}"/><rect x="21" y="30" width="10" height="4" rx="2" fill="#fff" fill-opacity=".6"/>`),
     inicios: d2(`${df('i', GRN, INK)}<rect x="16" y="3" width="16" height="10" rx="5" fill="url(#i1)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#i0)"/><rect x="7" y="7" width="34" height="38" rx="10" fill="url(#ih)"/><path d="m16 27 6 6 11-12" stroke="${LIM[0]}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`),
     empresa: d2(`${df('s', INK, GRN, LIM)}<rect x="5" y="8" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="20" width="38" height="8" rx="4" fill="${MINT}"/><rect x="5" y="32" width="38" height="8" rx="4" fill="${MINT}"/><circle cx="15" cy="12" r="7" fill="url(#s0)" stroke="#fff" stroke-width="2.5"/><circle cx="33" cy="24" r="7" fill="url(#s1)" stroke="#fff" stroke-width="2.5"/><circle cx="21" cy="36" r="7" fill="url(#s2)" stroke="#fff" stroke-width="2.5"/>`),
+    soluciones: d2(`${df('u', GRN, INK)}<path d="M24 4 42 14v20L24 44 6 34V14z" fill="url(#u0)"/><path d="M24 4 42 14v20L24 44 6 34V14z" fill="url(#uh)"/><path d="M6 14 24 24 42 14" stroke="#fff" stroke-opacity=".55" stroke-width="2.5" fill="none" stroke-linejoin="round"/><path d="M24 24v20" stroke="#fff" stroke-opacity=".55" stroke-width="2.5"/><circle cx="24" cy="24" r="6" fill="url(#u1)" stroke="#fff" stroke-width="2.5"/>`),
   };
   return ICO2;
 }
@@ -1001,6 +1007,7 @@ function _renderHomeInner(grid) {
     plantillas: { i: sv('<path d="M14.5 2.8H7A2.5 2.5 0 0 0 4.5 5.3v13.4A2.5 2.5 0 0 0 7 21.2h10a2.5 2.5 0 0 0 2.5-2.5V7.8z" fill="currentColor" fill-opacity=".24"/><path d="M14 2.8v3.6a1.4 1.4 0 0 0 1.4 1.4h4.1M8.5 13h7M8.5 16.5h4.5"/>') },
     inicios: { i: sv('<path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8" fill="currentColor" fill-opacity=".24"/><rect x="8" y="2.5" width="8" height="4" rx="1.4" fill="#14211B" fill-opacity="0"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
     empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="8" cy="12" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="16" cy="18" r="2" fill="currentColor" fill-opacity=".24"/>') },
+    soluciones: { i: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="currentColor" fill-opacity=".24"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') },
   };
   // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
   // Iconos de dos tonos (verde de marca, tinta y lima) sobre una ficha blanca, como las apps de Odoo.
@@ -1012,7 +1019,7 @@ function _renderHomeInner(grid) {
       <div class="home-app__n">${m.name}</div>
     </div>`;
   };
-  const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'empresa'];
+  const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
   const _u = window._authUser || {}, _datosOk = !!(_u.isOwner || !_u.permisos || (_u.permisos.datos && _u.permisos.datos.n > 0));
   const ordered = [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))].filter(m => m.id !== 'cantera' || _datosOk);
   const html = `<section class="home-sec"><div class="home-apps">${ordered.map(card).join('')}</div></section>`;
@@ -23274,6 +23281,22 @@ const LeadManagerModule = (() => {
     _loadNavCounts();                          // insignias visibles desde el primer momento
     _pulseStart();                             // sistema en vivo: pone al día esta pantalla cuando algo cambia
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
+    // Enlace directo a un informe con sus filtros (?tab=lead-manager&informes=overview&from=…&to=…): botón «Compartir» de Informes.
+    try {
+      const sp = new URLSearchParams(window.__novaQS || location.search), iv = sp.get('informes');
+      if (iv && !_infDeepDone) {
+        _infDeepDone = true; _section = 'reports'; _inf.tab = iv; _inf.init = true;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(sp.get('from') || '') && /^\d{4}-\d{2}-\d{2}$/.test(sp.get('to') || '')) { _inf.preset = 'custom'; _inf.from = sp.get('from'); _inf.to = sp.get('to'); }
+        _inf.camp = parseInt(sp.get('campaign'), 10) || 0; _inf.cli = parseInt(sp.get('client'), 10) || 0;
+        (sp.get('tags') || '').split(',').filter(Boolean).forEach(x => _inf.tags.add(x)); (sp.get('reps') || '').split(',').filter(Boolean).forEach(x => _inf.reps.add(x)); (sp.get('roles') || '').split(',').filter(Boolean).forEach(x => _inf.roles.add(x));
+        _renderBody();
+      }
+    } catch (_) {}
+    // Enlace directo a una campaña (?tab=lead-manager&campaign=ID): «Abrir en una pestaña nueva» / «Compartir enlace» de la lista de campañas.
+    try {
+      const cp = parseInt(new URLSearchParams(window.__novaQS || location.search).get('campaign'), 10);
+      if (cp && !_cmDeepDone) { _cmDeepDone = true; _section = 'campaigns'; _renderBody(); setTimeout(() => { if (_campaigns.some(c => c.id === cp)) openCampaignDrawer(cp); else showBanner('Esa campaña no existe o no tienes acceso.', 'info'); }, 200); }
+    } catch (_) {}
   }
 
   // ── Sistema en vivo: si algo cambia en cualquier módulo (o por otra persona/el motor), esta pantalla se pone al día sola, sin recargar ──
@@ -23571,7 +23594,7 @@ const LeadManagerModule = (() => {
   function gcName() { const c = (_gcAll || []).find(x => x.id === _gcli); return c ? c.nombre : ''; }
   async function gcSet(id) {
     _gcClose(true);
-    _gcli = id || null; _callsData = null; try { _inf.cli = _gcli || 0; _inf.data = null; _dv.data = null; } catch (_) {}
+    _gcli = id || null; _callsData = null; try { _inf.cli = _gcli || 0; _inf.data = null; _inf.ext = {}; _inf.extBusy = {}; _dv.data = null; } catch (_) {}
     try { if (_gcli) localStorage.setItem('nova_lm_gclient', String(_gcli)); else localStorage.removeItem('nova_lm_gclient'); } catch (_) {}
     _refreshNav();
     const body = $('lm2-body'); if (body) body.style.opacity = '.5';
@@ -23712,9 +23735,9 @@ const LeadManagerModule = (() => {
   }
 
   // ── Helpers de campaña (Fase 2) ──
-  const _CMP = { draft: ['Draft', '#F1EFEB', '#6C6862'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#F1EFEB', '#3B5573'] };
-  const _CMP_ORDER = { activa: 0, pausada: 1, draft: 2, cerrada: 3 };
-  const _CMP_VIVO = { draft: '#64748B', activa: '#16A34A', pausada: '#F59E0B', cerrada: '#475569' };
+  const _CMP = { draft: ['Draft', '#F1EFEB', '#6C6862'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#F1EFEB', '#3B5573'], archivada: ['Archivada', '#F1EFEB', '#64748B'] };
+  const _CMP_ORDER = { activa: 0, pausada: 1, draft: 2, cerrada: 3, archivada: 4 };
+  const _CMP_VIVO = { draft: '#64748B', activa: '#16A34A', pausada: '#F59E0B', cerrada: '#475569', archivada: '#94A3B8' };
   function _cmpBadge(e) { const s = _CMP[e] || _CMP.draft; return `<span class="ldh-chip ldh-chip--tag" style="background:${_CMP_VIVO[e] || _CMP_VIVO.draft}">${s[0]}</span>`; }
   function _campaignName(id) { const c = _campaigns.find(x => x.id === id); return c ? c.nombre : null; }
   function _campaignsByClient(cid) { return _campaigns.filter(c => c.outbound_client_id === cid); }
@@ -23742,21 +23765,22 @@ const LeadManagerModule = (() => {
       </div>
     </button>`;
   }
-  let _cmCli = '', _cmEst = '', _cmQ = '';
+  // ── Campañas: lista como la de lemlist (filtros por estado/remitente/etiquetas/creador, favoritos, carpetas, acciones masivas, columnas) + «Fila de outreach» ──
+  let _cmCli = '', _cmQ = '', _cmTab = 'campanas', _cmMeta = null, _cmMetaBusy = false, _cmDeepDone = false;
+  const _cm = { est: new Set(), rem: new Set(), tag: new Set(), cre: new Set(), fav: false, sort: { k: 'creado', d: -1 }, sel: new Set(), folders: new Set() };
+  const _CM_COLS = [['cliente', 'Cliente'], ['estado', 'Estado'], ['secuencias', 'Secuencias'], ['prospectos', 'Prospectos'], ['contactados', 'Contactados'], ['respuestas', 'Respuestas'], ['ganados', 'Ganados'], ['remitente', 'Remitente'], ['etiquetas', 'Etiquetas'], ['creado', 'Creado'], ['creador', 'Creador']];
+  const _CM_COLS_DEF = ['cliente', 'estado', 'prospectos', 'respuestas', 'remitente', 'etiquetas', 'creado'];
+  let _cmCols; try { const v = JSON.parse(localStorage.getItem('lm_cm_cols') || 'null'); _cmCols = new Set(Array.isArray(v) ? v : _CM_COLS_DEF); } catch (_) { _cmCols = new Set(_CM_COLS_DEF); }
   function _vCampaigns() {
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Campañas</h2></div>
-        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignStart()">＋ Nueva campaña</button>` : ''}
+        ${_clients.length ? `<div class="cm-split"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignStart()">＋ Crear</button><button class="btn btn--primary btn--sm cm-split__d" aria-label="Más formas de crear" onclick="LeadManagerModule.cmCreateMenu(event)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></div>` : ''}
       </div>
-      <div class="ldh-toolbar">
-        <select class="ldh-sel" id="cm-cli" onchange="LeadManagerModule.cmSetCli(this.value)"></select>
-        <select class="ldh-sel" id="cm-est" onchange="LeadManagerModule.cmSetEst(this.value)"></select>
-        <span class="ldh-toolbar__sp"></span>
-        <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cm-q" placeholder="Buscar campaña…" oninput="LeadManagerModule.cmSetQ(this.value)"></div>
-        ${_lmViews('cm', ['lista', 'tablero', 'gantt'])}
-      </div>
-      <div id="cm-wrap"></div>`;
+      <div class="cm-tabs"><button class="cm-tab${_cmTab === 'campanas' ? ' on' : ''}" data-tab="campanas" onclick="LeadManagerModule.cmTab('campanas')">Campañas</button><button class="cm-tab${_cmTab === 'cola' ? ' on' : ''}" data-tab="cola" onclick="LeadManagerModule.cmTab('cola')">Fila de outreach</button></div>
+      <div id="cm-bar"></div>
+      <div id="cm-wrap"></div>
+      <div id="cm-bulk"></div>`;
   }
   // ── Vistas (Lista / Tablero) de Clientes outbound, Campañas y Secuencias — mismo selector que Proyectos y Clientes de Operaciones; respetan los filtros de cada sección ──
   const _LAYOUT_DEF = { cm: 'lista', sq: 'lista', cl: 'tarjetas' };
@@ -23877,66 +23901,460 @@ const LeadManagerModule = (() => {
     return '<div class="lm-obc-grid">' + list.map(_obcCard).join('') + '</div>';
   }
   function _clPaint() { const w = $('cl-wrap'); if (w) w.innerHTML = _clBody(); }
+  // ── Campañas (lista): datos, filtros y orden ──
+  const _CM_EST = [['draft', 'Borrador'], ['running', 'En ejecución'], ['done', 'Finalizado'], ['paused', 'En pausa'], ['error', 'En error'], ['archived', 'Archivado']];
+  const _CM_EST_CLR = { draft: '#64748B', running: '#16A34A', done: '#475569', paused: '#F59E0B', error: '#DC2626', archived: '#94A3B8' };
+  const _CM_ICO = {
+    open: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    archive: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+    tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+    play: '<polygon points="5 3 19 12 5 21 5 3"/>',
+    pause: '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
+    down: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    bolt: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    template: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+    chev: '<polyline points="6 9 12 15 18 9"/>',
+    refresh: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  };
+  const _cmI = (k, w) => `<svg width="${w || 15}" height="${w || 15}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_CM_ICO[k]}</svg>`;
+  const _cmIni = s => (String(s || '?').replace(/@.*/, '').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('') || '?').toUpperCase();
+  async function _cmLoadMeta(force) {
+    if (_cmMetaBusy || (_cmMeta && !force)) return;
+    _cmMetaBusy = true;
+    try { const r = await apiFetch(`${API}/campaigns/list-meta`); if (r && r.ok) { const j = await r.json(); _cmMeta = { favs: new Set(j.favs || []), folders: j.folders || [], remitentes: j.remitentes || {}, creadores: j.creadores || {} }; } } catch (_) {}
+    _cmMetaBusy = false;
+    if (_section === 'campaigns' && _cmTab === 'campanas') { _cmBarPaint(); _cmTablePaint(); }
+  }
+  const _cmFavs = () => (_cmMeta && _cmMeta.favs) || new Set();
+  const _cmRem = id => (_cmMeta && _cmMeta.remitentes[id]) || [];
+  const _cmCre = id => (_cmMeta && _cmMeta.creadores[id]) || null;
+  const _cmFolders = () => (_cmMeta && _cmMeta.folders) || [];
+  function _cmHasErr(c) {
+    return _cmRem(c.id).some(r => {
+      const id = +String(r.k).split(':')[1];
+      if (r.tipo === 'email') { const mb = (_mailboxes || []).find(x => x.id === id); return !!mb && !['conectado', 'solo_envio'].includes(mb.estado); }
+      if (r.tipo === 'linkedin') { const a = Array.isArray(_li.accs) ? _li.accs.find(x => x.id === id) : null; return !!a && ['restringida', 'desconectada'].includes(a.estado); }
+      return false;
+    });
+  }
+  function _cmDer(c) {
+    const e = c.estado || 'draft';
+    if (e === 'activa') return _cmHasErr(c) ? 'error' : 'running';
+    return { draft: 'draft', pausada: 'paused', cerrada: 'done', archivada: 'archived' }[e] || 'draft';
+  }
+  function _cmStats(c) {
+    const m = _cmpMetrics(c);
+    const seqIds = _sequences.filter(s => s.campaign_id === c.id).map(s => s.id);
+    const cts = _contacts.filter(ct => (ct.campaigns || []).some(k => k.id === c.id) || (ct.sequences || []).some(sq => seqIds.includes(sq.id)));
+    return { seqs: seqIds.length, leads: m.leads + cts.length, contactados: m.contactados + cts.filter(x => (x.estado || 'nuevo') !== 'nuevo').length, replies: m.replies + cts.filter(x => ['respondio', 'interesado', 'reunion'].includes(x.disposition)).length, ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length };
+  }
+  function _cmRows() {
+    const favs = _cmFavs();
+    return _campaigns.map(c => ({ c, st: _cmStats(c), der: _cmDer(c), fav: favs.has(c.id), rem: _cmRem(c.id), tags: Array.isArray(c.tags) ? c.tags : [], cre: _cmCre(c.id), ts: new Date(c.created_at || 0).getTime() }));
+  }
+  function _cmFilter(all) {
+    const q = (_cmQ || '').toLowerCase();
+    return all.filter(r => {
+      const c = r.c;
+      if (_cmCli && String(c.outbound_client_id || '') !== String(_cmCli)) return false;
+      if (_cm.est.size ? !_cm.est.has(r.der) : r.der === 'archived') return false;
+      if (_cm.rem.size && !r.rem.some(x => _cm.rem.has(x.k))) return false;
+      if (_cm.tag.size && !r.tags.some(t => _cm.tag.has(t))) return false;
+      if (_cm.cre.size && !(r.cre && _cm.cre.has(String(r.cre.id)))) return false;
+      if (_cm.fav && !r.fav) return false;
+      if (q && !((c.nombre || '') + ' ' + (_clientName(c.outbound_client_id) || '') + ' ' + r.tags.join(' ') + ' ' + (c.canal || '') + ' ' + (c.mercado || '')).toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+  function _cmSort(list) {
+    const { k, d } = _cm.sort;
+    const val = r => ({ nombre: (r.c.nombre || '').toLowerCase(), cliente: (_clientName(r.c.outbound_client_id) || '').toLowerCase(), estado: r.der, prospectos: r.st.leads, contactados: r.st.contactados, respuestas: r.st.replies, ganados: r.st.ganados, secuencias: r.st.seqs, creado: r.ts, creador: ((r.cre && r.cre.nombre) || '').toLowerCase() })[k];
+    return [...list].sort((a, b) => { const x = val(a), y = val(b); return ((x < y ? -1 : x > y ? 1 : 0) * d) || (b.c.id - a.c.id); });
+  }
+  // ── Ventanitas flotantes (filtros, menús de fila, etiquetas, carpetas) ──
+  function _cmPopClose() { document.querySelectorAll('.cm-pop').forEach(p => p.remove()); }
+  function _cmPopOpen(ev, html, w) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    _cmPopClose();
+    const W = w || 240, el = document.createElement('div'); el.className = 'cm-pop'; el.style.width = W + 'px'; el.innerHTML = html;
+    document.body.appendChild(el);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect();
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - W - 10)) + 'px';
+    let top = r.bottom + 6; if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 6);
+    el.style.top = top + 'px';
+    setTimeout(() => document.addEventListener('click', function f(e) { if (!el.isConnected) { document.removeEventListener('click', f); return; } if (!el.contains(e.target)) { el.remove(); document.removeEventListener('click', f); } }), 0);
+    return el;
+  }
+  const _cmAnchor = id => { const b = document.querySelector('.cm-row[data-id="' + id + '"] .cm-more') || document.querySelector('.cm-bulk__b'); return { stopPropagation() {}, currentTarget: b || document.body }; };
+  // ── Barra de filtros ──
+  function _cmBarHtml() {
+    const chip = (k, name) => {
+      const n = k === 'cli' ? (_cmCli ? 1 : 0) : _cm[k].size;
+      const lbl = !n ? `${name}: Todo` : (k === 'cli' ? esc(_clientName(+_cmCli) || name) : `${name} <b>${n}</b>`);
+      return `<button type="button" class="cm-chip${n ? ' on' : ''}" onclick="LeadManagerModule.cmPop(event,'${k}')">${lbl}${_cmI('chev', 12)}</button>`;
+    };
+    const any = _cmCli || _cm.est.size || _cm.rem.size || _cm.tag.size || _cm.cre.size || _cm.fav;
+    return `<div class="cm-top"><div class="lm-search cm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cm-q" value="${esc(_cmQ)}" placeholder="Buscar una campaña…" oninput="LeadManagerModule.cmSetQ(this.value)"></div>${_lmViews('cm', ['lista', 'tablero', 'gantt'])}</div>
+      <div class="cm-chips">${chip('cli', 'Cliente')}${chip('est', 'Estado')}${chip('rem', 'Remitente')}${chip('tag', 'Etiquetas')}${chip('cre', 'Creadores')}${any ? '<button type="button" class="cm-clear" onclick="LeadManagerModule.cmClear()">Eliminar todo</button>' : ''}<label class="cm-favsw"><span class="cm-sw"><input type="checkbox"${_cm.fav ? ' checked' : ''} onchange="LeadManagerModule.cmSetFav(this.checked)"><i></i></span>Solo favoritos</label></div>`;
+  }
+  function _cmBarPaint() { const b = $('cm-bar'); if (!b) return; if (_cmTab !== 'campanas') { b.innerHTML = ''; return; } b.innerHTML = _cmBarHtml(); }
+  let _cmPopKey = '', _cmPopTerm = '';
+  function _cmPopList(key, term) {
+    const rows = _cmRows(), t = (term || '').toLowerCase();
+    let opts = [];
+    if (key === 'est') opts = _CM_EST.map(([k, l]) => [k, l, rows.filter(r => r.der === k).length]);
+    else if (key === 'rem') { const m = new Map(); rows.forEach(r => r.rem.forEach(x => { const o = m.get(x.k) || [x.k, x.nombre, 0, x.tipo]; o[2]++; m.set(x.k, o); })); opts = [...m.values()]; }
+    else if (key === 'tag') { const m = new Map(); rows.forEach(r => r.tags.forEach(x => m.set(x, (m.get(x) || 0) + 1))); opts = [...m].map(([k, n]) => [k, k, n]); }
+    else if (key === 'cre') { const m = new Map(); rows.forEach(r => { if (r.cre) { const o = m.get(String(r.cre.id)) || [String(r.cre.id), r.cre.nombre, 0]; o[2]++; m.set(String(r.cre.id), o); } }); opts = [...m.values()]; }
+    else if (key === 'cli') opts = _clients.map(c => [String(c.id), c.nombre, rows.filter(r => String(r.c.outbound_client_id) === String(c.id)).length]);
+    opts = opts.filter(o => !t || String(o[1]).toLowerCase().includes(t));
+    if (!opts.length) return '<div class="cm-pop__empty">' + (key === 'tag' ? 'Aún no hay etiquetas' : key === 'rem' ? 'Sin remitentes' : 'Sin resultados') + '</div>';
+    const set = key === 'cli' ? new Set(_cmCli ? [String(_cmCli)] : []) : _cm[key];
+    return opts.map(o => `<label class="cm-opt"><input type="checkbox"${set.has(o[0]) ? ' checked' : ''} onchange="LeadManagerModule.cmPopTick('${key}','${encodeURIComponent(o[0])}',this.checked)"><span class="cm-opt__t">${key === 'rem' ? `<i class="cm-av cm-av--${o[3]}">${esc(_cmIni(o[1]))}</i>` : ''}${key === 'est' ? `<i class="cm-dot" style="background:${_CM_EST_CLR[o[0]]}"></i>` : ''}${esc(o[1])}</span><em>${o[2]}</em></label>`).join('');
+  }
+  function cmPop(ev, key) {
+    _cmPopKey = key; _cmPopTerm = '';
+    const ph = { rem: 'Buscar usuario…', tag: 'Buscar etiqueta…', cre: 'Buscar usuario…' }[key];
+    const el = _cmPopOpen(ev, `${ph ? `<div class="cm-pop__s"><input type="text" placeholder="${ph}" oninput="LeadManagerModule.cmPopQ(this.value)"></div>` : ''}<div class="cm-pop__list" id="cm-pop-list">${_cmPopList(key, '')}</div><button type="button" class="cm-pop__clear" onclick="LeadManagerModule.cmPopClear('${key}')">Eliminar filtro</button>`, key === 'rem' || key === 'cre' ? 290 : 250);
+    const i = el && el.querySelector('.cm-pop__s input'); if (i) i.focus();
+  }
+  function cmPopQ(v) { _cmPopTerm = v; const l = $('cm-pop-list'); if (l) l.innerHTML = _cmPopList(_cmPopKey, v); }
+  function cmPopTick(key, enc, on) {
+    const val = decodeURIComponent(enc);
+    if (key === 'cli') _cmCli = on ? val : ''; else if (on) _cm[key].add(val); else _cm[key].delete(val);
+    const l = $('cm-pop-list'); if (l) l.innerHTML = _cmPopList(key, _cmPopTerm);
+    _cmBarPaint(); _cmTablePaint();
+  }
+  function cmPopClear(key) { if (key === 'cli') _cmCli = ''; else _cm[key].clear(); _cmPopClose(); _cmBarPaint(); _cmTablePaint(); }
+  function cmClear() { _cmCli = ''; ['est', 'rem', 'tag', 'cre'].forEach(k => _cm[k].clear()); _cm.fav = false; _cmBarPaint(); _cmTablePaint(); }
+  function cmSetFav(on) { _cm.fav = !!on; _cmBarPaint(); _cmTablePaint(); }
+  function cmSetCli(v) { _cmCli = v; _cmBarPaint(); _cmTablePaint(); }
+  function cmSetEst(v) { _cm.est = new Set(v ? [v] : []); _cmBarPaint(); _cmTablePaint(); }
+  function cmSetQ(v) { _cmQ = v; _cmTablePaint(); }
+  function cmTab(k) { _cmTab = k; _cmPopClose(); _cm.sel.clear(); _cmPaint(); }
+  function cmSort(k) { _cm.sort = _cm.sort.k === k ? { k, d: -_cm.sort.d } : { k, d: ['nombre', 'cliente', 'estado', 'creador'].includes(k) ? 1 : -1 }; _cmTablePaint(); }
+  function cmColsMenu(ev) {
+    _cmPopOpen(ev, `<div class="cm-pop__t">Columnas</div>${_CM_COLS.map(([k, l]) => `<label class="cm-opt"><input type="checkbox"${_cmCols.has(k) ? ' checked' : ''} onchange="LeadManagerModule.cmColTick('${k}',this.checked)"><span class="cm-opt__t">${l}</span></label>`).join('')}`, 220);
+  }
+  function cmColTick(k, on) { if (on) _cmCols.add(k); else _cmCols.delete(k); try { localStorage.setItem('lm_cm_cols', JSON.stringify([..._cmCols])); } catch (_) {} _cmTablePaint(); }
+  // ── Tabla ──
   function _cmPaint() {
     const wrap = $('cm-wrap'); if (!wrap) return;
-    const selC = $('cm-cli'), selE = $('cm-est');
-    if (selC) selC.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_cmCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
-    if (selE) selE.innerHTML = `<option value="">Estado: todos</option>` + Object.entries(_CMP).map(([k, v]) => `<option value="${k}"${_cmEst === k ? ' selected' : ''}>${v[0]}</option>`).join('');
+    document.querySelectorAll('.cm-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === _cmTab));
+    _cmBarPaint();
+    if (_cmTab === 'cola') { $('cm-bulk').innerHTML = ''; if (!_cq.data && !_cq.busy) _cmQueueLoad(); else _cmQueuePaint(); return; }
+    _cmLoadMeta();
+    if (_li.accs === null) _liLoad().then(() => { if (_section === 'campaigns' && _cmTab === 'campanas') _cmTablePaint(); }).catch(() => {});
+    _cmTablePaint();
+  }
+  function _cmTablePaint() {
+    const wrap = $('cm-wrap'); if (!wrap || _cmTab !== 'campanas') return;
     if (!_campaigns.length) {
       wrap.innerHTML = _clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignStart()')
                                        : _empty('campaigns', 'Primero crea un cliente outbound', 'Las campañas pertenecen a un cliente outbound. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()');
-      return;
+      _cmBulkPaint(); return;
     }
-    let list = _sortCmp(_campaigns);
-    if (_cmCli) list = list.filter(c => String(c.outbound_client_id || '') === _cmCli);
-    if (_cmEst) list = list.filter(c => (c.estado || 'draft') === _cmEst);
-    if (_cmQ) { const q = _cmQ.toLowerCase(); list = list.filter(c => ((c.nombre || '') + ' ' + (_clientName(c.outbound_client_id) || '') + ' ' + (c.canal || '') + ' ' + (c.mercado || '')).toLowerCase().includes(q)); }
-    if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna campaña cumple estos filtros.</div></div>`; return; }
-    // Métricas desde los contactos reales (enrolados en secuencias de la campaña o vinculados
-    // directo) + leads legacy como fallback histórico.
-    const stats = c => {
-      const m = _cmpMetrics(c);
-      const seqIds = _sequences.filter(s => s.campaign_id === c.id).map(s => s.id);
-      const cts = _contacts.filter(ct => (ct.campaigns || []).some(k => k.id === c.id) || (ct.sequences || []).some(sq => seqIds.includes(sq.id)));
-      return {
-        seqs: seqIds.length,
-        leads: m.leads + cts.length,
-        contactados: m.contactados + cts.filter(x => (x.estado || 'nuevo') !== 'nuevo').length,
-        replies: m.replies + cts.filter(x => ['respondio', 'interesado', 'reunion'].includes(x.disposition)).length,
-        ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length,
-      };
-    };
+    const list = _cmSort(_cmFilter(_cmRows()));
+    const live = new Set(list.map(r => r.c.id)); [..._cm.sel].forEach(id => { if (!live.has(id)) _cm.sel.delete(id); });
+    if (!list.length && !(_cmFolders().length && !_cmAnyFilter())) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna campaña cumple estos filtros.</div></div>`; _cmBulkPaint(); return; }
+    const byId = new Map(list.map(r => [r.c.id, r]));
     if (_lmLayout.cm === 'gantt') {
-      wrap.innerHTML = _lmGantt(list.map(c => { const sp = _sequences.filter(s => s.campaign_id === c.id).map(_seqSpan).filter(Boolean), start = _gD(c.fecha_inicio) || _gD(c.created_at), today = new Date(); today.setHours(12, 0, 0, 0); if (!start) return null; let end = sp.length ? sp.reduce((m, x) => x.end > m ? x.end : m, sp[0].end) : _gAdd(start, 7); if ((c.estado || '') === 'activa' && end < today) end = today; if (end <= start) end = _gAdd(start, 1); const v = _CMP[c.estado || 'draft'] || _CMP.draft; return { label: c.nombre, sub: _clientName(c.outbound_client_id) || '', start, end, bg: v[1], fg: v[2], tag: v[0], tip: sp.length + ' secuencia(s)', onclick: 'LeadManagerModule.openCampaignDrawer(' + c.id + ')' }; }));
-      return;
+      wrap.innerHTML = _lmGantt(list.map(r => { const c = r.c, sp = _sequences.filter(s => s.campaign_id === c.id).map(_seqSpan).filter(Boolean), start = _gD(c.fecha_inicio) || _gD(c.created_at), today = new Date(); today.setHours(12, 0, 0, 0); if (!start) return null; let end = sp.length ? sp.reduce((m, x) => x.end > m ? x.end : m, sp[0].end) : _gAdd(start, 7); if ((c.estado || '') === 'activa' && end < today) end = today; if (end <= start) end = _gAdd(start, 1); const v = _CMP[c.estado || 'draft'] || _CMP.draft; return { label: c.nombre, sub: _clientName(c.outbound_client_id) || '', start, end, bg: v[1], fg: v[2], tag: v[0], tip: sp.length + ' secuencia(s)', onclick: 'LeadManagerModule.openCampaignDrawer(' + c.id + ')' }; }));
+      _cmBulkPaint(); return;
     }
     if (_lmLayout.cm === 'tablero') {
-      wrap.innerHTML = _lmBoard('cm', Object.entries(_CMP), list, c => c.estado || 'draft', c => { const m = stats(c), cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
-      return;
+      wrap.innerHTML = _lmBoard('cm', Object.entries(_CMP).filter(([k]) => k !== 'archivada' || _cm.est.has('archived')), list.map(r => r.c), c => c.estado || 'draft', c => { const r = byId.get(c.id), m = r.st, cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
+      _cmBulkPaint(); return;
     }
-    const rows = list.map(c => {
-      const m = stats(c);
-      const cli = _clientName(c.outbound_client_id);
-      const meta = [c.canal, c.mercado].filter(Boolean).join(' · ');
-      return `<tr class="ldh-row" onclick="LeadManagerModule.openCampaignDrawer(${c.id})">
-        <td><div class="ldh-name">${esc(c.nombre)}</div><div class="ldh-sub">${esc(meta) || '&nbsp;'}</div></td>
-        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
-        <td>${_cmpBadge(c.estado)}</td>
-        <td class="ldh-num">${m.seqs}</td>
-        <td class="ldh-num">${m.leads}</td>
-        <td class="ldh-num">${m.contactados}</td>
-        <td class="ldh-num">${m.replies}</td>
-        <td class="ldh-num">${m.ganados}</td>
-      </tr>`;
-    }).join('');
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table" style="min-width:820px">
-      <colgroup><col style="width:26%"><col style="width:14%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:12%"><col style="width:10%"><col style="width:9%"></colgroup>
-      <thead><tr><th>Campaña</th><th>Cliente</th><th>Estado</th><th class="ldh-num">Secuencias</th><th class="ldh-num">Leads</th><th class="ldh-num">Contactados</th><th class="ldh-num">Respuestas</th><th class="ldh-num">Ganados</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+    const cols = _CM_COLS.filter(([k]) => _cmCols.has(k)).map(([k]) => k);
+    const total = 5 + cols.length;
+    const th = (k, label, cls) => `<th class="cm-th ${cls || ''}" onclick="LeadManagerModule.cmSort('${k}')">${label}${_cm.sort.k === k ? `<span class="cm-sortar">${_cm.sort.d > 0 ? '▲' : '▼'}</span>` : ''}</th>`;
+    const hd = { cliente: th('cliente', 'Cliente'), estado: th('estado', 'Estado'), secuencias: th('secuencias', 'Secuencias', 'ldh-num'), prospectos: th('prospectos', 'Prospectos'), contactados: th('contactados', 'Contactados', 'ldh-num'), respuestas: th('respuestas', 'Respuestas', 'ldh-num'), ganados: th('ganados', 'Ganados', 'ldh-num'), remitente: '<th>Remitente</th>', etiquetas: '<th>Etiquetas</th>', creado: th('creado', 'Creado'), creador: th('creador', 'Creador') };
+    const allSel = list.length && list.every(r => _cm.sel.has(r.c.id));
+    const cell = {
+      cliente: r => `<td class="ldh-dim">${esc(_clientName(r.c.outbound_client_id) || '—')}</td>`,
+      estado: r => `<td><span class="cm-st" style="--c:${_CM_EST_CLR[r.der]}">${(_CM_EST.find(x => x[0] === r.der) || [0, ''])[1]}</span></td>`,
+      secuencias: r => `<td class="ldh-num">${r.st.seqs}</td>`,
+      prospectos: r => { const pct = r.st.leads ? Math.min(100, Math.round(r.st.contactados / r.st.leads * 100)) : 0; return `<td><div class="cm-prog" title="${r.st.contactados} de ${r.st.leads} contactados"><span class="cm-prog__bar"><i style="width:${pct}%"></i></span><b>${r.st.leads}</b></div></td>`; },
+      contactados: r => `<td class="ldh-num">${r.st.contactados}</td>`,
+      respuestas: r => `<td class="ldh-num">${r.st.replies}</td>`,
+      ganados: r => `<td class="ldh-num">${r.st.ganados}</td>`,
+      remitente: r => `<td>${r.rem.length ? `<div class="cm-avs" title="${esc(r.rem.map(x => x.nombre).join(', '))}">${r.rem.slice(0, 3).map(x => `<i class="cm-av cm-av--${x.tipo}">${esc(_cmIni(x.nombre))}</i>`).join('')}${r.rem.length > 3 ? `<i class="cm-av cm-av--n">+${r.rem.length - 3}</i>` : ''}</div>` : '<span class="cm-dash">-</span>'}</td>`,
+      etiquetas: r => `<td class="cm-tagtd" onclick="LeadManagerModule.cmTagsEdit(event,${r.c.id})">${r.tags.length ? r.tags.slice(0, 2).map(t => `<span class="cm-tag">${esc(t)}</span>`).join('') + (r.tags.length > 2 ? `<span class="cm-tag cm-tag--n">+${r.tags.length - 2}</span>` : '') : '<span class="cm-dash">-</span>'}</td>`,
+      creado: r => `<td class="ldh-dim" title="${r.c.created_at ? esc(new Date(r.c.created_at).toLocaleString()) : ''}">${_ago(r.c.created_at) || '—'}</td>`,
+      creador: r => `<td class="ldh-dim">${esc((r.cre && r.cre.nombre) || '—')}</td>`,
+    };
+    const rowHtml = (r, inF) => {
+      const c = r.c, id = c.id, sel = _cm.sel.has(id), meta = [c.canal, c.mercado].filter(Boolean).join(' · ');
+      return `<tr class="ldh-row cm-row${sel ? ' is-sel' : ''}${inF ? ' cm-in' : ''}" data-id="${id}">
+        <td class="cm-c-sel"><input type="checkbox"${sel ? ' checked' : ''} onchange="LeadManagerModule.cmSel(${id},this.checked)"></td>
+        <td class="cm-c-act"><label class="cm-tg" title="${c.estado === 'activa' ? 'Pausar la campaña' : 'Activar la campaña'}"><input type="checkbox"${c.estado === 'activa' ? ' checked' : ''}${c.estado === 'archivada' ? ' disabled' : ''} onchange="LeadManagerModule.cmToggle(${id},this.checked)"><i></i></label></td>
+        <td class="cm-c-name" onclick="LeadManagerModule.openCampaignDrawer(${id})"><div class="cm-name"><span class="cm-ico" style="background:hsl(${(id * 47) % 360} 60% 90%);color:hsl(${(id * 47) % 360} 55% 32%)">${esc((String(c.nombre || '').replace(/^C\d{4}-[A-Z0-9]+\s*-\s*/, '').trim()[0] || '#').toUpperCase())}</span><div class="cm-name__t"><div class="ldh-name">${esc(c.nombre)}</div><div class="ldh-sub">${esc(meta) || '&nbsp;'}</div></div></div></td>
+        <td class="cm-c-fav"><button type="button" class="cm-star${r.fav ? ' on' : ''}" aria-label="Favorita" onclick="LeadManagerModule.cmFav(${id})">${_cmI('star', 15)}</button></td>
+        ${cols.map(k => cell[k](r)).join('')}
+        <td class="cm-c-more"><button type="button" class="cm-more" aria-label="Más acciones" onclick="LeadManagerModule.cmRowMenu(event,${id})">${_cmI('more', 16)}</button></td></tr>`;
+    };
+    const folders = _cmFolders(), fids = new Set(folders.map(f => f.id));
+    let body = '';
+    for (const f of folders) {
+      const items = list.filter(r => r.c.folder_id === f.id);
+      if (!items.length && _cmAnyFilter()) continue;
+      const open = _cm.folders.has(f.id);
+      body += `<tr class="cm-folder" onclick="LeadManagerModule.cmFolderToggle(${f.id})"><td class="cm-c-sel"></td><td colspan="${total - 2}"><span class="cm-fo${open ? ' open' : ''}">${_cmI('chev', 13)}</span>${_cmI('folder', 16)}<b>${esc(f.nombre)}</b><small>${items.length} campaña${items.length === 1 ? '' : 's'}</small></td><td class="cm-c-more"><button type="button" class="cm-more" aria-label="Opciones de la carpeta" onclick="event.stopPropagation();LeadManagerModule.cmFolderMenu(event,${f.id})">${_cmI('more', 16)}</button></td></tr>`;
+      if (open) body += items.map(r => rowHtml(r, true)).join('') || `<tr class="cm-in"><td></td><td colspan="${total - 1}" class="cm-empty-f">Carpeta vacía — mueve campañas aquí desde su menú ⋯</td></tr>`;
+    }
+    body += list.filter(r => !r.c.folder_id || !fids.has(r.c.folder_id)).map(r => rowHtml(r, false)).join('');
+    wrap.innerHTML = `<div class="ldh-table-wrap cm-wrapt"><table class="ldh-table cm-table"><thead><tr><th class="cm-c-sel"><input type="checkbox"${allSel ? ' checked' : ''} onchange="LeadManagerModule.cmSelAll(this.checked)"></th><th class="cm-c-act">Activo</th>${th('nombre', 'Nombre')}<th class="cm-c-fav">${_cmI('star', 14)}</th>${cols.map(k => hd[k]).join('')}<th class="cm-c-more"><button type="button" class="cm-more" aria-label="Columnas" title="Columnas" onclick="LeadManagerModule.cmColsMenu(event)">${_cmI('more', 16)}</button></th></tr></thead><tbody>${body}</tbody></table></div>`;
+    _cmBulkPaint();
   }
-  function cmSetCli(v) { _cmCli = v; _cmPaint(); }
-  function cmSetEst(v) { _cmEst = v; _cmPaint(); }
-  function cmSetQ(v) { _cmQ = v; _cmPaint(); }
+  const _cmAnyFilter = () => !!(_cmCli || _cm.est.size || _cm.rem.size || _cm.tag.size || _cm.cre.size || _cm.fav || _cmQ);
+  // ── Selección y barra de acciones masivas ──
+  function cmSel(id, on) { if (on) _cm.sel.add(id); else _cm.sel.delete(id); document.querySelector('.cm-row[data-id="' + id + '"]')?.classList.toggle('is-sel', !!on); _cmBulkPaint(); const h = document.querySelector('.cm-table thead .cm-c-sel input'); if (h) { const list = _cmFilter(_cmRows()); h.checked = list.length > 0 && list.every(r => _cm.sel.has(r.c.id)); } }
+  function cmSelAll(on) { const list = _cmFilter(_cmRows()); list.forEach(r => { if (on) _cm.sel.add(r.c.id); else _cm.sel.delete(r.c.id); }); _cmTablePaint(); }
+  function _cmBulkPaint() {
+    const b = $('cm-bulk'); if (!b) return;
+    const n = _cm.sel.size; if (!n || _cmTab !== 'campanas') { b.innerHTML = ''; return; }
+    const sel = _campaigns.filter(c => _cm.sel.has(c.id)), todasActivas = sel.every(c => c.estado === 'activa');
+    b.innerHTML = `<div class="cm-bulk"><span class="cm-bulk__n">${n} seleccionad${n === 1 ? 'a' : 'as'}</span><button type="button" class="cm-bulk__b" onclick="LeadManagerModule.cmBulkTags(event)">${_cmI('tag', 14)} Añadir etiquetas</button><button type="button" class="cm-bulk__b" onclick="LeadManagerModule.cmBulkPR()">${_cmI(todasActivas ? 'pause' : 'play', 14)} ${todasActivas ? 'Pausar' : 'Reanudar'}</button><button type="button" class="cm-bulk__b" onclick="LeadManagerModule.cmBulkMore(event)">${_cmI('chev', 13)} Más</button><button type="button" class="cm-bulk__x" aria-label="Quitar selección" onclick="LeadManagerModule.cmSelAll(false)">✕</button></div>`;
+  }
+  async function _cmCall(ids, action, extra) {
+    const r = await apiFetch(`${API}/campaigns/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, action, ...(extra || {}) }) });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo aplicar');
+    (j.campaigns || []).forEach(nc => { const i = _campaigns.findIndex(x => x.id === nc.id); if (i >= 0) _campaigns[i] = nc; });
+    if (['pause', 'resume', 'archive'].includes(action)) await _cmRefreshSeq();
+    return j;
+  }
+  async function _cmRefreshSeq() { try { const r = await apiFetch(`${API}/sequences`); if (r && r.ok) { const j = await r.json(); if (Array.isArray(j)) _sequences = j; } } catch (_) {} }
+  async function _cmApply(ids, action, extra, okMsg, confirmOpts) {
+    if (confirmOpts && !(await novaConfirm(confirmOpts))) { _cmTablePaint(); return false; }
+    try { await _cmCall(ids, action, extra); if (okMsg) showBanner(okMsg, 'success'); _cmPaint(); return true; }
+    catch (e) { showBanner(e.message, 'error'); _cmTablePaint(); return false; }
+  }
+  const _PAUSE_MSG = n => ({ title: n > 1 ? 'Pausar las campañas' : 'Pausar la campaña', message: 'Se pausan sus secuencias activas y los contactos que están en curso (sus tareas dejan de aparecer en Tareas). Al reanudar se reactivan los que pausó esta acción.', ok: 'Pausar' });
+  async function cmToggle(id, on) {
+    if (on) await _cmApply([id], 'resume', null, 'Campaña activada');
+    else await _cmApply([id], 'pause', null, 'Campaña en pausa', _PAUSE_MSG(1));
+  }
+  async function cmBulkPR() {
+    const ids = [..._cm.sel], sel = _campaigns.filter(c => _cm.sel.has(c.id));
+    if (sel.every(c => c.estado === 'activa')) { if (await _cmApply(ids, 'pause', null, `${ids.length} en pausa`, _PAUSE_MSG(ids.length))) _cm.sel.clear(); _cmBulkPaint(); }
+    else { if (await _cmApply(ids, 'resume', null, `${ids.length} reanudada${ids.length > 1 ? 's' : ''}`)) _cm.sel.clear(); _cmBulkPaint(); }
+  }
+  async function cmFav(id) {
+    try {
+      const r = await apiFetch(`${API}/campaigns/${id}/fav`, { method: 'POST' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      if (!_cmMeta) _cmMeta = { favs: new Set(), folders: [], remitentes: {}, creadores: {} };
+      if (j.fav) _cmMeta.favs.add(id); else _cmMeta.favs.delete(id);
+      _cmTablePaint();
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  // ── Etiquetas ──
+  const _cmAllTags = () => [...new Set(_campaigns.flatMap(c => Array.isArray(c.tags) ? c.tags : []))].sort((a, b) => a.localeCompare(b));
+  function _cmTagsPopHtml(id) {
+    const c = _campaigns.find(x => x.id === id) || {}, mine = Array.isArray(c.tags) ? c.tags : [], sug = _cmAllTags().filter(t => !mine.includes(t));
+    return `<div class="cm-pop__t">Etiquetas</div><div class="cm-tagbox">${mine.length ? mine.map(t => `<span class="cm-tag cm-tag--x">${esc(t)}<button type="button" aria-label="Quitar" onclick="LeadManagerModule.cmTagDel(${id},'${encodeURIComponent(t)}')">✕</button></span>`).join('') : '<span class="cm-dash">Sin etiquetas</span>'}</div>
+      <div class="cm-pop__s"><input type="text" id="cm-tag-in" placeholder="Escribe y pulsa Enter…" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.cmTagAdd(${id});}"></div>
+      ${sug.length ? `<div class="cm-pop__t cm-pop__t--s">Existentes</div><div class="cm-tagbox">${sug.slice(0, 20).map(t => `<button type="button" class="cm-tag cm-tag--b" onclick="LeadManagerModule.cmTagAdd(${id},'${encodeURIComponent(t)}')">+ ${esc(t)}</button>`).join('')}</div>` : ''}`;
+  }
+  function cmTagsEdit(ev, id) { const el = _cmPopOpen(ev, _cmTagsPopHtml(id), 270); const i = el && el.querySelector('#cm-tag-in'); if (i) i.focus(); }
+  async function _cmTagCall(id, action, tags) {
+    try { await _cmCall([id], action, { tags }); const p = document.querySelector('.cm-pop'); if (p && p.querySelector('#cm-tag-in')) { p.innerHTML = _cmTagsPopHtml(id); const i = p.querySelector('#cm-tag-in'); if (i) i.focus(); } _cmTablePaint(); }
+    catch (e) { showBanner(e.message, 'error'); }
+  }
+  function cmTagAdd(id, enc) { const v = enc ? decodeURIComponent(enc) : (($('cm-tag-in') || {}).value || '').trim(); if (!v) return; _cmTagCall(id, 'tag_add', [v]); }
+  function cmTagDel(id, enc) { _cmTagCall(id, 'tag_remove', [decodeURIComponent(enc)]); }
+  let _cmBTSel = new Set();
+  function _cmBulkTagsHtml() {
+    const all = _cmAllTags();
+    return `<div class="cm-pop__t">Añadir etiquetas a ${_cm.sel.size} campaña${_cm.sel.size > 1 ? 's' : ''}</div>${all.length ? `<div class="cm-tagbox">${all.map(t => `<button type="button" class="cm-tag cm-tag--b${_cmBTSel.has(t) ? ' on' : ''}" onclick="LeadManagerModule.cmBTPick('${encodeURIComponent(t)}')">${esc(t)}</button>`).join('')}</div>` : ''}<div class="cm-pop__s"><input type="text" id="cm-bt-in" placeholder="Nueva etiqueta…" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.cmBTApply();}"></div><button type="button" class="cm-pop__ok" onclick="LeadManagerModule.cmBTApply()">Añadir</button>`;
+  }
+  function cmBulkTags(ev) { _cmBTSel = new Set(); const el = _cmPopOpen(ev, _cmBulkTagsHtml(), 290); const i = el && el.querySelector('#cm-bt-in'); if (i) i.focus(); }
+  function cmBTPick(enc) { const t = decodeURIComponent(enc); if (_cmBTSel.has(t)) _cmBTSel.delete(t); else _cmBTSel.add(t); const p = document.querySelector('.cm-pop'); if (p) p.innerHTML = _cmBulkTagsHtml(); }
+  async function cmBTApply() {
+    const typed = (($('cm-bt-in') || {}).value || '').trim(), tags = [..._cmBTSel]; if (typed) tags.push(typed);
+    if (!tags.length) return;
+    _cmPopClose(); await _cmApply([..._cm.sel], 'tag_add', { tags }, 'Etiquetas añadidas');
+  }
+  // ── Menú «Más» de la barra masiva ──
+  function cmBulkMore(ev) {
+    const sel = _campaigns.filter(c => _cm.sel.has(c.id)), arch = sel.length && sel.every(c => c.estado === 'archivada');
+    const it = (ic, l, fn) => `<button type="button" class="cm-mi" onclick="LeadManagerModule._cmPopClose();${fn}">${_cmI(ic)}<span>${l}</span></button>`;
+    _cmPopOpen(ev, it('archive', arch ? 'Restaurar' : 'Archivar', `LeadManagerModule.cmBulkArchive(${arch ? 'false' : 'true'})`) + it('folder', 'Mover a carpeta…', 'LeadManagerModule.cmMoveMenu([...LeadManagerModule._cmSelIds()])') + it('down', 'Exportar (CSV)', 'LeadManagerModule.cmExport()'), 220);
+  }
+  const _cmSelIds = () => [..._cm.sel];
+  async function cmBulkArchive(on) {
+    const ids = [..._cm.sel];
+    const ok = await _cmApply(ids, on ? 'archive' : 'unarchive', null, on ? `${ids.length} archivada${ids.length > 1 ? 's' : ''}` : 'Restauradas (en pausa)', on ? { title: 'Archivar', message: 'Se pausan sus secuencias y la campaña deja de verse en la lista (se puede restaurar con el filtro Estado → Archivado).', ok: 'Archivar' } : null);
+    if (ok) { _cm.sel.clear(); _cmBulkPaint(); }
+  }
+  function cmExport(ids) {
+    ids = ids || [..._cm.sel];
+    const rows = _cmRows().filter(r => ids.includes(r.c.id)), q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [['Nombre', 'Cliente', 'Estado', 'Secuencias', 'Prospectos', 'Contactados', 'Respuestas', 'Ganados', 'Etiquetas', 'Creado'].map(q).join(',')].concat(rows.map(r => [r.c.nombre, _clientName(r.c.outbound_client_id) || '', (_CM_EST.find(x => x[0] === r.der) || [0, ''])[1], r.st.seqs, r.st.leads, r.st.contactados, r.st.replies, r.st.ganados, r.tags.join('; '), r.c.created_at ? new Date(r.c.created_at).toISOString().slice(0, 10) : ''].map(q).join(',')));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'campanas.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 600);
+    showBanner(`✓ ${rows.length} campaña${rows.length > 1 ? 's' : ''} exportada${rows.length > 1 ? 's' : ''}`, 'success');
+  }
+  // ── Carpetas ──
+  function cmFolderToggle(id) { if (_cm.folders.has(id)) _cm.folders.delete(id); else _cm.folders.add(id); _cmTablePaint(); }
+  function _cmAsk(title, label, value, okLbl, cb) {
+    document.getElementById('cm-ask')?.remove();
+    const m = document.createElement('div'); m.id = 'cm-ask'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px"><div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="document.getElementById('cm-ask').remove()">✕</button></div><div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">${esc(label)}</span><input class="form-input" id="cm-ask-in" value="${esc(value || '')}" maxlength="140"></label><div class="ctu-err fin-pi-full" id="cm-ask-e"></div></div><div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('cm-ask').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="cm-ask-ok">${esc(okLbl)}</button></div></div></div>`;
+    document.body.appendChild(m);
+    const inp = $('cm-ask-in'); inp.focus(); inp.select();
+    const go = async () => { const v = inp.value.trim(); if (!v) { $('cm-ask-e').textContent = 'Escribe un nombre'; return; } $('cm-ask-ok').disabled = true; try { await cb(v); m.remove(); } catch (e) { $('cm-ask-e').textContent = e.message; $('cm-ask-ok').disabled = false; } };
+    $('cm-ask-ok').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
+  }
+  function cmFolderNew(thenIds) {
+    _cmAsk('Crear carpeta', 'Nombre de la carpeta', '', 'Crear', async v => {
+      const r = await apiFetch(`${API}/campaign-folders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo crear');
+      if (!_cmMeta) _cmMeta = { favs: new Set(), folders: [], remitentes: {}, creadores: {} };
+      _cmMeta.folders.push(j); _cmMeta.folders.sort((a, b) => a.nombre.localeCompare(b.nombre)); _cm.folders.add(j.id);
+      if (thenIds && thenIds.length) { await _cmCall(thenIds, 'folder', { folder_id: j.id }); }
+      showBanner('✓ Carpeta creada', 'success'); _cmPaint();
+    });
+  }
+  function cmFolderMenu(ev, id) {
+    const it = (ic, l, fn) => `<button type="button" class="cm-mi" onclick="LeadManagerModule._cmPopClose();${fn}">${_cmI(ic)}<span>${l}</span></button>`;
+    _cmPopOpen(ev, it('doc', 'Renombrar', `LeadManagerModule.cmFolderRename(${id})`) + it('archive', 'Eliminar carpeta', `LeadManagerModule.cmFolderDel(${id})`), 210);
+  }
+  function cmFolderRename(id) {
+    const f = _cmFolders().find(x => x.id === id); if (!f) return;
+    _cmAsk('Renombrar carpeta', 'Nombre de la carpeta', f.nombre, 'Guardar', async v => {
+      const r = await apiFetch(`${API}/campaign-folders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: v }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo renombrar');
+      f.nombre = j.nombre; _cmTablePaint();
+    });
+  }
+  async function cmFolderDel(id) {
+    const f = _cmFolders().find(x => x.id === id); if (!f) return;
+    if (!(await novaConfirm({ title: 'Eliminar carpeta', message: `Se elimina la carpeta «${esc(f.nombre)}». Las campañas que tiene NO se borran: vuelven a la lista general.`, ok: 'Eliminar', tone: 'danger' }))) return;
+    try {
+      const r = await apiFetch(`${API}/campaign-folders/${id}`, { method: 'DELETE' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo eliminar');
+      _cmMeta.folders = _cmMeta.folders.filter(x => x.id !== id); _campaigns.forEach(c => { if (c.folder_id === id) c.folder_id = null; }); _cm.folders.delete(id);
+      showBanner('Carpeta eliminada', 'success'); _cmTablePaint();
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function cmMoveMenu(ids, ev) {
+    if (!ids || !ids.length) return;
+    const fs = _cmFolders(), cur = new Set(_campaigns.filter(c => ids.includes(c.id)).map(c => c.folder_id || 0)), only = cur.size === 1 ? [...cur][0] : -1;
+    const it = (ic, l, fn, on) => `<button type="button" class="cm-mi${on ? ' is-on' : ''}" onclick="LeadManagerModule._cmPopClose();${fn}">${_cmI(ic)}<span>${l}</span></button>`;
+    const idsJ = JSON.stringify(ids);
+    _cmPopOpen(ev || _cmAnchor(ids[0]), `<div class="cm-pop__t">Mover a carpeta</div>${fs.map(f => it('folder', esc(f.nombre), `LeadManagerModule.cmMoveTo(${idsJ},${f.id})`, only === f.id)).join('')}${it('archive', 'Sin carpeta', `LeadManagerModule.cmMoveTo(${idsJ},0)`, only === 0)}<div class="cm-pop__sep"></div>${it('folder', 'Nueva carpeta…', `LeadManagerModule.cmFolderNew(${idsJ})`)}`, 240);
+  }
+  async function cmMoveTo(ids, fid) { if (await _cmApply(ids, 'folder', { folder_id: fid || null }, fid ? 'Movida a la carpeta' : 'Sacada de la carpeta')) { if (fid) _cm.folders.add(fid); _cmTablePaint(); } }
+  // ── Menú de cada fila ──
+  function cmRowMenu(ev, id) {
+    const r = _cmRows().find(x => x.c.id === id); if (!r) return;
+    const arch = r.der === 'archived', it = (ic, l, fn, dis) => `<button type="button" class="cm-mi${dis ? ' is-dis' : ''}"${dis ? ' disabled' : ` onclick="LeadManagerModule._cmPopClose();${fn}"`}>${_cmI(ic)}<span>${l}</span></button>`;
+    _cmPopOpen(ev, it('open', 'Abrir en una pestaña nueva', `LeadManagerModule.cmOpenNew(${id})`) + it('users', 'Lista de prospectos', `LeadManagerModule.cmGoSeq(${id},'lista')`) + it('gear', 'Configuración de la campaña <small>(Más acciones)</small>', `LeadManagerModule.openCampaignConfig(${id})`) + it('rocket', 'Prospectos lanzados', `LeadManagerModule.cmGoSeq(${id},'lanzar')`, !r.st.contactados) + '<div class="cm-pop__sep"></div>' + it('link', 'Compartir enlace', `LeadManagerModule.cmShare(${id})`) + it('doc', 'Guardar campaña como template', `LeadManagerModule.cmSaveTpl(${id})`) + it('copy', 'Duplicar', `LeadManagerModule.cmDup(${id})`) + it('folder', 'Mover a carpeta…', `LeadManagerModule.cmMoveMenu([${id}])`) + it('archive', arch ? 'Restaurar campaña' : 'Archivar campaña', `LeadManagerModule.cmArchiveOne(${id},${arch ? 'false' : 'true'})`), 270);
+  }
+  const _cmLink = id => location.origin + '/?tab=lead-manager&campaign=' + id;
+  function cmOpenNew(id) { window.open(_cmLink(id), '_blank', 'noopener'); }
+  function cmShare(id) {
+    const url = _cmLink(id), ok = () => showBanner('✓ Enlace copiado — quien lo abra necesita sesión en Nova', 'success');
+    try { navigator.clipboard.writeText(url).then(ok, () => { prompt('Copia el enlace:', url); }); } catch (_) { prompt('Copia el enlace:', url); }
+  }
+  async function cmArchiveOne(id, on) { await _cmApply([id], on ? 'archive' : 'unarchive', null, on ? 'Campaña archivada' : 'Campaña restaurada (en pausa)', on ? { title: 'Archivar la campaña', message: 'Se pausan sus secuencias y deja de verse en la lista. Puedes restaurarla con el filtro Estado → Archivado.', ok: 'Archivar' } : null); }
+  async function cmDup(id) {
+    showBanner('Duplicando… (se copian las secuencias y sus pasos, sin contactos)', 'info');
+    try {
+      const r = await apiFetch(`${API}/campaigns/${id}/duplicate`, { method: 'POST' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo duplicar');
+      _campaigns.unshift(j.campaign); await _cmRefreshSeq(); await _cmLoadMeta(true);
+      showBanner(`✓ Campaña duplicada · ${j.sequences_copied} secuencia${j.sequences_copied === 1 ? '' : 's'} copiada${j.sequences_copied === 1 ? '' : 's'} en borrador`, 'success'); _cmPaint();
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function _cmPickSeq(title, id, cb) {
+    const ss = _sequences.filter(s => s.campaign_id === id);
+    if (!ss.length) { showBanner('Esta campaña aún no tiene secuencias.', 'info'); return; }
+    if (ss.length === 1) { cb(ss[0].id); return; }
+    document.getElementById('cm-ask')?.remove();
+    const m = document.createElement('div'); m.id = 'cm-ask'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:440px"><div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="document.getElementById('cm-ask').remove()">✕</button></div><div class="cm-seqpick">${ss.map(s => `<button type="button" class="cm-mi" data-s="${s.id}"><span>${esc(s.nombre)}</span></button>`).join('')}</div></div>`;
+    document.body.appendChild(m);
+    m.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { m.remove(); cb(+b.dataset.s); }; });
+  }
+  function cmGoSeq(id, stage) { _cmPickSeq('¿De cuál secuencia?', id, sid => { openSequence(sid).then(() => { _seqStage = stage; _renderBody(); }); }); }
+  function cmSaveTpl(id) {
+    const c = _campaigns.find(x => x.id === id); if (!c) return;
+    _cmPickSeq('¿Qué secuencia guardar como template?', id, sid => {
+      _cmAsk('Guardar como template', 'Nombre del template', String(c.nombre || '').replace(/^C\d{4}-[A-Z0-9]+\s*-\s*/, '').trim(), 'Guardar', async v => {
+        const r = await apiFetch(`${API}/campaigns/${id}/save-template`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sequence_id: sid, titulo: v }) });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo guardar');
+        showBanner(`✓ Template guardado (${j.pasos} pasos) — lo encuentras en Plantillas → Mis templates`, 'success');
+      });
+    });
+  }
+  function cmCreateMenu(ev) {
+    const it = (ic, l, fn, dis) => `<button type="button" class="cm-mi${dis ? ' is-dis' : ''}"${dis ? ' disabled' : ` onclick="LeadManagerModule._cmPopClose();${fn}"`}>${_cmI(ic)}<span>${l}</span>${dis ? _CC_SOON : ''}</button>`;
+    _cmPopOpen(ev, it('bolt', 'Crear mediante activador de señal', '', true) + it('template', 'Empezar desde una template', "LeadManagerModule.go('templates')") + it('folder', 'Crear carpeta', 'LeadManagerModule.cmFolderNew()'), 290);
+  }
+  // ── Fila de outreach: lo hecho y lo por hacer de un día, por canal (LinkedIn y email) ──
+  let _cq = { day: '', camp: '', rem: '', pq: '', eq: '', data: null, busy: false };
+  async function _cmQueueLoad() {
+    _cq.busy = true; _cmQueuePaint();
+    try { const r = await apiFetch(`${API}/lm/outreach-queue?${_cq.day ? 'day=' + _cq.day + '&' : ''}campaign=${_cq.camp || 0}`); _cq.data = r.ok ? await r.json() : { items: [], resumen: {}, day: _cq.day }; }
+    catch (_) { _cq.data = { items: [], resumen: {}, day: _cq.day }; }
+    _cq.busy = false; if (!_cq.day && _cq.data.day) _cq.day = _cq.data.day;
+    if (_section === 'campaigns' && _cmTab === 'cola') _cmQueuePaint();
+  }
+  const _CQ_LI = { visit: 'Visitar el perfil', invite: 'Enviar invitación', message: 'Enviar mensaje', inmail: 'Enviar InMail' };
+  const _CQ_ST = { queued: ['En cola', '#64748B'], taken: ['En curso', '#2563EB'], done: ['Hecha', '#16A34A'], failed: ['Falló', '#DC2626'], skipped: ['Omitida', '#94A3B8'], sent: ['Enviado', '#16A34A'], replied: ['Respondió', '#16A34A'], bounced: ['Rebotó', '#DC2626'], awaiting: ['Por aprobar', '#F59E0B'], scheduled: ['Programado', '#2563EB'] };
+  function cqSet(k, v) {
+    _cq[k] = v;
+    if (k === 'day' || k === 'camp') { _cq.data = null; _cmQueueLoad(); return; }
+    _cmQueueBody();
+  }
+  function cqToday() { _cq.day = ''; _cq.data = null; _cmQueueLoad(); }
+  function cqRefresh() { _cq.data = null; _cmQueueLoad(); }
+  function _cmQueuePaint() {
+    const wrap = $('cm-wrap'); if (!wrap) return;
+    const camps = _campaigns.filter(c => c.estado !== 'archivada');
+    const rems = new Map(); ((_cq.data && _cq.data.items) || []).forEach(i => { if (i.sender_k) rems.set(i.sender_k, i.remitente || i.sender_k); });
+    wrap.innerHTML = `<div class="cq-bar">
+        <label class="cq-day"><span>Día</span><input type="date" value="${esc(_cq.day)}" onchange="LeadManagerModule.cqSet('day',this.value)"></label>
+        <button type="button" class="cm-chip" onclick="LeadManagerModule.cqToday()">Hoy</button>
+        <button type="button" class="cm-chip cq-ref${_cq.busy ? ' spin' : ''}" title="Actualizar" aria-label="Actualizar" onclick="LeadManagerModule.cqRefresh()">${_cmI('refresh', 14)}</button>
+        <select class="ldh-sel" onchange="LeadManagerModule.cqSet('camp',this.value)"><option value="">Todas las campañas</option>${camps.map(c => `<option value="${c.id}"${String(_cq.camp) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+        <select class="ldh-sel" onchange="LeadManagerModule.cqSet('rem',this.value)"><option value="">Todos los remitentes</option>${[...rems].map(([k, n]) => `<option value="${esc(k)}"${_cq.rem === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
+        <div class="lm-search cq-s"><input type="text" value="${esc(_cq.pq)}" placeholder="Todos los contactos" oninput="LeadManagerModule.cqSet('pq',this.value)"></div>
+        <div class="lm-search cq-s"><input type="text" value="${esc(_cq.eq)}" placeholder="Todas las empresas" oninput="LeadManagerModule.cqSet('eq',this.value)"></div>
+      </div><div id="cq-body"></div>`;
+    _cmQueueBody();
+  }
+  function _cmQueueBody() {
+    const el = $('cq-body'); if (!el) return;
+    if (!_cq.data) { el.innerHTML = '<div class="ctp-empty" style="padding:50px">Cargando…</div>'; return; }
+    const pq = _cq.pq.toLowerCase(), eq = _cq.eq.toLowerCase();
+    const items = (_cq.data.items || []).filter(i => (!_cq.rem || i.sender_k === _cq.rem) && (!pq || (i.prospecto || '').toLowerCase().includes(pq)) && (!eq || (i.empresa || '').toLowerCase().includes(eq)));
+    const cnt = c => { const l = items.filter(i => i.canal === c); return [l.filter(i => i.hecho).length, l.length]; };
+    const [eh, et] = cnt('email'), [lh, lt] = cnt('linkedin');
+    const dia = new Date(_cq.data.day + 'T12:00:00'), hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+    const diff = Math.round((dia - hoy) / 864e5), rel = diff === 0 ? 'Hoy' : diff === -1 ? 'Ayer' : diff === 1 ? 'Mañana' : dia.toLocaleDateString('es', { weekday: 'long' });
+    const head = `<div class="cq-day-h"><span class="cq-day-h__t">${rel} <small>${dia.toLocaleDateString('es', { day: 'numeric', month: 'short' })}</small></span><span class="cq-cnt" title="Emails hechos / en total"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg> <b class="${eh ? 'ok' : ''}">${eh}</b>/${et}</span><span class="cq-cnt" title="Acciones de LinkedIn hechas / en total"><b class="in">in</b> <b class="${lh ? 'ok' : ''}">${lh}</b>/${lt}</span></div>`;
+    if (!items.length) { el.innerHTML = head + '<div class="ldh-empty"><div class="ldh-empty__t">Nada en la fila</div><div class="ldh-empty__s">No hay actividades de envío para este día con estos filtros.</div></div>'; return; }
+    const ico = c => c === 'linkedin' ? '<i class="cq-ic cq-ic--li">in</i>' : '<i class="cq-ic cq-ic--em"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></i>';
+    const rows = items.map(i => {
+      const act = i.canal === 'linkedin' ? (_CQ_LI[i.tipo] || i.tipo) : 'Email' + (i.asunto ? ': ' + i.asunto : '');
+      const st = _CQ_ST[i.estado] || [i.estado, '#64748B'];
+      const cuando = i.hecho ? `<span class="cq-when" title="${esc(new Date(i.cuando).toLocaleString())}">${_ago(i.cuando)}</span>` : `<span class="cm-st" style="--c:${st[1]}">${st[0]}</span>`;
+      return `<tr class="ldh-row cq-row${i.hecho ? ' is-done' : ''}"><td><div class="cq-act">${ico(i.canal)}<span class="cq-act__t" title="${esc(act)}">${esc(act)}</span>${cuando}${i.estado === 'failed' && i.error ? `<span class="cq-err" title="${esc(i.error)}">!</span>` : ''}</div></td>
+        <td class="cq-p" onclick="LeadManagerModule.openContactPage(${i.contact_id})"><i class="cm-av cm-av--n">${esc(_cmIni(i.prospecto))}</i>${esc(i.prospecto || '—')}</td>
+        <td class="ldh-dim">${esc(i.empresa || '—')}</td><td class="ldh-dim cq-camp" title="${esc(i.campana)}">${esc(i.campana || '—')}</td><td class="ldh-dim">${esc(i.remitente || '—')}</td></tr>`;
+    }).join('');
+    el.innerHTML = head + `<div class="ldh-table-wrap cm-wrapt"><table class="ldh-table cq-table"><thead><tr><th>Actividades en fila de envío</th><th>Prospecto</th><th>Empresa</th><th>Campaña</th><th>Remitente</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
 
   // ── Helpers de secuencia (Fase 3) ──
   const _SEQ = { draft: ['Draft', '#F1F5F9', '#64748B'], activa: ['Activa', '#DCFCE7', '#16A34A'], pausada: ['Pausada', '#FEF3C7', '#B45309'], completada: ['Culminada', '#DBEAFE', '#1D4ED8'], archivada: ['Archivada', '#F1F5F9', '#475569'] };
@@ -24191,6 +24609,94 @@ const LeadManagerModule = (() => {
     const r = ev.currentTarget.getBoundingClientRect(); menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px'; menu.style.top = (r.bottom + 6) + 'px';
     setTimeout(() => document.addEventListener('click', function f(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', f); } }), 0);
   }
+  // ── Límites del cliente: como la pantalla «Límites» de lemlist, pero con lo que Nova
+  // realmente controla — el calentamiento/tope de cada buzón de email y los topes de cada
+  // cuenta de LinkedIn de este cliente, todo en un solo lugar (en vez de abrir un modal por
+  // remitente). Lo demás de esa pantalla (facturación, integraciones, etc.) es de cuenta, no
+  // de cliente — eso se hará más adelante en la Configuración del módulo Outreach. ──
+  let _lim = { id: 0, mail: [], ramp: {}, li: [] };
+  async function openClientLimits(clientId) {
+    _lim = { id: clientId, mail: [], ramp: {}, li: [] };
+    document.getElementById('lim-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lim-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lim-box"><div class="fin-pi-box__hd"><h3>Límites · ${esc((_clients.find(c => c.id === clientId) || {}).nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('lim-modal').remove()">✕</button></div><div class="lim-scroll" id="lim-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
+    document.body.appendChild(m);
+    await _limLoad(clientId);
+  }
+  async function _limLoad(clientId) {
+    try {
+      const [emR] = await Promise.all([
+        apiFetch(`${API}/outbound-clients/${clientId}/senders`),
+        Array.isArray(_li.accs) ? Promise.resolve() : _liLoad(),
+      ]);
+      const em = emR.ok ? await emR.json() : { email: [] };
+      _lim.mail = em.email || [];
+      _lim.li = (_li.accs || []).filter(a => a.outbound_client_id === clientId);
+      await Promise.all(_lim.mail.map(async mb => {
+        try { const r = await apiFetch(`${API}/lm/mailboxes/${mb.id}/ramp`); _lim.ramp[mb.id] = r.ok ? await r.json() : null; } catch (_) { _lim.ramp[mb.id] = null; }
+      }));
+    } catch (_) {}
+    _limPaint();
+  }
+  function _limPaint() {
+    const root = document.getElementById('lim-root'); if (!root) return;
+    const mailHtml = _lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>';
+    const liHtml = _lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="cc-empty">Este cliente no tiene cuentas de LinkedIn conectadas.</div>';
+    root.innerHTML = `<p class="li-p" style="margin:0 0 14px">Los topes diarios y el calentamiento de cada remitente de este cliente, en un solo lugar.</p>
+      <div class="cc-grp">Email</div>${mailHtml}
+      <div class="cc-grp">LinkedIn</div>${liHtml}`;
+  }
+  function _limMailCard(mb) {
+    const d = _lim.ramp[mb.id];
+    if (!d) return `<div class="cc-card"><div class="cc-hd2"><h4>${esc(mb.email)}</h4></div><p class="li-p">No se pudo cargar.</p></div>`;
+    const fld = (id, lbl, v, hint) => `<label class="mbh-f"><span>${lbl}</span><input id="${id}" type="number" min="1" value="${v}"><small>${hint}</small></label>`;
+    const ok = ['ok', 'conectado', 'activo'].includes(mb.estado);
+    return `<div class="cc-card">
+      <div class="cc-hd2"><h4>${esc(mb.email)}</h4><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(mb.estado || '—')}</span></div>
+      <div class="mbh-sw"><label class="rp-sw"><input type="checkbox" id="lim-mb-on-${mb.id}"${d.ramp_on ? ' checked' : ''}><span></span></label><b>${d.ramp_on ? 'Calentamiento activo' : 'Calentamiento apagado'}</b></div>
+      <div class="mbh-lim"><label class="mbh-f"><span>Límite diario de este buzón</span><input id="lim-mb-limit-${mb.id}" type="number" min="1" value="${d.daily_limit || ''}" placeholder="Auto (${d.ramp_cap})"></label></div>
+      <div class="mbh-fields">${fld('lim-mb-start-' + mb.id, 'Empieza en', d.ramp_start, 'envíos por día')}${fld('lim-mb-step-' + mb.id, 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('lim-mb-target-' + mb.id, 'Meta', d.ramp_target, 'envíos por día')}</div>
+      ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> · enviados hoy <b>${d.sent_today}</b></div>` : ''}
+      <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limMbSave(${mb.id})">Guardar</button><span id="lim-mb-msg-${mb.id}" class="mbh-msg"></span></div></div>`;
+  }
+  async function limMbSave(mbId) {
+    const v = id => parseInt(document.getElementById(id)?.value);
+    const body = { on: !!document.getElementById(`lim-mb-on-${mbId}`)?.checked, start: v(`lim-mb-start-${mbId}`), step: v(`lim-mb-step-${mbId}`), target: v(`lim-mb-target-${mbId}`), limit: (document.getElementById(`lim-mb-limit-${mbId}`) || {}).value || '' };
+    const msg = document.getElementById(`lim-mb-msg-${mbId}`);
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _lim.ramp[mbId] = d;
+      const mb = (_mailboxes || []).find(x => x.id === mbId); if (mb) { mb.ramp_on = d.ramp_on; mb.ramp_start = d.ramp_start; mb.ramp_step = d.ramp_step; mb.ramp_target = d.ramp_target; mb.daily_limit = d.daily_limit; }
+      if (msg) { msg.textContent = '✓ Guardado'; msg.style.color = ''; }
+    } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
+  }
+  function _limLiCard(a) {
+    const f = (k, l, mx, hint) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${l}</span><input class="form-input" type="number" min="0" max="${mx}" id="lim-li-${k}-${a.id}" value="${a[k]}">${hint ? `<span class="li-hint">${hint}</span>` : ''}</label>`;
+    const ok = a.estado === 'activa' && a.conectada;
+    return `<div class="cc-card">
+      <div class="cc-hd2"><h4>${esc(a.nombre)}</h4><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(a.estado === 'activa' ? (a.conectada ? 'Activa' : 'Extensión sin conexión') : (a.estado || '—'))}</span></div>
+      <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Modo</span><select class="form-input" id="lim-li-modo-${a.id}"><option value="asistido"${a.modo !== 'auto' ? ' selected' : ''}>Asistido: la extensión deja el texto escrito y tú pulsas «Enviar»</option><option value="auto"${a.modo === 'auto' ? ' selected' : ''}>Automático: la extensión envía sola</option></select></label>
+      <div class="li-form">${f('inv_dia', 'Invitaciones por día', 40, 'Recomendado: 20')}${f('inv_semana', 'Invitaciones por semana', 150, 'Recomendado: ~100')}${f('msg_dia', 'Mensajes por día', 60, 'Recomendado: 30')}${f('vis_dia', 'Visitas por día', 60, 'Recomendado: 30')}${f('total_dia', 'Acciones totales por día', 150, 'Recomendado: 100')}${f('inmail_dia', 'InMail por día', 30, 'Recomendado: 5')}${f('hora_ini', 'Desde la hora', 23)}${f('hora_fin', 'Hasta la hora', 24)}</div>
+      <p class="li-p" style="margin-top:8px">El horario, los días de envío y el calentamiento con más detalle están en «Topes y horario» (Remitentes de la campaña).</p>
+      <div class="ctu-err" id="lim-li-e-${a.id}"></div>
+      <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
+  }
+  async function limLiSave(id) {
+    const g = k => document.getElementById(`lim-li-${k}-${id}`).value;
+    const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
+    const body = { nombre: a.nombre, modo: g('modo'), plan: a.plan, tz: a.tz, ramp_activo: a.ramp_activo, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max };
+    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin'].forEach(k => { body[k] = Number(g(k)); });
+    if (body.modo === 'auto' && a.modo !== 'auto' && !(await novaConfirm({ title: 'Modo automático', message: 'La extensión enviará sin que pulses nada. LinkedIn puede restringir la cuenta si detecta automatización. ¿Seguro?', ok: 'Sí, automático', tone: 'danger' }))) return;
+    const errEl = document.getElementById(`lim-li-e-${id}`), msg = document.getElementById(`lim-li-msg-${id}`);
+    try {
+      const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Error');
+      await _liLoad(); _lim.li = (_li.accs || []).filter(x => x.outbound_client_id === _lim.id);
+      if (msg) msg.textContent = '✓ Guardado'; if (errEl) errEl.textContent = '';
+    } catch (e) { if (errEl) errEl.textContent = e.message; }
+  }
   // ── Conectar una cuenta de LinkedIn como «Iniciar sesión con Google»: Nova habla con la extensión, se ve qué LinkedIn hay abierto, se pide permiso y listo ──
   const _liw = { client: '', nombre: '', reconectar: 0, timer: null, estado: '' };
   if (!window.__liBridgeOn) {
@@ -24248,7 +24754,7 @@ const LeadManagerModule = (() => {
     if (!r || !r.instalada) {
       el.innerHTML = `<div class="liw-big">Buscando la extensión de Nova en este Chrome…<span class="liw-dots"></span></div>
         <p class="li-p">Si no la has instalado:</p><ol class="li-ol"><li>Abre <code>chrome://extensions</code> y activa el «Modo de desarrollador».</li><li>Pulsa «Cargar descomprimida» y elige la carpeta <code>extension-linkedin</code>.</li><li>Vuelve aquí: se detecta sola.</li></ol>
-        <p class="cc-note" style="margin-top:12px"><b>¿Ya la instalaste y no avanza?</b> Recarga esta página (F5) y vuelve a abrir este asistente. También puedes conectar desde el <b>panel de la extensión</b> (el icono de «Nova · LinkedIn» en la barra de Chrome): ahí eliges la cuenta y pulsas «Permitir y conectar».</p>`;
+        <p class="cc-note" style="margin-top:12px"><b>¿Ya la instalaste y no avanza?</b> Recarga esta página (F5) y vuelve a abrir este asistente. También puedes conectar desde el <b>panel de la extensión</b> (el icono de «FLOW» en la barra de Chrome): ahí eliges la cuenta y pulsas «Permitir y conectar».</p>`;
       return;
     }
     if (!r.sesion_linkedin) {
@@ -24313,7 +24819,8 @@ const LeadManagerModule = (() => {
     const r = await apiFetch(`${API}/li/accounts/${id}/token`, { method: 'POST' }); const d = await r.json();
     if (r.ok) { _liToken(d.token, (_li.accs.find(a => a.id === id) || {}).nombre || ''); _liLoad(); }
   }
-  function liEdit(id) {
+  async function liEdit(id) {
+    if (!Array.isArray(_li.accs)) { try { await _liLoad(); } catch (_) {} }
     const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
     const f = (k, l, mx, hint) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${l}</span><input class="form-input" type="number" min="0" max="${mx}" id="li-f-${k}" value="${a[k]}">${hint ? `<span class="li-hint">${hint}</span>` : ''}</label>`;
     const dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -24373,8 +24880,11 @@ const LeadManagerModule = (() => {
   function _ccTracking() {
     return `<div class="cc-card"><h4>Opciones de tracking</h4>${_ccSw('tracking.aperturas', 'Registrar aperturas de email', { desc: 'Detecta cuando un destinatario abre su email. Puede ser útil como señal, aunque no siempre es fiable. Es un elemento de tracking y puede perjudicar la entregabilidad.' })}${_ccSw('tracking.clics', 'Hacer seguimiento de clics en enlaces', { desc: 'Detecta cuando un destinatario hace clic en un enlace. Es lo más vigilado por los proveedores de correo y el que más puede perjudicar la entregabilidad.' })}${_ccSw('tracking.respuestas', 'Rastrear respuestas', { lock: 1, desc: 'Detecta respuestas automáticamente. Necesario para que los seguimientos se detengan en cuanto un prospecto responda (siempre activo).' })}</div>`;
   }
+  const _CC_LIM_FN = { email: 'mbHealthOpen', linkedin: 'liEdit' };
   function _ccSenderRow(tipo, x, nombre, sub, estadoTxt, ok) {
-    return `<label class="cc-snd"><span class="cc-sw"><input type="checkbox"${x.activo ? ' checked' : ''} onchange="LeadManagerModule.ccSender('${tipo}',${x.id},this.checked)"><i></i></span><span class="cc-snd__ic cc-snd__ic--${tipo}">${{ email: '✉', whatsapp: '✆', linkedin: 'in' }[tipo]}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(estadoTxt)}</span></label>`;
+    const limFn = _CC_LIM_FN[tipo];
+    const limBtn = limFn ? `<button type="button" class="btn btn--ghost btn--sm" onclick="event.preventDefault();event.stopPropagation();LeadManagerModule.${limFn}(${x.id})">Límites</button>` : '';
+    return `<label class="cc-snd"><span class="cc-sw"><input type="checkbox"${x.activo ? ' checked' : ''} onchange="LeadManagerModule.ccSender('${tipo}',${x.id},this.checked)"><i></i></span><span class="cc-snd__ic cc-snd__ic--${tipo}">${{ email: '✉', whatsapp: '✆', linkedin: 'in' }[tipo]}</span><span class="cc-row__t"><b>${esc(nombre)}</b><small>${esc(sub)}</small></span><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(estadoTxt)}</span>${limBtn}</label>`;
   }
   function _ccRem() {
     const r = _cc.rem, cid = _cc.camp.outbound_client_id, n = r.email.length + r.whatsapp.length + r.linkedin.length, on = [...r.email, ...r.whatsapp, ...r.linkedin].filter(x => x.activo).length;
@@ -24392,9 +24902,15 @@ const LeadManagerModule = (() => {
         <div class="cc-grp">SMS · Llamadas</div><div class="cc-row is-off"><span class="cc-row__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span>${_CC_SOON}</div></div>`;
   }
   const _CC_ZONAS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'Europe/London', 'UTC'];
+  // Mismos feriados y claves que backend/services/holidays.js — por país, para que "pausar durante las vacaciones" no confunda un país con otro.
+  const _CC_FERIADOS = {
+    PE: { nombre: 'Perú', feriados: [['ano_nuevo', 'Año Nuevo (1 ene)'], ['dia_trabajo', 'Día del Trabajo (1 may)'], ['san_pedro_pablo', 'San Pedro y San Pablo (29 jun)'], ['fiestas_patrias_1', 'Fiestas Patrias (28 jul)'], ['fiestas_patrias_2', 'Fiestas Patrias (29 jul)'], ['santa_rosa', 'Santa Rosa de Lima (30 ago)'], ['combate_angamos', 'Combate de Angamos (8 oct)'], ['todos_santos', 'Todos los Santos (1 nov)'], ['inmaculada', 'Inmaculada Concepción (8 dic)'], ['navidad', 'Navidad (25 dic)']] },
+    US: { nombre: 'Estados Unidos', feriados: [['new_year', "New Year's Day (1 ene)"], ['mlk', 'Martin Luther King Jr. Day'], ['presidents', "Presidents' Day"], ['memorial', 'Memorial Day'], ['juneteenth', 'Juneteenth (19 jun)'], ['independence', 'Independence Day (4 jul)'], ['labor', 'Labor Day'], ['columbus', 'Columbus Day'], ['veterans', 'Veterans Day (11 nov)'], ['thanksgiving', 'Thanksgiving'], ['christmas', 'Christmas Day (25 dic)']] },
+    MX: { nombre: 'México', feriados: [['ano_nuevo', 'Año Nuevo (1 ene)'], ['constitucion', 'Día de la Constitución'], ['benito_juarez', 'Natalicio de Benito Juárez'], ['dia_trabajo', 'Día del Trabajo (1 may)'], ['independencia', 'Día de la Independencia (16 sep)'], ['revolucion', 'Día de la Revolución'], ['navidad', 'Navidad (25 dic)']] },
+  };
   function _ccPlan() {
     const p = _cc.cfg.planificacion, g = _cc.global || {}, dn = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-    return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { soon: 1, desc: 'Enviará automáticamente la campaña a los nuevos prospectos añadidos.' })}</div>
+    return `<div class="cc-card"><h4>Lanzamiento automático</h4>${_ccSw('planificacion.lanzamiento_auto', 'Activar el lanzamiento automático para esta campaña', { desc: 'En cuanto añadas un prospecto a una secuencia de esta campaña que todavía esté en borrador, se lanza sola — no hace falta pulsar «Lanzar secuencia» cada vez.' })}</div>
       <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
         <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
         <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
@@ -24403,7 +24919,19 @@ const LeadManagerModule = (() => {
       <div class="cc-card"><h4>Fecha de fin <small>(opcional)</small></h4><p class="cc-note">La campaña deja de enviar en esta fecha. Elige qué ocurre con los prospectos que siguen en la secuencia.</p>
         <div class="cc-two"><label><span class="cc-lbl">Fecha</span><input class="form-input" type="date" value="${esc(p.fecha_fin)}" onchange="LeadManagerModule.ccSet('planificacion.fecha_fin', this.value)"></label>
           <label><span class="cc-lbl">Con quien siga en la secuencia</span><select class="form-input" onchange="LeadManagerModule.ccSet('planificacion.al_finalizar', this.value)"><option value="terminar"${p.al_finalizar === 'terminar' ? ' selected' : ''}>Terminar su secuencia</option><option value="pausar"${p.al_finalizar === 'pausar' ? ' selected' : ''}>Pausarlo</option></select></label></div></div>
-      <div class="cc-card"><h4>Pausar durante las vacaciones ${_CC_SOON}</h4><p class="cc-note">Elige durante qué festivos pausar la campaña; se reanudará sola después.</p></div>`;
+      <div class="cc-card"><h4>Pausar durante las vacaciones</h4><p class="cc-note">Elige el país de tus prospectos y qué feriados de ese país pausan el envío automático. Un feriado de otro país nunca pausará esta campaña — se reanuda sola al día siguiente.</p>
+        <label class="cc-lbl" style="display:block;margin-bottom:6px">País</label>
+        <select class="form-input" style="max-width:260px" onchange="LeadManagerModule.ccSetRep('planificacion.vacaciones_pais', this.value)">
+          <option value=""${!p.vacaciones_pais ? ' selected' : ''}>— Ninguno (no pausar por feriados) —</option>
+          ${Object.entries(_CC_FERIADOS).map(([k, v]) => `<option value="${k}"${p.vacaciones_pais === k ? ' selected' : ''}>${esc(v.nombre)}</option>`).join('')}
+        </select>
+        ${p.vacaciones_pais && _CC_FERIADOS[p.vacaciones_pais] ? `<div class="cc-days" style="flex-wrap:wrap;justify-content:flex-start;gap:8px;margin-top:12px">${_CC_FERIADOS[p.vacaciones_pais].feriados.map(([k, l]) => `<label class="cc-rad" style="display:inline-flex;width:auto;padding:6px 10px"><input type="checkbox"${p.vacaciones.includes(k) ? ' checked' : ''} onchange="LeadManagerModule.ccVacToggle('${k}', this.checked)"><span style="margin-left:6px;font-size:13px">${esc(l)}</span></label>`).join('')}</div>` : ''}</div>`;
+  }
+  function ccVacToggle(k, on) {
+    const a = _cc.cfg.planificacion.vacaciones;
+    const i = a.indexOf(k);
+    if (on && i < 0) a.push(k); else if (!on && i >= 0) a.splice(i, 1);
+    _cc.dirty = true;
   }
   function _ccCrm() {
     return `<div class="cc-card"><h4>Integración con CRM</h4>${['HubSpot', 'Salesforce', 'Pipedrive'].map(n => `<div class="cc-row is-off"><span class="cc-row__t"><b>${n}</b><small>No conectado</small></span>${_CC_SOON}</div>`).join('')}<p class="cc-note">Elige el CRM que quieras usar con esta campaña. Nova todavía no tiene integraciones de CRM.</p></div>`;
@@ -24412,9 +24940,10 @@ const LeadManagerModule = (() => {
     const g = _cc.cfg.general;
     return `<div class="cc-card"><h4>Etiquetas <small>(opcional)</small></h4><p class="cc-note">Añade etiquetas para organizar mejor tus campañas.</p><div class="cc-tags">${g.etiquetas.map((t, i) => `<span class="cc-tag">${esc(t)}<button type="button" onclick="LeadManagerModule.ccTagDel(${i})">×</button></span>`).join('')}<input class="cc-tagin" placeholder="Añadir etiqueta y pulsar Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.ccTagAdd(this.value);this.value=''}"></div></div>
       <div class="cc-card"><h4>Compartir tu campaña</h4>${_ccSw('general.compartir', 'Activar el enlace compartible de la campaña', { soon: 1, desc: 'Solo las personas con el enlace podrán ver los pasos de tu campaña y duplicarlos en su cuenta.' })}</div>
-      <div class="cc-card"><h4>Cancelar suscripción del contacto</h4><p class="cc-note">Comportamiento cuando el contacto haga clic en el enlace de baja. ${_CC_SOON}</p>
-        <label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción del email del contacto</b></span></label><label class="cc-rad is-off"><input type="radio" disabled><span><b>Cancelar la suscripción de todo el contacto</b><small>Incluye otros canales.</small></span></label>
-        ${_ccSw('general.enlace_baja', 'Añadir un enlace de baja a los emails nuevos', { soon: 1 })}</div>
+      <div class="cc-card"><h4>Cancelar suscripción del contacto</h4><p class="cc-note">Comportamiento cuando el contacto haga clic en el enlace de baja del email.</p>
+        <label class="cc-rad"><input type="radio" name="cc-baja"${g.baja === 'email' ? ' checked' : ''} onchange="LeadManagerModule.ccSet('general.baja','email')"><span><b>Cancelar la suscripción del email del contacto</b><small>Deja de recibir email; LinkedIn/WhatsApp siguen.</small></span></label>
+        <label class="cc-rad"><input type="radio" name="cc-baja"${g.baja === 'todo' ? ' checked' : ''} onchange="LeadManagerModule.ccSet('general.baja','todo')"><span><b>Cancelar la suscripción de todo el contacto</b><small>Incluye otros canales — no se le vuelve a contactar.</small></span></label>
+        ${_ccSw('general.enlace_baja', 'Añadir un enlace de baja a los emails de esta campaña', { desc: 'Se añade automáticamente debajo de la firma, en el idioma del contacto, en cada email que se envíe mientras esto esté activado.' })}</div>
       <div class="cc-card"><h4>Eliminar campaña</h4><p class="cc-note">Esta acción elimina la campaña de forma permanente.</p><button class="btn btn--ghost btn--danger btn--sm" onclick="document.getElementById('cc-modal')?.remove();LeadManagerModule.confirmDeleteCampaign(${_cc.camp.id})">Eliminar campaña</button></div>`;
   }
   function ccPaint() {
@@ -25396,7 +25925,7 @@ const LeadManagerModule = (() => {
   const _llMI = (ic, t, js, o) => `<button class="sed-pop__i${o && o.off ? ' is-off' : ''}" ${o && o.off ? 'disabled' : `onclick="document.getElementById('sed-pop')?.remove();${js}"`}>${ic ? _llI(ic, 15) : ''}<span>${t}</span>${o && o.badge ? `<em>${o.badge}</em>` : ''}${o && o.n != null ? `<i class="ll-cnt">${o.n}</i>` : ''}</button>`;
   function llAddMenu(ev) {
     const id = _activeSeq, big = (ic, t, js) => `<button class="ll-card" onclick="document.getElementById('sed-pop')?.remove();${js}">${_llI(ic, 20)}<span>${t}</span></button>`;
-    _llPop(ev, `<div class="ll-cards">${big('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV', "LeadManagerModule.openImport('contacts',true)")}${big('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'CRM', `LeadManagerModule.seqEnrolOpen(${id})`)}${big('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar', "LeadManagerModule.llGoBase()")}</div>
+    _llPop(ev, `<div class="ll-cards">${big('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar CSV', `LeadManagerModule.openImport('contacts',true,${id})`)}${big('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'CRM', `LeadManagerModule.seqEnrolOpen(${id})`)}${big('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 'Buscar', "LeadManagerModule.llGoBase()")}</div>
       <div class="sed-pop__g">Buscando prospectos</div>
       ${_llMI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', 'Agentes de señales', '', { off: true, badge: 'Próximamente' })}
       ${_llMI('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 'Buscar en la base de datos de prospectos', "LeadManagerModule.llGoBase()")}
@@ -25405,7 +25934,7 @@ const LeadManagerModule = (() => {
       ${_llMI('<path d="m22 2-7 20-4-9-9-4z"/>', 'De una campaña existente', `LeadManagerModule.llFromSeq()`)}
       ${_llMI('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>', 'Sincronizar con su CRM', '', { off: true, badge: 'No conectado' })}
       ${_llMI('<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/>', 'Sincronizar con una lista de contactos', '', { off: true, badge: 'Próximamente' })}
-      ${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar archivo CSV', "LeadManagerModule.openImport('contacts',true)")}
+      ${_llMI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 'Importar archivo CSV', `LeadManagerModule.openImport('contacts',true,${id})`)}
       ${_llMI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>', 'Pegue una lista de emails', `LeadManagerModule.llPasteEmails()`)}
       ${_llMI('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>', 'Añadir un prospecto manualmente', `LeadManagerModule.llManual()`)}`, 340, 'right');
   }
@@ -25722,17 +26251,61 @@ const LeadManagerModule = (() => {
         ${vs ? `<div class="sed-node__vs">${vs.map((v, k) => `<span>${String.fromCharCode(65 + k)} · ${esc(v.nombre || 'Versión ' + String.fromCharCode(65 + k))}</span>`).join('')}</div>` : ''}
       </div>`;
   }
+  // Agrupa los pasos planos en filas: nodos sueltos, o bifurcaciones (2+ pasos que
+  // comparten cond_step_id con valores de `cond` distintos) — para dibujarlas como
+  // árbol estilo Lemlist en vez de una fila con una etiqueta de texto suelta.
+  function _sedBuildRows(steps) {
+    const rows = []; let i = 0;
+    while (i < steps.length) {
+      const st = steps[i];
+      if (st.cond_step_id) {
+        const branchId = st.cond_step_id, lanesMap = new Map(); let j = i;
+        while (j < steps.length && steps[j].cond_step_id === branchId) {
+          const c = steps[j].cond || '_'; if (!lanesMap.has(c)) lanesMap.set(c, []);
+          lanesMap.get(c).push(j); j++;
+        }
+        if (lanesMap.size >= 2) { rows.push({ type: 'branch', condStepId: branchId, lanes: [...lanesMap.entries()].map(([cond, idxs]) => ({ cond, idxs })) }); i = j; continue; }
+      }
+      rows.push({ type: 'node', idx: i }); i++;
+    }
+    return rows;
+  }
+  function _sedBranchQ(canal) { return canal === 'linkedin' ? '¿Aceptó la conexión?' : canal === 'email' ? '¿Respondió?' : '¿Se cumplió la condición?'; }
+  function _sedLaneTag(cond, canal) {
+    const pos = _COND_POS.includes(cond);
+    const raw = _stepCondText(cond, canal);
+    const txt = canal === 'linkedin' ? (cond === 'replied' ? 'Sí, aceptó' : cond === 'no_reply' ? 'No aceptó' : raw) : raw.replace(/^si /i, '').replace(/^NO /, 'No ');
+    return { bg: pos ? '#E7F6EC' : '#FBE8E8', fg: pos ? '#15803D' : '#B3261E', txt: txt || (pos ? 'Sí' : 'No') };
+  }
+  function _sedBranchHtml(row, steps) {
+    const ref = steps.find(x => x.id === row.condStepId), refCanal = ref ? ref.canal : 'email', n = row.lanes.length;
+    const pos = k => ((k + 0.5) / n * 100).toFixed(2) + '%';
+    const drops = () => row.lanes.map((_, k) => `<span class="sed-branch__drop" style="left:${pos(k)}"></span>`).join('') + `<span class="sed-branch__bar" style="left:${pos(0)};right:${(100 - parseFloat(pos(n - 1))).toFixed(2)}%"></span>`;
+    const laneHtml = row.lanes.map(l => {
+      const tag = _sedLaneTag(l.cond, refCanal);
+      return `<div class="sed-branch__lane"><span class="sed-branch__tag" style="background:${tag.bg};color:${tag.fg}">${esc(tag.txt)}</span>
+        <div>${l.idxs.map(idx => _sedNode(steps[idx], idx, steps)).join('')}</div></div>`;
+    }).join('');
+    return `<div class="sed-branch">
+      <div class="sed-branch__q">${esc(_sedBranchQ(refCanal))}</div>
+      <div class="sed-branch__fork">${drops()}</div>
+      <div class="sed-branch__lanes">${laneHtml}</div>
+      <div class="sed-branch__join">${drops()}</div>
+    </div>`;
+  }
   function _sedFlow(id, s, steps) {
     const cli = _clientName(s.outbound_client_id) || '—';
     const ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '·';
     const sch = _seqTzChip(s);
+    const rows = _sedBuildRows(steps);
+    const rowsHtml = rows.map(r => r.type === 'branch' ? _sedBranchHtml(r, steps) : `<div class="sed-col">${_sedNode(steps[r.idx], r.idx, steps)}</div>`).join('');
     return `<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
-        <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
+        <div class="sed-col"><div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
           <div class="sed-start__c"><small>Remitente</small><span class="sed-start__av" title="${esc(cli)}">${esc(ini)}</span></div>
           <div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${sch ? sch : 'Planificación predeterminada'}</span></div>
-        </div>
-        ${steps.map((x, i) => _sedNode(x, i, steps)).join('')}
-        <div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div>
+        </div></div>
+        ${rowsHtml}
+        <div class="sed-col"><div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div></div>
       </div>
       <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
   }
@@ -33723,7 +34296,71 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       setTimeout(_dashLoad, 0);
       return `<div class="dash-scope">${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div></div>`;
     }
-    return `<div class="dash-scope">${head}${_vDashHoy()}</div>`;
+    return `<div class="dash-scope">${head}${_aiHeroHtml()}${_vDashHoy()}</div>`;
+  }
+  // ── «¿Cómo puedo ayudarte hoy?» — como el lemAgent de Lemlist: un chat que lee los datos
+  // reales (tool-use, nunca inventa cifras) y accesos directos a lo que ya existe en Nova.
+  // Las tarjetas NO usan IA, solo navegan — el chat sí necesita ANTHROPIC_API_KEY en el servidor.
+  let _aiHeroHist = [];
+  const _AIH_SVG = {
+    search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+    layers: '<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5"/>',
+    send: '<path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    link: '<path d="M16 8a6 6 0 0 1 6 6v6h-4v-6a2 2 0 0 0-4 0v6h-4v-6a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="11"/><circle cx="4" cy="4" r="2"/>',
+    server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+    chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/>',
+  };
+  const _aihIc = (k, c) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c || 'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_AIH_SVG[k]}</svg>`;
+  const _AI_HERO_CARDS = [
+    ['search', '#00804C', 'Encontrar prospectos', 'Busca contactos y empresas que coincidan con tu ICP.', "LeadManagerModule.go('contacts')"],
+    ['layers', '#6D4AFF', 'Enriquecer datos', 'Obtén emails verificados, teléfonos e información sobre la empresa.', "LeadManagerModule.go('contacts')"],
+    ['send', '#2563EB', 'Crear una campaña', 'Crea una secuencia multicanal personalizada.', "LeadManagerModule.openCampaignDrawer()"],
+    ['target', '#E8590C', 'Identifica señales de compra', 'Ponte en contacto con los prospectos que ya respondieron o muestran interés.', "LeadManagerModule.go('leads')"],
+  ];
+  function _aiHeroHtml() {
+    const u = window._authUser || {}, nom = String(u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
+    const cl = (_clients || []).find(c => c.id === _gcli) || (_clients || []).find(c => c.estado === 'activo') || (_clients || [])[0];
+    const cid = cl ? cl.id : 0;
+    const mb = cid ? _mbFor(cid) : null, mbOk = !!(mb && mb.estado === 'conectado');
+    const liOk = !!(cid && Array.isArray(_li.accs) && _li.accs.some(a => a.outbound_client_id === cid));
+    const waOk = !!(cid && _waClientIds instanceof Set && _waClientIds.has(cid));
+    if (!Array.isArray(_li.accs)) _liLoad().then(() => { const el = document.querySelector('.ai-hero'), ch = document.getElementById('ai-hero-chat'); if (el && ch && !ch.children.length) el.outerHTML = _aiHeroHtml(); }).catch(() => {});
+    const row = (ic, t, sub, ok, btn, fn) => `<div class="ai-set__row"><span class="ai-set__ic">${_aihIc(ic)}</span><span class="ai-set__t"><b>${esc(t)}</b><small>${esc(sub)}</small></span>${ok ? '<span class="ai-set__ok">✓ Conectado</span>' : `<button type="button" class="ai-set__btn" onclick="${cid ? fn : 'LeadManagerModule.openClientDrawer()'}">${cid ? btn : 'Crear cliente'}</button>`}</div>`;
+    return `<div class="ai-hero">
+      <div class="ai-hero__hd">${nom ? `<span class="ai-hero__hi">Bienvenido ${esc(nom)},</span>` : ''}<h2 class="ai-hero__h">¿Cómo puedo ayudarte hoy?</h2></div>
+      <div class="ai-hero__box"><textarea id="ai-hero-in" class="ai-hero__in" placeholder="Pregunta sobre campañas, prospectos, secuencias..." rows="2" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,160)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();LeadManagerModule.aiHeroSend();}"></textarea><button class="ai-hero__send" onclick="LeadManagerModule.aiHeroSend()" aria-label="Enviar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button></div>
+      <div id="ai-hero-chat" class="ai-hero__chat"></div>
+      <div class="ai-hero__cards">${_AI_HERO_CARDS.map(([ic, col, t, d, fn]) => `<button type="button" class="ai-hero__card" onclick="${fn}"><span class="ai-hero__ct">${_aihIc(ic, col)}<b>${esc(t)}</b></span><small>${esc(d)}</small></button>`).join('')}</div>
+      <div class="ai-set"><div class="ai-set__hd"><b>Configura tu espacio de trabajo</b>${cl ? `<span>${esc(cl.nombre)}</span>` : ''}</div>
+        <div class="ai-set__grid">
+          ${row('mail', 'Conecta tu email de envío', 'Gmail, Outlook o SMTP', mbOk, 'Conectar', `LeadManagerModule.mbManageOpen(${cid})`)}
+          ${row('link', 'Conecta tu LinkedIn', 'Con la extensión de Nova', liOk, 'Conectar', `LeadManagerModule.liConnectFor(${cid})`)}
+          ${row('server', 'Configura tu infraestructura de envío', 'Buzones, topes diarios y calentamiento', false, 'Configurar', `LeadManagerModule.openClientLimits(${cid})`)}
+          ${row('chat', 'Conecta WhatsApp', 'Línea para mensajes y llamadas', waOk, 'Conectar', `LeadManagerModule.wamOpen(${cid})`)}
+        </div></div>
+    </div>`;
+  }
+  async function aiHeroSend() {
+    const inp = document.getElementById('ai-hero-in'); if (!inp) return;
+    const texto = inp.value.trim(); if (!texto) return;
+    inp.value = ''; inp.style.height = 'auto';
+    const box = document.getElementById('ai-hero-chat'); if (!box) return;
+    _aiHeroHist.push({ role: 'user', content: texto });
+    box.insertAdjacentHTML('beforeend', `<div class="ai-hero__msg ai-hero__msg--u">${esc(texto)}</div><div class="ai-hero__msg ai-hero__msg--a" id="ai-hero-pend">Pensando…</div>`);
+    box.scrollTop = box.scrollHeight;
+    try {
+      const r = await apiFetch(`${API}/ai/agent/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mensaje: texto, historial: _aiHeroHist.slice(0, -1) }) });
+      const d = await r.json();
+      const pend = document.getElementById('ai-hero-pend');
+      if (!r.ok) { if (pend) { pend.textContent = d.error || 'No se pudo responder.'; pend.classList.add('ai-hero__msg--err'); } return; }
+      _aiHeroHist.push({ role: 'assistant', content: d.respuesta });
+      if (pend) { pend.removeAttribute('id'); pend.textContent = d.respuesta; }
+    } catch (e) {
+      const pend = document.getElementById('ai-hero-pend'); if (pend) { pend.textContent = 'Error: ' + e.message; pend.classList.add('ai-hero__msg--err'); }
+    }
+    box.scrollTop = box.scrollHeight;
   }
   // ── Hoy: lo que hay que hacer y lo que está roto (no inventario) ──
   function _hoyHtml() {
@@ -35983,6 +36620,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const waYa = _waClientIds instanceof Set && _waClientIds.has(id);
     let html = `<div class="cp-mark-menu__list">`
       + item('Conectar remitente', `LeadManagerModule.openClientSenders(${id})`)
+      + item('Límites', `LeadManagerModule.openClientLimits(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Portal del cliente', `LeadManagerModule.openClient(${id});setTimeout(()=>LeadManagerModule._clientGoTab('Portal'),80)`)
       + `</div>`;
@@ -36341,87 +36979,370 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _dvAjustes(d) {
     return `<div class="rd-card"><h3>Buzones conectados</h3>${d.buzones.length ? `<table class="rd-t"><thead><tr><th>Buzón</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>${d.buzones.map(b => `<tr><td>${esc(b.email)}</td><td>${esc(b.provider)}</td><td><span class="ll-pill" style="background:${b.estado === 'conectado' ? '#DCFCE7' : '#FFF1CC'};color:${b.estado === 'conectado' ? '#166534' : '#7A5A00'}">${esc(b.estado)}</span></td><td>${b.outbound_client_id ? `<button class="ll-btn" onclick="LeadManagerModule.openClientSenders(${b.outbound_client_id})">Gestionar</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Aún no hay buzones conectados. Conéctalos desde «Clientes outbound → Conectar remitente».</div>'}<p class="ll-m__p" style="margin-top:12px">Los topes diarios, la ventana de envío y el intervalo entre correos se configuran en cada secuencia (pestaña Ajustes) y en Configuración de la campaña.</p></div>`;
   }
-  // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas, con periodo y filtros ═══════════
-  const _inf = { tab: 'overview', preset: '30', from: '', to: '', disp: '', camp: 0, cli: 0, data: null, busy: false, met: 'resp', gran: 'W' };
+  // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas + dashboards personalizados ═══════════
+  // Cada pieza es un «widget» registrado en _RPW; las vistas del sistema y las personalizadas son listas de widgets.
+  const _inf = { tab: 'overview', preset: '30', from: '', to: '', disp: '', camp: 0, cli: 0, tags: new Set(), reps: new Set(), roles: new Set(), data: null, ext: {}, extBusy: {}, busy: false, met: 'resp', gran: 'W', canal: '', wd: false, tmet: 'intentado', capSel: 'linkedin', tcanal: '', chSort: 'intentados', above: {}, views: null, fopt: null };
+  const _INF_SYS_ALL = ['overview', 'campaigns', 'activity', 'team', 'calls'];
+  let _infPins; try { const v = JSON.parse(localStorage.getItem('lm_inf_pins') || 'null'); _infPins = new Set(Array.isArray(v) ? v : _INF_SYS_ALL); } catch (_) { _infPins = new Set(_INF_SYS_ALL); }
+  const _infSavePins = () => { try { localStorage.setItem('lm_inf_pins', JSON.stringify([..._infPins])); } catch (_) {} };
+  const _INF_SYS = {
+    overview: ['Overview', 'M18 20V10M12 20V4M6 20v-6', ['funnel', 'class', 'ftime', 'tasks', 'channels', 'problems']],
+    campaigns: ['Campañas', 'M22 2 11 13M22 2l-7 20-4-9-9-4z', ['funnel', 'camp_perf', 'ftime', 'cohorts', 'steps']],
+    activity: ['Actividad', 'M22 12h-4l-3 9L9 3l-3 9H2', ['kpi_out', 'volume', 'churn', 'capacity', 'act_email', 'act_li', 'act_wa', 'act_sms', 'act_calls']],
+    team: ['Equipo', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', ['t_rank', 't_tasks', 't_calls', 't_cap', 't_trends', 't_matrix']],
+    calls: ['Llamadas', 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z', ['c_kpi', 'c_day', 'c_list']],
+  };
+  const _INF_PRE = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes'], ['anio', 'Este año'], ['mespas', 'El mes pasado'], ['aniopas', 'El año pasado']];
   function _infRange() {
-    const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5)), mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    switch (_inf.preset) { case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; default: return [_inf.from || back(29), _inf.to || t]; }
+    const iso = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); }, now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5)), mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    switch (_inf.preset) {
+      case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t];
+      case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; case 'anio': return [iso(new Date(now.getFullYear(), 0, 1)), t];
+      case 'mespas': return [iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)), iso(new Date(now.getFullYear(), now.getMonth(), 0))];
+      case 'aniopas': return [iso(new Date(now.getFullYear() - 1, 0, 1)), iso(new Date(now.getFullYear() - 1, 11, 31))];
+      default: return [_inf.from || back(29), _inf.to || t];
+    }
   }
+  function _infQS(extra) {
+    const [f, t] = _infRange(), p = ['from=' + f, 'to=' + t];
+    if (_inf.camp) p.push('campaign=' + _inf.camp); if (_inf.cli) p.push('client=' + _inf.cli);
+    if (_inf.tags.size) p.push('tags=' + encodeURIComponent([..._inf.tags].join(','))); if (_inf.reps.size) p.push('reps=' + encodeURIComponent([..._inf.reps].join(',')));
+    if (_inf.roles.size) p.push('roles=' + [..._inf.roles].join(',')); if (_inf.disp) p.push('disp=' + encodeURIComponent(_inf.disp));
+    if (extra) p.push(extra); return p.join('&');
+  }
+  const _infBodyAlive = () => _section === 'reports' && document.getElementById('inf-body');
   async function _infLoad() {
     if (_gcli) _inf.cli = _gcli;
-    _inf.busy = true; const [f, t] = _infRange();
-    try { const r = await apiFetch(`${API}/lm/dashboard?from=${f}&to=${t}${_inf.camp ? '&campaign=' + _inf.camp : ''}${_inf.cli ? '&client=' + _inf.cli : ''}`); _inf.data = r.ok ? await r.json() : { error: true }; } catch (_) { _inf.data = { error: true }; }
-    _inf.busy = false; if (_section === 'reports') { const b = document.getElementById('lm2-body') || document.querySelector('.lm2-body'); _renderBody(); }
+    _inf.busy = true;
+    try { const r = await apiFetch(`${API}/lm/dashboard?${_infQS()}`); _inf.data = r.ok ? await r.json() : { error: true }; } catch (_) { _inf.data = { error: true }; }
+    _inf.busy = false; if (_infBodyAlive()) _infPaintBody();
   }
-  function infSet(k, v) { if (k === 'camp' || k === 'cli') { _inf[k] = parseInt(v) || 0; _inf.data = null; } else _inf[k] = v; _renderBody(); }
-  function infPreset(k) { _inf.preset = k; _inf.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
-  function infDateOpen(ev) { const [f, t] = _infRange(); _llPop(ev, `<div class="rd-dp"><div class="rd-dp__in"><label>Desde<input type="date" id="inf-f" value="${f}"></label><label>Hasta<input type="date" id="inf-t" value="${t}"></label><button class="ll-pri" onclick="LeadManagerModule.infDateApply()">Aplicar</button></div><div class="sed-pop__g">Sugerencias</div>${_RD_PRE.filter(x => x[0] !== 'todo').map(([k, l]) => `<button class="sed-pop__i${_inf.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.infPreset('${k}')">${l}</button>`).join('')}</div>`, 320); }
-  function infDateApply() { const f = (document.getElementById('inf-f') || {}).value, t = (document.getElementById('inf-t') || {}).value; if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; } _inf.preset = 'custom'; _inf.from = f; _inf.to = t; _inf.data = null; document.getElementById('sed-pop')?.remove(); _renderBody(); }
+  async function _infExtLoad(tab) {
+    if (_inf.ext[tab] || _inf.extBusy[tab]) return;
+    _inf.extBusy[tab] = true; const sig = _infQS();
+    try { const r = await apiFetch(`${API}/lm/reports/${tab}?${_infQS((tab === 'campaigns' && _inf.canal ? 'canal=' + _inf.canal : '') + (tab === 'activity' || tab === 'team' ? (_inf.wd ? '&workdays=1' : '') : ''))}`); const j = r.ok ? await r.json() : { error: true }; if (sig === _infQS()) _inf.ext[tab] = j; } catch (_) { _inf.ext[tab] = { error: true }; }
+    _inf.extBusy[tab] = false; if (_infBodyAlive()) _infPaintBody();
+  }
+  async function _infLoadOpts() { if (_inf.fopt) return; _inf.fopt = { reps: [], tags: [] }; try { const r = await apiFetch(`${API}/lm/reports/filters`); if (r.ok) _inf.fopt = await r.json(); } catch (_) {} }
+  async function _infLoadViews() { if (_inf.views !== null) return; _inf.views = []; try { const r = await apiFetch(`${API}/lm/report-views`); if (r.ok) _inf.views = await r.json(); } catch (_) {} if (_section === 'reports') _renderBody(); }
+  function _infReset() { _inf.data = null; _inf.ext = {}; _inf.extBusy = {}; _renderBody(); }
+  const _infView = () => {
+    if (_INF_SYS[_inf.tab]) return { id: _inf.tab, sys: true, name: _INF_SYS[_inf.tab][0], widgets: _INF_SYS[_inf.tab][2] };
+    const v = (_inf.views || []).find(x => 'v' + x.id === _inf.tab);
+    return v ? { id: _inf.tab, sys: false, name: v.nombre, widgets: v.widgets.filter(w => _RPW[w]), v } : { id: 'overview', sys: true, name: 'Overview', widgets: _INF_SYS.overview[2] };
+  };
+  const _rpN = n => (n == null ? '—' : Number(n).toLocaleString('es-PE'));
+  const _rpPct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
+  const _rpEmpty = (m) => `<div class="rd-none">${m || 'No se han encontrado datos, prueba con otros filtros'}</div>`;
+  function _rpDelta(cur, prev, inverse) {
+    if (!prev) return '<small class="rp-d">-- frente al período anterior</small>';
+    const d = Math.round((cur - prev) / prev * 100), good = inverse ? d < 0 : d > 0;
+    return `<small class="rp-d${d === 0 ? '' : good ? ' rp-d--up' : ' rp-d--dn'}">${d > 0 ? '+' : ''}${d}% frente al período anterior</small>`;
+  }
+  const _rpStat = (l, v, sub, tip) => `<div class="rp-stat"${tip ? ` title="${esc(tip)}"` : ''}><span>${l}</span><b>${v}</b>${sub || ''}</div>`;
+  const _rpSeg = (key, opts, cur) => `<div class="ll-seg">${opts.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('${key}','${k}')">${l}</button>`).join('')}</div>`;
+  const _rpGran = () => _rpSeg('gran', [['D', 'Diario'], ['W', 'Semanal'], ['M', 'Mensual']], _inf.gran);
+  const _rpChips = (id, cur) => `<div class="rp-chips"><button class="${cur === 'up' ? 'on' : ''}" onclick="LeadManagerModule.infAbove('${id}','up')"><i style="background:#16A34A"></i>Por encima de la media</button><button class="${cur === 'down' ? 'on' : ''}" onclick="LeadManagerModule.infAbove('${id}','down')"><i style="background:#DC2626"></i>Por debajo de la media</button></div>`;
+  const _rpCanalChips = (key, cur) => `<div class="rp-chips">${[['', 'Todos los canales'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['sms', 'SMS']].map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('${key}','${k}')">${l}</button>`).join('')}</div>`;
+  function _rpBucket(d, gran) { const x = new Date(String(d).slice(0, 10) + 'T12:00:00'); if (gran === 'M') return x.toISOString().slice(0, 7); if (gran === 'W') { const m = new Date(x); m.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return m.toISOString().slice(0, 10); } return x.toISOString().slice(0, 10); }
+  function _rpStack(series, gran) {
+    const keys = new Set(), maps = series.map(s => { const m = new Map(); s.rows.forEach(r => { const b = _rpBucket(r.d, gran); m.set(b, (m.get(b) || 0) + r.n); keys.add(b); }); return m; });
+    const ks = [...keys].sort(); if (!ks.length) return _rpEmpty();
+    const tot = k => maps.reduce((n, m) => n + (m.get(k) || 0), 0), mx = Math.max(1, ...ks.map(tot));
+    return `<div class="rp-bars">${ks.map(k => `<div class="rp-bar" title="${k}: ${series.map((s, i) => s.name + ' ' + (maps[i].get(k) || 0)).join(' · ')}"><span class="rp-bar__s" style="height:${Math.max(3, Math.round(tot(k) / mx * 100))}%">${series.map((s, i) => { const v = maps[i].get(k) || 0; return v ? `<i style="flex:${v};background:${s.color}"></i>` : ''; }).join('')}</span><small>${gran === 'M' ? k : k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
+  }
+  function _rpHeat(rows) {
+    const g = Array.from({ length: 7 }, () => Array(24).fill(0)); rows.forEach(r => { g[r.dow][r.hr] += r.n; });
+    const tot = g.flat().reduce((a, b) => a + b, 0), mx = Math.max(0, ...g.flat()); if (!tot) return _rpEmpty('Aún no hay actividad en este período');
+    const hs = Array(24).fill(0); g.forEach(r => r.forEach((n, h) => { hs[h] += n; })); const best = hs.indexOf(Math.max(...hs));
+    const DN = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+    return `<div class="rp-heat">${[1, 2, 3, 4, 5, 6, 0].map(d => `<div class="rp-heat__r"><b>${DN[d]}</b>${g[d].map((n, h) => `<i style="opacity:${n ? (0.18 + 0.82 * n / mx).toFixed(2) : 0.07}" title="${DN[d]} ${h}:00 — ${n}"></i>`).join('')}</div>`).join('')}<div class="rp-heat__x">${[0, 6, 12, 18, 23].map(h => `<span style="left:calc(22px + (100% - 22px) * ${h / 24})">${h}h</span>`).join('')}</div></div><div class="rp-note">Mejor hora: <b>${best}:00</b> · ${tot} acciones</div>`;
+  }
+  const _RP_KIND = { email: ['Email', '#E07B12'], li_msg: ['Mensaje de LinkedIn', '#0A66C2'], li_invite: ['Invitación de LinkedIn', '#3B82F6'], li_visit: ['Visita de LinkedIn', '#6366F1'], whatsapp: ['WhatsApp', '#1FA855'], call: ['Llamadas', '#F59E0B'] };
+  const _rpX = t => _inf.ext[t];
+  const _rpFirst = (srcs) => srcs.map(s => s === 'dash' ? (_inf.data && _inf.data.kpi ? _inf.data : null) : _rpX(s)).find(x => x && !x.error);
+  const _rpCard = (id, title, tip, body, hd) => `<div class="rd-card rp-card" data-w="${id}"><div class="rd-card__hd"><h3>${title}${tip ? ` <span class="rp-tip" title="${esc(tip)}">ⓘ</span>` : ''}</h3><div class="rp-hd">${hd || ''}${_inf.editing ? `<button class="rp-x" title="Quitar de esta vista" onclick="LeadManagerModule.infWDel('${id}')">✕</button>` : ''}</div></div>${body}</div>`;
+  // ── Widgets ──
+  const _rpRank = (rows, metric, inverse) => {
+    const vals = rows.map(metric), avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    return { avg, rows: rows.map((r, i) => ({ r, v: vals[i], up: inverse ? vals[i] < avg : vals[i] > avg, down: inverse ? vals[i] > avg : vals[i] < avg })) };
+  };
+  const _rpAbove = (id, arr) => { const f = _inf.above[id]; return f === 'up' ? arr.filter(x => x.up) : f === 'down' ? arr.filter(x => x.down) : arr; };
+  const _rpDot = x => `<i class="rp-dot" style="background:${x.up ? '#16A34A' : x.down ? '#DC2626' : '#CBD2CD'}"></i>`;
+  const _rpTbl = (head, rows, cls) => `<div class="rp-tw"><table class="rd-t ${cls || ''}"><thead><tr>${head.map(h => `<th${h[1] ? ` class="${h[1]}"` : ''}>${h[0]}</th>`).join('')}</tr></thead><tbody>${rows.join('') || `<tr><td colspan="${head.length}">${_rpEmpty()}</td></tr>`}</tbody></table></div>`;
+  const _rpCampLink = id => `openCampaignDrawer(${id})`;
+  const _RPW = {
+    funnel: { t: 'Resumen del funnel de prospectos', tip: 'Prospectos enrolados que llegaron a cada etapa durante el período.', srcs: ['dash'], html: d => {
+      const fn = d.funnel || {}, FN = [['Enrolados', fn.enrolados || 0], ['Contactados', fn.contactados || 0], ['Respondieron', fn.respondieron || 0], ['Reunión', fn.reuniones || 0]], mx = Math.max(1, ...FN.map(x => x[1]));
+      return FN[0][1] || FN[1][1] ? `<div class="inf-fn">${FN.map(([l, v], i) => `<div class="inf-fn__r"><span>${l}</span><div><i style="width:${Math.round(v / mx * 100)}%"></i></div><b>${v}</b><em>${i ? _rpPct(v, FN[i - 1][1]) + '%' : ''}</em></div>`).join('')}</div>` : _rpEmpty();
+    } },
+    class: { t: 'Clasificación de la campaña', tip: 'Las campañas del período ordenadas por la métrica elegida.', srcs: ['overview'], half: true, html: d => {
+      const M = { resp: [c => _rpPct(c.respondidos, c.contactados), c => c.contactados > 0, false], int: [c => _rpPct(c.interesados, c.contactados), c => c.contactados > 0, false], bounce: [c => _rpPct(c.rebotados, c.enviados), c => c.enviados > 0, true] }[_inf.met];
+      const rows = (d.campaigns || []).filter(M[1]).map(c => ({ c, v: M[0](c) })).sort((a, b) => M[2] ? a.v - b.v : b.v - a.v);
+      const top = rows.slice(0, 3), low = [...rows].reverse().filter(x => !top.includes(x)).slice(0, 3);
+      const li = x => `<div class="inf-rk" onclick="LeadManagerModule.${_rpCampLink(x.c.id)}"><span>${esc(x.c.nombre)}<small>${esc(x.c.cliente || '')}</small></span><b>${x.v}%</b></div>`;
+      return `<div class="rd-tabs">${[['resp', 'Porcentaje de respuesta %'], ['int', 'Interesado %'], ['bounce', 'Porcentaje de bounce %']].map(([k, l]) => `<button class="${_inf.met === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('met','${k}')">${l}</button>`).join('')}</div>
+        <div class="inf-two"><div><h4>${_llI('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17M14 14.66V17M18 2H6v7a6 6 0 0 0 12 0V2z"/>', 15)} Mejor rendimiento</h4>${top.length ? top.map(li).join('') : '<div class="rd-none">Tus campañas principales aparecerán aquí</div>'}</div><div><h4>${_llI('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>', 15)} Requiere atención</h4>${low.length ? low.map(li).join('') : '<div class="rd-none">Las campañas a las que deberías prestar atención aparecen aquí</div>'}</div></div>`;
+    } },
+    ftime: { t: 'Embudo de prospectos a lo largo del tiempo', tip: 'Cada prospecto se cuenta una sola vez: el día que llegó a cada etapa.', srcs: ['overview', 'campaigns'], half: true, hd: () => _rpGran(), html: d => {
+      const T = d.timeline || {}; return _rpStack([{ name: 'Contactado', color: '#3B82F6', rows: T.contactados || [] }, { name: 'Respondió', color: '#16A34A', rows: T.respondidos || [] }, { name: 'Interesado', color: '#F59E0B', rows: T.interesados || [] }, { name: 'Reunión', color: '#7C3AED', rows: T.reuniones || [] }], _inf.gran);
+    } },
+    tasks: { t: 'Tareas', tip: 'Tareas manuales y seguimientos. «Ignorado» = pasos omitidos. Nova no guarda la hora de cierre, por eso no hay tiempo medio de gestión.', srcs: ['overview'], html: d => {
+      const T = d.tasks || {}, c = T.cur || {}, p = T.prev || {}, days = (d.range || {}).days || 1;
+      return `<div class="rp-stats">${_rpStat('Tareas abiertas', _rpN(T.abiertas), '<small class="rp-d">ahora mismo</small>')}${_rpStat('Vencido', _rpN(T.vencidas), '<small class="rp-d">ahora mismo</small>')}${_rpStat('Creado', _rpN(c.creadas), _rpDelta(c.creadas, p.creadas))}${_rpStat('Hecho', _rpN(c.hechas), _rpDelta(c.hechas, p.hechas))}${_rpStat('Ignorado', _rpN(c.ignoradas), _rpDelta(c.ignoradas, p.ignoradas, true))}${_rpStat('Tiempo medio de gestión', '—', '<small class="rp-d">no disponible</small>')}</div><div class="rp-stats rp-stats--1">${_rpStat('Excedente creado por día', (Math.round((c.creadas || 0) / days * 10) / 10).toLocaleString('es-PE'), _rpDelta((c.creadas || 0) / days, (p.creadas || 0) / days))}</div>`;
+    } },
+    channels: { t: 'Rendimiento del canal', tip: 'Prospectos alcanzados por canal. Comprometido = abrió o hizo clic (email) / aceptó la invitación (LinkedIn).', srcs: ['overview'], html: d => {
+      const T = new Map((d.channelTable || []).map(r => [r.k, r]));
+      const L = [['email', 'Email', 'mail'], ['li_msg', 'Mensaje de LinkedIn', 'in'], ['li_invite', 'Invitación de LinkedIn', 'in'], ['li_voz', 'Nota de voz de LinkedIn', 'in', 1], ['li_visit', 'Visita de LinkedIn', 'in'], ['sms', 'SMS', 'sms', 1], ['whatsapp', 'WhatsApp', 'wa'], ['call', 'Llamadas', 'tel']];
+      const rows = L.map(([k, n, ic, na]) => ({ k, n, ic, na, r: T.get(k) || { intentados: 0, entregados: 0, comprometidos: 0, respondidos: 0, interesados: 0, rebotados: 0 } })).sort((a, b) => a.na - b.na || (b.r[_inf.chSort] || 0) - (a.r[_inf.chSort] || 0));
+      const th = (k, l) => [`<span class="rp-sort${_inf.chSort === k ? ' on' : ''}" onclick="LeadManagerModule.infSet('chSort','${k}')">${l}${_inf.chSort === k ? ' ▾' : ''}</span>`, 'ldh-num'];
+      const icon = { mail: '<i class="cq-ic cq-ic--em">✉</i>', in: '<i class="cq-ic cq-ic--li">in</i>', sms: '<i class="cq-ic" style="background:#64748B">sms</i>', wa: '<i class="cq-ic" style="background:#1FA855">w</i>', tel: '<i class="cq-ic" style="background:#F59E0B">☎</i>' };
+      return _rpTbl([['Canal'], th('intentados', 'Intentado'), th('entregados', 'Entregado'), th('comprometidos', 'Comprometido'), th('respondidos', 'Respondido'), th('interesados', 'Interesado'), th('rebotados', 'Rebotado')],
+        rows.map(x => `<tr class="${x.na ? 'rp-na' : ''}"><td><div class="cq-act">${icon[x.ic]}<span>${x.n}</span>${x.na ? '<em class="rp-tag">No disponible en Nova</em>' : ''}</div></td>${['intentados', 'entregados', 'comprometidos', 'respondidos', 'interesados', 'rebotados'].map(k => `<td class="ldh-num">${x.r[k]}</td>`).join('')}</tr>`));
+    } },
+    problems: { t: 'Problemas de prospectos', tip: 'Intentos que no llegaron o que pidieron no seguir.', srcs: ['overview'], html: d => {
+      const P = d.problems || {}, c = P.cur || {}, p = P.prev || {};
+      const card = (l, k, tip) => `<div class="rp-stat" title="${tip}"><span>${l}</span><b>${c[k] || 0} <em>${_rpPct(c[k] || 0, c.intentados || 0)}% de intentos</em></b>${_rpDelta(c[k] || 0, p[k] || 0, true)}</div>`;
+      return `<div class="rp-stats rp-stats--3">${card('No entregado (Bounce)', 'bounce', 'Prospectos cuyo email rebotó')}${card('No le interesa', 'nointeresa', 'Marcados como «No interesado» en el período')}${card('Dado de baja', 'baja', 'Pidieron no recibir más (enlace de baja o «No contactar»)')}</div>`;
+    } },
+    camp_perf: { t: 'Rendimiento de las campañas', tip: 'Cada campaña frente a la media. La media es la tasa de respuesta promedio de las campañas con prospectos contactados.', srcs: ['campaigns'], hd: () => _rpChips('camp_perf', _inf.above.camp_perf), html: d => {
+      if (_inf.canal === 'sms') return _rpCanalChips('canal', 'sms') + _rpEmpty('Nova todavía no envía SMS.');
+      const base = (d.campaigns || []).filter(c => c.enrolados || c.contactados), rk = _rpRank(base.filter(c => c.contactados > 0), c => _rpPct(c.respondidos, c.contactados)), map = new Map(rk.rows.map(x => [x.r.id, x]));
+      let rows = base.map(c => ({ c, x: map.get(c.id) || {} })); const f = _inf.above.camp_perf; if (f) rows = rows.filter(r => f === 'up' ? r.x.up : r.x.down);
+      return `<div class="rp-sub">${base.length} campaña${base.length === 1 ? '' : 's'} · media de respuesta ${Math.round(rk.avg * 10) / 10}%</div>${_rpCanalChips('canal', _inf.canal)}` + _rpTbl([['Campaña'], ['Cliente'], ['Enrolados', 'ldh-num'], ['Contactados', 'ldh-num'], ['Respondidos', 'ldh-num'], ['% resp.', 'ldh-num'], ['Interesados', 'ldh-num'], ['% bounce', 'ldh-num']],
+        rows.map(({ c, x }) => `<tr class="ldh-row" onclick="LeadManagerModule.${_rpCampLink(c.id)}"><td>${_rpDot(x)}<b>${esc(c.nombre)}</b></td><td class="ldh-dim">${esc(c.cliente || '—')}</td><td class="ldh-num">${c.enrolados}</td><td class="ldh-num">${c.contactados}</td><td class="ldh-num">${c.respondidos}</td><td class="ldh-num"><b>${_rpPct(c.respondidos, c.contactados)}%</b></td><td class="ldh-num">${c.interesados}</td><td class="ldh-num">${c.enviados ? _rpPct(c.rebotados, c.enviados) + '%' : '—'}</td></tr>`));
+    } },
+    cohorts: { t: 'Desglose semanal por cohortes', tip: 'Prospectos agrupados por la semana en que entraron a una secuencia y qué % avanzó.', sub: 'Tasas de conversión por semana de entrada', srcs: ['campaigns'], hd: () => _rpChips('cohorts', _inf.above.cohorts), html: d => {
+      const base = (d.cohorts || []), rk = _rpRank(base.filter(c => c.enrolados > 0), c => _rpPct(c.respondidos, c.enrolados)), map = new Map(rk.rows.map(x => [x.r.semana, x]));
+      let rows = base.map(c => ({ c, x: map.get(c.semana) || {} })); const f = _inf.above.cohorts; if (f) rows = rows.filter(r => f === 'up' ? r.x.up : r.x.down);
+      const cell = (n, tot) => `<td class="ldh-num rp-co" style="--p:${tot ? Math.min(1, n / tot) : 0}"><b>${_rpPct(n, tot)}%</b><small>${n}</small></td>`;
+      return '<div class="rp-sub">Tasas de conversión por semana de entrada</div>' + _rpTbl([['Semana de entrada'], ['Enrolados', 'ldh-num'], ['Contactados', 'ldh-num'], ['Respondieron', 'ldh-num'], ['Interesados', 'ldh-num']],
+        rows.map(({ c, x }) => `<tr><td>${_rpDot(x)}${new Date(c.semana + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}</td><td class="ldh-num">${c.enrolados}</td>${cell(c.contactados, c.enrolados)}${cell(c.respondidos, c.enrolados)}${cell(c.interesados, c.enrolados)}</tr>`));
+    } },
+    steps: { t: 'Rendimiento de pasos entre campañas', tip: 'Todos los tipos de paso, ordenados por tasa de respuesta.', srcs: ['campaigns'], hd: () => _rpChips('steps', _inf.above.steps), html: d => {
+      const g = new Map(); (d.steps || []).forEach(s => { const k = s.canal + '|' + (s.accion || ''); const o = g.get(k) || { canal: s.canal, accion: s.accion || '', intentos: 0, respondidos: 0, rebotados: 0 }; o.intentos += s.intentos; o.respondidos += s.respondidos; o.rebotados += s.rebotados; g.set(k, o); });
+      const base = [...g.values()].sort((a, b) => _rpPct(b.respondidos, b.intentos) - _rpPct(a.respondidos, a.intentos)), rk = _rpRank(base.filter(s => s.intentos > 0), s => _rpPct(s.respondidos, s.intentos)), map = new Map(rk.rows.map(x => [x.r, x]));
+      let rows = base.map(s => ({ s, x: map.get(s) || {} })); const f = _inf.above.steps; if (f) rows = rows.filter(r => f === 'up' ? r.x.up : r.x.down);
+      const nm = s => (typeof _accionLabel === 'function' && _accionLabel(s.canal, s.accion)) || ((_TOUCH[s.canal] || [s.canal])[0] + (s.accion ? ' · ' + s.accion : ''));
+      return `<div class="rp-sub">Tipos de paso clasificados por tasa de respuesta en ${(_rpX('campaigns') || {}).campaigns ? _rpX('campaigns').campaigns.length : 0} campañas · — = no registrado</div>` + _rpTbl([['Tipo de paso'], ['Canal'], ['Intentos', 'ldh-num'], ['Respondidos', 'ldh-num'], ['% respuesta', 'ldh-num'], ['Rebotes', 'ldh-num']],
+        rows.map(({ s, x }) => `<tr><td>${_rpDot(x)}<b>${esc(nm(s))}</b></td><td class="ldh-dim">${esc((_TOUCH[s.canal] || [s.canal])[0])}</td><td class="ldh-num">${s.intentos || '—'}</td><td class="ldh-num">${s.intentos ? s.respondidos : '—'}</td><td class="ldh-num"><b>${s.intentos ? _rpPct(s.respondidos, s.intentos) + '%' : '—'}</b></td><td class="ldh-num">${s.canal === 'email' ? s.rebotados : '—'}</td></tr>`));
+    } },
+    kpi_out: { t: 'KPI de outreach', tip: 'Actividad del período frente al anterior.', srcs: ['activity'], html: d => {
+      const c = (d.kpi || {}).cur || {}, p = (d.kpi || {}).prev || {};
+      return `<div class="rp-stats">${[['Prospectos contactados', 'contactados'], ['Acciones realizadas', 'toques'], ['Emails enviados', 'emails'], ['Invitaciones de LinkedIn', 'invitaciones'], ['Mensajes de WhatsApp', 'whatsapps'], ['Llamadas', 'llamadas'], ['Respuestas', 'respuestas']].map(([l, k]) => _rpStat(l, _rpN(c[k] || 0), _rpDelta(c[k] || 0, p[k] || 0))).join('')}</div>`;
+    } },
+    volume: { t: 'Volumen de actividad', tip: 'Cada acción cuenta individualmente.', sub: 'Each action counted individually', srcs: ['activity'], half: true, hd: () => _rpGran(), html: d => {
+      const rows = d.volume || [], ks = Object.keys(_RP_KIND);
+      return _rpStack(ks.map(k => ({ name: _RP_KIND[k][0], color: _RP_KIND[k][1], rows: rows.filter(r => r.kind === k) })).filter(s => s.rows.length), _inf.gran);
+    } },
+    churn: { t: 'Abandono de prospectos a lo largo del tiempo', tip: 'Prospectos que salieron de la secuencia: pausas de secuencia y marcados como no interesado, no califica o no contactar.', srcs: ['activity'], half: true, hd: () => _rpGran(), html: d => _rpStack([{ name: 'Abandonos', color: '#DC2626', rows: d.churn || [] }], _inf.gran) },
+    capacity: { t: 'Capacidad de envío', tip: 'Promedio diario enviado frente al límite configurado de los remitentes.', srcs: ['activity'], hd: () => `<label class="rp-tg"><span class="cm-sw"><input type="checkbox"${_inf.wd ? ' checked' : ''} onchange="LeadManagerModule.infSet('wd',this.checked)"><i></i></span>Solo días laborables</label>`, html: d => {
+      const C = d.capacity || {}, cid = _inf.cli || _gcli || 0;
+      const card = (k, name, ico, o, extra) => { const none = !o || !o.senders && k !== 'calls'; const pct = o && o.limit ? Math.min(100, Math.round(o.avg / o.limit * 100)) : 0;
+        return `<div class="rp-cap"><div class="rp-cap__h">${ico}<b>${name}</b>${extra || ''}</div><div class="rp-cap__l"><span>Media ${k === 'calls' ? 'de llamadas' : 'enviada'}/día</span><b>${o && o.limit ? `${o.avg}/${o.limit}` : (o ? o.avg : 0)}</b></div>${o && o.limit ? `<div class="rp-prog"><i style="width:${pct}%;background:${pct > 90 ? '#DC2626' : '#3B82F6'}"></i></div><small>Usando el ${pct}% del límite diario</small>` : `<small>${none ? 'Aún no hay ningún remitente conectado en este canal.' : k === 'calls' ? 'Sin límite diario: la capacidad es el tiempo del comercial.' : 'Sin límite configurado.'}</small>`}</div>`; };
+      const lim = o => o && o.senders ? `<a href="javascript:void(0)" class="rp-lk" onclick="LeadManagerModule.openClientLimits(${cid || (_clients[0] || {}).id || 0})">Ver límites</a>` : '';
+      return `<div class="rp-caps">${card('email', 'Email', '<i class="cq-ic cq-ic--em">✉</i>', C.email, lim(C.email))}${card('linkedin', 'LinkedIn', '<i class="cq-ic cq-ic--li">in</i>', C.linkedin, lim(C.linkedin))}${card('sms', 'SMS', '<i class="cq-ic" style="background:#64748B">sms</i>', C.sms)}${card('whatsapp', 'WhatsApp', '<i class="cq-ic" style="background:#1FA855">w</i>', C.whatsapp)}${card('calls', 'Llamadas', '<i class="cq-ic" style="background:#F59E0B">☎</i>', C.calls)}</div>`;
+    } },
+    act_email: { t: 'Actividad de email', tip: 'Cuándo se envía (día de la semana y hora).', srcs: ['activity'], half: true, html: d => { const r = (d.heat || []).filter(x => x.kind === 'email'); return `<div class="rp-sub">Basado en ${r.reduce((n, x) => n + x.n, 0)} mensajes</div>` + _rpHeat(r); } },
+    act_li: { t: 'Actividad de LinkedIn', tip: 'Cuándo se hacen las acciones de LinkedIn.', srcs: ['activity'], half: true, html: d => { const r = (d.heat || []).filter(x => /^li_/.test(x.kind)); return `<div class="rp-sub">Basado en ${r.reduce((n, x) => n + x.n, 0)} acciones (mensajes, invitaciones y visitas)</div>` + _rpHeat(r); } },
+    act_wa: { t: 'Actividad de WhatsApp', srcs: ['activity'], half: true, html: d => { const r = (d.heat || []).filter(x => x.kind === 'whatsapp'); return `<div class="rp-sub">Basado en ${r.reduce((n, x) => n + x.n, 0)} mensajes</div>` + _rpHeat(r); } },
+    act_sms: { t: 'Actividad de SMS', srcs: ['activity'], half: true, html: () => `<div class="rd-none">Nova todavía no envía SMS.<br><span class="cc-soon">Próximamente</span></div>` },
+    act_calls: { t: 'Actividad de llamadas', srcs: ['activity'], half: true, html: d => { const r = (d.heat || []).filter(x => x.kind === 'call'); return `<div class="rp-sub">Basado en ${r.reduce((n, x) => n + x.n, 0)} llamadas</div>` + _rpHeat(r); } },
+    t_rank: { t: 'Clasificación del equipo del funnel', tip: 'Representantes (responsable de cada cliente) ordenados por tasa de respuesta.', srcs: ['team'], hd: () => _rpChips('t_rank', _inf.above.t_rank), html: d => {
+      const kinds = { '': null, email: ['email'], linkedin: ['li_msg', 'li_invite', 'li_visit'], whatsapp: ['whatsapp'], sms: [] }[_inf.tcanal || ''];
+      const rows = (d.reps || []).map(r => { const n = kinds === null ? r.intentados : kinds.reduce((a, k) => a + (r.kinds[k] || 0), 0); return { r, n, v: _rpPct(r.respondidos, n) }; }).filter(x => x.n > 0).sort((a, b) => b.v - a.v);
+      const avg = rows.length ? rows.reduce((a, x) => a + x.v, 0) / rows.length : 0; rows.forEach(x => { x.up = x.v > avg; x.down = x.v < avg; });
+      const f = _inf.above.t_rank, show = f ? rows.filter(x => f === 'up' ? x.up : x.down) : rows;
+      return _rpCanalChips('tcanal', _inf.tcanal || '') + _rpTbl([['#'], ['Representante'], ['Intentados', 'ldh-num'], ['Respondidos', 'ldh-num'], ['% respuesta', 'ldh-num'], ['Interesados', 'ldh-num']], show.map((x, i) => `<tr><td>${i + 1}</td><td>${_rpDot(x)}<b>${esc(x.r.nombre)}</b></td><td class="ldh-num">${x.n}</td><td class="ldh-num">${x.r.respondidos}</td><td class="ldh-num"><b>${x.v}%</b></td><td class="ldh-num">${x.r.interesados}</td></tr>`));
+    } },
+    t_tasks: { t: 'Rendimiento de la tarea por representante', srcs: ['team'], html: d => {
+      const reps = d.reps || [], days = ((_rpX('team') || {}).range || {}).days || 1, sum = k => reps.reduce((n, r) => n + (r.tareas[k] || 0), 0), n = Math.max(1, reps.length), f = x => Math.round(x * 10) / 10;
+      return `<div class="rp-sub">${reps.length} representante${reps.length === 1 ? '' : 's'}</div>` + _rpTbl([['Usuario'], ['Abierto', 'ldh-num'], ['Vencido', 'ldh-num'], ['Hecho', 'ldh-num'], ['Ignorado', 'ldh-num'], ['Tareas completadas/día', 'ldh-num'], ['Tareas creadas/día', 'ldh-num'], ['Tiempo medio de gestión', 'ldh-num']],
+        reps.map((r, i) => `<tr><td><span class="cm-av">${esc(_cmIni(r.nombre))}</span> <b>${esc(r.nombre)}</b></td><td class="ldh-num">${r.tareas.abiertas}</td><td class="ldh-num">${r.tareas.vencidas}</td><td class="ldh-num">${r.tareas.hechas}</td><td class="ldh-num">${r.tareas.ignoradas}</td><td class="ldh-num">${f(r.tareas.hechas / days)}</td><td class="ldh-num">${f(r.tareas.creadas / days)}</td><td class="ldh-num">—</td></tr>`).concat(reps.length ? [`<tr class="rp-avg"><td>Promedio del equipo</td><td class="ldh-num">${f(sum('abiertas') / n)}</td><td class="ldh-num">${f(sum('vencidas') / n)}</td><td class="ldh-num">${f(sum('hechas') / n)}</td><td class="ldh-num">${f(sum('ignoradas') / n)}</td><td class="ldh-num">${f(sum('hechas') / n / days)}</td><td class="ldh-num">${f(sum('creadas') / n / days)}</td><td class="ldh-num">—</td></tr>`] : []));
+    } },
+    t_calls: { t: 'Rendimiento de llamadas por representante', tip: 'Llamadas hechas desde Nova (telefonía).', sub: 'Llamadas conectadas + llamadas realizadas', srcs: ['team'], html: d => {
+      const reps = (d.reps || []).filter(r => r.llamadas.realizadas), dur = s => s ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '—';
+      return '<div class="rp-sub">Llamadas conectadas + llamadas realizadas</div>' + _rpTbl([['Representante'], ['Realizadas', 'ldh-num'], ['Conectadas', 'ldh-num'], ['% conexión', 'ldh-num'], ['Duración media', 'ldh-num']], reps.map(r => `<tr><td><b>${esc(r.nombre)}</b></td><td class="ldh-num">${r.llamadas.realizadas}</td><td class="ldh-num">${r.llamadas.conectadas}</td><td class="ldh-num">${_rpPct(r.llamadas.conectadas, r.llamadas.realizadas)}%</td><td class="ldh-num">${dur(r.llamadas.dur)}</td></tr>`));
+    } },
+    t_cap: { t: 'Capacidad de envío por comercial', tip: 'Promedio diario frente al límite de los remitentes de sus clientes.', srcs: ['team'], hd: () => `<select class="rd-sel" onchange="LeadManagerModule.infSet('capSel',this.value)">${[['linkedin', 'LinkedIn'], ['email', 'Email'], ['all', 'Todos los envíos']].map(([k, l]) => `<option value="${k}"${_inf.capSel === k ? ' selected' : ''}>${l}</option>`).join('')}</select><label class="rp-tg"><span class="cm-sw"><input type="checkbox"${_inf.wd ? ' checked' : ''} onchange="LeadManagerModule.infSet('wd',this.checked)"><i></i></span>Solo días laborables</label>`, html: d => {
+      const rows = (d.reps || []).map(r => { const c = r.capacidad, a = _inf.capSel === 'linkedin' ? [c.li_prom, c.li_limite] : _inf.capSel === 'email' ? [c.em_prom, c.em_limite] : [c.li_prom + c.em_prom, c.li_limite + c.em_limite]; return { r, avg: Math.round(a[0] * 10) / 10, lim: a[1] }; });
+      return _rpTbl([['Representante'], ['Media/día', 'ldh-num'], ['Límite/día', 'ldh-num'], ['Uso']], rows.map(x => { const p = x.lim ? Math.min(100, Math.round(x.avg / x.lim * 100)) : 0; return `<tr><td><b>${esc(x.r.nombre)}</b></td><td class="ldh-num">${x.avg}</td><td class="ldh-num">${x.lim || '—'}</td><td>${x.lim ? `<div class="rp-prog"><i style="width:${p}%;background:${p > 90 ? '#DC2626' : '#3B82F6'}"></i></div><small>${p}%</small>` : '<small>Sin límite configurado</small>'}</td></tr>`; }));
+    } },
+    t_trends: { t: 'Tendencias de representantes a lo largo del tiempo', srcs: ['team'], hd: () => `<div class="rp-chips">${[['intentado', 'Intentado'], ['entregado', 'Entregado'], ['comprometido', 'Comprometido'], ['respondido', 'Respondido'], ['interesado', 'Interesado']].map(([k, l]) => `<button class="${_inf.tmet === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('tmet','${k}')">${l}</button>`).join('')}</div>`, html: d => {
+      const COL = ['#3B82F6', '#16A34A', '#F59E0B', '#7C3AED', '#DC2626', '#0EA5A4'], reps = (d.reps || []).map(r => r.nombre), tr = d.trends || [], ws = [...new Set(tr.map(x => x.w))].sort();
+      const val = x => _inf.tmet === 'entregado' ? Math.max(0, (x.intentado || 0) - (x.rebotado || 0)) : (x[_inf.tmet] || 0);
+      if (!ws.length) return _rpEmpty(); const mx = Math.max(1, ...tr.map(val));
+      return `<div class="rp-bars rp-bars--g">${ws.map(w => `<div class="rp-bar"><span class="rp-bar__g">${reps.map((r, i) => { const x = tr.find(t => t.w === w && t.rep === r), v = x ? val(x) : 0; return `<i title="${esc(r)}: ${v}" style="height:${Math.max(2, Math.round(v / mx * 100))}%;background:${COL[i % COL.length]}"></i>`; }).join('')}</span><small>${w.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${reps.map((r, i) => `<span><i style="background:${COL[i % COL.length]}"></i>${esc(r)}</span>`).join('')}</div>`;
+    } },
+    t_matrix: { t: 'Desglose de la actividad por representante x canal', sub: 'Número de contactos contactados por canal por representante', srcs: ['team'], html: d => {
+      const reps = d.reps || [], ks = ['email', 'li_msg', 'li_invite', 'li_visit', 'whatsapp', 'call'], mx = Math.max(1, ...reps.flatMap(r => ks.map(k => r.kinds[k] || 0)));
+      return '<div class="rp-sub">Número de contactos contactados por canal por representante</div>' + _rpTbl([['Representante'], ...ks.map(k => [_RP_KIND[k][0], 'ldh-num'])], reps.map(r => `<tr><td><b>${esc(r.nombre)}</b></td>${ks.map(k => { const n = r.kinds[k] || 0; return `<td class="ldh-num rp-co" style="--p:${n / mx}"><b>${n}</b></td>`; }).join('')}</tr>`));
+    } },
+    c_kpi: { t: 'Llamadas', tip: 'Llamadas hechas desde Nova (telefonía) y las registradas a mano.', srcs: ['calls'], html: d => {
+      const r = d.resumen || {}, dur = s => s ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '—';
+      return `<div class="rp-stats">${_rpStat('Llamadas realizadas', _rpN(r.realizadas))}${_rpStat('Desde Nova', _rpN(r.desdeNova))}${_rpStat('Registradas a mano', _rpN(r.registradas))}${_rpStat('Conectadas', _rpN(r.conectadas), `<small class="rp-d">${_rpPct(r.conectadas, r.desdeNova)}% de las de Nova</small>`)}${_rpStat('Duración media', dur(r.dur_media))}</div>${r.realizadas ? '' : '<div class="rp-note" style="margin-top:12px">Aún no hay llamadas en este período. Las que hagas desde Llamadas (telefonía) o registres a mano aparecerán aquí.</div>'}`;
+    } },
+    c_day: { t: 'Llamadas por día', srcs: ['calls'], half: false, hd: () => _rpGran(), html: d => _rpStack([{ name: 'Llamadas', color: '#F59E0B', rows: d.porDia || [] }], _inf.gran) },
+    c_list: { t: 'Últimas llamadas', srcs: ['calls'], html: d => {
+      const all = [...(d.telefonia || []).map(c => ({ f: c.started_at, who: c.contacto || c.to_number || '—', cid: c.contact_id, rep: c.rep, det: (c.duracion ? Math.floor(c.duracion / 60) + ':' + String(c.duracion % 60).padStart(2, '0') : 'sin conexión') + (c.resultado ? ' · ' + c.resultado : ''), org: 'Nova' })), ...(d.manuales || []).map(c => ({ f: c.fecha, who: c.contacto || '—', cid: c.contact_id, rep: c.rep, det: String(c.nota || '').slice(0, 80), org: 'A mano' }))].sort((a, b) => new Date(b.f) - new Date(a.f)).slice(0, 60);
+      return _rpTbl([['Fecha'], ['Prospecto'], ['Representante'], ['Detalle'], ['Origen']], all.map(c => `<tr ${c.cid ? `onclick="LeadManagerModule.openContactPage(${c.cid})" style="cursor:pointer"` : ''}><td>${new Date(c.f).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td><b>${esc(c.who)}</b></td><td class="ldh-dim">${esc(c.rep)}</td><td class="ldh-dim">${esc(c.det)}</td><td>${c.org}</td></tr>`));
+    } },
+  };
+  const _RPW_GROUPS = [['Overview', ['funnel', 'class', 'ftime', 'tasks', 'channels', 'problems']], ['Campañas', ['camp_perf', 'cohorts', 'steps']], ['Actividad', ['kpi_out', 'volume', 'churn', 'capacity', 'act_email', 'act_li', 'act_wa', 'act_sms', 'act_calls']], ['Equipo', ['t_rank', 't_tasks', 't_calls', 't_cap', 't_trends', 't_matrix']], ['Llamadas', ['c_kpi', 'c_day', 'c_list']]];
+  // ── Página: pestañas, filtros, cuerpo y gestor de dashboards ──
+  let _infDeepDone = false;
+  const _INF_ICONS = { chart: 'M18 20V10M12 20V4M6 20v-6', target: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', users: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', mail: 'M3 5h18v14H3zM3 7l9 6 9-6', flame: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z', star: 'M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z' };
+  function _infNeeds(widgets) { const need = new Set(); widgets.forEach(id => { const w = _RPW[id]; if (w && !w.srcs.some(s => need.has(s))) need.add(w.srcs[0]); }); return [...need]; }
+  function _infWidgetsHtml(view) {
+    const out = []; let pair = [];
+    const flush = () => { if (pair.length) { out.push(pair.length > 1 ? `<div class="rd-g2">${pair.join('')}</div>` : pair[0]); pair = []; } };
+    view.widgets.forEach(id => {
+      const w = _RPW[id], d = _rpFirst(w.srcs); let card;
+      if (!d) { const err = w.srcs.some(s => s === 'dash' ? (_inf.data || {}).error : (_rpX(s) || {}).error); card = _rpCard(id, w.t, w.tip, err ? '<div class="rd-none">No se pudo cargar este informe.</div>' : '<div class="ll-empty">Cargando…</div>'); }
+      else card = _rpCard(id, w.t, w.tip, w.html(d), w.hd ? w.hd() : '');
+      if (w.half) { pair.push(card); if (pair.length === 2) flush(); } else { flush(); out.push(card); }
+    });
+    flush(); return out.join('') || '<div class="rd-none" style="padding:40px">Esta vista aún no tiene widgets. Pulsa «Editar» y luego «Añadir widget».</div>';
+  }
+  function _infPaintBody() { const b = document.getElementById('inf-body'); if (b) b.innerHTML = _infWidgetsHtml(_infView()); }
   function _vReports() {
     const I = _llI;
-    if (!_inf.data && !_inf.busy) _infLoad();
-    const d = _inf.data, [f, t] = _infRange(), fm = x => new Date(x + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
-    const TABS = [['overview', 'Overview', 'M18 20V10M12 20V4M6 20v-6'], ['campaigns', 'Campañas', 'M22 2 11 13M22 2l-7 20-4-9-9-4z'], ['activity', 'Actividad', 'M22 12h-4l-3 9L9 3l-3 9H2'], ['team', 'Equipo', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'], ['calls', 'Llamadas', 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z']];
-    const bar = `<div class="inf-tabs">${TABS.map(([k, l, ic]) => `<button class="${_inf.tab === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('tab','${k}')">${I(`<path d="${ic}"/>`, 15)} ${l}</button>`).join('')}</div>
-      <div class="inf-filters"><button class="rd-sel rd-date" onclick="LeadManagerModule.infDateOpen(event)"><span>${fm(f)} → ${fm(t)}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
-        <select class="rd-sel" onchange="LeadManagerModule.infSet('disp',this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(x => `<option value="${x[0]}"${_inf.disp === x[0] ? ' selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
-        <select class="rd-sel" onchange="LeadManagerModule.infSet('camp',this.value)"><option value="0">Todas las campañas</option>${(_campaigns || []).map(c => `<option value="${c.id}"${_inf.camp === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-        <select class="rd-sel" onchange="LeadManagerModule.infSet('cli',this.value)"><option value="0">Todos los clientes</option>${(_clients || []).map(c => `<option value="${c.id}"${_inf.cli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
-        <span class="sp"></span><button class="ll-pri" onclick="LeadManagerModule.infExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 15)} Exportar</button></div>`;
-    let body;
-    if (!d) body = '<div class="ll-empty">Cargando informe…</div>';
-    else if (d.error || !d.kpi) body = '<div class="ll-empty">No se pudo cargar el informe.</div>';
-    else body = _inf.tab === 'campaigns' ? _infCampaigns(d) : _inf.tab === 'activity' ? _infActivity() : _inf.tab === 'team' ? _infTeam(d) : _inf.tab === 'calls' ? _infCalls() : _infOverview(d);
-    return `<div class="inf">${bar}${body}</div>`;
+    if (!_inf.init) { _inf.init = true; if (_gcli) _inf.cli = _gcli; }
+    if (!_inf.fopt) _infLoadOpts(); if (_inf.views === null) _infLoadViews();
+    const view = _infView(), needs = _infNeeds(view.widgets);
+    if (needs.includes('dash') && !_inf.data && !_inf.busy) _infLoad();
+    needs.filter(n => n !== 'dash').forEach(_infExtLoad);
+    const [f, t] = _infRange(), fm = x => new Date(x + 'T12:00:00').toLocaleDateString('es-PE', { month: 'short', day: '2-digit', year: 'numeric' });
+    const tabs = [..._INF_SYS_ALL.filter(k => _infPins.has(k) || k === _inf.tab).map(k => [k, _INF_SYS[k][0], _INF_SYS[k][1]]), ...(_inf.views || []).filter(v => _infPins.has('v' + v.id) || 'v' + v.id === _inf.tab).map(v => ['v' + v.id, v.nombre, _INF_ICONS[v.icono] || _INF_ICONS.chart])];
+    const chip = (key, label, n, txt) => `<button type="button" class="cm-chip${n ? ' on' : ''}" onclick="LeadManagerModule.infPop(event,'${key}')">${n ? txt : label}${_cmI('chev', 12)}</button>`;
+    const nm = (arr, id) => (arr.find(x => x.id === id) || {}).nombre || '';
+    const bar = `<div class="inf-tabs rp-tabs">${tabs.map(([k, l, ic]) => `<button class="${_inf.tab === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('tab','${k}')">${I(`<path d="${ic}"/>`, 15)} ${esc(l)}</button>`).join('')}<button class="rp-tabs__add" title="Dashboards" aria-label="Dashboards" onclick="LeadManagerModule.infViews()">＋</button></div>
+      <div class="inf-filters rp-filters"><button class="rd-sel rd-date" onclick="LeadManagerModule.infDateOpen(event)"><span>${fm(f)} → ${fm(t)}</span>${I('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>', 15)}</button>
+        ${chip('tags', 'Todas las etiquetas', _inf.tags.size, `Etiquetas <b>${_inf.tags.size}</b>`)}${chip('camp', 'Todas las campañas', _inf.camp, esc(nm(_campaigns || [], _inf.camp) || 'Campaña'))}${chip('cli', 'Todos los clientes', _inf.cli, esc(nm(_clients || [], _inf.cli) || 'Cliente'))}${chip('reps', 'Todos los usuarios', _inf.reps.size, `Usuarios <b>${_inf.reps.size}</b>`)}${chip('roles', 'Todos los roles', _inf.roles.size, `Roles <b>${_inf.roles.size}</b>`)}
+        <select class="rd-sel" onchange="LeadManagerModule.infSet('disp',this.value)"><option value="">Todos los resultados</option>${_DISPOS.map(x => `<option value="${x[0]}"${_inf.disp === x[0] ? ' selected' : ''}>${esc(x[1])}</option>`).join('')}</select>
+        <span class="sp"></span><button class="ll-btn" onclick="LeadManagerModule.infExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 15)} Exportar</button><button class="ll-pri" onclick="LeadManagerModule.infShare()">${I('<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/>', 15)} Compartir</button></div>`;
+    const vbar = !view.sys ? `<div class="rp-vbar"><b>${esc(view.name)}</b><small>${view.v && view.v.visibilidad === 'yo' ? 'Solo tú' : 'Visible para todo el equipo'}</small><span class="sp"></span>${_inf.editing ? `<button class="ll-btn" onclick="LeadManagerModule.infWMenu(event)">＋ Añadir widget</button><button class="ll-pri" onclick="LeadManagerModule.infEdit(false)">Listo</button>` : `<button class="ll-btn" onclick="LeadManagerModule.infEdit(true)">Editar</button>`}<button class="ll-btn" onclick="LeadManagerModule.infViewRename('${view.id}')">Renombrar</button><button class="ll-btn" style="color:#B42318" onclick="LeadManagerModule.infViewDel('${view.id}')">Eliminar</button></div>` : '';
+    return `<div class="inf rp">${bar}${vbar}<div id="inf-body">${_infWidgetsHtml(view)}</div></div>`;
   }
-  const _infPct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
-  function _infOverview(d) {
-    const fn = d.funnel || {}, c = d.kpi.cur, seqs = d.seqs || [], I = _llI;
-    const FN = [['Enrolados', fn.enrolados || 0], ['Contactados', fn.contactados || 0], ['Respondieron', fn.respondieron || 0], ['Reunión', fn.reuniones || 0]], mx = Math.max(1, ...FN.map(x => x[1]));
-    const funnel = `<div class="rd-card"><h3>Resumen del embudo de prospectos</h3><div class="inf-fn">${FN.map(([l, v], i) => `<div class="inf-fn__r"><span>${l}</span><div><i style="width:${Math.round(v / mx * 100)}%"></i></div><b>${v}</b><em>${i ? _infPct(v, FN[i - 1][1]) + '%' : ''}</em></div>`).join('')}</div></div>`;
-    const metric = { resp: ['Porcentaje de respuesta %', s => _infPct(s.respuestas || 0, s.contactados || 0)], int: ['Interesado %', s => _infPct(s.reuniones || s.meetings || 0, s.contactados || 0)], bounce: ['Porcentaje de bounce %', null] }[_inf.met];
-    const rows = seqs.filter(s => (s.contactados || 0) > 0);
-    let cls;
-    if (_inf.met === 'bounce') cls = `<div class="rd-none">Rebotes de la campaña: <b>${_infPct(c.bounced || 0, c.sent || 0)}%</b> (${c.bounced || 0} de ${c.sent || 0} emails enviados)</div>`;
-    else { const sorted = [...rows].sort((a, b) => metric[1](b) - metric[1](a)), best = sorted.slice(0, 3), worst = [...sorted].reverse().slice(0, 3).filter(x => !best.includes(x) || sorted.length <= 3);
-      const li = (x, k) => `<div class="inf-rk" onclick="LeadManagerModule.openSequence(${x.id})"><span>${esc(x.nombre)}<small>${esc(x.cliente || '')}</small></span><b>${metric[1](x)}%</b></div>`;
-      cls = `<div class="inf-two"><div><h4>${I('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17M14 14.66V17M18 2H6v7a6 6 0 0 0 12 0V2z"/>', 15)} Mejor rendimiento</h4>${best.length ? best.map(li).join('') : '<div class="rd-none">Tus campañas principales aparecerán aquí</div>'}</div><div><h4>${I('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>', 15)} Requiere atención</h4>${worst.length ? worst.map(li).join('') : '<div class="rd-none">Las campañas a las que deberías prestar atención aparecen aquí</div>'}</div></div>`; }
-    const classCard = `<div class="rd-card"><h3>Clasificación de las campañas</h3><div class="rd-tabs">${[['resp', 'Porcentaje de respuesta %'], ['int', 'Interesado %'], ['bounce', 'Porcentaje de bounce %']].map(([k, l]) => `<button class="${_inf.met === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('met','${k}')">${l}</button>`).join('')}</div>${cls}</div>`;
-    const daily = d.daily || [], bucket = dt => { const x = new Date(String(dt).slice(0, 10) + 'T12:00:00'); if (_inf.gran === 'M') return x.toISOString().slice(0, 7); if (_inf.gran === 'W') { const m = new Date(x); m.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return m.toISOString().slice(0, 10); } return x.toISOString().slice(0, 10); };
-    const bk = new Map(); daily.forEach(r => bk.set(bucket(r.d), (bk.get(bucket(r.d)) || 0) + (r.n || 0)));
-    const keys = [...bk.keys()].sort(), mxb = Math.max(1, ...bk.values());
-    const timeCard = `<div class="rd-card"><div class="rd-card__hd"><h3>Actividad a lo largo del tiempo</h3><div class="ll-seg">${[['D', 'D'], ['W', 'S'], ['M', 'M']].map(([k, l]) => `<button class="${_inf.gran === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('gran','${k}')">${l}</button>`).join('')}</div></div>${keys.length ? `<div class="inf-bars">${keys.map(k => `<div title="${k}: ${bk.get(k)} toques"><i style="height:${Math.max(4, Math.round(bk.get(k) / mxb * 100))}%"></i><small>${k.slice(5)}</small></div>`).join('')}</div>` : '<div class="rd-none">No se han encontrado datos, prueba con otros filtros</div>'}</div>`;
-    const today = new Date(new Date().toDateString()), pend = (_activities || []).filter(a => a.estado === 'pendiente'), due = pend.filter(a => new Date(a.fecha) <= new Date());
-    const tasksCard = `<div class="rd-card"><h3>Tareas</h3><div class="rd-g3"><div class="rd-stat"><div><div class="rd-stat__v"><b>${pend.length}</b></div><div class="rd-stat__l">Pendientes</div></div></div><div class="rd-stat"><div><div class="rd-stat__v"><b>${due.length}</b></div><div class="rd-stat__l">Vencidas o de hoy</div></div></div><div class="rd-stat"><div><div class="rd-stat__v"><b>${(_activities || []).filter(a => a.estado === 'hecha' && new Date(a.fecha) >= today).length}</b></div><div class="rd-stat__l">Hechas hoy</div></div></div></div></div>`;
-    const ch = d.channels || [], tot = ch.reduce((n, r) => n + r.touches, 0);
-    const chCard = `<div class="rd-card"><h3>Rendimiento por canal</h3><div class="rd-card__sub">Prospectos alcanzados por canal</div>${ch.length ? `<table class="rd-t"><thead><tr><th>Canal</th><th>Toques</th><th>Prospectos</th><th></th></tr></thead><tbody>${ch.map(r => `<tr><td>${esc((_DASH_CH[r.ch] || _DASH_CH.otros)[0])}</td><td><b>${r.touches}</b></td><td>${r.contacted}</td><td><div class="inf-mini"><i style="width:${_infPct(r.touches, tot)}%"></i></div></td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin datos</div>'}</div>`;
-    const cs = _contacts || [], prob = [['Sin email', cs.filter(x => !x.email).length], ['Email rebotado', cs.filter(x => ['invalid', 'bounced'].includes(x.email_status)).length], ['Sin LinkedIn', cs.filter(x => !x.linkedin).length], ['Con dato por corregir', cs.filter(x => x.data_issue).length]];
-    const probCard = `<div class="rd-card"><h3>Problemas de prospectos</h3><div class="inf-prob">${prob.map(([l, n]) => `<div onclick="LeadManagerModule.go('contacts')"><b>${n}</b><span>${l}</span></div>`).join('')}</div></div>`;
-    const stats = `<div class="rd-g3 inf-kpis">${[['Prospectos contactados', c.contacted], ['Tasa de respuesta', _infPct(c.replies, c.contacted) + '%'], ['Invitaciones aceptadas', c.accepts], ['Reuniones', c.meetings], ['Emails enviados', c.sent || 0], ['Rebotes', c.bounced || 0]].map(([l, v]) => `<div class="rd-stat"><div><div class="rd-stat__v"><b>${v}</b></div><div class="rd-stat__l">${l}</div></div></div>`).join('')}</div>`;
-    return `${stats}${funnel}<div class="rd-g2">${classCard}${timeCard}</div>${tasksCard}<div class="rd-g2">${chCard}${probCard}</div>`;
+  // ── Filtros ──
+  let _infPopKey = '', _infPopTerm = '';
+  function _infPopList(key, term) {
+    const t = (term || '').toLowerCase(); let opts = [];
+    if (key === 'tags') opts = ((_inf.fopt || {}).tags || []).map(x => [x, x]);
+    else if (key === 'camp') opts = (_campaigns || []).filter(c => c.estado !== 'archivada').map(c => [String(c.id), c.nombre]);
+    else if (key === 'cli') opts = (_clients || []).map(c => [String(c.id), c.nombre]);
+    else if (key === 'reps') opts = ((_inf.fopt || {}).reps || []).map(r => [r.nombre, r.nombre]);
+    else if (key === 'roles') opts = [['admin', 'Admins'], ['member', 'Members']];
+    opts = opts.filter(o => !t || String(o[1]).toLowerCase().includes(t));
+    if (!opts.length) return `<div class="cm-pop__empty">${key === 'tags' ? 'Aún no hay etiquetas de campaña (se añaden en Campañas)' : 'Sin resultados'}</div>`;
+    const set = key === 'camp' ? new Set(_inf.camp ? [String(_inf.camp)] : []) : key === 'cli' ? new Set(_inf.cli ? [String(_inf.cli)] : []) : _inf[key];
+    return opts.map(o => `<label class="cm-opt"><input type="checkbox"${set.has(o[0]) ? ' checked' : ''} onchange="LeadManagerModule.infPopTick('${key}','${encodeURIComponent(o[0])}',this.checked)"><span class="cm-opt__t">${esc(o[1])}</span></label>`).join('');
   }
-  function _infCampaigns(d) {
-    const rows = d.seqs || [];
-    return `<div class="rd-card"><h3>Campañas y secuencias</h3>${rows.length ? `<table class="rd-t"><thead><tr><th>Secuencia</th><th>Cliente</th><th>Enrolados</th><th>Activos</th><th>Contactados</th><th>Respuestas</th><th>% resp.</th><th>Reuniones</th></tr></thead><tbody>${rows.map(x => `<tr onclick="LeadManagerModule.openSequence(${x.id})" style="cursor:pointer"><td><b>${esc(x.nombre)}</b></td><td>${esc(x.cliente || '—')}</td><td>${x.enrolados || 0}</td><td>${x.activos || 0}</td><td>${x.contactados || 0}</td><td>${x.respuestas || 0}</td><td>${_infPct(x.respuestas || 0, x.contactados || 0)}%</td><td>${x.reuniones || x.meetings || 0}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados con estos filtros</div>'}</div>`;
+  function infPop(ev, key) {
+    _infPopKey = key; _infPopTerm = '';
+    const ph = { tags: 'Buscar etiqueta…', camp: 'Buscar campaña…', cli: 'Buscar cliente…', reps: 'Buscar usuario…' }[key];
+    const el = _cmPopOpen(ev, `${ph ? `<div class="cm-pop__s"><input type="text" placeholder="${ph}" oninput="LeadManagerModule.infPopQ(this.value)"></div>` : ''}<div class="cm-pop__list" id="inf-pop-list">${_infPopList(key, '')}</div><button type="button" class="cm-pop__clear" onclick="LeadManagerModule.infPopClear('${key}')">Eliminar filtro</button>`, 300);
+    const i = el && el.querySelector('.cm-pop__s input'); if (i) i.focus();
   }
-  function _infActs(types) {
-    const [f, t] = _infRange(), byId = new Map((_contacts || []).map(c => [c.id, c]));
-    return (_activities || []).filter(a => a.estado === 'hecha' && String(a.fecha).slice(0, 10) >= f && String(a.fecha).slice(0, 10) <= t && (!types || types(a))).filter(a => !_inf.disp || (byId.get(a.contact_id) || {}).disposition === _inf.disp)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 80).map(a => ({ a, c: byId.get(a.contact_id) || {} }));
+  function infPopQ(v) { _infPopTerm = v; const l = document.getElementById('inf-pop-list'); if (l) l.innerHTML = _infPopList(_infPopKey, v); }
+  function infPopTick(key, enc, on) {
+    const v = decodeURIComponent(enc);
+    if (key === 'camp') _inf.camp = on ? parseInt(v) : 0; else if (key === 'cli') _inf.cli = on ? parseInt(v) : 0; else if (on) _inf[key].add(v); else _inf[key].delete(v);
+    const l = document.getElementById('inf-pop-list'); if (l) l.innerHTML = _infPopList(key, _infPopTerm);
+    _infReset();
   }
-  function _infActTable(rows) {
-    return rows.length ? `<table class="rd-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Prospecto</th><th>Detalle</th></tr></thead><tbody>${rows.map(({ a, c }) => `<tr ${a.contact_id ? `onclick="LeadManagerModule.openContactPage(${a.contact_id})" style="cursor:pointer"` : ''}><td>${new Date(a.fecha).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(a.tipo || '').replace(/_/g, ' '))}</td><td>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || '—')}</td><td>${esc(String(a.nota || '').slice(0, 90))}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin actividad en este periodo</div>';
+  function infPopClear(key) { if (key === 'camp') _inf.camp = 0; else if (key === 'cli') _inf.cli = 0; else _inf[key].clear(); _cmPopClose(); _infReset(); }
+  function infSet(k, v) {
+    if (k === 'tab') { _inf.tab = v; _inf.editing = false; _renderBody(); return; }
+    if (k === 'camp' || k === 'cli') { _inf[k] = parseInt(v) || 0; _infReset(); return; }
+    if (k === 'disp') { _inf.disp = v; _infReset(); return; }
+    if (k === 'canal') { _inf.canal = v; delete _inf.ext.campaigns; _renderBody(); return; }
+    if (k === 'wd') { _inf.wd = v === true || v === 'true'; delete _inf.ext.activity; delete _inf.ext.team; _renderBody(); return; }
+    _inf[k] = v; if (_infBodyAlive()) _infPaintBody(); else _renderBody();
   }
-  function _infActivity() { return `<div class="rd-card"><h3>Actividad reciente</h3>${_infActTable(_infActs())}</div>`; }
-  function _infCalls() { const rows = _infActs(a => a.tipo === 'llamada' || /llamada/i.test(a.canal || '')); return `<div class="rd-card"><h3>Llamadas</h3><div class="rd-g3"><div class="rd-stat"><div><div class="rd-stat__v"><b>${rows.length}</b></div><div class="rd-stat__l">Llamadas en el periodo</div></div></div></div><div style="height:12px"></div>${_infActTable(rows)}</div>`; }
-  function _infTeam(d) {
-    const rows = d.clients || [];
-    return `<div class="rd-card"><h3>Equipo y clientes</h3>${rows.length ? `<table class="rd-t"><thead><tr><th>Cliente</th><th>Contactos</th><th>Contactados</th><th>Respuestas</th><th>% resp.</th><th>Reuniones</th></tr></thead><tbody>${rows.map(x => `<tr><td><b>${esc(x.nombre)}</b></td><td>${x.contactos || 0}</td><td>${x.contactados || 0}</td><td>${x.respuestas || 0}</td><td>${_infPct(x.respuestas || 0, x.contactados || 0)}%</td><td>${x.reuniones || x.meetings || 0}</td></tr>`).join('')}</tbody></table>` : '<div class="rd-none">Sin resultados con estos filtros</div>'}</div>`;
+  function infAbove(id, v) { _inf.above[id] = _inf.above[id] === v ? '' : v; _infPaintBody(); }
+  function infPreset(k) { _inf.preset = k; _cmPopClose(); _infReset(); }
+  function infDateOpen(ev) {
+    const [f, t] = _infRange();
+    _cmPopOpen(ev, `<div class="rp-dp"><div class="rp-dp__in"><label>Desde<input type="date" id="inf-f" value="${f}"></label><label>Hasta<input type="date" id="inf-t" value="${t}"></label></div><button class="cm-pop__ok" onclick="LeadManagerModule.infDateApply()">Aplicar</button><div class="cm-pop__t">Sugerencias</div>${_INF_PRE.map(([k, l]) => `<button class="cm-mi${_inf.preset === k ? ' is-on' : ''}" onclick="LeadManagerModule.infPreset('${k}')"><span>${l}</span></button>`).join('')}</div>`, 270);
   }
+  function infDateApply() {
+    const f = (document.getElementById('inf-f') || {}).value, t = (document.getElementById('inf-t') || {}).value;
+    if (!f || !t || f > t) { showBanner('Elige un rango de fechas válido.', 'info'); return; }
+    _inf.preset = 'custom'; _inf.from = f; _inf.to = t; _cmPopClose(); _infReset();
+  }
+  // ── Exportar y compartir ──
   function infExport() {
-    const d = _inf.data; if (!d || !d.seqs) { showBanner('Espera a que cargue el informe.', 'info'); return; }
-    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', rows = [['Secuencia', 'Cliente', 'Enrolados', 'Activos', 'Contactados', 'Respuestas', 'Reuniones'], ...d.seqs.map(x => [x.nombre, x.cliente || '', x.enrolados || 0, x.activos || 0, x.contactados || 0, x.respuestas || 0, x.reuniones || x.meetings || 0])];
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'informe-campanas.csv'; document.body.appendChild(a); a.click(); a.remove();
+    const ov = _rpX('overview') || _rpX('campaigns');
+    if (!ov || !ov.campaigns) { showBanner('Espera a que cargue el informe (o abre Overview o Campañas).', 'info'); return; }
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', [f, t] = _infRange();
+    const lines = [[`Informe de Nova ${f} → ${t}`], [], ['Campaña', 'Cliente', 'Enrolados', 'Contactados', 'Respondidos', '% respuesta', 'Interesados', 'Emails enviados', 'Rebotados']];
+    ov.campaigns.forEach(c => lines.push([c.nombre, c.cliente || '', c.enrolados, c.contactados, c.respondidos, _rpPct(c.respondidos, c.contactados), c.interesados, c.enviados, c.rebotados]));
+    if (ov.channelTable) { lines.push([], ['Canal', 'Intentado', 'Entregado', 'Comprometido', 'Respondido', 'Interesado', 'Rebotado']); ov.channelTable.forEach(r => lines.push([(_RP_KIND[r.k] || [r.k])[0], r.intentados, r.entregados, r.comprometidos, r.respondidos, r.interesados, r.rebotados])); }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + lines.map(r => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'informe-nova.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 600);
+  }
+  function infShare() {
+    const [f, t] = _infRange(), p = ['tab=lead-manager', 'informes=' + encodeURIComponent(_inf.tab), 'from=' + f, 'to=' + t];
+    if (_inf.camp) p.push('campaign=' + _inf.camp); if (_inf.cli) p.push('client=' + _inf.cli); if (_inf.tags.size) p.push('tags=' + encodeURIComponent([..._inf.tags].join(','))); if (_inf.reps.size) p.push('reps=' + encodeURIComponent([..._inf.reps].join(','))); if (_inf.roles.size) p.push('roles=' + [..._inf.roles].join(','));
+    const url = location.origin + '/?' + p.join('&'), ok = () => showBanner('✓ Enlace copiado con estos filtros — quien lo abra necesita sesión en Nova', 'success');
+    try { navigator.clipboard.writeText(url).then(ok, () => prompt('Copia el enlace:', url)); } catch (_) { prompt('Copia el enlace:', url); }
+  }
+  // ── Gestor de dashboards (el «+» de las pestañas) ──
+  function _infVmRows(term) {
+    const t = (term || '').toLowerCase(), I = _llI;
+    const rows = [..._INF_SYS_ALL.map(k => ({ key: k, nombre: _INF_SYS[k][0], ic: _INF_SYS[k][1], sys: true })), ...(_inf.views || []).map(v => ({ key: 'v' + v.id, nombre: v.nombre, ic: _INF_ICONS[v.icono] || _INF_ICONS.chart, sys: false, v }))].filter(r => !t || r.nombre.toLowerCase().includes(t));
+    return rows.map(r => `<div class="inf-vm__r"><span class="inf-vm__n">${I(`<path d="${r.ic}"/>`, 15)}<b>${esc(r.nombre)}</b><button class="inf-vm__pin${_infPins.has(r.key) ? ' on' : ''}" title="${_infPins.has(r.key) ? 'Quitar de las pestañas' : 'Fijar como pestaña'}" onclick="LeadManagerModule.infPin('${r.key}')">${I('<path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/>', 15)}</button></span><span class="inf-vm__w">${r.sys ? 'vista de Nova' : (r.v.mia ? 'creada por ti' : 'del equipo') + (r.v.visibilidad === 'yo' ? ' · solo tú' : '')}</span>${_inf.tab === r.key ? '<span class="cc-chip ok">Abierto</span>' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.infOpenView('${r.key}')">Abrir</button>`}<button class="cm-more" aria-label="Más" onclick="LeadManagerModule.infVmMenu(event,'${r.key}')">${_cmI('more', 16)}</button></div>`).join('') || '<div class="rd-none">Sin resultados</div>';
+  }
+  function infViews() {
+    document.getElementById('inf-vm')?.remove();
+    const m = document.createElement('div'); m.id = 'inf-vm'; m.className = 'fin-pi-backdrop'; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:660px"><div class="fin-pi-box__hd"><h3>Dashboards</h3><button class="fin-pi-x" onclick="document.getElementById('inf-vm').remove()">✕</button></div><div class="inf-vm"><p class="li-p">Explora, abre o gestiona los dashboards creados por ti y tu equipo.</p><div class="inf-vm__top"><div class="lm-search"><input type="text" placeholder="Buscar dashboard…" oninput="document.getElementById('inf-vm-list').innerHTML=LeadManagerModule._infVmRows(this.value)"></div><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.infViewNew()">＋ Crear dashboard</button></div><div id="inf-vm-list">${_infVmRows('')}</div></div></div>`;
+    document.body.appendChild(m);
+  }
+  const _infVmRefresh = () => { const l = document.getElementById('inf-vm-list'); if (l) l.innerHTML = _infVmRows(''); };
+  function infPin(k) { if (_infPins.has(k)) _infPins.delete(k); else _infPins.add(k); _infSavePins(); _infVmRefresh(); _renderBody(); }
+  function infOpenView(k) { document.getElementById('inf-vm')?.remove(); infSet('tab', k); }
+  function infVmMenu(ev, k) {
+    const own = k[0] === 'v' && ((_inf.views || []).find(x => 'v' + x.id === k) || {}).mia, it = (ic, l, fn) => `<button type="button" class="cm-mi" onclick="LeadManagerModule._cmPopClose();${fn}">${_cmI(ic)}<span>${l}</span></button>`;
+    _cmPopOpen(ev, it('copy', 'Duplicar vista', `LeadManagerModule.infViewDup('${k}')`) + (own ? it('doc', 'Renombrar', `LeadManagerModule.infViewRename('${k}')`) + it('archive', 'Eliminar', `LeadManagerModule.infViewDel('${k}')`) : ''), 220);
+  }
+  async function _infViewSave(body, id) {
+    const r = await apiFetch(`${API}/lm/report-views${id ? '/' + id : ''}`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo guardar'); return j;
+  }
+  function infViewNew() {
+    document.getElementById('inf-new')?.remove();
+    const m = document.createElement('div'); m.id = 'inf-new'; m.className = 'fin-pi-backdrop'; m.style.zIndex = 10010; m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:440px"><div class="fin-pi-box__hd"><h3>Crear vista personalizada</h3><button class="fin-pi-x" onclick="document.getElementById('inf-new').remove()">✕</button></div><div class="fin-pi-form"><label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre y icono de la pestaña</span><div style="display:flex;gap:8px"><select class="form-input" id="inf-n-ic" style="width:96px">${Object.keys(_INF_ICONS).map(k => `<option value="${k}">${{ chart: 'Gráfico', target: 'Objetivo', users: 'Equipo', mail: 'Email', flame: 'Fuego', star: 'Estrella' }[k]}</option>`).join('')}</select><input class="form-input" id="inf-n-nm" maxlength="60" placeholder="Nombre de la vista – p. ej., Revisión semanal" style="flex:1"></div></label>
+      <div class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Visibilidad</span><label class="cm-opt"><input type="radio" name="inf-n-vis" value="yo"><span class="cm-opt__t"><b>Solo yo</b> — solo tú puedes ver esta vista</span></label><label class="cm-opt"><input type="radio" name="inf-n-vis" value="todos" checked><span class="cm-opt__t"><b>Todos</b> — visible para todo tu equipo</span></label></div><div class="ctu-err fin-pi-full" id="inf-n-e"></div></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('inf-new').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="inf-n-ok">＋ Crear vista</button></div></div></div>`;
+    document.body.appendChild(m);
+    const nm = document.getElementById('inf-n-nm'); nm.focus();
+    const go = async () => { const v = nm.value.trim(); if (!v) { document.getElementById('inf-n-e').textContent = 'Escribe un nombre'; return; } document.getElementById('inf-n-ok').disabled = true; try { const j = await _infViewSave({ nombre: v, icono: document.getElementById('inf-n-ic').value, visibilidad: (document.querySelector('input[name="inf-n-vis"]:checked') || {}).value || 'todos', widgets: [] }); _inf.views.push(j); _infPins.add('v' + j.id); _infSavePins(); m.remove(); document.getElementById('inf-vm')?.remove(); _inf.tab = 'v' + j.id; _inf.editing = true; _renderBody(); showBanner('✓ Vista creada: añade los widgets que quieras', 'success'); } catch (e) { document.getElementById('inf-n-e').textContent = e.message; document.getElementById('inf-n-ok').disabled = false; } };
+    document.getElementById('inf-n-ok').onclick = go; nm.onkeydown = e => { if (e.key === 'Enter') go(); };
+  }
+  async function infViewDup(k) {
+    const src = _INF_SYS[k] ? { nombre: _INF_SYS[k][0], icono: 'chart', widgets: _INF_SYS[k][2] } : (() => { const v = (_inf.views || []).find(x => 'v' + x.id === k); return v ? { nombre: v.nombre, icono: v.icono, widgets: v.widgets } : null; })();
+    if (!src) return;
+    try { const j = await _infViewSave({ nombre: src.nombre + ' (copia)', icono: src.icono, visibilidad: 'yo', widgets: src.widgets }); _inf.views.push(j); _infPins.add('v' + j.id); _infSavePins(); document.getElementById('inf-vm')?.remove(); _inf.tab = 'v' + j.id; _inf.editing = true; _renderBody(); showBanner('✓ Vista duplicada: ya puedes editarla', 'success'); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function infViewRename(k) {
+    const v = (_inf.views || []).find(x => 'v' + x.id === k); if (!v) return;
+    _cmAsk('Renombrar vista', 'Nombre de la vista', v.nombre, 'Guardar', async nombre => { const j = await _infViewSave({ nombre }, v.id); Object.assign(v, j); _renderBody(); _infVmRefresh(); });
+  }
+  async function infViewDel(k) {
+    const v = (_inf.views || []).find(x => 'v' + x.id === k); if (!v) return;
+    if (!(await novaConfirm({ title: 'Eliminar vista', message: `Se elimina la vista «${esc(v.nombre)}» para quien la tenga. Los datos no se tocan.`, ok: 'Eliminar', tone: 'danger' }))) return;
+    try { const r = await apiFetch(`${API}/lm/report-views/${v.id}`, { method: 'DELETE' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo eliminar'); _inf.views = _inf.views.filter(x => x.id !== v.id); _infPins.delete(k); _infSavePins(); if (_inf.tab === k) { _inf.tab = 'overview'; _inf.editing = false; } _renderBody(); _infVmRefresh(); showBanner('Vista eliminada', 'success'); } catch (e) { showBanner(e.message, 'error'); }
+  }
+  function infEdit(on) { _inf.editing = !!on; _renderBody(); }
+  async function _infWSave(widgets) { const v = (_inf.views || []).find(x => 'v' + x.id === _inf.tab); if (!v) return; try { Object.assign(v, await _infViewSave({ widgets }, v.id)); _renderBody(); } catch (e) { showBanner(e.message, 'error'); } }
+  function infWDel(id) { const v = (_inf.views || []).find(x => 'v' + x.id === _inf.tab); if (v) _infWSave(v.widgets.filter(w => w !== id)); }
+  function infWAdd(id) { const v = (_inf.views || []).find(x => 'v' + x.id === _inf.tab); _cmPopClose(); if (v && !v.widgets.includes(id)) _infWSave([...v.widgets, id]); }
+  function infWMenu(ev) {
+    const v = (_inf.views || []).find(x => 'v' + x.id === _inf.tab); if (!v) return;
+    const html = _RPW_GROUPS.map(([g, ids]) => { const free = ids.filter(i => !v.widgets.includes(i)); return free.length ? `<div class="cm-pop__t">${g}</div>${free.map(i => `<button type="button" class="cm-mi" onclick="LeadManagerModule.infWAdd('${i}')"><span>${_RPW[i].t}</span></button>`).join('')}` : ''; }).join('');
+    _cmPopOpen(ev, html || '<div class="cm-pop__empty">Ya añadiste todos los widgets</div>', 340);
   }
   function _vReportsOld() {
     const acts = _activities || [];
@@ -39239,7 +40160,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function onLeadClientChange() { _fillCampaignSelect($('lm-outbound-client')?.value || '', ''); }
 
   // ── Campaña: drawer crear/editar (modal dinámico) ──
-  const _CMP_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['cerrada', 'Cerrada']];
+  const _CMP_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['cerrada', 'Cerrada'], ['archivada', 'Archivada']];
   // Nombre con código en vista previa: el prefijo (C0001-GRE - / C0001-GRE-S1 - ) va en gris dentro del campo, no se puede borrar; ella solo escribe lo que sigue.
   const _NM_RE = /^(?:C\d{4}-[A-Z0-9]+(?:-S\d+)?|CAM\d{3}(?:-S\d+)?)\s*[·\-—:]?\s*/;
   function _nmField(fid, lbl, nombre, ph) {
@@ -40303,6 +41224,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
         ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'],
         ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
+        ['antiguedad_cargo', 'Antigüedad en el cargo'], ['conexiones_total', 'Conexiones (total)'],
         ['buyer_role', 'Rol de compra (Buyer Role)'],
         ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'], ['idioma', 'Idioma del contacto (uno o varios)'],
         ['idioma_1', 'Idioma 1'], ['nivel_1', 'Nivel del idioma 1'], ['idioma_2', 'Idioma 2'], ['nivel_2', 'Nivel del idioma 2'],
@@ -40342,6 +41264,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     movil: ['mobile', 'mobile number', 'mobile phone', 'movil', 'celular', 'cell', 'cell phone', 'whatsapp'],
     cargo: ['title', 'job title', 'cargo', 'puesto', 'position', 'role', 'headline'],
     seniority: ['seniority', 'seniority level', 'nivel', 'nivel jerarquico'],
+    antiguedad_cargo: ['tenure in role', 'antiguedad en el cargo', 'antiguedad'],
+    conexiones_total: ['connections', 'conexiones', 'number of connections', '# connections', 'connection count'],
     departamento: ['department', 'departamento', 'area', 'function', 'functional level', 'departments'],
     linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url', 'personal linkedin'],
     ciudad: ['city', 'ciudad', 'localidad'],
@@ -42460,9 +43384,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
 
   // ── Importador (wizard con mapeo de columnas) ──
   let _imp = null;
-  function openImport(target, withCompanies) {
+  function openImport(target, withCompanies, enrollSeqId) {
     const t = target === 'companies' ? 'companies' : 'contacts';
-    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, updateExisting: true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: _gcli ? String(_gcli) : '' };
+    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, updateExisting: true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: _gcli ? String(_gcli) : '', enrollSeqId: enrollSeqId || null };
     document.getElementById('lm-imp-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'lm-imp-modal'; m.className = 'fin-pi-backdrop';
@@ -42735,9 +43659,25 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _impInner(`${_impHd('No se pudo completar')}<div class="lm-imp-body"><div class="lm-imp-err">${esc(msg)}</div></div><div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.closeImport()">Cerrar</button></div></div>`);
   }
 
-  function _impStepDone(d) {
+  // Si el import se abrió desde «Añadir prospectos» de una secuencia (botón Importar CSV
+  // en Lista de prospectos), los contactos tocados se enrolan solos ahí — importar ya
+  // significa "quiero esto en esta secuencia", no un paso aparte.
+  async function _impEnrollIfNeeded(d) {
+    const seqId = _imp && _imp.enrollSeqId;
+    const ids = Array.isArray(d.contactIds) ? d.contactIds : [];
+    if (!seqId || !ids.length) return null;
+    try {
+      const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, sequence_id: seqId }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'Error');
+      _seqContacts = null;
+      return j;
+    } catch (e) { return { error: e.message }; }
+  }
+  async function _impStepDone(d) {
     const isCo = _imp.target === 'companies';
     const stat = (n, l) => `<div class="lm-stat"><b>${n || 0}</b><span>${l}</span></div>`;
+    const enrol = await _impEnrollIfNeeded(d);
     _impInner(`${_impHd('Importación completa')}
       <div class="lm-imp-body">
         ${_impSteps(3)}
@@ -42750,11 +43690,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
             ${stat(d.companiesCreated, 'empresas nuevas')}
             ${stat(d.companiesUpdated, 'empresas actualizadas')}
             ${stat(d.companiesSkipped, 'empresas sin cambios')}
+            ${enrol && !enrol.error ? stat(enrol.added, 'añadidos a la secuencia') : ''}
           </div>
+          ${enrol && enrol.error ? `<div class="lm-imp-err">Se importaron, pero no se pudieron añadir a la secuencia: ${esc(enrol.error)}</div>` : ''}
+          ${enrol && enrol.misma_empresa && enrol.misma_empresa.length ? `<div class="lm-imp-err">${enrol.misma_empresa.length} no se añadieron: ya hay otro contacto activo de la misma empresa en esta secuencia.</div>` : ''}
           ${d.errors && d.errors.length ? `<div class="lm-imp-err">${d.errors.length} fila(s) con error — ${esc(d.errors.slice(0, 3).join(' · '))}</div>` : ''}
         </div>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.closeImport()">Cerrar</button></div></div>`);
+    if (_imp && _imp.enrollSeqId && _activeSeq === _imp.enrollSeqId) { try { await _seqLoadContacts(_imp.enrollSeqId); _renderBody(); } catch (_) {} }
   }
 
   // ── Drawer: Contacto (crear / editar) ──
@@ -44389,7 +45333,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
@@ -44423,7 +45367,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, envFilter, seqDoEnd, fixEmailSave, fixRowMenu, fixSkip, fixDisq, fixHints, fixHintUse, fixShowAll, seqMailDevice, seqTaskOpenG, taskToggleDd, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtPara, mtSave, mtSend, mtCancel,
-    sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
+    sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ, cmTab, cmPop, cmPopQ, cmPopTick, cmPopClear, cmClear, cmSetFav, cmSort, cmColsMenu, cmColTick, cmSel, cmSelAll, cmToggle, cmBulkPR, cmFav, cmTagsEdit, cmTagAdd, cmTagDel, cmBulkTags, cmBTPick, cmBTApply, cmBulkMore, cmBulkArchive, cmExport, cmFolderToggle, cmFolderNew, cmFolderMenu, cmFolderRename, cmFolderDel, cmMoveMenu, cmMoveTo, cmRowMenu, cmOpenNew, cmShare, cmArchiveOne, cmDup, cmGoSeq, cmSaveTpl, cmCreateMenu, cqSet, cqToday, cqRefresh, _cmPopClose, _cmSelIds,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
     wamOpen, wamClose, wamDesconectar,
@@ -47269,7 +48213,7 @@ const HerramientasModule = (() => {
   };
   // Vistas previas: la de Nova Activity (web) es una captura real de su popup; las otras dos son réplicas fieles de lo que se ve.
   const PREV = {
-    scraper: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Elevn Scraper LinkedIn Sales</div>
+    scraper: `<div class="hrm-win"><div class="hrm-win__bar"><img src="tool-scout.png" alt="" style="width:16px;height:16px;border-radius:4px;margin-right:7px;vertical-align:-3px">SCOUT · Sales Navigator</div>
       <div class="hrm-sc"><div class="hrm-sc__h">Scraping Leads from Sales Navigator</div>
         <div class="hrm-sc__l">Enter the number of pages to scrape: <span class="hrm-sc__in">1</span></div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Scrape Company Website (Slower)</div>
@@ -47295,7 +48239,7 @@ const HerramientasModule = (() => {
         <div class="hrm-sc__l">Siempre en la misma ventana, a la derecha</div>
         <div class="hrm-sc__l">Sin acumular ventanas nuevas en cada clic</div>
         <div class="hrm-sc__ck"><span class="hrm-sc__box"></span>Si la cierras, se abre de nuevo sola</div></div></div>`,
-    linkedin: `<div class="hrm-win"><div class="hrm-win__bar"><span class="hrm-win__dot"></span>Nova · LinkedIn</div>
+    linkedin: `<div class="hrm-win"><div class="hrm-win__bar"><img src="tool-flow.png" alt="" style="width:16px;height:16px;border-radius:4px;margin-right:7px;vertical-align:-3px">FLOW · secuencias y tareas</div>
       <div class="hrm-sc"><div class="hrm-sc__h">Conectar esta cuenta de LinkedIn a Nova</div>
         <div class="hrm-sc__l">Detecta la cuenta abierta en este Chrome</div>
         <div class="hrm-sc__l">Pides permiso y queda vinculada, sin tokens</div>
@@ -47331,15 +48275,15 @@ const HerramientasModule = (() => {
     { id: 'guia-respuestas', nombre: 'Guía · Cuando responde (ES y EN)', tipo: 'Guía de uso', ico: 'skill', prev: 'respuestas',
       desc: 'Para el equipo: qué hacer y qué contestar cuando un contacto responde a Outreach. Dos PDF en la misma carpeta, uno con los mensajes en español y otro con los mensajes en inglés, con índice y textos listos para copiar.',
       pasos: ['Pulsa <b>Descargar</b> y descomprime el archivo: obtienes la carpeta <b>Respuestas-Outreach</b> con los dos PDF.', 'Abre <b>respuestas-es.pdf</b> si la persona escribe en español, o <b>respuestas-en.pdf</b> si escribe en inglés (la explicación de cada caso es la misma; cambia el idioma de los mensajes para copiar).', 'Entra por el <b>índice</b>: un clic y estás en el caso. Copia el mensaje y rellena lo que va entre [corchetes] con los datos de la persona.'] },
-    { id: 'linkedin-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
-      desc: 'Exporta a Excel los leads y las cuentas de Sales Navigator: eliges cuántas páginas y la extensión hace el resto.',
+    { id: 'linkedin-scraper', nombre: 'SCOUT', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'scraper',
+      desc: 'Scraper y prospección para Sales Navigator: exporta a Excel los leads y las cuentas; eliges cuántas páginas y la extensión hace el resto.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> y activa el <b>Modo de desarrollador</b> (arriba a la derecha).', 'Pulsa <b>Cargar descomprimida</b> y elige esa carpeta.', 'Entra a Sales Navigator, abre una búsqueda y pulsa el icono de la extensión.'] },
     { id: 'nova-ventana', nombre: 'Nova · Ventana de búsqueda', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'ventana',
       desc: 'Las búsquedas con IA y los perfiles de LinkedIn que abres desde Nova se muestran siempre en la misma ventana, a la derecha, en vez de abrir una nueva en cada clic.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí).', 'Abre <b>chrome://extensions</b> en el Chrome donde usas Nova, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Elige esa carpeta y recarga Nova con <b>Ctrl+F5</b>. No hay nada más que configurar.', 'Prueba con el botón <b>IA</b> de un contacto en Por corregir: la ventana de la derecha se reutiliza.'] },
-    { id: 'nova-linkedin', nombre: 'Nova · LinkedIn', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'linkedin',
-      desc: 'Conecta una cuenta de LinkedIn a Nova: ejecuta las invitaciones, visitas y mensajes de tus secuencias con topes y horarios, y detecta aceptaciones y respuestas. Una copia por cada perfil de Chrome.',
-      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí). Obtienes la carpeta <b>nova-linkedin</b>.', 'En <b>el perfil de Chrome de la cuenta de LinkedIn</b> que quieres conectar, abre <b>chrome://extensions</b>, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Inicia sesión en LinkedIn en ese mismo perfil.', 'En Nova, en ese mismo Chrome: menú <b>⋮ del cliente → Conectar remitente → + Añadir remitente → LinkedIn</b>. Nova detecta la extensión y la cuenta de LinkedIn, te pide permiso y la vincula, sin copiar ningún token.', 'Repite en cada perfil de Chrome: cada uno queda vinculado a su propia cuenta de LinkedIn. Para actualizar, descarga la versión nueva, reemplaza la carpeta y pulsa ↻ en chrome://extensions.'] },
+    { id: 'nova-linkedin', nombre: 'FLOW', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'linkedin',
+      desc: 'Automatización de secuencias y tareas comerciales: ejecuta en tu cuenta de LinkedIn las invitaciones, visitas y mensajes de tus secuencias con topes y horarios, y detecta aceptaciones y respuestas. Una copia por cada perfil de Chrome.',
+      pasos: ['Descarga el archivo y descomprímelo en una carpeta fija (no la borres: Chrome la lee desde ahí). Obtienes la carpeta <b>flow</b>.', 'En <b>el perfil de Chrome de la cuenta de LinkedIn</b> que quieres conectar, abre <b>chrome://extensions</b>, activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'Inicia sesión en LinkedIn en ese mismo perfil.', 'En Nova, en ese mismo Chrome: menú <b>⋮ del cliente → Conectar remitente → + Añadir remitente → LinkedIn</b>. Nova detecta la extensión y la cuenta de LinkedIn, te pide permiso y la vincula, sin copiar ningún token.', 'Repite en cada perfil de Chrome: cada uno queda vinculado a su propia cuenta de LinkedIn. Para actualizar, descarga la versión nueva, reemplaza la carpeta y pulsa ↻ en chrome://extensions.'] },
     { id: 'nova-activity-web', nombre: 'Elevn Activity · Web', tipo: 'Extensión de Chrome', ico: 'chrome', prev: 'web', token: true,
       desc: 'Mide el tiempo real por sitio web y lo asocia a la tarea que estás cronometrando en Nova. Solo envía dominio, título y tiempo.',
       pasos: ['Descarga el archivo y descomprímelo en una carpeta fija.', 'Abre <b>chrome://extensions</b> (o <b>edge://extensions</b>), activa el <b>Modo de desarrollador</b> y pulsa <b>Cargar descomprimida</b>.', 'En esta tarjeta pulsa <b>Obtener mi token</b> y cópialo.', 'Abre el popup de la extensión, pega el token y comprueba que diga <b>Conectado</b>.'] },
@@ -47443,6 +48387,143 @@ const HerramientasModule = (() => {
   return { render, descargar, pasos, abrirTT, tab, buscar, verComo, vista, cerrar };
 })();
 window.HerramientasModule = HerramientasModule;
+
+// ── Soluciones: productos propios de pago que se venden por fuera de Nova (extensiones/apps con licencia). Por ahora solo el LinkedIn Sales Scraper. ──
+const SolucionesModule = (() => {
+  const E = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let _product = null;       // id del producto abierto, o null = lista de productos
+  let _licenses = null;
+  let _q = '';
+  const PRODUCTS_FALLBACK = [{ id: 'li-scraper', nombre: 'LinkedIn Sales Scraper', tipo: 'Extensión de Chrome', precio: 'USD 39 (pago único)' }];
+  let _products = PRODUCTS_FALLBACK;
+
+  function _fmtDate(s) { if (!s) return '—'; try { return new Date(s).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (_) { return s; } }
+  function _supportBadge(l) {
+    const vigente = new Date(l.support_until) > new Date();
+    return `<span class="sol-pill ${vigente ? 'sol-pill--ok' : 'sol-pill--warn'}">${vigente ? 'Soporte vigente' : 'Soporte vencido'} · ${_fmtDate(l.support_until)}</span>`;
+  }
+  function _statusBadge(l) {
+    return l.status === 'active' ? '<span class="sol-pill sol-pill--ok">Activa</span>' : '<span class="sol-pill sol-pill--bad">Revocada</span>';
+  }
+
+  function _productCard(p) {
+    return `<div class="pl-gc sol-pc" onclick="SolucionesModule.openProduct('${p.id}')">
+      <div class="pl-thumb pl-thumb--t is-ready"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+      <div class="pl-gc__b"><div class="pl-card__top"><span class="hrm-chip">${E(p.tipo)}</span><span class="hrm-card__meta">${E(p.precio)}</span></div>
+        <h3 class="pl-gc__t">${E(p.nombre)}</h3><p class="pl-gc__m">Ver y gestionar las licencias vendidas.</p></div></div>`;
+  }
+
+  function _listHtml() {
+    return `<div class="pl-wrap"><div class="pl-hd"><h1 class="pl-h1">Soluciones</h1></div>
+      <p class="hrm-foot" style="margin-top:0">Productos propios que vendes por fuera de Nova (Gumroad, etc.). Entra a uno para ver y gestionar sus licencias.</p>
+      <div class="pl-gal">${_products.map(_productCard).join('')}</div></div>`;
+  }
+
+  function _rowHtml(l) {
+    const pct = Math.round(((l.devices || []).length / l.max_devices) * 100);
+    return `<tr>
+      <td><code class="sol-key">${E(l.license_key)}</code> <button class="cpm-ib cpm-ib--bare" title="Copiar" onclick="SolucionesModule.copyKey('${l.license_key}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td>
+      <td>${E(l.email)}</td>
+      <td>${_statusBadge(l)}</td>
+      <td>${(l.devices || []).length}/${l.max_devices} equipos</td>
+      <td>${_supportBadge(l)}</td>
+      <td>${_fmtDate(l.created_at)}</td>
+      <td>${l.last_check_at ? _fmtDate(l.last_check_at) : '—'}</td>
+      <td class="sol-td-note">${E(l.note || '')}</td>
+      <td class="sol-td-act">
+        <button class="btn btn-ghost btn-sm" onclick="SolucionesModule.resetDevices('${l.license_key}')" title="Libera los equipos activados">Reiniciar equipos</button>
+        <button class="btn btn-ghost btn-sm" onclick="SolucionesModule.renew('${l.license_key}')" title="Extiende el soporte/actualizaciones">Renovar soporte</button>
+        ${l.status === 'active'
+          ? `<button class="btn btn-ghost btn-sm sol-danger" onclick="SolucionesModule.revoke('${l.license_key}')">Revocar</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="SolucionesModule.reactivate('${l.license_key}')">Reactivar</button>`}
+      </td>
+    </tr>`;
+  }
+
+  function _productHtml() {
+    const p = _products.find(x => x.id === _product) || { nombre: _product };
+    const q = _q.trim().toLowerCase();
+    const rows = (_licenses || []).filter(l => !q || (l.email + ' ' + l.license_key + ' ' + (l.note || '')).toLowerCase().includes(q));
+    return `<div class="pl-wrap"><div class="pl-hd"><button class="ll-btn" onclick="SolucionesModule.render('soluciones-body')">‹ Soluciones</button><h1 class="pl-h1">${E(p.nombre)}</h1><span class="sp"></span><button class="btn btn-primary" onclick="SolucionesModule.openGenerate()">+ Generar licencia</button></div>
+      <div class="pl-tb"><label class="pl-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" placeholder="Buscar por email, clave o nota…" value="${E(_q)}" oninput="SolucionesModule.search(this.value)"></label><span class="pl-tb__sp"></span><span class="hrm-card__meta">${(_licenses || []).length} licencia${(_licenses || []).length === 1 ? '' : 's'}</span></div>
+      ${_licenses === null ? '<div class="pl-empty">Cargando…</div>' : !rows.length ? '<div class="pl-empty">Sin licencias todavía. Genera la primera con el botón de arriba.</div>' : `
+      <div class="sol-tbl-wrap"><table class="sol-tbl"><thead><tr><th>Clave</th><th>Email</th><th>Estado</th><th>Equipos</th><th>Soporte</th><th>Creada</th><th>Últ. verificación</th><th>Nota</th><th></th></tr></thead>
+      <tbody>${rows.map(_rowHtml).join('')}</tbody></table></div>`}
+      </div>`;
+  }
+
+  let _host = null;
+  function _paint() { if (_host && _host.isConnected) _host.innerHTML = _product ? _productHtml() : _listHtml(); }
+
+  async function render(id) {
+    const el = document.getElementById(id); if (!el) return;
+    _host = el; _product = null; _paint();
+    try { const r = await apiFetch(`${API}/soluciones/products`); if (r.ok) { const p = await r.json(); if (p && p.length) _products = p; } } catch (_) {}
+    _paint();
+  }
+
+  async function openProduct(id) {
+    _product = id; _licenses = null; _q = ''; _paint();
+    try {
+      const r = await apiFetch(`${API}/soluciones/licenses?product=${encodeURIComponent(id)}`);
+      _licenses = r.ok ? await r.json() : [];
+    } catch (_) { _licenses = []; }
+    _paint();
+  }
+  function search(v) { _q = v || ''; _paint(); }
+  function copyKey(k) { try { navigator.clipboard.writeText(k); showBanner('Clave copiada', 'success'); } catch (_) {} }
+
+  async function _reload() { await openProduct(_product); }
+
+  function openGenerate() {
+    const html = `<div class="cpm-pop-overlay" id="sol-gen-ov" onclick="if(event.target===this)SolucionesModule.closeGenerate()">
+      <div class="cpm-pop" style="max-width:420px">
+        <h3 style="margin-top:0">Generar licencia</h3>
+        <label class="pl-field">Email del comprador<input type="email" id="sol-gen-email" placeholder="comprador@email.com"></label>
+        <label class="pl-field">Máximo de equipos<input type="number" id="sol-gen-devices" value="3" min="1" max="10"></label>
+        <label class="pl-field">Nota (opcional)<input type="text" id="sol-gen-note" placeholder="venta Gumroad 2026-11-24"></label>
+        <div class="pl-gc__a" style="margin-top:14px"><button class="btn btn-primary" onclick="SolucionesModule.submitGenerate()">Generar</button><button class="btn btn-ghost" onclick="SolucionesModule.closeGenerate()">Cancelar</button></div>
+      </div></div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    document.getElementById('sol-gen-email')?.focus();
+  }
+  function closeGenerate() { document.getElementById('sol-gen-ov')?.remove(); }
+  async function submitGenerate() {
+    const email = document.getElementById('sol-gen-email')?.value.trim();
+    const devices = parseInt(document.getElementById('sol-gen-devices')?.value, 10) || 3;
+    const note = document.getElementById('sol-gen-note')?.value.trim();
+    if (!email) { showBanner('Falta el email del comprador', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/soluciones/licenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product: _product, email, max_devices: devices, note }) });
+      if (!r.ok) throw new Error('x');
+      const lic = await r.json();
+      closeGenerate();
+      await _reload();
+      copyKey(lic.license_key);
+      showBanner(`Licencia ${lic.license_key} creada y copiada al portapapeles`, 'success');
+    } catch (_) { showBanner('No se pudo crear la licencia', 'error'); }
+  }
+
+  async function revoke(key) {
+    if (!confirm(`¿Revocar la licencia ${key}? El comprador dejará de poder validarla.`)) return;
+    try { await apiFetch(`${API}/soluciones/licenses/${key}/revoke`, { method: 'POST' }); await _reload(); showBanner('Licencia revocada', 'success'); } catch (_) { showBanner('Error al revocar', 'error'); }
+  }
+  async function reactivate(key) {
+    try { await apiFetch(`${API}/soluciones/licenses/${key}/activate`, { method: 'POST' }); await _reload(); showBanner('Licencia reactivada', 'success'); } catch (_) { showBanner('Error al reactivar', 'error'); }
+  }
+  async function resetDevices(key) {
+    if (!confirm('¿Liberar los equipos activados de esta clave? Útil si el comprador cambió de PC.')) return;
+    try { await apiFetch(`${API}/soluciones/licenses/${key}/reset-devices`, { method: 'POST' }); await _reload(); showBanner('Equipos liberados', 'success'); } catch (_) { showBanner('Error al reiniciar equipos', 'error'); }
+  }
+  async function renew(key) {
+    const months = parseInt(prompt('¿Cuántos meses de soporte añadir?', '9') || '', 10);
+    if (!months) return;
+    try { await apiFetch(`${API}/soluciones/licenses/${key}/renew`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ months }) }); await _reload(); showBanner('Soporte renovado', 'success'); } catch (_) { showBanner('Error al renovar', 'error'); }
+  }
+
+  return { render, openProduct, search, copyKey, openGenerate, closeGenerate, submitGenerate, revoke, reactivate, resetDevices, renew };
+})();
+window.SolucionesModule = SolucionesModule;
 
 // ── Plantillas: propuestas comerciales y métodos de pago por oferta (nombre editable), marca/logos, idiomas y copias generadas ──
 const PlantillasModule = (() => {
@@ -55431,6 +56512,7 @@ function initApp() {
     if (tabName === 'herramientas') HerramientasModule.render('herramientas-body');
     if (tabName === 'plantillas') PlantillasModule.render('plantillas-body');
     if (tabName === 'inicios' && typeof InicioModule !== 'undefined') InicioModule.render('inicios-body');
+    if (tabName === 'soluciones') SolucionesModule.render('soluciones-body');
     if (tabName.indexOf('contenido') === 0 && typeof ContenidoModule !== 'undefined') ContenidoModule.render(tabName);
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();

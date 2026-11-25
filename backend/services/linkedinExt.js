@@ -72,6 +72,44 @@ function localParts(d, tz) {
 }
 const daysBetween = (ymd1, ymd2) => Math.round((Date.parse(ymd2 + 'T00:00:00Z') - Date.parse(ymd1 + 'T00:00:00Z')) / 864e5);
 
+// ── Huella: nada de rutinas idénticas día tras día ──
+// Cada DÍA (estable durante ese día, distinto del siguiente) la cuenta tiene su propio perfil: cuánto hace (72–100 % de los topes),
+// a qué hora arranca (hasta 45 min después de abrir el horario), cuándo termina (hasta 30 min antes) y una pausa de descanso a mediodía de 30–75 min.
+const hrand = s => parseInt(crypto.createHash('md5').update(String(s)).digest('hex').slice(0, 8), 16) / 0x100000000;
+function perfilDia(a, ymd) {
+  const k = x => hrand(a.id + '|' + ymd + '|' + x);
+  let ini = a.hora_ini + 0.75 * k('i'), fin = a.hora_fin - 0.5 * k('e');
+  if (fin - ini < 1) { ini = a.hora_ini; fin = a.hora_fin; }
+  let pausa = null;
+  if (fin - ini >= 6) { const d = 0.5 + 0.75 * k('d'), s = 12 + 1.5 * k('p'); if (s > ini + 1 && s + d < fin - 1) pausa = [s, s + d]; }
+  return { ini, fin, pausa, f: 0.72 + 0.28 * k('f') };
+}
+const fmtH = h => { const m = Math.round(h * 60); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+
+// ── ¿Cuándo vuelve a abrir el horario de la cuenta? (para decirle a la persona a qué hora empieza) ──
+function proximaVentana(a, now) {
+  const dias = a.dias || DEF.dias, tz = a.tz, lp0 = localParts(now, tz);
+  const enPausa = (pd, h) => !!(pd.pausa && h >= pd.pausa[0] && h < pd.pausa[1]);
+  const dentro = p => { const pd = perfilDia(a, p.ymd); return dias.includes(p.dow) && p.hour >= pd.ini && p.hour < pd.fin && !enPausa(pd, p.hour); };
+  const pd0 = perfilDia(a, lp0.ymd);
+  if (dentro(lp0)) return { en_ventana: true, fin: pd0.fin, finTxt: fmtH(pd0.fin) };
+  if (dias.includes(lp0.dow) && lp0.hour >= pd0.ini && lp0.hour < pd0.fin && enPausa(pd0, lp0.hour)) return { en_ventana: false, descanso: true, ts: new Date(now.getTime() + (pd0.pausa[1] - lp0.hour) * 3600e3).toISOString(), dia: 'hoy', hora: fmtH(pd0.pausa[1]), fin: pd0.fin, finTxt: fmtH(pd0.fin), tz };
+  const DOW = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+  for (let m = 15; m <= 8 * 24 * 60; m += 15) {
+    const t = new Date(now.getTime() + m * 60000), p = localParts(t, tz);
+    if (dentro(p)) { const pd = perfilDia(a, p.ymd), diff = daysBetween(lp0.ymd, p.ymd); return { en_ventana: false, ts: new Date(t.getTime() - (p.hour - pd.ini) * 3600e3).toISOString(), dia: diff === 0 ? 'hoy' : diff === 1 ? 'mañana' : DOW[p.dow], hora: fmtH(pd.ini), fin: pd.fin, finTxt: fmtH(pd.fin), tz }; }
+  }
+  return { en_ventana: false, sin_dias: true };
+}
+// Lo que la persona ve en el panel cuando no hay nada que hacer AHORA: cuánto hay en cola, qué viene y cuándo empieza.
+async function resumenCola(pool, a, now) {
+  const [{ rows: [c] }, { rows: prox }] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE tipo='visit')::int AS visit, COUNT(*) FILTER (WHERE tipo='invite')::int AS invite, COUNT(*) FILTER (WHERE tipo='message')::int AS message, COUNT(*) FILTER (WHERE tipo='inmail')::int AS inmail FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('visit','invite','message','inmail')`, [a.id]),
+    pool.query(`SELECT q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 4`, [a.id]),
+  ]);
+  return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: prox.map(r => ({ tipo: r.tipo, quien: r.nombre || r.slug })), ventana: proximaVentana(a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
+}
+
 // ── Límites efectivos de HOY (calentamiento incluido) ──
 function efectivos(a, now) {
   const lp = localParts(now, a.tz);
@@ -88,7 +126,9 @@ function efectivos(a, now) {
       inmail = Math.min(a.inmail_dia, 2 + dia);
     }
   }
-  return { inv, inv_semana: a.inv_semana, msg, vis, inmail, total, dia, calentando, local: lp };
+  // El tope de HOY es un 72–100 % del configurado (distinto cada día): hacer exactamente el máximo todos los días es una huella muy clara.
+  const pd = perfilDia(a, lp.ymd), esc = x => Math.max(1, Math.round(x * pd.f));
+  return { inv: esc(inv), inv_semana: a.inv_semana, msg: esc(msg), vis: esc(vis), inmail: esc(inmail), total: esc(total), dia, calentando, local: lp, perfil: pd };
 }
 
 // ── ¿Puede la cuenta hacer una acción de este tipo AHORA? ──
@@ -101,7 +141,9 @@ function evaluar(a, hist, tipo, now, rnd, conNota) {
   if (a.pausa_hasta && new Date(a.pausa_hasta) > now) return { ok: false, motivo: 'pausa_hasta', espera_s: Math.min(3600, Math.ceil((new Date(a.pausa_hasta) - now) / 1000)) };
   const ef = efectivos(a, now), lp = ef.local;
   if (!(a.dias || DEF.dias).includes(lp.dow)) return { ok: false, motivo: 'dia_no_laborable', espera_s: 3600 };
-  if (lp.hour < a.hora_ini || lp.hour >= a.hora_fin) return { ok: false, motivo: 'fuera_de_horario', espera_s: 1800 };
+  const pd = ef.perfil;
+  if (lp.hour < pd.ini || lp.hour >= pd.fin) return { ok: false, motivo: 'fuera_de_horario', espera_s: 1800 };
+  if (pd.pausa && lp.hour >= pd.pausa[0] && lp.hour < pd.pausa[1]) return { ok: false, motivo: 'pausa_descanso', espera_s: Math.max(60, Math.ceil((pd.pausa[1] - lp.hour) * 3600)) };
   const esCheck = String(tipo).startsWith('check_');
   if (!esCheck && hist.total_hoy >= ef.total) return { ok: false, motivo: 'tope_total_dia', espera_s: 3600 };
   const caps = esCheck ? [hist.chequeos_hoy || 0, DEF.chequeos_dia] :  { invite: [hist.inv_hoy, ef.inv], message: [hist.msg_hoy, ef.msg], visit: [hist.vis_hoy, ef.vis], inmail: [hist.inmail_hoy, ef.inmail] }[tipo];
@@ -109,13 +151,40 @@ function evaluar(a, hist, tipo, now, rnd, conNota) {
   if (caps[0] >= caps[1]) return { ok: false, motivo: 'tope_' + tipo + '_dia', espera_s: 3600 };
   if (tipo === 'invite' && hist.inv_semana >= ef.inv_semana) return { ok: false, motivo: 'tope_invitaciones_semana', espera_s: 3600 };
   if (tipo === 'invite' && conNota && a.plan !== 'premium' && (hist.notas_mes || 0) >= DEF.notas_mes_gratis) return { ok: false, motivo: 'tope_notas_mes_cuenta_gratis', espera_s: 3600 };
-  // espera aleatoria entre acciones: nunca ráfagas
-  const gap = a.gap_min + rnd * Math.max(0, a.gap_max - a.gap_min);
-  if (hist.ultima) {
+  // Espera entre acciones: la hora de la próxima se SORTEA UNA SOLA VEZ al terminar la anterior (proxima_accion_at) y se respeta.
+  // (Antes se volvía a sortear en cada sondeo: eso empujaba las acciones hacia el mínimo y las dejaba casi a intervalos regulares.)
+  if (a.proxima_accion_at) {
+    const t = new Date(a.proxima_accion_at);
+    if (t > now) return { ok: false, motivo: 'espera_entre_acciones', espera_s: Math.ceil((t - now) / 1000) };
+  } else if (hist.ultima) {
+    const gap = a.gap_min + rnd * Math.max(0, a.gap_max - a.gap_min);
     const falta = gap - (now - new Date(hist.ultima)) / 1000;
     if (falta > 0) return { ok: false, motivo: 'espera_entre_acciones', espera_s: Math.ceil(falta) };
   }
   return { ok: true, ef };
+}
+// Segundos de espera hasta la próxima acción. Nunca un número redondo ni constante: uniforme entre el mínimo y el máximo de la cuenta,
+// con un 12 % de «pausas largas» (como quien se distrae) y algo de ruido en segundos.
+// «media» = lo que toca para REPARTIR el resto del tope del día en lo que queda de horario (así trabaja lemlist: ~1 acción cada 21 min, repartidas
+// por toda la jornada y no en ráfagas al empezar). Alrededor de esa media se varía ±30 %, con alguna pausa larga y ruido en segundos.
+function siguienteEspera(a, media) {
+  const mn = Math.max(20, a.gap_min || 300), tope = Math.max(4 * (a.gap_max || 1200), mn);
+  const m = Math.min(Math.max(media || ((a.gap_min || 300) + (a.gap_max || 1200)) / 2, mn), tope);
+  let s = m * (0.7 + Math.random() * 0.6);
+  if (Math.random() < 0.08) s *= 1.3 + Math.random() * 0.7;
+  return Math.round(Math.max(mn, s) + (Math.random() * 2 - 1) * 17 + Math.random());
+}
+// Media de espera que reparte lo que falta del tope del día de ESE tipo de acción en lo que queda del horario de hoy.
+async function mediaReparto(pool, a, tipo, sumaUna) {
+  try {
+    const ahora = new Date(), ef = efectivos(a, ahora), hist = await historial(pool, a, ahora);
+    const usado = ({ invite: hist.inv_hoy, message: hist.msg_hoy, visit: hist.vis_hoy, inmail: hist.inmail_hoy })[tipo], cap = ({ invite: ef.inv, message: ef.msg, visit: ef.vis, inmail: ef.inmail })[tipo];
+    if (usado == null || !cap) return 0;
+    const pd = ef.perfil; let resto = pd.fin - ef.local.hour;
+    if (pd.pausa && ef.local.hour < pd.pausa[1]) resto -= pd.pausa[1] - Math.max(ef.local.hour, pd.pausa[0]);   // el descanso no cuenta como tiempo de trabajo
+    const restoDia = Math.max(0, resto) * 3600, quedan = Math.max(1, cap - usado - (sumaUna ? 1 : 0));
+    return restoDia > 0 ? restoDia / quedan : 0;
+  } catch (_) { return 0; }
 }
 
 // ── Enlaces de LinkedIn ──
@@ -142,6 +211,9 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratis'`);
   await pool.query(`ALTER TABLE li_accounts ALTER COLUMN inmail_dia SET DEFAULT 5, ALTER COLUMN gap_min SET DEFAULT 300, ALTER COLUMN gap_max SET DEFAULT 1200`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS li_slug TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS proxima_accion_at TIMESTAMPTZ`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS li_ext_log (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, account_id INTEGER, nivel TEXT NOT NULL DEFAULT 'error', tipo TEXT NOT NULL DEFAULT '', msg TEXT NOT NULL DEFAULT '', ctx JSONB, version TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS li_ext_log_idx ON li_ext_log (user_id, created_at DESC)`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS snapshot TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS datos JSONB`);
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS linkedin_auto BOOLEAN NOT NULL DEFAULT FALSE`).catch(() => {});
@@ -295,8 +367,11 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const { rows: cuentas } = await pool.query(`SELECT * FROM li_accounts WHERE estado='activa' AND ultimo_visto > NOW() - INTERVAL '10 minutes'`);
       for (const a of cuentas) {
         for (const t of CHEQUEOS) {
-          const { rows: [ya] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND tipo=$2 AND (estado IN ('queued','taken') OR created_at > NOW() - ($3 || ' minutes')::interval) LIMIT 1`, [a.id, t, String(CHEQUEO_CADA_MIN[t])]);
+          // Las lecturas de control (conexiones, bandeja, notificaciones) tampoco van a intervalos fijos: pasado el 70 % del período se
+          // dispara con una probabilidad por minuto, así llegan en momentos distintos cada vez.
+          const { rows: [ya] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND tipo=$2 AND (estado IN ('queued','taken') OR created_at > NOW() - ($3 || ' minutes')::interval) LIMIT 1`, [a.id, t, String(Math.round(CHEQUEO_CADA_MIN[t] * 0.7))]);
           if (ya) continue;
+          if (Math.random() > Math.min(1, 1 / (CHEQUEO_CADA_MIN[t] * 0.3))) continue;
           const filtro = t === 'check_connections' ? `tipo='invite'` : t === 'check_inbox' ? `tipo IN ('invite','message','inmail')` : `tipo IN ('invite','message','inmail')`;
           const { rows: [hay] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='done' AND ${filtro} AND done_at > NOW() - INTERVAL '45 days' LIMIT 1`, [a.id]);
           if (!hay) continue;
@@ -494,6 +569,14 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         if (!r.rowCount) return res.status(404).json({ error: 'Cuenta no encontrada' });
         return res.json({ ok: true, token, cuenta: r.rows[0] });
       }
+      // Reinstalar la extensión NO debe crear una segunda cuenta de la misma persona de LinkedIn (doblaría los topes: cada cuenta cuenta los suyos).
+      if (slug) {
+        const { rows: [ya] } = await pool.query(`SELECT id, nombre FROM li_accounts WHERE user_id=$1 AND li_slug=$2 ORDER BY id LIMIT 1`, [uid, slug]);
+        if (ya) {
+          await pool.query(`UPDATE li_accounts SET token_hash=$2, estado='pausada', motivo='Reconectada desde la extensión: actívala cuando estés lista', ultimo_visto=NULL, pausa_hasta=NULL WHERE id=$1`, [ya.id, hash(token)]);
+          return res.json({ ok: true, token, cuenta: ya, reutilizada: true });
+        }
+      }
       const n = b.nueva || {};
       const { rows: [a] } = await pool.query(
         `INSERT INTO li_accounts (user_id, nombre, outbound_client_id, token_hash, estado, motivo, ramp_desde, tz, li_slug)
@@ -541,10 +624,11 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (a.estado !== 'activa') { await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]); a.estado = 'activa'; a.pausa_hasta = null; }
       const { rows: [enCurso] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='taken' LIMIT 1`, [a.id]);
       if (enCurso) return res.json({ accion: null, espera_s: 60, motivo: 'accion_en_curso' });
+      const sinAccion = async (espera_s, motivo) => res.json({ accion: null, espera_s, motivo, modo: a.modo, resumen: await resumenCola(pool, a, new Date()), config: CONFIG });
       const hist = await historial(pool, a, now);
       const { rows: cola } = await pool.query(`SELECT * FROM li_actions WHERE account_id=$1 AND estado='queued' AND (not_before IS NULL OR not_before <= NOW()) ORDER BY id LIMIT 30`, [a.id]);
-      if (!cola.length) return res.json({ accion: null, espera_s: 60, motivo: 'cola_vacia', config: CONFIG });
-      let mejor = null, espera = 3600, motivo = '';
+      if (!cola.length) return sinAccion(60, 'cola_vacia');
+      let mejor = null, espera = 3600, motivo = ''; const oks = [];
       const rnd = Math.random();
       for (const q of cola) {
         // Si la persona ya respondió, salió o la secuencia se pausó mientras esperaba en la cola, la acción se cancela
@@ -553,10 +637,12 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
           if (!vivo) { await pool.query(`UPDATE li_actions SET estado='cancelled', detalle='La secuencia ya no está activa para esta persona' WHERE id=$1`, [q.id]); continue; }
         }
         const ev = evaluar(a, hist, q.tipo, now, rnd, !!(q.nota && q.nota.trim()));
-        if (ev.ok) { mejor = q; break; }
+        if (ev.ok) { oks.push(q); if (oks.length >= 8) break; continue; }
         if (ev.espera_s < espera) { espera = ev.espera_s; motivo = ev.motivo; }
       }
-      if (!mejor) return res.json({ accion: null, espera_s: espera, motivo, config: CONFIG });
+      // No se recorre la lista siempre en el mismo orden (id 1, 2, 3…): se elige entre las primeras permitidas, con preferencia por las más antiguas.
+      if (oks.length) mejor = oks[Math.floor(Math.pow(Math.random(), 1.6) * oks.length)];
+      if (!mejor) return sinAccion(espera, motivo);
       const { rowCount } = await pool.query(`UPDATE li_actions SET estado='taken', taken_at=NOW() WHERE id=$1 AND estado='queued'`, [mejor.id]);
       if (!rowCount) return res.json({ accion: null, espera_s: 15, motivo: 'reintentar' });
       res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto }, modo: a.modo, config: CONFIG });
@@ -573,6 +659,15 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const det = String(b.detalle || '').slice(0, 500);
       const snap = String(b.snapshot || '').slice(0, 300000);
       let extra = null;
+      // Se sortea aquí (al TERMINAR, no al empezar) cuánto falta para la próxima acción: así el intervalo no incluye lo que tardes en pulsar «Enviar».
+      if (codigo !== 'sesion') {
+        if (String(ac.tipo).startsWith('check_')) await pool.query(`UPDATE li_accounts SET proxima_accion_at = GREATEST(COALESCE(proxima_accion_at, NOW()), NOW() + ($2 || ' seconds')::interval) WHERE id=$1`, [a.id, String(30 + Math.floor(Math.random() * 60))]);
+        else {
+          const { rows: [sig] } = await pool.query(`SELECT tipo FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('invite','message','visit','inmail') ORDER BY id LIMIT 1`, [a.id]);
+          const media = await mediaReparto(pool, a, sig ? sig.tipo : ac.tipo, codigo === 'ok');
+          await pool.query(`UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, [a.id, String(siguienteEspera(a, media))]);
+        }
+      }
       if (codigo === 'ok') {
         await pool.query(`UPDATE li_actions SET estado='done', done_at=NOW(), error='', detalle=$2, datos=$3::jsonb WHERE id=$1`, [id, det, b.datos ? JSON.stringify(b.datos).slice(0, 200000) : null]);
         await pool.query(`UPDATE li_accounts SET fallos_seguidos=0 WHERE id=$1`, [a.id]);
@@ -620,6 +715,27 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (a.estado === 'pausada' || a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]);
       res.json({ ok: true, estado: 'activa' });
     } catch (e) { console.error('[li] activar', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
+  // Registro de errores de la extensión (para que la persona pueda decir «falló X» y se vea qué pasó). Solo texto corto, nunca datos de LinkedIn.
+  app.post('/api/li/ext/log', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {};
+      const items = (Array.isArray(b.items) ? b.items : [b]).slice(0, 20);
+      for (const it of items) {
+        const ctx = it.ctx && typeof it.ctx === 'object' ? JSON.stringify(it.ctx).slice(0, 4000) : null;
+        await pool.query(`INSERT INTO li_ext_log (user_id, account_id, nivel, tipo, msg, ctx, version) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
+          [a.user_id, a.id, ['error', 'aviso', 'info'].includes(it.nivel) ? it.nivel : 'error', String(it.tipo || '').slice(0, 60), String(it.msg || '').slice(0, 600), ctx, String(it.version || '').slice(0, 20)]);
+      }
+      await pool.query(`DELETE FROM li_ext_log WHERE account_id=$1 AND id NOT IN (SELECT id FROM li_ext_log WHERE account_id=$1 ORDER BY id DESC LIMIT 500)`, [a.id]);
+      res.json({ ok: true });
+    } catch (e) { console.error('[li] log', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+  app.get('/api/li/ext-log', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT l.id, l.nivel, l.tipo, l.msg, l.ctx, l.version, l.created_at, a.nombre AS cuenta FROM li_ext_log l LEFT JOIN li_accounts a ON a.id=l.account_id WHERE l.user_id=$1 ORDER BY l.id DESC LIMIT 200`, [req.workspaceOwnerId]);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: 'No se pudo cargar el registro' }); }
   });
 
   // Alertas que la extensión ve en cualquier pestaña de LinkedIn (aunque no esté ejecutando nada): verificación, captcha, restricción, sesión cerrada.

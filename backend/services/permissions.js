@@ -14,6 +14,7 @@ const MODULOS = [
   { k: 'outreach', l: 'Outreach', g: 'Outreach', alc: true }, { k: 'datos', l: 'Datos (enriquecimiento)', g: 'Datos', alc: false },
   { k: 'contenido', l: 'Contenido', g: 'Contenido', alc: false }, { k: 'plantillas', l: 'Plantillas', g: 'Plantillas', alc: false },
   { k: 'inicios', l: 'Inicios de cliente', g: 'Negocio', alc: false },
+  { k: 'soluciones', l: 'Soluciones (licencias de productos propios)', g: 'Administración', alc: false },
   { k: 'config', l: 'Configuración y usuarios', g: 'Administración', alc: false },
 ];
 const ROLES = [
@@ -48,6 +49,7 @@ const RUTAS = [
   [/^\/(timer|mgmt\/time-off)(\/|$)/, 'tiempo'], [/^\/mgmt\/team(\/|$)/, 'equipo'], [/^\/mgmt\/(fin-|payments|pagos-internos|exchange-rates)/, 'finanzas'],
   [/^\/slack(\/|$)/, 'slack'], [/^\/wa\//, 'whatsapp'], [/^\/(lm|outbound-clients|sequences|sequence-steps|campaigns|leads|activities|tel)(\/|$)/, 'outreach'],
   [/^\/(cantera|user\/verifications|tools)(\/|$)/, 'datos'], [/^\/content\/(?!public)/, 'contenido'], [/^\/tpl(\/|$)/, 'plantillas'], [/^\/inicios(\/|$)/, 'inicios'],
+  [/^\/soluciones(\/|$)/, 'soluciones'],
 ];
 const BORRAR_ADMIN = new Set(['proyectos', 'clientes', 'espacios', 'outreach', 'finanzas', 'oportunidades', 'datos']);
 const needLevel = (mod, method) => (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') ? 1 : (method === 'DELETE' && BORRAR_ADMIN.has(mod) ? 3 : 2);

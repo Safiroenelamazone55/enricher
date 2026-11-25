@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Nova · LinkedIn",
-  "version": "0.5.0",
-  "description": "Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, respetando los topes diarios. Modo asistido por defecto.",
+  "name": "FLOW",
+  "version": "0.8.1",
+  "description": "FLOW: automatización de secuencias y tareas comerciales. Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, con topes diarios. Modo asistido por defecto.",
   "permissions": [
     "storage",
     "tabs",
@@ -24,7 +24,8 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Nova · LinkedIn",
+    "default_title": "FLOW · Secuencias y tareas",
+    "default_popup": "sidepanel.html?p=1",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

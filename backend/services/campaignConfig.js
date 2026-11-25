@@ -19,7 +19,7 @@ const DEFAULTS = {
   },
   tracking: { aperturas: true, clics: true, respuestas: true },
   remitentes: { modo: 'equilibrado' },
-  planificacion: { lanzamiento_auto: false, dias: [1, 2, 3, 4, 5], cada_min: 5, zona: '', fecha_fin: '', al_finalizar: 'terminar', vacaciones: [] },
+  planificacion: { lanzamiento_auto: false, dias: [1, 2, 3, 4, 5], cada_min: 5, zona: '', fecha_fin: '', al_finalizar: 'terminar', vacaciones_pais: '', vacaciones: [] },
   general: { etiquetas: [], compartir: false, baja: 'email', enlace_baja: false },
 };
 const PROGRESOS = ['continuar', 'pausar', 'finalizar'];
@@ -47,6 +47,9 @@ function sanear(c) {
   p.zona = String(p.zona || '').slice(0, 60); if (p.zona) { try { new Intl.DateTimeFormat('en', { timeZone: p.zona }); } catch (_) { p.zona = ''; } }
   p.fecha_fin = /^\d{4}-\d{2}-\d{2}$/.test(p.fecha_fin) ? p.fecha_fin : '';
   if (!['terminar', 'pausar'].includes(p.al_finalizar)) p.al_finalizar = 'terminar';
+  { const { CALENDARS } = require('./holidays');
+    if (!CALENDARS[p.vacaciones_pais]) { p.vacaciones_pais = ''; p.vacaciones = []; }
+    else { const validas = new Set(CALENDARS[p.vacaciones_pais].feriados.map(h => h.k)); p.vacaciones = [...new Set((p.vacaciones || []).filter(k => validas.has(k)))]; } }
   c.general.etiquetas = [...new Set((c.general.etiquetas || []).map(x => String(x).trim().slice(0, 30)).filter(Boolean))].slice(0, 12);
   if (!['email', 'todo'].includes(c.general.baja)) c.general.baja = 'email';
   if (!['equilibrado', 'propiedad'].includes(c.remitentes.modo)) c.remitentes.modo = 'equilibrado';
@@ -127,6 +130,18 @@ async function trasClic(pool, messageId) {
     if (r.progreso === 'finalizar') await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', paused_reason='' WHERE id IN ${ids} AND estado IN ('activo','pausado')`, [m.user_id, m.contact_id, m.campaign_id]);
     else if (r.progreso === 'pausar') await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='clic_en_enlace' WHERE id IN ${ids} AND estado='activo'`, [m.user_id, m.contact_id, m.campaign_id]);
   } catch (e) { console.error('[campaignConfig] trasClic', e.message); }
+}
+
+// ¿Hoy (en la zona horaria del prospecto) es feriado del país que la campaña configuró? null si no aplica/no es feriado.
+async function holidayHoy(pool, campaignId, tz) {
+  if (!campaignId) return null;
+  const cfg = await configGuardada(pool, campaignId);
+  if (!cfg || !cfg.planificacion.vacaciones_pais || !cfg.planificacion.vacaciones.length) return null;
+  const { holidayOn } = require('./holidays');
+  // "Hoy" en la zona horaria del prospecto, no en UTC del servidor — un feriado es por calendario local.
+  let hoy;
+  try { const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()); const g = k => (p.find(x => x.type === k) || {}).value; hoy = new Date(Date.UTC(+g('year'), +g('month') - 1, +g('day'))); } catch (_) { hoy = new Date(); }
+  return holidayOn(cfg.planificacion.vacaciones_pais, cfg.planificacion.vacaciones, hoy);
 }
 
 // Fecha de fin: al llegar, quien sigue en las secuencias de la campaña termina o se pausa
@@ -231,4 +246,4 @@ function mount(app, { pool, requireAuth }) {
   });
 }
 
-module.exports = { mount, trasRespuesta, trasReunion, trasClic, configGuardada, DEFAULTS, merge, sanear, maskDe };
+module.exports = { mount, trasRespuesta, trasReunion, trasClic, configGuardada, holidayHoy, DEFAULTS, merge, sanear, maskDe };
