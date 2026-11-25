@@ -24910,11 +24910,11 @@ const LeadManagerModule = (() => {
       <div class="cc-card"><h4>La planificación de envío de la campaña</h4>
         <div class="cc-lbl">Días de envío</div><div class="cc-days">${dn.map((d, i) => `<button type="button" class="${p.dias.includes(i + 1) ? 'is-on' : ''}" onclick="LeadManagerModule.ccDia(${i + 1})">${d}</button>`).join('')}</div>
         <div class="cc-field" style="margin-bottom:14px"><span class="cc-lbl">LinkedIn: ¿cómo se ejecutan las invitaciones, visitas y mensajes?</span>
-          <select class="form-input" onchange="LeadManagerModule.ccSetRep('planificacion.li_modo', this.value)">
+          <div style="display:flex;align-items:center;gap:10px"><select class="form-input" style="flex:1" onchange="LeadManagerModule.ccSetRep('planificacion.li_modo', this.value)">
             <option value="manual"${p.li_modo === 'manual' ? ' selected' : ''}>Manual: yo los hago desde las tareas</option>
-            <option value="asistido"${p.li_modo === 'asistido' || !p.li_modo ? ' selected' : ''}>Asistido: la extensión abre el perfil y deja el texto; yo pulso «Enviar»</option>
+            <option value="asistido"${p.li_modo === 'asistido' || !p.li_modo ? ' selected' : ''}>⚠ Asistido (solo para pruebas · beta): la extensión abre el perfil y deja el texto; yo pulso «Enviar»</option>
             <option value="auto"${p.li_modo === 'auto' ? ' selected' : ''}>Automático: la extensión lo envía sola (más riesgo para la cuenta)</option>
-          </select>
+          </select>${p.li_modo === 'asistido' || !p.li_modo ? '<span title="Solo para pruebas (beta): no tiene sentido esperar sentada para pulsar «Enviar» en cada acción. Para campañas reales usa Automático." style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#FFF6E5;color:#B45309;font-size:18px;cursor:help">⚠</span>' : ''}</div>
           <span class="cc-note" style="display:block;margin-top:6px">${p.li_modo === 'auto' ? 'La siguiente tarea de LinkedIn de esta campaña saldrá sola, dentro de los topes y el horario de la cuenta.' : p.li_modo === 'manual' ? 'Los pasos de LinkedIn aparecen como tareas para ti. La extensión no los ejecuta.' : 'La extensión te lleva a cada perfil; tú confirmas el envío.'} Se aplica a todas las secuencias de la campaña al guardar.</span></div>
         <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
           <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
