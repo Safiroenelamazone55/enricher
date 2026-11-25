@@ -22626,10 +22626,12 @@ body.ibx-lb-open{overflow:hidden}
 .cap-stk i { display: block; width: 100%; } .cap-stk .cap-h { background: #2E8B6A; border-radius: 0 0 3px 3px; } .cap-stk .cap-q { background: #F59E0B; border-radius: 3px 3px 0 0; }
 .cap-stk u { position: absolute; left: -2px; right: -2px; border-top: 2px dashed #64748B; }
 .cap-tbl { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface, #fff); }
-.cap-tr { display: grid; grid-template-columns: 64px 54px 1fr 70px 64px 84px; gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--border); font-size: .78rem; }
+.cap-tr { display: grid; grid-template-columns: 64px 54px 1.15fr 1.1fr 78px 64px 84px; gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--border); font-size: .78rem; }
 .cap-tr:first-child { border-top: 0; } .cap-th { background: var(--bg, #F6F7F8); font-weight: 700; font-size: .7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
 .cap-d { font-weight: 700; } .cap-det { color: var(--text-secondary); font-size: .74rem; }
 .cap-b { font-style: normal; font-size: .7rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; } .cap-b--ok { background: #E8F6EF; color: #0B5E3F; } .cap-b--warn { background: #FFF3E3; color: #9A5B07; } .cap-b--bad { background: #FDECEA; color: #A32A1C; }
-@media (max-width: 720px) { .cap-tr { grid-template-columns: 56px 40px 1fr 60px; } .cap-tr > span:nth-child(5), .cap-tr > span:nth-child(6) { display: none; } }
+@media (max-width: 720px) { .cap-tr { grid-template-columns: 56px 40px 1fr 60px; } .cap-tr > span:nth-child(4), .cap-tr > span:nth-child(6), .cap-tr > span:nth-child(7) { display: none; } }
 /* Capacidad: el panel se desplaza por dentro (el contenedor del editor es de alto fijo) */
 .sed__left > .cap { flex: 1; min-height: 0; overflow-y: auto; width: 100%; box-sizing: border-box; }
+
+.cap-tp { color: var(--text); font-size: .74rem; } .cap-tp b { color: var(--navy, #032049); } .cap-det u { text-decoration: none; color: #9A5B07; font-weight: 700; }

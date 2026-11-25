@@ -26471,9 +26471,10 @@ const LeadManagerModule = (() => {
     const dMax = Math.max(1, ...r.dias.map(x => Math.max(x.hechasTot + x.colaTot, x.capTotal)));
     const bars = r.dias.map((x, i) => { if (!x.ok) return `<div class="cap-col is-off" title="${_capF(x.fecha)} · día sin envíos"></div>`; const h1 = Math.round(x.hechasTot / dMax * 100), h2 = Math.round(x.colaTot / dMax * 100), hc = Math.round(x.capTotal / dMax * 100);
       return `<div class="cap-col" title="${_capF(x.fecha)} · hechas ${Math.round(x.hechasTot)} de ${x.capTotal} · en cola ${Math.round(x.colaTot)}"><div class="cap-stk"><i class="cap-q" style="height:${h2}%"></i><i class="cap-h" style="height:${h1}%"></i><u class="cap-l" style="bottom:${hc}%"></u></div><span>${x.fecha.getUTCDate()}</span></div>`; }).join('');
+    const tiposSeq = [...new Set(liSteps.map(z => _CAP_TIPO[z.accion]))];
     const fila = x => { if (!x.ok) return ''; const ents = Object.keys(_CAP_NOM).filter(k => x.dem[k] || x.hechas[k]);
       const est = x.colaTot >= 0.5 ? (x.colaTot >= x.capTotal * 0.5 ? ['Saturado', 'bad'] : ['Con cola', 'warn']) : (x.hechasTot >= x.capTotal * 0.9 ? ['Al límite', 'warn'] : ['Cabe', 'ok']);
-      return `<div class="cap-tr"><span class="cap-d">${_capF(x.fecha)}</span><span>${x.entran ? Math.round(x.entran) : '·'}</span><span class="cap-det">${ents.map(k => `${_CAP_NOM[k]} ${Math.round(x.hechas[k] || 0)}/${x.capTipo[k]}`).join(' · ') || '—'}</span><span><b>${Math.round(x.hechasTot)}</b>/${x.capTotal}</span><span>${Math.round(x.colaTot) || '·'}</span><span><i class="cap-b cap-b--${est[1]}">${est[0]}</i></span></div>`; };
+      return `<div class="cap-tr"><span class="cap-d">${_capF(x.fecha)}</span><span>${x.entran ? Math.round(x.entran) : '·'}</span><span class="cap-det">${ents.map(k => `${_CAP_NOM[k]} ${Math.round(x.hechas[k] || 0)}${(x.cola[k] || 0) >= 0.5 ? ' <u>+' + Math.round(x.cola[k]) + ' en cola</u>' : ''}`).join(' · ') || '—'}</span><span class="cap-tp">${tiposSeq.map(k => `${_CAP_NOM[k]} <b>${x.capTipo[k]}</b>`).join(' · ')}</span><span><b>${Math.round(x.hechasTot)}</b>/${x.capTotal}</span><span>${Math.round(x.colaTot) || '·'}</span><span><i class="cap-b cap-b--${est[1]}">${est[0]}</i></span></div>`; };
     const finTxt = r.fin != null ? _capF(r.dias[r.fin].fecha) : 'más allá de ' + P.dias + ' días';
     const idealFin = (() => { const u = _capCalc({ ..._cap.P, drip: 99999, dias: P.dias }); return u && u.fin != null ? _capF(u.dias[u.fin].fecha) : null; })();
     const cuello = (() => { const t = {}; r.dias.forEach(x => Object.keys(x.cola).forEach(k => { t[k] = (t[k] || 0) + x.cola[k]; })); const m = Object.entries(t).sort((a, b) => b[1] - a[1])[0]; return m && m[1] >= 1 ? _CAP_NOM[m[0]] : ''; })();
@@ -26485,7 +26486,7 @@ const LeadManagerModule = (() => {
       ${resumen}
       <div class="cap-lim">Topes${d.sin_cuenta ? ' recomendados (aún no hay cuenta de LinkedIn conectada)' : ' de ' + d.cuentas + ' cuenta' + (d.cuentas > 1 ? 's' : '')}: invitaciones ${c.inv}/día (${c.inv_semana}/semana) · visitas ${c.vis} · mensajes ${c.msg} · InMail ${c.inmail} · total ${c.total}/día${rd.activo ? ' · calentamiento: día ' + Math.min(rd.dia_actual + 1, rd.dias) + ' de ' + rd.dias : ''}</div>
       <div class="cap-chart"><div class="cap-leg"><i class="cap-h"></i>Hechas <i class="cap-q"></i>Esperando en cola <u class="cap-lg"></u>Tope total del día</div><div class="cap-cols">${bars}</div></div>
-      <div class="cap-tbl"><div class="cap-tr cap-th"><span>Día</span><span>Entran</span><span>Por tipo (hechas / tope)</span><span>Total</span><span>En cola</span><span>Estado</span></div>${r.dias.map(fila).join('')}</div>`;
+      <div class="cap-tbl"><div class="cap-tr cap-th"><span>Día</span><span>Entran</span><span>Hechas por tipo</span><span>Tope del día por tipo</span><span>Total / tope</span><span>En cola</span><span>Estado</span></div>${r.dias.map(fila).join('')}</div>`;
   }
   function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
   function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
