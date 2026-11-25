@@ -22635,3 +22635,7 @@ body.ibx-lb-open{overflow:hidden}
 .sed__left > .cap { flex: 1; min-height: 0; overflow-y: auto; width: 100%; box-sizing: border-box; }
 
 .cap-tp { color: var(--text); font-size: .74rem; } .cap-tp b { color: var(--navy, #032049); } .cap-det u { text-decoration: none; color: #9A5B07; font-weight: 700; }
+
+.cap-cfg { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 4px; margin-bottom: 12px; background: var(--surface, #fff); }
+.cap-cfg__t { font-weight: 700; font-size: .82rem; margin-bottom: 8px; } .cap-cfg__t em { display: block; font-style: normal; font-weight: 500; color: var(--text-secondary); font-size: .76rem; margin-top: 2px; }
+.cap-ck { display: flex; align-items: center; gap: 7px; font-size: .76rem; color: var(--text-secondary); height: 34px; } .cap-ck input { width: auto; height: auto; }
