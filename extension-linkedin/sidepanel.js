@@ -154,6 +154,7 @@ $('toggle').onclick = async () => {
 };
 $('swon').onchange = () => $('toggle').onclick();
 // Se abre como desplegable ancho desde el icono (como lemlist); «Panel lateral» la deja fija a un costado si la prefieres
+if (/[?&]p=2/.test(location.search)) document.body.classList.add('emb');   // dentro del lanzador flotante de LinkedIn
 if (/[?&]p=1/.test(location.search)) {
   document.body.classList.add('pop'); $('lateral').hidden = false;
   $('lateral').onclick = async () => { try { const w = await chrome.windows.getCurrent(); await chrome.sidePanel.open({ windowId: w.id }); window.close(); } catch (e) { $('lateral').textContent = 'No disponible'; } };
