@@ -809,6 +809,25 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     } catch (e) { res.json({ error: String(e.message || 'No se pudo generar el comentario').slice(0, 200) }); }
   });
 
+  // Datos para proyectar la carga de una secuencia contra los topes diarios (la proyección se calcula en la pantalla)
+  app.get('/api/li/sequence/:id/capacidad-datos', requireAuth, async (req, res) => {
+    try {
+      const sid = parseInt(req.params.id, 10), uid = req.workspaceOwnerId;
+      const { rows: [sq] } = await pool.query(`SELECT id, outbound_client_id, drip_per_day, send_days, starts_on, timezone FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid]);
+      if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
+      const { rows: steps } = await pool.query(`SELECT st.id, st.dia, st.canal, st.accion, st.cond, c.canal AS cond_canal, c.accion AS cond_accion FROM sequence_steps st LEFT JOIN sequence_steps c ON c.id = st.cond_step_id WHERE st.sequence_id=$1 ORDER BY st.dia ASC, st.orden ASC, st.id ASC`, [sid]);
+      const { rows: cuentas } = await pool.query(`SELECT * FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2 AND estado IN ('activa','pausada','desconectada') ORDER BY id`, [uid, sq.outbound_client_id || 0]);
+      const sum = k => cuentas.reduce((t, a) => t + (Number(a[k]) || 0), 0);
+      const sinCuenta = !cuentas.length;
+      const caps = sinCuenta ? { inv: DEF.inv_dia, inv_semana: DEF.inv_semana, msg: DEF.msg_dia, vis: DEF.vis_dia, inmail: DEF.inmail_dia, react: DEF.react_dia, follow: DEF.follow_dia, comment: DEF.comment_dia, total: DEF.total_dia }
+        : { inv: sum('inv_dia'), inv_semana: sum('inv_semana'), msg: sum('msg_dia'), vis: sum('vis_dia'), inmail: sum('inmail_dia'), react: DEF.react_dia * cuentas.length, follow: DEF.follow_dia * cuentas.length, comment: DEF.comment_dia * cuentas.length, total: sum('total_dia') };
+      const a0 = cuentas[0];
+      const ramp = a0 && a0.ramp_activo ? { activo: true, inicio: a0.ramp_inicio, paso: a0.ramp_paso, dias: a0.ramp_dias, dia_actual: Math.max(0, daysBetween(String(a0.ramp_desde || '').slice(0, 10) || localParts(new Date(), a0.tz).ymd, localParts(new Date(), a0.tz).ymd)), total_nuevo: DEF.total_nuevo } : { activo: false };
+      const { rows: [ct] } = await pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE estado='activo')::int AS activos FROM lm_contact_sequences WHERE sequence_id=$1`, [sid]);
+      res.json({ steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+    } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
+  });
+
   // Avisos de una secuencia: qué pasos de LinkedIn no se pueden automatizar ahora y se harán a mano
   app.get('/api/li/sequence/:id/avisos', requireAuth, async (req, res) => {
     try {

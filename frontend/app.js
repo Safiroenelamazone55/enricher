@@ -26329,13 +26329,13 @@ const LeadManagerModule = (() => {
     const st = steps.find(x => x.id === _sedSel), t = st ? (_TOUCH[st.canal] || _TOUCH.email) : null;
     return `<div class="sed">
       <div class="sed__bar">
-        <div class="sed__seg" role="tablist"><button class="${_sedView === 'flujo' ? 'on' : ''}" onclick="LeadManagerModule.sedView('flujo')" title="Vista de flujo">${_sedI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/>', 15)} Flujo</button><button class="${_sedView === 'lista' ? 'on' : ''}" onclick="LeadManagerModule.sedView('lista')" title="Vista de lista">${_sedI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>', 15)} Lista</button></div>
+        <div class="sed__seg" role="tablist"><button class="${_sedView === 'flujo' ? 'on' : ''}" onclick="LeadManagerModule.sedView('flujo')" title="Vista de flujo">${_sedI('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/>', 15)} Flujo</button><button class="${_sedView === 'lista' ? 'on' : ''}" onclick="LeadManagerModule.sedView('lista')" title="Vista de lista">${_sedI('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>', 15)} Lista</button><button class="${_sedView === 'capacidad' ? 'on' : ''}" onclick="LeadManagerModule.sedView('capacidad')" title="Cuánta carga tendrá la secuencia frente a los topes diarios">${_sedI('<line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="13"/><line x1="22" y1="20" x2="22" y2="8"/>', 15)} Capacidad</button></div>
         <span class="sed__n">${steps.length} paso${steps.length === 1 ? '' : 's'}${steps.length ? ' · ' + steps[steps.length - 1].dia + ' días' : ''}</span><span class="sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowOpen(${id})" title="Abrir el flujo a pantalla completa (modo anterior)">Pantalla completa</button>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button>
       </div>
-      <div class="sed__main${_sedPanel ? '' : ' is-closed'}">
-        <div class="sed__left">${_sedView === 'flujo' ? _sedFlow(id, s, steps) : _sedList(id, s, steps)}</div>
+      <div class="sed__main${_sedPanel && _sedView !== 'capacidad' ? '' : ' is-closed'}">
+        <div class="sed__left">${_sedView === 'flujo' ? _sedFlow(id, s, steps) : _sedView === 'capacidad' ? _capHtml(id, s) : _sedList(id, s, steps)}</div>
         <div class="sed__right">
           <div class="sed__rh">${st ? `<span class="sed-node__ic" style="color:${t[1]};background:${t[1]}18">${_sedI(_stepIcoPath(st), 16)}</span><b>${esc(_sedTitle(st))}</b>` : '<b>Sin paso seleccionado</b>'}<span class="sp"></span>
             ${st ? `<button class="seqtop__ib" title="Más" onclick="LeadManagerModule.sedStepMenu(event,${st.id})">${_sedI('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>', 16)}</button>` : ''}
@@ -26357,7 +26357,136 @@ const LeadManagerModule = (() => {
     if (_sedDirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Este paso tiene cambios sin guardar. Si cambias de paso se pierden.', confirmText: 'Descartar' }))) return;
     _sedSel = id; _renderBody();
   }
-  function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v); } catch (_) {} _renderBody(); }
+  function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v === 'capacidad' ? 'flujo' : v); } catch (_) {} _renderBody(); if (v === 'capacidad') _capEnsure(_activeSeq); }
+
+  // ═════ Capacidad: ¿cuánta carga tendrá la secuencia frente a los topes diarios? ═════
+  // Se simula día a día: entran contactos al ritmo de la secuencia, cada paso de LinkedIn consume del tope de su tipo y del tope total,
+  // lo que no cabe pasa al día siguiente (cola) y empuja también los pasos que vienen detrás de esa persona.
+  const _cap = { id: 0, data: null, err: '', P: null };
+  const _CAP_TIPO = { visita: 'vis', invite: 'inv', invite_nota: 'inv', mensaje: 'msg', inmail: 'inmail', like: 'react', follow: 'follow', comentario: 'comment' };
+  const _CAP_NOM = { vis: 'Visitas', inv: 'Invitaciones', msg: 'Mensajes', inmail: 'InMail', react: 'Reacciones', follow: 'Seguir', comment: 'Comentarios' };
+  async function _capEnsure(id) {
+    if (!id || (_cap.id === id && _cap.data)) { _capPaint(); return; }
+    _cap.id = id; _cap.data = null; _cap.err = ''; _capPaint();
+    try {
+      const r = await apiFetch(`${API}/li/sequence/${id}/capacidad-datos`); const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo cargar');
+      _cap.data = d;
+      const total = (d.contactos && d.contactos.total) || 0;
+      _cap.P = { contactos: total || 100, drip: d.drip || 10, acep: 30, resp: 8, dias: 45 };
+    } catch (e) { _cap.err = e.message; }
+    _capPaint();
+  }
+  function _capPaint() { const el = document.getElementById('cap-body'); if (el) el.innerHTML = _capBody(); }
+  function capSet(k, v) { if (!_cap.P) return; const n = Math.max(0, Number(v) || 0); _cap.P[k] = k === 'dias' ? Math.min(120, Math.max(7, n)) : n; _capPaint(); }
+  function capUsarMax() { const r = _capCalc(); if (r && r.max) { _cap.P.drip = r.max; _capPaint(); } }
+  function _capCalc(P0) {
+    const d = _cap.data, P = P0 || _cap.P; if (!d || !P) return null;
+    const mask = String(d.send_days || '1111100').padEnd(7, '0'), DAY = 864e5;
+    const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
+    let start = d.starts_on ? new Date(d.starts_on) : hoy; start = new Date(Math.max(start.getTime(), hoy.getTime())); start.setUTCHours(0, 0, 0, 0);
+    const okDay = t => mask[(new Date(t).getUTCDay() + 6) % 7] === '1';
+    const roll = t => { let g = 0; while (!okDay(t) && g++ < 8) t += DAY; return t; };
+    const steps = d.steps || [], acc = P.acep / 100, rep = P.resp / 100, f = 0.86;
+    // qué parte de (aceptaron, no aceptaron) le toca a cada paso según su condición
+    const match = st => {
+      const c = st.cond || '', porEmail = st.cond_canal === 'email';
+      if (c === 'replied') return porEmail ? [rep, rep] : [1, 0];
+      if (c === 'no_reply') return porEmail ? [1 - rep, 1 - rep] : [0, 1];
+      if (c === 'opened') return [0.45, 0.45]; if (c === 'not_opened') return [0.55, 0.55];
+      if (c === 'clicked') return [0.06, 0.06]; if (c === 'not_clicked') return [0.94, 0.94];
+      return [1, 1];
+    };
+    const items = []; let queda = P.contactos;
+    const spawn = (fi, qa, qn, doneT, prevDia) => {
+      if (fi >= steps.length || qa + qn < 0.001) return;
+      const st = steps[fi], [ma, mn] = match(st), ta = qa * ma, tn = qn * mn;
+      if (ta + tn > 0.001) items.push({ j: fi, qa: ta, qn: tn, due: roll(doneT + Math.max(0, st.dia - prevDia) * DAY) });
+      spawn(fi + 1, qa - ta, qn - tn, doneT, prevDia);
+    };
+    const dias = []; let fin = null, primerCola = null, colaMax = 0, pico = null, retrasoMax = 0, invHist = [];
+    const rd = d.ramp || {};
+    for (let i = 0; i < P.dias; i++) {
+      const t = start.getTime() + i * DAY, fecha = new Date(t), ok = okDay(t);
+      const row = { fecha, ok, entran: 0, dem: {}, hechas: {}, cola: {}, capTipo: {}, capTotal: 0, hechasTot: 0, colaTot: 0 };
+      if (!ok) { dias.push(row); continue; }
+      if (queda > 0) { const n = Math.min(P.drip, queda); queda -= n; row.entran = n; if (steps.length) spawn(0, 0, n, t, steps[0].dia); }
+      // topes de hoy (calentamiento + promedio de la variación diaria)
+      const dia = (rd.activo ? (rd.dia_actual || 0) : 99) + i, cal = rd.activo && dia < rd.dias, c = d.caps;
+      const cap = { inv: c.inv, msg: c.msg, vis: c.vis, inmail: c.inmail, react: c.react, follow: c.follow, comment: c.comment }; let total = c.total;
+      if (rd.activo) { cap.inv = Math.min(c.inv, rd.inicio + rd.paso * dia); if (cal) { total = Math.min(total, rd.total_nuevo); cap.msg = Math.min(c.msg, 8 + 2 * dia); cap.vis = Math.min(c.vis, 10 + 2 * dia); cap.inmail = Math.min(c.inmail, 2 + dia); } }
+      Object.keys(cap).forEach(k => { cap[k] = Math.max(1, Math.round(cap[k] * f)); }); total = Math.max(1, Math.round(total * f));
+      const semana = Math.max(1, Math.round(c.inv_semana * f)), invSem = invHist.slice(-6).reduce((a, b) => a + b, 0);
+      let restTot = total, restInv = Math.max(0, semana - invSem);
+      const rest = { ...cap };
+      row.capTipo = cap; row.capTotal = total;
+      // las tareas vencidas hasta hoy, de la más antigua a la más nueva; las de email/llamada no gastan tope
+      let guard = 0;
+      while (guard++ < 5000) {
+        const due = items.filter(it => it.due <= t && it.qa + it.qn > 0.001).sort((a, b) => a.due - b.due || a.j - b.j);
+        let moved = false;
+        for (const it of due) {
+          const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : null, q = it.qa + it.qn;
+          if (!tipo) { items.splice(items.indexOf(it), 1); spawn(it.j + 1, it.qa, it.qn, t, st.dia); moved = true; continue; }
+          if (!(it._cnt)) { it._cnt = true; row.dem[tipo] = (row.dem[tipo] || 0) + q; }
+          const lim = Math.min(rest[tipo], restTot, tipo === 'inv' ? restInv : Infinity);
+          if (lim <= 0) continue;
+          const ex = Math.min(q, lim), fr = ex / q;
+          row.hechas[tipo] = (row.hechas[tipo] || 0) + ex; row.hechasTot += ex; rest[tipo] -= ex; restTot -= ex; if (tipo === 'inv') { restInv -= ex; row._inv = (row._inv || 0) + ex; }
+          retrasoMax = Math.max(retrasoMax, Math.round((t - it.due) / DAY));
+          const ea = it.qa * fr, en = it.qn * fr; it.qa -= ea; it.qn -= en; if (it.qa + it.qn < 0.001) items.splice(items.indexOf(it), 1); else it._cnt = true;
+          let na = ea, nn = en;
+          if (tipo === 'inv') { const tt = ea + en; na = tt * acc; nn = tt * (1 - acc); }
+          const sv = 1 - rep / Math.max(3, steps.length); na *= sv; nn *= sv;
+          spawn(it.j + 1, na, nn, t, st.dia); moved = true;
+        }
+        if (!moved) break;
+      }
+      invHist.push(row._inv || 0);
+      // lo que sigue esperando
+      items.filter(it => it.due <= t).forEach(it => { const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : null; if (tipo) { row.cola[tipo] = (row.cola[tipo] || 0) + it.qa + it.qn; row.colaTot += it.qa + it.qn; } });
+      items.forEach(it => { it._cnt = false; });
+      if (row.colaTot >= 0.5 && primerCola == null) primerCola = i;
+      if (row.colaTot > colaMax) { colaMax = row.colaTot; pico = i; }
+      dias.push(row);
+      if (!items.length && queda <= 0) { fin = i; break; }
+    }
+    return { dias, fin, primerCola, colaMax, pico, retrasoMax, start, queda, items: items.length };
+  }
+  function _capMax() { // ritmo más alto de entrada sin que la cola pase de unas pocas acciones
+    const P = _cap.P; let lo = 0, hi = Math.max(60, P.contactos), best = 0;
+    for (let k = 0; k < 9; k++) { const mid = Math.max(1, Math.round((lo + hi) / 2)); const r = _capCalc({ ...P, drip: mid }); if (r && r.colaMax < 2) { best = mid; lo = mid + 1; } else hi = mid - 1; if (lo > hi) break; }
+    return best;
+  }
+  const _capF = t => t.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  function _capHtml(id, s) { return `<div class="cap" id="cap-wrap"><div id="cap-body">${_capBody()}</div></div>`; }
+  function _capBody() {
+    if (_cap.err) return `<div class="cap-empty"><b>No se pudo cargar</b><span>${esc(_cap.err)}</span></div>`;
+    const d = _cap.data, P = _cap.P; if (!d || !P) return '<div class="cap-empty">Calculando…</div>';
+    const liSteps = (d.steps || []).filter(x => x.canal === 'linkedin' && _CAP_TIPO[x.accion]);
+    if (!liSteps.length) return '<div class="cap-empty"><b>Esta secuencia no tiene pasos de LinkedIn</b><span>Esta vista mide cuánta carga de LinkedIn (visitas, invitaciones, mensajes…) cabe en los topes diarios.</span></div>';
+    const r = _capCalc(); r.max = _capMax();
+    const c = d.caps, rd = d.ramp || {};
+    const inp = (k, lbl, ex, w) => `<label class="cap-f"><span>${lbl}</span><input type="number" min="0" value="${P[k]}" style="width:${w || 84}px" onchange="LeadManagerModule.capSet('${k}', this.value)">${ex ? `<em>${ex}</em>` : ''}</label>`;
+    const dMax = Math.max(1, ...r.dias.map(x => Math.max(x.hechasTot + x.colaTot, x.capTotal)));
+    const bars = r.dias.map((x, i) => { if (!x.ok) return `<div class="cap-col is-off" title="${_capF(x.fecha)} · día sin envíos"></div>`; const h1 = Math.round(x.hechasTot / dMax * 100), h2 = Math.round(x.colaTot / dMax * 100), hc = Math.round(x.capTotal / dMax * 100);
+      return `<div class="cap-col" title="${_capF(x.fecha)} · hechas ${Math.round(x.hechasTot)} de ${x.capTotal} · en cola ${Math.round(x.colaTot)}"><div class="cap-stk"><i class="cap-q" style="height:${h2}%"></i><i class="cap-h" style="height:${h1}%"></i><u class="cap-l" style="bottom:${hc}%"></u></div><span>${x.fecha.getUTCDate()}</span></div>`; }).join('');
+    const fila = x => { if (!x.ok) return ''; const ents = Object.keys(_CAP_NOM).filter(k => x.dem[k] || x.hechas[k]);
+      const est = x.colaTot >= 0.5 ? (x.colaTot >= x.capTotal * 0.5 ? ['Saturado', 'bad'] : ['Con cola', 'warn']) : (x.hechasTot >= x.capTotal * 0.9 ? ['Al límite', 'warn'] : ['Cabe', 'ok']);
+      return `<div class="cap-tr"><span class="cap-d">${_capF(x.fecha)}</span><span>${x.entran ? Math.round(x.entran) : '·'}</span><span class="cap-det">${ents.map(k => `${_CAP_NOM[k]} ${Math.round(x.hechas[k] || 0)}/${x.capTipo[k]}`).join(' · ') || '—'}</span><span><b>${Math.round(x.hechasTot)}</b>/${x.capTotal}</span><span>${Math.round(x.colaTot) || '·'}</span><span><i class="cap-b cap-b--${est[1]}">${est[0]}</i></span></div>`; };
+    const finTxt = r.fin != null ? _capF(r.dias[r.fin].fecha) : 'más allá de ' + P.dias + ' días';
+    const idealFin = (() => { const u = _capCalc({ ..._cap.P, drip: 99999, dias: P.dias }); return u && u.fin != null ? _capF(u.dias[u.fin].fecha) : null; })();
+    const cuello = (() => { const t = {}; r.dias.forEach(x => Object.keys(x.cola).forEach(k => { t[k] = (t[k] || 0) + x.cola[k]; })); const m = Object.entries(t).sort((a, b) => b[1] - a[1])[0]; return m && m[1] >= 1 ? _CAP_NOM[m[0]] : ''; })();
+    const ok = r.colaMax < 2;
+    const resumen = ok ? `<div class="cap-sum cap-sum--ok"><b>Cabe sin retrasos.</b> Con ${P.drip} contactos por día, los topes alcanzan: todos terminan hacia el ${finTxt}.</div>`
+      : `<div class="cap-sum cap-sum--bad"><b>Se forma cola desde el ${_capF(r.dias[r.primerCola].fecha)}.</b> Llega a ${Math.round(r.colaMax)} acciones esperando (pico el ${_capF(r.dias[r.pico].fecha)}), hasta ${r.retrasoMax} día${r.retrasoMax === 1 ? '' : 's'} de retraso${cuello ? ', y el cuello de botella es «' + cuello + '»' : ''}. Todos terminan el ${finTxt}${idealFin ? ' (sin tope sería el ' + idealFin + ')' : ''}.${r.max ? ` Para que no haya cola: <b>máximo ${r.max} contactos por día</b> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.capUsarMax()">Usar ${r.max}</button>` : ' Con estos topes no hay ritmo que evite la cola: sube los topes o añade una cuenta.'}</div>`;
+    return `<div class="cap-top"><div class="cap-h1"><b>Capacidad de la secuencia</b><span>Cuánta carga tendrá frente a los topes diarios de LinkedIn. Es una proyección: usa las tasas de abajo y los topes con su variación diaria (~86 %).</span></div></div>
+      <div class="cap-form">${inp('contactos', 'Contactos a procesar', '', 90)}${inp('drip', 'Entran por día', '', 70)}${inp('acep', 'Aceptan invitación', '%', 60)}${inp('resp', 'Responden', '%', 60)}${inp('dias', 'Días a simular', '', 64)}</div>
+      ${resumen}
+      <div class="cap-lim">Topes${d.sin_cuenta ? ' recomendados (aún no hay cuenta de LinkedIn conectada)' : ' de ' + d.cuentas + ' cuenta' + (d.cuentas > 1 ? 's' : '')}: invitaciones ${c.inv}/día (${c.inv_semana}/semana) · visitas ${c.vis} · mensajes ${c.msg} · InMail ${c.inmail} · total ${c.total}/día${rd.activo ? ' · calentamiento: día ' + Math.min(rd.dia_actual + 1, rd.dias) + ' de ' + rd.dias : ''}</div>
+      <div class="cap-chart"><div class="cap-leg"><i class="cap-h"></i>Hechas <i class="cap-q"></i>Esperando en cola <u class="cap-lg"></u>Tope total del día</div><div class="cap-cols">${bars}</div></div>
+      <div class="cap-tbl"><div class="cap-tr cap-th"><span>Día</span><span>Entran</span><span>Por tipo (hechas / tope)</span><span>Total</span><span>En cola</span><span>Estado</span></div>${r.dias.map(fila).join('')}</div>`;
+  }
   function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
   function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
   function sedCenter() { const c = document.getElementById('sed-canvas'); if (c) c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); }
@@ -45341,7 +45470,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    capSet, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
