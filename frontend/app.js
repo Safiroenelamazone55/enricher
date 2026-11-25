@@ -24627,9 +24627,10 @@ const LeadManagerModule = (() => {
     m.innerHTML = `<div class="fin-pi-box lim-box lim2"><button class="lim2-x" title="Cerrar" onclick="document.getElementById('lim-modal').remove()">✕</button>
       <nav class="lim2-nav" id="lim-nav"></nav><div class="lim2-main" id="lim-root"><div class="ctp-empty" style="padding:50px">Cargando…</div></div></div>`;
     document.body.appendChild(m);
+    _limNav();
     await _limLoad(clientId);
   }
-  function limTab(t) { _lim.tab = t; _limPaint(); }
+  function limTab(t) { _lim.tab = t; _lim.elegida = true; _limPaint(); }
   async function _limLoad(clientId) {
     try {
       const [emR] = await Promise.all([
@@ -24645,12 +24646,17 @@ const LeadManagerModule = (() => {
     } catch (_) {}
     _limPaint();
   }
-  function _limPaint() {
-    const root = document.getElementById('lim-root'), nav = document.getElementById('lim-nav'); if (!root || !nav) return;
+  function _limNav() {
+    const nav = document.getElementById('lim-nav'); if (!nav) return;
     const cli = (_clients.find(c => c.id === _lim.id) || {}).nombre || '';
     const it = (t, ico, lbl, n) => `<button class="lim2-i${_lim.tab === t ? ' on' : ''}" onclick="LeadManagerModule.limTab('${t}')"><span>${ico}</span>${lbl}${n ? `<em>${n}</em>` : ''}</button>`;
     nav.innerHTML = `<div class="lim2-g">Límites del cliente</div><div class="lim2-who">${esc(cli)}</div>${it('linkedin', '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9.75h4V21H3zM9.5 9.75h3.8v1.6h.06c.53-1 1.82-2 3.74-2 4 0 4.7 2.6 4.7 6V21h-4v-4.9c0-1.2 0-2.7-1.7-2.7s-1.9 1.3-1.9 2.6V21h-4z"/></svg>', 'LinkedIn', _lim.li.length)}${it('email', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>', 'Email', _lim.mail.length)}
       <div class="lim2-note">Estos límites son de las <b>cuentas del cliente</b>. Los comparten todas sus campañas y secuencias, y la pestaña «Capacidad» de cada secuencia los usa para calcular la cola.</div>`;
+  }
+  function _limPaint() {
+    const root = document.getElementById('lim-root'); if (!root) return;
+    if (_lim.tab === 'linkedin' && !_lim.li.length && _lim.mail.length && !_lim.elegida) { _lim.tab = 'email'; }
+    _limNav();
     if (_lim.tab === 'email') {
       root.innerHTML = `<h3 class="lim2-t">Email</h3><p class="lim2-p">Límite diario y calentamiento de cada buzón de este cliente.</p>${_lim.mail.length ? _lim.mail.map(_limMailCard).join('') : '<div class="cc-empty">Este cliente no tiene buzones de email conectados.</div>'}`;
     } else {
