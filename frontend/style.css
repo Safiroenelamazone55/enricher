@@ -22723,3 +22723,65 @@ body.ibx-lb-open{overflow:hidden}
 .lim2-main .li-bar { height: 6px; width: 60%; border-radius: 99px; } .lim2-main .li-bar i { border-radius: 99px; } .lim2-main .li-bar__t { font-size: 14px; font-weight: 600; } .lim2-main .li-w { font-size: 14px; }
 .lim2-main .li-foot { padding-top: 12px; border-top: 1px solid #ECE7DF; } .lim2-main .li-motivo, .lim2-main .li-ev, .lim2-main .li-tr { font-size: 14px; }
 @media (max-width: 720px) { .fin-pi-box.lim-box.lim2 { flex-direction: column !important; height: 88vh; } .lim2-nav { width: auto; border-right: 0; border-bottom: 1px solid #ECE8E0; padding: 10px; } .lim2-r { grid-template-columns: 1fr 110px; } }
+
+/* ── Ajustes del cliente: ventanas incrustadas en el panel (formularios y buzón, salud, firma…) ── */
+.lim2-emb.fin-pi-backdrop { position: static !important; inset: auto !important; background: none !important; display: block !important; padding: 0 !important; z-index: auto !important; backdrop-filter: none !important; font-size: 14px; color: #213856; }
+.lim2-emb .fin-pi-box { position: static !important; transform: none !important; box-shadow: none !important; border: 0 !important; background: transparent !important; max-width: none !important; width: auto !important; height: auto !important; max-height: none !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; animation: none !important; }
+.lim2-emb .fin-pi-box__hd { display: none !important; }
+.lim2-emb .fin-pi-form { padding: 0 !important; max-height: none !important; overflow: visible !important; gap: 14px 18px; }
+.lim2-emb .fin-pi-box__ft { border: 0 !important; background: transparent !important; padding: 18px 0 0 !important; }
+.lim2-emb .fin-cfg-lbl, .lim2-emb label > span:first-child { font-size: 14px; font-weight: 500; color: #213856; }
+.lim2-emb .form-input, .lim2-emb input:not([type=checkbox]):not([type=radio]), .lim2-emb select { height: 32px; padding: 0 10px; font-size: 14px; font-weight: 500; border: 1px solid #E0DAD0; border-radius: 8px; background: #fff; color: #213856; }
+.lim2-emb textarea { font-size: 14px; border: 1px solid #E0DAD0; border-radius: 8px; background: #fff; color: #213856; padding: 8px 10px; }
+.lim2-emb .btn, .lim2-emb button.btn { height: 32px; font-size: 14px; }
+.lim2-back { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 500; color: #5A6472; cursor: pointer; padding: 0; margin: 0 0 14px; } .lim2-back:hover { color: #213856; }
+.lim2-h4 { font-size: 16px; font-weight: 700; color: #213856; margin: 22px 0 6px; }
+.lim2-t + .lim2-h4 { margin-top: 18px; }
+.lim2-av { width: 22px; height: 22px; border-radius: 50%; background: #DCE8FB; color: #1D4ED8; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; margin-left: -3px; }
+.lim2-i:has(.lim2-av) span { width: 22px; }
+
+/* ── Configuración de envío: tarjetas desplegables como lemlist ── */
+.lim2-ac { border: 1px solid #E6E1D8; border-radius: 12px; background: #FBFAF7; margin-bottom: 14px; overflow: hidden; }
+.lim2-ac__h { display: flex; align-items: center; gap: 16px; width: 100%; border: 0; background: none; padding: 16px 20px; text-align: left; cursor: pointer; font: inherit; color: #213856; }
+.lim2-ac--off .lim2-ac__h { cursor: default; opacity: .8; }
+.lim2-ac__ic { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #E6E1D8; background: #fff; box-shadow: 0 1px 2px rgba(33,56,86,.06); display: inline-flex; align-items: center; justify-content: center; color: #213856; flex: none; }
+.lim2-ac__t { flex: 1; min-width: 0; } .lim2-ac__t b { display: block; font-size: 16px; font-weight: 500; line-height: 22px; color: #213856; } .lim2-ac__t small { display: block; font-size: 14px; font-weight: 500; line-height: 20px; color: #98A1AC; margin-top: 2px; }
+.lim2-chev { color: #5A6472; transition: transform .15s; flex: none; } .lim2-ac.is-open .lim2-chev { transform: rotate(180deg); }
+.lim2-ac__b { border-top: 1px solid #E6E1D8; padding: 16px 20px 18px; background: #F7F5F2; }
+.lim2-ar { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECE7DF; } .lim2-ar:last-of-type { border-bottom: 0; }
+.lim2-ar__t { flex: 1; min-width: 0; } .lim2-ar__t b { display: block; font-size: 14px; font-weight: 500; color: #213856; } .lim2-ar__t small { display: block; font-size: 14px; font-weight: 500; color: #98A1AC; }
+.lim2-hint { font-size: 14px; font-weight: 500; color: #98A1AC; line-height: 20px; margin: 4px 0 12px; }
+.lim2-ac__b .li-card { background: #FBFAF7; }
+.lim2-ac__h .cc-chip { margin-right: 4px; }
+
+/* ── Límites: formato de lemlist (aviso azul, sección, caja con filas «texto … − valor +») ── */
+.lim2-ib { display: flex; align-items: flex-start; gap: 12px; background: #EAF2FD; border-radius: 10px; padding: 12px 16px; margin: 0 0 18px; font-size: 14px; font-weight: 500; line-height: 20px; color: #213856; } .lim2-ib svg { color: #2563EB; flex: none; margin-top: 1px; }
+.lim2-box .lim2-ib { margin: 0 0 6px; }
+.lim2-sub { font-size: 14px; font-weight: 500; color: #98A1AC; margin: -2px 0 12px; }
+.lim2-box { background: #FBFAF7; border: 1px solid #E6E1D8; border-radius: 12px; padding: 14px 18px 16px; margin: 0 0 16px; }
+.lim2-box__t { font-size: 14px; font-weight: 700; color: #213856; margin-bottom: 10px; }
+.lim2-box__h { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; padding: 2px 0 10px; color: #213856; }
+.lim2-sel { width: 100%; height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #EFEBE4; font: inherit; font-size: 14px; font-weight: 500; color: #5A6472; }
+.lim2-r2 { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 4px; min-height: 64px; }
+.lim2-r2 + .lim2-r2 { border-top: 1px solid #ECE7DF; }
+.lim2-r2__l { font-size: 14px; font-weight: 500; line-height: 20px; color: #213856; flex: 1; } .lim2-r2__l small { display: block; font-size: 14px; font-weight: 500; color: #98A1AC; margin-top: 2px; }
+.lim2-stp { display: inline-flex; align-items: stretch; flex: none; height: 32px; border: 1px solid #E0DAD0; border-radius: 8px; overflow: hidden; background: #fff; }
+.lim2-stp button { width: 34px; border: 0; background: #F3F0EA; color: #5A6472; font-size: 16px; line-height: 1; cursor: pointer; } .lim2-stp button:hover { background: #E9E4DA; color: #213856; }
+.lim2-stp input { width: 62px; border: 0; border-left: 1px solid #E0DAD0; border-right: 1px solid #E0DAD0; text-align: center; font: inherit; font-size: 14px; font-weight: 500; color: #213856; background: #fff; padding: 0; -moz-appearance: textfield; } .lim2-stp input::-webkit-outer-spin-button, .lim2-stp input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.lim2-stp input:focus { outline: 2px solid rgba(33,56,86,.15); outline-offset: -2px; }
+.lim2-div { height: 1px; background: #E6E1D8; margin: 8px 0; }
+.lim2-stt { font-size: 14px; line-height: 20px; background: #F0ECE5; border-radius: 8px; padding: 8px 12px; margin: 4px 0 6px; color: #213856; }
+.lim2-box .lim2-ft { margin-top: 10px; }
+.lim2-r2 .rp-sw { flex: none; }
+
+/* ── Capacidad: ocupa todo el ancho y los dos avisos son barras de una fila, como el aviso de «Lista de prospectos» ── */
+.sed__left > .cap { max-width: none; width: 100%; margin: 0; padding: 16px 28px 32px; }
+.cap-bn { display: flex; align-items: center; gap: 12px; background: #FEF6DD; border: 0; border-radius: 8px; padding: 0 14px; min-height: 46px; height: 46px; margin-bottom: 8px; }
+.cap-bn::before { content: ""; flex: none; width: 18px; height: 18px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B7791F' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E") center/contain no-repeat; }
+.cap-bn > div:first-child { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.cap-bn b { display: inline; flex: none; font-size: 14px; font-weight: 700; color: #3B2F0B; white-space: nowrap; }
+.cap-bn span { display: block; margin: 0; font-size: 14px; font-weight: 500; color: #4B4020; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cap-bn__a { display: flex; gap: 6px; flex: none; }
+.cap-bn__a .btn { height: 30px; font-size: 13px; font-weight: 600; background: #2563EB; border-color: #2563EB; color: #fff; padding: 0 14px; border-radius: 8px; } .cap-bn__a .btn:hover { background: #1D4ED8; }
+.cap-bn__a .btn[title] { background: transparent; border-color: transparent; color: #4B4020; padding: 0 8px; } .cap-bn__a .btn[title]:hover { background: rgba(0,0,0,.06); }
+.cap-form { margin-top: 12px; }
