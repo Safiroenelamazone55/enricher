@@ -105,9 +105,11 @@ function proximaVentana(a, now) {
 async function resumenCola(pool, a, now) {
   const [{ rows: [c] }, { rows: prox }] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE tipo='visit')::int AS visit, COUNT(*) FILTER (WHERE tipo='invite')::int AS invite, COUNT(*) FILTER (WHERE tipo='message')::int AS message, COUNT(*) FILTER (WHERE tipo='inmail')::int AS inmail FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('visit','invite','message','inmail')`, [a.id]),
-    pool.query(`SELECT q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 4`, [a.id]),
+    pool.query(`SELECT q.sequence_id, q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 4`, [a.id]),
   ]);
-  return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: prox.map(r => ({ tipo: r.tipo, quien: r.nombre || r.slug })), ventana: proximaVentana(a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
+  let tzPrim = null;
+  if (prox[0] && prox[0].sequence_id) { const { rows: [sq] } = await pool.query(`SELECT timezone FROM sequences WHERE id=$1`, [prox[0].sequence_id]); tzPrim = sq && sq.timezone || null; }
+  return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: prox.map(r => ({ tipo: r.tipo, quien: r.nombre || r.slug })), ventana: proximaVentana(tzPrim ? { ...a, tz: tzPrim } : a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
 }
 
 // ── Límites efectivos de HOY (calentamiento incluido) ──
@@ -628,6 +630,10 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const hist = await historial(pool, a, now);
       const { rows: cola } = await pool.query(`SELECT * FROM li_actions WHERE account_id=$1 AND estado='queued' AND (not_before IS NULL OR not_before <= NOW()) ORDER BY id LIMIT 30`, [a.id]);
       if (!cola.length) return sinAccion(60, 'cola_vacia');
+      // El horario (días, hora de inicio/fin, pausa) se mide en la zona horaria de la CAMPAÑA (la de su secuencia), no en la de la cuenta; si la secuencia no tiene, vale la de la cuenta.
+      const seqIds = [...new Set(cola.map(q => q.sequence_id).filter(Boolean))];
+      const tzSeq = {};
+      if (seqIds.length) (await pool.query(`SELECT id, timezone FROM sequences WHERE id = ANY($1::int[])`, [seqIds])).rows.forEach(r => { if (r.timezone) tzSeq[r.id] = r.timezone; });
       let mejor = null, espera = 3600, motivo = ''; const oks = [];
       const rnd = Math.random();
       for (const q of cola) {
@@ -636,7 +642,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
           const { rows: [vivo] } = await pool.query(`SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id AND s.estado='activa' WHERE cs.contact_id=$1 AND cs.sequence_id=$2 AND cs.estado='activo'`, [q.contact_id, q.sequence_id]);
           if (!vivo) { await pool.query(`UPDATE li_actions SET estado='cancelled', detalle='La secuencia ya no está activa para esta persona' WHERE id=$1`, [q.id]); continue; }
         }
-        const ev = evaluar(a, hist, q.tipo, now, rnd, !!(q.nota && q.nota.trim()));
+        const ev = evaluar(tzSeq[q.sequence_id] ? { ...a, tz: tzSeq[q.sequence_id] } : a, hist, q.tipo, now, rnd, !!(q.nota && q.nota.trim()));
         if (ev.ok) { oks.push(q); if (oks.length >= 8) break; continue; }
         if (ev.espera_s < espera) { espera = ev.espera_s; motivo = ev.motivo; }
       }
