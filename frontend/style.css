@@ -22785,3 +22785,5 @@ body.ibx-lb-open{overflow:hidden}
 .cap-bn__a .btn { height: 30px; font-size: 13px; font-weight: 600; background: #2563EB; border-color: #2563EB; color: #fff; padding: 0 14px; border-radius: 8px; } .cap-bn__a .btn:hover { background: #1D4ED8; }
 .cap-bn__a .btn[title] { background: transparent; border-color: transparent; color: #4B4020; padding: 0 8px; } .cap-bn__a .btn[title]:hover { background: rgba(0,0,0,.06); }
 .cap-form { margin-top: 12px; }
+/* en el panel incrustado el scroll es uno solo (el del panel), no uno dentro de otro */
+.lim2-emb .mbh-body, .lim2-emb .lim-scroll, .lim2-emb [class$="__body"], .lim2-emb .fin-pi-form { max-height: none !important; overflow: visible !important; }
