@@ -22696,3 +22696,6 @@ body.ibx-lb-open{overflow:hidden}
 .lim2-st { font-size: .8rem; color: #334155; background: #F6F8FB; border-radius: 8px; padding: 9px 12px; margin: 10px 0 0; line-height: 1.5; }
 .lim2-ft { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 @media (max-width: 720px) { .fin-pi-box.lim-box.lim2 { flex-direction: column !important; height: 88vh; } .lim2-nav { width: auto; border-right: 0; border-bottom: 1px solid #EEF0F4; padding: 12px; } .lim2-note { display: none; } .lim2-r { grid-template-columns: 1fr 100px; } }
+
+.lim2-g2 { margin-top: 14px; } .lim2-i--a { color: #475569; } .lim2-go { margin-left: auto; font-style: normal; background: none !important; color: #94A3B8 !important; font-size: .8rem !important; padding: 0 !important; }
+.seq-more-btn svg { display: block; }
