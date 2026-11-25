@@ -46,10 +46,14 @@
       if (on) { h.style.setProperty('transition', 'margin-right .15s', 'important'); h.style.setProperty('margin-right', Math.min(ANCHO, window.innerWidth * 0.92) + 'px', 'important'); }
       else { h.style.removeProperty('margin-right'); setTimeout(() => h.style.removeProperty('transition'), 250); }
     };
+    const abrirIframe = () => {
+      if (!frame) { frame = el('iframe', { src: chrome.runtime.getURL('sidepanel.html?p=2') }); panel.appendChild(frame); }
+      panel.classList.add('open'); tab.style.display = 'none'; empujar(true);
+    };
+    // Lo normal: abre el panel lateral REAL de Chrome (encoge de verdad la página, nada queda tapado). Si no se pudiera, panel flotante.
     const abrir = on => {
       if (on) {
-        if (!frame) { frame = el('iframe', { src: chrome.runtime.getURL('sidepanel.html?p=2') }); panel.appendChild(frame); }
-        panel.classList.add('open'); tab.style.display = 'none'; empujar(true);
+        try { chrome.runtime.sendMessage({ cmd: 'abrirPanel' }, r => { if (chrome.runtime.lastError || !r || !r.ok) abrirIframe(); }); } catch (_) { abrirIframe(); }
       } else { panel.classList.remove('open'); tab.style.display = 'flex'; empujar(false); }
     };
     x.onclick = () => abrir(false);

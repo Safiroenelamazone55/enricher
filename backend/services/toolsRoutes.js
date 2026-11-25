@@ -12,7 +12,7 @@ const TOOLS = {
   'guia-respuestas':       { file: 'guia-respuestas-outreach-1.0.2.zip', nombre: 'Respuestas-Outreach.zip',             version: '1.0.2' },
   'linkedin-scraper':      { file: 'scout-1.0.21.zip',   nombre: 'SCOUT-1.0.21.zip',   version: '1.0.21' },
   'nova-ventana':          { file: 'nova-ventana-1.0.0.zip',             nombre: 'Nova-Ventana-de-busqueda-1.0.0.zip', version: '1.0.0' },
-  'nova-linkedin':         { file: 'flow-0.9.7.zip',            nombre: 'FLOW-0.9.7.zip',            version: '0.9.7' },
+  'nova-linkedin':         { file: 'flow-0.9.8.zip',            nombre: 'FLOW-0.9.8.zip',            version: '0.9.8' },
   'nova-activity-web':     { file: 'elevn-activity-extension-0.1.3.zip', nombre: 'Elevn-Activity-Extension-0.1.3.zip', version: '0.1.3' },
   'nova-activity-desktop': { file: 'ElevnActivitySetup-1.0.2.exe',       nombre: 'ElevnActivitySetup-1.0.2.exe',       version: '1.0.2' },
   'ficha-cliente':         { file: 'ficha-cliente-1.0.1.zip',            nombre: 'ficha-cliente-1.0.1.zip',            version: '1.0.1' },

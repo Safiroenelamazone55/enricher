@@ -17,7 +17,13 @@ async function pintarVinculada() {
   $('swon').checked = on;
   $('st').className = 'msg ' + (e.nivel || '');
   $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
-  $('acctslug').textContent = e.slug ? 'linkedin.com/in/' + e.slug : 'Leyendo cuenta…';
+  {
+    // Muestra el nombre y el usuario de LinkedIn, no la URL completa
+    const base = String(e.slug || '').replace(/-[a-z0-9]{6,12}$/i, '');
+    const nombre = base.split('-').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    $('acctname').textContent = e.slug ? (nombre || e.slug) : 'Leyendo cuenta…';
+    $('acctslug').textContent = e.slug ? '@' + e.slug : 'Cuenta de LinkedIn en este Chrome';
+  }
   pintarExtra(on ? e : { ...e, resumen: null });
   const md = $('modo');
   if (e.modo === 'auto') { md.className = 'modo au'; md.innerHTML = '<b>Automático</b><span>FLOW envía invitaciones y mensajes por sí solo, dentro de los topes y el horario. No tienes que pulsar nada.</span>'; }
