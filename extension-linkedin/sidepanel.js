@@ -32,7 +32,7 @@ async function pintarVinculada() {
 
 }
 
-const TIPO = { visit: 'Visitar perfil', invite: 'Enviar invitación', message: 'Enviar mensaje', inmail: 'Enviar InMail' };
+const TIPO = { visit: 'Visitar perfil', invite: 'Enviar invitación', message: 'Enviar mensaje', inmail: 'Enviar InMail', react: 'Reaccionar', follow: 'Seguir perfil', comment: 'Comentar' };
 function faltan(ts) { const m = Math.max(0, Math.round((new Date(ts) - Date.now()) / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; }
 const hh = n => String(n).padStart(2, '0') + ':00';
 function pintarExtra(e) {

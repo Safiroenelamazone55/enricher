@@ -127,6 +127,122 @@
     return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() }) : R('ok');
   }
 
+  // ── Publicaciones: reaccionar y comentar ──
+  // Se abre «Actividad» de la persona y se elige su publicación más reciente (no las que solo reaccionó o comentó). Si no hay una (o es más vieja que la ventana
+  // del paso), devuelve «omitida · sin_publicacion» y Nova hace el plan B (seguir el perfil).
+  const POST_SEL = () => SEL('post') || '[data-urn^="urn:li:activity"], .feed-shared-update-v2, div.occludable-update';
+  const edadDias = t => {
+    const m = norm(t).match(/(\d+)\s*(s|seg|min|m|h|d|sem|w|mes|mo|a|y|yr|año)\b/);
+    if (!m) return null; const n = Number(m[1]), u = m[2];
+    return /^(s|seg|min|h)$/.test(u) ? 0 : u === 'm' ? 0 : /^(d)$/.test(u) ? n : /^(sem|w)$/.test(u) ? n * 7 : /^(mes|mo)$/.test(u) ? n * 30 : n * 365;
+  };
+  async function buscarPost(a) {
+    const maxDias = Number((a.params && a.params.post_dias) || 0);
+    for (let i = 0; i < 8; i++) {
+      const ps = [...document.querySelectorAll(POST_SEL())].filter(vis);
+      for (const p of ps) {
+        const cab = norm((p.querySelector('.update-components-header, .feed-shared-actor__description--minimal') || {}).innerText || '');
+        if (/\b(likes this|loves this|celebrates this|supports this|finds this|commented on|le gusta esto|comentó|comentaron)\b/.test(cab)) continue;   // actividad AJENA, no una publicación suya
+        const sub = (p.querySelector('.update-components-actor__sub-description, .feed-shared-actor__sub-description') || {}).innerText || '';
+        const dias = edadDias(sub);
+        if (maxDias > 0 && dias != null && dias > maxDias) return null;   // el post más reciente ya es demasiado viejo
+        return p;
+      }
+      if (/hasn.t posted|no ha publicado|nothing to see|aún no hay|no recent/i.test(String(document.body.innerText || '').slice(0, 20000)) && i >= 2) return null;
+      await sleep(1500);
+    }
+    return null;
+  }
+  const textoPost = p => { const t = p.querySelector('.update-components-text, .feed-shared-update-v2__description, .feed-shared-text, .break-words'); return String((t && t.innerText) || p.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 6000); };
+
+  async function reaccionar(a, asistido) {
+    if (!/\/in\//.test(location.pathname)) return R('omitida', 'perfil_no_encontrado');
+    const p = await buscarPost(a);
+    if (!p) return R('omitida', 'sin_publicacion', 'La persona no tiene una publicación reciente para reaccionar');
+    p.scrollIntoView({ block: 'center', behavior: 'smooth' }); await sleep(rnd(1800, 3800));
+    const trig = p.querySelector(SEL('reaccionBoton') || 'button.react-button__trigger, button[aria-label^="React"], button[aria-label^="Reaccionar"]') || findBtn(T('like'), p);
+    if (!trig) return R('fallo', 'sin_boton_reaccion', 'No encontré el botón de reaccionar', { snapshot: snapshot() });
+    if (trig.getAttribute('aria-pressed') === 'true') return R('omitida', 'ya_reaccionado', 'Ya había reaccionado a esa publicación');
+    const hecho = () => trig.getAttribute('aria-pressed') === 'true' || /unlike|quitar|reacted|has reaccionado/.test(textOf(trig));
+    const cual = String(a.texto || '').trim();
+    const pal = (CFG && CFG.reacciones && CFG.reacciones[cual]) || null;
+    if (asistido) { trig.scrollIntoView({ block: 'center' }); trig.style.outline = '3px solid #316BFE'; return await esperarUsuario(hecho, 'Reacciona a la publicación' + (cual && pal ? ' (' + cual.replace('_', ' ') + ')' : '') + '.'); }
+    if (pal && cual !== 'recomendar') {
+      trig.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); trig.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); await sleep(rnd(1200, 2000));
+      const op = btns(document).find(b => hasAny(b, pal));
+      if (op) { op.click(); await sleep(rnd(1200, 2200)); return hecho() ? R('ok') : R('fallo', 'no_confirmado', 'No se pudo confirmar la reacción', { snapshot: snapshot() }); }
+    }
+    trig.click(); await sleep(rnd(1200, 2200));
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    return hecho() ? R('ok') : R('fallo', 'no_confirmado', 'No se pudo confirmar la reacción', { snapshot: snapshot() });
+  }
+
+  async function seguir(a, asistido) {
+    const p = estadoPerfil();
+    if (!p.hayPerfil) return R('omitida', 'perfil_no_encontrado');
+    const top = (document.querySelector('main') || document).querySelector('section') || document;
+    if (findBtn(T('following'), top)) return R('omitida', 'ya_siguiendo', 'Ya sigue a esta persona');
+    let seg = findBtn(T('follow'), top);
+    if (!seg) {   // «Seguir» a veces está dentro del menú «Más»
+      const mas = findBtn(T('more'), document.querySelector('main') || document);
+      if (mas) { mas.click(); await sleep(rnd(700, 1400)); seg = [...document.querySelectorAll('[role="menuitem"], div.artdeco-dropdown__item, li')].filter(vis).find(x => hasAny(x, T('follow')) && !hasAny(x, T('following'))); }
+    }
+    if (!seg) return R('omitida', 'sin_boton_seguir', 'No hay botón Seguir (perfil sin modo seguir)', { snapshot: snapshot() });
+    if (asistido) { seg.scrollIntoView({ block: 'center' }); seg.style.outline = '3px solid #316BFE'; return await esperarUsuario(() => !!findBtn(T('following'), document), 'Pulsa «Seguir».'); }
+    seg.click(); await sleep(rnd(1400, 2600));
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    return findBtn(T('following'), document) || !document.contains(seg) ? R('ok') : R('fallo', 'no_confirmado', 'No se pudo confirmar que se siguió', { snapshot: snapshot() });
+  }
+
+  const pedirComentario = (id, post) => new Promise(res => { try { chrome.runtime.sendMessage({ cmd: 'comentario', id, post }, r => res(r || { error: 'sin_respuesta' })); } catch (e) { res({ error: String(e) }); } });
+  async function comentar(a, asistido) {
+    if (!/\/in\//.test(location.pathname)) return R('omitida', 'perfil_no_encontrado');
+    const p = await buscarPost(a);
+    if (!p) return R('omitida', 'sin_publicacion', 'La persona no tiene una publicación reciente para comentar');
+    p.scrollIntoView({ block: 'center', behavior: 'smooth' }); await sleep(rnd(2200, 4500));   // «lee» la publicación
+    const cuerpo = textoPost(p);
+    if (cuerpo.length < 20) return R('omitida', 'sin_publicacion', 'La publicación no tiene texto que comentar');
+    const g = await pedirComentario(a.id, cuerpo);
+    if (g.error || !g.comentario) return R('omitida', /clave|api|presupuesto|desactivada/i.test(String(g.error || '')) ? 'sin_clave_ia' : 'sin_comentario_ia', String(g.error || 'La IA no devolvió un comentario'));
+    const btn = p.querySelector(SEL('botonComentar') || 'button.comment-button, button[aria-label^="Comment"], button[aria-label^="Comentar"]') || findBtn(T('comment'), p);
+    if (!btn) return R('fallo', 'sin_boton_comentar', '', { snapshot: snapshot() });
+    btn.click(); await sleep(rnd(1200, 2400));
+    const caja = p.querySelector(SEL('cajaComentario') || '.comments-comment-box__form .ql-editor, div.ql-editor[contenteditable="true"], div[role="textbox"][contenteditable="true"]') || document.querySelector('.comments-comment-box .ql-editor');
+    if (!caja) return R('fallo', 'sin_campo_comentario', '', { snapshot: snapshot() });
+    await escribir(caja, g.comentario); await sleep(rnd(900, 1800));
+    const datos = { comentario: g.comentario };
+    if (asistido) { const r = await esperarUsuario(() => !String(caja.innerText || '').trim().replace(/\u200b/g, ''), 'Revisa el comentario y pulsa «Comentar».'); return r.codigo === 'ok' ? { ...r, datos } : r; }
+    const form = caja.closest('form, .comments-comment-box') || document;
+    const env = form.querySelector(SEL('botonEnviarComentario') || 'button.comments-comment-box__submit-button, button[type="submit"]') || findBtn(T('comment'), form);
+    if (!env || env.disabled) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
+    env.click(); await sleep(rnd(1800, 3200));
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    return !String(caja.innerText || '').trim().replace(/\u200b/g, '') ? { ...R('ok'), datos } : R('fallo', 'no_confirmado', 'El comentario sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() });
+  }
+
+  // InMail (cuenta Premium / Sales Navigator): desde el perfil, el botón «Mensaje» de alguien que no es conexión abre el redactor de InMail con asunto.
+  async function inmail(a, asistido) {
+    const p = estadoPerfil();
+    if (!p.hayPerfil) return R('omitida', 'perfil_no_encontrado');
+    if (p.primerGrado) return R('omitida', 'ya_conectado', 'Ya es conexión: no hace falta InMail');
+    if (!p.msg) return R('omitida', 'sin_inmail', 'No hay botón de mensaje/InMail (la cuenta no tiene InMail disponible)');
+    p.msg.click(); await sleep(rnd(1400, 2400));
+    const av = avisoLinkedIn(); if (av) return porAviso(av);
+    const pagina = norm(document.body.innerText || '').slice(0, 60000);
+    if (/(0|no) inmail credits|sin cr[eé]ditos de inmail|try premium|prueba premium|upgrade to premium|hazte premium|reactivate premium/.test(pagina) && !document.querySelector(SEL('asuntoInmail') || 'input[name="subject"], input[placeholder*="ubject" i], input[placeholder*="sunto" i]'))
+      return R('omitida', 'sin_inmail', 'LinkedIn no ofrece InMail (sin créditos o la suscripción venció)', { snapshot: snapshot() });
+    const asunto = document.querySelector(SEL('asuntoInmail') || 'input[name="subject"], input[placeholder*="ubject" i], input[placeholder*="sunto" i]');
+    const box = document.querySelector(SEL('cajaMensaje'));
+    if (!asunto || !box) return R('omitida', 'sin_inmail', 'No apareció el redactor de InMail (¿la cuenta no es Premium?)', { snapshot: snapshot() });
+    await escribir(asunto, String(a.nota || 'Hola').slice(0, 200)); await sleep(rnd(500, 1100));
+    await escribir(box, a.texto); await sleep(rnd(800, 1600));
+    if (asistido) return await esperarUsuario(() => !String(box.innerText || '').trim(), 'Revisa el InMail y pulsa «Enviar».');
+    const enviar = document.querySelector(SEL('botonEnviarMensaje')) || findBtn(T('send'), document);
+    if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
+    enviar.click(); await sleep(rnd(1500, 2800));
+    return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() }) : R('ok');
+  }
+
   // ── Lecturas para detectar aceptaciones, respuestas e interacciones (no escriben nada) ──
   async function desplazar(veces) { for (let i = 0; i < veces; i++) { window.scrollBy({ top: rnd(500, 900), behavior: 'smooth' }); await sleep(rnd(1200, 2400)); } }
 
@@ -201,6 +317,10 @@
         const r = a.tipo === 'invite' ? await invitar(a, m.asistido)
           : a.tipo === 'visit' ? await visitar()
           : a.tipo === 'message' ? await mensaje(a, m.asistido)
+          : a.tipo === 'react' ? await reaccionar(a, m.asistido)
+          : a.tipo === 'follow' ? await seguir(a, m.asistido)
+          : a.tipo === 'comment' ? await comentar(a, m.asistido)
+          : a.tipo === 'inmail' ? await inmail(a, m.asistido)
           : a.tipo === 'check_connections' ? await leerConexiones()
           : a.tipo === 'check_inbox' ? await leerBandeja()
           : a.tipo === 'check_notifications' ? await leerNotificaciones()

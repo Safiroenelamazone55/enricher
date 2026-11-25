@@ -24488,14 +24488,18 @@ const LeadManagerModule = (() => {
     // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
     // aún en null (ej. "Empresas 0" aunque los 117 contactos ya cargaron) y esa pintura
     // parcial se queda en pantalla si el segundo resuelve sin cambiar nada visible propio.
-    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id), _seqLoadApprovals(id), _seqLoadPendingNoEmail(id)]);
+    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id), _seqLoadApprovals(id), _seqLoadPendingNoEmail(id), _seqLoadLiAvisos(id)]);
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
+  // Avisos de LinkedIn de la secuencia: pasos que hoy NO se pueden automatizar y quedan como tarea manual (sin clave de IA, cuenta gratuita, InMail bloqueado)
+  let _seqLiAvisos = { id: 0, list: [] };
+  async function _seqLoadLiAvisos(id) { try { const r = await apiFetch(`${API}/li/sequence/${id}/avisos`); const d = r && r.ok ? await r.json() : {}; _seqLiAvisos = { id, list: d.avisos || [] }; } catch (_) { _seqLiAvisos = { id, list: [] }; } }
+  function _seqLiAvisosHtml(id) { const l = _seqLiAvisos.id === id ? _seqLiAvisos.list : []; return l.map(a => `<div style="display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:11px 14px;border-radius:10px;background:#FFF6E5;border:1px solid #F3D9A4;color:#7A4A06;font-size:13.5px;line-height:1.45"><span style="font-size:16px;line-height:1.2">⚠</span><span>${esc(a.msg)}</span></div>`).join(''); }
   // ── LinkedIn con la extensión de Nova: cuentas, topes, calentamiento y cola ──
   const _li = { accs: null, queue: null, events: [], acc: 0, timer: null };
   const _LI_EST = { activa: ['Activa', '#00804C', '#EAF5EE'], pausada: ['Pausada', '#B45309', '#FFF7E6'], restringida: ['En pausa por restricción', '#B42318', '#FDECEA'], desconectada: ['Sin sesión de LinkedIn', '#B42318', '#FDECEA'] };
   const _LI_QST = { queued: 'En cola', taken: 'En curso', done: 'Hecha', failed: 'Falló', skipped: 'Omitida', cancelled: 'Cancelada' };
-  const _LI_TIPO = { invite: 'Invitación', message: 'Mensaje', visit: 'Visita', inmail: 'InMail' };
+  const _LI_TIPO = { invite: 'Invitación', message: 'Mensaje', visit: 'Visita', inmail: 'InMail', react: 'Reacción', follow: 'Seguir', comment: 'Comentario' };
   async function _liLoad() {
     try {
       const [a, q] = await Promise.all([apiFetch(`${API}/li/accounts`), apiFetch(`${API}/li/queue?account_id=${_li.acc || 0}`)]);
@@ -24915,6 +24919,7 @@ const LeadManagerModule = (() => {
             <option value="asistido"${p.li_modo === 'asistido' || !p.li_modo ? ' selected' : ''}>⚠ Asistido (solo para pruebas · beta): la extensión abre el perfil y deja el texto; yo pulso «Enviar»</option>
             <option value="auto"${p.li_modo === 'auto' ? ' selected' : ''}>Automático: la extensión lo envía sola (más riesgo para la cuenta)</option>
           </select>${p.li_modo === 'asistido' || !p.li_modo ? '<span title="Solo para pruebas (beta): no tiene sentido esperar sentada para pulsar «Enviar» en cada acción. Para campañas reales usa Automático." style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#FFF6E5;color:#B45309;font-size:18px;cursor:help">⚠</span>' : ''}</div>
+          <label style="display:block;margin-top:12px"><span class="cc-lbl">Tipo de cuenta de LinkedIn de esta campaña</span><select class="form-input" onchange="LeadManagerModule.ccSetRep('planificacion.li_plan', this.value)"><option value="gratis"${p.li_plan !== 'premium' ? ' selected' : ''}>Gratuita: sin InMail (los pasos de InMail van a mano)</option><option value="premium"${p.li_plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator: permite InMail (con tus créditos)</option></select><span class="cc-note" style="display:block;margin-top:6px">Si la suscripción vence o no quedan créditos, FLOW lo detecta, avisa y deja solo los InMail como tarea manual 24 h; lo demás sigue normal.</span></label>
           <span class="cc-note" style="display:block;margin-top:6px">${p.li_modo === 'auto' ? 'La siguiente tarea de LinkedIn de esta campaña saldrá sola, dentro de los topes y el horario de la cuenta.' : p.li_modo === 'manual' ? 'Los pasos de LinkedIn aparecen como tareas para ti. La extensión no los ejecuta.' : 'La extensión te lleva a cada perfil; tú confirmas el envío.'} Se aplica a todas las secuencias de la campaña al guardar.</span></div>
         <div class="cc-two"><label><span class="cc-lbl">Enviar cada (minutos)</span><input class="form-input" type="number" min="1" max="240" value="${p.cada_min}" onchange="LeadManagerModule.ccSet('planificacion.cada_min', Number(this.value))"></label>
           <label><span class="cc-lbl">Zona horaria</span><input class="form-input" list="cc-zonas" value="${esc(p.zona)}" placeholder="La de cada secuencia" onchange="LeadManagerModule.ccSet('planificacion.zona', this.value.trim())"><datalist id="cc-zonas">${_CC_ZONAS.map(z => `<option value="${z}">`).join('')}</datalist></label></div>
@@ -26643,7 +26648,7 @@ const LeadManagerModule = (() => {
     // detallada ("Revisar / editar") sigue abriéndose desde ahí y solo muestra su pestaña mientras estás dentro.
     if (_seqTab === 'aprobar') tabs.push(['aprobar', 'Aprobar', apN || null]);
     if (_seqTab === 'bloqueos') tabs.push(['bloqueos', 'Bloqueos', blN]);
-    return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
+    return `${_seqLiAvisosHtml(id)}<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
         <span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
       </button>`).join('')}</div>`;

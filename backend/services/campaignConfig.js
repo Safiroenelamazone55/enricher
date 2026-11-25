@@ -19,7 +19,7 @@ const DEFAULTS = {
   },
   tracking: { aperturas: true, clics: true, respuestas: true },
   remitentes: { modo: 'equilibrado' },
-  planificacion: { li_modo: 'asistido', lanzamiento_auto: false, dias: [1, 2, 3, 4, 5], cada_min: 5, zona: '', fecha_fin: '', al_finalizar: 'terminar', vacaciones_pais: '', vacaciones: [] },
+  planificacion: { li_modo: 'asistido', li_plan: 'gratis', lanzamiento_auto: false, dias: [1, 2, 3, 4, 5], cada_min: 5, zona: '', fecha_fin: '', al_finalizar: 'terminar', vacaciones_pais: '', vacaciones: [] },
   general: { etiquetas: [], compartir: false, baja: 'email', enlace_baja: false },
 };
 const PROGRESOS = ['continuar', 'pausar', 'finalizar'];
@@ -48,6 +48,7 @@ function sanear(c) {
   p.fecha_fin = /^\d{4}-\d{2}-\d{2}$/.test(p.fecha_fin) ? p.fecha_fin : '';
   if (!['terminar', 'pausar'].includes(p.al_finalizar)) p.al_finalizar = 'terminar';
   if (!['manual', 'asistido', 'auto'].includes(p.li_modo)) p.li_modo = 'asistido';
+  if (!['gratis', 'premium'].includes(p.li_plan)) p.li_plan = 'gratis';
   { const { CALENDARS } = require('./holidays');
     if (!CALENDARS[p.vacaciones_pais]) { p.vacaciones_pais = ''; p.vacaciones = []; }
     else { const validas = new Set(CALENDARS[p.vacaciones_pais].feriados.map(h => h.k)); p.vacaciones = [...new Set((p.vacaciones || []).filter(k => validas.has(k)))]; } }
@@ -195,10 +196,11 @@ function mount(app, { pool, requireAuth }) {
       const { rows: wa } = await pool.query(`SELECT w.id, w.nombre, w.numero, w.estado FROM wa_connections w WHERE w.user_id=$1 AND w.archivada_at IS NULL AND (w.outbound_client_id=$2 OR EXISTS (SELECT 1 FROM wa_connection_clients x WHERE x.connection_id=w.id AND x.outbound_client_id=$2)) ORDER BY w.id`, [uid, cid]).catch(() => ({ rows: [] }));
       const { rows: li } = await pool.query(`SELECT id, nombre, li_slug, estado, modo, plan, ultimo_visto FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY id`, [uid, cid]).catch(() => ({ rows: [] }));
       const { rows: ws } = await pool.query(`SELECT window_start, window_end, send_weekends, timezone, track_opens, track_clicks FROM lm_send_settings WHERE user_id=$1`, [uid]);
-      const { rows: seqs } = await pool.query(`SELECT s.id, s.nombre, s.estado, s.send_days, s.timezone, s.send_interval_min, s.send_mode, s.linkedin_auto, s.li_modo, s.track_opens, s.track_clicks, (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND x.estado='activo') AS activos FROM sequences s WHERE s.campaign_id=$1 AND s.user_id=$2 ORDER BY s.id`, [c.id, uid]);
+      const { rows: seqs } = await pool.query(`SELECT s.id, s.nombre, s.estado, s.send_days, s.timezone, s.send_interval_min, s.send_mode, s.linkedin_auto, s.li_modo, s.li_plan, s.track_opens, s.track_clicks, (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND x.estado='activo') AS activos FROM sequences s WHERE s.campaign_id=$1 AND s.user_id=$2 ORDER BY s.id`, [c.id, uid]);
       // Campaña sin configuración guardada: se parte de lo que YA tienen sus secuencias (así guardar sin tocar nada no cambia el comportamiento actual)
       { const guard = isObj(c.config) && isObj(c.config.planificacion) && c.config.planificacion.li_modo; const q0 = seqs[0];
-        if (!guard && q0) cfg.planificacion.li_modo = q0.linkedin_auto ? (q0.li_modo === 'auto' ? 'auto' : 'asistido') : 'manual'; }
+        if (!guard && q0) cfg.planificacion.li_modo = q0.linkedin_auto ? (q0.li_modo === 'auto' ? 'auto' : 'asistido') : 'manual';
+        if (!(isObj(c.config) && isObj(c.config.planificacion) && c.config.planificacion.li_plan) && q0) cfg.planificacion.li_plan = q0.li_plan === 'premium' ? 'premium' : 'gratis'; }
       if (!(isObj(c.config) && c.config.guardada)) {
         const q0 = seqs[0];
         if (q0) {
@@ -235,7 +237,7 @@ function mount(app, { pool, requireAuth }) {
           WHERE campaign_id=$1 AND user_id=$2 AND ($8::int[] IS NULL OR id = ANY($8::int[]))`,
         [c.id, uid, maskDe(cfg.planificacion.dias), cfg.planificacion.cada_min, cfg.planificacion.zona, cfg.tracking.aperturas, cfg.tracking.clics,
           Array.isArray(b.aplicar_a) ? b.aplicar_a.map(x => parseInt(x, 10)).filter(Boolean) : null]);
-      await cx.query(`UPDATE sequences SET linkedin_auto=($3 <> 'manual'), li_modo=CASE WHEN $3='auto' THEN 'auto' ELSE 'asistido' END WHERE campaign_id=$1 AND user_id=$2`, [c.id, uid, cfg.planificacion.li_modo]);
+      await cx.query(`UPDATE sequences SET linkedin_auto=($3 <> 'manual'), li_modo=CASE WHEN $3='auto' THEN 'auto' ELSE 'asistido' END, li_plan=$4 WHERE campaign_id=$1 AND user_id=$2`, [c.id, uid, cfg.planificacion.li_modo, cfg.planificacion.li_plan]);
       if (Array.isArray(b.remitentes)) {
         await cx.query(`DELETE FROM campaign_senders WHERE campaign_id=$1`, [c.id]);
         for (const r of b.remitentes) {

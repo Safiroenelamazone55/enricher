@@ -15,7 +15,7 @@ const crypto = require('crypto');
 const DEF = {
   inv_dia: 20, inv_semana: 100, msg_dia: 30, vis_dia: 30, inmail_dia: 5, total_dia: 100, notas_mes_gratis: 3,
   ramp_activo: true, ramp_inicio: 5, ramp_paso: 2, ramp_dias: 14, total_nuevo: 50,
-  hora_ini: 9, hora_fin: 18, dias: [1, 2, 3, 4, 5], gap_min: 300, gap_max: 1200, nota_max: 200, tz: 'America/Lima',
+  react_dia: 30, follow_dia: 25, comment_dia: 12, hora_ini: 9, hora_fin: 18, dias: [1, 2, 3, 4, 5], gap_min: 300, gap_max: 1200, nota_max: 200, tz: 'America/Lima',
 };
 const TIPOS = ['invite', 'message', 'visit', 'inmail'];
 const CHEQUEOS = ['check_connections', 'check_inbox', 'check_notifications'];   // lecturas que hace la extensión para detectar aceptaciones, respuestas e interacciones
@@ -25,13 +25,15 @@ DEF.chequeos_dia = 30;   // «comprobaciones de red en 24 h»: el valor de la pa
 // Configuración que viaja DESDE el servidor hacia la extensión (como hace lemlist): si LinkedIn cambia su página, se corrige aquí y
 // las extensiones lo reciben solas, sin reinstalarlas. Los patrones de bloqueo son los que usa lemlist (leídos en su extensión).
 const CONFIG = {
-  v: 2,
+  v: 3,
   bandeja: { item: 'li.msg-conversation-listitem', nombre: '.msg-conversation-card__participant-names, .msg-conversation-listitem__participant-names', extracto: '.msg-conversation-card__message-snippet' },   // comprobado en una cuenta real el 2026-11-23
   textos: {
     connect: ['connect', 'conectar'], pending: ['pending', 'pendiente'], message: ['message', 'mensaje'],
     addNote: ['add a note', 'añadir una nota', 'agregar una nota'], send: ['send', 'enviar'],
     sendNoNote: ['send without a note', 'enviar sin nota'], more: ['more', 'más'],
+    like: ['react like', 'like', 'recomendar', 'me gusta', 'reaccionar'], follow: ['follow', 'seguir'], following: ['following', 'siguiendo'], comment: ['comment', 'comentar'],
   },
+  reacciones: { recomendar: ['react like', 'like', 'recomendar'], celebrar: ['celebrate', 'celebrar'], apoyar: ['support', 'apoyar'], me_encanta: ['love', 'me encanta'], interesante: ['insightful', 'interesante'] },
   selectores: {
     notaTextarea: 'textarea[name="message"], textarea#custom-message, .artdeco-modal textarea',
     cajaMensaje: 'div.msg-form__contenteditable[contenteditable="true"], div[role="textbox"][contenteditable="true"]',
@@ -104,8 +106,8 @@ function proximaVentana(a, now) {
 // Lo que la persona ve en el panel cuando no hay nada que hacer AHORA: cuánto hay en cola, qué viene y cuándo empieza.
 async function resumenCola(pool, a, now) {
   const [{ rows: [c] }, { rows: prox }] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE tipo='visit')::int AS visit, COUNT(*) FILTER (WHERE tipo='invite')::int AS invite, COUNT(*) FILTER (WHERE tipo='message')::int AS message, COUNT(*) FILTER (WHERE tipo='inmail')::int AS inmail FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('visit','invite','message','inmail')`, [a.id]),
-    pool.query(`SELECT q.sequence_id, q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 10`, [a.id]),
+    pool.query(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE tipo='visit')::int AS visit, COUNT(*) FILTER (WHERE tipo='invite')::int AS invite, COUNT(*) FILTER (WHERE tipo='message')::int AS message, COUNT(*) FILTER (WHERE tipo='inmail')::int AS inmail FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('visit','invite','message','inmail','react','follow','comment')`, [a.id]),
+    pool.query(`SELECT q.sequence_id, q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') ORDER BY q.id LIMIT 10`, [a.id]),
   ]);
   let tzPrim = null;
   if (prox[0] && prox[0].sequence_id) { const { rows: [sq] } = await pool.query(`SELECT timezone FROM sequences WHERE id=$1`, [prox[0].sequence_id]); tzPrim = sq && sq.timezone || null; }
@@ -136,7 +138,7 @@ function efectivos(a, now) {
   }
   // El tope de HOY es un 72–100 % del configurado (distinto cada día): hacer exactamente el máximo todos los días es una huella muy clara.
   const pd = perfilDia(a, lp.ymd), esc = x => Math.max(1, Math.round(x * pd.f));
-  return { inv: esc(inv), inv_semana: a.inv_semana, msg: esc(msg), vis: esc(vis), inmail: esc(inmail), total: esc(total), dia, calentando, local: lp, perfil: pd };
+  return { inv: esc(inv), inv_semana: a.inv_semana, msg: esc(msg), vis: esc(vis), inmail: esc(inmail), react: esc(DEF.react_dia), follow: esc(DEF.follow_dia), comment: esc(DEF.comment_dia), total: esc(total), dia, calentando, local: lp, perfil: pd };
 }
 
 // ── ¿Puede la cuenta hacer una acción de este tipo AHORA? ──
@@ -154,7 +156,7 @@ function evaluar(a, hist, tipo, now, rnd, conNota) {
   if (pd.pausa && lp.hour >= pd.pausa[0] && lp.hour < pd.pausa[1]) return { ok: false, motivo: 'pausa_descanso', espera_s: Math.max(60, Math.ceil((pd.pausa[1] - lp.hour) * 3600)) };
   const esCheck = String(tipo).startsWith('check_');
   if (!esCheck && hist.total_hoy >= ef.total) return { ok: false, motivo: 'tope_total_dia', espera_s: 3600 };
-  const caps = esCheck ? [hist.chequeos_hoy || 0, DEF.chequeos_dia] :  { invite: [hist.inv_hoy, ef.inv], message: [hist.msg_hoy, ef.msg], visit: [hist.vis_hoy, ef.vis], inmail: [hist.inmail_hoy, ef.inmail] }[tipo];
+  const caps = esCheck ? [hist.chequeos_hoy || 0, DEF.chequeos_dia] :  { invite: [hist.inv_hoy, ef.inv], message: [hist.msg_hoy, ef.msg], visit: [hist.vis_hoy, ef.vis], inmail: [hist.inmail_hoy, ef.inmail], react: [hist.react_hoy, ef.react], follow: [hist.follow_hoy, ef.follow], comment: [hist.comment_hoy, ef.comment] }[tipo];
   if (!caps) return { ok: false, motivo: 'tipo_desconocido', espera_s: 0 };
   if (caps[0] >= caps[1]) return { ok: false, motivo: 'tope_' + tipo + '_dia', espera_s: 3600 };
   if (tipo === 'invite' && hist.inv_semana >= ef.inv_semana) return { ok: false, motivo: 'tope_invitaciones_semana', espera_s: 3600 };
@@ -186,7 +188,7 @@ function siguienteEspera(a, media) {
 async function mediaReparto(pool, a, tipo, sumaUna) {
   try {
     const ahora = new Date(), ef = efectivos(a, ahora), hist = await historial(pool, a, ahora);
-    const usado = ({ invite: hist.inv_hoy, message: hist.msg_hoy, visit: hist.vis_hoy, inmail: hist.inmail_hoy })[tipo], cap = ({ invite: ef.inv, message: ef.msg, visit: ef.vis, inmail: ef.inmail })[tipo];
+    const usado = ({ invite: hist.inv_hoy, message: hist.msg_hoy, visit: hist.vis_hoy, inmail: hist.inmail_hoy, react: hist.react_hoy, follow: hist.follow_hoy, comment: hist.comment_hoy })[tipo], cap = ({ invite: ef.inv, message: ef.msg, visit: ef.vis, inmail: ef.inmail, react: ef.react, follow: ef.follow, comment: ef.comment })[tipo];
     if (usado == null || !cap) return 0;
     const pd = ef.perfil; let resto = pd.fin - ef.local.hour;
     if (pd.pausa && ef.local.hour < pd.pausa[1]) resto -= pd.pausa[1] - Math.max(ef.local.hour, pd.pausa[0]);   // el descanso no cuenta como tiempo de trabajo
@@ -225,6 +227,9 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS snapshot TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS datos JSONB`);
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS linkedin_auto BOOLEAN NOT NULL DEFAULT FALSE`).catch(() => {});
+  await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS li_plan TEXT NOT NULL DEFAULT 'gratis'`).catch(() => {});   // tipo de cuenta de LinkedIn de la campaña: 'gratis' | 'premium' (Premium / Sales Navigator: permite InMail)
+  await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS params JSONB`).catch(() => {});
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS inmail_bloqueado_hasta TIMESTAMPTZ`).catch(() => {});
   // Modo de LinkedIn POR CAMPAÑA/SECUENCIA ('asistido' | 'auto'); antes era de la cuenta. Migración única: hereda 'auto' si la cuenta del cliente lo era.
   const { rows: [hadCol] } = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name='sequences' AND column_name='li_modo'`).catch(() => ({ rows: [] }));
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS li_modo TEXT NOT NULL DEFAULT 'asistido'`).catch(() => {});
@@ -251,6 +256,9 @@ async function historial(pool, a, now) {
        COUNT(*) FILTER (WHERE tipo='message' AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS msg_hoy,
        COUNT(*) FILTER (WHERE tipo='visit'   AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS vis_hoy,
        COUNT(*) FILTER (WHERE tipo='inmail'  AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS inmail_hoy,
+       COUNT(*) FILTER (WHERE tipo='react'   AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS react_hoy,
+       COUNT(*) FILTER (WHERE tipo='follow'  AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS follow_hoy,
+       COUNT(*) FILTER (WHERE tipo='comment' AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS comment_hoy,
        COUNT(*) FILTER (WHERE tipo NOT LIKE 'check\_%' AND done_at > $2::timestamptz - INTERVAL '24 hours')::int AS total_hoy,
        COUNT(*) FILTER (WHERE tipo='invite' AND done_at > $2::timestamptz - INTERVAL '7 days')::int AS inv_semana,
        COUNT(*) FILTER (WHERE tipo='invite' AND nota <> '' AND done_at > $2::timestamptz - INTERVAL '30 days')::int AS notas_mes,
@@ -393,20 +401,22 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       // (2b) Pasos de LinkedIn de secuencias con «LinkedIn automático»
       const { rows: pend } = await pool.query(`
         SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, s.outbound_client_id, s.campaign_id, s.send_days, s.nombre AS seq_nombre,
-               st.id AS step_id, st.accion, st.plantilla, st.asunto, st.variants, st.variant_mode, st.variant_field, st.canal, st.cond, st.cond_step_id,
+               st.id AS step_id, st.accion, st.plantilla, st.asunto, st.post_dias, st.reaccion, s.li_plan, st.variants, st.variant_mode, st.variant_field, st.canal, st.cond, st.cond_step_id,
                k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.idioma, k.idiomas, k.company_id, k.disposition, k.li_aceptado_at
           FROM lm_contact_sequences cs
           JOIN sequences s ON s.id = cs.sequence_id AND s.estado = 'activa' AND s.linkedin_auto
           JOIN lm_contacts k ON k.id = cs.contact_id
           JOIN LATERAL (SELECT * FROM sequence_steps ss WHERE ss.sequence_id = cs.sequence_id ORDER BY ss.dia ASC, ss.orden ASC, ss.id ASC OFFSET GREATEST(cs.paso - 1, 0) LIMIT 1) st ON TRUE
          WHERE cs.estado = 'activo' AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW()) AND st.canal = 'linkedin'
-           AND st.accion IN ('invite_nota','invite','mensaje','visita')
+           AND st.accion IN ('invite_nota','invite','mensaje','visita','like','follow','comentario','inmail')
            AND NOT EXISTS (SELECT 1 FROM li_actions a WHERE a.contact_id = cs.contact_id AND a.step_id = st.id)
          ORDER BY cs.next_action_at ASC NULLS FIRST LIMIT 40`);
       const se = sendEngine();
       for (const e of pend) {
         // ¿El paso aplica a esta persona (condición de aceptó / respondió)? Si no, se salta
         if (!(await se.condMatch(pool, { cond: e.cond, cond_step_id: e.cond_step_id }, { contact_id: e.contact_id, disposition: e.disposition, li_aceptado_at: e.li_aceptado_at }))) { await se.advancePastStep(pool, e.user_id, e.contact_id, e.sequence_id, e.step_id); continue; }
+        if (e.accion === 'comentario' && !process.env.ANTHROPIC_API_KEY) continue;   // sin clave de IA: se hace a mano (la secuencia muestra el aviso)
+        if (e.accion === 'inmail' && e.li_plan !== 'premium') continue;              // campaña con cuenta gratuita: InMail a mano
         const slug = slugDe(e.linkedin);
         if (!slug) { await pausarInscripcion(e, 'linkedin_sin_url', 'Secuencia pausada: este contacto no tiene un enlace de LinkedIn válido.'); continue; }
         const { rows: cuentasC } = await pool.query(`SELECT a.*, (SELECT COUNT(*) FROM li_actions q WHERE q.account_id=a.id AND q.estado='queued')::int AS cola FROM li_accounts a WHERE a.user_id=$1 AND a.outbound_client_id=$2 AND a.estado IN ('activa','pausada')
@@ -414,20 +424,27 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
          ORDER BY cola ASC LIMIT 1`, [e.user_id, e.outbound_client_id || 0, e.campaign_id || 0]);
         if (!cuentasC.length) continue;   // sin cuenta ligada a este cliente: el paso sigue siendo manual
         const acc = cuentasC[0];
+        if (e.accion === 'inmail' && acc.inmail_bloqueado_hasta && new Date(acc.inmail_bloqueado_hasta) > new Date()) continue;   // sin créditos / suscripción vencida: InMail a mano mientras dure el bloqueo
         const { rows: ex } = await pool.query(`SELECT 1 FROM lm_exclusions WHERE user_id=$1 AND linkedin_slug=$2 AND (scope='global' OR (scope='cliente' AND outbound_client_id=$3)) LIMIT 1`, [e.user_id, slug, e.outbound_client_id || 0]).catch(() => ({ rows: [] }));
         if (ex.length) { await pausarInscripcion(e, 'disposition_no_contactar', 'Secuencia pausada: la persona está en tus exclusiones.'); continue; }
-        const tipo = e.accion === 'mensaje' ? 'message' : e.accion === 'visita' ? 'visit' : 'invite';
-        let texto = '';
-        if (tipo !== 'visit') {
+        const tipo = e.accion === 'mensaje' ? 'message' : e.accion === 'visita' ? 'visit' : e.accion === 'like' ? 'react' : e.accion === 'follow' ? 'follow' : e.accion === 'comentario' ? 'comment' : e.accion === 'inmail' ? 'inmail' : 'invite';
+        let texto = '', params = null, urlAccion = urlDeSlug(slug);
+        if (tipo === 'react' || tipo === 'comment') { params = { post_dias: e.post_dias || 0 }; urlAccion = urlDeSlug(slug) + 'recent-activity/all/'; }
+        if (tipo === 'react') texto = e.reaccion || '';
+        if (tipo === 'comment') {
+          const ctx0 = await se.attachCustom(pool, { ...e, contact_id: e.contact_id, user_id: e.user_id }, e.user_id);
+          params.prompt = se.renderTemplate(e.plantilla || '', ctx0).replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' ').trim().slice(0, 6000);
+        }
+        if (tipo === 'message' || tipo === 'invite' || tipo === 'inmail') {
           const ctx = await se.attachCustom(pool, { ...e, contact_id: e.contact_id, user_id: e.user_id }, e.user_id);
           const v = se.pickVariant({ id: e.step_id, plantilla: e.plantilla, variants: e.variants, variant_mode: e.variant_mode, variant_field: e.variant_field }, ctx);
           texto = se.renderTemplate((v && v.cuerpo) || e.plantilla || '', ctx).replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-          if (tipo === 'message' && !texto) { await pausarInscripcion(e, 'linkedin_sin_texto', 'Secuencia pausada: el paso de mensaje de LinkedIn no tiene texto.'); continue; }
+          if ((tipo === 'message' || tipo === 'inmail') && !texto) { await pausarInscripcion(e, 'linkedin_sin_texto', 'Secuencia pausada: el paso de mensaje de LinkedIn no tiene texto.'); continue; }
           if (tipo === 'invite' && e.accion === 'invite_nota' && texto.length > DEF.nota_max) { await pausarInscripcion(e, 'linkedin_nota_larga', `Secuencia pausada: la nota de la invitación mide ${texto.length} caracteres y el máximo es ${DEF.nota_max}.`); continue; }
         }
         await pool.query(
-          `INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [e.user_id, acc.id, tipo, slug, urlDeSlug(slug), e.contact_id, e.sequence_id, e.step_id, tipo === 'invite' && e.accion === 'invite_nota' ? texto : '', tipo === 'message' ? texto : '']);
+          `INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+          [e.user_id, acc.id, tipo, slug, urlAccion, e.contact_id, e.sequence_id, e.step_id, tipo === 'invite' && e.accion === 'invite_nota' ? texto : (tipo === 'inmail' ? String(e.asunto || '').slice(0, 200) : ''), (tipo === 'message' || tipo === 'inmail') ? texto : (tipo === 'react' ? texto : ''), params ? JSON.stringify(params) : null]);
       }
     } catch (e) { console.error('[li] puente', e.message); }
   }
@@ -665,7 +682,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (!mejor) return sinAccion(espera, motivo);
       const { rowCount } = await pool.query(`UPDATE li_actions SET estado='taken', taken_at=NOW() WHERE id=$1 AND estado='queued'`, [mejor.id]);
       if (!rowCount) return res.json({ accion: null, espera_s: 15, motivo: 'reintentar' });
-      res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto }, modo: modoSeq[mejor.sequence_id] || 'asistido', config: CONFIG });
+      res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto, params: mejor.params || null }, modo: modoSeq[mejor.sequence_id] || 'asistido', config: CONFIG });
     } catch (e) { console.error('[li] next', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -683,7 +700,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (codigo !== 'sesion') {
         if (String(ac.tipo).startsWith('check_')) await pool.query(`UPDATE li_accounts SET proxima_accion_at = GREATEST(COALESCE(proxima_accion_at, NOW()), NOW() + ($2 || ' seconds')::interval) WHERE id=$1`, [a.id, String(30 + Math.floor(Math.random() * 60))]);
         else {
-          const { rows: [sig] } = await pool.query(`SELECT tipo FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('invite','message','visit','inmail') ORDER BY id LIMIT 1`, [a.id]);
+          const { rows: [sig] } = await pool.query(`SELECT tipo FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('invite','message','visit','inmail','react','follow','comment') ORDER BY id LIMIT 1`, [a.id]);
           const media = await mediaReparto(pool, a, sig ? sig.tipo : ac.tipo, codigo === 'ok');
           await pool.query(`UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, [a.id, String(siguienteEspera(a, media))]);
         }
@@ -693,7 +710,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         await pool.query(`UPDATE li_accounts SET fallos_seguidos=0 WHERE id=$1`, [a.id]);
         if (String(ac.tipo).startsWith('check_')) extra = await procesarChequeo(a, ac.tipo, b.datos);
         else if (ac.contact_id && ac.sequence_id && ac.step_id) {
-          const rot = { invite: 'Invitación de LinkedIn enviada' + (ac.nota ? ' con nota' : ''), message: 'Mensaje de LinkedIn enviado', visit: 'Perfil de LinkedIn visitado' }[ac.tipo] || 'Acción de LinkedIn hecha';
+          const rot = { invite: 'Invitación de LinkedIn enviada' + (ac.nota ? ' con nota' : ''), message: 'Mensaje de LinkedIn enviado', visit: 'Perfil de LinkedIn visitado', react: 'Reaccionó a una publicación en LinkedIn', follow: ac.params && ac.params.fallback_de ? 'Siguió el perfil en LinkedIn (no tenía publicación reciente)' : 'Siguió el perfil en LinkedIn', comment: 'Comentó una publicación en LinkedIn' + (b.datos && b.datos.comentario ? ': «' + String(b.datos.comentario).slice(0, 300) + '»' : ''), inmail: 'InMail de LinkedIn enviado' }[ac.tipo] || 'Acción de LinkedIn hecha';
           await nota(ac, rot + ' (automático, extensión)');
           await avanzar(ac);
         }
@@ -705,6 +722,24 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
             if (ac.step_id) await avanzar({ ...ac, tipo: 'visit' });
           } else if (b.error === 'ya_pendiente' && ac.tipo === 'invite') {
             if (ac.step_id) await avanzar(ac);
+          } else if (['react', 'comment'].includes(ac.tipo) && b.error === 'sin_publicacion') {
+            // Plan B: la persona no tiene publicación (reciente) → se la sigue en vez de reaccionar/comentar
+            await pool.query(`INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, params) VALUES ($1,$2,'follow',$3,$4,$5,$6,$7,$8::jsonb)`,
+              [ac.user_id, ac.account_id, ac.slug, urlDeSlug(ac.slug), ac.contact_id, ac.sequence_id, ac.step_id, JSON.stringify({ fallback_de: ac.tipo })]);
+            await nota(ac, 'Sin publicación reciente para ' + (ac.tipo === 'react' ? 'reaccionar' : 'comentar') + ': se la seguirá en su lugar');
+          } else if (ac.tipo === 'follow' && b.error === 'ya_siguiendo') {
+            if (ac.step_id) await avanzar(ac);
+          } else if (ac.tipo === 'react' && b.error === 'ya_reaccionado') {
+            if (ac.step_id) await avanzar(ac);
+          } else if (ac.tipo === 'inmail' && b.error === 'ya_conectado') {
+            if (ac.step_id) await avanzar(ac);
+          } else if (ac.tipo === 'inmail' && b.error === 'sin_inmail') {
+            // Bloqueo SOLO de InMail: sin créditos / suscripción vencida / cuenta gratuita. El paso queda como tarea manual y lo demás sigue igual.
+            await pool.query(`UPDATE li_accounts SET inmail_bloqueado_hasta = NOW() + INTERVAL '24 hours' WHERE id=$1`, [ac.account_id]);
+            await pool.query(`INSERT INTO li_events (user_id, account_id, tipo, slug, detalle) VALUES ($1,$2,'alerta',$3,$4)`, [ac.user_id, ac.account_id, ac.slug, 'InMail no disponible (sin créditos o suscripción vencida): los pasos de InMail pasan a manual 24 h']).catch(() => {});
+            await nota(ac, 'InMail no disponible (sin créditos o suscripción vencida): este paso queda como tarea manual');
+          } else if (ac.tipo === 'comment' && ['sin_clave_ia', 'sin_comentario_ia'].includes(b.error)) {
+            await nota(ac, 'No se pudo generar el comentario con IA (' + (b.detalle || b.error) + '): este paso queda como tarea manual');
           } else {
             await pausarInscripcion(ac, 'linkedin_omitido', `Secuencia pausada: la extensión no pudo ejecutar el paso de LinkedIn (${b.error || 'omitido'}${det ? ': ' + det : ''}). Revísalo.`);
           }
@@ -734,10 +769,10 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const a = req.liAcc, now = new Date();
       const { rows: hechas } = await pool.query(`SELECT q.tipo, q.estado, q.done_at, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana
         FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
-        WHERE q.account_id=$1 AND q.tipo IN ('visit','invite','message','inmail') AND q.estado IN ('done','failed','skipped') AND q.done_at > NOW() - INTERVAL '24 hours' ORDER BY q.done_at DESC LIMIT 25`, [a.id]);
+        WHERE q.account_id=$1 AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') AND q.estado IN ('done','failed','skipped') AND q.done_at > NOW() - INTERVAL '24 hours' ORDER BY q.done_at DESC LIMIT 25`, [a.id]);
       const { rows: cola } = await pool.query(`SELECT q.id, q.sequence_id, q.tipo, q.estado, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana, s.timezone AS tz
         FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
-        WHERE q.account_id=$1 AND q.estado IN ('queued','taken') AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 80`, [a.id]);
+        WHERE q.account_id=$1 AND q.estado IN ('queued','taken') AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') ORDER BY q.id LIMIT 80`, [a.id]);
       const tz = (cola[0] && cola[0].tz) || a.tz, aR = { ...a, tz }, ptr = proximaVentana(aR, now);
       const gapS = Math.max(60, await mediaReparto(pool, aR, cola[0] ? cola[0].tipo : 'visit', false) || ((a.gap_min || 300) + (a.gap_max || 1200)) / 2);
       let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
@@ -749,6 +784,37 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         total: cola.length,
       });
     } catch (e) { console.error('[li] cola', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
+  // La extensión pide el texto del comentario (IA) con el contenido real de la publicación. Sin clave de IA o sin presupuesto → error y el paso queda manual.
+  app.post('/api/li/ext/comentario', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {};
+      if (!process.env.ANTHROPIC_API_KEY) return res.json({ error: 'Falta la clave de IA (ANTHROPIC_API_KEY) en el servidor' });
+      const { rows: [ac] } = await pool.query(`SELECT * FROM li_actions WHERE id=$1 AND account_id=$2 AND tipo='comment'`, [parseInt(b.id, 10) || 0, a.id]);
+      if (!ac || !ac.contact_id) return res.json({ error: 'Acción no encontrada' });
+      const { generateComment } = require('./aiPersonalizeService');
+      const r = await generateComment(pool, ac.user_id, { contactId: ac.contact_id, stepId: ac.step_id, sequenceId: ac.sequence_id, prompt: String((ac.params && ac.params.prompt) || '').slice(0, 8000), post: String(b.post || '').slice(0, 12000), identidadIncluida: false });
+      res.json({ comentario: r.comentario });
+    } catch (e) { res.json({ error: String(e.message || 'No se pudo generar el comentario').slice(0, 200) }); }
+  });
+
+  // Avisos de una secuencia: qué pasos de LinkedIn no se pueden automatizar ahora y se harán a mano
+  app.get('/api/li/sequence/:id/avisos', requireAuth, async (req, res) => {
+    try {
+      const sid = parseInt(req.params.id, 10);
+      const { rows: [sq] } = await pool.query(`SELECT id, linkedin_auto, li_plan, li_modo, outbound_client_id FROM sequences WHERE id=$1 AND user_id=$2`, [sid, req.workspaceOwnerId]);
+      if (!sq || !sq.linkedin_auto) return res.json({ avisos: [] });
+      const { rows: st } = await pool.query(`SELECT accion, COUNT(*)::int AS n FROM sequence_steps WHERE sequence_id=$1 AND canal='linkedin' AND accion IN ('comentario','inmail') GROUP BY accion`, [sid]);
+      const n = x => (st.find(r => r.accion === x) || {}).n || 0, avisos = [];
+      if (n('comentario') && !process.env.ANTHROPIC_API_KEY) avisos.push({ tipo: 'comentario', msg: 'Falta la clave de IA en el servidor: los pasos «Comentar una publicación» se harán a mano (aparecen como tarea).' });
+      if (n('inmail') && sq.li_plan !== 'premium') avisos.push({ tipo: 'inmail', msg: 'La campaña tiene cuenta de LinkedIn gratuita: los pasos de InMail se harán a mano. Si tienes Premium o Sales Navigator, márcalo en la configuración de la campaña.' });
+      if (n('inmail') && sq.li_plan === 'premium') {
+        const { rows: [bl] } = await pool.query(`SELECT MAX(inmail_bloqueado_hasta) AS h FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2`, [req.workspaceOwnerId, sq.outbound_client_id || 0]);
+        if (bl && bl.h && new Date(bl.h) > new Date()) avisos.push({ tipo: 'inmail', msg: 'LinkedIn no ofreció InMail en el último intento (sin créditos o la suscripción venció): los pasos de InMail van a mano hasta ' + new Date(bl.h).toLocaleString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) + '. El resto de pasos sigue normal.' });
+      }
+      res.json({ avisos });
+    } catch (e) { res.json({ avisos: [] }); }
   });
 
   app.post('/api/li/ext/activar', liAuth, async (req, res) => {
@@ -803,7 +869,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   app.put('/api/li/sequence/:id', requireAuth, async (req, res) => {
     try {
       const mb = (req.body || {}).modo, modo = mb === 'auto' ? 'auto' : 'asistido', auto = mb ? mb !== 'manual' : !!(req.body || {}).auto;
-      const { rows: [sq] } = await pool.query(`UPDATE sequences SET linkedin_auto=$3, li_modo=$4 WHERE id=$1 AND user_id=$2 RETURNING id, linkedin_auto, li_modo, outbound_client_id`, [parseInt(req.params.id, 10), req.workspaceOwnerId, auto, modo]);
+      const { rows: [sq] } = await pool.query(`UPDATE sequences SET linkedin_auto=$3, li_modo=$4, li_plan=COALESCE($5, li_plan) WHERE id=$1 AND user_id=$2 RETURNING id, linkedin_auto, li_modo, outbound_client_id`, [parseInt(req.params.id, 10), req.workspaceOwnerId, auto, modo, ['gratis', 'premium'].includes((req.body || {}).plan) ? req.body.plan : null]);
       if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
       const { rows: [cu] } = await pool.query(`SELECT COUNT(*)::int AS n FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2`, [req.workspaceOwnerId, sq.outbound_client_id || 0]);
       res.json({ ok: true, auto: sq.linkedin_auto, modo: sq.li_modo, cuentas_del_cliente: cu.n });
