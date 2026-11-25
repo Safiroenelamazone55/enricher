@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.8.1';
+const VERSION = '0.9.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -54,6 +54,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'activar') { activar(!!m.datos).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'probar') { probar().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
   return false;
 });
@@ -85,6 +86,12 @@ async function activar(on) {
   if (r && r.ok === false && !r.error) await setEstado({ msg: 'Nova mantiene esta cuenta en pausa: ' + (r.motivo || 'restricción'), nivel: 'err', motivo: 'cuenta_restringida' });
   tick(true);
   return { ok: true, nova: r };
+}
+
+// Solo para pruebas o tras un fallo: salta la espera sorteada y deja que la siguiente acción salga ya
+async function probar() {
+  try { await api('/ext/activar', { prueba: true }); } catch (e) { await logErr('aviso', 'probar', 'No pude saltar la espera: ' + e.message); }
+  await tick(true); return { ok: true };
 }
 
 async function sesionIniciada() {

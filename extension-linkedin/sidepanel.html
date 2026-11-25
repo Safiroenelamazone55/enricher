@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 html,body{margin:0}
 body{font:17px/1.45 Inter,"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--pg);-webkit-font-smoothing:antialiased;padding:0 0 24px}
-body.pop{width:666px;min-height:520px}
+body.pop{width:560px;min-height:520px}
 .top{display:flex;align-items:center;gap:12px;padding:11px 22px;height:54px;background:#fff;border-bottom:1px solid var(--line)}
 .top img{width:31px;height:31px;border-radius:8px;display:block}
 .top .brand{font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1}.top .brand small{font-size:16px;font-weight:500;color:var(--mut);letter-spacing:0;margin-left:6px}
@@ -70,6 +70,22 @@ small{color:var(--mut)}
 details.card{padding:0}details summary{cursor:pointer;font-weight:500;font-size:18px;min-height:60px;padding:0 18px;list-style:none;display:flex;align-items:center;justify-content:space-between;color:var(--ink)}
 details summary::-webkit-details-marker{display:none}details summary::after{content:"＋";font-weight:400;color:var(--mut)}details[open] summary::after{content:"−"}
 details .in-d{padding:0 18px 18px}
+/* jerarquía: tarjeta de cuenta → estado → secciones */
+.cardh{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.av{width:40px;height:40px;border-radius:9px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font:800 17px/1 system-ui;font-style:normal;flex:none}
+.who{flex:1;min-width:0}.who small{display:block;font-size:13.5px;color:var(--mut)}.who b{display:block;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero{padding:14px 4px 4px;flex:none}.hero b{font-size:20px;font-weight:700}.hero span{font-size:15px}
+.sec{display:flex;align-items:center;gap:10px;margin:22px 0 10px;font-size:18px;font-weight:700;letter-spacing:-.01em}.sec .ct{font-size:13px;font-weight:600;background:var(--blue-bg);color:var(--blue);border-radius:99px;padding:2px 10px}
+.nxl{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.nx{display:flex;align-items:center;gap:12px;min-height:54px;padding:0 16px;border-top:1px solid var(--line)}.nx:first-child{border-top:0}
+.nx .tm{width:88px;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600;font-size:15px;color:var(--ink);flex:none}
+.nx .tp{font-style:normal;font-size:13px;font-weight:600;border-radius:99px;padding:3px 11px;background:var(--blue-bg);color:var(--blue);flex:none}
+.nx .tp.invite{background:#FFF1E0;color:#B45309}.nx .tp.message,.nx .tp.inmail{background:var(--okbg);color:var(--ok)}
+.nx .nm{flex:1;min-width:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nx.sep{min-height:36px;background:var(--soft);font-size:13.5px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:11px}.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}.tile small{display:block;font-size:13.5px;color:var(--mut);margin-bottom:4px}.tile b{font-size:19px;font-weight:700;display:block;line-height:1.25}.tile span{font-size:14px;color:var(--mut)}
+.acts{display:flex;gap:11px;margin-top:20px}.acts button{flex:1}
+.vacio{background:#fff;border:1px dashed #D6DBE3;border-radius:12px;padding:18px;color:var(--mut);text-align:center}
 </style></head><body>
 <div class="top"><img src="icons/icon128.png" alt=""><div class="brand">FLOW<small>· secuencias y tareas</small></div><span class="sp"></span><button class="lat" id="lateral" hidden title="Abrir esta ventana como panel lateral fijo">Panel lateral</button></div>
 <div class="wrap">
@@ -110,15 +126,17 @@ details .in-d{padding:0 18px 18px}
 <div id="tab-estado">
 <!-- 2) Ya vinculada -->
 <div id="vinculada" hidden>
-  <h2>Ejecuta lo que Nova programa en tu cuenta</h2>
-  <p class="lead">Respeta los topes y el horario de la cuenta. En modo asistido, tú confirmas cada envío.</p>
-  <h3>Activación</h3>
-  <div class="fila"><i class="ico">in</i><div class="hero" id="hero"><span class="dot"></span><div><b id="pill">En pausa</b><span id="sub">Nada se ejecuta hasta que la actives</span></div></div><label class="sw" title="Activar o pausar"><input type="checkbox" id="swon"><i></i></label></div>
-  <div class="acct" id="acct" hidden><i>in</i><div>Cuenta de LinkedIn en este Chrome<br><b id="acctslug"></b></div></div>
+  <div class="cardh">
+    <i class="av">in</i>
+    <div class="who" id="acct"><small>Cuenta de LinkedIn en este Chrome</small><b id="acctslug">Leyendo cuenta…</b></div>
+    <label class="sw" title="Activar o pausar"><input type="checkbox" id="swon"><i></i></label>
+  </div>
+  <div class="hero" id="hero"><span class="dot"></span><div><b id="pill">En pausa</b><span id="sub">Nada se ejecuta hasta que la actives</span></div></div>
   <div class="msg" id="st">Cargando…</div>
   <div id="extra"></div>
-  <button id="now" class="fa"><i class="ic">↻</i><span>Comprobar ahora</span><em>Ahora →</em></button><button id="toggle" class="go" hidden>Activar</button>
-  <p class="foot">Se detiene sola si LinkedIn muestra un aviso, y Nova pausa la cuenta 48 h.</p>
+  <div class="acts"><button id="now">↻ Comprobar ahora</button><button id="probar" title="Solo para pruebas o tras un fallo: salta la espera y ejecuta la siguiente acción ya">▶ Probar ahora</button></div>
+  <button id="toggle" class="go" hidden>Activar</button>
+  <p class="foot">Respeta los topes y el horario de la campaña. Se detiene sola si LinkedIn muestra un aviso (Nova pausa la cuenta 48 h). Al activar, la primera acción sale a los 3–9 min, no al instante.</p>
 </div>
 
 <details class="card"><summary>Avanzado</summary><div class="in-d">

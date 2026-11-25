@@ -105,11 +105,17 @@ function proximaVentana(a, now) {
 async function resumenCola(pool, a, now) {
   const [{ rows: [c] }, { rows: prox }] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE tipo='visit')::int AS visit, COUNT(*) FILTER (WHERE tipo='invite')::int AS invite, COUNT(*) FILTER (WHERE tipo='message')::int AS message, COUNT(*) FILTER (WHERE tipo='inmail')::int AS inmail FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('visit','invite','message','inmail')`, [a.id]),
-    pool.query(`SELECT q.sequence_id, q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 4`, [a.id]),
+    pool.query(`SELECT q.sequence_id, q.tipo, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id WHERE q.account_id=$1 AND q.estado='queued' AND q.tipo IN ('visit','invite','message','inmail') ORDER BY q.id LIMIT 10`, [a.id]),
   ]);
   let tzPrim = null;
   if (prox[0] && prox[0].sequence_id) { const { rows: [sq] } = await pool.query(`SELECT timezone FROM sequences WHERE id=$1`, [prox[0].sequence_id]); tzPrim = sq && sq.timezone || null; }
-  return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: prox.map(r => ({ tipo: r.tipo, quien: r.nombre || r.slug })), ventana: proximaVentana(tzPrim ? { ...a, tz: tzPrim } : a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
+  const tzR = tzPrim || a.tz, aR = tzPrim ? { ...a, tz: tzPrim } : a, ptr = proximaVentana(aR, now);
+  const gapS = Math.max(60, await mediaReparto(pool, aR, prox[0] ? prox[0].tipo : 'visit', false) || ((a.gap_min || 300) + (a.gap_max || 1200)) / 2);
+  let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
+  if (ptr && !ptr.en_ventana && ptr.ts) t0 = Math.max(t0, new Date(ptr.ts).getTime());
+  const lpHoy = localParts(now, tzR), pdHoy = perfilDia(aR, lpHoy.ymd);
+  const proxEst = prox.map((r, i) => { const ts = new Date(t0 + i * gapS * 1000), lp = localParts(ts, tzR); return { tipo: r.tipo, quien: r.nombre || r.slug, ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; });
+  return { en_cola: c.n, por_tipo: { visit: c.visit, invite: c.invite, message: c.message, inmail: c.inmail }, proximas: proxEst, ventana: proximaVentana(tzPrim ? { ...a, tz: tzPrim } : a, now), topes: { inv: a.inv_dia, msg: a.msg_dia, vis: a.vis_dia } };
 }
 
 // ── Límites efectivos de HOY (calentamiento incluido) ──
@@ -485,6 +491,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
          WHERE id=$1 AND user_id=$2 RETURNING *`,
         [id, req.workspaceOwnerId, v.nombre, v.outbound_client_id, v.modo, v.inv_dia, v.inv_semana, v.msg_dia, v.vis_dia, v.inmail_dia, v.total_dia,
           v.ramp_activo, v.ramp_inicio, v.ramp_paso, v.ramp_dias, v.hora_ini, v.hora_fin, v.tz, v.dias, v.gap_min, v.gap_max, estado, motivo, pausa, ramp, b.accion === 'activar', v.plan]);
+      if (b.accion === 'activar') await pool.query(`UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, [id, String(180 + Math.floor(Math.random() * 360))]);   // sin acción instantánea al activar
       res.json(publica(a));
     } catch (e) { console.error('[li] update', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
   });
@@ -719,7 +726,11 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const a = req.liAcc;
       if (a.estado === 'restringida' || (a.estado === 'pausada' && a.pausa_hasta && new Date(a.pausa_hasta) > new Date())) return res.json({ ok: false, estado: a.estado, motivo: a.motivo });
       if (a.estado === 'pausada' || a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]);
-      res.json({ ok: true, estado: 'activa' });
+      // Al activar NO sale una acción al instante (huella clara: «lo prendí y ya hizo algo»): se sortea una espera de 3–9 min.
+      // Solo en modo prueba (botón «Probar ahora») se salta la espera.
+      const prueba = !!(req.body && req.body.prueba);
+      await pool.query(prueba ? `UPDATE li_accounts SET proxima_accion_at = NOW() - INTERVAL '1 second' WHERE id=$1` : `UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, prueba ? [a.id] : [a.id, String(180 + Math.floor(Math.random() * 360))]);
+      res.json({ ok: true, estado: 'activa', prueba });
     } catch (e) { console.error('[li] activar', e.message); res.status(500).json({ error: 'Error' }); }
   });
 

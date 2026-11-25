@@ -17,8 +17,7 @@ async function pintarVinculada() {
   $('swon').checked = on;
   $('st').className = 'msg ' + (e.nivel || '');
   $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
-  $('acct').hidden = !e.slug;
-  if (e.slug) $('acctslug').textContent = 'linkedin.com/in/' + e.slug;
+  $('acctslug').textContent = e.slug ? 'linkedin.com/in/' + e.slug : 'Leyendo cuenta…';
   pintarExtra(on ? e : { ...e, resumen: null });
 }
 
@@ -28,19 +27,25 @@ const hh = n => String(n).padStart(2, '0') + ':00';
 function pintarExtra(e) {
   const r = e.resumen, box = $('extra'); if (!r) { box.innerHTML = ''; return; }
   const v = r.ventana || {}, pt = r.por_tipo || {}, prox = r.proximas || [];
+  const hora = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const partes = [pt.visit && pt.visit + ' visitas', pt.invite && pt.invite + ' invitaciones', pt.message && pt.message + ' mensajes', pt.inmail && pt.inmail + ' InMail'].filter(Boolean).join(' · ');
-  let cuando;
-  if (!r.en_cola) cuando = '<small>No hay nada programado para esta cuenta todavía.</small>';
-  else if (v.en_ventana) cuando = '<div class="big"><b>Trabajando hoy</b> hasta las ' + esc(v.finTxt || hh(v.fin)) + '</div><small>La siguiente acción sale cuando pase la espera entre acciones o se libere el tope del día.</small>';
-  else if (v.descanso) cuando = '<div class="big"><b>Pausa de descanso</b> hasta las ' + esc(v.hora) + '</div><small>Faltan ' + faltan(v.ts) + ' · hoy termina a las ' + esc(v.finTxt) + '. El descanso cambia cada día a propósito.</small>';
-  else if (v.ts) cuando = '<div class="big">Empieza <b>' + esc(v.dia) + ' a las ' + new Date(v.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</b></div><small>Faltan ' + faltan(v.ts) + ' · ese día trabaja de ' + esc(v.hora) + ' a ' + esc(v.finTxt || hh(v.fin)) + ' (' + esc(v.tz) + '). La hora de arranque, la de cierre y el descanso cambian cada día a propósito.</small>';
-  else cuando = '<small>Revisa los días y el horario de la cuenta en Nova.</small>';
-  const asistido = e.modo !== 'auto';
-  box.innerHTML = '<div class="blk"><h4>Próximas acciones</h4>' + (r.en_cola
-    ? '<div><b>' + r.en_cola + ' en cola</b> · ' + partes + '</div><ul>' + prox.map(p => '<li><i>' + esc(TIPO[p.tipo] || p.tipo) + '</i><span>' + esc(p.quien) + '</span></li>').join('') + (r.en_cola > prox.length ? '<li><small>y ' + (r.en_cola - prox.length) + ' más…</small></li>' : '') + '</ul>'
-    : '<div>Cola vacía</div>') + '</div>'
-    + '<div class="blk"><h4>Cuándo</h4>' + cuando + '</div>'
-    + (asistido ? '<div class="blk"><h4>Qué va a pasar (modo asistido)</h4><div>Cuando toque, la extensión abre cada perfil en una pestaña de LinkedIn. <b>Las visitas se hacen solas.</b> En invitaciones y mensajes te deja el texto escrito y <b>tú pulsas «Enviar»</b>; luego sigue con la siguiente. Mantén este Chrome abierto con LinkedIn iniciado: si no estás, queda esperando.</div></div>' : '');
+  const hoy = prox.filter(p => p.hoy), luego = prox.filter(p => !p.hoy);
+  const fila = p => '<div class="nx"><span class="tm">~' + hora(p.ts) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span></div>';
+  let h = '<div class="sec">Próximas acciones de hoy' + (hoy.length ? '<span class="ct">' + hoy.length + '</span>' : '') + '</div>';
+  if (!r.en_cola) h += '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
+  else {
+    h += '<div class="nxl">' + (hoy.length ? hoy.map(fila).join('') : '<div class="nx"><span class="nm" style="color:var(--mut)">Nada más por hoy: lo siguiente sale en el próximo horario.</span></div>')
+      + (luego.length ? '<div class="nx sep">Después</div>' + luego.map(fila).join('') : '') + '</div>'
+      + '<p class="foot">Horas estimadas: cambian un poco cada vez a propósito' + (r.en_cola > prox.length ? ' · y ' + (r.en_cola - prox.length) + ' más en cola' : '') + '.</p>';
+  }
+  let cuando, sub;
+  if (v.en_ventana) { cuando = 'Trabajando'; sub = 'hasta las ' + esc(v.finTxt || hh(v.fin)); }
+  else if (v.descanso) { cuando = 'Descanso'; sub = 'vuelve a las ' + esc(v.hora) + ' (faltan ' + faltan(v.ts) + ')'; }
+  else if (v.ts) { cuando = esc(v.dia) + ' ' + hora(v.ts); sub = 'trabaja de ' + esc(v.hora) + ' a ' + esc(v.finTxt || hh(v.fin)) + ' · ' + esc(v.tz); }
+  else { cuando = 'Sin horario'; sub = 'revisa los días en Nova'; }
+  h += '<div class="sec">Resumen</div><div class="tiles"><div class="tile"><small>En cola</small><b>' + r.en_cola + '</b><span>' + (partes || 'vacía') + '</span></div><div class="tile"><small>Horario</small><b>' + cuando + '</b><span>' + sub + '</span></div></div>';
+  if (e.modo !== 'auto') h += '<details class="card" style="margin-top:14px"><summary>Qué pasa en modo asistido</summary><div class="in-d">La extensión abre cada perfil en una pestaña de LinkedIn. <b>Las visitas se hacen solas.</b> En invitaciones y mensajes deja el texto escrito y <b>tú pulsas «Enviar»</b>; luego sigue con la siguiente. Mantén este Chrome abierto con LinkedIn iniciado.</div></details>';
+  box.innerHTML = h;
 }
 setInterval(() => { pintar(); }, 30000);
 
@@ -136,6 +141,7 @@ if (/[?&]p=1/.test(location.search)) {
   document.body.classList.add('pop'); $('lateral').hidden = false;
   $('lateral').onclick = async () => { try { const w = await chrome.windows.getCurrent(); await chrome.sidePanel.open({ windowId: w.id }); window.close(); } catch (e) { $('lateral').textContent = 'No disponible'; } };
 }
+$('probar').onclick = async () => { $('probar').disabled = true; await msg('probar'); $('probar').disabled = false; pintarVinculada(); };
 $('now').onclick = () => chrome.runtime.sendMessage({ cmd: 'tick' }, () => pintarVinculada());
 chrome.storage.onChanged.addListener(() => pintar());
 pintar().then(async () => { const { token } = await chrome.storage.local.get({ token: '' }); if (!token) conectar(); });
