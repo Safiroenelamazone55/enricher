@@ -23,7 +23,7 @@ async function pintarVinculada() {
   if (e.modo === 'auto') { md.className = 'modo au'; md.innerHTML = '<b>Automático</b><span>FLOW envía invitaciones y mensajes por sí solo, dentro de los topes y el horario. No tienes que pulsar nada.</span>'; }
   else if (e.modo) { md.className = 'modo as'; md.innerHTML = '<b>Asistido</b><span>Las visitas se hacen solas. En invitaciones y mensajes FLOW deja el texto escrito y <u>tú pulsas «Enviar»</u>.</span>'; }
   else { md.className = 'modo nd'; md.innerHTML = '<b>Detectando…</b><span>Se confirma en la próxima comprobación con Nova.</span>'; }
-  pintarProx(false);
+
 }
 
 const TIPO = { visit: 'Visitar perfil', invite: 'Enviar invitación', message: 'Enviar mensaje', inmail: 'Enviar InMail' };
