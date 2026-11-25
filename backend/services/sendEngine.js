@@ -47,7 +47,7 @@ function pickVariant(st, ctx) {
   const mode = st.variant_mode || 'off';
   if (mode === 'segment' && st.variant_field) {
     const nz = x => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    const val = nz(ctx[st.variant_field]);
+    const val = nz(ctx[st.variant_field] != null && ctx[st.variant_field] !== '' ? ctx[st.variant_field] : (ctx._extra || {})[st.variant_field]);   // también campos de la empresa (company_segmento…) que viven en _extra
     // Varios mensajes del MISMO idioma = test A/B dentro de ese idioma (se reparten al azar de forma estable por contacto)
     let hits = vars.filter(v => (Array.isArray(v.targets) ? v.targets : []).some(t => nz(t) === val));
     // Segmento por idioma: si no hay mensaje en su idioma principal, se prueba con los demás idiomas que habla (en orden).
