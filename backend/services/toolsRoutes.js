@@ -10,7 +10,7 @@ const TOOLS = {
   'manual-outreach':       { file: 'manual-outreach-1.0.0.pdf',          nombre: 'Manual-Outreach-Nova.pdf',           version: '1.0.0' },
   'manual-ofertas':        { file: 'manual-novacentrax-ofertas-1.0.2.html', nombre: 'Manual-NovaCentrax-Ofertas.html',    version: '1.0.2' },
   'guia-respuestas':       { file: 'guia-respuestas-outreach-1.0.2.zip', nombre: 'Respuestas-Outreach.zip',             version: '1.0.2' },
-  'linkedin-scraper':      { file: 'linkedin-sales-scraper-1.0.18.zip',   nombre: 'LinkedIn-Sales-Scraper-1.0.18.zip',   version: '1.0.18' },
+  'linkedin-scraper':      { file: 'linkedin-sales-scraper-1.0.19.zip',   nombre: 'LinkedIn-Sales-Scraper-1.0.19.zip',   version: '1.0.19' },
   'nova-ventana':          { file: 'nova-ventana-1.0.0.zip',             nombre: 'Nova-Ventana-de-busqueda-1.0.0.zip', version: '1.0.0' },
   'nova-linkedin':         { file: 'nova-linkedin-0.5.0.zip',            nombre: 'Nova-LinkedIn-0.5.0.zip',            version: '0.5.0' },
   'nova-activity-web':     { file: 'elevn-activity-extension-0.1.3.zip', nombre: 'Elevn-Activity-Extension-0.1.3.zip', version: '0.1.3' },
