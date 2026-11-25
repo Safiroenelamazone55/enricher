@@ -22699,3 +22699,28 @@ body.ibx-lb-open{overflow:hidden}
 
 .lim2-g2 { margin-top: 14px; } .lim2-i--a { color: #475569; } .lim2-go { margin-left: auto; font-style: normal; background: none !important; color: #94A3B8 !important; font-size: .8rem !important; padding: 0 !important; }
 .seq-more-btn svg { display: block; }
+
+/* ── Ajustes del cliente: tamaño y tipografía como la referencia (lemlist), fondo crema (no blanco) ── */
+.fin-pi-box.lim-box.lim2 { max-width: 1000px; width: 94vw; height: min(82vh, 640px); background: #F7F5F2; border-radius: 16px; }
+.lim2-nav { width: 252px; background: #F1EEE8; border-right: 1px solid #E6E1D8; padding: 24px 14px; }
+.lim2-g { font-size: .88rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: #7B8494; padding: 0 12px 6px; }
+.lim2-g2 { margin-top: 20px; }
+.lim2-who { font-size: 1.05rem; font-weight: 700; color: #0B1220; padding: 2px 12px 8px; }
+.lim2-i { font-size: .97rem; font-weight: 500; color: #1F2A3D; padding: 0 12px; min-height: 44px; border-radius: 10px; margin-bottom: 2px; }
+.lim2-i span { color: #667085; } .lim2-i:hover { background: #E9E5DD; }
+.lim2-i.on { background: #E6E1D7; color: #0B1220; font-weight: 600; } .lim2-i.on span { color: #0B1220; }
+.lim2-i em { background: #DDD8CE; color: #3F4756; font-size: .76rem; }
+.lim2-note { font-size: .82rem; margin: 22px 12px 0; color: #6B7280; }
+.lim2-main { padding: 32px 44px 36px; }
+.lim2-t { font-size: 1.5rem; font-weight: 700; letter-spacing: -.015em; margin-bottom: 6px; }
+.lim2-p { font-size: .95rem; color: #6B7280; margin-bottom: 20px; }
+.lim2-card { background: #FBFAF7; border: 1px solid #E6E1D8; border-radius: 14px; padding: 8px 26px 22px; margin-bottom: 20px; }
+.lim2-ch { font-size: 1.05rem; padding: 16px 0 10px; }
+.lim2-sec { font-size: .78rem; margin: 20px 0 4px; }
+.lim2-r { grid-template-columns: 1fr 170px; padding: 17px 0; border-bottom: 1px solid #ECE7DF; }
+.lim2-r b { font-size: .98rem; font-weight: 600; } .lim2-r small { font-size: .86rem; margin-top: 3px; color: #8A93A3; }
+.lim2-in { height: 46px; font-size: 1rem; border-radius: 10px; border-color: #E0DAD0; background: #fff; }
+.lim2-st { font-size: .92rem; background: #F1EEE8; padding: 12px 14px; border-radius: 10px; }
+.lim2-ft { margin-top: 18px; }
+.lim2-main .cc-grp { font-size: .78rem; } .lim2-main .cc-card, .lim2-main .cc-snd { background: #FBFAF7; }
+.lim2-x { top: 16px; right: 18px; font-size: 1.1rem; }
