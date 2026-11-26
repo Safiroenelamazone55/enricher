@@ -79,6 +79,12 @@
     const t = norm(e.innerText), al = norm(e.getAttribute('aria-label'));
     return T('pending').includes(t) || /^pending|^pendiente/.test(al);
   });
+  const mensajeVisible = root => [...root.querySelectorAll('button, a, [role="button"]')].filter(vis).find(e => {
+    const t = norm(e.innerText), al = norm(e.getAttribute('aria-label'));
+    return T('message').includes(t) || /^message |^enviar mensaje|^mensaje a /.test(al);
+  });
+  const raicesDeep = () => { const out = [document]; const walk = r => r.querySelectorAll('*').forEach(e => { if (e.shadowRoot) { out.push(e.shadowRoot); walk(e.shadowRoot); } }); walk(document); return out; };
+  const deepAll = (sel, filtro) => { const out = []; for (const r of raicesDeep()) r.querySelectorAll(sel).forEach(e => { if (vis(e) && (!filtro || filtro(e))) out.push(e); }); return out; };
   const esMas = b => { const t = norm(b.innerText), al = norm(b.getAttribute('aria-label')); return t === 'more' || t === 'más' || t === 'mas' || /^(more|más|mas) actions?$|^más acciones$|^more$/.test(al); };
   async function abrirMenuMas() {
     const main = document.querySelector('main') || document, top = main.querySelector('section') || main;
@@ -93,7 +99,7 @@
     const main = document.querySelector('main') || document.body;
     const top = main.querySelector('section') || main;
     const grado = norm(top.innerText).match(/·\s*(1st|1\.º|1\.er|1º|2nd|2\.º|2º|3rd|3\.º|3º)/);
-    return { pend: pendienteVisible(top), con: conectarVisible(top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: /\/in\//.test(location.pathname) && !!([...main.querySelectorAll('h2')].find(h => (h.innerText || '').trim().length > 1) || main.querySelector('h1')) };
+    return { pend: pendienteVisible(top), con: conectarVisible(top), msg: mensajeVisible(top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: /\/in\//.test(location.pathname) && !!([...main.querySelectorAll('h2')].find(h => (h.innerText || '').trim().length > 1) || main.querySelector('h1')) };
   }
 
   async function invitar(a, asistido) {
@@ -152,16 +158,27 @@
     const p = estadoPerfil();
     if (!p.hayPerfil) return R('omitida', 'perfil_no_encontrado');
     if (!p.primerGrado || !p.msg) return R('omitida', 'no_conectado', 'Solo se escribe a conexiones de primer grado');
-    p.msg.click(); await sleep(rnd(1200, 2200));
+    const nombre = norm((document.querySelector('main h1') || {}).innerText);
+    p.msg.click(); await sleep(rnd(1400, 2400));
     const av = avisoLinkedIn(); if (av) return porAviso(av);
-    const box = document.querySelector(SEL('cajaMensaje'));
+    const selCaja = SEL('cajaMensaje') || 'div.msg-form__contenteditable[contenteditable="true"], div[role="textbox"][contenteditable="true"]';
+    let burbuja = null, box = null;
+    for (let i = 0; i < 12 && !box; i++) {
+      await sleep(500);
+      const bs = deepAll('.msg-overlay-conversation-bubble');
+      burbuja = bs.find(b => nombre && norm(b.innerText).includes(nombre)) || null;
+      box = burbuja ? burbuja.querySelector(selCaja) : null;
+    }
+    if (!box) { box = deepAll(selCaja)[0] || null; burbuja = box ? (box.closest('.msg-overlay-conversation-bubble') || box.closest('form') || box.parentElement) : null; }
     if (!box) return R('fallo', 'sin_campo_mensaje', '', { snapshot: snapshot() });
     await escribir(box, a.texto); await sleep(rnd(800, 1600));
     if (asistido) return await esperarUsuario(() => !String(box.innerText || '').trim(), 'Revisa el mensaje y pulsa «Enviar».');
-    const enviar = document.querySelector(SEL('botonEnviarMensaje')) || findBtn(T('send'), document);
+    const ambito = burbuja || document;
+    const enviar = ambito.querySelector(SEL('botonEnviarMensaje') || 'button.msg-form__send-button') || [...ambito.querySelectorAll('button')].filter(vis).find(b => /^send$|^enviar$/.test(norm(b.innerText)));
     if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
-    enviar.click(); await sleep(rnd(1500, 2800));
-    return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() }) : R('ok');
+    enviar.click();
+    for (let i = 0; i < 14; i++) { await sleep(500); if (!String(box.innerText || '').trim()) { await sleep(1000); return R('ok'); } }
+    return R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() });
   }
 
   // ── Publicaciones: reaccionar y comentar ──
@@ -258,26 +275,45 @@
   }
 
   // InMail (cuenta Premium / Sales Navigator): desde el perfil, el botón «Mensaje» de alguien que no es conexión abre el redactor de InMail con asunto.
+  // Paso 2 (pestaña de Sales Navigator): rellena asunto y mensaje y envía
+  async function inmailSales(a, asistido) {
+    let asunto = null, cuerpo = null;
+    for (let i = 0; i < 30 && !(asunto && cuerpo); i++) {
+      await sleep(500);
+      asunto = [...document.querySelectorAll('input')].filter(vis).find(e => /subject|asunto/i.test((e.placeholder || '') + (e.getAttribute('aria-label') || '')));
+      cuerpo = [...document.querySelectorAll('textarea[name="message"], textarea')].filter(vis).find(e => !e.disabled);
+    }
+    const pagina = norm(document.body.innerText || '').slice(0, 60000);
+    if (/(0|no) (of \d+ )?inmail credits|0 of \d+ credits|out of inmail credits|sin cr[eé]ditos de inmail/.test(pagina)) return R('omitida', 'sin_inmail', 'LinkedIn no ofrece InMail (sin créditos o la suscripción venció)', { snapshot: snapshot() });
+    if (!asunto || !cuerpo) return R('omitida', 'sin_inmail', 'No apareció el redactor de InMail (¿la cuenta no tiene InMail?)', { snapshot: snapshot() });
+    await escribir(asunto, String(a.nota || 'Hola').slice(0, 200)); await sleep(rnd(500, 1100));
+    await escribir(cuerpo, a.texto); await sleep(rnd(800, 1600));
+    if (asistido) return await esperarUsuario(() => !String(cuerpo.value || '').trim(), 'Revisa el InMail y pulsa «Enviar».');
+    const enviar = [...document.querySelectorAll('button')].filter(vis).find(b => /^send$|^enviar$/.test(norm(b.innerText)));
+    if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar', 'No se pudo pulsar «Enviar» (¿falta el asunto o el texto es largo?)', { snapshot: snapshot() });
+    enviar.click();
+    for (let i = 0; i < 16; i++) {
+      await sleep(500);
+      const av = avisoLinkedIn(); if (av) return porAviso(av);
+      if (!document.contains(cuerpo) || !String(cuerpo.value || '').trim()) { await sleep(1200); return R('ok'); }
+    }
+    return R('fallo', 'no_confirmado', 'No se pudo confirmar el envío del InMail; revisa en LinkedIn antes de repetir', { snapshot: snapshot() });
+  }
+  // Paso 1 (perfil): pulsa «Mensaje» (visible o dentro de «Más»). LinkedIn abre Sales Navigator en otra pestaña y el service worker sigue allí.
   async function inmail(a, asistido) {
+    if (/^\/sales\//.test(location.pathname)) return await inmailSales(a, asistido);
     const p = estadoPerfil();
     if (!p.hayPerfil) return R('omitida', 'perfil_no_encontrado');
     if (p.primerGrado) return R('omitida', 'ya_conectado', 'Ya es conexión: no hace falta InMail');
-    if (!p.msg) return R('omitida', 'sin_inmail', 'No hay botón de mensaje/InMail (la cuenta no tiene InMail disponible)');
-    p.msg.click(); await sleep(rnd(1400, 2400));
+    let msg = p.msg;
+    if (!msg) {
+      const menu = await abrirMenuMas();
+      if (menu) msg = [...menu.querySelectorAll('[role="menuitem"], li, a, button')].filter(vis).find(e => /^message |^mensaje /.test(norm(e.innerText || e.getAttribute('aria-label')))) || null;
+    }
+    if (!msg) return R('omitida', 'sin_inmail', 'No hay botón de mensaje/InMail (la cuenta no tiene InMail disponible)');
+    msg.click(); await sleep(rnd(1200, 2000));
     const av = avisoLinkedIn(); if (av) return porAviso(av);
-    const pagina = norm(document.body.innerText || '').slice(0, 60000);
-    if (/(0|no) inmail credits|sin cr[eé]ditos de inmail|try premium|prueba premium|upgrade to premium|hazte premium|reactivate premium/.test(pagina) && !document.querySelector(SEL('asuntoInmail') || 'input[name="subject"], input[placeholder*="ubject" i], input[placeholder*="sunto" i]'))
-      return R('omitida', 'sin_inmail', 'LinkedIn no ofrece InMail (sin créditos o la suscripción venció)', { snapshot: snapshot() });
-    const asunto = document.querySelector(SEL('asuntoInmail') || 'input[name="subject"], input[placeholder*="ubject" i], input[placeholder*="sunto" i]');
-    const box = document.querySelector(SEL('cajaMensaje'));
-    if (!asunto || !box) return R('omitida', 'sin_inmail', 'No apareció el redactor de InMail (¿la cuenta no es Premium?)', { snapshot: snapshot() });
-    await escribir(asunto, String(a.nota || 'Hola').slice(0, 200)); await sleep(rnd(500, 1100));
-    await escribir(box, a.texto); await sleep(rnd(800, 1600));
-    if (asistido) return await esperarUsuario(() => !String(box.innerText || '').trim(), 'Revisa el InMail y pulsa «Enviar».');
-    const enviar = document.querySelector(SEL('botonEnviarMensaje')) || findBtn(T('send'), document);
-    if (!enviar || enviar.disabled) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
-    enviar.click(); await sleep(rnd(1500, 2800));
-    return String(box.innerText || '').trim() ? R('fallo', 'no_confirmado', 'El texto sigue en el cuadro; revisa en LinkedIn', { snapshot: snapshot() }) : R('ok');
+    return R('abierto');
   }
 
   // ── Lecturas para detectar aceptaciones, respuestas e interacciones (no escriben nada) ──

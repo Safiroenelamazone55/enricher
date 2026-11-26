@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.3';
+const VERSION = '0.10.4';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -197,6 +197,10 @@ function traducir(m) {
 
 // Abre el perfil (en primer plano si es asistido y es una acción real) y le pide al content script que la haga.
 async function ejecutar(a, modo) {
+  const r = await Promise.race([ejecutarInner(a, modo), new Promise(res => setTimeout(() => res({ codigo: 'fallo', error: 'tiempo_agotado', detalle: 'La acción tardó más de 4 minutos sin responder' }), 240000))]);
+  return r;
+}
+async function ejecutarInner(a, modo) {
   const esCheck = String(a.tipo).startsWith('check_');
   const asistido = !esCheck && modo !== 'auto';
   const url = a.url || (await cfg()).chequeos[a.tipo];
@@ -205,9 +209,30 @@ async function ejecutar(a, modo) {
     await esperarCarga(tab.id, 45000);
     await sleep(2500 + Math.random() * 6500);   // un humano tarda en mirar la página (2,5–9 s, nunca igual)
     let r;
+    // InMail: el clic en «Mensaje» abre Sales Navigator en una pestaña nueva; hay que escuchar ANTES de pulsar
+    let nuevaTab = null, quitarEscucha = () => {};
+    if (a.tipo === 'inmail') {
+      nuevaTab = new Promise(res => {
+        const f = t => { if (t.openerTabId === tab.id || /\/sales\//.test(t.pendingUrl || t.url || '')) { chrome.tabs.onCreated.removeListener(f); res(t); } };
+        chrome.tabs.onCreated.addListener(f);
+        quitarEscucha = () => chrome.tabs.onCreated.removeListener(f);
+        setTimeout(() => { quitarEscucha(); res(null); }, 25000);
+      });
+    }
     for (let i = 0; i < 3; i++) {
       try { r = await chrome.tabs.sendMessage(tab.id, { cmd: 'ejecutar', accion: a, asistido, config: await cfg() }); break; } catch (e) { await sleep(2000); }
     }
+    if (a.tipo === 'inmail' && r && r.codigo === 'abierto') {
+      const t2 = await nuevaTab; quitarEscucha();
+      if (!t2) return { codigo: 'omitida', error: 'sin_inmail', detalle: 'LinkedIn no abrió el redactor de InMail (¿sin créditos o sin Premium?)' };
+      try {
+        await esperarCarga(t2.id, 45000); await sleep(2500 + Math.random() * 3500);
+        let r2;
+        for (let i = 0; i < 3; i++) { try { r2 = await chrome.tabs.sendMessage(t2.id, { cmd: 'ejecutar', accion: a, asistido, config: await cfg() }); break; } catch (e) { await sleep(2000); } }
+        return r2 || { codigo: 'fallo', error: 'sin_content_script', detalle: 'La pestaña de Sales Navigator no respondió' };
+      } finally { if (!asistido) setTimeout(() => chrome.tabs.remove(t2.id).catch(() => {}), 3000); }
+    }
+    quitarEscucha();
     return r || { codigo: 'fallo', error: 'sin_content_script', detalle: 'La página no respondió' };
   } finally {
     if (!asistido) setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {}), 3000);
