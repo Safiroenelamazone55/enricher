@@ -22873,3 +22873,44 @@ body.ibx-lb-open{overflow:hidden}
 .cap-pr.is-off { color: #B8B2A8; }
 .cap-pe.is-bad { color: #B42318; font-weight: 600; } .cap-pe.is-ok { color: #067647; font-weight: 600; }
 .cap-hoy { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ECE7DF; font-size: 13px; color: #45586A; }
+
+/* ── Informes: apariencia de lemlist (Inter 14 px, tarjetas de 12 px con borde fino, filtros de 32 px en una sola fila) ── */
+.inf.rp { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #213856; line-height: 20px; }
+.inf.rp .rp-tabs { gap: 2px; border-bottom: 0; margin-bottom: 8px; }
+.inf.rp .rp-tabs button { font-size: 14px; font-weight: 500; color: #6B7280; padding: 6px 10px; border-radius: 8px; border-bottom: 0; }
+.inf.rp .rp-tabs button.on { color: #1F2937; background: #fff; box-shadow: 0 0 0 .75px rgba(31,41,55,.1); }
+.inf.rp .rp-tabs button svg { width: 16px; height: 16px; }
+.inf.rp .rp-filters { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+.inf.rp .rp-filters::-webkit-scrollbar { display: none; }
+.inf.rp .rp-filters > * { flex: none; }
+.inf.rp .rp-filters .rd-sel, .inf.rp .rp-filters .cm-chip, .inf.rp .rp-filters .ll-btn { height: 32px; padding: 1px 8px; border: .75px solid rgba(31,41,55,.1); border-radius: 10px; background: #fff; font: 500 14px/20px Inter, -apple-system, "Segoe UI", sans-serif; color: #1F2937; box-shadow: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.inf.rp .rp-filters .cm-chip:not(.on) { color: #98A1AC; }
+.inf.rp .rp-filters .cm-chip.on { background: #F5F8FF; border-color: #C7D7FE; color: #1F2937; }
+.inf.rp .rp-filters .rp-exp { width: 32px; padding: 0; justify-content: center; }
+.inf.rp .rp-filters .ll-pri { height: 32px; padding: 0 12px; border-radius: 10px; font: 500 14px/20px Inter, -apple-system, "Segoe UI", sans-serif; }
+.inf.rp .rp-filters .sp { flex: 1 1 auto; min-width: 8px; }
+.inf.rp .rd-card, .inf.rp .rp-card { background: #fff; border: .75px solid rgba(31,41,55,.1); border-radius: 10px; padding: 12px; box-shadow: none; }
+.inf.rp .rd-card h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 20px; color: #213856; }
+.inf.rp .rd-card__hd { min-height: 28px; margin-bottom: 8px; }
+.inf.rp .rp-tip { width: 14px; height: 14px; border: 1px solid #98A1AC; color: #98A1AC; font-size: 9px; margin-left: 6px; vertical-align: -2px; }
+.inf.rp .ll-seg { background: #F6F6F6; border: .75px solid #E6E6E6; border-radius: 10px; padding: 4px; height: 40px; gap: 2px; overflow: visible; }
+.inf.rp .ll-seg button { height: 30px; border-radius: 7px; background: transparent; color: #213856; font-size: 14px; font-weight: 500; padding: 0 12px; border: 0; }
+.inf.rp .ll-seg button + button { border-left: 0; }
+.inf.rp .ll-seg button.on { background: #fff; color: #213856; font-weight: 600; box-shadow: 0 1px 2px rgba(31,41,55,.08), 0 0 0 .75px rgba(31,41,55,.06); }
+.inf.rp .rp-stat { border: .75px solid rgba(31,41,55,.1); border-radius: 10px; padding: 12px; gap: 6px; background: #fff; }
+.inf.rp .rp-stat > span { font-size: 14px; font-weight: 500; color: #213856; }
+.inf.rp .rp-stat > b { font-size: 20px; line-height: 28px; font-weight: 600; color: #213856; }
+.inf.rp .rp-d { font-size: 12px; color: #98A1AC; }
+.inf.rp .rp-chips button { border-radius: 8px; font-size: 12px; padding: 3px 9px; }
+.inf.rp .rd-g2 { gap: 12px; } .inf.rp #inf-body { display: flex; flex-direction: column; gap: 12px; }
+.inf.rp table.rd-t th { font-size: 13px; font-weight: 500; color: #6B7280; }
+.inf.rp table.rd-t td { font-size: 14px; color: #213856; }
+.inf.rp > .rp-filters, .inf.rp > .rp-tabs, .inf.rp > .rp-vbar { flex: 0 0 auto; min-height: auto; }
+.inf.rp .rp-filters { min-height: 34px; }
+
+.inf.rp .rp-tchart { margin-bottom: 12px; }
+.inf.rp table.rp-lt th, .inf.rp table.rp-lt td { text-align: left; border-right: .75px solid rgba(31,41,55,.08); padding: 0 12px; height: 48px; }
+.inf.rp table.rp-lt th { height: 40px; background: #fff; } .inf.rp table.rp-lt th:last-child, .inf.rp table.rp-lt td:last-child { border-right: 0; }
+.inf.rp table.rp-lt tbody tr { border-top: .75px solid rgba(31,41,55,.08); }
+.inf.rp .rp-hi { vertical-align: -3px; margin-right: 6px; color: #6B7280; }
+.inf.rp .rp-hc { white-space: nowrap; }

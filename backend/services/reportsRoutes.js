@@ -119,6 +119,12 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
         COUNT(*) FILTER (WHERE a.tipo IN ${TASK_T} AND a.estado='hecha' AND ${inR('a.fecha', f, t)})::int AS hechas,
         COUNT(*) FILTER (WHERE a.tipo='paso_omitido' AND ${inR('a.fecha', f, t)})::int AS ignoradas
         ${base}`);
+      const taskSeries = async () => {
+        const [cr, dn] = await Promise.all([
+          Q(`SELECT a.created_at::date::text AS d, COUNT(*)::int AS n ${base} AND a.tipo IN ${TASK_T} AND ${inR('a.created_at', from, to)} GROUP BY 1 ORDER BY 1`),
+          Q(`SELECT a.fecha::date::text AS d, COUNT(*)::int AS n ${base} AND a.tipo IN ${TASK_T} AND a.estado='hecha' AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`)]);
+        return { creadas: cr, hechas: dn };
+      };
       const firstReach = async (cond) => (await Q(`SELECT d::text AS d, COUNT(*)::int AS n FROM (SELECT a.contact_id, MIN(a.fecha)::date AS d ${base} AND ${cond} GROUP BY a.contact_id) t WHERE d BETWEEN '${from}'::date AND '${to}'::date GROUP BY d ORDER BY d`));
       const timeline = async () => {
         const [c, r, i, m] = await Promise.all([firstReach(OUT), firstReach(REPLY), firstReach(INTERESADO_EV), firstReach(`(a.tipo='reunion' OR (a.tipo='disposition_change' AND a.nota ~ '→ Reunión[[:space:]]*$'))`)]);
@@ -153,19 +159,19 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
       const out = { range: { from, to, days, prevFrom: pFrom, prevTo: pTo }, tz };
 
       if (tab === 'overview') {
-        const [rows, rep, bnc, eng, ps, pp, ts, tp, open, tl, cp] = await Promise.all([
+        const [rows, rep, bnc, eng, ps, pp, ts, tp, open, tl, cp, tsr] = await Promise.all([
           outKinds(),
           Q(`SELECT DISTINCT a.contact_id AS cid ${base} AND ${REPLY} AND ${inR('a.fecha', from, to)}`),
           Q(`SELECT DISTINCT m.contact_id AS cid FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND m.estado='bounced' AND ${inR('m.sent_at', from, to)}`),
           Q(`SELECT DISTINCT m.contact_id AS cid FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND ${inR('m.sent_at', from, to)} AND EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo IN ('open','click'))`),
           periodStats(from, to), periodStats(pFrom, pTo), taskStats(from, to), taskStats(pFrom, pTo),
           one(`SELECT COUNT(*) FILTER (WHERE a.estado='pendiente' AND a.tipo IN ${TASK_T})::int AS abiertas, COUNT(*) FILTER (WHERE a.estado='pendiente' AND a.tipo IN ${TASK_T} AND a.fecha < NOW())::int AS vencidas ${base}`),
-          timeline(), campaigns(),
+          timeline(), campaigns(), taskSeries(),
         ]);
         const R = setOf(rep), B = setOf(bnc), E = setOf(eng), ct = {};
         ['email', 'li_msg', 'li_invite', 'li_visit', 'whatsapp', 'call'].forEach(k => { ct[k] = { k, intentados: 0, entregados: 0, comprometidos: 0, respondidos: 0, interesados: 0, rebotados: 0 }; });
         rows.forEach(r => { const o = ct[r.kind]; if (!o) return; o.intentados++; if (r.kind === 'email' && B.has(r.cid)) o.rebotados++; else o.entregados++; if ((r.kind === 'email' && E.has(r.cid)) || (r.kind === 'li_invite' && r.acc)) o.comprometidos++; if (R.has(r.cid)) o.respondidos++; if (['interesado', 'reunion'].includes(r.disp)) o.interesados++; });
-        Object.assign(out, { channelTable: Object.values(ct), problems: { cur: ps, prev: pp }, tasks: { cur: ts, prev: tp, ...open }, timeline: tl, campaigns: cp });
+        Object.assign(out, { channelTable: Object.values(ct), problems: { cur: ps, prev: pp }, tasks: { cur: ts, prev: tp, series: tsr, ...open }, timeline: tl, campaigns: cp });
       } else if (tab === 'campaigns') {
         const [cp, tl, coh, stepsEm, stepsOt] = await Promise.all([
           campaigns(), timeline(),
