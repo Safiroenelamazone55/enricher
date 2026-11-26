@@ -4,15 +4,17 @@
 // li_actions, tel_calls, lm_contacts y las campañas/secuencias. «Representante» = responsable del cliente outbound.
 // Filtros comunes: from/to, client, campaign, tags (de campañas), reps (responsables), roles, disp.
 
-const IS_INVITE = `(a.tipo='linkedin_connect' OR ((a.tipo='nota' OR a.tipo LIKE 'linkedin%') AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
+const AUTO_LI = `(a.tipo='nota' AND a.canal='linkedin' AND a.nota ~ '\\(automático, extensión\\)[[:space:]]*$')`;
+const IS_INVITE = `(a.tipo='linkedin_connect' OR (${AUTO_LI} AND a.nota LIKE 'Invitación de LinkedIn enviada%') OR ((a.tipo='nota' OR a.tipo LIKE 'linkedin%') AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
 const STEP_ACC = `(SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1)`;
-const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
+const CH = `CASE WHEN ${AUTO_LI} THEN 'linkedin' WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
 const RTYPES = 'Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar';
 const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
-const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
-const KIND = `CASE WHEN (${CH})='email' THEN 'email' WHEN (${CH})='linkedin' THEN (CASE WHEN ${IS_INVITE} THEN 'li_invite' WHEN (a.tipo='linkedin_visita' OR ${STEP_ACC}='visita') THEN 'li_visit' ELSE 'li_msg' END) WHEN (${CH})='wa_msg' THEN 'whatsapp' WHEN (${CH}) IN ('call','wa_call') THEN 'call' ELSE 'otros' END`;
+const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR ${AUTO_LI} OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
+const KIND = `CASE WHEN (${CH})='email' THEN 'email' WHEN (${CH})='linkedin' THEN (CASE WHEN ${IS_INVITE} THEN 'li_invite' WHEN (a.tipo='linkedin_visita' OR (${AUTO_LI} AND a.nota LIKE 'Perfil de LinkedIn visitado%') OR ${STEP_ACC}='visita') THEN 'li_visit' ELSE 'li_msg' END) WHEN (${CH})='wa_msg' THEN 'whatsapp' WHEN (${CH}) IN ('call','wa_call') THEN 'call' ELSE 'otros' END`;
 const INTERESADO_EV = `(a.tipo='disposition_change' AND a.nota ~ '→ (Interesado|Reunión)[[:space:]]*$')`;
 const TASK_T = `('tarea','followup','revisar_respuesta','seguimiento_inactivo','seguimiento_aviso')`;
+const TASKISH = `(a.tipo IN ${TASK_T} OR (a.estado='hecha' AND (${AUTO_LI} OR a.tipo LIKE 'linkedin%' OR a.tipo='llamada' OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))))`;
 const REP = `COALESCE(NULLIF((SELECT oc.responsable FROM outbound_clients oc WHERE oc.id=k.outbound_client_id),''),'Sin responsable')`;
 const iso = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
 const csv = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 50);
@@ -115,14 +117,14 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
         (SELECT COUNT(DISTINCT a.contact_id) ${base} AND a.tipo='disposition_change' AND a.nota ~ '→ No interesado[[:space:]]*$' AND ${inR('a.fecha', f, t)})::int AS nointeresa,
         (SELECT COUNT(DISTINCT k.id) FROM lm_contacts k WHERE ${kw} AND (k.disposition='no_contactar' OR k.email_opt_out) AND ${inR('k.updated_at', f, t)})::int AS baja`);
       const taskStats = async (f, t) => one(`SELECT
-        COUNT(*) FILTER (WHERE a.tipo IN ${TASK_T} AND ${inR('a.created_at', f, t)})::int AS creadas,
-        COUNT(*) FILTER (WHERE a.tipo IN ${TASK_T} AND a.estado='hecha' AND ${inR('a.fecha', f, t)})::int AS hechas,
+        COUNT(*) FILTER (WHERE ${TASKISH} AND ${inR('a.created_at', f, t)})::int AS creadas,
+        COUNT(*) FILTER (WHERE ${TASKISH} AND a.estado='hecha' AND ${inR('a.fecha', f, t)})::int AS hechas,
         COUNT(*) FILTER (WHERE a.tipo='paso_omitido' AND ${inR('a.fecha', f, t)})::int AS ignoradas
         ${base}`);
       const taskSeries = async () => {
         const [cr, dn] = await Promise.all([
-          Q(`SELECT a.created_at::date::text AS d, COUNT(*)::int AS n ${base} AND a.tipo IN ${TASK_T} AND ${inR('a.created_at', from, to)} GROUP BY 1 ORDER BY 1`),
-          Q(`SELECT a.fecha::date::text AS d, COUNT(*)::int AS n ${base} AND a.tipo IN ${TASK_T} AND a.estado='hecha' AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`)]);
+          Q(`SELECT a.created_at::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND ${inR('a.created_at', from, to)} GROUP BY 1 ORDER BY 1`),
+          Q(`SELECT a.fecha::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND a.estado='hecha' AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`)]);
         return { creadas: cr, hechas: dn };
       };
       const firstReach = async (cond) => (await Q(`SELECT d::text AS d, COUNT(*)::int AS n FROM (SELECT a.contact_id, MIN(a.fecha)::date AS d ${base} AND ${cond} GROUP BY a.contact_id) t WHERE d BETWEEN '${from}'::date AND '${to}'::date GROUP BY d ORDER BY d`));
@@ -227,8 +229,8 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
           Q(`SELECT ${REP} AS rep, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${REPLY} AND ${inR('a.fecha', from, to)} GROUP BY 1`),
           Q(`SELECT ${REP} AS rep, COUNT(DISTINCT a.contact_id) FILTER (WHERE k.disposition IN ('interesado','reunion'))::int AS interesados, COUNT(DISTINCT a.contact_id)::int AS intentados ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1`),
           Q(`SELECT ${REP} AS rep, COUNT(*) FILTER (WHERE a.estado='pendiente' AND a.tipo IN ${TASK_T})::int AS abiertas, COUNT(*) FILTER (WHERE a.estado='pendiente' AND a.tipo IN ${TASK_T} AND a.fecha<NOW())::int AS vencidas,
-                    COUNT(*) FILTER (WHERE a.estado='hecha' AND a.tipo IN ${TASK_T} AND ${inR('a.fecha', from, to)})::int AS hechas, COUNT(*) FILTER (WHERE a.tipo='paso_omitido' AND ${inR('a.fecha', from, to)})::int AS ignoradas,
-                    COUNT(*) FILTER (WHERE a.tipo IN ${TASK_T} AND ${inR('a.created_at', from, to)})::int AS creadas ${base} GROUP BY 1`),
+                    COUNT(*) FILTER (WHERE a.estado='hecha' AND ${TASKISH} AND ${inR('a.fecha', from, to)})::int AS hechas, COUNT(*) FILTER (WHERE a.tipo='paso_omitido' AND ${inR('a.fecha', from, to)})::int AS ignoradas,
+                    COUNT(*) FILTER (WHERE ${TASKISH} AND ${inR('a.created_at', from, to)})::int AS creadas ${base} GROUP BY 1`),
           Q(`SELECT ${sw(REP, 'k', 'k')} AS rep, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND m.estado='bounced' AND ${inR('m.sent_at', from, to)} GROUP BY 1`),
           Q(`SELECT ${REP} AS rep, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND ${inR('m.sent_at', from, to)} AND EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo IN ('open','click')) GROUP BY 1`),
           Q(`SELECT ${REP} AS rep, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${INTERESADO_EV} AND ${inR('a.fecha', from, to)} GROUP BY 1`),
