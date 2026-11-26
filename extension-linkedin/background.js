@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.8';
+const VERSION = '0.10.9';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -51,6 +51,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
   if (m.cmd === 'config') { cfg().then(send); return true; }
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'nova_login') { novaLogin(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'activar') { activar(!!m.datos).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
@@ -278,6 +279,11 @@ async function novaFetch(path, opts) {
   const r = await fetch(apiBase + '/api' + path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...(opts || {}) });
   let d = {}; try { d = await r.json(); } catch (_) {}
   return { status: r.status, data: d };
+}
+// Inicia sesión en Nova con correo y contraseña (la contraseña solo viaja a Nova, no se guarda en la extensión)
+async function novaLogin(d) {
+  const r = await novaFetch('/auth/login', { method: 'POST', body: JSON.stringify({ email: String(d.email || '').trim(), password: String(d.password || '') }) });
+  return r.status === 200 && r.data && r.data.ok ? { ok: true } : { error: (r.data && r.data.error) || ('No se pudo iniciar sesión (' + r.status + ')') };
 }
 async function parEstado() {
   const sesion = await sesionIniciada();

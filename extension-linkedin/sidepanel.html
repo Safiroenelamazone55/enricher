@@ -37,6 +37,21 @@ h3{font-size:18px;margin:22px 0 11px;font-weight:600;letter-spacing:-.005em}
 .msg::before{content:"";width:4px;align-self:stretch;border-radius:3px;background:var(--mut);flex:none}
 .msg.ok::before{background:var(--ok)}.msg.warn::before{background:var(--warn)}.msg.err::before{background:var(--err)}.msg.work::before{background:var(--work)}
 .msg.err{background:var(--errbg)}.msg.warn{background:var(--warnbg)}.msg.work{background:var(--workbg)}.msg.ok{background:var(--okbg)}
+#login{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;background-color:#14161D;background-image:radial-gradient(circle at 18% 22%,rgba(255,255,255,.07) 0 1.5px,transparent 2px),radial-gradient(circle at 82% 68%,rgba(255,255,255,.06) 0 1.5px,transparent 2px),radial-gradient(circle at 50% 100%,rgba(49,107,254,.22),transparent 55%),linear-gradient(135deg,#1A1D27,#0E1016);background-size:44px 44px,60px 60px,auto,auto}
+#login[hidden]{display:none}
+#login .lcard{background:#fff;border-radius:22px;width:100%;max-width:430px;padding:26px 28px 24px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+#login .llogo{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:700;color:var(--ink);letter-spacing:-.02em}#login .llogo img{width:40px;height:40px;border-radius:10px}
+#login h1{margin:46px 0 22px;text-align:center;font-size:30px;line-height:1.15;font-weight:700;color:var(--ink)}
+#login .lbtn{width:100%;height:46px;border:1px solid #E2E5EA;background:#fff;border-radius:10px;font:inherit;font-size:16px;font-weight:500;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}#login .lbtn:hover{background:#F6F7F9}
+#login .lbtn img{width:20px;height:20px;border-radius:5px}
+#login .lsep{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:var(--mut);font-size:15px}#login .lsep::before,#login .lsep::after{content:"";flex:1;height:1px;background:#E9ECF0}
+#login label{display:block;margin:12px 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+#login .lin{position:relative}#login input{width:100%;height:46px;border:1px solid #E2E5EA;border-radius:10px;padding:0 44px 0 14px;font:inherit;font-size:16px;color:var(--ink);background:#fff;box-sizing:border-box}#login input:focus{outline:2px solid #C9D8FF;border-color:#316BFE}
+#login .leye{position:absolute;right:6px;top:5px;width:36px;height:36px;border:0;background:none;color:var(--mut);cursor:pointer;display:flex;align-items:center;justify-content:center}
+#login .lforgot{display:inline-block;margin:10px 0 14px;font-size:15px;color:var(--blue-d);cursor:pointer;background:none;border:0;padding:0;font-family:inherit}
+#login .lgo{width:100%;height:48px;border:0;border-radius:10px;font:inherit;font-size:16px;font-weight:600;background:#EEF0F3;color:#9AA3B0;cursor:not-allowed}#login .lgo.on{background:var(--blue);color:#fff;cursor:pointer}
+#login .lerr{min-height:18px;margin:10px 0 0;font-size:14px;color:var(--err);text-align:center}
+#login .lfoot{margin:22px 0 0;text-align:center;font-size:15px;color:var(--mut)}#login .lfoot a{color:var(--blue-d);cursor:pointer;text-decoration:underline}
 .alerta{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--errbg);border-left:4px solid var(--err);display:flex;gap:10px;align-items:center;font-size:14px;line-height:1.35;color:var(--ink)}.alerta b{display:block;font-weight:600}.alerta .tx{flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.alerta button{border:0;background:none;color:var(--blue-d);font:inherit;font-weight:600;cursor:pointer;padding:4px 6px;white-space:nowrap}.alerta .x{color:var(--mut);font-size:18px;padding:0 6px}.code{position:relative;background:#0F172A;color:#E2E8F0;border-radius:10px;padding:12px 48px 12px 14px;margin:10px 0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;white-space:pre-wrap;word-break:break-word}
 .code .ch{display:block;color:#94A3B8;margin-bottom:4px}.code.error .ch{color:#FCA5A5}.code.aviso .ch{color:#FCD34D}.code .ok{color:#86EFAC}
 .code .cpi{position:absolute;top:8px;right:8px;width:32px;height:32px;border:0;border-radius:8px;background:rgba(255,255,255,.12);color:#E2E8F0;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}.code .cpi:hover{background:rgba(255,255,255,.22)}.code .cpi.hecho{color:#86EFAC}
@@ -101,6 +116,21 @@ details .in-d{padding:0 18px 18px}
 <div class="wrap">
 
 <!-- 1) Aún no vinculada -->
+<div id="login" hidden><div class="lcard">
+  <div class="llogo"><img src="icons/icon128.png" alt="">FLOW</div>
+  <h1>¡Bienvenido de nuevo!</h1>
+  <button class="lbtn" id="lg-nova" type="button"><img src="icons/icon48.png" alt="">Continuar con Nova</button>
+  <div class="lsep">o</div>
+  <form id="lg-form" autocomplete="off">
+    <label for="lg-email">Dirección de email</label><div class="lin"><input id="lg-email" type="email" placeholder="tu@correo.com" autocomplete="username"></div>
+    <label for="lg-pass">Contraseña</label><div class="lin"><input id="lg-pass" type="password" autocomplete="current-password"><button class="leye" id="lg-eye" type="button" title="Mostrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+    <button class="lforgot" id="lg-forgot" type="button">¿Olvidaste la contraseña?</button>
+    <button class="lgo" id="lg-go" type="submit" disabled>Inicia sesión</button>
+    <p class="lerr" id="lg-err"></p>
+  </form>
+  <p class="lfoot">¿Problemas para entrar? <a id="lg-abrir">Abrir Nova</a></p>
+</div></div>
+
 <div id="conectar" hidden>
   <h2>Conectar esta cuenta de LinkedIn con Nova</h2>
   <p class="lead">Usa la sesión de Nova y de LinkedIn de este Chrome. No se pide ninguna contraseña.</p>
