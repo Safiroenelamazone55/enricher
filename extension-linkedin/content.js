@@ -284,7 +284,7 @@
       cuerpo = [...document.querySelectorAll('textarea[name="message"], textarea')].filter(vis).find(e => !e.disabled);
     }
     const pagina = norm(document.body.innerText || '').slice(0, 60000);
-    if (/(0|no) (of \d+ )?inmail credits|0 of \d+ credits|out of inmail credits|sin cr[eé]ditos de inmail/.test(pagina)) return R('omitida', 'sin_inmail', 'LinkedIn no ofrece InMail (sin créditos o la suscripción venció)', { snapshot: snapshot() });
+    if (/\b(0|no) (of \d+ )?inmail credits|\b0 of \d+ credits|out of inmail credits|sin cr[eé]ditos de inmail/.test(pagina)) return R('omitida', 'sin_inmail', 'LinkedIn no ofrece InMail (sin créditos o la suscripción venció)', { snapshot: snapshot() });
     if (!asunto || !cuerpo) return R('omitida', 'sin_inmail', 'No apareció el redactor de InMail (¿la cuenta no tiene InMail?)', { snapshot: snapshot() });
     await escribir(asunto, String(a.nota || 'Hola').slice(0, 200)); await sleep(rnd(500, 1100));
     await escribir(cuerpo, a.texto); await sleep(rnd(800, 1600));
