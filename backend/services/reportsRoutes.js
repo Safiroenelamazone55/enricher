@@ -192,7 +192,7 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
         Object.assign(out, { campaigns: cp, timeline: tl, cohorts: coh, steps: [...stepsEm, ...stepsOt] });
       } else if (tab === 'activity') {
         const kpi = async (f, t) => one(`SELECT COUNT(*) FILTER (WHERE ${OUT})::int AS toques, COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT})::int AS contactados,
-              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS respuestas, COUNT(*) FILTER (WHERE ${OUT} AND ${IS_INVITE})::int AS invitaciones,
+              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS respuestas, COUNT(*) FILTER (WHERE ${OUT} AND ${IS_INVITE})::int AS invitaciones, COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT} AND ${IS_INVITE})::int AS invitados, COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT} AND ${IS_INVITE} AND k.li_aceptado_at IS NOT NULL)::int AS aceptadas,
               COUNT(*) FILTER (WHERE ${OUT} AND (${CH})='email')::int AS emails, COUNT(*) FILTER (WHERE ${OUT} AND (${CH}) IN ('call','wa_call'))::int AS llamadas,
               COUNT(*) FILTER (WHERE ${OUT} AND (${CH})='wa_msg')::int AS whatsapps ${base} AND ${inR('a.fecha', f, t)}`);
         const cap = async () => {

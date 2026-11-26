@@ -682,7 +682,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const sinAccion = async (espera_s, motivo) => res.json({ accion: null, espera_s, motivo, modo: modoRes, resumen: await resumenCola(pool, a, new Date()), config: CONFIG });
       const hist = await historial(pool, a, now);
       // Reparto justo: se mezclan las secuencias (las 6 más antiguas de cada una, de la 1.ª a la 6.ª) para que una campaña con 80 acciones en cola no deje sin turno a otra recién activada
-      const { rows: cola } = await pool.query(`SELECT * FROM (SELECT x.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(x.sequence_id, 0) ORDER BY x.id) AS rn FROM li_actions x WHERE x.account_id=$1 AND x.estado='queued' AND (x.not_before IS NULL OR x.not_before <= NOW())) q WHERE q.rn <= 6 ORDER BY q.rn, q.id LIMIT 30`, [a.id]);
+      const { rows: cola } = await pool.query(`SELECT * FROM (SELECT x.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(x.sequence_id, 0) ORDER BY CASE WHEN x.tipo='visit' THEN 1 ELSE 0 END, x.id) AS rn FROM li_actions x WHERE x.account_id=$1 AND x.estado='queued' AND (x.not_before IS NULL OR x.not_before <= NOW())) q WHERE q.rn <= 6 ORDER BY q.rn, q.id LIMIT 30`, [a.id]);
       if (!cola.length) return sinAccion(60, 'cola_vacia');
       // El horario (días, hora de inicio/fin, pausa) se mide en la zona horaria de la CAMPAÑA (la de su secuencia), no en la de la cuenta; si la secuencia no tiene, vale la de la cuenta.
       const seqIds = [...new Set(cola.map(q => q.sequence_id).filter(Boolean))];
