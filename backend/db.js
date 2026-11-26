@@ -765,6 +765,14 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS campaigns_user_idx ON campaigns (user_id);`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL;`);
+    // Lista de campañas estilo lemlist: archivar, etiquetas, carpetas, favoritos por persona y quién la creó.
+    await pool.query(`ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS campaigns_estado_check;`);
+    await pool.query(`ALTER TABLE campaigns ADD CONSTRAINT campaigns_estado_check CHECK (estado IN ('draft','activa','pausada','cerrada','archivada'));`);
+    await pool.query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS created_by INTEGER;`);
+    await pool.query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS folder_id INTEGER;`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS campaign_folders (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS campaign_favs (user_id INTEGER NOT NULL, campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE, PRIMARY KEY (user_id, campaign_id));`);
 
     // ── sequences + steps (Lead Manager Fase 3: planificación manual, sin envío automático) ──
     await pool.query(`
@@ -1094,6 +1102,14 @@ async function initDb() {
     // ser su propio timestamp; sigue disparando el re-enrutado a la rama "replied" igual
     // que antes, solo que ya no pisa disposition. Ver server.js /contacts/:id/disposition.
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS li_aceptado_at   TIMESTAMPTZ;`);
+    // Antigüedad en el rol actual (texto tal cual lo trae el export de Sales Navigator, ej. "1 yr 1 mo") — mismo campo que ya existía en Cantera.
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS antiguedad_cargo TEXT NOT NULL DEFAULT '';`);
+    // Nº total de conexiones de LinkedIn del contacto (no confundir con "conexiones mutuas", que es otro campo).
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS conexiones_total INTEGER;`);
+    // Baja (unsubscribe) por campaña: token público para el enlace de baja + si se dio de baja solo del email (otros canales siguen).
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS unsub_token TEXT;`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_contacts_unsub_token_idx ON lm_contacts (unsub_token) WHERE unsub_token IS NOT NULL;`);
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS email_opt_out BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`UPDATE lm_contacts SET li_aceptado_at = COALESCE(li_aceptado_at, updated_at) WHERE disposition = 'aceptado';`);
     await pool.query(`UPDATE lm_contacts SET disposition = '' WHERE disposition = 'aceptado';`);
     // Deals: capa financiera del pipeline por contacto (valor estimado · probabilidad · cierre)

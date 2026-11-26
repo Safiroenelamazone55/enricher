@@ -847,7 +847,17 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       }
       Object.keys(reservado).forEach(k => { reservado[k] = Math.round(Math.max(reservado[k], real7d[k]) * 10) / 10; });
       const { rows: [qo] } = cuentas.length ? await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='queued' AND sequence_id IS DISTINCT FROM $2`, [cuentas.map(a => a.id), sid]) : { rows: [{ n: 0 }] };
-      res.json({ otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+      // Avance real: contactos que ya pasaron el paso 1 (con su paso actual) y lo que las cuentas ya hicieron HOY
+      const { rows: av } = await pool.query("SELECT paso, estado='activo' AS activo, COUNT(*)::int AS n FROM lm_contact_sequences WHERE sequence_id=$1 AND paso > 1 GROUP BY 1,2", [sid]);
+      const hoy = { inv: 0, vis: 0, msg: 0, inmail: 0, react: 0, follow: 0, comment: 0 };
+      if (cuentas.length) {
+        const tz0 = a0.tz || DEF.tz, { rows: hh } = await pool.query("SELECT tipo, COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='done' AND done_at >= ((NOW() AT TIME ZONE $2)::date::timestamp AT TIME ZONE $2) GROUP BY tipo", [cuentas.map(a => a.id), tz0]);
+        const T2 = { visit: 'vis', invite: 'inv', message: 'msg', inmail: 'inmail', react: 'react', follow: 'follow', comment: 'comment' };
+        hh.forEach(r => { if (T2[r.tipo]) hoy[T2[r.tipo]] = r.n; });
+      }
+      // Ritmo máximo por horario y espera mínima entre acciones (una sola acción a la vez por cuenta): ~1,5 h menos por el arranque/cierre aleatorio y el descanso
+      const ritmo_max = cuentas.length ? cuentas.reduce((t, a) => t + Math.floor(Math.max(1, (a.hora_fin - a.hora_ini) - ((a.hora_fin - a.hora_ini) >= 6 ? 1.5 : 0.6)) * 3600 / (Math.max(20, a.gap_min || 300) * 1.1)), 0) : null;
+      res.json({ avance: av, hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
     } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
   });
 

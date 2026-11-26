@@ -26668,6 +26668,8 @@ const LeadManagerModule = (() => {
       if (ta + tn > 0.001) items.push({ j: fi, qa: ta, qn: tn, due: roll(doneT + Math.max(0, st.dia - prevDia) * DAY) });
       spawn(fi + 1, qa - ta, qn - tn, doneT, prevDia);
     };
+    // lo que ya avanzó de verdad: quien ya pasó el paso 1 sale del grupo «por entrar» y vuelve como tarea pendiente de su paso actual
+    (d.avance || []).forEach(a => { queda = Math.max(0, queda - a.n); if (a.activo && a.paso - 2 >= 0 && a.paso - 1 < steps.length) spawn(a.paso - 1, 0, a.n, start.getTime() - DAY, steps[a.paso - 2].dia); });
     const dias = []; let fin = null, primerCola = null, colaMax = 0, pico = null, retrasoMax = 0, invHist = [];
     const rd = P.calentar ? _capRampBase(d) : { activo: false };
     for (let i = 0; i < P.dias; i++) {
@@ -26679,7 +26681,7 @@ const LeadManagerModule = (() => {
       const dia = (rd.activo ? (rd.dia_actual || 0) : 99) + i, cal = rd.activo && dia < rd.dias, c = eff;
       const cap = { inv: c.inv, msg: c.msg, vis: c.vis, inmail: c.inmail, react: c.react, follow: c.follow, comment: c.comment }; let total = c.total;
       if (rd.activo) { cap.inv = Math.min(c.inv, rd.inicio + rd.paso * dia); if (cal) { total = Math.min(total, rd.total_nuevo); cap.msg = Math.min(c.msg, 8 + 2 * dia); cap.vis = Math.min(c.vis, 10 + 2 * dia); cap.inmail = Math.min(c.inmail, 2 + dia); } }
-      Object.keys(cap).forEach(k => { cap[k] = Math.max(1, Math.round(cap[k] * f)); }); total = Math.max(1, Math.round(total * f));
+      Object.keys(cap).forEach(k => { cap[k] = Math.max(1, Math.round(cap[k] * f)); }); total = Math.max(1, Math.round(total * f)); if (d.ritmo_max) total = Math.min(total, d.ritmo_max);
       // los límites son del CLIENTE: lo que ya usan sus otras secuencias automáticas activas no está disponible para esta
       const rs = (P.descontar !== false && d.otras) ? d.otras.reservado : null;
       if (rs) { let sumR = 0; Object.keys(cap).forEach(k => { const rr = Math.round(rs[k] || 0); cap[k] = Math.max(0, cap[k] - rr); sumR += rr; }); total = Math.max(0, total - sumR); }
@@ -26687,6 +26689,7 @@ const LeadManagerModule = (() => {
       let restTot = total, restInv = Math.max(0, semana - invSem);
       const rest = { ...cap };
       row.capTipo = cap; row.capTotal = total;
+      if (i === 0 && d.hoy) { let sh = 0; Object.keys(cap).forEach(k => { const h = Math.min(rest[k], d.hoy[k] || 0); if (h > 0) { rest[k] -= h; sh += h; row.hechas[k] = h; if (k === 'inv') { restInv = Math.max(0, restInv - h); row._inv = h; } } }); restTot = Math.max(0, restTot - sh); row.hechasTot = sh; }
       // las tareas vencidas hasta hoy, de la más antigua a la más nueva; las de email/llamada no gastan tope
       let guard = 0;
       while (guard++ < 5000) {
