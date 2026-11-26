@@ -357,10 +357,13 @@ const _liApplyDisposition = (uid, cid, body) => new Promise((resolve, reject) =>
   Promise.resolve(_lmDispositionHandler(fake, res)).catch(reject);
 });
 require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });
+require('./services/extScraperLicense').mount(app, { pool });   // licencias del LinkedIn Sales Scraper (producto aparte, de pago — endpoints públicos a propósito)
+require('./services/solucionesRoutes').mount(app, { pool, requireAuth });   // módulo «Soluciones»: panel DENTRO de Nova para ver/generar/revocar esas mismas licencias (requiere sesión)
 const CF = require('./services/canteraFiltros');
 CF.mount(app, { requireAuth, fetchAll: uid => _cGlobalFetchAll(uid, '%%', '') });   // filtros de la Base global al estilo lemlist
 const campaignCfg = require('./services/campaignConfig');
 campaignCfg.mount(app, { pool, requireAuth });   // configuración de la campaña: automatización, tracking, remitentes, planificación, general   // LinkedIn con extensión propia: cuentas, topes, cola y calentamiento   // agenda del calendario: prioridades y tipo de bloque
+require('./services/aiAgentChat').mount(app, { pool, requireAuth });   // «¿Cómo puedo ayudarte hoy?» del Dashboard — chat con tool-use de solo lectura sobre los datos reales
 //   // Inicio: bandeja «Para ti», comentarios asignados, cobros
 
 // Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
@@ -5309,6 +5312,18 @@ async function _lmAddMembership(req, res, kind) {
     }
     // Enrolar en una secuencia 'completada' la vuelve a poner activa (si no, el motor no la tocaría y los contactos quedarían muertos).
     await pool.query(`UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2 AND estado='completada'`, [targetId, uid]).catch(() => {});
+    // «Lanzamiento automático» de la campaña (Configuración de la campaña → Planificaciones): si está
+    // activado, enrolar a alguien en una secuencia todavía en borrador la lanza sola — no hace falta
+    // pulsar «Lanzar secuencia» cada vez que llega un prospecto nuevo.
+    try {
+      const { rows: [sqd] } = await pool.query(`SELECT campaign_id FROM sequences WHERE id=$1 AND user_id=$2 AND estado='draft'`, [targetId, uid]);
+      if (sqd && sqd.campaign_id) {
+        const cfgAuto = await campaignCfg.configGuardada(pool, sqd.campaign_id);
+        if (cfgAuto && cfgAuto.planificacion && cfgAuto.planificacion.lanzamiento_auto) {
+          await pool.query(`UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2 AND estado='draft'`, [targetId, uid]);
+        }
+      }
+    } catch (e) { console.warn('[lm-add-seq] lanzamiento_auto', e.message); }
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
     const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on, rotacion_empresa FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
     let drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
@@ -6793,10 +6808,25 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
     sets.push(`skip_canales = CASE WHEN (',' || skip_canales || ',') LIKE ('%,' || $${vals.length} || ',%') THEN skip_canales ELSE concat_ws(',', NULLIF(skip_canales,''), $${vals.length}::text) END`);
   }
   if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+  // Si el paso se completa a mano aquí (task-runner), pero «LinkedIn automático» ya había
+  // encolado ese mismo paso para la extensión (puenteTick), hay que cancelar esa cola — si no,
+  // la extensión lo ejecutaría de nuevo (visita/invitación/mensaje duplicados) cuando se conecte.
+  let _oldPaso = null;
+  if (b.paso != null || b.estado === 'terminado') {
+    const { rows: [pre] } = await pool.query(`SELECT paso FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [req.workspaceOwnerId, req.params.id, req.params.cid]);
+    _oldPaso = pre ? pre.paso : null;
+  }
   vals.push(req.workspaceOwnerId, req.params.id, req.params.cid);
   try {
     const { rows } = await pool.query(`UPDATE lm_contact_sequences SET ${sets.join(',')} WHERE user_id=$${vals.length - 2} AND sequence_id=$${vals.length - 1} AND contact_id=$${vals.length} RETURNING *`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
+    if (_oldPaso) {
+      await pool.query(`
+        UPDATE li_actions a SET estado='cancelled', detalle='Paso completado manualmente en Nova'
+        FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY dia ASC, orden ASC, id ASC) AS rn FROM sequence_steps WHERE sequence_id=$1) st
+        WHERE a.step_id = st.id AND st.rn <= $2 AND a.estado='queued' AND a.contact_id=$3 AND a.sequence_id=$1
+      `, [req.params.id, _oldPaso, req.params.cid]).catch(e => console.warn('[lm-seq-ct] cancel li_actions', e.message));
+    }
     // Si el último paso era un WhatsApp que TODAVÍA está en cola, la secuencia no termina hasta que el mensaje salga de verdad.
     let _enEspera = false;
     if (b.estado === 'terminado') {
@@ -8226,7 +8256,7 @@ const _RESPONDED_M = `(k.disposition IN ${_STOP_DISP}
 app.get('/api/lm/approvals', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT m.id, m.sequence_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.scheduled_at,
+      SELECT m.id, m.sequence_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.scheduled_at, m.estado,
              s.nombre AS seq_nombre,
              k.nombre, k.apellido, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa
         FROM lm_messages m
@@ -8493,6 +8523,36 @@ app.get('/t/c/:token', async (req, res) => {
   } catch (e) { /* tracking nunca rompe nada */ }
 });
 
+// ── Enlace de baja (opt-out): página pública, sin sesión — el link va en el pie de los emails cuando
+// la campaña tiene "Añadir un enlace de baja" activado (Configuración de la campaña → General).
+// ?all=1 = baja de TODO el contacto (dispone 'no_contactar', para todos los canales).
+// ?all=0 (o ausente) = baja SOLO del email (email_opt_out=true; LinkedIn/WhatsApp siguen).
+app.get('/u/:token', async (req, res) => {
+  const page = (titulo, cuerpo) => res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${titulo}</title>
+    <style>body{font-family:Arial,Helvetica,sans-serif;background:#F7F8F6;color:#14211B;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+    .box{background:#fff;border-radius:12px;padding:32px 28px;max-width:420px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    h1{font-size:18px;margin:0 0 10px}p{font-size:14px;color:#55657D;line-height:1.5;margin:0}</style></head>
+    <body><div class="box"><h1>${titulo}</h1><p>${cuerpo}</p></div></body></html>`);
+  try {
+    const token = String(req.params.token || '').trim();
+    const { rows: [k] } = await pool.query(`SELECT id, user_id, idioma, email, disposition FROM lm_contacts WHERE unsub_token=$1`, [token]);
+    if (!k) return page('Link not valid', 'This unsubscribe link is not valid or has expired.');
+    const en = String(k.idioma || '').toLowerCase().startsWith('en');
+    const all = req.query.all === '1';
+    if (all) {
+      if (k.disposition !== 'no_contactar') {
+        await pool.query(`UPDATE lm_contacts SET disposition='no_contactar', updated_at=NOW() WHERE id=$1`, [k.id]);
+        await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='opt_out' WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [k.user_id, k.id]);
+        await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado) VALUES ($1,$2,'nota','Se dio de baja desde el enlace del email (todos los canales)',NOW(),'hecha')`, [k.user_id, k.id]).catch(() => {});
+      }
+      return page(en ? "You're unsubscribed" : 'Baja confirmada', en ? "You won't receive any more messages from us on any channel." : 'No volverás a recibir mensajes nuestros por ningún canal.');
+    }
+    await pool.query(`UPDATE lm_contacts SET email_opt_out=TRUE, updated_at=NOW() WHERE id=$1 AND email_opt_out=FALSE`, [k.id]);
+    await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado) VALUES ($1,$2,'nota','Se dio de baja de email desde el enlace del email (otros canales siguen)',NOW(),'hecha')`, [k.user_id, k.id]).catch(() => {});
+    return page(en ? "You're unsubscribed from email" : 'Baja de email confirmada', en ? "You won't receive any more emails from us. We may still reach out on other channels, like LinkedIn." : 'No volverás a recibir correos nuestros. Podríamos seguir en contacto por otros canales, como LinkedIn.');
+  } catch (e) { console.error('[unsub]', e.message); return page('Error', 'Something went wrong. Please try again later.'); }
+});
+
 // ── Configuración de envío (singleton por workspace, patrón fin_config) ──
 app.get('/api/lm/send-settings', requireAuth, async (req, res) => {
   try {
@@ -8714,10 +8774,20 @@ const _lmDashHandler = async (req, res) => {
     if (parseInt(q.sequence)) { seqP = P(parseInt(q.sequence)); kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=${seqP})`; }
     let campP = null;
     if (parseInt(q.campaign)) { campP = P(parseInt(q.campaign)); kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x JOIN sequences s2 ON s2.id=x.sequence_id WHERE x.contact_id=k.id AND s2.campaign_id=${campP})`; }
+    // Informes: etiquetas de campaña, representantes (responsable del cliente), roles y resultado
+    {
+      const _csv = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 50);
+      const _tg = _csv(q.tags);
+      if (_tg.length) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences xt JOIN sequences st3 ON st3.id=xt.sequence_id JOIN campaigns ct3 ON ct3.id=st3.campaign_id WHERE xt.contact_id=k.id AND ct3.tags && ${P(_tg)}::text[])`;
+      let _rp = _csv(q.reps); const _rl = _csv(q.roles);
+      if (_rl.length) { const { rows: _tm } = await pool.query(`SELECT nombre FROM team_members WHERE user_id=$1 AND (CASE WHEN LOWER(rol)='admin' THEN 'admin' ELSE 'member' END) = ANY($2::text[])`, [uid, _rl]); const _nm = _tm.map(r => r.nombre); _rp = _rp.length ? _rp.filter(n => _nm.includes(n)) : _nm; if (!_rp.length) _rp = ['\u0001ninguno']; }
+      if (_rp.length) kw += ` AND EXISTS(SELECT 1 FROM outbound_clients ocr WHERE ocr.id=k.outbound_client_id AND ocr.responsable = ANY(${P(_rp)}::text[]))`;
+      if (q.disp) kw += ` AND k.disposition=${P(String(q.disp).slice(0, 40))}`;
+    }
     // el país es el de la EMPRESA; solo si no la tiene se usa el del contacto
     const KP = `COALESCE(NULLIF(TRIM((SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id)),''),NULLIF(TRIM(k.pais),''))`;
     if (q.country) kw += ` AND ${KP} ILIKE ${P('%' + String(q.country).slice(0, 60) + '%')}`;
-    const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
+    const CH =`CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
     const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar`;
     const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
     const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
@@ -8941,6 +9011,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
   } catch (e) { console.error('[dash drill]', e.message); res.status(500).json({ error: 'No se pudo cargar el detalle' }); }
 });
 app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
+require('./services/reportsRoutes').mount(app, { pool, requireAuth, tzOfUser: _tzOfUser });   // Informes estilo lemlist: Overview, Campañas, Actividad, Equipo, Llamadas + dashboards personalizados
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 require('./services/inicioRoutes').mount(app, { pool, requireAuth, permsSvc, puedeVerWa: _puedeVerWa });   // Formulario de inicio del cliente + modulo Inicios de cliente
 require('./services/translateRoutes').mount(app, { requireAuth });
@@ -9195,7 +9266,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     if (field) colMap[idx] = field;
   }
 
-  const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [] };
+  const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [], contactIds: [] };
   const coCache = new Map();
   // Una sola importación a la vez por usuaria: una segunda encima duplicaría filas.
   const _prevJob = _impJobs.get(uid);
@@ -9290,6 +9361,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] || null;
         }
         if (existing) {
+          summary.contactIds.push(existing.id);
           if (!updateExisting) { summary.contactsSkipped++; continue; }
           const sets = []; const vals = [existing.id, uid];
           const upd = {
@@ -9299,8 +9371,11 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             linkedin: _lmS(f.linkedin), linkedin_sales_nav: _lmCleanUrlish(f.linkedin_sales_nav), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
             estado: _lmS(f.estado), fuente: _lmS(f.fuente),
             contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), analisis: _lmS(f.analisis), notas: _lmS(f.notas),
+            antiguedad_cargo: _lmS(f.antiguedad_cargo),
             idioma: _lg.principal,   // el idioma del archivo manda sobre el deducido por país
           };
+          const _conexNum = parseInt(String(f.conexiones_total || '').replace(/[^\d]/g, ''), 10);
+          if (Number.isFinite(_conexNum)) sets.push(`conexiones_total=$${vals.push(_conexNum)}`);
           for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
           if (_lg.lista.length) sets.push(`idiomas=$${vals.push(JSON.stringify(_lg.lista))}::jsonb`);
           // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
@@ -9354,13 +9429,16 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
           tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
         });
-        await pool.query(`
-          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch,idioma)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+        const _conexNumNew = parseInt(String(f.conexiones_total || '').replace(/[^\d]/g, ''), 10);
+        const _newCt = await pool.query(`
+          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch,idioma,antiguedad_cargo,conexiones_total)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
-            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', _lg.principal]);
-        if (_lg.lista.length) await pool.query(`UPDATE lm_contacts SET idiomas=$1::jsonb WHERE id=(SELECT MAX(id) FROM lm_contacts WHERE user_id=$2)`, [JSON.stringify(_lg.lista), uid]);
-        if (_lmS(f.linkedin_sales_nav)) await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=(SELECT MAX(id) FROM lm_contacts WHERE user_id=$2)`, [_lmCleanUrlish(f.linkedin_sales_nav), uid]);
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '', _lg.principal, _lmS(f.antiguedad_cargo), Number.isFinite(_conexNumNew) ? _conexNumNew : null]);
+        const _newCtId = _newCt.rows[0].id;
+        if (_lg.lista.length) await pool.query(`UPDATE lm_contacts SET idiomas=$1::jsonb WHERE id=$2`, [JSON.stringify(_lg.lista), _newCtId]);
+        if (_lmS(f.linkedin_sales_nav)) await pool.query(`UPDATE lm_contacts SET linkedin_sales_nav=$1 WHERE id=$2`, [_lmCleanUrlish(f.linkedin_sales_nav), _newCtId]);
+        summary.contactIds.push(_newCtId);
         summary.contactsCreated++;
       }
     } catch (e) {
@@ -11656,7 +11734,7 @@ app.delete('/api/lm/templates/:id', requireAuth, async (req, res) => {
 });
 
 // ── Campañas (Fase 2) ──────────────────────────────────────────────
-const CMP_ESTADOS = ['draft', 'activa', 'pausada', 'cerrada'];
+const CMP_ESTADOS = ['draft', 'activa', 'pausada', 'cerrada', 'archivada'];
 app.get('/api/campaigns', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -11723,10 +11801,10 @@ app.post('/api/campaigns', requireAuth, async (req, res) => {
   const estado = CMP_ESTADOS.includes(b.estado) ? b.estado : 'draft';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO campaigns (user_id,outbound_client_id,nombre,estado,mercado,icp,canal,canal_secundario,objetivo,fecha_inicio,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+      INSERT INTO campaigns (user_id,outbound_client_id,nombre,estado,mercado,icp,canal,canal_secundario,objetivo,fecha_inicio,notas,created_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
     `, [req.workspaceOwnerId, b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'',
-        b.canal||'', b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'']);
+        b.canal||'', b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'', (req.user && req.user.id) || null]);
     { const _cn = await _conCodigoCampana(rows[0].id, rows[0].outbound_client_id, rows[0].nombre); rows[0].nombre = (await pool.query('UPDATE campaigns SET nombre=$1 WHERE id=$2 RETURNING nombre', [_cn, rows[0].id])).rows[0].nombre; }
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -11783,6 +11861,264 @@ app.delete('/api/campaigns/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ── Lista de campañas estilo lemlist: favoritos, carpetas, etiquetas, remitentes, creadores, acciones masivas ──
+// Datos extra para la lista (no cambian la forma de GET /api/campaigns): favoritos de quien mira, carpetas,
+// remitentes de cada campaña (misma regla que «Configuración de la campaña») y nombre de quien la creó.
+app.get('/api/campaigns/list-meta', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, me = (req.user && req.user.id) || 0;
+    const [favs, folders, camps, mbs, lis, was, sel] = await Promise.all([
+      pool.query('SELECT f.campaign_id FROM campaign_favs f JOIN campaigns c ON c.id=f.campaign_id WHERE f.user_id=$1 AND c.user_id=$2', [me, uid]),
+      pool.query('SELECT id, nombre FROM campaign_folders WHERE user_id=$1 ORDER BY nombre', [uid]),
+      pool.query('SELECT id, outbound_client_id, COALESCE(created_by, user_id) AS creador FROM campaigns WHERE user_id=$1', [uid]),
+      pool.query('SELECT id, email AS nombre, outbound_client_id FROM lm_mailboxes WHERE user_id=$1', [uid]),
+      pool.query('SELECT id, nombre, outbound_client_id FROM li_accounts WHERE user_id=$1', [uid]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT id, COALESCE(NULLIF(nombre,''), numero) AS nombre, outbound_client_id FROM wa_connections WHERE user_id=$1 AND archivada_at IS NULL`, [uid]).catch(() => ({ rows: [] })),
+      pool.query('SELECT campaign_id, tipo, ref_id, activo FROM campaign_senders WHERE user_id=$1', [uid]),
+    ]);
+    const ids = [...new Set(camps.rows.map(c => c.creador).filter(Boolean))];
+    const names = ids.length ? (await pool.query('SELECT id, name FROM users WHERE id = ANY($1::int[])', [ids])).rows : [];
+    const nm = new Map(names.map(r => [r.id, r.name || 'Usuario']));
+    const remitentes = {}, creadores = {};
+    for (const c of camps.rows) {
+      const mine = sel.rows.filter(s => s.campaign_id === c.id);
+      const ok = (tipo, id) => { if (!mine.length) return true; const r = mine.find(x => x.tipo === tipo && x.ref_id === id); return r ? r.activo : false; };
+      const out = [];
+      mbs.rows.filter(x => x.outbound_client_id === c.outbound_client_id && ok('email', x.id)).forEach(x => out.push({ k: 'email:' + x.id, tipo: 'email', nombre: x.nombre }));
+      lis.rows.filter(x => x.outbound_client_id === c.outbound_client_id && ok('linkedin', x.id)).forEach(x => out.push({ k: 'linkedin:' + x.id, tipo: 'linkedin', nombre: x.nombre }));
+      was.rows.filter(x => x.outbound_client_id === c.outbound_client_id && ok('whatsapp', x.id)).forEach(x => out.push({ k: 'whatsapp:' + x.id, tipo: 'whatsapp', nombre: x.nombre }));
+      remitentes[c.id] = out;
+      creadores[c.id] = { id: c.creador, nombre: nm.get(c.creador) || 'Usuario' };
+    }
+    res.json({ favs: favs.rows.map(r => r.campaign_id), folders: folders.rows, remitentes, creadores });
+  } catch (e) { console.error('[cmp] list-meta', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
+});
+app.post('/api/campaigns/:id/fav', requireAuth, async (req, res) => {
+  try {
+    const me = (req.user && req.user.id) || 0, id = parseInt(req.params.id);
+    const { rows: [c] } = await pool.query('SELECT id FROM campaigns WHERE id=$1 AND user_id=$2', [id, req.workspaceOwnerId]);
+    if (!c) return res.status(404).json({ error: 'Campaña no encontrada' });
+    const del = await pool.query('DELETE FROM campaign_favs WHERE user_id=$1 AND campaign_id=$2', [me, id]);
+    if (!del.rowCount) await pool.query('INSERT INTO campaign_favs (user_id, campaign_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [me, id]);
+    res.json({ fav: !del.rowCount });
+  } catch (e) { res.status(500).json({ error: 'No se pudo cambiar el favorito' }); }
+});
+app.post('/api/campaign-folders', requireAuth, async (req, res) => {
+  try {
+    const nombre = String((req.body || {}).nombre || '').trim().slice(0, 80);
+    if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la carpeta' });
+    const { rows: [f] } = await pool.query('INSERT INTO campaign_folders (user_id, nombre) VALUES ($1,$2) RETURNING id, nombre', [req.workspaceOwnerId, nombre]);
+    res.status(201).json(f);
+  } catch (e) { res.status(500).json({ error: 'No se pudo crear la carpeta' }); }
+});
+app.patch('/api/campaign-folders/:id', requireAuth, async (req, res) => {
+  try {
+    const nombre = String((req.body || {}).nombre || '').trim().slice(0, 80);
+    if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la carpeta' });
+    const { rows: [f] } = await pool.query('UPDATE campaign_folders SET nombre=$1 WHERE id=$2 AND user_id=$3 RETURNING id, nombre', [nombre, req.params.id, req.workspaceOwnerId]);
+    if (!f) return res.status(404).json({ error: 'Carpeta no encontrada' });
+    res.json(f);
+  } catch (e) { res.status(500).json({ error: 'No se pudo renombrar' }); }
+});
+app.delete('/api/campaign-folders/:id', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, id = parseInt(req.params.id);
+    const { rowCount } = await pool.query('DELETE FROM campaign_folders WHERE id=$1 AND user_id=$2', [id, uid]);
+    if (!rowCount) return res.status(404).json({ error: 'Carpeta no encontrada' });
+    await pool.query('UPDATE campaigns SET folder_id=NULL WHERE user_id=$1 AND folder_id=$2', [uid, id]);   // las campañas NO se borran: solo salen de la carpeta
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo eliminar la carpeta' }); }
+});
+// Pausar / reanudar una campaña lleva a sus secuencias con ella (mismo efecto que «Pausar todo» / «Reactivar todo» de cada secuencia).
+async function _campPause(uid, campaignId) {
+  await pool.query(`UPDATE campaigns SET estado='pausada', updated_at=NOW() WHERE id=$1 AND user_id=$2`, [campaignId, uid]);
+  const { rows: sq } = await pool.query(`SELECT id, nombre FROM sequences WHERE campaign_id=$1 AND user_id=$2 AND estado='activa'`, [campaignId, uid]);
+  for (const s of sq) {
+    await pool.query(`UPDATE sequences SET estado='pausada', updated_at=NOW() WHERE id=$1`, [s.id]);
+    await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='pausada_manual' WHERE user_id=$1 AND sequence_id=$2 AND estado='activo'`, [uid, s.id]);
+    await _archiveSeqTasks(uid, s.nombre).catch(() => {});
+  }
+  return sq.length;
+}
+async function _campResume(uid, campaignId) {
+  await pool.query(`UPDATE campaigns SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2`, [campaignId, uid]);
+  const { rows: sq } = await pool.query(`SELECT id FROM sequences WHERE campaign_id=$1 AND user_id=$2 AND estado='pausada'`, [campaignId, uid]);
+  for (const s of sq) {
+    await pool.query(`UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1`, [s.id]);
+    await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW() WHERE user_id=$1 AND sequence_id=$2 AND estado='pausado' AND paused_reason='pausada_manual'`, [uid, s.id]);
+  }
+  return sq.length;
+}
+// Acciones sobre varias campañas a la vez: etiquetas, pausar/reanudar, archivar/restaurar, mover a carpeta.
+app.post('/api/campaigns/bulk', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, b = req.body || {};
+    const ids = (Array.isArray(b.ids) ? b.ids : []).map(x => parseInt(x)).filter(Boolean);
+    if (!ids.length) return res.status(400).json({ error: 'Sin campañas seleccionadas' });
+    const { rows: mine } = await pool.query('SELECT id, estado FROM campaigns WHERE user_id=$1 AND id = ANY($2::int[])', [uid, ids]);
+    const ok = mine.map(r => r.id);
+    if (!ok.length) return res.status(404).json({ error: 'Campañas no encontradas' });
+    const act = String(b.action || '');
+    const tags = [...new Set((Array.isArray(b.tags) ? b.tags : []).map(t => String(t).trim().slice(0, 40)).filter(Boolean))];
+    if (act === 'tag_add') {
+      if (!tags.length) return res.status(400).json({ error: 'Escribe al menos una etiqueta' });
+      await pool.query(`UPDATE campaigns SET tags = (SELECT ARRAY(SELECT DISTINCT unnest(tags || $2::text[]))) WHERE user_id=$1 AND id = ANY($3::int[])`, [uid, tags, ok]);
+    } else if (act === 'tag_remove') {
+      await pool.query(`UPDATE campaigns SET tags = ARRAY(SELECT t FROM unnest(tags) t WHERE NOT (t = ANY($2::text[]))) WHERE user_id=$1 AND id = ANY($3::int[])`, [uid, tags, ok]);
+    } else if (act === 'pause') {
+      for (const r of mine) if (r.estado === 'activa') await _campPause(uid, r.id);
+    } else if (act === 'resume') {
+      for (const r of mine) if (r.estado === 'pausada' || r.estado === 'draft') await _campResume(uid, r.id);
+    } else if (act === 'archive') {
+      for (const r of mine) { if (r.estado === 'activa') await _campPause(uid, r.id); await pool.query(`UPDATE campaigns SET estado='archivada', updated_at=NOW() WHERE id=$1`, [r.id]); }
+    } else if (act === 'unarchive') {
+      await pool.query(`UPDATE campaigns SET estado='pausada', updated_at=NOW() WHERE user_id=$1 AND estado='archivada' AND id = ANY($2::int[])`, [uid, ok]);
+    } else if (act === 'folder') {
+      let fid = b.folder_id ? parseInt(b.folder_id) : null;
+      if (fid) { const { rows: [f] } = await pool.query('SELECT id FROM campaign_folders WHERE id=$1 AND user_id=$2', [fid, uid]); if (!f) return res.status(400).json({ error: 'Carpeta no válida' }); }
+      await pool.query('UPDATE campaigns SET folder_id=$3 WHERE user_id=$1 AND id = ANY($2::int[])', [uid, ok, fid]);
+    } else return res.status(400).json({ error: 'Acción no válida' });
+    const { rows } = await pool.query('SELECT * FROM campaigns WHERE user_id=$1 AND id = ANY($2::int[])', [uid, ok]);
+    res.json({ ok: true, campaigns: rows });
+  } catch (e) { console.error('[cmp] bulk', e.message); res.status(500).json({ error: 'No se pudo aplicar' }); }
+});
+// Duplicar una campaña: copia sus datos y sus secuencias con todos los pasos — SIN contactos y todo en borrador.
+app.post('/api/campaigns/:id/duplicate', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cx = await pool.connect();
+  try {
+    const { rows: [src] } = await cx.query('SELECT * FROM campaigns WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+    if (!src) return res.status(404).json({ error: 'Campaña no encontrada' });
+    const base = String(src.nombre || '').replace(_RE_COD, '').trim() + ' (copia)';
+    const { rows: [nc] } = await cx.query(
+      `INSERT INTO campaigns (user_id,outbound_client_id,nombre,estado,mercado,icp,canal,canal_secundario,objetivo,fecha_inicio,notas,created_by,tags,folder_id)
+       VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12) RETURNING *`,
+      [uid, src.outbound_client_id, base, src.mercado || '', src.icp || '', src.canal || '', src.canal_secundario || '', src.objetivo || '', src.notas || '', (req.user && req.user.id) || null, src.tags || [], src.folder_id || null]);
+    const cfgCopia = src.config && Object.keys(src.config).length ? { ...src.config, fin_aplicado: false } : {};
+    nc.nombre = (await cx.query('UPDATE campaigns SET nombre=$1, config=$3::jsonb WHERE id=$2 RETURNING nombre', [await _conCodigoCampana(nc.id, nc.outbound_client_id, base), nc.id, JSON.stringify(cfgCopia)])).rows[0].nombre;
+    const { rows: seqs } = await cx.query('SELECT * FROM sequences WHERE campaign_id=$1 AND user_id=$2 ORDER BY id', [src.id, uid]);
+    let nSeq = 0;
+    for (const s of seqs) {
+      const { rows: [ns] } = await cx.query(
+        'INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera,rotacion_empresa,rotacion_empresa_paso) ' +
+        "VALUES ($1,$2,$3,$4,$5,'draft',$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,FALSE,$15,$16,$17,$18,FALSE,$19,$20) RETURNING *",
+        [uid, s.outbound_client_id, nc.id, s.nombre, s.objetivo || '', s.timezone || '', s.drip_per_day || 0, s.send_days, s.daily_limit || 0, s.mercado || '', s.icp || '', s.notas || '',
+         s.send_mode, s.send_interval_min, s.preferred_channel, s.target_role_1 || '', s.target_role_2 || '', s.nurture_days, !!s.rotacion_empresa, s.rotacion_empresa_paso || 0]);
+      const { rows: steps } = await cx.query('SELECT * FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC', [s.id]);
+      const map = new Map();
+      for (const st of steps) {
+        const { rows: [n] } = await cx.query(
+          'INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,orden,variants,variant_mode,variant_field,espera_dias,hora,cond,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion) ' +
+          'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id',
+          [uid, ns.id, st.dia, st.canal, st.titulo || '', st.plantilla || '', st.orden || 0, JSON.stringify(st.variants || []), st.variant_mode || 'off', st.variant_field || '', st.espera_dias || 0,
+           st.hora || '', st.cond || '', st.accion || '', st.asunto || '', !!st.cc_off, !!st.reply_to_prev, st.post_dias || 0, st.reaccion || '']);
+        map.set(st.id, n.id);
+      }
+      for (const st of steps) {
+        const c = st.cond_step_id ? map.get(st.cond_step_id) : null, r = st.reply_to_step_id ? map.get(st.reply_to_step_id) : null;
+        if (c || r) await cx.query('UPDATE sequence_steps SET cond_step_id=$1, reply_to_step_id=$2 WHERE id=$3', [c || null, r || null, map.get(st.id)]);
+      }
+      const nn = await _conCodigoSec(nc.id, s.nombre, ns.id);
+      if (nn !== ns.nombre) await cx.query('UPDATE sequences SET nombre=$1 WHERE id=$2', [nn, ns.id]);
+      nSeq++;
+    }
+    res.status(201).json({ campaign: (await cx.query('SELECT * FROM campaigns WHERE id=$1', [nc.id])).rows[0], sequences_copied: nSeq });
+  } catch (e) { console.error('[cmp] duplicate', e.message); res.status(500).json({ error: 'No se pudo duplicar la campaña' }); }
+  finally { cx.release(); }
+});
+
+// Guardar una campaña (su secuencia) como template propio: va a la MISMA biblioteca de «Plantillas» (scope «mis»),
+// con el flujo en el mismo formato (pasos, esperas en días y ramas por condición) que ya sabe copiar «Usar este template».
+app.post('/api/campaigns/:id/save-template', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, b = req.body || {};
+    const { rows: [c] } = await pool.query('SELECT * FROM campaigns WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+    if (!c) return res.status(404).json({ error: 'Campaña no encontrada' });
+    const { rows: seqs } = await pool.query('SELECT id, nombre FROM sequences WHERE campaign_id=$1 AND user_id=$2 ORDER BY id', [c.id, uid]);
+    if (!seqs.length) return res.status(400).json({ error: 'Esta campaña aún no tiene secuencias que guardar.' });
+    const sid = parseInt(b.sequence_id) || (seqs.length === 1 ? seqs[0].id : 0);
+    if (!sid || !seqs.some(s => s.id === sid)) return res.status(400).json({ error: 'Elige qué secuencia guardar como template', secuencias: seqs });
+    const { rows: st } = await pool.query('SELECT * FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC', [sid, uid]);
+    if (!st.length) return res.status(400).json({ error: 'La secuencia no tiene pasos.' });
+    const TIPO = s => s.canal === 'linkedin' ? ({ invite: 'invite', invite_nota: 'invite', visita: 'visit', mensaje: 'message', inmail: 'inmail' }[s.accion] || 'message') : (s.canal === 'email' ? 'email' : (s.canal === 'whatsapp' ? 'whatsapp' : (s.canal === 'call' ? 'call' : 'task')));
+    const byId = new Map(st.map(s => [s.id, s]));
+    const POS = { opened: 1, clicked: 1, replied: 1 }, NEG = { not_opened: 1, not_clicked: 1, no_reply: 1 };
+    const KEY = (s) => {
+      const ref = byId.get(s.cond_step_id);
+      const base = String(s.cond || '').replace(/^not_/, '').replace(/^no_reply$/, 'replied');
+      if (ref && ref.canal === 'email') return 'email_' + (base === 'opened' ? 'opened' : base === 'clicked' ? 'clicked' : 'replied');
+      if (ref && ref.canal === 'linkedin' && /invite/.test(ref.accion || '')) return 'invite_accepted';
+      return 'replied';
+    };
+    const items = []; let prevDia = 1, last = null;
+    st.forEach((s, i) => {
+      const vs = Array.isArray(s.variants) ? s.variants.filter(v => v && (v.cuerpo || v.asunto)) : [];
+      const step = { k: 'step', id: 'stp_' + s.id, tipo: TIPO(s), nombre: s.titulo || '', espera: i === 0 ? 0 : Math.max(0, (s.dia || 1) - prevDia), versiones: vs.length ? vs.map(v => ({ asunto: v.asunto || '', cuerpo: v.cuerpo || '' })) : [{ asunto: s.asunto || '', cuerpo: s.plantilla || '' }] };
+      prevDia = s.dia || 1;
+      if ((POS[s.cond] || NEG[s.cond]) && s.cond_step_id) {
+        const gk = KEY(s) + ':' + s.cond_step_id;
+        if (last && last.gk === gk) last.item[POS[s.cond] ? 'si' : 'no'].push(step);
+        else { const item = { k: 'cond', cond: KEY(s), dias: 0, texto: '', si: [], no: [] }; item[POS[s.cond] ? 'si' : 'no'].push(step); items.push(item); last = { gk, item }; }
+      } else { items.push(step); last = null; }
+    });
+    const solo = st.every(s => s.canal === 'email');
+    const titulo = String(b.titulo || '').trim().slice(0, 140) || String(c.nombre || '').replace(_RE_COD, '').trim();
+    const { rows: [u] } = await pool.query('SELECT name FROM users WHERE id=$1', [(req.user && req.user.id) || 0]);
+    const { rows: [t] } = await pool.query(
+      `INSERT INTO lm_campaign_templates (user_id, scope, tipo, idioma, titulo, autor_nombre, pasos, descripcion) VALUES ($1,'mis',$2,'es',$3,$4,$5::jsonb,$6) RETURNING id, titulo`,
+      [uid, solo ? 'solo_emails' : 'multicanal', titulo, (u && u.name) || '', JSON.stringify(items), 'Guardado desde la campaña «' + c.nombre + '».']);
+    res.status(201).json({ ok: true, template: t, pasos: st.length });
+  } catch (e) { console.error('[cmp] save-template', e.message); res.status(500).json({ error: 'No se pudo guardar el template' }); }
+});
+
+// ── Fila de outreach (como la de lemlist): lo que se hizo y lo que está por hacerse un día, por canal ──
+// LinkedIn: acciones de la extensión (li_actions). Email: mensajes de secuencias (enviados, programados, por aprobar, fallidos).
+// Lo que sigue pendiente de días anteriores se muestra en HOY (sigue en la fila).
+app.get('/api/lm/outreach-queue', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId;
+    const tz = (await _tzOfUser(req.user && req.user.id)) || 'America/Lima';
+    const q = req.query || {};
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(q.day || '') ? q.day : (await pool.query(`SELECT (NOW() AT TIME ZONE $1)::date::text d`, [tz])).rows[0].d;
+    const camp = parseInt(q.campaign) || 0;
+    const [li, em] = await Promise.all([
+      pool.query(`
+        SELECT a.id, a.tipo, a.estado, a.error, a.detalle, a.contact_id, a.sequence_id,
+               COALESCE(a.done_at, a.not_before, a.created_at) AS cuando,
+               k.nombre, k.apellido, k.empresa_nombre, s.nombre AS seq_nombre, s.campaign_id, c.nombre AS camp_nombre, la.nombre AS remitente, a.account_id
+          FROM li_actions a
+          JOIN lm_contacts k ON k.id=a.contact_id
+          LEFT JOIN sequences s ON s.id=a.sequence_id
+          LEFT JOIN campaigns c ON c.id=s.campaign_id
+          LEFT JOIN li_accounts la ON la.id=a.account_id
+         WHERE a.user_id=$1 AND a.tipo IN ('invite','message','visit','inmail') AND a.estado <> 'cancelled'
+           AND (CASE WHEN a.estado IN ('queued','taken') THEN GREATEST((COALESCE(a.not_before,a.created_at) AT TIME ZONE $2)::date, (NOW() AT TIME ZONE $2)::date)
+                     ELSE (COALESCE(a.done_at,a.created_at) AT TIME ZONE $2)::date END) = $3::date
+           AND ($4::int = 0 OR s.campaign_id = $4)
+         ORDER BY cuando DESC LIMIT 600`, [uid, tz, day, camp]),
+      pool.query(`
+        SELECT m.id, m.estado, m.asunto, m.error, m.contact_id, m.sequence_id, m.mailbox_id,
+               COALESCE(m.sent_at, m.scheduled_at, m.created_at) AS cuando,
+               k.nombre, k.apellido, k.empresa_nombre, s.nombre AS seq_nombre, s.campaign_id, c.nombre AS camp_nombre, mb.email AS remitente
+          FROM lm_messages m
+          JOIN lm_contacts k ON k.id=m.contact_id
+          LEFT JOIN sequences s ON s.id=m.sequence_id
+          LEFT JOIN campaigns c ON c.id=s.campaign_id
+          LEFT JOIN lm_mailboxes mb ON mb.id=m.mailbox_id
+         WHERE m.user_id=$1 AND m.sequence_id IS NOT NULL AND m.estado <> 'omitido'
+           AND (CASE WHEN m.estado IN ('awaiting','scheduled') THEN GREATEST((COALESCE(m.scheduled_at,m.created_at) AT TIME ZONE $2)::date, (NOW() AT TIME ZONE $2)::date)
+                     ELSE (COALESCE(m.sent_at,m.created_at) AT TIME ZONE $2)::date END) = $3::date
+           AND ($4::int = 0 OR s.campaign_id = $4)
+         ORDER BY cuando DESC LIMIT 600`, [uid, tz, day, camp]),
+    ]);
+    const items = [
+      ...li.rows.map(r => ({ canal: 'linkedin', id: 'l' + r.id, tipo: r.tipo, hecho: r.estado === 'done', estado: r.estado, error: r.error || '', cuando: r.cuando, contact_id: r.contact_id, prospecto: [r.nombre, r.apellido].filter(Boolean).join(' '), empresa: r.empresa_nombre || '', campaign_id: r.campaign_id, campana: r.camp_nombre || r.seq_nombre || '', remitente: r.remitente || '', sender_k: r.account_id ? 'linkedin:' + r.account_id : '' })),
+      ...em.rows.map(r => ({ canal: 'email', id: 'e' + r.id, tipo: 'email', hecho: ['sent', 'replied', 'bounced'].includes(r.estado), estado: r.estado, error: r.error || '', asunto: r.asunto || '', cuando: r.cuando, contact_id: r.contact_id, prospecto: [r.nombre, r.apellido].filter(Boolean).join(' '), empresa: r.empresa_nombre || '', campaign_id: r.campaign_id, campana: r.camp_nombre || r.seq_nombre || '', remitente: r.remitente || '', sender_k: r.mailbox_id ? 'email:' + r.mailbox_id : '' })),
+    ].sort((a, b) => new Date(b.cuando) - new Date(a.cuando));
+    const cnt = c => ({ hechos: items.filter(i => i.canal === c && i.hecho).length, total: items.filter(i => i.canal === c).length });
+    res.json({ day, tz, items, resumen: { email: cnt('email'), linkedin: cnt('linkedin') } });
+  } catch (e) { console.error('[outreach-queue]', e.message); res.status(500).json({ error: 'No se pudo cargar la fila' }); }
+});
+
 // ── Secuencias + pasos (Fase 3) ────────────────────────────────────
 const SEQ_ESTADOS  = ['draft', 'activa', 'pausada', 'completada', 'archivada'];
 const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
@@ -11820,7 +12156,7 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
 app.post('/api/sequences', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
-  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
   if (estado === 'activa') return res.status(400).json({ error: 'Una secuencia nueva empieza en borrador: crea los pasos, añade prospectos y luego lánzala.' });
   try {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
@@ -11915,7 +12251,7 @@ app.post('/api/sequences/:id/estado', requireAuth, async (req, res) => {
 app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
-  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
   try {
     const { rows: [_old] } = await pool.query('SELECT estado FROM sequences WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
     if (estado === 'activa' && _old && _old.estado !== 'activa') {
