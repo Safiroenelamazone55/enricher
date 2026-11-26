@@ -871,9 +871,28 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         const tz1 = a0.tz || DEF.tz, { rows: ih } = await pool.query("SELECT ((NOW() AT TIME ZONE $3)::date - (done_at AT TIME ZONE $3)::date) AS ago, COUNT(*)::int AS n FROM li_actions WHERE sequence_id=$1 AND account_id = ANY($2::int[]) AND tipo='invite' AND estado='done' AND done_at >= (((NOW() AT TIME ZONE $3)::date - 6)::timestamp AT TIME ZONE $3) GROUP BY 1", [sid, cuentas.map(a => a.id), tz1]);
         ih.forEach(r => { const ago = Number(r.ago); if (ago >= 1 && ago <= 6) inv_hist[6 - ago] = r.n; });
       }
+      // Lo que de verdad pasó en los últimos 7 días (todas las acciones de las cuentas del cliente) y cuánto cabe aún HOY en lo que queda de horario
+      const pasado = []; let resto_hoy = null;
+      if (cuentas.length) {
+        const tz2 = a0.tz || DEF.tz, dias2 = a0.dias || DEF.dias, lpN = localParts(new Date(), tz2);
+        const { rows: ph } = await pool.query("SELECT ((NOW() AT TIME ZONE $2)::date - (done_at AT TIME ZONE $2)::date) AS ago, tipo, COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='done' AND tipo IN ('visit','invite','message','inmail','react','follow','comment') AND done_at >= (((NOW() AT TIME ZONE $2)::date - 7)::timestamp AT TIME ZONE $2) GROUP BY 1,2", [cuentas.map(a => a.id), tz2]);
+        for (let ago = 7; ago >= 1; ago--) {
+          const t = new Date(Date.parse(lpN.ymd + 'T00:00:00Z') - ago * 864e5), dow = t.getUTCDay() === 0 ? 7 : t.getUTCDay(), row = { ymd: t.toISOString().slice(0, 10), laborable: dias2.includes(dow), vis: 0, inv: 0, msg: 0, inmail: 0, otros: 0, total: 0 };
+          ph.filter(r => Number(r.ago) === ago).forEach(r => { const k = { visit: 'vis', invite: 'inv', message: 'msg', inmail: 'inmail' }[r.tipo] || 'otros'; row[k] += r.n; row.total += r.n; });
+          pasado.push(row);
+        }
+        resto_hoy = 0;
+        for (const a of cuentas) {
+          const lp = localParts(new Date(), a.tz || DEF.tz);
+          if (!(a.dias || DEF.dias).includes(lp.dow) || !['activa'].includes(a.estado)) continue;
+          const pd = perfilDia(a, lp.ymd); let h = pd.fin - Math.max(lp.hour, pd.ini);
+          if (pd.pausa && lp.hour < pd.pausa[1]) h -= pd.pausa[1] - Math.max(lp.hour, pd.pausa[0]);
+          if (h > 0) resto_hoy += Math.floor(h * 3600 / (Math.max(20, a.gap_min || 300) * 1.1));
+        }
+      }
       // Ritmo máximo por horario y espera mínima entre acciones (una sola acción a la vez por cuenta): ~1,5 h menos por el arranque/cierre aleatorio y el descanso
       const ritmo_max = cuentas.length ? cuentas.reduce((t, a) => t + Math.floor(Math.max(1, (a.hora_fin - a.hora_ini) - ((a.hora_fin - a.hora_ini) >= 6 ? 1.5 : 0.6)) * 3600 / (Math.max(20, a.gap_min || 300) * 1.1)), 0) : null;
-      res.json({ avance: av, hoy, inv_hist, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+      res.json({ avance: av, hoy, inv_hist, pasado, resto_hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
     } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
   });
 

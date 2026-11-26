@@ -26686,9 +26686,10 @@ const LeadManagerModule = (() => {
       const rs = (P.descontar !== false && d.otras) ? d.otras.reservado : null;
       if (rs) { let sumR = 0; Object.keys(cap).forEach(k => { const rr = Math.round(rs[k] || 0); cap[k] = Math.max(0, cap[k] - rr); sumR += rr; }); total = Math.max(0, total - sumR); }
       const semana = Math.max(0, Math.round(c.inv_semana * f) - (rs ? Math.round((rs.inv || 0) * 5) : 0)), invSem = invHist.slice(-6).reduce((a, b) => a + b, 0);
-      let restTot = total, restInv = Math.max(0, semana - invSem);
+      let restTot = (i === 0 && d.resto_hoy != null) ? Math.min(total, Object.values(d.hoy || {}).reduce((x, y) => x + y, 0) + d.resto_hoy) : total, restInv = Math.max(0, semana - invSem);
       const rest = { ...cap };
       row.capTipo = cap; row.capTotal = total;
+      if (i === 0 && d.resto_hoy != null) { const hh = Object.values(d.hoy || {}).reduce((x, y) => x + y, 0); total = Math.min(total, hh + d.resto_hoy); row.capTotal = total; restTot = Math.min(restTot, total); }
       if (i === 0 && d.hoy) { let sh = 0; Object.keys(cap).forEach(k => { const h = Math.min(rest[k], d.hoy[k] || 0); if (h > 0) { rest[k] -= h; sh += h; row.hechas[k] = h; if (k === 'inv') { restInv = Math.max(0, restInv - h); row._inv = h; } } }); restTot = Math.max(0, restTot - sh); row.hechasTot = sh; }
       // las tareas vencidas hasta hoy, de la más antigua a la más nueva; las de email/llamada no gastan tope
       let guard = 0;
@@ -26730,6 +26731,19 @@ const LeadManagerModule = (() => {
   }
   const _capF = t => t.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' });
   function _capHtml(id, s) { return `<div class="cap" id="cap-wrap"><div id="cap-body">${_capBody()}</div></div>`; }
+  // Lo real: qué hicieron las cuentas en los últimos 7 días (se lee de lo ya ejecutado, no es una estimación)
+  function _capPasado(d, tipos) {
+    const P = d.pasado || []; if (!P.length || d.sin_cuenta) return '';
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], lab = y => { const t = new Date(y + 'T00:00:00Z'); return dias[t.getUTCDay()] + ' ' + t.getUTCDate(); };
+    const cols = [['vis', 'Visitas'], ['inv', 'Invitaciones'], ['msg', 'Mensajes'], ['inmail', 'InMail']].filter(c => tipos.includes(c[0]) || P.some(x => x[c[0]] > 0));
+    const hechoTot = P.reduce((a, x) => a + x.total, 0), lab2 = P.filter(x => x.laborable);
+    const sin = lab2.filter(x => x.total === 0).length;
+    const filas = P.map(x => `<div style="grid-template-columns:70px repeat(${cols.length + 1}, minmax(0,1fr)) 120px" class="cap-pr${x.laborable ? '' : ' is-off'}"><span class="cap-pd">${lab(x.ymd)}</span>${cols.map(c => `<span>${x.laborable || x[c[0]] ? x[c[0]] : '·'}</span>`).join('')}<span><b>${x.laborable || x.total ? x.total : '·'}</b></span><span class="cap-pe ${!x.laborable ? '' : x.total === 0 ? 'is-bad' : 'is-ok'}">${!x.laborable ? 'Día sin envíos' : x.total === 0 ? 'Sin actividad' : 'Se hizo'}</span></div>`).join('');
+    const aviso = sin ? `<div class="cap-sum" style="margin-bottom:8px"><b>${sin} día${sin === 1 ? '' : 's'} laborable${sin === 1 ? '' : 's'} sin actividad.</b> Lo que no se hizo ya está contado como pendiente en la proyección de abajo. Para que salga solo, deja Chrome abierto con la extensión FLOW activa en horario laboral.</div>` : '';
+    const hoyN = Object.values(d.hoy || {}).reduce((a, b) => a + b, 0);
+    const hoyTxt = d.resto_hoy == null ? '' : `<div class="cap-hoy">Hoy: <b>${hoyN}</b> hechas · caben unas <b>${d.resto_hoy}</b> más en lo que queda de horario${d.resto_hoy === 0 ? ' (lo pendiente pasa al siguiente día hábil)' : ''}.</div>`;
+    return `<div class="cap-pas"><div class="cap-pas__t">Lo que ya pasó · últimos 7 días</div>${aviso}<div style="grid-template-columns:70px repeat(${cols.length + 1}, minmax(0,1fr)) 120px" class="cap-pr cap-ph"><span class="cap-pd">Día</span>${cols.map(c => `<span>${c[1]}</span>`).join('')}<span>Total</span><span>Estado</span></div>${filas}${hoyTxt}</div>`;
+  }
   function _capBody() {
     if (_cap.err) return `<div class="cap-empty"><b>No se pudo cargar</b><span>${esc(_cap.err)}</span></div>`;
     const d = _cap.data, P = _cap.P; if (!d || !P) return '<div class="cap-empty">Calculando…</div>';
@@ -26764,6 +26778,7 @@ const LeadManagerModule = (() => {
       <div class="cap-bn"><div><b>Calentamiento: ${P.calentar ? 'activo' : 'apagado'}</b><span>${P.calentar ? (d.sin_cuenta ? 'Cuenta nueva' : 'Día ' + Math.min((rdB.dia_actual || 0) + 1, rdB.dias) + ' de ' + rdB.dias) + ' · invitaciones: ' + rdB.inicio + ' al empezar, +' + rdB.paso + ' por día · máx. ' + rdB.total_nuevo + ' acciones al día' : 'Se usan los límites completos desde el primer día'}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'linkedin')">Editar en límites del cliente</button></div></div>
       <div class="cap-form">${inp('contactos', 'Contactos', '', 80)}${inp('drip', 'Entran por día', '', 70)}${inp('acep', 'Aceptan', '%', 60)}${inp('resp', 'Responden', '%', 60)}${inp('dias', 'Días', '', 60)}</div>
       ${resumen}
+      ${_capPasado(d, tiposSeq)}
       <div class="cap-chart"><div class="cap-leg"><i class="cap-h"></i>Se hacen ese día <i class="cap-q"></i>Esperan al día siguiente</div><div class="cap-cols">${bars}</div></div>
       <div class="cap-tbl"><div class="cap-tr cap-th"><span>Día</span><span>Entran</span><span>Qué se hace (hecho de su límite)</span><span>Todo el día</span><span>Estado</span></div>${r.dias.map(fila).join('')}</div>`;
   }

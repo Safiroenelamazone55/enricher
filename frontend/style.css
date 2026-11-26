@@ -22864,3 +22864,12 @@ body.ibx-lb-open{overflow:hidden}
 .ll-t .ll-ck { width: 40px; min-width: 40px; max-width: 40px; box-sizing: border-box; }
 .ll-t:has(th.ll-ck:first-child) td:nth-child(2), .ll-t:has(th.ll-ck:first-child) th:nth-child(2) { position: sticky; left: 40px; z-index: 2; background: #fff; }
 .ll-t:has(th.ll-ck:first-child) th:nth-child(2) { z-index: 4; }
+
+/* Capacidad: lo que de verdad pasó */
+.cap-pas { border: 1px solid #E6E1D8; border-radius: 12px; background: #FBFAF7; padding: 12px 16px 10px; margin: 12px 0; }
+.cap-pas__t { font-size: 14px; font-weight: 700; color: #213856; margin-bottom: 8px; }
+.cap-pr { display: grid; grid-template-columns: 70px repeat(5, minmax(0, 1fr)) 120px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #ECE7DF; font-size: 13px; color: #213856; }
+.cap-pr.cap-ph { border-top: 0; color: #98A1AC; font-size: 12px; }
+.cap-pr.is-off { color: #B8B2A8; }
+.cap-pe.is-bad { color: #B42318; font-weight: 600; } .cap-pe.is-ok { color: #067647; font-weight: 600; }
+.cap-hoy { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ECE7DF; font-size: 13px; color: #45586A; }
