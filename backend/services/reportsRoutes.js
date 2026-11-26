@@ -129,7 +129,7 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
       };
       const firstReach = async (cond) => (await Q(`SELECT d::text AS d, COUNT(*)::int AS n FROM (SELECT a.contact_id, (MIN(a.fecha) AT TIME ZONE '${tz}')::date AS d ${base} AND ${cond} GROUP BY a.contact_id) t WHERE d BETWEEN '${from}'::date AND '${to}'::date GROUP BY d ORDER BY d`));
       const timeline = async () => {
-        const [c, r, i, m] = await Promise.all([firstReach(OUT), firstReach(REPLY), firstReach(INTERESADO_EV), firstReach(`(a.tipo='reunion' OR (a.tipo='disposition_change' AND a.nota ~ '→ Reunión[[:space:]]*$'))`)]);
+        const [c, r, i, m] = await Promise.all([Q(`SELECT (a.fecha AT TIME ZONE '${tz}')::date::text AS d, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`), firstReach(REPLY), firstReach(INTERESADO_EV), firstReach(`(a.tipo='reunion' OR (a.tipo='disposition_change' AND a.nota ~ '→ Reunión[[:space:]]*$'))`)]);
         return { contactados: c, respondidos: r, interesados: i, reuniones: m };
       };
       const campaigns = async () => {
