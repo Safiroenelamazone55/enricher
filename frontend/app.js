@@ -37508,13 +37508,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     for (let d = new Date(f + 'T12:00:00'), end = new Date(t + 'T12:00:00'), g = 0; d <= end && g < 1500; d.setDate(d.getDate() + 1), g++) { const b = _rpBucket(loc(d), gran); if (!seen.has(b)) { seen.add(b); out.push(b); } }
     return out;
   }
-  function _rpScrollEnd() { document.querySelectorAll('.rp-bars').forEach(e => { e.scrollLeft = e.scrollWidth; }); }
+  function _rpScrollEnd() { document.querySelectorAll('.rp-bars').forEach(e => { const first = e.querySelector('.rp-bar[data-has]'), max = e.scrollWidth - e.clientWidth; e.style.scrollBehavior = 'auto'; e.scrollLeft = first ? Math.min(max, Math.max(0, first.offsetLeft - 24)) : max; e.style.scrollBehavior = ''; }); }
   function _rpStack(series, gran) {
     const keys = new Set(), maps = series.map(s => { const m = new Map(); s.rows.forEach(r => { const b = _rpBucket(r.d, gran); m.set(b, (m.get(b) || 0) + r.n); keys.add(b); }); return m; });
     if (!keys.size) return _rpEmpty();
     const ks = [...new Set([..._rpKeys(gran), ...keys])].sort();
     const tot = k => maps.reduce((n, m) => n + (m.get(k) || 0), 0), mx = Math.max(1, ...ks.map(tot));
-    return `<div class="rp-bars" title="Desliza hacia la izquierda para ver días anteriores">${ks.map(k => `<div class="rp-bar" title="${k}: ${series.map((s, i) => s.name + ' ' + (maps[i].get(k) || 0)).join(' · ')}"><span class="rp-bar__s" style="height:${Math.max(3, Math.round(tot(k) / mx * 100))}%">${series.map((s, i) => { const v = maps[i].get(k) || 0; return v ? `<i style="flex:${v};background:${s.color}"></i>` : ''; }).join('')}</span><small>${gran === 'M' ? k : k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
+    return `<div class="rp-bars" title="Desliza hacia la izquierda para ver días anteriores">${ks.map(k => `<div class="rp-bar"${tot(k) ? ' data-has="1"' : ''} title="${k}: ${series.map((s, i) => s.name + ' ' + (maps[i].get(k) || 0)).join(' · ')}"><span class="rp-bar__s" style="height:${Math.max(3, Math.round(tot(k) / mx * 100))}%">${series.map((s, i) => { const v = maps[i].get(k) || 0; return v ? `<i style="flex:${v};background:${s.color}"></i>` : ''; }).join('')}</span><small>${gran === 'M' ? k : k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
   }
   function _rpHeat(rows) {
     const g = Array.from({ length: 7 }, () => Array(24).fill(0)); rows.forEach(r => { g[r.dow][r.hr] += r.n; });

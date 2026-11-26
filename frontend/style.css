@@ -22916,6 +22916,6 @@ body.ibx-lb-open{overflow:hidden}
 .inf.rp .rp-hc { white-space: nowrap; }
 
 /* Informes: gráficos con todos los días y desplazamiento hacia atrás */
-.inf.rp .rp-bar { flex: 1 0 34px; }
+.inf.rp .rp-bar { flex: 1 0 30px; }
 .inf.rp .rp-bars { overflow-x: auto; scrollbar-width: thin; padding-bottom: 6px; scroll-behavior: smooth; }
-.inf.rp .rp-bar small { font-size: 11px; white-space: nowrap; }
+.inf.rp .rp-bar small { font-size: 10px; white-space: nowrap; }
