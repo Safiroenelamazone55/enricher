@@ -147,7 +147,7 @@ function efectivos(a, now) {
   }
   // El tope de HOY es un 72–100 % del configurado (distinto cada día): hacer exactamente el máximo todos los días es una huella muy clara.
   const pd = perfilDia(a, lp.ymd), esc = x => Math.max(1, Math.round(x * pd.f));
-  return { inv: esc(inv), inv_semana: a.inv_semana, msg: esc(msg), vis: esc(vis), inmail: esc(inmail), react: esc(DEF.react_dia), follow: esc(DEF.follow_dia), comment: esc(DEF.comment_dia), total: esc(total), dia, calentando, local: lp, perfil: pd };
+  return { inv: esc(inv), inv_semana: a.inv_semana, msg: esc(msg), vis: esc(vis), inmail: esc(inmail), react: esc(a.react_dia != null ? a.react_dia : DEF.react_dia), follow: esc(a.follow_dia != null ? a.follow_dia : DEF.follow_dia), comment: esc(a.comment_dia != null ? a.comment_dia : DEF.comment_dia), total: esc(total), dia, calentando, local: lp, perfil: pd };
 }
 
 // ── ¿Puede la cuenta hacer una acción de este tipo AHORA? ──
@@ -238,6 +238,9 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS linkedin_auto BOOLEAN NOT NULL DEFAULT FALSE`).catch(() => {});
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS li_plan TEXT NOT NULL DEFAULT 'gratis'`).catch(() => {});   // tipo de cuenta de LinkedIn de la campaña: 'gratis' | 'premium' (Premium / Sales Navigator: permite InMail)
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS params JSONB`).catch(() => {});
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS react_dia INTEGER NOT NULL DEFAULT 30`).catch(() => {});
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS follow_dia INTEGER NOT NULL DEFAULT 25`).catch(() => {});
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS comment_dia INTEGER NOT NULL DEFAULT 12`).catch(() => {});
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS inmail_bloqueado_hasta TIMESTAMPTZ`).catch(() => {});
   // Modo de LinkedIn POR CAMPAÑA/SECUENCIA ('asistido' | 'auto'); antes era de la cuenta. Migración única: hereda 'auto' si la cuenta del cliente lo era.
   const { rows: [hadCol] } = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name='sequences' AND column_name='li_modo'`).catch(() => ({ rows: [] }));
@@ -521,6 +524,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
          WHERE id=$1 AND user_id=$2 RETURNING *`,
         [id, req.workspaceOwnerId, v.nombre, v.outbound_client_id, v.modo, v.inv_dia, v.inv_semana, v.msg_dia, v.vis_dia, v.inmail_dia, v.total_dia,
           v.ramp_activo, v.ramp_inicio, v.ramp_paso, v.ramp_dias, v.hora_ini, v.hora_fin, v.tz, v.dias, v.gap_min, v.gap_max, estado, motivo, pausa, ramp, b.accion === 'activar', v.plan]);
+      { const rd = num(b.react_dia, cur.react_dia != null ? cur.react_dia : 30, 0, 60), fd = num(b.follow_dia, cur.follow_dia != null ? cur.follow_dia : 25, 0, 60), cd = num(b.comment_dia, cur.comment_dia != null ? cur.comment_dia : 12, 0, 30);
+        await pool.query(`UPDATE li_accounts SET react_dia=$2, follow_dia=$3, comment_dia=$4 WHERE id=$1`, [id, rd, fd, cd]); a.react_dia = rd; a.follow_dia = fd; a.comment_dia = cd; }
       if (b.accion === 'activar') await pool.query(`UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, [id, String(180 + Math.floor(Math.random() * 360))]);   // sin acción instantánea al activar
       res.json(publica(a));
     } catch (e) { console.error('[li] update', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
@@ -821,7 +826,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const sum = k => cuentas.reduce((t, a) => t + (Number(a[k]) || 0), 0);
       const sinCuenta = !cuentas.length;
       const caps = sinCuenta ? { inv: DEF.inv_dia, inv_semana: DEF.inv_semana, msg: DEF.msg_dia, vis: DEF.vis_dia, inmail: DEF.inmail_dia, react: DEF.react_dia, follow: DEF.follow_dia, comment: DEF.comment_dia, total: DEF.total_dia }
-        : { inv: sum('inv_dia'), inv_semana: sum('inv_semana'), msg: sum('msg_dia'), vis: sum('vis_dia'), inmail: sum('inmail_dia'), react: DEF.react_dia * cuentas.length, follow: DEF.follow_dia * cuentas.length, comment: DEF.comment_dia * cuentas.length, total: sum('total_dia') };
+        : { inv: sum('inv_dia'), inv_semana: sum('inv_semana'), msg: sum('msg_dia'), vis: sum('vis_dia'), inmail: sum('inmail_dia'), react: sum('react_dia'), follow: sum('follow_dia'), comment: sum('comment_dia'), total: sum('total_dia') };
       const a0 = cuentas[0];
       const ramp = a0 && a0.ramp_activo ? { activo: true, inicio: a0.ramp_inicio, paso: a0.ramp_paso, dias: a0.ramp_dias, dia_actual: Math.max(0, daysBetween(String(a0.ramp_desde || '').slice(0, 10) || localParts(new Date(), a0.tz).ymd, localParts(new Date(), a0.tz).ymd)), total_nuevo: DEF.total_nuevo } : { activo: false };
       const { rows: [ct] } = await pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE estado='activo')::int AS activos FROM lm_contact_sequences WHERE sequence_id=$1`, [sid]);

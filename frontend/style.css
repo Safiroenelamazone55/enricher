@@ -22787,3 +22787,9 @@ body.ibx-lb-open{overflow:hidden}
 .cap-form { margin-top: 12px; }
 /* en el panel incrustado el scroll es uno solo (el del panel), no uno dentro de otro */
 .lim2-emb .mbh-body, .lim2-emb .lim-scroll, .lim2-emb [class$="__body"], .lim2-emb .fin-pi-form { max-height: none !important; overflow: visible !important; }
+
+.lim2-days { display: inline-flex; gap: 4px; flex: none; } .lim2-days label { cursor: pointer; } .lim2-days input { display: none; }
+.lim2-days span { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 1px solid #E0DAD0; border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600; color: #6B7280; }
+.lim2-days input:checked + span { background: #213856; border-color: #213856; color: #fff; }
+.lim2-sel--in { width: 230px; flex: none; background: #fff; border: 1px solid #E0DAD0; color: #213856; padding: 0 10px; }
+.lim2-mut { font-weight: 500; color: #98A1AC; font-size: 14px; margin-left: 6px; }

@@ -24708,6 +24708,10 @@ const LeadManagerModule = (() => {
       ]);
       const em = emR.ok ? await emR.json() : { email: [] };
       _lim.mail = em.email || [];
+      _lim.wapps = em.whatsapp || [];
+      try { const r = await apiFetch(`${API}/lm/send-settings`); _lim.es = r.ok ? await r.json() : null; } catch (_) { _lim.es = null; }
+      _lim.wa = {};
+      await Promise.all(_lim.wapps.map(async w => { try { const r = await apiFetch(`${API}/wa/connections/${w.id}/cola?ligero=1`); const d = r.ok ? await r.json() : null; _lim.wa[w.id] = d && d.ajustes ? d.ajustes : null; } catch (_) { _lim.wa[w.id] = null; } }));
       _lim.li = (_li.accs || []).filter(a => a.outbound_client_id === clientId);
       await Promise.all(_lim.mail.map(async mb => {
         try { const r = await apiFetch(`${API}/lm/mailboxes/${mb.id}/ramp`); _lim.ramp[mb.id] = r.ok ? await r.json() : null; } catch (_) { _lim.ramp[mb.id] = null; }
@@ -24745,8 +24749,12 @@ const LeadManagerModule = (() => {
         <div class="lim2-box"><div class="lim2-box__t">1. Elige una dirección de envío de email</div>
           <select class="lim2-sel" onchange="LeadManagerModule.limMbPick(this.value)"${_lim.mail.length ? '' : ' disabled'}>${_lim.mail.length ? _lim.mail.map(m => `<option value="${m.id}"${m.id === _lim.mbSel ? ' selected' : ''}>${esc(m.email)}</option>`).join('') : '<option>Este cliente no tiene buzones de correo conectados</option>'}</select></div>
         ${selMb ? _limMailCard(selMb) : ''}
+        ${_limEsHtml()}
         <h4 class="lim2-h4">Límites para los pasos de LinkedIn</h4>
-        ${_lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="lim2-box"><div class="lim2-hint" style="margin:0">Este cliente no tiene cuentas de LinkedIn conectadas.</div></div>'}`;
+        ${_lim.li.length ? _lim.li.map(_limLiCard).join('') : '<div class="lim2-box"><div class="lim2-hint" style="margin:0">Este cliente no tiene cuentas de LinkedIn conectadas.</div></div>'}
+        <h4 class="lim2-h4">Límites de WhatsApp</h4>
+        ${(_lim.wapps || []).length ? _lim.wapps.map(_limWaCard).join('') : '<div class="lim2-box"><div class="lim2-hint" style="margin:0">Este cliente no tiene líneas de WhatsApp conectadas.</div></div>'}
+        <datalist id="lim-tzs">${(() => { try { return _tzIndex().filter(e => !e.tz.startsWith('Etc/')).map(e => '<option value="' + esc(e.tz) + '">' + esc(e.label) + '</option>').join(''); } catch (_) { return ''; } })()}</datalist>`;
       return;
     }
     root.innerHTML = top + `<h4 class="lim2-h4">Información del cliente</h4>
@@ -24784,6 +24792,57 @@ const LeadManagerModule = (() => {
   // «− valor +» como los límites de lemlist
   const _limStp = (id, v, min, max, ph) => `<div class="lim2-stp"><button type="button" onclick="LeadManagerModule.limStep('${id}',-1)">−</button><input id="${id}" type="number" min="${min}" max="${max}" value="${v == null ? '' : v}"${ph ? ' placeholder="' + ph + '"' : ''}><button type="button" onclick="LeadManagerModule.limStep('${id}',1)">+</button></div>`;
   function limStep(id, d) { const el = document.getElementById(id); if (!el) return; let v = parseInt(el.value); if (isNaN(v)) v = parseInt(el.placeholder) || 0; el.value = Math.max(+el.min || 0, Math.min(+el.max || 9999, v + d)); }
+  // Límites generales de envío de email (de toda la cuenta de Nova): /lm/send-settings
+  function _limEsHtml() {
+    const e = _lim.es; if (!e) return '';
+    const r2 = (lbl, ctl, sub) => `<div class="lim2-r2"><div class="lim2-r2__l">${lbl}${sub ? `<small>${sub}</small>` : ''}</div>${ctl}</div>`;
+    return `<h4 class="lim2-h4">Límites generales de envío de email</h4><p class="lim2-sub">Valen para todos los buzones y clientes de tu cuenta de Nova.</p>
+      <div class="lim2-box">
+        ${r2('Número máximo de emails por día en total', _limStp('lim-es-daily', e.daily_limit, 1, 200))}
+        ${r2('Espera entre un email y el siguiente (segundos)', _limStp('lim-es-thr', e.throttle_seconds, 30, 3600))}
+        ${r2('Empieza a enviar a las (hora)', _limStp('lim-es-wi', e.window_start, 0, 23))}
+        ${r2('Termina de enviar a las (hora)', _limStp('lim-es-we', e.window_end, 1, 24))}
+        ${r2('Enviar también en fin de semana', `<label class="rp-sw"><input type="checkbox" id="lim-es-wk"${e.send_weekends ? ' checked' : ''}><span></span></label>`)}
+        ${r2('Zona horaria del horario de envío', `<input class="lim2-sel lim2-sel--in" list="lim-tzs" id="lim-es-tz" value="${esc(e.timezone || '')}" autocomplete="off">`)}
+        <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limEsSave()">Guardar</button><span id="lim-es-msg" class="mbh-msg"></span></div></div>`;
+  }
+  async function limEsSave() {
+    const e = _lim.es, g = id => document.getElementById(id), msg = g('lim-es-msg'); if (!e) return;
+    const body = { ...e, daily_limit: +g('lim-es-daily').value, throttle_seconds: +g('lim-es-thr').value, window_start: +g('lim-es-wi').value, window_end: +g('lim-es-we').value, send_weekends: g('lim-es-wk').checked, timezone: g('lim-es-tz').value.trim() || e.timezone };
+    try { new Intl.DateTimeFormat('en-US', { timeZone: body.timezone }); } catch (_) { if (msg) msg.textContent = 'Zona horaria no válida'; return; }
+    if (!(body.window_end > body.window_start)) { if (msg) msg.textContent = 'La hora final debe ser mayor que la inicial'; return; }
+    try { const r = await apiFetch(`${API}/lm/send-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); _lim.es = d; if (msg) msg.textContent = '✓ Guardado'; } catch (er) { if (msg) msg.textContent = 'No se pudo guardar: ' + er.message; }
+  }
+  // Límites de cada línea de WhatsApp (el mismo «ritmo de envío» de la línea)
+  function _limWaCard(w) {
+    const A = (_lim.wa || {})[w.id]; if (!A) return `<div class="lim2-box"><div class="lim2-hint" style="margin:0">No se pudieron cargar los límites de ${esc(w.nombre || w.numero || 'la línea')}.</div></div>`;
+    const r2 = (lbl, ctl, sub) => `<div class="lim2-r2"><div class="lim2-r2__l">${lbl}${sub ? `<small>${sub}</small>` : ''}</div>${ctl}</div>`, p = `lim-wa-${w.id}-`;
+    const ok = w.estado === 'conectado';
+    return `<div class="lim2-box"><div class="lim2-box__h"><b>${esc(w.nombre || w.numero || 'Línea')} <span class="lim2-mut">${esc(w.numero || '')}</span></b><span class="cc-chip ${ok ? 'ok' : 'warn'}">${ok ? 'Conectada' : esc(w.estado || '—')}</span></div>
+      ${r2('Un mensaje cada (minutos)', _limStp(p + 'int', A.intervalo_min, 3, 720), 'Nunca más rápido que uno cada 3 minutos.')}
+      ${r2('Variación del intervalo (%)', _limStp(p + 'jit', A.jitter_pct, 0, 80), 'Para que los envíos no salgan a intervalos exactos.')}
+      ${r2('Número máximo de mensajes de WhatsApp en 24 h', _limStp(p + 'tope', A.tope_diario, 1, 500))}
+      ${r2('Empieza a enviar a las (hora, del contacto)', _limStp(p + 'hi', A.hora_ini, 0, 23))}
+      ${r2('Termina de enviar a las (hora, del contacto)', _limStp(p + 'hf', A.hora_fin, 1, 24))}
+      ${r2('Días de envío', '<div class="lim2-days">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, k) => `<label><input type="checkbox" id="${p}dia-${k}"${A.dias[k] === '1' ? ' checked' : ''}><span>${d}</span></label>`).join('') + '</div>')}
+      ${r2('Zona horaria de la línea', `<input class="lim2-sel lim2-sel--in" list="lim-tzs" id="${p}tz" value="${esc(A.tz || '')}" autocomplete="off">`)}
+      ${r2('Línea nueva: empezar con pocos y subir cada semana', `<label class="rp-sw"><input type="checkbox" id="${p}ramp"${A.rampa_on ? ' checked' : ''}><span></span></label>`)}
+      ${r2('Mensajes por día al empezar', _limStp(p + 'ri', A.rampa_inicio, 1, 500))}
+      ${r2('Mensajes más por día cada semana', _limStp(p + 'rp', A.rampa_paso, 0, 200))}
+      <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limWaSave(${w.id})">Guardar</button><span id="${p}msg" class="mbh-msg"></span></div></div>`;
+  }
+  async function limWaSave(id) {
+    const p = `lim-wa-${id}-`, g = k => document.getElementById(p + k), msg = g('msg');
+    const dias = Array.from({ length: 7 }, (_, k) => (g('dia-' + k) || {}).checked ? '1' : '0').join('');
+    if (!dias.includes('1')) { if (msg) msg.textContent = 'Elige al menos un día'; return; }
+    const hi = +g('hi').value, hf = +g('hf').value; if (!(hf > hi)) { if (msg) msg.textContent = 'La hora final debe ser mayor que la inicial'; return; }
+    const tz = String(g('tz').value || '').trim(); try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); } catch (_) { if (msg) msg.textContent = 'Zona horaria no válida'; return; }
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${id}/ajustes`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ intervalo_min: +g('int').value, jitter_pct: +g('jit').value, tope_diario: +g('tope').value, hora_ini: hi, hora_fin: hf, tz, dias, rampa_on: g('ramp').checked, rampa_inicio: +g('ri').value, rampa_paso: +g('rp').value }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      if (d && d.ajustes) _lim.wa[id] = d.ajustes; if (msg) msg.textContent = '✓ Guardado';
+    } catch (e) { if (msg) msg.textContent = 'No se pudo guardar: ' + e.message; }
+  }
   function limMbPick(v) { _lim.mbSel = parseInt(v) || 0; _limPaint(); }
   function _limLiCard(a) {
     const r2 = (lbl, ctl, sub) => `<div class="lim2-r2"><div class="lim2-r2__l">${lbl}${sub ? `<small>${sub}</small>` : ''}</div>${ctl}</div>`;
@@ -24800,7 +24859,13 @@ const LeadManagerModule = (() => {
       ${r2('Número máximo de invitaciones en 7 días', stp('inv_semana', 150))}
       ${r2('Número máximo de mensajes de LinkedIn en 24 h', stp('msg_dia', 60))}
       ${r2('Número máximo de InMail en 24 h', stp('inmail_dia', 30))}
+      ${r2('Número máximo de reacciones a publicaciones en 24 h', stp('react_dia', 60))}
+      ${r2('Número máximo de seguimientos de perfil en 24 h', stp('follow_dia', 60))}
+      ${r2('Número máximo de comentarios en publicaciones en 24 h', stp('comment_dia', 30))}
       ${r2('Número máximo de acciones de LinkedIn en total en 24 h', stp('total_dia', 150))}
+      <div class="lim2-div"></div>
+      ${r2('Espera mínima entre una acción y la siguiente (minutos) <small>FLOW sortea cada espera entre el mínimo y el máximo.</small>', _limStp(`lim-li-gapmin-${a.id}`, Math.round((a.gap_min || 300) / 60), 1, 120))}
+      ${r2('Espera máxima entre acciones (minutos)', _limStp(`lim-li-gapmax-${a.id}`, Math.round((a.gap_max || 1200) / 60), 1, 240))}
       <div class="lim2-div"></div>
       ${r2('Calentar la cuenta <small>Empieza con pocas acciones y sube cada día hasta tus límites (cuentas nuevas).</small>', `<label class="rp-sw"><input type="checkbox" id="lim-li-ramp_activo-${a.id}"${a.ramp_activo ? ' checked' : ''}><span></span></label>`)}
       ${r2('Invitaciones el primer día del calentamiento', stp('ramp_inicio', 20, 1))}
@@ -24810,6 +24875,9 @@ const LeadManagerModule = (() => {
       <div class="lim2-div"></div>
       ${r2('Empieza a trabajar a las (hora) <small>En la zona horaria de la cuenta. Los días y la zona de cada campaña están en su configuración.</small>', stp('hora_ini', 23))}
       ${r2('Deja de trabajar a las (hora)', stp('hora_fin', 24, 1))}
+      ${r2('Días de trabajo', '<div class="lim2-days">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, k) => `<label><input type="checkbox" id="lim-li-dia-${a.id}-${k + 1}"${(a.dias || []).includes(k + 1) ? ' checked' : ''}><span>${d}</span></label>`).join('') + '</div>')}
+      ${r2('Zona horaria de la cuenta <small>Los días y la zona de cada campaña se configuran en la campaña.</small>', `<input class="lim2-sel lim2-sel--in" list="lim-tzs" id="lim-li-tz-${a.id}" value="${esc(a.tz || '')}" autocomplete="off">`)}
+      ${r2('Tipo de cuenta de LinkedIn <small>Premium / Sales Navigator permite InMail y más notas de invitación.</small>', `<select class="lim2-sel lim2-sel--in" id="lim-li-plan-${a.id}"><option value="gratis"${a.plan !== 'premium' ? ' selected' : ''}>Gratuita</option><option value="premium"${a.plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator</option></select>`)}
       <div class="ctu-err" id="lim-li-e-${a.id}"></div>
       <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><button class="btn btn--ghost btn--sm" title="Vuelve a empezar el calentamiento desde el día 1" onclick="LeadManagerModule.limLiRestart(${a.id})">Reiniciar calentamiento</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
   }
@@ -24817,7 +24885,10 @@ const LeadManagerModule = (() => {
     const g = k => document.getElementById(`lim-li-${k}-${id}`).value;
     const a = (_li.accs || []).find(x => x.id === id); if (!a) return;
     const body = { nombre: a.nombre, plan: a.plan, tz: a.tz, dias: a.dias || [1, 2, 3, 4, 5], gap_min: a.gap_min, gap_max: a.gap_max, ramp_activo: !!document.getElementById(`lim-li-ramp_activo-${id}`).checked };
-    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'ramp_inicio', 'ramp_paso', 'ramp_dias'].forEach(k => { body[k] = Number(g(k)); });
+    ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'ramp_inicio', 'ramp_paso', 'ramp_dias', 'react_dia', 'follow_dia', 'comment_dia'].forEach(k => { body[k] = Number(g(k)); });
+    body.gap_min = Math.max(1, Number(g('gapmin'))) * 60; body.gap_max = Math.max(1, Number(g('gapmax'))) * 60;
+    const dd = [1, 2, 3, 4, 5, 6, 7].filter(k => (document.getElementById(`lim-li-dia-${id}-${k}`) || {}).checked); if (!dd.length) { const e0 = document.getElementById(`lim-li-e-${id}`); if (e0) e0.textContent = 'Elige al menos un día de trabajo'; return; } body.dias = dd;
+    body.tz = (document.getElementById(`lim-li-tz-${id}`) || {}).value || a.tz; body.plan = (document.getElementById(`lim-li-plan-${id}`) || {}).value || a.plan;
     const errEl = document.getElementById(`lim-li-e-${id}`), msg = document.getElementById(`lim-li-msg-${id}`);
     try {
       const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -45624,7 +45695,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, limEsSave, limWaSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
