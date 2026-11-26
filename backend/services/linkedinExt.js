@@ -829,10 +829,12 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   app.get('/api/li/sequence/:id/capacidad-datos', requireAuth, async (req, res) => {
     try {
       const sid = parseInt(req.params.id, 10), uid = req.workspaceOwnerId;
-      const { rows: [sq] } = await pool.query(`SELECT id, outbound_client_id, drip_per_day, send_days, starts_on, timezone FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid]);
+      const { rows: [sq] } = await pool.query(`SELECT id, outbound_client_id, campaign_id, drip_per_day, send_days, starts_on, timezone FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid]);
       if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
       const { rows: steps } = await pool.query(`SELECT st.id, st.dia, st.canal, st.accion, st.cond, c.canal AS cond_canal, c.accion AS cond_accion FROM sequence_steps st LEFT JOIN sequence_steps c ON c.id = st.cond_step_id WHERE st.sequence_id=$1 ORDER BY st.dia ASC, st.orden ASC, st.id ASC`, [sid]);
-      const { rows: cuentas } = await pool.query(`SELECT * FROM li_accounts WHERE user_id=$1 AND outbound_client_id=$2 AND estado IN ('activa','pausada','desconectada') ORDER BY id`, [uid, sq.outbound_client_id || 0]);
+      // Solo las cuentas que esa campaña puede usar (si eligió remitentes de LinkedIn), igual que hace el motor al enviar
+      const { rows: cuentas } = await pool.query(`SELECT * FROM li_accounts a WHERE a.user_id=$1 AND a.outbound_client_id=$2 AND a.estado IN ('activa','pausada','desconectada')
+         AND (NOT EXISTS (SELECT 1 FROM campaign_senders c1 WHERE c1.campaign_id=$3 AND c1.tipo='linkedin') OR EXISTS (SELECT 1 FROM campaign_senders c2 WHERE c2.campaign_id=$3 AND c2.tipo='linkedin' AND c2.ref_id=a.id AND c2.activo)) ORDER BY a.id`, [uid, sq.outbound_client_id || 0, sq.campaign_id || 0]);
       const sum = k => cuentas.reduce((t, a) => t + (Number(a[k]) || 0), 0);
       const sinCuenta = !cuentas.length;
       const caps = sinCuenta ? { inv: DEF.inv_dia, inv_semana: DEF.inv_semana, msg: DEF.msg_dia, vis: DEF.vis_dia, inmail: DEF.inmail_dia, react: DEF.react_dia, follow: DEF.follow_dia, comment: DEF.comment_dia, total: DEF.total_dia }
@@ -892,7 +894,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       }
       // Ritmo máximo por horario y espera mínima entre acciones (una sola acción a la vez por cuenta): ~1,5 h menos por el arranque/cierre aleatorio y el descanso
       const ritmo_max = cuentas.length ? cuentas.reduce((t, a) => t + Math.floor(Math.max(1, (a.hora_fin - a.hora_ini) - ((a.hora_fin - a.hora_ini) >= 6 ? 1.5 : 0.6)) * 3600 / (Math.max(20, a.gap_min || 300) * 1.1)), 0) : null;
-      res.json({ avance: av, hoy, inv_hist, pasado, resto_hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: sq.send_days || '1111100', starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+      res.json({ avance: av, hoy, inv_hist, pasado, resto_hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: (() => { const m = String(sq.send_days || '1111100').padEnd(7, '0'), dd = a0 ? (a0.dias || DEF.dias) : null; return dd ? m.split('').map((c, i) => (c === '1' && dd.includes(i + 1) ? '1' : '0')).join('') : m; })(), starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
     } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
   });
 
