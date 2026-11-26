@@ -57,6 +57,23 @@ const CONFIG = {
     check_notifications: 'https://www.linkedin.com/notifications/',
   },
 };
+// Versión mínima de la extensión para cada tipo de acción: una versión vieja que sabemos que falla NO debe gastar reintentos ni insistir sobre perfiles reales.
+const EXT_MIN = { invite: '0.10.15', message: '0.10.4', inmail: '0.10.4', follow: '0.10.3', react: '0.10.3', comment: '0.10.3' };
+const vNum = v => String(v || '0').split('.').map(x => parseInt(x, 10) || 0);
+const vMenor = (a, b) => { const x = vNum(a), y = vNum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+// Freno por tipo: si las últimas 3 acciones de ese tipo fallaron (o se omitieron por un motivo técnico) con la versión actual, se detiene ese tipo 6 h.
+// Antes solo contaban los fallos «seguidos» de toda la cuenta y una visita buena los reseteaba, así que un fallo constante de invitaciones nunca frenaba nada.
+const FRENO_H = 6, TRANSITORIAS_FRENO = new Set(['sin_boton_conectar', 'sin_boton_seguir', 'perfil_no_encontrado', 'sin_content_script', 'pagina_lenta']);
+async function tipoFrenado(pool, a, tipo) {
+  const { rows } = await pool.query(`SELECT estado, error, COALESCE(done_at, taken_at) AS t FROM li_actions
+     WHERE account_id=$1 AND tipo=$2 AND estado IN ('done','failed','skipped') AND COALESCE(done_at, taken_at) > COALESCE($3::timestamptz, NOW() - INTERVAL '24 hours')
+     ORDER BY COALESCE(done_at, taken_at) DESC LIMIT 3`, [a.id, tipo, a.ext_version_at]);
+  if (rows.length < 3) return null;
+  const mal = rows.every(r => r.estado === 'failed' || (r.estado === 'skipped' && TRANSITORIAS_FRENO.has(r.error)));
+  if (!mal) return null;
+  const falta = FRENO_H * 3600e3 - (Date.now() - new Date(rows[0].t).getTime());
+  return falta > 0 ? { espera_s: Math.min(3600, Math.ceil(falta / 1000)), error: rows[0].error } : null;
+}
 const FALLOS_PAUSA = 3;          // fallos seguidos que pausan la cuenta (algo cambió o LinkedIn avisa)
 const PAUSA_RESTRICCION_H = 48;  // tras una restricción / aviso de LinkedIn
 const PAUSA_FALLOS_H = 24;
@@ -228,6 +245,7 @@ async function ensure(pool) {
     gap_min INTEGER NOT NULL DEFAULT 300, gap_max INTEGER NOT NULL DEFAULT 1200, fallos_seguidos INTEGER NOT NULL DEFAULT 0,
     ultimo_visto TIMESTAMPTZ, ext_version TEXT NOT NULL DEFAULT '', li_nombre TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratis'`);
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS ext_version_at TIMESTAMPTZ`).catch(() => {});
   await pool.query(`ALTER TABLE li_accounts ALTER COLUMN inmail_dia SET DEFAULT 5, ALTER COLUMN gap_min SET DEFAULT 300, ALTER COLUMN gap_max SET DEFAULT 1200`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS li_slug TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS proxima_accion_at TIMESTAMPTZ`);
@@ -677,7 +695,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     const a = req.liAcc, b = req.body || {};
     try {
       const now = new Date();
-      await pool.query(`UPDATE li_accounts SET ultimo_visto=NOW(), ext_version=$2, li_nombre=CASE WHEN $3 <> '' THEN $3 ELSE li_nombre END WHERE id=$1`, [a.id, String(b.version || '').slice(0, 20), String(b.li_nombre || '').slice(0, 120)]);
+      await pool.query(`UPDATE li_accounts SET ultimo_visto=NOW(), ext_version_at=CASE WHEN ext_version IS DISTINCT FROM $2 THEN NOW() ELSE ext_version_at END, ext_version=$2, li_nombre=CASE WHEN $3 <> '' THEN $3 ELSE li_nombre END WHERE id=$1`, [a.id, String(b.version || '').slice(0, 20), String(b.li_nombre || '').slice(0, 120)]);
+      if (String(b.version || '') && String(b.version) !== String(a.ext_version || '')) { a.ext_version_at = new Date(); a.ext_version = String(b.version); }   // versión nueva: los fallos de la anterior ya no cuentan
       // Identidad: la primera sesión de LinkedIn que se ve queda como la de esta cuenta. Si luego cambia (token pegado en el Chrome
       // equivocado, otra cuenta iniciada), la cuenta se PAUSA y no se ejecuta nada.
       const slugVisto = String(b.li_slug || '').toLowerCase().slice(0, 120);
@@ -712,7 +731,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const modoSeq = {};
       if (seqIds.length) (await pool.query(`SELECT id, timezone, li_modo FROM sequences WHERE id = ANY($1::int[])`, [seqIds])).rows.forEach(r => { if (r.timezone) tzSeq[r.id] = r.timezone; modoSeq[r.id] = r.li_modo === 'auto' ? 'auto' : 'asistido'; });
       modoRes = modoSeq[cola[0].sequence_id] || 'asistido';
-      let mejor = null, espera = 3600, motivo = ''; const oks = [];
+      let mejor = null, espera = 3600, motivo = ''; const oks = []; const frenos = {};
       const rnd = Math.random();
       for (const q of cola) {
         // Si la persona ya respondió, salió o la secuencia se pausó mientras esperaba en la cola, la acción se cancela
@@ -720,6 +739,11 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
           const { rows: [vivo] } = await pool.query(`SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id AND s.estado='activa' WHERE cs.contact_id=$1 AND cs.sequence_id=$2 AND cs.estado='activo'`, [q.contact_id, q.sequence_id]);
           if (!vivo) { await pool.query(`UPDATE li_actions SET estado='cancelled', detalle='La secuencia ya no está activa para esta persona' WHERE id=$1`, [q.id]); continue; }
         }
+        // versión de la extensión demasiado vieja para este tipo de acción: no se entrega (así no se gasta un reintento ni se toca un perfil real)
+        if (EXT_MIN[q.tipo] && vMenor(String(b.version || a.ext_version || ''), EXT_MIN[q.tipo])) { if (900 < espera) { espera = 900; motivo = 'actualiza FLOW a la ' + EXT_MIN[q.tipo] + ' para ' + ({ invite: 'invitaciones', message: 'mensajes', inmail: 'InMail', follow: 'seguir', react: 'reaccionar', comment: 'comentar' }[q.tipo] || q.tipo); } continue; }
+        // freno por fallos repetidos de este tipo
+        if (frenos[q.tipo] === undefined) frenos[q.tipo] = await tipoFrenado(pool, { ...a, ext_version_at: a.ext_version_at }, q.tipo).catch(() => null);
+        if (frenos[q.tipo]) { const fr = frenos[q.tipo]; if (fr.espera_s < espera) { espera = fr.espera_s; motivo = 'frenado por fallos seguidos de este tipo (' + (fr.error || 'error') + '): reintenta solo en unas horas'; } await eventoNuevo(a, 'alerta', '', 'Las últimas 3 acciones de tipo «' + q.tipo + '» fallaron: se detienen 6 h para no insistir y cuidar la cuenta').catch(() => {}); continue; }
         const ev = evaluar(tzSeq[q.sequence_id] ? { ...a, tz: tzSeq[q.sequence_id] } : a, hist, q.tipo, now, rnd, !!(q.nota && q.nota.trim()));
         if (ev.ok) { oks.push(q); if (oks.length >= 8) break; continue; }
         if (ev.espera_s < espera) { espera = ev.espera_s; motivo = ev.motivo; }
