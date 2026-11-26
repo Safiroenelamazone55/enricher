@@ -69,12 +69,31 @@
     for (const ch of texto) { acum += ch; set(acum); await sleep(rnd(25, 90)); if (Math.random() < 0.04) await sleep(rnd(200, 600)); }
   }
 
+  // ── Acciones visibles en la tarjeta del perfil ──
+  // «Conectar» es un enlace con aria-label «Invite X to connect»; se exige esa forma (o el texto exacto) para NO pulsar enlaces como «500+ connections» o «X is a mutual connection».
+  const conectarVisible = root => [...root.querySelectorAll('button, a, [role="button"]')].filter(vis).find(e => {
+    const t = norm(e.innerText), al = norm(e.getAttribute('aria-label'));
+    return /^invite .* to connect$|^invitar a .* a conectar$|^conectar con /.test(al) || T('connect').includes(t);
+  });
+  const pendienteVisible = root => [...root.querySelectorAll('button, a, [role="button"]')].filter(vis).find(e => {
+    const t = norm(e.innerText), al = norm(e.getAttribute('aria-label'));
+    return T('pending').includes(t) || /^pending|^pendiente/.test(al);
+  });
+  const esMas = b => { const t = norm(b.innerText), al = norm(b.getAttribute('aria-label')); return t === 'more' || t === 'más' || t === 'mas' || /^(more|más|mas) actions?$|^más acciones$|^more$/.test(al); };
+  async function abrirMenuMas() {
+    const main = document.querySelector('main') || document, top = main.querySelector('section') || main;
+    const mas = btns(top).find(esMas) || btns(main).find(esMas);
+    if (!mas) return null;
+    mas.click(); await sleep(rnd(700, 1400));
+    return [...document.querySelectorAll('[role="menu"], .artdeco-dropdown__content, .artdeco-dropdown__content-inner')].filter(vis).pop() || null;
+  }
+
   // ── Estado del perfil ──
   function estadoPerfil() {
     const main = document.querySelector('main') || document.body;
     const top = main.querySelector('section') || main;
     const grado = norm(top.innerText).match(/·\s*(1st|1\.º|1\.er|1º|2nd|2\.º|2º|3rd|3\.º|3º)/);
-    return { pend: findBtn(T('pending'), top), con: findBtn(T('connect'), top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: /\/in\//.test(location.pathname) && !!([...main.querySelectorAll('h2')].find(h => (h.innerText || '').trim().length > 1) || main.querySelector('h1')) };
+    return { pend: pendienteVisible(top), con: conectarVisible(top), msg: findBtn(T('message'), top), primerGrado: !!(grado && /^1/.test(grado[1])), hayPerfil: /\/in\//.test(location.pathname) && !!([...main.querySelectorAll('h2')].find(h => (h.innerText || '').trim().length > 1) || main.querySelector('h1')) };
   }
 
   async function invitar(a, asistido) {
@@ -84,12 +103,8 @@
     if (p.pend) return R('omitida', 'ya_pendiente');
     let con = p.con;
     if (!con) {   // «Conectar» a veces está dentro del menú «Más»
-      const main = document.querySelector('main') || document, top = main.querySelector('section') || main;
-      const esMas = b => { const t = norm(b.innerText), al = norm(b.getAttribute('aria-label')); return t === 'more' || t === 'más' || t === 'mas' || /^(more|más|mas) actions?$|^más acciones$|^more$/.test(al); };
-      const mas = btns(top).find(esMas) || btns(main).find(esMas) || findBtn(T('more'), top);
-      if (mas) {
-        mas.click(); await sleep(rnd(700, 1400));
-        const menu = [...document.querySelectorAll('[role="menu"], .artdeco-dropdown__content, .artdeco-dropdown__content-inner')].filter(vis).pop();
+      {
+        const menu = await abrirMenuMas();
         const empieza = el => { const t = norm(el.innerText || el.getAttribute('aria-label')); return T('connect').some(w => t === w || t.startsWith(w + ' ')) && !/(disconnect|desconectar|remove|quitar|eliminar)/.test(t); };
         if (menu) con = [...menu.querySelectorAll('[role="menuitem"], li, button, a, div[role="button"]')].filter(vis).find(empieza) || null;
       }
@@ -206,8 +221,8 @@
     if (findBtn(T('following'), top)) return R('omitida', 'ya_siguiendo', 'Ya sigue a esta persona');
     let seg = findBtn(T('follow'), top);
     if (!seg) {   // «Seguir» a veces está dentro del menú «Más»
-      const mas = findBtn(T('more'), document.querySelector('main') || document);
-      if (mas) { mas.click(); await sleep(rnd(700, 1400)); seg = [...document.querySelectorAll('[role="menuitem"], div.artdeco-dropdown__item, li')].filter(vis).find(x => hasAny(x, T('follow')) && !hasAny(x, T('following'))); }
+      const menu = await abrirMenuMas();
+      if (menu) seg = [...menu.querySelectorAll('[role="menuitem"], div.artdeco-dropdown__item, li, button, a')].filter(vis).find(x => { const t = norm(x.innerText || x.getAttribute('aria-label')); return T('follow').some(w => t === w || t.startsWith(w + ' ')) && !hasAny(x, T('following')); }) || null;
     }
     if (!seg) return R('omitida', 'sin_boton_seguir', 'No hay botón Seguir (perfil sin modo seguir)', { snapshot: snapshot() });
     if (asistido) { seg.scrollIntoView({ block: 'center' }); seg.style.outline = '3px solid #316BFE'; return await esperarUsuario(() => !!findBtn(T('following'), document), 'Pulsa «Seguir».'); }
