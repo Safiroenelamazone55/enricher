@@ -462,7 +462,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
           const v = se.pickVariant({ id: e.step_id, plantilla: e.plantilla, variants: e.variants, variant_mode: e.variant_mode, variant_field: e.variant_field }, ctx);
           texto = se.renderTemplate((v && v.cuerpo) || e.plantilla || '', ctx).replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
           if ((tipo === 'message' || tipo === 'inmail') && !texto) { await pausarInscripcion(e, 'linkedin_sin_texto', 'Secuencia pausada: el paso de mensaje de LinkedIn no tiene texto.'); continue; }
-          if (tipo === 'invite' && e.accion === 'invite_nota' && texto.length > DEF.nota_max) { await pausarInscripcion(e, 'linkedin_nota_larga', `Secuencia pausada: la nota de la invitación mide ${texto.length} caracteres y el máximo es ${DEF.nota_max}.`); continue; }
+          if (tipo === 'invite' && e.accion === 'invite_nota' && texto.length > (acc.plan === 'premium' ? 300 : DEF.nota_max)) { await pausarInscripcion(e, 'linkedin_nota_larga', `Secuencia pausada: la nota de la invitación mide ${texto.length} caracteres y el máximo es ${acc.plan === 'premium' ? 300 : DEF.nota_max}.`); continue; }
         }
         await pool.query(
           `INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
