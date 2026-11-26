@@ -24661,27 +24661,31 @@ const LeadManagerModule = (() => {
     const host = document.getElementById('lim-root'); if (!host) return;
     if (_lim.emb && _lim.emb !== n) { const old = _lim.emb; _lim.emb = n; old.remove(); }
     _lim.emb = n; n.classList.add('lim2-emb'); n.onclick = null;
-    host.innerHTML = '<h3 class="lim2-t">' + _limTitle() + '</h3>' + (_lim.tab === 'cliente' ? '' : '<button class="lim2-back" onclick="LeadManagerModule.limBack()">← Volver</button>');
+    host.innerHTML = '<h3 class="lim2-t">' + _limTitle() + '</h3>' + (_LIM_FORM.includes(_lim.tab) ? '' : '<button class="lim2-back" onclick="LeadManagerModule.limBack()">← Volver</button>');
     host.appendChild(n); host.scrollTop = 0;
   }
   function _limEmbedGone() {
     _lim.emb = null; _limNav(); _limPaint();
-    if (_lim.tab !== 'cliente') setTimeout(() => { if (!_lim.emb && document.getElementById('lim-modal')) _limLoad(_lim.id); }, 0);
+    if (!_LIM_FORM.includes(_lim.tab)) setTimeout(() => { if (!_lim.emb && document.getElementById('lim-modal')) _limLoad(_lim.id); }, 0);
   }
   function limBack() {
     const e = _lim.emb; if (!e) { _limPaint(); return; }
     const x = e.querySelector('.fin-pi-x'); if (x) x.click();
     if (e.isConnected) e.remove();
   }
+  const _LIM_FORM = ['cliente', 'perfil', 'equipo'], _LIM_SEC = { cliente: 'gen', perfil: 'li', equipo: 'team' };
   function _limEnter(t) {
+    if (_lim.emb && _lim.emb.id === 'lm-obc-modal' && _LIM_FORM.includes(t) && _LIM_FORM.includes(_lim.tab)) {
+      _lim.tab = t; _lim.emb.dataset.show = _LIM_SEC[t]; _limNav(); const h = document.querySelector('#lim-root > .lim2-t'); if (h) h.textContent = _limTitle(); const r = document.getElementById('lim-root'); if (r) r.scrollTop = 0; return;
+    }
     _lim.tab = t;
     if (_lim.emb) { const e = _lim.emb; _lim.emb = null; const x = e.querySelector('.fin-pi-x'); if (x) x.click(); if (e.isConnected) e.remove(); }
     _limNav();
-    if (t === 'cliente') { openClientDrawer(_lim.id); return; }   // el formulario se incrusta solo
+    if (_LIM_FORM.includes(t)) { openClientDrawer(_lim.id); return; }   // el formulario se incrusta solo
     _limPaint();
   }
   function limTab(t) { _limEnter(t); }
-  const _limTitle = () => ({ cliente: 'Ajustes del cliente', senders: 'Configuración de envío', limites: 'Límites', portal: 'Portal del cliente' }[_lim.tab] || 'Ajustes del cliente');
+  const _limTitle = () => ({ cliente: 'Ajustes del cliente', perfil: 'Perfil de LinkedIn', equipo: 'Equipo y acceso', senders: 'Configuración de envío', limites: 'Límites', portal: 'Portal del cliente' }[_lim.tab] || 'Ajustes del cliente');
   function limAcc(k) { _lim.acc = _lim.acc || {}; _lim.acc[k] = !_lim.acc[k]; _limAccPaint(); }
   async function _limSenders() { _snd.id = _lim.id; _snd.data = null; await _sndCargar(); if (_lim.tab === 'senders' && !_lim.emb) _limAccPaint(); }
   // Acordeones como «Configuración de envío» de lemlist: Email, LinkedIn, WhatsApp, SMS y llamadas
@@ -24740,9 +24744,11 @@ const LeadManagerModule = (() => {
       lim: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
       po: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
     };
+    I.li = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+    I.team = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
     const av = `<span class="lim2-av">${esc((cli || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>`;
     nav.innerHTML = `<div class="lim2-g">Ajustes del cliente</div>${it('cliente', av, esc(cli))}${it('senders', I.send, 'Configuración de envío')}${it('limites', I.lim, 'Límites')}
-      <div class="lim2-g lim2-g2">Configuración del cliente</div>${it('portal', I.po, 'Portal del cliente')}`;
+      <div class="lim2-g lim2-g2">Configuración del cliente</div>${it('perfil', I.li, 'Perfil de LinkedIn')}${it('equipo', I.team, 'Equipo y acceso')}${it('portal', I.po, 'Portal del cliente')}`;
   }
   function _limPaint() {
     const root = document.getElementById('lim-root'); if (!root) return;
@@ -40489,10 +40495,38 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <button class="btn btn--primary btn--sm" id="obc-save" onclick="LeadManagerModule.saveClient(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear cliente'}</button>
         </div>
       </div></div>`;
+    if (c && document.getElementById('lim-modal')) _obcLemlistRows(m);
     document.body.appendChild(m);
     _obcLoadResp(c?.responsable || '');
     if (c && typeof PermsUI !== 'undefined') PermsUI.clientTeam(c.id);
     setTimeout(() => $('obc-nombre')?.focus(), 60);
+  }
+  // Reordena el formulario del cliente en secciones y filas como «Ajustes de la cuenta» de lemlist (los mismos campos y ids)
+  function _obcLemlistRows(m) {
+    const form = m.querySelector('.fin-pi-form'); if (!form) return;
+    const D = { 'obc-nombre': 'El nombre con el que se identifica al cliente en Nova.', 'obc-estado': 'Pausar o cerrar al cliente también pausa o cierra sus campañas y secuencias.', 'obc-responsable': 'Miembro del equipo a cargo de este cliente.', 'obc-abrev': 'Se usa en los códigos de campaña (ej. GRE). Se genera sola si la dejas vacía.', 'obc-website': 'Sitio web del cliente.', 'obc-tz': 'Define su horario laboral (8–17 h) para enviarle los avisos de seguimiento. Ej. Asia/Kolkata = India.', 'obc-proxima': 'Lo siguiente que hay que hacer con este cliente.', 'obc-from': 'Dirección desde la que se envían los emails (De).', 'obc-cc': 'Recibe copia de los emails que se envían a nombre del cliente.', 'obc-li-cargo': 'Su cargo en su perfil de LinkedIn.', 'obc-li-empresa': 'La empresa que figura en su perfil.', 'obc-li-quehace': 'Una línea sobre qué hace la empresa. Ayuda a la IA a sonar como esa persona.' };
+    const T = { 'obc-nombre': 'Nombre del cliente', 'obc-abrev': 'Abreviatura', 'obc-from': 'Buzón de envío', 'obc-cc': 'CC en emails', 'obc-li-quehace': 'A qué se dedica la empresa' };
+    const rows = {};
+    form.querySelectorAll('label.fin-cfg-field').forEach(l => {
+      const ctl = l.querySelector('input,select'); if (!ctl) return;
+      const id = ctl.id, lbl = (l.querySelector('.fin-cfg-lbl') || {}).textContent || '';
+      const row = document.createElement('div'); row.className = 'lim2-fr';
+      const left = document.createElement('div'); left.className = 'lim2-fr__l';
+      const b = document.createElement('b'); b.textContent = T[id] || lbl.replace(/\s*\(.*\)\s*$/, '').replace(/\*/, '').trim(); left.appendChild(b);
+      const sm = document.createElement('small'); sm.textContent = D[id] || ''; left.appendChild(sm);
+      const right = document.createElement('div'); right.className = 'lim2-fr__r';
+      Array.from(l.children).forEach(ch => { if (ch.classList.contains('fin-cfg-lbl') || ch.classList.contains('seq-drip-hint')) return; right.appendChild(ch); });
+      row.appendChild(left); row.appendChild(right); rows[id] = row;
+    });
+    const sec = (key, title, ids, extra) => { const d = document.createElement('div'); d.className = 'lim2-fsec'; d.dataset.sec = key; const body = ids.map(i => rows[i]).filter(Boolean); d.innerHTML = '<h4 class="lim2-h4">' + title + '</h4>'; const card = document.createElement('div'); card.className = 'lim2-card lim2-card--fr'; body.forEach(r => card.appendChild(r)); if (extra) card.appendChild(extra); d.appendChild(card); return d; };
+    const team = form.querySelector('#obc-team'); if (team) team.removeAttribute('style');
+    const g1 = sec('gen', 'Información del cliente', ['obc-nombre', 'obc-estado', 'obc-responsable', 'obc-abrev', 'obc-website', 'obc-tz', 'obc-proxima']);
+    const g2 = sec('gen', 'Correo', ['obc-from', 'obc-cc']);
+    const l1 = sec('li', 'Perfil de LinkedIn desde el que se comenta e invita', ['obc-li-cargo', 'obc-li-empresa', 'obc-li-quehace']);
+    const lp = document.createElement('p'); lp.className = 'lim2-sub'; lp.textContent = 'Cada cliente tiene su propio LinkedIn personal. La IA de comentarios lo usa para saber quién escribe; no aparece en el texto del comentario.'; l1.insertBefore(lp, l1.children[1]);
+    const t1 = document.createElement('div'); t1.className = 'lim2-fsec'; t1.dataset.sec = 'team'; t1.innerHTML = '<h4 class="lim2-h4">Equipo y acceso</h4>'; const tc = document.createElement('div'); tc.className = 'lim2-card'; if (team) tc.appendChild(team); t1.appendChild(tc);
+    form.innerHTML = ''; [g1, g2, l1, t1].forEach(x => form.appendChild(x));
+    m.dataset.show = _LIM_SEC[_lim.tab] || 'gen';
   }
   // Puebla el <select> de Responsable con los miembros del workspace (/mgmt/team).
   async function _obcLoadResp(current) {

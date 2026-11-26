@@ -22814,3 +22814,17 @@ body.ibx-lb-open{overflow:hidden}
 .sfl-node { width: 290px; border-radius: 10px; } .sfl-d { font-size: .68rem; }
 .sfl-ver { padding: 6px 12px; font-size: .78rem; } .sed-link { height: 30px; } .sfl-link { height: 34px; }
 .lz-lim__n { color: #8A93A3; font-weight: 500; margin: 0 2px; cursor: help; }
+
+/* Ajustes del cliente — filas estilo lemlist */
+.lim2-emb .lim2-fsec { display: none; }
+.lim2-emb[data-show="gen"] .lim2-fsec[data-sec="gen"], .lim2-emb[data-show="li"] .lim2-fsec[data-sec="li"], .lim2-emb[data-show="team"] .lim2-fsec[data-sec="team"] { display: block; }
+.lim2-emb .lim2-fsec .lim2-h4:first-child { margin-top: 18px; }
+.lim2-card--fr { padding: 8px 20px; }
+.lim2-fr { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: center; padding: 9px 0; min-height: 52px; }
+.lim2-fr__l b { display: block; font-size: 14px; font-weight: 500; line-height: 20px; color: #213856; }
+.lim2-fr__l small { display: block; font-size: 14px; font-weight: 500; line-height: 20px; color: #98A1AC; }
+.lim2-fr__r { min-width: 0; }
+.lim2-fr__r .form-input, .lim2-fr__r input, .lim2-fr__r select { width: 100%; box-sizing: border-box; height: 36px; background: #fff; }
+.lim2-emb .lim2-sub { margin: 0 0 10px; }
+@media (max-width: 760px) { .lim2-fr { grid-template-columns: 1fr; gap: 6px; } }
+.lim2-emb .fin-pi-form { display: block !important; }
