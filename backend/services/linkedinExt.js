@@ -843,9 +843,9 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       const { rows: hechas } = await pool.query(`SELECT q.tipo, q.estado, q.done_at, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana
         FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
         WHERE q.account_id=$1 AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') AND q.estado IN ('done','failed','skipped') AND q.done_at > NOW() - INTERVAL '24 hours' ORDER BY q.done_at DESC LIMIT 25`, [a.id]);
-      const { rows: cola } = await pool.query(`SELECT q.id, q.sequence_id, q.tipo, q.estado, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana, s.timezone AS tz
+      const { rows: cola } = await pool.query(`SELECT q.id, q.sequence_id, q.tipo, q.estado, q.not_before, TRIM(COALESCE(k.nombre,'')||' '||COALESCE(k.apellido,'')) AS nombre, q.slug, s.nombre AS campana, s.timezone AS tz
         FROM li_actions q LEFT JOIN lm_contacts k ON k.id=q.contact_id LEFT JOIN sequences s ON s.id=q.sequence_id
-        WHERE q.account_id=$1 AND q.estado IN ('queued','taken') AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') ORDER BY q.id LIMIT 80`, [a.id]);
+        WHERE q.account_id=$1 AND q.estado IN ('queued','taken') AND q.tipo IN ('visit','invite','message','inmail','react','follow','comment') ORDER BY (q.estado='taken') DESC, (q.not_before IS NOT NULL AND q.not_before > NOW()), CASE WHEN q.tipo='visit' THEN 1 ELSE 0 END, q.id LIMIT 80`, [a.id]);
       const tz = (cola[0] && cola[0].tz) || a.tz, aR = { ...a, tz }, ptr = proximaVentana(aR, now);
       const gapS = Math.max(60, await mediaReparto(pool, aR, cola[0] ? cola[0].tipo : 'visit', false) || ((a.gap_min || 300) + (a.gap_max || 1200)) / 2);
       let t0 = Math.max(now.getTime(), a.proxima_accion_at ? new Date(a.proxima_accion_at).getTime() : 0);
@@ -875,6 +875,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       res.json({
         hechas: hechas.map(r => ({ tipo: r.tipo, estado: r.estado, quien: r.nombre || r.slug, campana: r.campana || '', t: r.done_at })),
         cola: cola.map((r, i) => {
+          if (r.not_before && new Date(r.not_before).getTime() > cur) cur = new Date(r.not_before).getTime();
           const { lp, pd } = colocar(r.tipo), ts = new Date(cur);
           const gap = lp.ymd === lpHoy.ymd ? gapS : Math.max(a.gap_min || 300, ((pd.fin - pd.ini - 1.2) * 3600) / capDe(r.tipo));
           cur += gap * 1000 * (0.85 + (i % 3) * 0.15);
