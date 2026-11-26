@@ -307,6 +307,27 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
     const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$4 WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [a.user_id, a.contact_id, a.sequence_id, motivo]);
     if (r.rowCount) await pool.query(`INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado) VALUES ($1,$2,'pausa_secuencia',$3,NOW(),'hecha')`, [a.user_id, a.contact_id, nota]).catch(() => {});
   };
+  // ── Reintento automático ante errores TÉCNICOS (distinto de cuando la persona responde o se pausa por decisión): hasta 3 reintentos, a las 2 h, ~20 h y ~24 h.
+  // Solo se reintenta lo que es seguro: visitas, seguir, reaccionar e invitaciones (la extensión mira antes si ya está «Pendiente»/conectado y entonces no repite);
+  // un mensaje/InMail/comentario solo si el fallo ocurrió ANTES de enviar. Si tras 3 reintentos sigue fallando, recién ahí se pausa para revisión humana.
+  const REINTENTO_DEMORA_H = [2, 20, 24];
+  const SEGUROS = new Set(['visit', 'follow', 'react', 'invite']);
+  const ANTES_DE_ENVIAR = new Set(['sin_campo_mensaje', 'sin_boton_enviar', 'sin_ventana_invitacion', 'sin_boton_nota', 'sin_campo_nota', 'sin_content_script', 'pagina_lenta']);
+  const OMITIDAS_TRANSITORIAS = new Set(['sin_boton_conectar', 'sin_boton_seguir', 'perfil_no_encontrado', 'sin_content_script', 'pagina_lenta']);
+  async function reintentar(ac, error, esOmitida) {
+    try {
+      if (!ac.contact_id || !ac.sequence_id || !ac.step_id || String(ac.tipo).startsWith('check_')) return false;
+      const ok = esOmitida ? OMITIDAS_TRANSITORIAS.has(error) : (SEGUROS.has(ac.tipo) || ANTES_DE_ENVIAR.has(error));
+      if (!ok) return false;
+      const { rows: [c] } = await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE contact_id=$1 AND step_id=$2 AND estado IN ('failed','skipped')`, [ac.contact_id, ac.step_id]);
+      if (c.n > REINTENTO_DEMORA_H.length) return false;
+      const h = REINTENTO_DEMORA_H[c.n - 1];
+      await pool.query(`INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params, not_before)
+        SELECT user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params, NOW() + ($2 || ' hours')::interval FROM li_actions WHERE id=$1`, [ac.id, String(h)]);
+      await nota(ac, `Reintento automático ${c.n}/${REINTENTO_DEMORA_H.length} dentro de ${h} h (${error || 'error'}): no hace falta que hagas nada`);
+      return true;
+    } catch (e) { console.error('[li] reintentar', e.message); return false; }
+  }
   const nota = (a, texto) => a.contact_id ? pool.query(`INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','linkedin',$3,NOW(),'hecha')`, [a.user_id, a.contact_id, texto]).catch(() => {}) : null;
 
   // Avanza la inscripción tras un paso hecho. Caso especial: tras una invitación, si los pasos que siguen solo aplican a quien ACEPTA y aún no aceptó,
@@ -673,7 +694,8 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       }
       if (a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='' WHERE id=$1`, [a.id]), a.estado = 'activa';
       // Una acción «en curso» sin respuesta se marca fallida: no se reintenta (podría haberse enviado)
-      await pool.query(`UPDATE li_actions SET estado='failed', error='sin_respuesta', detalle='La extensión no confirmó el resultado; revisa en LinkedIn antes de repetir' WHERE account_id=$1 AND estado='taken' AND taken_at < NOW() - ($2 || ' minutes')::interval`, [a.id, String(TAKEN_TIMEOUT_MIN)]);
+      { const { rows: colgadas } = await pool.query(`UPDATE li_actions SET estado='failed', error='sin_respuesta', detalle='La extensión no confirmó el resultado; revisa en LinkedIn antes de repetir' WHERE account_id=$1 AND estado='taken' AND taken_at < NOW() - ($2 || ' minutes')::interval RETURNING *`, [a.id, String(TAKEN_TIMEOUT_MIN)]);
+        for (const ac of colgadas) { if (!(await reintentar(ac, 'sin_respuesta', false)) && ac.contact_id && ac.sequence_id && !String(ac.tipo).startsWith('check_')) await pausarInscripcion(ac, 'linkedin_fallo', 'Secuencia pausada: un paso de LinkedIn no confirmó su resultado. Puede haberse enviado: revisa en LinkedIn antes de repetir.'); } }
       if (a.estado !== 'activa' && !(a.pausa_hasta && new Date(a.pausa_hasta) <= now)) return res.json({ accion: null, espera_s: 300, motivo: 'cuenta_' + a.estado, config: CONFIG });
       if (a.estado !== 'activa') { await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]); a.estado = 'activa'; a.pausa_hasta = null; }
       const { rows: [enCurso] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='taken' LIMIT 1`, [a.id]);
@@ -765,8 +787,10 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
             await nota(ac, 'InMail no disponible (sin créditos o suscripción vencida): este paso queda como tarea manual');
           } else if (ac.tipo === 'comment' && ['sin_clave_ia', 'sin_comentario_ia'].includes(b.error)) {
             await nota(ac, 'No se pudo generar el comentario con IA (' + (b.detalle || b.error) + '): este paso queda como tarea manual');
+          } else if (await reintentar(ac, b.error, true)) {
+            // reprogramado solo: no se pausa
           } else {
-            await pausarInscripcion(ac, 'linkedin_omitido', `Secuencia pausada: la extensión no pudo ejecutar el paso de LinkedIn (${b.error || 'omitido'}${det ? ': ' + det : ''}). Revísalo.`);
+            await pausarInscripcion(ac, 'linkedin_omitido', `Secuencia pausada: la extensión no pudo ejecutar el paso de LinkedIn tras varios intentos (${b.error || 'omitido'}${det ? ': ' + det : ''}). Revísalo.`);
           }
         }
       } else if (codigo === 'restringida') {
@@ -778,7 +802,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
         await pool.query(`UPDATE li_accounts SET estado='desconectada', motivo='La sesión de LinkedIn se cerró' WHERE id=$1`, [a.id]);
       } else {
         await pool.query(`UPDATE li_actions SET estado='failed', error=$2, detalle=$3, snapshot=$4 WHERE id=$1`, [id, String(b.error || 'fallo').slice(0, 60), det, snap]);
-        if (!String(ac.tipo).startsWith('check_')) await pausarInscripcion(ac, 'linkedin_fallo', `Secuencia pausada: falló un paso de LinkedIn (${b.error || 'fallo'}). Puede haberse enviado: revisa en LinkedIn antes de repetir.`);
+        if (!String(ac.tipo).startsWith('check_') && !(await reintentar(ac, b.error, false))) await pausarInscripcion(ac, 'linkedin_fallo', `Secuencia pausada: falló un paso de LinkedIn (${b.error || 'fallo'}). Puede haberse enviado: revisa en LinkedIn antes de repetir.`);
         const esLectura = String(ac.tipo).startsWith('check_');   // una lectura que no encuentra datos no cuenta como fallo de la cuenta
         const { rows: [u] } = esLectura ? { rows: [null] } : await pool.query(`UPDATE li_accounts SET fallos_seguidos = fallos_seguidos + 1 WHERE id=$1 RETURNING fallos_seguidos`, [a.id]);
         if (u && u.fallos_seguidos >= FALLOS_PAUSA) await pausar(pool, a.id, PAUSA_FALLOS_H, 'pausada', `${FALLOS_PAUSA} fallos seguidos: pausa automática de 24 h. Puede que LinkedIn haya cambiado su página o haya un aviso`, false);
