@@ -26669,7 +26669,7 @@ const LeadManagerModule = (() => {
       spawn(fi + 1, qa - ta, qn - tn, doneT, prevDia);
     };
     // lo que ya avanzó de verdad: quien ya pasó el paso 1 sale del grupo «por entrar» y vuelve como tarea pendiente de su paso actual
-    (d.avance || []).forEach(a => { queda = Math.max(0, queda - a.n); if (a.activo && a.paso - 2 >= 0 && a.paso - 1 < steps.length) spawn(a.paso - 1, 0, a.n, start.getTime() - DAY, steps[a.paso - 2].dia); });
+    (d.avance || []).forEach(a => { queda = Math.max(0, queda - a.n); if (a.activo && a.paso - 2 >= 0 && a.paso - 1 < steps.length) spawn(a.paso - 1, 0, a.n, start.getTime() - Math.max(1, a.hace || 1) * DAY, steps[a.paso - 2].dia); });
     const dias = []; let fin = null, primerCola = null, colaMax = 0, pico = null, retrasoMax = 0, invHist = Array.isArray(d.inv_hist) ? d.inv_hist.slice() : [];
     const rd = P.calentar ? _capRampBase(d) : { activo: false };
     for (let i = 0; i < P.dias; i++) {

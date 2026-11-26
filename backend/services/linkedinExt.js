@@ -858,7 +858,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       Object.keys(reservado).forEach(k => { reservado[k] = Math.round(Math.max(reservado[k], real7d[k]) * 10) / 10; });
       const { rows: [qo] } = cuentas.length ? await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='queued' AND sequence_id IS DISTINCT FROM $2`, [cuentas.map(a => a.id), sid]) : { rows: [{ n: 0 }] };
       // Avance real: contactos que ya pasaron el paso 1 (con su paso actual) y lo que las cuentas ya hicieron HOY
-      const { rows: av } = await pool.query("SELECT paso, estado='activo' AS activo, COUNT(*)::int AS n FROM lm_contact_sequences WHERE sequence_id=$1 AND paso > 1 GROUP BY 1,2", [sid]);
+      const { rows: av } = await pool.query("SELECT paso, estado='activo' AS activo, GREATEST(0, (CURRENT_DATE - COALESCE(paso_date, CURRENT_DATE)))::int AS hace, COUNT(*)::int AS n FROM lm_contact_sequences WHERE sequence_id=$1 AND paso > 1 GROUP BY 1,2,3", [sid]);
       const hoy = { inv: 0, vis: 0, msg: 0, inmail: 0, react: 0, follow: 0, comment: 0 };
       if (cuentas.length) {
         const tz0 = a0.tz || DEF.tz, { rows: hh } = await pool.query("SELECT tipo, COUNT(*)::int AS n FROM li_actions WHERE account_id = ANY($1::int[]) AND estado='done' AND done_at >= ((NOW() AT TIME ZONE $2)::date::timestamp AT TIME ZONE $2) GROUP BY tipo", [cuentas.map(a => a.id), tz0]);
