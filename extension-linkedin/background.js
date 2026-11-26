@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.11';
+const VERSION = '0.10.12';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -198,7 +198,7 @@ function traducir(m) {
 
 // Abre el perfil (en primer plano si es asistido y es una acción real) y le pide al content script que la haga.
 async function ejecutar(a, modo) {
-  const r = await Promise.race([ejecutarInner(a, modo), new Promise(res => setTimeout(() => res({ codigo: 'fallo', error: 'tiempo_agotado', detalle: 'La acción tardó más de 4 minutos sin responder' }), 240000))]);
+  const r = await Promise.race([ejecutarInner(a, modo), new Promise(res => setTimeout(() => res({ codigo: 'fallo', error: 'tiempo_agotado', detalle: 'La acción tardó más de 5 minutos sin responder' }), 300000))]);
   return r;
 }
 async function ejecutarInner(a, modo) {

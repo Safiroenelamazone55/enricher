@@ -54,6 +54,15 @@
   // ── Escritura «humana» en un campo (compatible con React) ──
   async function escribir(el, texto) {
     el.focus();
+    if (document.hidden) {
+      if (el.isContentEditable) { document.execCommand('selectAll'); document.execCommand('delete'); document.execCommand('insertText', false, texto); }
+      else {
+        const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, texto);
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));
+      }
+      return;
+    }
     if (el.isContentEditable) {
       document.execCommand('selectAll'); document.execCommand('delete'); await sleep(rnd(150, 400));
       for (const ch of texto) { document.execCommand('insertText', false, ch); await sleep(rnd(25, 90)); if (Math.random() < 0.04) await sleep(rnd(200, 600)); }
