@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.12';
+const VERSION = '0.10.13';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -51,6 +51,8 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
   if (m.cmd === 'config') { cfg().then(send); return true; }
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'nova_google') { get().then(({ apiBase }) => chrome.tabs.create({ url: apiBase + '/api/auth/google' })).then(() => send({ ok: true })).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'nova_forgot') { novaFetch('/auth/forgot', { method: 'POST', body: JSON.stringify({ email: String((m.datos || {}).email || '').trim() }) }).then(r => send(r.status === 200 ? { ok: true } : { error: (r.data && r.data.error) || 'No se pudo enviar el enlace' })).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_login') { novaLogin(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }

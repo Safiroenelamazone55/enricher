@@ -37,24 +37,7 @@ h3{font-size:18px;margin:22px 0 11px;font-weight:600;letter-spacing:-.005em}
 .msg::before{content:"";width:4px;align-self:stretch;border-radius:3px;background:var(--mut);flex:none}
 .msg.ok::before{background:var(--ok)}.msg.warn::before{background:var(--warn)}.msg.err::before{background:var(--err)}.msg.work::before{background:var(--work)}
 .msg.err{background:var(--errbg)}.msg.warn{background:var(--warnbg)}.msg.work{background:var(--workbg)}.msg.ok{background:var(--okbg)}
-#login{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;background-color:#1B1D26;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='520' height='760' viewBox='0 0 520 760' fill='none' stroke='%23ffffff' stroke-opacity='.10' stroke-width='1'><path d='M-20 140 C 90 60 180 230 330 120 S 500 40 560 150'/><path d='M-20 330 C 120 250 210 420 360 300 S 520 250 560 330'/><path d='M-20 560 C 100 500 230 650 370 540 S 520 480 560 600'/><path d='M90 -10 C 60 120 160 220 120 380 S 40 600 110 780'/><path d='M410 -10 C 450 140 360 260 420 400 S 500 620 430 780'/><circle cx='120' cy='128' r='3' fill='%23ffffff' fill-opacity='.35' stroke='none'/><circle cx='360' cy='300' r='3' fill='%23ffffff' fill-opacity='.35' stroke='none'/><circle cx='120' cy='380' r='3' fill='%23ffffff' fill-opacity='.35' stroke='none'/><circle cx='420' cy='400' r='3' fill='%23ffffff' fill-opacity='.35' stroke='none'/><circle cx='370' cy='540' r='3' fill='%23ffffff' fill-opacity='.35' stroke='none'/></svg>");background-size:cover;background-position:center;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-#login[hidden]{display:none}
-#login .lcard{position:relative;background:#fff;border-radius:24px;width:100%;max-width:960px;min-height:calc(100vh - 28px);padding:30px 26px 22px;box-sizing:border-box;font-size:14px;line-height:20px;color:#213856;display:flex;flex-direction:column}
-#login .lx{position:absolute;top:14px;right:14px;width:28px;height:28px;border:0;background:none;color:#98A1AC;font-size:22px;line-height:1;cursor:pointer;border-radius:8px}#login .lx:hover{background:#F1F3F6}
-#login .llogo{display:flex;align-items:center;gap:8px;font-size:24px;font-weight:600;color:#213856;letter-spacing:-.02em}#login .llogo img{width:32px;height:32px;border-radius:8px}
-#login .lcol{width:100%;max-width:432px;margin:46px auto 0;flex:1;display:flex;flex-direction:column}
-#login h1{margin:0;padding:0 0 16px;text-align:center;font-size:25px;line-height:32px;font-weight:600;color:#213856}
-#login .lbtn{width:100%;height:32px;border:.75px solid rgba(31,41,55,.1);background:#fff;border-radius:10px;font:inherit;font-size:14px;font-weight:500;color:#1F2937;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;padding:1px 8px;box-sizing:border-box;box-shadow:0 1px 1px rgba(31,41,55,.04)}#login .lbtn:hover{background:#F8F9FA}
-#login .lbtn img{width:16px;height:16px;border-radius:4px}
-#login .lsep{display:flex;align-items:center;gap:0;margin:26px 0 20px;height:12px}#login .lsep::before,#login .lsep::after{content:"";flex:1;height:1px;background:#E5E7EB}#login .lsep span{width:8px;height:8px;border:1px solid #98A1AC;border-radius:50%;margin:0 4px;flex:none}
-#login label{display:block;margin:0 0 4px;font-size:14px;font-weight:400;color:#577090}
-#login label.l2{margin-top:14px}
-#login .lin{position:relative}#login input{width:100%;height:32px;border:.75px solid #E5E7EB;border-radius:10px;padding:0 34px 0 12px;font:inherit;font-size:14px;font-weight:400;color:#213856;background:#fff;box-sizing:border-box}#login input::placeholder{color:#98A1AC}#login input:focus{outline:0;border-color:#9DB6FF;box-shadow:0 0 0 3px rgba(49,107,254,.12)}
-#login .leye{position:absolute;right:4px;top:2px;width:28px;height:28px;border:0;background:none;color:#577090;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}#login .leye svg{flex:none;width:16px;height:16px;display:block}
-#login .lforgot{align-self:flex-start;height:32px;margin:0;padding:1px 8px;border:.75px solid transparent;border-radius:10px;background:none;font:inherit;font-size:14px;font-weight:500;color:#5A6472;cursor:pointer}#login .lforgot:hover{background:#F6F7F8}
-#login .lgo{width:100%;height:32px;margin-top:16px;border:.75px solid transparent;border-radius:10px;font:inherit;font-size:14px;font-weight:500;background:#F6F7F8;color:#9CA3AF;cursor:not-allowed;padding:1px 8px}#login .lgo.on{background:var(--blue);color:#fff;cursor:pointer}
-#login .lerr{min-height:20px;margin:8px 0 0;font-size:13px;color:var(--err);text-align:center}
-#login .lfoot{margin:auto 0 0;padding-top:40px;text-align:center;font-size:14px;color:#213856}#login .lfoot a{color:#213856;cursor:pointer;text-decoration:underline}
+#login-wrap{position:fixed;inset:0;z-index:60}#login-wrap[hidden]{display:none}#login-wrap iframe{width:100%;height:100%;border:0;display:block}
 .alerta{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--errbg);border-left:4px solid var(--err);display:flex;gap:10px;align-items:center;font-size:14px;line-height:1.35;color:var(--ink)}.alerta b{display:block;font-weight:600}.alerta .tx{flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.alerta button{border:0;background:none;color:var(--blue-d);font:inherit;font-weight:600;cursor:pointer;padding:4px 6px;white-space:nowrap}.alerta .x{color:var(--mut);font-size:18px;padding:0 6px}.code{position:relative;background:#0F172A;color:#E2E8F0;border-radius:10px;padding:12px 48px 12px 14px;margin:10px 0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;white-space:pre-wrap;word-break:break-word}
 .code .ch{display:block;color:#94A3B8;margin-bottom:4px}.code.error .ch{color:#FCA5A5}.code.aviso .ch{color:#FCD34D}.code .ok{color:#86EFAC}
 .code .cpi{position:absolute;top:8px;right:8px;width:32px;height:32px;border:0;border-radius:8px;background:rgba(255,255,255,.12);color:#E2E8F0;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}.code .cpi:hover{background:rgba(255,255,255,.22)}.code .cpi.hecho{color:#86EFAC}
@@ -119,23 +102,7 @@ details .in-d{padding:0 18px 18px}
 <div class="wrap">
 
 <!-- 1) Aún no vinculada -->
-<div id="login" hidden><div class="lcard">
-  <button class="lx" id="lg-x" type="button" title="Cerrar">×</button>
-  <div class="llogo"><img src="icons/icon128.png" alt="">FLOW</div>
-  <div class="lcol">
-  <h1>¡Bienvenido de nuevo!</h1>
-  <button class="lbtn" id="lg-nova" type="button"><img src="icons/icon48.png" alt="">Continuar con Nova</button>
-  <div class="lsep"><span></span></div>
-  <form id="lg-form" autocomplete="off">
-    <label for="lg-email">Dirección de email</label><div class="lin"><input id="lg-email" type="email" placeholder="tu@correo.com" autocomplete="username"></div>
-    <label class="l2" for="lg-pass">Contraseña</label><div class="lin"><input id="lg-pass" type="password" autocomplete="current-password"><button class="leye" id="lg-eye" type="button" title="Mostrar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-    <button class="lforgot" id="lg-forgot" type="button">¿Olvidaste la contraseña?</button>
-    <button class="lgo" id="lg-go" type="submit" disabled>Inicia sesión</button>
-    <p class="lerr" id="lg-err"></p>
-  </form>
-  <p class="lfoot">¿Problemas para entrar? <a id="lg-abrir">Abrir Nova</a></p>
-  </div>
-</div></div>
+<div id="login-wrap" hidden><iframe src="login.html" title="Acceso"></iframe></div>
 
 <div id="conectar" hidden>
   <h2>Conectar esta cuenta de LinkedIn con Nova</h2>

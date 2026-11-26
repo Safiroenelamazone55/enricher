@@ -72,28 +72,12 @@ setInterval(() => { pintar(); if (pestana === 'lista') pintarLista(); }, 30000);
 
 const paso = (ok, t) => `<div class="step${ok ? ' ok' : ''}"><i>${ok ? '✓' : '·'}</i><span>${t}</span></div>`;
 
-let _lgT = 0;
-function mostrarLogin(on) {
-  const l = $('login'); if (!l) return;
-  l.hidden = !on;
-  clearInterval(_lgT);
-  if (on) _lgT = setInterval(() => { if (!$('login').hidden) conectar(); }, 4000);   // si inició sesión en Nova en otra pestaña, entra solo
-}
-const lgOk = () => { const ok = /.+@.+\..+/.test($('lg-email').value.trim()) && $('lg-pass').value.length > 0; $('lg-go').disabled = !ok; $('lg-go').className = 'lgo' + (ok ? ' on' : ''); };
-$('lg-email').oninput = lgOk; $('lg-pass').oninput = lgOk;
-$('lg-eye').onclick = () => { const p = $('lg-pass'); p.type = p.type === 'password' ? 'text' : 'password'; };
-$('lg-x').onclick = () => { clearInterval(_lgT); $('login').hidden = true; };
-$('lg-nova').onclick = () => chrome.tabs.create({ url: APP });
-$('lg-abrir').onclick = () => chrome.tabs.create({ url: APP });
-$('lg-forgot').onclick = () => chrome.tabs.create({ url: APP });
-$('lg-form').onsubmit = async ev => {
-  ev.preventDefault();
-  const b = $('lg-go'); b.disabled = true; b.textContent = 'Entrando…'; $('lg-err').textContent = '';
-  const r = await msg('nova_login', { email: $('lg-email').value.trim(), password: $('lg-pass').value });
-  $('lg-pass').value = ''; b.textContent = 'Inicia sesión'; lgOk();
-  if (!r || r.error || !r.ok) { $('lg-err').textContent = (r && r.error) || 'No se pudo iniciar sesión'; return; }
-  $('lg-email').value = ''; lgOk(); conectar();
-};
+function mostrarLogin(on) { const l = $('login-wrap'); if (l) l.hidden = !on; }
+window.addEventListener('message', ev => {
+  if (!ev.data || !ev.data.flowLogin) return;
+  mostrarLogin(false);
+  if (ev.data.ok) conectar();
+});
 async function conectar() {
   $('err').textContent = ''; $('elegir').hidden = true; $('accion-extra').hidden = true;
   $('pasos').innerHTML = paso(false, 'Buscando tu sesión de Nova y de LinkedIn…');

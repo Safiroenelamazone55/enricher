@@ -51,9 +51,24 @@
       panel.classList.add('open'); tab.style.display = 'none'; empujar(true);
     };
     // Lo normal: abre el panel lateral REAL de Chrome (encoge de verdad la página, nada queda tapado). Si no se pudiera, panel flotante.
+    const abrirPanelReal = () => { try { chrome.runtime.sendMessage({ cmd: 'abrirPanel' }, r => { if (chrome.runtime.lastError || !r || !r.ok) abrirIframe(); }); } catch (_) { abrirIframe(); } };
+    let loginFrame = null;
+    const quitarLogin = () => { if (loginFrame) { loginFrame.remove(); loginFrame = null; } };
+    window.addEventListener('message', ev => { if (loginFrame && ev.source === loginFrame.contentWindow && ev.data && ev.data.flowLogin) { quitarLogin(); if (ev.data.ok) abrirPanelReal(); } });
+    const mostrarLogin = () => {
+      if (loginFrame) return;
+      loginFrame = el('iframe', { src: chrome.runtime.getURL('login.html') });
+      loginFrame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
+      sh.appendChild(loginFrame);
+    };
     const abrir = on => {
       if (on) {
-        try { chrome.runtime.sendMessage({ cmd: 'abrirPanel' }, r => { if (chrome.runtime.lastError || !r || !r.ok) abrirIframe(); }); } catch (_) { abrirIframe(); }
+        try {
+          chrome.storage.local.get({ token: '' }, st => {
+            if (st && st.token) return abrirPanelReal();
+            chrome.runtime.sendMessage({ cmd: 'par_estado' }, p => { if (!chrome.runtime.lastError && p && p.nova === 'sin_sesion') mostrarLogin(); else abrirPanelReal(); });
+          });
+        } catch (_) { abrirPanelReal(); }
       } else { panel.classList.remove('open'); tab.style.display = 'flex'; empujar(false); }
     };
     x.onclick = () => abrir(false);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FLOW",
-  "version": "0.10.12",
+  "version": "0.10.13",
   "description": "FLOW: automatización de secuencias y tareas comerciales. Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, con topes diarios. Modo asistido por defecto.",
   "permissions": [
     "storage",
@@ -55,7 +55,7 @@
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["sidepanel.html", "sidepanel.js", "icons/*.png"], "matches": ["https://*.linkedin.com/*"] }
+    { "resources": ["sidepanel.html", "sidepanel.js", "login.html", "login.js", "icons/*.png"], "matches": ["https://*.linkedin.com/*"] }
   ],
   "icons": {
     "16": "icons/icon16.png",
