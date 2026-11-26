@@ -412,7 +412,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       }
       // (2b) Pasos de LinkedIn de secuencias con «LinkedIn automático»
       const { rows: pend } = await pool.query(`
-        SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, s.outbound_client_id, s.campaign_id, s.send_days, s.nombre AS seq_nombre,
+        SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, s.drip_per_day, s.timezone AS seq_tz, s.outbound_client_id, s.campaign_id, s.send_days, s.nombre AS seq_nombre,
                st.id AS step_id, st.accion, st.plantilla, st.asunto, st.post_dias, st.reaccion, s.li_plan, st.variants, st.variant_mode, st.variant_field, st.canal, st.cond, st.cond_step_id,
                k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.idioma, k.idiomas, k.company_id, k.disposition, k.li_aceptado_at
           FROM lm_contact_sequences cs
@@ -424,7 +424,17 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
            AND NOT EXISTS (SELECT 1 FROM li_actions a WHERE a.contact_id = cs.contact_id AND a.step_id = st.id)
          ORDER BY cs.next_action_at ASC NULLS FIRST LIMIT 40`);
       const se = sendEngine();
+      const cupoEntrada = new Map();   // «contactos que entran por día» (drip): cuántos del primer paso caben todavía hoy en cada secuencia
       for (const e of pend) {
+        if (e.paso <= 1 && e.drip_per_day > 0) {
+          const ck = e.sequence_id + ':' + e.step_id;
+          if (!cupoEntrada.has(ck)) {
+            const { rows: [u] } = await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE sequence_id=$1 AND step_id=$2 AND (estado IN ('queued','taken') OR (estado='done' AND done_at >= ((NOW() AT TIME ZONE $3)::date::timestamp AT TIME ZONE $3)))`, [e.sequence_id, e.step_id, e.seq_tz || 'America/Lima']).catch(() => ({ rows: [{ n: 0 }] }));
+            cupoEntrada.set(ck, e.drip_per_day - u.n);
+          }
+          if (cupoEntrada.get(ck) <= 0) continue;
+          cupoEntrada.set(ck, cupoEntrada.get(ck) - 1);
+        }
         // ¿El paso aplica a esta persona (condición de aceptó / respondió)? Si no, se salta
         if (!(await se.condMatch(pool, { cond: e.cond, cond_step_id: e.cond_step_id }, { contact_id: e.contact_id, disposition: e.disposition, li_aceptado_at: e.li_aceptado_at }))) { await se.advancePastStep(pool, e.user_id, e.contact_id, e.sequence_id, e.step_id); continue; }
         if (e.accion === 'comentario' && !process.env.ANTHROPIC_API_KEY) continue;   // sin clave de IA: se hace a mano (la secuencia muestra el aviso)
