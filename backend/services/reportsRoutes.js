@@ -104,7 +104,7 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
       if (reps.length) kw += ` AND EXISTS(SELECT 1 FROM outbound_clients oc2 WHERE oc2.id=k.outbound_client_id AND oc2.responsable = ANY(${P(reps)}::text[]))`;
       if (q.disp) kw += ` AND k.disposition=${P(String(q.disp).slice(0, 40))}`;
       const base = `FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ${kw}`;
-      const inR = (col, f, t) => `${col}::date BETWEEN '${f}'::date AND '${t}'::date`;
+      const inR = (col, f, t) => `(${col} AT TIME ZONE '${tz}')::date BETWEEN '${f}'::date AND '${t}'::date`;
       // Cada consulta recibe solo los parámetros que usa (Postgres exige que coincidan con los $N del SQL)
       const Q = (sql) => { let m = 0; sql.replace(/\$(\d+)/g, (_, n) => { m = Math.max(m, +n); return _; }); return pool.query(sql, params.slice(0, m)).then(r => r.rows); };
       const lit = arr => 'ARRAY[' + arr.map(x => "'" + String(x).replace(/'/g, "''") + "'").join(',') + ']::text[]';
@@ -123,11 +123,11 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
         ${base}`);
       const taskSeries = async () => {
         const [cr, dn] = await Promise.all([
-          Q(`SELECT a.created_at::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND ${inR('a.created_at', from, to)} GROUP BY 1 ORDER BY 1`),
-          Q(`SELECT a.fecha::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND a.estado='hecha' AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`)]);
+          Q(`SELECT (a.created_at AT TIME ZONE '${tz}')::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND ${inR('a.created_at', from, to)} GROUP BY 1 ORDER BY 1`),
+          Q(`SELECT (a.fecha AT TIME ZONE '${tz}')::date::text AS d, COUNT(*)::int AS n ${base} AND ${TASKISH} AND a.estado='hecha' AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`)]);
         return { creadas: cr, hechas: dn };
       };
-      const firstReach = async (cond) => (await Q(`SELECT d::text AS d, COUNT(*)::int AS n FROM (SELECT a.contact_id, MIN(a.fecha)::date AS d ${base} AND ${cond} GROUP BY a.contact_id) t WHERE d BETWEEN '${from}'::date AND '${to}'::date GROUP BY d ORDER BY d`));
+      const firstReach = async (cond) => (await Q(`SELECT d::text AS d, COUNT(*)::int AS n FROM (SELECT a.contact_id, (MIN(a.fecha) AT TIME ZONE '${tz}')::date AS d ${base} AND ${cond} GROUP BY a.contact_id) t WHERE d BETWEEN '${from}'::date AND '${to}'::date GROUP BY d ORDER BY d`));
       const timeline = async () => {
         const [c, r, i, m] = await Promise.all([firstReach(OUT), firstReach(REPLY), firstReach(INTERESADO_EV), firstReach(`(a.tipo='reunion' OR (a.tipo='disposition_change' AND a.nota ~ '→ Reunión[[:space:]]*$'))`)]);
         return { contactados: c, respondidos: r, interesados: i, reuniones: m };
@@ -177,7 +177,7 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
       } else if (tab === 'campaigns') {
         const [cp, tl, coh, stepsEm, stepsOt] = await Promise.all([
           campaigns(), timeline(),
-          Q(`SELECT date_trunc('week', cs.created_at)::date::text AS semana, COUNT(DISTINCT cs.contact_id)::int AS enrolados,
+          Q(`SELECT date_trunc('week', cs.created_at AT TIME ZONE '${tz}')::date::text AS semana, COUNT(DISTINCT cs.contact_id)::int AS enrolados,
                     COUNT(DISTINCT cs.contact_id) FILTER (WHERE EXISTS(SELECT 1 FROM activities a WHERE a.contact_id=cs.contact_id AND ${OUT} AND a.fecha>=cs.created_at))::int AS contactados,
                     COUNT(DISTINCT cs.contact_id) FILTER (WHERE EXISTS(SELECT 1 FROM activities a WHERE a.contact_id=cs.contact_id AND ${REPLY} AND a.fecha>=cs.created_at))::int AS respondidos,
                     COUNT(DISTINCT cs.contact_id) FILTER (WHERE k.disposition IN ('interesado','reunion'))::int AS interesados
@@ -215,15 +215,15 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
         };
         const [kc, kp, vol, churn, capacity, heat, repHeat] = await Promise.all([
           kpi(from, to), kpi(pFrom, pTo),
-          Q(`SELECT a.fecha::date::text AS d, ${KIND} AS kind, COUNT(*)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1,2 ORDER BY 1`),
-          Q(`SELECT a.fecha::date::text AS d, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND (a.tipo='pausa_secuencia' OR (a.tipo='disposition_change' AND a.nota ~ '→ (No interesado|No contactar|No califica)[[:space:]]*$')) AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`),
+          Q(`SELECT (a.fecha AT TIME ZONE '${tz}')::date::text AS d, ${KIND} AS kind, COUNT(*)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1,2 ORDER BY 1`),
+          Q(`SELECT (a.fecha AT TIME ZONE '${tz}')::date::text AS d, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND (a.tipo='pausa_secuencia' OR (a.tipo='disposition_change' AND a.nota ~ '→ (No interesado|No contactar|No califica)[[:space:]]*$')) AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`),
           cap(),
           Q(`SELECT ${KIND} AS kind, EXTRACT(DOW FROM a.fecha AT TIME ZONE '${tz}')::int AS dow, EXTRACT(HOUR FROM a.fecha AT TIME ZONE '${tz}')::int AS hr, COUNT(*)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1,2,3`),
           Q(`SELECT EXTRACT(DOW FROM a.fecha AT TIME ZONE '${tz}')::int AS dow, EXTRACT(HOUR FROM a.fecha AT TIME ZONE '${tz}')::int AS hr, COUNT(*)::int AS n ${base} AND ${REPLY} AND ${inR('a.fecha', from, to)} GROUP BY 1,2`),
         ]);
         Object.assign(out, { kpi: { cur: kc, prev: kp }, volume: vol, churn, capacity, heat, replyHeat: repHeat });
       } else if (tab === 'team') {
-        const wk = `date_trunc('week', a.fecha)::date::text`;
+        const wk = `date_trunc('week', a.fecha AT TIME ZONE '${tz}')::date::text`;
         const [rows, rep, intr, tasks, bnc, eng, interEv, calls, capLi, capMb, trOut, trRep, trInt, trBnc, trEng] = await Promise.all([
           Q(`SELECT ${REP} AS rep, ${KIND} AS kind, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1,2`),
           Q(`SELECT ${REP} AS rep, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${REPLY} AND ${inR('a.fecha', from, to)} GROUP BY 1`),
@@ -240,8 +240,8 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
           Q(`SELECT ${REP} AS rep, ${wk} AS w, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${OUT} AND ${inR('a.fecha', from, to)} GROUP BY 1,2`),
           Q(`SELECT ${REP} AS rep, ${wk} AS w, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${REPLY} AND ${inR('a.fecha', from, to)} GROUP BY 1,2`),
           Q(`SELECT ${REP} AS rep, ${wk} AS w, COUNT(DISTINCT a.contact_id)::int AS n ${base} AND ${INTERESADO_EV} AND ${inR('a.fecha', from, to)} GROUP BY 1,2`),
-          Q(`SELECT ${REP} AS rep, date_trunc('week', m.sent_at)::date::text AS w, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND m.estado='bounced' AND ${inR('m.sent_at', from, to)} GROUP BY 1,2`),
-          Q(`SELECT ${REP} AS rep, date_trunc('week', m.sent_at)::date::text AS w, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND ${inR('m.sent_at', from, to)} AND EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo IN ('open','click')) GROUP BY 1,2`),
+          Q(`SELECT ${REP} AS rep, date_trunc('week', m.sent_at AT TIME ZONE '${tz}')::date::text AS w, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND m.estado='bounced' AND ${inR('m.sent_at', from, to)} GROUP BY 1,2`),
+          Q(`SELECT ${REP} AS rep, date_trunc('week', m.sent_at AT TIME ZONE '${tz}')::date::text AS w, COUNT(DISTINCT m.contact_id)::int AS n FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ${kw} AND ${inR('m.sent_at', from, to)} AND EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo IN ('open','click')) GROUP BY 1,2`),
         ]);
         const { rows: tm } = await pool.query('SELECT nombre, rol FROM team_members WHERE user_id=$1', [uid]);
         const roleOf = n => { const m = tm.find(x => String(x.nombre).toLowerCase() === String(n).toLowerCase()); return m ? (String(m.rol).toLowerCase() === 'admin' ? 'admin' : 'member') : 'member'; };
@@ -263,7 +263,7 @@ function mount(app, { pool, requireAuth, tzOfUser }) {
           Q(`SELECT c.id, c.estado, c.duracion, c.resultado, c.nota, c.started_at, COALESCE(NULLIF(c.member,''),'Sin asignar') AS rep, c.to_number, TRIM(k.nombre||' '||COALESCE(k.apellido,'')) AS contacto, c.contact_id
                FROM tel_calls c LEFT JOIN lm_contacts k ON k.id=c.contact_id WHERE c.user_id=$1 AND ${inR('c.started_at', from, to)}${client ? ` AND c.outbound_client_id=${client}` : ''} ORDER BY c.started_at DESC LIMIT 200`).catch(() => []),
           Q(`SELECT a.id, a.fecha, a.nota, ${REP} AS rep, a.contact_id, TRIM(k.nombre||' '||COALESCE(k.apellido,'')) AS contacto ${base} AND a.estado='hecha' AND (a.tipo='llamada' OR (${OUT} AND (${CH}) IN ('call','wa_call'))) AND ${inR('a.fecha', from, to)} ORDER BY a.fecha DESC LIMIT 200`),
-          Q(`SELECT a.fecha::date::text AS d, COUNT(*)::int AS n ${base} AND a.estado='hecha' AND (a.tipo='llamada' OR (${OUT} AND (${CH}) IN ('call','wa_call'))) AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`),
+          Q(`SELECT (a.fecha AT TIME ZONE '${tz}')::date::text AS d, COUNT(*)::int AS n ${base} AND a.estado='hecha' AND (a.tipo='llamada' OR (${OUT} AND (${CH}) IN ('call','wa_call'))) AND ${inR('a.fecha', from, to)} GROUP BY 1 ORDER BY 1`),
         ]);
         const conect = calls.filter(c => (c.duracion || 0) > 0);
         const durs = conect.map(c => c.duracion);
