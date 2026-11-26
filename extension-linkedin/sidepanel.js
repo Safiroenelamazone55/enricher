@@ -120,12 +120,25 @@ async function pintarLista() {
   box.innerHTML = h || '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
 }
 const fechaE = t => new Date(t).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+async function pintarAlerta() {
+  const box = $('alerta'); if (!box) return;
+  const { errores, estado, alertaVista } = await chrome.storage.local.get({ errores: [], estado: {}, alertaVista: 0 });
+  const e = errores.find(x => x.nivel === 'error' && Date.now() - x.t < 2 * 3600e3 && x.t > alertaVista);
+  const bloqueo = !e && estado && estado.nivel === 'err' ? estado : null;
+  if (!e && !bloqueo) { box.hidden = true; return; }
+  const txt = e ? e.tipo.replace(/_/g, ' ') + ': ' + String(e.msg || '').slice(0, 110) : String(bloqueo.msg || '').slice(0, 130);
+  box.innerHTML = '<span class="tx"><b>Hay un error</b>' + esc(txt) + '</span><button id="alerta-mas">Ver más ›</button><button class="x" id="alerta-x" title="Ocultar">×</button>';
+  box.hidden = false;
+  $('alerta-mas').onclick = () => mostrarPestana('errores');
+  $('alerta-x').onclick = async () => { await chrome.storage.local.set({ alertaVista: Date.now() }); box.hidden = true; };
+}
 async function pintarErrores() {
+  pintarAlerta();
   const { errores } = await chrome.storage.local.get({ errores: [] });
   const dia = errores.filter(e => e.nivel === 'error' && Date.now() - e.t < 864e5).length;
   $('nerr').hidden = !dia; $('nerr').textContent = dia;
   if (pestana !== 'errores') return;
-  $('errlista').innerHTML = errores.length ? errores.map(e => '<div class="er ' + esc(e.nivel) + '"><b>' + esc(e.tipo) + '</b>' + (e.n > 1 ? '<span class="n">×' + e.n + '</span>' : '') + '<span class="t">' + esc(fechaE(e.t)) + '</span><div>' + esc(e.msg) + '</div>' + (e.ctx ? '<details><summary style="padding:4px 0 0;font-size:11.5px">Detalle técnico</summary><pre>' + esc(JSON.stringify(e.ctx, null, 1)) + '</pre></details>' : '') + '</div>').join('') : '<div class="card"><small>Todo en orden: no hay errores registrados.</small></div>';
+  $('errlista').innerHTML = errores.length ? errores.map((e, i) => '<div class="er ' + esc(e.nivel) + '"><button class="cp1" data-i="' + i + '">Copiar</button><b>' + esc(e.tipo) + '</b>' + (e.n > 1 ? '<span class="n">×' + e.n + '</span>' : '') + '<span class="t">' + esc(fechaE(e.t)) + '</span><div>' + esc(e.msg) + '</div>' + (e.ctx ? '<details><summary style="padding:4px 0 0;font-size:11.5px">Detalle técnico</summary><pre>' + esc(JSON.stringify(e.ctx, null, 1)) + '</pre></details>' : '') + '</div>').join('') : '<div class="card"><small>Todo en orden: no hay errores registrados.</small></div>';
 }
 async function informe() {
   const { errores, estado, identidad, paused } = await chrome.storage.local.get({ errores: [], estado: {}, identidad: {}, paused: true });
@@ -142,6 +155,14 @@ $('copiar').onclick = async () => {
   try { await navigator.clipboard.writeText(txt); } catch (_) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
   $('copiado').hidden = false; setTimeout(() => { $('copiado').hidden = true; }, 2500);
 };
+$('errlista').addEventListener('click', async ev => {
+  const b = ev.target.closest('.cp1'); if (!b) return;
+  const { errores, estado, identidad } = await chrome.storage.local.get({ errores: [], estado: {}, identidad: {} });
+  const e = errores[Number(b.dataset.i)]; if (!e) return;
+  const txt = ['FLOW v' + chrome.runtime.getManifest().version + ' — error', 'Cuenta: ' + (identidad.slug ? 'linkedin.com/in/' + identidad.slug : '(sin leer)'), '[' + fechaE(e.t) + '] ' + e.nivel.toUpperCase() + ' ' + e.tipo + (e.n > 1 ? ' ×' + e.n : ''), e.msg, e.ctx ? JSON.stringify(e.ctx) : '', 'Estado: ' + (estado.msg || '—')].filter(Boolean).join('\n');
+  try { await navigator.clipboard.writeText(txt); } catch (_) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1800);
+});
 $('limpiar').onclick = async () => { await chrome.storage.local.set({ errores: [] }); pintarErrores(); };
 
 async function pintar() {
@@ -150,6 +171,7 @@ async function pintar() {
   if (!token && pestana !== 'estado') mostrarPestana('estado');
   if (token) pintarVinculada();
   pintarErrores();
+  pintarAlerta();
 }
 
 chrome.storage.local.get({ lanzadorOculto: false }, r => { $('vlanz').checked = !r.lanzadorOculto; });
