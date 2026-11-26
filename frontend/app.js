@@ -24822,13 +24822,12 @@ const LeadManagerModule = (() => {
         ${r2('Empieza a enviar a las (hora)', _limStp('lim-es-wi', e.window_start, 0, 23))}
         ${r2('Termina de enviar a las (hora)', _limStp('lim-es-we', e.window_end, 1, 24))}
         ${r2('Enviar también en fin de semana', `<label class="rp-sw"><input type="checkbox" id="lim-es-wk"${e.send_weekends ? ' checked' : ''}><span></span></label>`)}
-        ${r2('Zona horaria por defecto', `<input class="lim2-sel lim2-sel--in" list="lim-tzs" id="lim-es-tz" value="${esc(e.timezone || '')}" autocomplete="off">`, 'Solo vale si una secuencia no tiene zona propia. El horario de envío de cada secuencia sigue su «Zona horaria del prospecto».')}
         <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limEsSave()">Guardar</button><span id="lim-es-msg" class="mbh-msg"></span></div></div>`;
   }
   async function limEsSave() {
     const e = _lim.es, g = id => document.getElementById(id), msg = g('lim-es-msg'); if (!e) return;
-    const body = { ...e, daily_limit: +g('lim-es-daily').value, throttle_seconds: +g('lim-es-thr').value, window_start: +g('lim-es-wi').value, window_end: +g('lim-es-we').value, send_weekends: g('lim-es-wk').checked, timezone: g('lim-es-tz').value.trim() || e.timezone };
-    try { new Intl.DateTimeFormat('en-US', { timeZone: body.timezone }); } catch (_) { if (msg) msg.textContent = 'Zona horaria no válida'; return; }
+    const body = { ...e, daily_limit: +g('lim-es-daily').value, throttle_seconds: +g('lim-es-thr').value, window_start: +g('lim-es-wi').value, window_end: +g('lim-es-we').value, send_weekends: g('lim-es-wk').checked, timezone: e.timezone || '' || e.timezone };
+    try { new Intl.DateTimeFormat('en-US', { timeZone: body.timezone || 'UTC' }); } catch (_) { if (msg) msg.textContent = 'Zona horaria no válida'; return; }
     if (!(body.window_end > body.window_start)) { if (msg) msg.textContent = 'La hora final debe ser mayor que la inicial'; return; }
     try { const r = await apiFetch(`${API}/lm/send-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error'); _lim.es = d; if (msg) msg.textContent = '✓ Guardado'; } catch (er) { if (msg) msg.textContent = 'No se pudo guardar: ' + er.message; }
   }
@@ -24895,7 +24894,6 @@ const LeadManagerModule = (() => {
       ${r2('Empieza a trabajar a las (hora) <small>En la zona horaria de la cuenta. Los días y la zona de cada campaña están en su configuración.</small>', stp('hora_ini', 23))}
       ${r2('Deja de trabajar a las (hora)', stp('hora_fin', 24, 1))}
       ${r2('Días de trabajo', '<div class="lim2-days">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, k) => `<label><input type="checkbox" id="lim-li-dia-${a.id}-${k + 1}"${(a.dias || []).includes(k + 1) ? ' checked' : ''}><span>${d}</span></label>`).join('') + '</div>')}
-      ${r2('Zona horaria por defecto <small>Solo vale si la secuencia no tiene zona propia: el horario de envío de LinkedIn sigue la zona de cada secuencia.</small>', `<input class="lim2-sel lim2-sel--in" list="lim-tzs" id="lim-li-tz-${a.id}" value="${esc(a.tz || '')}" autocomplete="off">`)}
       ${r2('Tipo de cuenta de LinkedIn <small>Premium / Sales Navigator permite InMail y más notas de invitación.</small>', `<select class="lim2-sel lim2-sel--in" id="lim-li-plan-${a.id}"><option value="gratis"${a.plan !== 'premium' ? ' selected' : ''}>Gratuita</option><option value="premium"${a.plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator</option></select>`)}
       <div class="ctu-err" id="lim-li-e-${a.id}"></div>
       <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><button class="btn btn--ghost btn--sm" title="Vuelve a empezar el calentamiento desde el día 1" onclick="LeadManagerModule.limLiRestart(${a.id})">Reiniciar calentamiento</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
