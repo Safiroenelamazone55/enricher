@@ -135,12 +135,19 @@
     let av = avisoLinkedIn(); if (av) return porAviso(av);
     if (!dlg) { await sleep(1500); if (estadoPerfil().pend) return R('ok'); return R('fallo', 'sin_ventana_invitacion', 'No apareció la ventana de invitación', { snapshot: snapshot() }); }
     if (a.nota) {
-      const nota = enDlg(dlg, T('addNote'));
+      const todos = () => [...document.querySelectorAll('dialog, [role="dialog"], .artdeco-modal')].filter(vis);
+      const nota = todos().map(d => enDlg(d, T('addNote'))).find(Boolean);
       if (!nota) return R('fallo', 'sin_boton_nota', 'No apareció «Añadir nota» (¿cuenta gratuita sin notas?)', { snapshot: snapshot() });
-      nota.click(); await sleep(rnd(700, 1400));
-      dlg = dlgAbierto() || dlg;
-      const ta = dlg.querySelector('[contenteditable="true"], [role="textbox"], textarea') || document.querySelector(SEL('notaTextarea'));
+      nota.click();
+      // el cuadro de la nota tarda en dibujarse (más aún con la pestaña en segundo plano): se espera hasta 15 s
+      let ta = null;
+      for (let i = 0; i < 30 && !ta; i++) {
+        await sleep(500);
+        ta = todos().map(d => d.querySelector('[contenteditable="true"], [role="textbox"], textarea')).find(Boolean) || document.querySelector(SEL('notaTextarea')) || null;
+      }
       if (!ta) return R('fallo', 'sin_campo_nota', '', { snapshot: snapshot() });
+      dlg = ta.closest('dialog, [role="dialog"], .artdeco-modal') || dlgAbierto() || dlg;
+      await sleep(rnd(400, 900));
       await escribir(ta, a.nota); await sleep(rnd(600, 1200));
     }
     const enviar = a.nota ? exacto(dlg, T('send')) : (exacto(dlg, T('sendNoNote')) || exacto(dlg, T('send')));
