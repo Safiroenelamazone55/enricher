@@ -7,7 +7,7 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const rnd = (a, b) => a + Math.random() * (b - a);
   const norm = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const vis = el => !!(el && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
+  const vis = el => !!(el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
   const R = (codigo, error, detalle, extra) => ({ codigo, error: error || '', detalle: detalle || '', ...(extra || {}) });
   let CFG = null;
   const cargarConfig = () => new Promise(res => { try { chrome.runtime.sendMessage({ cmd: 'config' }, c => res(c || null)); } catch (_) { res(null); } });
@@ -54,6 +54,11 @@
   // ── Escritura «humana» en un campo (compatible con React) ──
   async function escribir(el, texto) {
     el.focus();
+    if (el.isContentEditable) {
+      document.execCommand('selectAll'); document.execCommand('delete'); await sleep(rnd(150, 400));
+      for (const ch of texto) { document.execCommand('insertText', false, ch); await sleep(rnd(25, 90)); if (Math.random() < 0.04) await sleep(rnd(200, 600)); }
+      return;
+    }
     const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const set = v => {
       if (el.isContentEditable) el.textContent = v; else Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
@@ -90,23 +95,33 @@
       }
     }
     if (!con) return R('omitida', 'sin_boton_conectar', 'No hay botón Conectar (perfil restringido o solo seguir)', { snapshot: snapshot() });
-    con.click(); await sleep(rnd(900, 1800));
+    con.click();
+    const dlgAbierto = () => [...document.querySelectorAll('dialog, [role="dialog"], .artdeco-modal')].filter(vis).pop() || null;
+    const enDlg = (root, words) => [...root.querySelectorAll('button, a, [role="button"]')].filter(vis).find(e => hasAny(e, words));
+    const exacto = (root, words) => [...root.querySelectorAll('button')].filter(vis).find(e => !e.disabled && words.some(w => norm(e.innerText) === w || norm(e.getAttribute('aria-label')) === w));
+    let dlg = null;
+    for (let i = 0; i < 14 && !dlg; i++) { await sleep(500); dlg = dlgAbierto(); }
+    await sleep(rnd(600, 1300));
     let av = avisoLinkedIn(); if (av) return porAviso(av);
+    if (!dlg) { await sleep(1500); if (estadoPerfil().pend) return R('ok'); return R('fallo', 'sin_ventana_invitacion', 'No apareció la ventana de invitación', { snapshot: snapshot() }); }
     if (a.nota) {
-      const nota = findBtn(T('addNote'), document);
+      const nota = enDlg(dlg, T('addNote'));
       if (!nota) return R('fallo', 'sin_boton_nota', 'No apareció «Añadir nota» (¿cuenta gratuita sin notas?)', { snapshot: snapshot() });
       nota.click(); await sleep(rnd(700, 1400));
-      const ta = document.querySelector(SEL('notaTextarea'));
+      dlg = dlgAbierto() || dlg;
+      const ta = dlg.querySelector('[contenteditable="true"], [role="textbox"], textarea') || document.querySelector(SEL('notaTextarea'));
       if (!ta) return R('fallo', 'sin_campo_nota', '', { snapshot: snapshot() });
       await escribir(ta, a.nota); await sleep(rnd(600, 1200));
     }
-    const dlg = document.querySelector(SEL('modal')) || document;
-    const enviar = a.nota ? findBtn(T('send'), dlg) : (findBtn(T('sendNoNote'), dlg) || findBtn(T('send'), dlg));
-    if (!enviar) return R('fallo', 'sin_boton_enviar', '', { snapshot: snapshot() });
+    const enviar = a.nota ? exacto(dlg, T('send')) : (exacto(dlg, T('sendNoNote')) || exacto(dlg, T('send')));
+    if (!enviar) return R('fallo', 'sin_boton_enviar', 'No se pudo pulsar «Enviar» (¿la nota pasa del máximo?)', { snapshot: snapshot() });
     if (asistido) return await esperarUsuario(() => !!estadoPerfil().pend, 'Revisa la nota y pulsa «Enviar».');
-    enviar.click(); await sleep(rnd(1500, 2800));
-    av = avisoLinkedIn(); if (av) return porAviso(av);
-    if (estadoPerfil().pend || !document.querySelector(SEL('notaTextarea'))) return R('ok');
+    enviar.click();
+    for (let i = 0; i < 16; i++) {
+      await sleep(500);
+      av = avisoLinkedIn(); if (av) return porAviso(av);
+      if (estadoPerfil().pend || !dlgAbierto()) { await sleep(1200); return R('ok'); }
+    }
     return R('fallo', 'no_confirmado', 'No se pudo confirmar el envío; revisa en LinkedIn antes de repetir', { snapshot: snapshot() });
   }
 
