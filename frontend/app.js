@@ -25762,12 +25762,20 @@ const LeadManagerModule = (() => {
   function _lzLimit(st, acc) {
     if (!acc || st.canal !== 'linkedin') return '';
     const h = acc.hoy || {}, f = acc.efectivos || {}, a = st.accion || '';
+    // cada tipo cuenta contra SU propio tope (antes InMail iba contra el de mensajes y reacciones/seguir/comentar no tenían)
     let t = null;
-    if (['visita'].includes(a)) t = ['Visitas al perfil', h.vis_hoy || 0, f.vis];
-    else if (['invite', 'invite_nota'].includes(a)) t = ['Solicitudes de conexión', h.inv_hoy || 0, f.inv];
-    else if (['mensaje', 'inmail'].includes(a)) t = ['Mensajes', h.msg_hoy || 0, f.msg];
-    else t = ['Acciones de LinkedIn', h.total_hoy || 0, f.total];
-    return `<div class="lz-lim">${_llI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 16)}<span>${t[0]}: <b>${t[1]}/${t[2] != null ? t[2] : '—'}</b> en las últimas 24 horas</span></div>`;
+    if (a === 'visita') t = ['Visitas al perfil', h.vis_hoy, f.vis, acc.vis_dia];
+    else if (['invite', 'invite_nota'].includes(a)) t = ['Solicitudes de conexión', h.inv_hoy, f.inv, acc.inv_dia];
+    else if (a === 'mensaje') t = ['Mensajes', h.msg_hoy, f.msg, acc.msg_dia];
+    else if (a === 'inmail') t = ['InMail', h.inmail_hoy, f.inmail, acc.inmail_dia];
+    else if (a === 'like') t = ['Reacciones', h.react_hoy, f.react, acc.react_dia];
+    else if (a === 'follow') t = ['Seguimientos', h.follow_hoy, f.follow, acc.follow_dia];
+    else if (a === 'comentario') t = ['Comentarios', h.comment_hoy, f.comment, acc.comment_dia];
+    else t = ['Acciones de LinkedIn', h.total_hoy, f.total, acc.total_dia];
+    // Se muestra el tope QUE TÚ CONFIGURASTE. FLOW hoy trabaja hasta un 72–100 % de ese tope (cambia cada día a propósito, para no dejar patrón); si va distinto, se anota aparte.
+    const usado = t[1] || 0, hoy = f.calentando ? t[2] : (t[3] != null ? t[3] : t[2]);
+    const nota = (!f.calentando && t[2] != null && t[3] != null && t[2] !== t[3]) ? ` <span class="lz-lim__n" title="FLOW no llega siempre al tope: hoy se detiene en ${t[2]}. Varía cada día a propósito para no dejar un patrón.">(hoy hasta ${t[2]})</span>` : (f.calentando ? ' <span class="lz-lim__n" title="Cuenta nueva en calentamiento: el tope sube cada día.">(calentamiento)</span>' : '');
+    return `<div class="lz-lim">${_llI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 16)}<span>${t[0]}: <b>${usado}/${hoy != null ? hoy : '—'}</b>${nota} en las últimas 24 horas</span></div>`;
   }
   function _lzNode(st, i, steps, rows, states, acc, launched) {
     const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st), N0 = rows.length;
