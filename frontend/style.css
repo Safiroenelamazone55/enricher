@@ -22848,6 +22848,6 @@ body.ibx-lb-open{overflow:hidden}
 .tk-t2__ch { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; flex: none; }
 .tk-t2__w { font-size: 12.5px; color: #918C85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px; margin-top: 1px; }
 .tk__tbl .ll-t td:first-child { max-width: 560px; }
-.tk__tbl .ll-t tbody td { height: 58px; }
+.tk__tbl .ll-t tbody td { height: 48px; }
 .tk-gocell { width: 1%; white-space: nowrap; text-align: right; border-right: 0 !important; }
 .tk__tbl .ll-t tbody tr:hover .seq-task__go { background: rgba(0,122,255,.16); }

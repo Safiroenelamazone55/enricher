@@ -31507,7 +31507,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const chTxt = r.kind === 'ap' || r.tipo === 'revisar' ? 'Revisar' : t[0];
         const who = [nm, c.company_nombre || c.empresa_nombre || '', r.origen].filter(Boolean).join(' · ');
         const l2 = who + (extra ? (who ? ' — ' : '') + '«' + extra.slice(0, 80) + (extra.length > 80 ? '…' : '') + '»' : '');
-        return `<div class="tk-t2"><span class="sed-node__ic" style="width:30px;height:30px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><div class="tk-t2__b"><div class="tk-t2__t"><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(l1)}</b><span class="tk-t2__ch" style="color:${t[1]}">${esc(chTxt)}</span></div><div class="tk-t2__w">${esc(l2) || '&nbsp;'}</div></div></div>`;
+        return `<div class="tk-t2"><span class="sed-node__ic" style="width:30px;height:30px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><div class="tk-t2__b"><div class="tk-t2__t"><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(l1)}</b><span class="tk-t2__ch" style="color:${t[1]}">${esc(chTxt)}</span></div></div></div>`;
       }
       if (k === 'due') return _tkDue(r.due, r.hora);
       if (k === 'campo') return nm ? `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>${esc(nm)}</div>` : '<span class="ll-dim">—</span>';
