@@ -422,7 +422,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
          WHERE cs.estado = 'activo' AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW()) AND st.canal = 'linkedin'
            AND st.accion IN ('invite_nota','invite','mensaje','visita','like','follow','comentario','inmail')
            AND NOT EXISTS (SELECT 1 FROM li_actions a WHERE a.contact_id = cs.contact_id AND a.step_id = st.id)
-         ORDER BY cs.next_action_at ASC NULLS FIRST LIMIT 40`);
+         ORDER BY (cs.paso > 1) DESC, cs.next_action_at ASC NULLS FIRST LIMIT 40`);
       const se = sendEngine();
       const cupoEntrada = new Map();   // «contactos que entran por día» (drip): cuántos del primer paso caben todavía hoy en cada secuencia
       for (const e of pend) {
