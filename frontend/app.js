@@ -23324,6 +23324,7 @@ const LeadManagerModule = (() => {
     const get = async (p) => { try { const r = await apiFetch(API + p); if (r && r.ok) { const j = await r.json(); return Array.isArray(j) ? j : null; } } catch (_) {} return null; };
     const [cl, cm, sq, st, co, ct, ac] = await Promise.all([get('/outbound-clients'), get('/campaigns'), get('/sequences'), get('/sequence-steps'), get('/lm/companies'), get('/lm/contacts'), get('/activities')]);
     if (cl) _clients = cl; if (cm) _campaigns = cm; if (sq) _sequences = sq; if (st) _steps = st; if (co) _companies = co; if (ct) _contacts = ct; if (ac) _activities = ac;
+    if (['sequence', 'linkedin', 'clients'].includes(_section)) { try { await _liLoad(); } catch (_) {} }
     if (_gcli) { if (cl) _gcApply(cl); else if (cm || sq || st || co || ct || ac) { const keep = _clients; _gcApply(null); _clients = keep; } }
     // Listas propias de la secuencia abierta (traen nombres de empresa/contacto copiados del servidor)
     if (_section === 'sequence' && _activeSeq) {
@@ -23348,7 +23349,7 @@ const LeadManagerModule = (() => {
     if (_dgContainerId && document.getElementById('dg-tbody')) _dgRenderRows();                 // grid de Datos
     _loadNavCounts();
   }
-  function _pulseStart() { if (_pulseTimer) return; _pulseTimer = setInterval(_pulsePoll, 15000); document.addEventListener('visibilitychange', () => { if (!document.hidden) _pulsePoll(); }); _pulsePoll(); }
+  function _pulseStart() { if (_pulseTimer) return; _pulseTimer = setInterval(_pulsePoll, 10000); document.addEventListener('visibilitychange', () => { if (!document.hidden) _pulsePoll(); }); _pulsePoll(); }
 
   // Las insignias se calculaban con listas que solo existen tras entrar en cada
   // seccion, asi que al abrir el modulo salian vacias. Este contador viene del
