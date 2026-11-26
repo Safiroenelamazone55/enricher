@@ -25307,7 +25307,7 @@ const LeadManagerModule = (() => {
     if (!steps.some(x => x.id === _sfl.sel)) _sfl.sel = steps.length ? steps[0].id : 0;
     const st = steps.find(x => x.id === _sfl.sel);
     box.innerHTML = `<div class="sfl-top"><button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqFlowClose()">← Volver a la secuencia</button><b class="sfl-title">${esc(s0 ? s0.nombre : '')}</b>${s0 ? _seqBadge(s0.estado) : ''}<span class="sfl-sp"></span><button type="button" class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+ Añadir paso</button></div>
-      <div class="sfl-main"><div class="sfl-canvas"><div class="sfl-start">Inicio</div>${steps.length ? steps.map((x, i) => _sflNode(x, i, steps[i - 1])).join('') : `<div class="sfl-empty">Esta secuencia aún no tiene pasos.</div>`}<div class="sfl-link"><button type="button" class="sfl-plus" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div><div class="sfl-start">Fin</div></div>
+      <div class="sfl-main"><div class="sfl-canvas"><div class="sfl-start">Inicio</div>${steps.length ? _sedBuildRows(steps).map(r => r.type === 'branch' ? _sedBranchHtml(r, steps, (st, idx, prevDia) => _sflNode(st, idx, prevDia != null ? { dia: prevDia } : steps[idx - 1])) : _sflNode(steps[r.idx], r.idx, steps[r.idx - 1])).join('') : `<div class="sfl-empty">Esta secuencia aún no tiene pasos.</div>`}<div class="sfl-link"><button type="button" class="sfl-plus" onclick="LeadManagerModule.openStepDrawer(${_sfl.seq})">+</button></div><div class="sfl-start">Fin</div></div>
       <div class="sfl-panel">${_sflPanel(st)}</div></div>`;
   }
   function seqFlowOpen(seqId) {
@@ -25713,10 +25713,10 @@ const LeadManagerModule = (() => {
     }).join('');
     const fin = (d.embudo.interrumpido || 0), term = (d.pasos.length ? d.pasos[d.pasos.length - 1].hechos : 0);
     const cli = _clientName(s.outbound_client_id) || '·', ini = String(cli).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    return `<div class="rd-right rd-right--flow"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
+    return `<div class="rd-right rd-right--flow"><div class="sed-cwrap"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
       <div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})"><div class="sed-start__c"><small>Remitente</small><span class="sed-start__av">${esc(ini)}</span></div><div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${_seqTzChip(s) || 'Planificación predeterminada'}</span></div></div><div class="sed-link sed-link--s"></div>
       ${nodes || '<div class="ll-empty">Sin pasos para este canal.</div>'}<div class="sed-link sed-link--s"></div><div class="rd-fin"><span>Fin</span><b>${term}</b></div></div>
-      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
+      </div><div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
   }
   function rdMode(m) { _rd.mode = m; _renderBody(); }
   function rdShow(k) { if (_rd.show.has(k)) _rd.show.delete(k); else _rd.show.add(k); _renderBody(); }
@@ -25809,8 +25809,8 @@ const LeadManagerModule = (() => {
     const start = `<div class="sed-start lz-start${launched ? ' is-live' : ''}" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia"><div class="sed-start__c"><small>Remitente</small><span class="sed-start__av">${esc((String(_clientName(s.outbound_client_id) || '·').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '·').toUpperCase())}</span></div><div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${_seqTzChip(s) || 'Planificación predeterminada'}</span></div></div>`;
     const g = _seqProg(id, s, steps);
     const launchBar = launched ? '' : `<div class="lz-launch"><div><b>${g.p1 && g.p2 ? 'Todo listo para lanzar' : 'Aún falta algo'}</b><small>${g.pasos} paso${g.pasos === 1 ? '' : 's'} · ${g.lista} prospecto${g.lista === 1 ? '' : 's'}${val.length ? ` · ${val.length} por validar` : ''}</small></div><button class="ll-pri" ${g.p1 && g.p2 ? '' : 'disabled'} onclick="LeadManagerModule.lzLaunch()">${_llI('<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', 15)} Lanzar secuencia</button></div>`;
-    const right = `<div class="lz-right">${launchBar}<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">${start}<div class="sed-link sed-link--s"></div>${steps.length ? steps.map((st, i) => _lzNode(st, i, steps, rows, states, acc, launched)).join('') : '<div class="ll-empty">Esta secuencia aún no tiene pasos.</div>'}</div>
-      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
+    const right = `<div class="lz-right">${launchBar}<div class="sed-cwrap"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">${start}<div class="sed-link sed-link--s"></div>${steps.length ? steps.map((st, i) => _lzNode(st, i, steps, rows, states, acc, launched)).join('') : '<div class="ll-empty">Esta secuencia aún no tiene pasos.</div>'}</div>
+      </div><div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div></div>`;
     return `<div class="lz">${left}${right}</div>`;
   }
   function lzTab(t) { _lzTab = t; _renderBody(); }
@@ -26452,8 +26452,10 @@ const LeadManagerModule = (() => {
   const _sedI = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   function _sedGap(steps, i) { return i ? Math.max(0, (Number(steps[i].dia) || 0) - (Number(steps[i - 1].dia) || 0)) : Math.max(0, (Number(steps[0].dia) || 1) - 1); }
   function _sedTitle(st) { return st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || _TOUCH.email)[0]; }
-  function _sedNode(st, i, steps) {
-    const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st);
+  function _sedNode(st, i, steps, prevDia) {
+    // prevDia: día del paso del que ESTE cuelga dentro de su vía (en una bifurcación el paso
+    // anterior del arreglo puede ser de otra vía y daría una espera falsa).
+    const t = _TOUCH[st.canal] || _TOUCH.email, gap = prevDia != null ? Math.max(0, (Number(st.dia) || 0) - prevDia) : _sedGap(steps, i), cb = _stepCondBadge(st);
     const hd = gap ? `Esperar durante <b>${gap} ${gap === 1 ? 'día' : 'días'}</b>` : (i ? 'Mismo día' : 'Enviar inmediatamente');
     const vs = _sflVers(st);
     return `<div class="sed-link"><button type="button" class="sed-plus" title="Añadir un paso aquí" onclick="LeadManagerModule.sedAddMenu(event,${i})">+</button></div>
@@ -26469,16 +26471,19 @@ const LeadManagerModule = (() => {
   // comparten cond_step_id con valores de `cond` distintos) — para dibujarlas como
   // árbol estilo Lemlist en vez de una fila con una etiqueta de texto suelta.
   function _sedBuildRows(steps) {
+    // Todos los pasos consecutivos que cuelgan de OTRO paso (cond_step_id) se reparten en
+    // vías, una por (paso del que cuelgan + condición): así cada camino sigue su propia
+    // línea (Sí aceptó / No aceptó / Email sin respuesta) y no se mezclan en una columna.
     const rows = []; let i = 0;
     while (i < steps.length) {
-      const st = steps[i];
-      if (st.cond_step_id) {
-        const branchId = st.cond_step_id, lanesMap = new Map(); let j = i;
-        while (j < steps.length && steps[j].cond_step_id === branchId) {
-          const c = steps[j].cond || '_'; if (!lanesMap.has(c)) lanesMap.set(c, []);
-          lanesMap.get(c).push(j); j++;
+      if (steps[i].cond_step_id) {
+        let j = i; const lanesMap = new Map();
+        while (j < steps.length && steps[j].cond_step_id) {
+          const key = steps[j].cond_step_id + '|' + (steps[j].cond || '_');
+          if (!lanesMap.has(key)) lanesMap.set(key, { cond: steps[j].cond || '_', refId: steps[j].cond_step_id, idxs: [] });
+          lanesMap.get(key).idxs.push(j); j++;
         }
-        if (lanesMap.size >= 2) { rows.push({ type: 'branch', condStepId: branchId, lanes: [...lanesMap.entries()].map(([cond, idxs]) => ({ cond, idxs })) }); i = j; continue; }
+        if (lanesMap.size >= 2) { rows.push({ type: 'branch', lanes: [...lanesMap.values()] }); i = j; continue; }
       }
       rows.push({ type: 'node', idx: i }); i++;
     }
@@ -26491,17 +26496,26 @@ const LeadManagerModule = (() => {
     const txt = canal === 'linkedin' ? (cond === 'replied' ? 'Sí, aceptó' : cond === 'no_reply' ? 'No aceptó' : raw) : raw.replace(/^si /i, '').replace(/^NO /, 'No ');
     return { bg: pos ? '#E7F6EC' : '#FBE8E8', fg: pos ? '#15803D' : '#B3261E', txt: txt || (pos ? 'Sí' : 'No') };
   }
-  function _sedBranchHtml(row, steps) {
-    const ref = steps.find(x => x.id === row.condStepId), refCanal = ref ? ref.canal : 'email', n = row.lanes.length;
+  function _sedBranchHtml(row, steps, nodeFn) {
+    nodeFn = nodeFn || ((st, idx, prevDia) => _sedNode(st, idx, steps, prevDia));
+    const n = row.lanes.length, refIds = [...new Set(row.lanes.map(l => l.refId))];
+    const ref0 = steps.find(x => x.id === refIds[0]);
+    // Una sola pregunta si todas las vías cuelgan del mismo paso; si no, un rótulo general.
+    const q = refIds.length === 1 ? _sedBranchQ(ref0 ? ref0.canal : 'email') : 'Cada vía sigue su propia línea';
     const pos = k => ((k + 0.5) / n * 100).toFixed(2) + '%';
     const drops = () => row.lanes.map((_, k) => `<span class="sed-branch__drop" style="left:${pos(k)}"></span>`).join('') + `<span class="sed-branch__bar" style="left:${pos(0)};right:${(100 - parseFloat(pos(n - 1))).toFixed(2)}%"></span>`;
     const laneHtml = row.lanes.map(l => {
+      const ref = steps.find(x => x.id === l.refId), refCanal = ref ? ref.canal : 'email';
       const tag = _sedLaneTag(l.cond, refCanal);
-      return `<div class="sed-branch__lane"><span class="sed-branch__tag" style="background:${tag.bg};color:${tag.fg}">${esc(tag.txt)}</span>
-        <div>${l.idxs.map(idx => _sedNode(steps[idx], idx, steps)).join('')}</div></div>`;
+      // Con varias fuentes, la etiqueta dice de qué paso viene la condición.
+      const src = refIds.length > 1 && ref ? ' · ' + _sedTitle(ref).split('·')[0].trim() : '';
+      let prev = ref ? Number(ref.dia) || 0 : null;
+      const nodes = l.idxs.map(idx => { const h = nodeFn(steps[idx], idx, prev); prev = Number(steps[idx].dia) || 0; return h; }).join('');
+      return `<div class="sed-branch__lane"><span class="sed-branch__tag" style="background:${tag.bg};color:${tag.fg}">${esc(tag.txt + src)}</span>
+        <div>${nodes}</div></div>`;
     }).join('');
     return `<div class="sed-branch">
-      <div class="sed-branch__q">${esc(_sedBranchQ(refCanal))}</div>
+      <div class="sed-branch__q">${esc(q)}</div>
       <div class="sed-branch__fork">${drops()}</div>
       <div class="sed-branch__lanes">${laneHtml}</div>
       <div class="sed-branch__join">${drops()}</div>
@@ -26513,7 +26527,7 @@ const LeadManagerModule = (() => {
     const sch = _seqTzChip(s);
     const rows = _sedBuildRows(steps);
     const rowsHtml = rows.map(r => r.type === 'branch' ? _sedBranchHtml(r, steps) : `<div class="sed-col">${_sedNode(steps[r.idx], r.idx, steps)}</div>`).join('');
-    return `<div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
+    return `<div class="sed-cwrap"><div class="sed-canvas" id="sed-canvas"><div class="sed-zoom" id="sed-zoom" style="transform:scale(${_sedZoom})">
         <div class="sed-col"><div class="sed-start" onclick="LeadManagerModule.openSequenceDrawer(${id})" title="Cambiar remitente, horario y cadencia de la secuencia">
           <div class="sed-start__c"><small>Remitente</small><span class="sed-start__av" title="${esc(cli)}">${esc(ini)}</span></div>
           <div class="sed-start__c"><small>Planificación de envío</small><span class="sed-start__sch">${sch ? sch : 'Planificación predeterminada'}</span></div>
@@ -26521,7 +26535,7 @@ const LeadManagerModule = (() => {
         ${rowsHtml}
         <div class="sed-col"><div class="sed-end"><div class="sed-link sed-link--s"></div><button type="button" class="sed-addpill" onclick="LeadManagerModule.sedAddMenu(event,${steps.length})">+ Añadir paso</button></div></div>
       </div>
-      <div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
+      </div><div class="sed-tools"><button title="Acercar" onclick="LeadManagerModule.sedZ(0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Alejar" onclick="LeadManagerModule.sedZ(-0.1)">${_sedI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>')}</button><button title="Ajustar al tamaño" onclick="LeadManagerModule.sedZ(0)">${_sedI('<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>')}</button><button title="Centrar" onclick="LeadManagerModule.sedCenter()">${_sedI('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>')}</button></div></div>`;
   }
   function _sedList(id, s, steps) {
     const states = steps.length ? _stepStates(steps) : [], prog = steps.length ? _stepRealProgress(steps) : [];
@@ -26561,7 +26575,9 @@ const LeadManagerModule = (() => {
   async function sedSel(id) {
     if (id === _sedSel) return;
     if (_sedDirty && !(await novaConfirm({ title: 'Cambios sin guardar', message: 'Este paso tiene cambios sin guardar. Si cambias de paso se pierden.', confirmText: 'Descartar' }))) return;
+    const c0 = document.getElementById('sed-canvas'), keep = c0 ? { t: c0.scrollTop, l: c0.scrollLeft } : null;
     _sedSel = id; _renderBody();
+    const c1 = document.getElementById('sed-canvas'); if (keep && c1) { c1.scrollTop = keep.t; c1.scrollLeft = keep.l; }
   }
   function sedView(v) { _sedView = v; try { localStorage.setItem('lm_sed_view', v === 'capacidad' ? 'flujo' : v); } catch (_) {} _renderBody(); if (v === 'capacidad') _capEnsure(_activeSeq, true); }
 
@@ -26569,6 +26585,25 @@ const LeadManagerModule = (() => {
   // Se simula día a día: entran contactos al ritmo de la secuencia, cada paso de LinkedIn consume del tope de su tipo y del tope total,
   // lo que no cabe pasa al día siguiente (cola) y empuja también los pasos que vienen detrás de esa persona.
   const _cap = { id: 0, data: null, err: '', P: null };
+  // «Manito»: se arrastra el lienzo del flujo con el mouse (en el editor de la secuencia y en la pantalla completa)
+  if (!window.__panFlow) {
+    window.__panFlow = true; let pn = null;
+    document.addEventListener('mousedown', e => {
+      if (e.button !== 0 || !e.target.closest) return;
+      const c = e.target.closest('.sfl-canvas, .sed-canvas'); if (!c) return;
+      if (e.target.closest('input, textarea, select, button, a, .sed-addpill, .sed-tools, [contenteditable]')) return;
+      pn = { c, x: e.clientX, y: e.clientY, l: c.scrollLeft, t: c.scrollTop, m: false };
+    });
+    document.addEventListener('mousemove', e => {
+      if (!pn) return; const dx = e.clientX - pn.x, dy = e.clientY - pn.y;
+      if (!pn.m && Math.abs(dx) + Math.abs(dy) > 4) { pn.m = true; pn.c.classList.add('is-pan'); }
+      if (pn.m) { pn.c.scrollLeft = pn.l - dx; pn.c.scrollTop = pn.t - dy; e.preventDefault(); }
+    });
+    document.addEventListener('mouseup', () => {
+      if (pn && pn.m) { const c = pn.c; c.classList.remove('is-pan'); c.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true }); }
+      pn = null;
+    });
+  }
   const _CAP_TIPO = { visita: 'vis', invite: 'inv', invite_nota: 'inv', mensaje: 'msg', inmail: 'inmail', like: 'react', follow: 'follow', comentario: 'comment' };
   const _CAP_NOM = { vis: 'Visitas', inv: 'Invitaciones', msg: 'Mensajes', inmail: 'InMail', react: 'Reacciones', follow: 'Seguir', comment: 'Comentarios' };
   async function _capEnsure(id, force) {
@@ -26717,7 +26752,13 @@ const LeadManagerModule = (() => {
   }
   function sedPanel() { _sedPanel = !_sedPanel; _renderBody(); }
   function sedZ(d) { _sedZoom = d === 0 ? 1 : Math.max(0.5, Math.min(1.6, +(_sedZoom + d).toFixed(2))); const z = document.getElementById('sed-zoom'); if (z) z.style.transform = `scale(${_sedZoom})`; }
-  function sedCenter() { const c = document.getElementById('sed-canvas'); if (c) c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); }
+  function sedCenter() {
+    const c = document.getElementById('sed-canvas'); if (!c) return;
+    const n = c.querySelector('.sed-node.is-on');
+    if (!n) { c.scrollTo({ top: 0, left: Math.max(0, (c.scrollWidth - c.clientWidth) / 2), behavior: 'smooth' }); return; }
+    const cr = c.getBoundingClientRect(), nr = n.getBoundingClientRect();
+    c.scrollTo({ top: Math.max(0, c.scrollTop + (nr.top - cr.top) - (c.clientHeight - nr.height) / 2), left: Math.max(0, c.scrollLeft + (nr.left - cr.left) - (c.clientWidth - nr.width) / 2), behavior: 'smooth' });
+  }
   function _sedPop(ev, html, wide) {
     ev.stopPropagation(); document.getElementById('sed-pop')?.remove();
     const m = document.createElement('div'); m.id = 'sed-pop'; m.className = 'sed-pop'; if (wide) m.style.width = wide + 'px'; m.innerHTML = html; m.onclick = e => e.stopPropagation();
