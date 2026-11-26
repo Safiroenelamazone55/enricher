@@ -82,6 +82,7 @@ function mostrarLogin(on) {
 const lgOk = () => { const ok = /.+@.+\..+/.test($('lg-email').value.trim()) && $('lg-pass').value.length > 0; $('lg-go').disabled = !ok; $('lg-go').className = 'lgo' + (ok ? ' on' : ''); };
 $('lg-email').oninput = lgOk; $('lg-pass').oninput = lgOk;
 $('lg-eye').onclick = () => { const p = $('lg-pass'); p.type = p.type === 'password' ? 'text' : 'password'; };
+$('lg-x').onclick = () => { clearInterval(_lgT); $('login').hidden = true; };
 $('lg-nova').onclick = () => chrome.tabs.create({ url: APP });
 $('lg-abrir').onclick = () => chrome.tabs.create({ url: APP });
 $('lg-forgot').onclick = () => chrome.tabs.create({ url: APP });
