@@ -12148,7 +12148,10 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
              (SELECT COUNT(*)::int FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id=cs.contact_id
                WHERE s.estado='activa' AND cs.sequence_id = s.id AND (k.email IS NULL OR k.email='')
                  AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))
-                 AND COALESCE(k.disposition,'') NOT IN ('derivado','no_es_persona','no_interesado','no_califica','no_contactar')) AS no_email_pending
+                 AND COALESCE(k.disposition,'') NOT IN ('derivado','no_es_persona','no_interesado','no_califica','no_contactar')) AS no_email_pending,
+             (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id) AS n_contactos,
+             (SELECT COUNT(*)::int FROM lm_contact_sequences x WHERE x.sequence_id=s.id AND (x.paso > 1 OR x.estado <> 'activo')) AS n_contactados,
+             (SELECT COUNT(*)::int FROM lm_contact_sequences x JOIN lm_contacts k2 ON k2.id=x.contact_id WHERE x.sequence_id=s.id AND k2.disposition IN ('respondio','interesado','reunion','aceptado')) AS n_respuestas
         FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }

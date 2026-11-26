@@ -24400,6 +24400,9 @@ const LeadManagerModule = (() => {
     </button>`;
   }
   let _sqCli = '', _sqEst = '', _sqQ = '';
+  // Secuencias: mismo estilo que Campañas (barra de búsqueda y filtros en pastillas, tabla con interruptor «Activo», estado con punto y barra de prospectos)
+  const _sx = { est: new Set(), cli: new Set(), cmp: new Set(), q: '', sort: { k: 'estado', d: 1 } };
+  const _SX_EST = [['activa', 'Activa', '#16A34A'], ['pausada', 'Pausada', '#B45309'], ['draft', 'Borrador', '#64748B'], ['completada', 'Culminada', '#1D4ED8'], ['archivada', 'Archivada', '#94A3B8']];
   function _vSequences() {
     const paN = _pendingAccept().length;
     return `
@@ -24410,29 +24413,46 @@ const LeadManagerModule = (() => {
           ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
         </div>
       </div>
-      <div class="ldh-toolbar">
-        <select class="ldh-sel" id="sq-cli" onchange="LeadManagerModule.sqSetCli(this.value)"></select>
-        <select class="ldh-sel" id="sq-est" onchange="LeadManagerModule.sqSetEst(this.value)"></select>
-        <span class="ldh-toolbar__sp"></span>
-        <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="sq-q" placeholder="Buscar secuencia…" oninput="LeadManagerModule.sqSetQ(this.value)"></div>
-        ${_lmViews('sq', ['lista', 'tablero', 'gantt'])}
-      </div>
+      <div id="sx-bar">${_sxBarHtml()}</div>
       <div id="sq-wrap"></div>`;
   }
+  const _sxAny = () => !!(_sx.est.size || _sx.cli.size || _sx.cmp.size || _sx.q);
+  function _sxBarHtml() {
+    const chip = (key, lbl, n) => `<button type="button" class="cm-chip${n ? ' on' : ''}" onclick="LeadManagerModule.sxPop(event,'${key}')">${lbl}${n ? ': <b>' + n + '</b>' : ': Todo'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    return `<div class="cm-top"><div class="lm-search cm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="sq-q" placeholder="Buscar una secuencia…" value="${esc(_sx.q)}" oninput="LeadManagerModule.sxQ(this.value)"></div>${_lmViews('sq', ['lista', 'tablero', 'gantt'])}</div>
+      <div class="cm-chips">${chip('cli', 'Cliente', _sx.cli.size)}${chip('est', 'Estado', _sx.est.size)}${chip('cmp', 'Campaña', _sx.cmp.size)}${_sxAny() ? '<button type="button" class="cm-clear" onclick="LeadManagerModule.sxClear()">Eliminar todo</button>' : ''}</div>`;
+  }
+  function _sxBarPaint() { const b = $('sx-bar'); if (!b) return; const q = $('sq-q'), had = document.activeElement === q, pos = q ? q.selectionStart : 0; b.innerHTML = _sxBarHtml(); if (had) { const n = $('sq-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} } } }
+  function _sxPopList(key) {
+    let opts = [];
+    if (key === 'est') opts = _SX_EST.map(([k, l, c]) => [k, l, _sequences.filter(x => (x.estado || 'draft') === k).length, c]);
+    else if (key === 'cli') opts = _clients.map(c => [String(c.id), c.nombre, _sequences.filter(x => String(x.outbound_client_id) === String(c.id)).length]);
+    else if (key === 'cmp') opts = (_campaigns || []).map(c => [String(c.id), c.nombre, _sequences.filter(x => String(x.campaign_id) === String(c.id)).length]).filter(o => o[2]);
+    if (!opts.length) return '<div class="cm-pop__empty">Sin opciones</div>';
+    const set = _sx[key];
+    return opts.map(o => `<label class="cm-opt"><input type="checkbox"${set.has(o[0]) ? ' checked' : ''} onchange="LeadManagerModule.sxPopTick('${key}','${encodeURIComponent(o[0])}',this.checked)"><span class="cm-opt__t">${o[3] ? `<i class="cm-dot" style="background:${o[3]}"></i>` : ''}${esc(o[1])}</span><em>${o[2]}</em></label>`).join('');
+  }
+  function sxPop(ev, key) { _cmPopOpen(ev, `<div class="cm-pop__list">${_sxPopList(key)}</div><button type="button" class="cm-pop__clear" onclick="LeadManagerModule.sxPopClear('${key}')">Eliminar filtro</button>`, 270); }
+  function sxPopTick(key, enc, on) { const v = decodeURIComponent(enc); if (on) _sx[key].add(v); else _sx[key].delete(v); _sxBarPaint(); _sqPaint(); }
+  function sxPopClear(key) { _sx[key].clear(); document.querySelectorAll('.cm-pop').forEach(p => p.remove()); _sxBarPaint(); _sqPaint(); }
+  function sxClear() { _sx.est.clear(); _sx.cli.clear(); _sx.cmp.clear(); _sx.q = ''; _sxBarPaint(); _sqPaint(); }
+  function sxQ(v) { _sx.q = v; _sqPaint(); }
+  function sxSort(k) { _sx.sort = { k, d: _sx.sort.k === k ? -_sx.sort.d : 1 }; _sqPaint(); }
+  async function sxToggle(id, on) { await seqSetEstado(id, on ? 'activa' : 'pausada'); }
   function _sqPaint() {
     const wrap = $('sq-wrap'); if (!wrap) return;
-    const selC = $('sq-cli'), selE = $('sq-est');
-    if (selC) selC.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_sqCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
-    if (selE) selE.innerHTML = `<option value="">Estado: todos</option>` + Object.entries(_SEQ).map(([k, v]) => `<option value="${k}"${_sqEst === k ? ' selected' : ''}>${v[0]}</option>`).join('');
+    _sxBarPaint();
     if (!_sequences.length) {
       wrap.innerHTML = _clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
                                        : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()');
       return;
     }
     let list = _sortSeq(_sequences);
-    if (_sqCli) list = list.filter(s => String(s.outbound_client_id || '') === _sqCli);
-    if (_sqEst) list = list.filter(s => (s.estado || 'draft') === _sqEst);
-    if (_sqQ) { const q = _sqQ.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
+    if (_sx.cli.size) list = list.filter(s => _sx.cli.has(String(s.outbound_client_id || '')));
+    if (_sx.est.size) list = list.filter(s => _sx.est.has(s.estado || 'draft'));
+    if (_sx.cmp.size) list = list.filter(s => _sx.cmp.has(String(s.campaign_id || '')));
+    if (_sx.q) { const q = _sx.q.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
+    { const o = { activa: 0, pausada: 1, draft: 2, completada: 3, archivada: 4 }, k = _sx.sort.k, d = _sx.sort.d, v = x => k === 'nombre' ? (x.nombre || '').toLowerCase() : k === 'cliente' ? (_clientName(x.outbound_client_id) || '').toLowerCase() : k === 'prospectos' ? (x.n_contactos || 0) : k === 'pasos' ? _seqSteps(x.id).length : (o[x.estado || 'draft'] ?? 9); if (k !== 'estado' || d < 0) list = [...list].sort((x, y) => (v(x) > v(y) ? 1 : v(x) < v(y) ? -1 : 0) * d); }
     if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna secuencia cumple estos filtros.</div></div>`; return; }
     if (_lmLayout.sq === 'gantt') {
       wrap.innerHTML = _lmGantt(list.map(s => { const sp = _seqSpan(s); if (!sp) return null; const v = _SEQ[s.estado || 'draft'] || _SEQ.draft; return { label: s.nombre, sub: [_clientName(s.outbound_client_id), _campaignName(s.campaign_id)].filter(Boolean).join(' · '), start: sp.start, end: sp.end, bg: v[1], fg: v[2], tag: v[0], tip: '', onclick: 'LeadManagerModule.openSequence(' + s.id + ')' }; }));
@@ -24442,44 +24462,34 @@ const LeadManagerModule = (() => {
       wrap.innerHTML = _lmBoard('sq', Object.entries(_SEQ), list, s => s.estado || 'draft', s => { const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id), n = _seqSteps(s.id).length; return '<div class="cl-bcard" onclick="LeadManagerModule.openSequence(' + s.id + ')"><div class="cl-bcard__t">' + esc(s.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (cmp ? '<div class="cl-bcard__s">' + esc(cmp) + '</div>' : '') + '<div class="cl-bcard__s">' + (n ? n + ' paso' + (n !== 1 ? 's' : '') : 'Sin pasos') + ((s.awaiting || 0) > 0 ? ' · <b>' + s.awaiting + '</b> por aprobar' : '') + '</div></div>'; });
       return;
     }
+    const th = (k, label, cls) => `<th class="cm-th ${cls || ''}" onclick="LeadManagerModule.sxSort('${k}')">${label}${_sx.sort.k === k && (k !== 'estado' || _sx.sort.d < 0) ? `<span class="cm-sortar">${_sx.sort.d > 0 ? '▲' : '▼'}</span>` : ''}</th>`;
     const rows = list.map(s => {
-      const steps = _seqSteps(s.id);
-      const cli = _clientName(s.outbound_client_id);
-      const cmp = _campaignName(s.campaign_id);
-      const canalCounts = {};
-      steps.forEach(st => { const k = st.canal || 'email'; canalCounts[k] = (canalCounts[k] || 0) + 1; });
-      const mainCanal = Object.keys(canalCounts).sort((a, b) => canalCounts[b] - canalCounts[a])[0];
-      const mt = mainCanal ? (_TOUCH[mainCanal] || _TOUCH.email) : null;
-      // Secuencia creada desde Cantera y aún sin contactos enrolados de
-      // verdad — se ve "en gris" y no se abre a editar hasta que "Mover al
-      // CRM"/"Enviar a secuencia" la active. Pedido explícito 2026-09-16:
-      // "debería haber estado como en plomito... y no debería haber sido
-      // editable... porque todavía recién se está trabajando desde cantera".
-      if (s.origen_cantera) return `<tr class="ldh-row ldh-row--locked" onclick="event.stopPropagation();showBanner('Esta secuencia todavía se está armando desde Cantera — se activa sola cuando muevas sus contactos al CRM','info')" title="Borrador desde Cantera — se activa al mover sus contactos al CRM">
-        <td><div class="ldh-name">${esc(s.nombre)} <span class="tag" style="margin-left:4px">Borrador (Cantera)</span></div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
+      const steps = _seqSteps(s.id), id = s.id, est = s.estado || 'draft', ec = (_SX_EST.find(x => x[0] === est) || _SX_EST[2]);
+      const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
+      const canalCounts = {}; steps.forEach(st => { const k = st.canal || 'email'; canalCounts[k] = (canalCounts[k] || 0) + 1; });
+      const canales = Object.keys(canalCounts).sort((x, y) => canalCounts[y] - canalCounts[x]).map(k => { const t = _TOUCH[k] || _TOUCH.email; return `<span class="cm-tag" style="color:${t[1]}">${esc(t[0])}</span>`; }).join('') || '<span class="cm-dash">-</span>';
+      const nm = String(s.nombre || '').replace(/^C\d{4}-[A-Z0-9]+-S\d+\s*-\s*/, '').trim() || s.nombre;
+      const ico = `<span class="cm-ico" style="background:hsl(${(id * 47) % 360} 60% 90%);color:hsl(${(id * 47) % 360} 55% 32%)">${esc((nm[0] || '#').toUpperCase())}</span>`;
+      if (s.origen_cantera) return `<tr class="ldh-row ldh-row--locked cm-row" onclick="showBanner('Esta secuencia todavía se está armando desde Cantera — se activa sola cuando muevas sus contactos al CRM','info')" title="Borrador desde Cantera — se activa al mover sus contactos al CRM">
+        <td class="cm-c-act"></td><td class="cm-c-name"><div class="cm-name">${ico}<div class="cm-name__t"><div class="ldh-name">${esc(s.nombre)} <span class="tag" style="margin-left:4px">Borrador (Cantera)</span></div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></div></div></td>
+        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td><td><span class="ldh-none">Aún sin contactos</span></td><td>${canales}</td><td class="ldh-num">${steps.length || '—'}</td><td><span class="cm-dash">-</span></td><td class="cm-c-more"></td></tr>`;
+      const tot = s.n_contactos || 0, hechos = s.n_contactados || 0, pct = tot ? Math.min(100, Math.round(hechos / tot * 100)) : 0;
+      const puede = ['activa', 'pausada'].includes(est);
+      return `<tr class="ldh-row cm-row" data-id="${id}">
+        <td class="cm-c-act"><label class="cm-tg" title="${puede ? (est === 'activa' ? 'Pausar la secuencia' : 'Reanudar la secuencia') : (est === 'draft' ? 'Lánzala desde la secuencia (necesita pasos y prospectos)' : 'No se puede activar en este estado')}"><input type="checkbox"${est === 'activa' ? ' checked' : ''}${puede ? '' : ' disabled'} onchange="LeadManagerModule.sxToggle(${id},this.checked)"><i></i></label></td>
+        <td class="cm-c-name" onclick="LeadManagerModule.openSequence(${id})"><div class="cm-name">${ico}<div class="cm-name__t"><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></div></div></td>
         <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
-        <td class="sq-estado"><span class="ldh-none">Aún sin contactos</span></td>
-        <td><span class="ldh-none">—</span></td>
-        <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''}` : '—'}</td>
-        <td></td>
-      </tr>`;
-      return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
-        <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
-        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
-        <td class="sq-estado">${_seqBadge(s.estado)}${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}</td>
-        <td>${mt ? `<span style="color:${mt[1]};font-weight:600">${mt[0]}</span>` : '<span class="ldh-none">Sin pasos</span>'}</td>
-        <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''} · ${steps[steps.length - 1].dia} días` : '—'}</td>
-        <td class="sq-more"><button class="dg-kebab" onclick="LeadManagerModule.seqMoreMenu(event,${s.id})" title="Opciones: duplicar, pausar, eliminar…">⋮</button></td>
-      </tr>`;
+        <td><span class="cm-st" style="--c:${ec[2]}">${ec[1]}</span>${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}</td>
+        <td>${canales}</td>
+        <td class="ldh-num" title="${steps.length ? steps[steps.length - 1].dia + ' días' : ''}">${steps.length || '—'}</td>
+        <td><div class="cm-prog" title="${hechos} de ${tot} contactados"><span class="cm-prog__bar"><i style="width:${pct}%"></i></span><b>${tot}</b></div></td>
+        <td class="cm-c-more"><button type="button" class="cm-more" aria-label="Más acciones" onclick="LeadManagerModule.seqMoreMenu(event,${id})">${_cmI('more', 16)}</button></td></tr>`;
     }).join('');
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-table--seq">
-      <colgroup><col style="width:32%"><col style="width:17%"><col style="width:12%"><col style="width:19%"><col style="width:16%"><col style="width:4%"></colgroup>
-      <thead><tr><th>Secuencia</th><th>Cliente</th><th>Estado</th><th>Canales</th><th>Pasos</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+    wrap.innerHTML = `<div class="ldh-table-wrap cm-wrapt"><table class="ldh-table cm-table"><thead><tr><th class="cm-c-act">Activo</th>${th('nombre', 'Nombre')}${th('cliente', 'Cliente')}${th('estado', 'Estado')}<th>Canales</th>${th('pasos', 'Pasos', 'ldh-num')}${th('prospectos', 'Prospectos')}<th class="cm-c-more"></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
-  function sqSetCli(v) { _sqCli = v; _sqPaint(); }
-  function sqSetEst(v) { _sqEst = v; _sqPaint(); }
-  function sqSetQ(v) { _sqQ = v; _sqPaint(); }
+  function sqSetCli(v) { _sx.cli.clear(); if (v) _sx.cli.add(String(v)); _sxBarPaint(); _sqPaint(); }
+  function sqSetEst(v) { _sx.est.clear(); if (v) _sx.est.add(v); _sxBarPaint(); _sqPaint(); }
+  function sqSetQ(v) { _sx.q = v; _sqPaint(); }
   async function openSequence(id) {
     _rd.data = null; _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; { const _sq0 = (_sequences || []).find(x => x.id === id); _seqStage = 'secuencia'; }
     _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqApprovals = null; _seqPendingNoEmail = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
@@ -45747,7 +45757,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, limEsSave, limWaSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    sxPop, sxPopTick, sxPopClear, sxClear, sxQ, sxSort, sxToggle, capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, limEsSave, limWaSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,
