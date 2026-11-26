@@ -24701,22 +24701,24 @@ const LeadManagerModule = (() => {
       + `<div class="lim2-ac lim2-ac--off"><div class="lim2-ac__h"><span class="lim2-ac__ic">${IC.tel}</span><span class="lim2-ac__t"><b>SMS y llamadas</b><small>Se podrán conectar como remitentes.</small></span><span class="cc-soon">Próximamente</span></div></div>`;
   }
   async function _limLoad(clientId) {
+    // todo en paralelo: antes iba una petición tras otra y la pantalla tardaba varios segundos
+    _lim.cargado = false; _lim.wa = {};
     try {
-      const [emR] = await Promise.all([
+      const [emR, esR] = await Promise.all([
         apiFetch(`${API}/outbound-clients/${clientId}/senders`),
+        apiFetch(`${API}/lm/send-settings`).catch(() => null),
         _liLoad(),
       ]);
       const em = emR.ok ? await emR.json() : { email: [] };
-      _lim.mail = em.email || [];
-      _lim.wapps = em.whatsapp || [];
-      try { const r = await apiFetch(`${API}/lm/send-settings`); _lim.es = r.ok ? await r.json() : null; } catch (_) { _lim.es = null; }
-      _lim.wa = {};
-      await Promise.all(_lim.wapps.map(async w => { try { const r = await apiFetch(`${API}/wa/connections/${w.id}/cola?ligero=1`); const d = r.ok ? await r.json() : null; _lim.wa[w.id] = d && d.ajustes ? d.ajustes : null; } catch (_) { _lim.wa[w.id] = null; } }));
+      _lim.mail = em.email || []; _lim.wapps = em.whatsapp || [];
+      _lim.es = esR && esR.ok ? await esR.json().catch(() => null) : null;
       _lim.li = (_li.accs || []).filter(a => a.outbound_client_id === clientId);
-      await Promise.all(_lim.mail.map(async mb => {
-        try { const r = await apiFetch(`${API}/lm/mailboxes/${mb.id}/ramp`); _lim.ramp[mb.id] = r.ok ? await r.json() : null; } catch (_) { _lim.ramp[mb.id] = null; }
-      }));
+      await Promise.all([
+        ..._lim.mail.map(async mb => { try { const r = await apiFetch(`${API}/lm/mailboxes/${mb.id}/ramp`); _lim.ramp[mb.id] = r.ok ? await r.json() : null; } catch (_) { _lim.ramp[mb.id] = null; } }),
+        ..._lim.wapps.map(async w => { try { const r = await apiFetch(`${API}/wa/connections/${w.id}/cola?ligero=1`); const d = r.ok ? await r.json() : null; _lim.wa[w.id] = d && d.ajustes ? d.ajustes : null; } catch (_) { _lim.wa[w.id] = null; } }),
+      ]);
     } catch (_) {}
+    _lim.cargado = true;
     _limPaint();
   }
   function _limNav() {
@@ -24740,6 +24742,7 @@ const LeadManagerModule = (() => {
     const cli = _clients.find(c => c.id === _lim.id) || {};
     if (_lim.tab === 'senders') { root.innerHTML = top + '<div id="lim-acc"><div class="cc-empty">Cargando…</div></div>'; _limSenders(); return; }
     if (_lim.tab === 'portal') { root.innerHTML = top + '<div id="lm-portal-box"><div class="cc-empty">Cargando…</div></div>'; try { _portalLoad(_lim.id); } catch (_) {} return; }
+    if (_lim.tab === 'limites' && !_lim.cargado) { root.innerHTML = top + '<div class="cc-empty">Cargando los límites…</div>'; return; }
     if (_lim.tab === 'limites') {
       const info = t => `<div class="lim2-ib"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>${t}</span></div>`;
       if (!_lim.mbSel || !_lim.mail.some(m => m.id === _lim.mbSel)) _lim.mbSel = (_lim.mail[0] || {}).id || 0;
