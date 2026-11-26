@@ -26489,11 +26489,11 @@ const LeadManagerModule = (() => {
     }
     return rows;
   }
-  function _sedBranchQ(canal) { return canal === 'linkedin' ? '¿Aceptó la conexión?' : canal === 'email' ? '¿Respondió?' : '¿Se cumplió la condición?'; }
+  function _sedBranchQ(canal) { return canal === 'linkedin' ? 'Si la invitación fue aceptada' : canal === 'email' ? 'Si respondió el email' : 'Si se cumple la condición'; }
   function _sedLaneTag(cond, canal) {
     const pos = _COND_POS.includes(cond);
     const raw = _stepCondText(cond, canal);
-    const txt = canal === 'linkedin' ? (cond === 'replied' ? 'Sí, aceptó' : cond === 'no_reply' ? 'No aceptó' : raw) : raw.replace(/^si /i, '').replace(/^NO /, 'No ');
+    const txt = (cond === 'replied' || cond === 'opened' || cond === 'clicked') ? 'Sí' : (cond === 'no_reply' || cond === 'not_opened' || cond === 'not_clicked') ? 'No' : raw.replace(/^si /i, '').replace(/^NO /, 'No ');
     return { bg: pos ? '#E7F6EC' : '#FBE8E8', fg: pos ? '#15803D' : '#B3261E', txt: txt || (pos ? 'Sí' : 'No') };
   }
   function _sedBranchHtml(row, steps, nodeFn) {
@@ -26515,7 +26515,7 @@ const LeadManagerModule = (() => {
         <div>${nodes}</div></div>`;
     }).join('');
     return `<div class="sed-branch">
-      <div class="sed-branch__q">${esc(q)}</div>
+      <div class="sed-branch__q"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.2"/><circle cx="18" cy="19" r="2.2"/><circle cx="6" cy="19" r="2.2"/><path d="M6 7.2v9.6M6 12c0-3 4-3 8-3h2"/></svg><span>${esc(q)}</span></div>
       <div class="sed-branch__fork">${drops()}</div>
       <div class="sed-branch__lanes">${laneHtml}</div>
       <div class="sed-branch__join">${drops()}</div>

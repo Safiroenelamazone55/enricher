@@ -22800,3 +22800,16 @@ body.ibx-lb-open{overflow:hidden}
 /* manito para mover el flujo */
 .sfl-canvas, .sed-canvas { cursor: grab; }
 .sfl-canvas.is-pan, .sed-canvas.is-pan, .sfl-canvas.is-pan *, .sed-canvas.is-pan * { cursor: grabbing !important; user-select: none; }
+
+/* ── Flujo estilo lemlist: nodos compactos, condición como cajita con icono, vías «Sí» / «No», sin repetir la condición en cada paso ── */
+.sed-col { width: 300px; } .sed-branch__lane { width: 290px; } .sed-branch__lanes { gap: 28px; }
+.sed-branch__q { display: inline-flex; align-items: center; gap: 7px; font-size: .72rem; font-weight: 500; color: #475569; background: #fff; border: 1px solid #E3E6EC; border-radius: 8px; padding: 5px 11px; }
+.sed-branch__q svg { color: #64748B; flex: none; }
+.sed-branch__tag { font-size: .66rem; font-weight: 600; padding: 2px 10px; }
+.sed-branch__lane .sed-node__cond, .sed-branch__lane .sfl-cond { display: none; }
+.sed-node__hd, .sfl-hd { padding: 6px 12px; font-size: .7rem; }
+.sed-node__bd, .sfl-body { padding: 10px 12px; gap: 10px; }
+.sed-node__ic, .sfl-ic { width: 28px; height: 28px; border-radius: 7px; }
+.sed-node__t, .sfl-nm { font-size: .82rem; font-weight: 600; }
+.sfl-node { width: 290px; border-radius: 10px; } .sfl-d { font-size: .68rem; }
+.sfl-ver { padding: 6px 12px; font-size: .78rem; } .sed-link { height: 30px; } .sfl-link { height: 34px; }
