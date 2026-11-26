@@ -25638,12 +25638,12 @@ const LeadManagerModule = (() => {
     const iso = d => d.toISOString().slice(0, 10), now = new Date(), t = iso(now), back = n => iso(new Date(now.getTime() - n * 864e5));
     const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     switch (_rd.preset) {
-      case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t];
+      case 'hoy': return [t, t]; case 'semana': return [iso(mon), t]; case '7': return [back(6), t]; case '30': return [back(29), t]; case '90': return [back(89), t]; case '180': return [back(179), t]; case '365': return [back(364), t]; case 'todo': return [back(729), t];
       case 'mes': return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), t]; case 'todo': return ['', ''];
       default: return [_rd.from, _rd.to];
     }
   }
-  const _RD_PRE = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['mes', 'Este mes'], ['todo', 'Todo el tiempo']];
+  const _RD_PRE = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['180', 'Últimos 180 días'], ['365', 'Último año'], ['todo', 'Todo el tiempo'], ['mes', 'Este mes'], ['todo', 'Todo el tiempo']];
   function _rdLabel() {
     const [f, t] = _rdRange(), fm = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
     return f ? `${fm(f)} → ${fm(t)}` : 'Todo el tiempo';
@@ -37438,7 +37438,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas + dashboards personalizados ═══════════
   // Cada pieza es un «widget» registrado en _RPW; las vistas del sistema y las personalizadas son listas de widgets.
-  const _inf = { tab: 'overview', preset: '30', from: '', to: '', disp: '', camp: 0, cli: 0, tags: new Set(), reps: new Set(), roles: new Set(), data: null, ext: {}, extBusy: {}, busy: false, met: 'resp', gran: 'W', canal: '', wd: false, tmet: 'intentado', capSel: 'linkedin', tcanal: '', chSort: 'intentados', above: {}, views: null, fopt: null };
+  const _inf = { tab: 'overview', preset: '90', from: '', to: '', disp: '', camp: 0, cli: 0, tags: new Set(), reps: new Set(), roles: new Set(), data: null, ext: {}, extBusy: {}, busy: false, met: 'resp', gran: 'W', canal: '', wd: false, tmet: 'intentado', capSel: 'linkedin', tcanal: '', chSort: 'intentados', above: {}, views: null, fopt: null };
   const _INF_SYS_ALL = ['overview', 'campaigns', 'activity', 'team', 'calls'];
   let _infPins; try { const v = JSON.parse(localStorage.getItem('lm_inf_pins') || 'null'); _infPins = new Set(Array.isArray(v) ? v : _INF_SYS_ALL); } catch (_) { _infPins = new Set(_INF_SYS_ALL); }
   const _infSavePins = () => { try { localStorage.setItem('lm_inf_pins', JSON.stringify([..._infPins])); } catch (_) {} };
@@ -37502,11 +37502,19 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   const _rpChips = (id, cur) => `<div class="rp-chips"><button class="${cur === 'up' ? 'on' : ''}" onclick="LeadManagerModule.infAbove('${id}','up')"><i style="background:#16A34A"></i>Por encima de la media</button><button class="${cur === 'down' ? 'on' : ''}" onclick="LeadManagerModule.infAbove('${id}','down')"><i style="background:#DC2626"></i>Por debajo de la media</button></div>`;
   const _rpCanalChips = (key, cur) => `<div class="rp-chips">${[['', 'Todos los canales'], ['email', 'Email'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['sms', 'SMS']].map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="LeadManagerModule.infSet('${key}','${k}')">${l}</button>`).join('')}</div>`;
   function _rpBucket(d, gran) { const x = new Date(String(d).slice(0, 10) + 'T12:00:00'); if (gran === 'M') return x.toISOString().slice(0, 7); if (gran === 'W') { const m = new Date(x); m.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return m.toISOString().slice(0, 10); } return x.toISOString().slice(0, 10); }
+  // todas las barras del rango elegido (día/semana/mes), con o sin datos
+  function _rpKeys(gran) {
+    const [f, t] = _infRange(), out = [], seen = new Set(), loc = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    for (let d = new Date(f + 'T12:00:00'), end = new Date(t + 'T12:00:00'), g = 0; d <= end && g < 1500; d.setDate(d.getDate() + 1), g++) { const b = _rpBucket(loc(d), gran); if (!seen.has(b)) { seen.add(b); out.push(b); } }
+    return out;
+  }
+  function _rpScrollEnd() { document.querySelectorAll('.rp-bars').forEach(e => { e.scrollLeft = e.scrollWidth; }); }
   function _rpStack(series, gran) {
     const keys = new Set(), maps = series.map(s => { const m = new Map(); s.rows.forEach(r => { const b = _rpBucket(r.d, gran); m.set(b, (m.get(b) || 0) + r.n); keys.add(b); }); return m; });
-    const ks = [...keys].sort(); if (!ks.length) return _rpEmpty();
+    if (!keys.size) return _rpEmpty();
+    const ks = [...new Set([..._rpKeys(gran), ...keys])].sort();
     const tot = k => maps.reduce((n, m) => n + (m.get(k) || 0), 0), mx = Math.max(1, ...ks.map(tot));
-    return `<div class="rp-bars">${ks.map(k => `<div class="rp-bar" title="${k}: ${series.map((s, i) => s.name + ' ' + (maps[i].get(k) || 0)).join(' · ')}"><span class="rp-bar__s" style="height:${Math.max(3, Math.round(tot(k) / mx * 100))}%">${series.map((s, i) => { const v = maps[i].get(k) || 0; return v ? `<i style="flex:${v};background:${s.color}"></i>` : ''; }).join('')}</span><small>${gran === 'M' ? k : k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
+    return `<div class="rp-bars" title="Desliza hacia la izquierda para ver días anteriores">${ks.map(k => `<div class="rp-bar" title="${k}: ${series.map((s, i) => s.name + ' ' + (maps[i].get(k) || 0)).join(' · ')}"><span class="rp-bar__s" style="height:${Math.max(3, Math.round(tot(k) / mx * 100))}%">${series.map((s, i) => { const v = maps[i].get(k) || 0; return v ? `<i style="flex:${v};background:${s.color}"></i>` : ''; }).join('')}</span><small>${gran === 'M' ? k : k.slice(5)}</small></div>`).join('')}</div><div class="inf-lg">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>`;
   }
   function _rpHeat(rows) {
     const g = Array.from({ length: 7 }, () => Array(24).fill(0)); rows.forEach(r => { g[r.dow][r.hr] += r.n; });
@@ -37663,7 +37671,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     });
     flush(); return out.join('') || '<div class="rd-none" style="padding:40px">Esta vista aún no tiene widgets. Pulsa «Editar» y luego «Añadir widget».</div>';
   }
-  function _infPaintBody() { const b = document.getElementById('inf-body'); if (b) b.innerHTML = _infWidgetsHtml(_infView()); }
+  function _infPaintBody() { const b = document.getElementById('inf-body'); if (b) { b.innerHTML = _infWidgetsHtml(_infView()); _rpScrollEnd(); } }
   function _vReports() {
     const I = _llI;
     if (!_inf.init) { _inf.init = true; if (_gcli) _inf.cli = _gcli; }
@@ -37681,6 +37689,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${chip('disp', 'Resultados', _inf.disp ? 1 : 0, esc((_DISPOS.find(x => x[0] === _inf.disp) || [0, 'Resultado'])[1]))}
         <span class="sp"></span><button class="ll-btn rp-exp" title="Exportar" aria-label="Exportar" onclick="LeadManagerModule.infExport()">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>', 16)}</button><button class="ll-pri" onclick="LeadManagerModule.infShare()">${I('<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"/>', 15)} Compartir</button></div>`;
     const vbar = !view.sys ? `<div class="rp-vbar"><b>${esc(view.name)}</b><small>${view.v && view.v.visibilidad === 'yo' ? 'Solo tú' : 'Visible para todo el equipo'}</small><span class="sp"></span>${_inf.editing ? `<button class="ll-btn" onclick="LeadManagerModule.infWMenu(event)">＋ Añadir widget</button><button class="ll-pri" onclick="LeadManagerModule.infEdit(false)">Listo</button>` : `<button class="ll-btn" onclick="LeadManagerModule.infEdit(true)">Editar</button>`}<button class="ll-btn" onclick="LeadManagerModule.infViewRename('${view.id}')">Renombrar</button><button class="ll-btn" style="color:#B42318" onclick="LeadManagerModule.infViewDel('${view.id}')">Eliminar</button></div>` : '';
+    setTimeout(_rpScrollEnd, 0);
     return `<div class="inf rp">${bar}${vbar}<div id="inf-body">${_infWidgetsHtml(view)}</div></div>`;
   }
   // ── Filtros ──
