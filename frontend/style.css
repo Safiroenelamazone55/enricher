@@ -22830,3 +22830,12 @@ body.ibx-lb-open{overflow:hidden}
 .lim2-emb .fin-pi-form { display: block !important; }
 
 .cm-mi.is-danger, .cm-mi.is-danger:hover { color: #B91C1C; }
+
+/* Portal del cliente: acordeones */
+.pa-ac .lim2-ac__b { display: none; padding: 0 20px 14px; border-top: 1px solid #ECE7DF; }
+.pa-ac.is-open .lim2-ac__b { display: block; }
+.pa-ac.is-open .lim2-chev { transform: rotate(180deg); }
+.pa-ac .cp-card { background: transparent; border: 0; border-top: 1px solid #ECE7DF; border-radius: 0; box-shadow: none; padding: 14px 0 6px; margin: 0 !important; }
+.pa-ac .lim2-ac__b > .cp-card:first-child, .pa-ac .lim2-ac__b > .pa-wrap:first-child { border-top: 0; }
+.pa-ac .cp-card__t { font-size: 14px; font-weight: 600; color: #213856; }
+.pa-ac .pa-wrap { padding-top: 12px; }
