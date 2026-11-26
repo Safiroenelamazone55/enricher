@@ -346,6 +346,25 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       return true;
     } catch (e) { console.error('[li] reintentar', e.message); return false; }
   }
+  // El texto de una invitación con nota / mensaje / InMail se vuelve a armar JUSTO al entregarlo con los datos más recientes del contacto y de su empresa
+  // (antes quedaba fijo desde que se puso en cola, así que un nombre de empresa corregido después no se veía). Si el texto nuevo no cabe, se conserva el anterior.
+  async function refrescarTexto(ac, cuenta) {
+    try {
+      if (!ac.step_id || !ac.contact_id || !['invite', 'message', 'inmail'].includes(ac.tipo)) return ac;
+      const { rows: [e] } = await pool.query(`SELECT st.accion, st.plantilla, st.variants, st.variant_mode, st.variant_field, k.id AS contact_id, k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.idioma, k.idiomas, k.company_id, NULLIF(TRIM(co.nombre), '') AS company_nombre
+          FROM sequence_steps st JOIN lm_contacts k ON k.id=$2 LEFT JOIN lm_companies co ON co.id=k.company_id WHERE st.id=$1`, [ac.step_id, ac.contact_id]);
+      if (!e) return ac;
+      const se = sendEngine(), ctx = await se.attachCustom(pool, { ...e, user_id: ac.user_id }, ac.user_id);
+      const v = se.pickVariant({ id: ac.step_id, plantilla: e.plantilla, variants: e.variants, variant_mode: e.variant_mode, variant_field: e.variant_field }, ctx);
+      const texto = se.renderTemplate((v && v.cuerpo) || e.plantilla || '', ctx).replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+      if (!texto) return ac;
+      if (ac.tipo === 'invite') {
+        if (e.accion !== 'invite_nota' || !ac.nota || texto === ac.nota || texto.length > (cuenta && cuenta.plan === 'premium' ? 300 : DEF.nota_max)) return ac;
+        ac.nota = texto; await pool.query('UPDATE li_actions SET nota=$2 WHERE id=$1', [ac.id, texto]);
+      } else if (texto !== ac.texto) { ac.texto = texto; await pool.query('UPDATE li_actions SET texto=$2 WHERE id=$1', [ac.id, texto]); }
+      return ac;
+    } catch (e) { console.error('[li] refrescarTexto', e.message); return ac; }
+  }
   const nota = (a, texto) => a.contact_id ? pool.query(`INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado) VALUES ($1,$2,'nota','linkedin',$3,NOW(),'hecha')`, [a.user_id, a.contact_id, texto]).catch(() => {}) : null;
 
   // Avanza la inscripción tras un paso hecho. Caso especial: tras una invitación, si los pasos que siguen solo aplican a quien ACEPTA y aún no aceptó,
@@ -753,6 +772,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (!mejor) return sinAccion(espera, motivo);
       const { rowCount } = await pool.query(`UPDATE li_actions SET estado='taken', taken_at=NOW() WHERE id=$1 AND estado='queued'`, [mejor.id]);
       if (!rowCount) return res.json({ accion: null, espera_s: 15, motivo: 'reintentar' });
+      await refrescarTexto(mejor, a);
       res.json({ accion: { id: mejor.id, tipo: mejor.tipo, url: mejor.url || CONFIG.chequeos[mejor.tipo] || '', slug: mejor.slug, nota: mejor.nota, texto: mejor.texto, params: mejor.params || null }, modo: modoSeq[mejor.sequence_id] || 'asistido', config: CONFIG });
     } catch (e) { console.error('[li] next', e.message); res.status(500).json({ error: 'Error' }); }
   });
