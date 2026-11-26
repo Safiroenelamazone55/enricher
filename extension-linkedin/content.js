@@ -79,8 +79,15 @@
     if (p.pend) return R('omitida', 'ya_pendiente');
     let con = p.con;
     if (!con) {   // «Conectar» a veces está dentro del menú «Más»
-      const mas = findBtn(T('more'), document.querySelector('main') || document);
-      if (mas) { mas.click(); await sleep(rnd(700, 1400)); con = findBtn(T('connect'), document); }
+      const main = document.querySelector('main') || document, top = main.querySelector('section') || main;
+      const esMas = b => { const t = norm(b.innerText), al = norm(b.getAttribute('aria-label')); return t === 'more' || t === 'más' || t === 'mas' || /^(more|más|mas) actions?$|^más acciones$|^more$/.test(al); };
+      const mas = btns(top).find(esMas) || btns(main).find(esMas) || findBtn(T('more'), top);
+      if (mas) {
+        mas.click(); await sleep(rnd(700, 1400));
+        const menu = [...document.querySelectorAll('[role="menu"], .artdeco-dropdown__content, .artdeco-dropdown__content-inner')].filter(vis).pop();
+        const empieza = el => { const t = norm(el.innerText || el.getAttribute('aria-label')); return T('connect').some(w => t === w || t.startsWith(w + ' ')) && !/(disconnect|desconectar|remove|quitar|eliminar)/.test(t); };
+        if (menu) con = [...menu.querySelectorAll('[role="menuitem"], li, button, a, div[role="button"]')].filter(vis).find(empieza) || null;
+      }
     }
     if (!con) return R('omitida', 'sin_boton_conectar', 'No hay botón Conectar (perfil restringido o solo seguir)', { snapshot: snapshot() });
     con.click(); await sleep(rnd(900, 1800));
