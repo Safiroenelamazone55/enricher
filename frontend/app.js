@@ -25781,7 +25781,7 @@ const LeadManagerModule = (() => {
     // Se muestra el tope QUE TÚ CONFIGURASTE. FLOW hoy trabaja hasta un 72–100 % de ese tope (cambia cada día a propósito, para no dejar patrón); si va distinto, se anota aparte.
     const usado = t[1] || 0, hoy = f.calentando ? t[2] : (t[3] != null ? t[3] : t[2]);
     const nota = (!f.calentando && t[2] != null && t[3] != null && t[2] !== t[3]) ? ` <span class="lz-lim__n" title="FLOW no llega siempre al tope: hoy se detiene en ${t[2]}. Varía cada día a propósito para no dejar un patrón.">(hoy hasta ${t[2]})</span>` : (f.calentando ? ' <span class="lz-lim__n" title="Cuenta nueva en calentamiento: el tope sube cada día.">(calentamiento)</span>' : '');
-    return `<div class="lz-lim">${_llI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 16)}<span>${t[0]}: <b>${usado}/${hoy != null ? hoy : '—'}</b>${nota} en las últimas 24 horas</span></div>`;
+    return `<div class="lz-lim">${_llI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', 16)}<span title="Es el cupo de la CUENTA de LinkedIn: todos los pasos de este mismo tipo (en esta y otras secuencias) gastan del mismo número. El avance de ESTE paso está abajo («hechos»).">${t[0]} de la cuenta (todos los pasos): <b>${usado}/${hoy != null ? hoy : '—'}</b>${nota} en las últimas 24 horas</span></div>`;
   }
   function _lzNode(st, i, steps, rows, states, acc, launched) {
     const t = _TOUCH[st.canal] || _TOUCH.email, gap = _sedGap(steps, i), cb = _stepCondBadge(st), N0 = rows.length;
