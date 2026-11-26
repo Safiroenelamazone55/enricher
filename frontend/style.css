@@ -22857,3 +22857,10 @@ body.ibx-lb-open{overflow:hidden}
 .ll__bar > .tkbar::-webkit-scrollbar { display: none; }
 .ll__bar > .tkbar > * { flex: none; }
 .ll__bar:has(> .tkbar) .ll-search { flex: 0 0 220px; width: 220px; min-width: 0; }
+
+/* Tablas de Tareas, Contactos y Empresas: la primera columna queda fija al deslizar a la derecha (con casilla: casilla + nombre) */
+.ll-t td:first-child, .ll-t th:first-child { position: sticky; left: 0; z-index: 2; background: #fff; }
+.ll-t th:first-child { z-index: 4; }
+.ll-t .ll-ck { width: 40px; min-width: 40px; max-width: 40px; box-sizing: border-box; }
+.ll-t:has(th.ll-ck:first-child) td:nth-child(2), .ll-t:has(th.ll-ck:first-child) th:nth-child(2) { position: sticky; left: 40px; z-index: 2; background: #fff; }
+.ll-t:has(th.ll-ck:first-child) th:nth-child(2) { z-index: 4; }
