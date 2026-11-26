@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.4';
+const VERSION = '0.10.5';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -168,8 +168,8 @@ async function tickInner(manual) {
     if (r.config && r.config.v !== undefined) await chrome.storage.local.set({ config: r.config });
     if (!sesion) { await logErr('aviso', 'sin_sesion_linkedin', 'No hay sesión de LinkedIn iniciada en este Chrome'); return setEstado({ msg: 'Inicia sesión en LinkedIn en este Chrome.', nivel: 'warn' }); }
     if (!r.accion && ['cuenta_distinta', 'sesion_cerrada'].includes(r.motivo)) await logErr('error', r.motivo, traducir(r.motivo), { slug });
-    if (!r.accion) return setEstado({ msg: 'Sin acciones ahora: ' + traducir(r.motivo) + (r.espera_s ? ` (reintento en ${Math.ceil(r.espera_s / 60)} min)` : ''), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug, motivo: r.motivo || '', resumen: r.resumen || null, ...(r.modo ? { modo: r.modo } : {}) });
-    await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}` + (r.modo === 'auto' ? ' (automático)' : ' (asistido: tú pulsas «Enviar» si es invitación o mensaje)'), nivel: 'work', accion: r.accion, slug, modo: r.modo || '' });
+    if (!r.accion) return setEstado({ msg: (() => { const t = traducir(r.motivo); return t.charAt(0).toUpperCase() + t.slice(1) + (r.espera_s ? ` · reintento en ${Math.ceil(r.espera_s / 60)} min` : ''); })(), nivel: r.motivo === 'cuenta_distinta' ? 'err' : 'ok', slug, motivo: r.motivo || '', resumen: r.resumen || null, ...(r.modo ? { modo: r.modo } : {}) });
+    await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}` + (r.modo === 'auto' ? '' : ' (asistido)'), nivel: 'work', accion: r.accion, slug, modo: r.modo || '' });
     // Si abrir la página o hablar con ella falla, igual se informa a Nova (si no, la acción quedaría «en curso» y se daría por fallida a los 10 min)
     let res; try { res = await ejecutar(r.accion, r.modo); } catch (e) { res = { codigo: 'fallo', error: /tard/i.test(e.message) ? 'pagina_lenta' : 'excepcion_extension', detalle: String(e && e.message || e).slice(0, 200) }; }
     if (res.codigo !== 'ok') await logErr(res.codigo === 'omitida' ? 'aviso' : 'error', 'accion_' + (res.error || res.codigo), `${r.accion.tipo} → ${r.accion.slug}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}${res.detalle ? ' — ' + res.detalle : ''}`, { tipo: r.accion.tipo, slug: r.accion.slug, codigo: res.codigo, error: res.error, detalle: res.detalle });
@@ -192,7 +192,7 @@ async function tickInner(manual) {
 }
 
 function traducir(m) {
-  return ({ cola_vacia: 'cola vacía', fuera_de_horario: 'fuera del horario', dia_no_laborable: 'día no laborable', espera_entre_acciones: 'espera entre acciones', tope_total_dia: 'tope total del día', tope_invite_dia: 'tope de invitaciones del día', tope_invitaciones_semana: 'tope semanal de invitaciones', tope_message_dia: 'tope de mensajes del día', tope_visit_dia: 'tope de visitas del día', tope_notas_mes_cuenta_gratis: 'tope mensual de notas (cuenta gratuita)', cuenta_pausada: 'cuenta pausada en Nova', cuenta_restringida: 'cuenta en pausa por restricción', cuenta_desconectada: 'cuenta desconectada', cuenta_distinta: 'ESTE CHROME TIENE OTRA CUENTA DE LINKEDIN: revisa el token', pausa_hasta: 'pausa activa', pausa_descanso: 'pausa de descanso (a propósito, cambia cada día)', accion_en_curso: 'acción en curso' })[m] || (m || '');
+  return ({ cola_vacia: 'cola vacía', fuera_de_horario: 'fuera de horario', dia_no_laborable: 'día sin envíos', espera_entre_acciones: 'espera entre acciones', tope_total_dia: 'tope diario', tope_invite_dia: 'tope de invitaciones', tope_invitaciones_semana: 'tope semanal', tope_message_dia: 'tope de mensajes', tope_visit_dia: 'tope de visitas', tope_inmail_dia: 'tope de InMail', tope_notas_mes_cuenta_gratis: 'tope de notas', cuenta_pausada: 'cuenta en pausa', cuenta_restringida: 'cuenta restringida', cuenta_desconectada: 'cuenta desconectada', cuenta_distinta: 'OTRA CUENTA en este Chrome: revisa el token', pausa_hasta: 'pausa activa', pausa_descanso: 'descanso', accion_en_curso: 'acción en curso' })[m] || (m || '');
 }
 
 // Abre el perfil (en primer plano si es asistido y es una acción real) y le pide al content script que la haga.

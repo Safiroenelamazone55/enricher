@@ -11,12 +11,12 @@ async function pintarVinculada() {
   const on = !paused && !novaPausa;
   $('hero').className = 'hero' + (on ? ' on' : '');
   $('pill').textContent = on ? 'Activa' : (novaPausa ? 'Pausada en Nova' : 'En pausa');
-  $('sub').textContent = on ? 'Ejecutando lo que Nova programe, con sus topes' : (novaPausa ? 'Nova mantiene esta cuenta en pausa' : 'Nada se ejecuta hasta que la actives');
+  $('sub').textContent = on ? 'Trabajando dentro de tus topes' : (novaPausa ? 'En pausa en Nova' : 'Actívala para empezar');
   $('toggle').textContent = paused ? 'Activar' : 'Pausar';
   $('toggle').className = paused ? 'go' : 'pri';
   $('swon').checked = on;
   $('st').className = 'msg ' + (e.nivel || '');
-  $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Última comprobación: ' + new Date(e.t).toLocaleTimeString() + '</small>' : '') + '</div>';
+  $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Revisado ' + new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</small>' : '') + '</div>';
   {
     // Muestra el nombre y el usuario de LinkedIn, no la URL completa
     const base = String(e.slug || '').replace(/-[a-z0-9]{6,12}$/i, '');
@@ -26,9 +26,9 @@ async function pintarVinculada() {
   }
   pintarExtra(on ? e : { ...e, resumen: null });
   const md = $('modo');
-  if (e.modo === 'auto') { md.className = 'modo au'; md.innerHTML = '<b>Automático</b><span>FLOW envía invitaciones y mensajes por sí solo, dentro de los topes y el horario. No tienes que pulsar nada.</span>'; }
-  else if (e.modo) { md.className = 'modo as'; md.innerHTML = '<b>Asistido</b><span>Las visitas se hacen solas. En invitaciones y mensajes FLOW deja el texto escrito y <u>tú pulsas «Enviar»</u>.</span>'; }
-  else { md.className = 'modo nd'; md.innerHTML = '<b>Detectando…</b><span>Se confirma en la próxima comprobación con Nova.</span>'; }
+  if (e.modo === 'auto') { md.className = 'modo au'; md.innerHTML = '<b>Automático</b><span>Envía solo, con topes y horario.</span>'; }
+  else if (e.modo) { md.className = 'modo as'; md.innerHTML = '<b>Asistido</b><span>Tú pulsas <u>«Enviar»</u>.</span>'; }
+  else { md.className = 'modo nd'; md.innerHTML = '<b>Detectando…</b><span></span>'; }
 
 }
 
@@ -45,7 +45,7 @@ function pintarExtra(e) {
   let h = '';
   let cuando, sub;
   if (v.en_ventana) { cuando = 'Trabajando'; sub = 'hasta las ' + esc(v.finTxt || hh(v.fin)); }
-  else if (v.descanso) { cuando = 'Descanso'; sub = 'vuelve a las ' + esc(v.hora) + ' (faltan ' + faltan(v.ts) + ')'; }
+  else if (v.descanso) { cuando = 'Descanso'; sub = 'vuelve a las ' + esc(v.hora) + ' · ' + faltan(v.ts); }
   else if (v.ts) { cuando = esc(v.dia) + ' ' + hora(v.ts); sub = 'trabaja de ' + esc(v.hora) + ' a ' + esc(v.finTxt || hh(v.fin)) + ' · ' + esc(v.tz); }
   else { cuando = 'Sin horario'; sub = 'revisa los días en Nova'; }
   h += '<div class="sec">Resumen</div><div class="tiles"><div class="tile"><small>En cola</small><b>' + r.en_cola + '</b><span>' + (partes || 'vacía') + '</span></div><div class="tile"><small>Horario</small><b>' + cuando + '</b><span>' + sub + '</span></div></div>';
@@ -64,7 +64,7 @@ async function pintarProx(forzar) {
   const fila = p => '<div class="nx' + (p.en_curso ? ' cur' : '') + '"><span class="tm">' + (p.en_curso ? 'ahora' : '~' + hora(p.ts)) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span></div>';
   let h = '<div class="sec">Próximas acciones de hoy' + (hoy.length ? '<span class="ct">' + hoy.length + '</span>' : '') + '</div>';
   if (!r.total) h += '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
-  else h += '<div class="nxl">' + (ver.length ? ver.map(fila).join('') : '<div class="nx"><span class="nm" style="color:var(--mut)">Nada más por hoy: lo siguiente sale en el próximo horario (' + r.total + ' en cola).</span></div>') + '<button class="vermas" id="vermas">Ver toda la lista (' + r.total + (r.total >= 80 ? '+' : '') + ') →</button></div><p class="foot">Horas estimadas: cambian un poco cada vez a propósito.</p>';
+  else h += '<div class="nxl">' + (ver.length ? ver.map(fila).join('') : '<div class="nx"><span class="nm" style="color:var(--mut)">Nada más por hoy (' + r.total + ' en cola).</span></div>') + '<button class="vermas" id="vermas">Ver toda la lista (' + r.total + (r.total >= 80 ? '+' : '') + ') →</button></div><p class="foot">Horas estimadas: cambian un poco cada vez a propósito.</p>';
   box.innerHTML = h;
   const vm = $('vermas'); if (vm) vm.onclick = () => mostrarPestana('lista');
 }
