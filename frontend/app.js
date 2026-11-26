@@ -31365,7 +31365,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (!pend && due < new Date(Date.now() - 45 * 864e5)) return;
       out.push({ kind: 'act', key, tipo: rev ? 'revisar' : (a.canal === 'llamada' || a.canal === 'call' || a.tipo === 'llamada' ? 'call' : ['email', 'linkedin', 'whatsapp', 'sms'].includes(a.canal) ? a.canal : 'task'), titulo: (a.nota || String(a.tipo || 'tarea').replace(/_/g, ' ')).slice(0, 120), due, hora: '', c, cid: a.contact_id, act: a, origen: '', campId: '', prio: _tkPrio(a.nota), resp: a.tipo === 'revisar_respuesta', estado: pend ? estOf(due) : 'hecho', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' });
     });
-    if (Array.isArray(_apList)) _apList.filter(a => (!a.estado || a.estado === 'awaiting') && (!_gcli || (_apCliOk(a) && byId.has(a.contact_id)))).forEach(a => { const c = byId.get(a.contact_id) || {}, key = 'p' + a.id; out.push({ kind: 'ap', key, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: seqOf(a.sequence_id).nombre || '', campId: camp(a.sequence_id), prio: 'ninguno', estado: 'venc', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' }); });
+    if (Array.isArray(_apList)) _apList.filter(a => (!a.estado || a.estado === 'awaiting') && (!_gcli || (_apCliOk(a) && byId.has(a.contact_id)))).forEach(a => { const c = byId.get(a.contact_id) || {}, key = 'p' + a.id; out.push({ kind: 'ap', key, apId: a.id, tipo: 'revisar', titulo: 'Aprobar email: ' + (a.asunto || ''), due: today, hora: '', c, cid: a.contact_id, seqId: a.sequence_id, origen: seqOf(a.sequence_id).nombre || '', campId: camp(a.sequence_id), prio: 'ninguno', estado: 'venc', lect: rd.has(key) ? 'leido' : 'noleido', score: _tkScore(c), owner: 'me' }); });
     return out.sort((x, y) => x.due - y.due);
   }
   // ── Definición de los campos filtrables (los de Lemlist primero; después los propios de Nova) ──
@@ -31500,7 +31500,15 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const sc = { alto: ['Alto', '#DC2626'], medio: ['Medio', '#F59E0B'], bajo: ['Bajo', '#2F6BFF'], muybajo: ['Muy bajo', '#98A1AC'] }, pr = { alto: ['Alto', '#DC2626'], medio: ['Medio', '#F59E0B'], baja: ['Baja', '#2F6BFF'] };
     const cell = (k, r) => {
       const c = r.c || {}, nm = [c.nombre, c.apellido].filter(Boolean).join(' ');
-      if (k === 'titulo') { const t = _TOUCH[r.tipo] || _TOUCH.task; return `<div class="ll-name"><span class="sed-node__ic" style="width:28px;height:28px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(r.titulo)}</b></div>`; }
+      if (k === 'titulo') {
+        const t = _TOUCH[r.tipo] || _TOUCH.task, full = String(r.titulo || ''), cut = full.indexOf(' — ');
+        let l1 = r.kind === 'act' && cut > 0 ? full.slice(0, cut) : full, extra = r.kind === 'act' && cut > 0 ? full.slice(cut + 3).replace(/^\[[^\]]*\]\s*/, '') : '';
+        if (r.kind === 'ap') l1 = 'Aprobar email · ' + full.replace(/^Aprobar email:\s*/, '');
+        const chTxt = r.kind === 'ap' || r.tipo === 'revisar' ? 'Revisar' : t[0];
+        const who = [nm, c.company_nombre || c.empresa_nombre || '', r.origen].filter(Boolean).join(' · ');
+        const l2 = who + (extra ? (who ? ' — ' : '') + '«' + extra.slice(0, 80) + (extra.length > 80 ? '…' : '') + '»' : '');
+        return `<div class="tk-t2"><span class="sed-node__ic" style="width:30px;height:30px;color:${t[1]};background:${t[1]}18">${_sedI(t[2], 15)}</span><div class="tk-t2__b"><div class="tk-t2__t"><b${r.lect === 'leido' ? ' style="font-weight:500"' : ''}>${esc(l1)}</b><span class="tk-t2__ch" style="color:${t[1]}">${esc(chTxt)}</span></div><div class="tk-t2__w">${esc(l2) || '&nbsp;'}</div></div></div>`;
+      }
       if (k === 'due') return _tkDue(r.due, r.hora);
       if (k === 'campo') return nm ? `<div class="ll-name"><span class="ll-av" style="background:${_llAvColor(nm)}">${esc(nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>${esc(nm)}</div>` : '<span class="ll-dim">—</span>';
       if (k === 'score') { const x = sc[r.score]; return x ? `<span class="tk-sc">${_tkFire(r.score, 16)}${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
@@ -31510,7 +31518,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (k === 'prioridad') { const x = pr[r.prio]; return x ? `<span class="tk-sc"><i style="background:${x[1]}"></i>${x[0]}</span>` : '<span class="ll-dim">—</span>'; }
       return '<span class="ll-dim">—</span>';
     };
-    const body = all.slice(0, 200).map(r => `<tr onclick="LeadManagerModule.tkOpen('${r.key}')">${cols.map(c => `<td>${cell(c[0], r)}</td>`).join('')}</tr>`).join('');
+    const body = all.slice(0, 200).map(r => `<tr onclick="LeadManagerModule.tkOpen('${r.key}')">${cols.map(c => `<td>${cell(c[0], r)}</td>`).join('')}<td class="tk-gocell"><span class="seq-task__go">${r.kind === 'ap' || r.tipo === 'revisar' ? 'Revisar' : 'Hacer tarea'} ›</span></td></tr>`).join('');
     return `<div class="tk">${strip}
       <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="tk-q" placeholder="Buscar una tarea…" value="${esc(_tk.q)}" autocomplete="off" oninput="LeadManagerModule.tkSearch(this.value)"></label>
         <button class="ll-btn${nF ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${nF ? ` <i class="ll-n">${nF}</i>` : ''}</button><span class="sp"></span>
@@ -31519,7 +31527,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <button class="ll-btn" onclick="LeadManagerModule.tkCreate()">${I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Crear tarea</button>
         <button class="ll-pri" ${first ? '' : 'disabled'} onclick="LeadManagerModule.tkStart()">${I('<polygon points="5 3 19 12 5 21 5 3"/>', 14)} Iniciar ${all.length} tarea${all.length === 1 ? '' : 's'}</button></div>
       ${_tk.filtOpen ? _tkFilterBar() : ''}
-      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length}" class="ll-empty">${rows.length ? 'No tienes ninguna tarea con este estado.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
+      <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}<th class="tk-gocell"></th></tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length + 1}" class="ll-empty">${rows.length ? 'No tienes ninguna tarea con este estado.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
       <div class="ll__foot"><span><b>${all.length ? 1 : 0} - ${Math.min(200, all.length)}</b> de ${all.length}</span></div></div>`;
   }
   function tkView(v) {
@@ -31816,7 +31824,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function tkOpen(key) {
     const r = _tkRows(true).find(x => x.key === key); if (!r) return; _tkMarkRead(key);
     if (r.kind === 'seq') { seqTaskOpen(r.seqId, r.cid); return; }
-    if (r.kind === 'ap') { _tk.classic = true; _taskStat = 'approve'; _renderBody(); return; }
+    if (r.kind === 'ap') {
+      _tk.classic = false;
+      const lst = _tkApply(_tkRows(_tkWantsDone()), _dayOf(new Date())).filter(x => x.kind === 'ap'), q = lst.some(x => x.key === key) ? lst : [r];
+      _apQ = q.map(x => ({ id: x.apId, sequence_id: x.seqId, contact_id: x.cid })); _apQi = Math.max(0, q.findIndex(x => x.key === key));
+      _cpFromGlobal = true; _cpHistSeq.clear(); _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _cpReturnTo = null;
+      _apQOpen(); return;
+    }
     openContactPage(r.cid);
   }
   function tkStart() {
