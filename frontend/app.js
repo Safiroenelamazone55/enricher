@@ -37438,12 +37438,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   }
   // ═══════════ Informes (estilo Lemlist): Overview, Campañas, Actividad, Equipo y Llamadas + dashboards personalizados ═══════════
   // Cada pieza es un «widget» registrado en _RPW; las vistas del sistema y las personalizadas son listas de widgets.
-  const _inf = { tab: 'overview', preset: '90', from: '', to: '', disp: '', camp: 0, cli: 0, tags: new Set(), reps: new Set(), roles: new Set(), data: null, ext: {}, extBusy: {}, busy: false, met: 'resp', gran: 'W', canal: '', wd: false, tmet: 'intentado', capSel: 'linkedin', tcanal: '', chSort: 'intentados', above: {}, views: null, fopt: null };
+  const _inf = { tab: 'overview', preset: '90', from: '', to: '', disp: '', camp: 0, cli: 0, tags: new Set(), reps: new Set(), roles: new Set(), data: null, ext: {}, extBusy: {}, busy: false, met: 'resp', gran: 'D', canal: '', wd: false, tmet: 'intentado', capSel: 'linkedin', tcanal: '', chSort: 'intentados', above: {}, views: null, fopt: null };
   const _INF_SYS_ALL = ['overview', 'campaigns', 'activity', 'team', 'calls'];
   let _infPins; try { const v = JSON.parse(localStorage.getItem('lm_inf_pins') || 'null'); _infPins = new Set(Array.isArray(v) ? v : _INF_SYS_ALL); } catch (_) { _infPins = new Set(_INF_SYS_ALL); }
   const _infSavePins = () => { try { localStorage.setItem('lm_inf_pins', JSON.stringify([..._infPins])); } catch (_) {} };
   const _INF_SYS = {
-    overview: ['Overview', 'M18 20V10M12 20V4M6 20v-6', ['funnel', 'class', 'ftime', 'tasks', 'channels', 'problems']],
+    overview: ['Overview', 'M18 20V10M12 20V4M6 20v-6', ['funnel', 'class', 'ftime', 'vol_ov', 'tasks', 'channels', 'problems']],
     campaigns: ['Campañas', 'M22 2 11 13M22 2l-7 20-4-9-9-4z', ['funnel', 'camp_perf', 'ftime', 'cohorts', 'steps']],
     activity: ['Actividad', 'M22 12h-4l-3 9L9 3l-3 9H2', ['kpi_out', 'volume', 'churn', 'capacity', 'act_email', 'act_li', 'act_wa', 'act_sms', 'act_calls']],
     team: ['Equipo', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', ['t_rank', 't_tasks', 't_calls', 't_cap', 't_trends', 't_matrix']],
@@ -37602,6 +37602,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const rows = d.volume || [], ks = Object.keys(_RP_KIND);
       return _rpStack(ks.map(k => ({ name: _RP_KIND[k][0], color: _RP_KIND[k][1], rows: rows.filter(r => r.kind === k) })).filter(s => s.rows.length), _inf.gran);
     } },
+    vol_ov: { t: 'Actividad diaria por canal', tip: 'Cada acción hecha ese día (emails enviados, visitas, invitaciones, mensajes y llamadas), incluidas las automáticas. A diferencia del embudo, aquí un prospecto cuenta cada vez que se le toca.', srcs: ['activity'], half: false, hd: () => _rpGran(), html: d => _RPW.volume.html(d) },
     churn: { t: 'Abandono de prospectos a lo largo del tiempo', tip: 'Prospectos que salieron de la secuencia: pausas de secuencia y marcados como no interesado, no califica o no contactar.', srcs: ['activity'], half: true, hd: () => _rpGran(), html: d => _rpStack([{ name: 'Abandonos', color: '#DC2626', rows: d.churn || [] }], _inf.gran) },
     capacity: { t: 'Capacidad de envío', tip: 'Promedio diario enviado frente al límite configurado de los remitentes.', srcs: ['activity'], hd: () => `<label class="rp-tg"><span class="cm-sw"><input type="checkbox"${_inf.wd ? ' checked' : ''} onchange="LeadManagerModule.infSet('wd',this.checked)"><i></i></span>Solo días laborables</label>`, html: d => {
       const C = d.capacity || {}, cid = _inf.cli || _gcli || 0;
