@@ -22828,3 +22828,5 @@ body.ibx-lb-open{overflow:hidden}
 .lim2-emb .lim2-sub { margin: 0 0 10px; }
 @media (max-width: 760px) { .lim2-fr { grid-template-columns: 1fr; gap: 6px; } }
 .lim2-emb .fin-pi-form { display: block !important; }
+
+.cm-mi.is-danger, .cm-mi.is-danger:hover { color: #B91C1C; }

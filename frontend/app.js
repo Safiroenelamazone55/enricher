@@ -25359,39 +25359,29 @@ const LeadManagerModule = (() => {
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
   // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
   // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
+  Object.assign(_CM_ICO, {
+    flow: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.5 6H12a3 3 0 0 1 3 3v.5M8.5 18H12a3 3 0 0 0 3-3v-.5"/>',
+    bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', play: '<path d="M7 4l13 8-13 8z"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+    dl: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>', trash: '<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/>'
+  });
   function seqMoreMenu(ev, seqId) {
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const s = _sequences.find(x => x.id === seqId);
-    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
-    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    let html = `<div class="cp-mark-menu__list">`
-      + item('Ver como flujo (editar pasos)', `LeadManagerModule.seqFlowOpen(${seqId})`)
-      + (s && s.campaign_id ? item('⚙ Configuración de la campaña', `LeadManagerModule.openCampaignConfig(${s.campaign_id})`) : '')
-      + item(s && s.linkedin_auto ? '⏸ Quitar «LinkedIn automático»' : '⚡ Activar «LinkedIn automático»', `LeadManagerModule.seqLiAuto(${seqId})`)
-      + item('＋ Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
-      + item('＋ Agregar contacto', `LeadManagerModule.seqAddContactOpen(${seqId})`)
-      + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
-      + item(s && s.estado === 'pausada' ? '► Reactivar todo' : 'II Pausar todo', s && s.estado === 'pausada' ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
-      + item('Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
-      + item('Descargar plantillas (Word / PDF)', `LeadManagerModule.seqCopyDocOpen(${seqId})`)
-      + '<div class="cp-mark-menu__sep"></div>'
-      + item('Duplicar…', `LeadManagerModule.seqDuplicateOpen(${seqId})`)
-      + item('<span style="color:#B91C1C">Eliminar</span>', `LeadManagerModule.confirmDeleteSequence(${seqId})`)
-      + `</div>`;
-    const menu = document.createElement('div');
-    menu.className = 'cp-mark-menu';
-    menu.style.minWidth = '190px';
-    menu.innerHTML = html;
-    document.body.appendChild(menu);
-    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
-    const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
-    // Bug reportado 2026-09-01: le faltaba el cierre por clic afuera (todos los demás
-    // menús de este estilo lo tienen) — se quedaba flotando en pantalla hasta que se
-    // hacía clic en una de sus propias opciones, incluso cambiando de sección.
-    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+    const s = _sequences.find(x => x.id === seqId); if (!s) return;
+    const it = (ic, l, fn, cls) => `<button type="button" class="cm-mi${cls ? ' ' + cls : ''}" onclick="LeadManagerModule._cmPopClose();${fn}">${_cmI(ic)}<span>${l}</span></button>`;
+    const pausada = s.estado === 'pausada';
+    _cmPopOpen(ev, it('flow', 'Ver como flujo (editar pasos)', `LeadManagerModule.seqFlowOpen(${seqId})`)
+      + (s.campaign_id ? it('gear', 'Configuración de la campaña', `LeadManagerModule.openCampaignConfig(${s.campaign_id})`) : '')
+      + it(s.linkedin_auto ? 'pause' : 'bolt', s.linkedin_auto ? 'Quitar «LinkedIn automático»' : 'Activar «LinkedIn automático»', `LeadManagerModule.seqLiAuto(${seqId})`)
+      + it('plus', 'Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
+      + it('users', 'Agregar contacto', `LeadManagerModule.seqAddContactOpen(${seqId})`)
+      + it('edit', 'Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
+      + it(pausada ? 'play' : 'pause', pausada ? 'Reactivar todo' : 'Pausar todo', pausada ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
+      + it('pdf', 'Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
+      + it('dl', 'Descargar plantillas (Word / PDF)', `LeadManagerModule.seqCopyDocOpen(${seqId})`)
+      + '<div class="cm-pop__sep"></div>'
+      + it('copy', 'Duplicar…', `LeadManagerModule.seqDuplicateOpen(${seqId})`)
+      + it('trash', 'Eliminar', `LeadManagerModule.confirmDeleteSequence(${seqId})`, 'is-danger'), 290);
   }
 
   // ── Duplicar secuencia (pasos + ajustes, sin contactos) ──
