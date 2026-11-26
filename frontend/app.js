@@ -24891,10 +24891,11 @@ const LeadManagerModule = (() => {
       ${r2('Días de calentamiento', stp('ramp_dias', 60))}
       <div class="lim2-stt">${estado}</div>
       <div class="lim2-div"></div>
-      ${r2('Empieza a trabajar a las (hora) <small>En la zona horaria de la cuenta. Los días y la zona de cada campaña están en su configuración.</small>', stp('hora_ini', 23))}
+      ${r2('Empieza a trabajar a las (hora) <small>La zona horaria y los días los define cada secuencia.</small>', stp('hora_ini', 23))}
       ${r2('Deja de trabajar a las (hora)', stp('hora_fin', 24, 1))}
       ${r2('Días de trabajo', '<div class="lim2-days">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, k) => `<label><input type="checkbox" id="lim-li-dia-${a.id}-${k + 1}"${(a.dias || []).includes(k + 1) ? ' checked' : ''}><span>${d}</span></label>`).join('') + '</div>')}
       ${r2('Tipo de cuenta de LinkedIn <small>Premium / Sales Navigator permite InMail y más notas de invitación.</small>', `<select class="lim2-sel lim2-sel--in" id="lim-li-plan-${a.id}"><option value="gratis"${a.plan !== 'premium' ? ' selected' : ''}>Gratuita</option><option value="premium"${a.plan === 'premium' ? ' selected' : ''}>Premium / Sales Navigator</option></select>`)}
+      ${r2('Fecha de renovación de la suscripción <small>Te avisamos 2 días antes en las notificaciones. Se repite cada mes.</small>', `<input class="lim2-sel lim2-sel--in" type="date" id="lim-li-ren-${a.id}" value="${esc(String(a.plan_renovacion || '').slice(0, 10))}">`)}
       <div class="ctu-err" id="lim-li-e-${a.id}"></div>
       <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limLiSave(${a.id})">Guardar</button><button class="btn btn--ghost btn--sm" title="Vuelve a empezar el calentamiento desde el día 1" onclick="LeadManagerModule.limLiRestart(${a.id})">Reiniciar calentamiento</button><span id="lim-li-msg-${a.id}" class="mbh-msg"></span></div></div>`;
   }
@@ -24905,7 +24906,7 @@ const LeadManagerModule = (() => {
     ['inv_dia', 'inv_semana', 'msg_dia', 'vis_dia', 'total_dia', 'inmail_dia', 'hora_ini', 'hora_fin', 'ramp_inicio', 'ramp_paso', 'ramp_dias', 'react_dia', 'follow_dia', 'comment_dia'].forEach(k => { body[k] = Number(g(k)); });
     body.gap_min = Math.max(1, Number(g('gapmin'))) * 60; body.gap_max = Math.max(1, Number(g('gapmax'))) * 60;
     const dd = [1, 2, 3, 4, 5, 6, 7].filter(k => (document.getElementById(`lim-li-dia-${id}-${k}`) || {}).checked); if (!dd.length) { const e0 = document.getElementById(`lim-li-e-${id}`); if (e0) e0.textContent = 'Elige al menos un día de trabajo'; return; } body.dias = dd;
-    body.tz = (document.getElementById(`lim-li-tz-${id}`) || {}).value || a.tz; body.plan = (document.getElementById(`lim-li-plan-${id}`) || {}).value || a.plan;
+    body.tz = (document.getElementById(`lim-li-tz-${id}`) || {}).value || a.tz; body.plan = (document.getElementById(`lim-li-plan-${id}`) || {}).value || a.plan; body.plan_renovacion = (document.getElementById(`lim-li-ren-${id}`) || {}).value || '';
     const errEl = document.getElementById(`lim-li-e-${id}`), msg = document.getElementById(`lim-li-msg-${id}`);
     try {
       const r = await apiFetch(`${API}/li/accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -54752,7 +54753,7 @@ const RNotifPanel = (() => {
         _dismissed = new Set((dr.ok ? await dr.json() : []).map(d => `${d.kind}:${d.ref_id}`));
       } catch (_) { _dismissed = new Set(); }
       if (_dismissed.size) {
-        for (const key of ['menciones', 'agentes', 'tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
+        for (const key of ['menciones', 'agentes', 'renovaciones', 'tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
           if (!Array.isArray(data[key])) continue;
           const before = data[key].length;
           data[key] = data[key].filter(x => !_dismissed.has(`${key}:${x.id}`));
@@ -54763,6 +54764,11 @@ const RNotifPanel = (() => {
         const mr = await apiFetch(`${API}/mentions`);
         const mens = mr.ok ? await mr.json() : [];
         if (mens.length) { data.menciones = mens; data.total = (data.total || 0) + mens.length; }
+      } catch (_) {}
+      try {
+        const rr = await apiFetch(`${API}/li/renovaciones`);
+        const rn = (rr.ok ? await rr.json() : []).filter(x => !_dismissed.has(`renovaciones:${x.id}`));
+        if (rn.length) { data.renovaciones = rn; data.total = (data.total || 0) + rn.length; }
       } catch (_) {}
       _render(data);
       _updateBadge(_eventosDe(data));
@@ -54828,7 +54834,7 @@ const RNotifPanel = (() => {
 
   // Avisos = cosas que ocurren (menciones, sistema, listas para cerrar). Pendientes = lo atrasado o por ordenar (vencidas, sin responsable, sin fecha…).
   // La campana cuenta solo avisos: el atraso no debe llenarla de notificaciones.
-  const _eventosDe = d => ['menciones', 'agentes', 'tareas_completas', 'proyectos_completos'].reduce((a, k) => a + ((d && d[k]) || []).length, 0);
+  const _eventosDe = d => ['menciones', 'agentes', 'tareas_completas', 'proyectos_completos', 'renovaciones'].reduce((a, k) => a + ((d && d[k]) || []).length, 0);
   const _pendientesDe = d => ['tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas'].reduce((a, k) => a + ((d && d[k]) || []).length, 0);
   function toggleCat(k) { if (_openCats.has(k)) _openCats.delete(k); else _openCats.add(k); if (_lastData) _render(_lastData); }
   function goVencidas() { try { RChatPanel.close(); } catch (_) {} document.querySelector('#sidebar .snav-item[data-tab="mgmt-mywork"]')?.click(); }
@@ -54889,6 +54895,7 @@ const RNotifPanel = (() => {
         actions: m => [{ lbl: 'Abrir', on: `RNotifPanel.openMention(${m.id},${m.task_id || 0})`, pri: true }] },
       { key: 'agentes', tone: 'red', badge: 'Sistema', ico: 'pulse', nameKey: 'titulo', task: false,
         sub: a => esc(a.message || ''), action: () => `WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('agentes'),80)`, link: 'Ver agentes' },
+      { key: 'renovaciones', tone: 'orange', badge: 'Renovar suscripción', ico: 'calendar', nameKey: 'nombre', task: false, action: t => `RChatPanel.close&&RChatPanel.close();LeadManagerModule.openClientLimits(${t.cliente_id},'limites')`, link: 'Abrir ajustes', sub: t => (t.dias <= 0 ? 'Se renueva <b>hoy</b>' : t.dias === 1 ? 'Se renueva <b>mañana</b>' : 'Se renueva en <b>2 días</b>') + ' · ' + t.fecha },
       { key: 'tareas_completas', tone: 'green', badge: 'Lista para cerrar', ico: 'check', nameKey: 'titulo', task: true,
         sub: t => `${t._n || '?'} de ${t._n || '?'} subtareas completadas${[t.client_nombre, t.project_nombre].filter(Boolean).length ? ' · ' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''}`,
         actions: t => [

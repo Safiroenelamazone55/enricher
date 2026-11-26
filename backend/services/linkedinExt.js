@@ -246,6 +246,7 @@ async function ensure(pool) {
     ultimo_visto TIMESTAMPTZ, ext_version TEXT NOT NULL DEFAULT '', li_nombre TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'gratis'`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS ext_version_at TIMESTAMPTZ`).catch(() => {});
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan_renovacion DATE`).catch(() => {});
   await pool.query(`ALTER TABLE li_accounts ALTER COLUMN inmail_dia SET DEFAULT 5, ALTER COLUMN gap_min SET DEFAULT 300, ALTER COLUMN gap_max SET DEFAULT 1200`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS li_slug TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS proxima_accion_at TIMESTAMPTZ`);
@@ -534,6 +535,22 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   const publica = a => { const { token_hash, ...r } = a; return r; };
 
   // ───────── Lado Nova (sesión web) ─────────
+  app.get('/api/li/renovaciones', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT a.id, a.nombre, a.outbound_client_id AS cliente_id, a.plan, a.plan_renovacion::text AS f, oc.nombre AS cliente
+          FROM li_accounts a LEFT JOIN outbound_clients oc ON oc.id=a.outbound_client_id WHERE a.user_id=$1 AND a.plan_renovacion IS NOT NULL`, [req.workspaceOwnerId]);
+      const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
+      const out = [];
+      for (const r of rows) {
+        let d = new Date(r.f + 'T00:00:00Z'); if (isNaN(d)) continue;
+        let g = 0; while (d < hoy && g++ < 600) { const y = d.getUTCFullYear(), m = d.getUTCMonth(), dia = d.getUTCDate(); const n = new Date(Date.UTC(y, m + 1, 1)); const ult = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate(); d = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), Math.min(dia, ult))); }
+        const dias = Math.round((d - hoy) / 864e5);
+        if (dias <= 2) out.push({ id: r.id * 10000 + ((d.getUTCFullYear() % 100) * 100 + d.getUTCMonth() + 1), cuenta_id: r.id, cliente_id: r.cliente_id, nombre: [r.cliente, r.plan === 'premium' ? 'Premium / Sales Navigator' : 'LinkedIn'].filter(Boolean).join(' · '), fecha: d.toISOString().slice(0, 10), dias });
+      }
+      res.json(out);
+    } catch (e) { console.error('[li] renovaciones', e.message); res.json([]); }
+  });
+
   app.get('/api/li/accounts', requireAuth, async (req, res) => {
     try {
       const { rows } = await pool.query(`SELECT * FROM li_accounts WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
@@ -594,6 +611,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
           v.ramp_activo, v.ramp_inicio, v.ramp_paso, v.ramp_dias, v.hora_ini, v.hora_fin, v.tz, v.dias, v.gap_min, v.gap_max, estado, motivo, pausa, ramp, b.accion === 'activar', v.plan]);
       { const rd = num(b.react_dia, cur.react_dia != null ? cur.react_dia : 30, 0, 60), fd = num(b.follow_dia, cur.follow_dia != null ? cur.follow_dia : 25, 0, 60), cd = num(b.comment_dia, cur.comment_dia != null ? cur.comment_dia : 12, 0, 30);
         await pool.query(`UPDATE li_accounts SET react_dia=$2, follow_dia=$3, comment_dia=$4 WHERE id=$1`, [id, rd, fd, cd]); a.react_dia = rd; a.follow_dia = fd; a.comment_dia = cd; }
+      if (b.plan_renovacion !== undefined) { const d = /^\d{4}-\d{2}-\d{2}$/.test(String(b.plan_renovacion)) ? String(b.plan_renovacion) : null; await pool.query('UPDATE li_accounts SET plan_renovacion=$2 WHERE id=$1', [id, d]); a.plan_renovacion = d; }
       if (b.accion === 'activar') await pool.query(`UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, [id, String(180 + Math.floor(Math.random() * 360))]);   // sin acción instantánea al activar
       res.json(publica(a));
     } catch (e) { console.error('[li] update', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
