@@ -109,11 +109,13 @@ async function pintarLista() {
   const hora = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const fila = p => '<div class="nx' + (p.en_curso ? ' cur' : '') + '"><span class="tm">' + (p.en_curso ? 'ahora' : '~' + hora(p.ts)) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span>' + (p.campana ? '<span class="cp" title="' + esc(p.campana) + '">' + esc(p.campana) + '</span>' : '') + '</div>';
   const hoy = r.cola.filter(p => p.hoy), luego = r.cola.filter(p => !p.hoy);
+  const diaDe = ts => new Date(ts).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+  const filaL = p => fila(p).replace('<span class="tm">~', '<span class="tm">' + esc(diaDe(p.ts)) + ' ~');
   const hechas = (r.hechas || []).map(p => '<div class="nx hecha"><span class="tm">' + hora(p.t) + '</span><i class="tp ' + esc(p.tipo) + '">' + esc(TIPO[p.tipo] || p.tipo) + '</i><span class="nm">' + esc(p.quien) + '</span><span class="' + (p.estado === 'done' ? 'ok' : 'ko') + '">' + (p.estado === 'done' ? '✓' : p.estado === 'skipped' ? '↷' : '✕') + '</span></div>').join('');
   $('lista-ct').textContent = r.total + (r.total >= 80 ? '+' : '') + ' en cola';
   let h = '';
   if (hoy.length) h += '<div class="nxl">' + '<div class="nx sep">Por hacer hoy</div>' + hoy.map(fila).join('') + '</div>';
-  if (luego.length) h += '<div class="nxl" style="margin-top:12px"><div class="nx sep">Después</div>' + luego.map(fila).join('') + '</div>';
+  if (luego.length) h += '<div class="nxl" style="margin-top:12px"><div class="nx sep">Después</div>' + luego.map(filaL).join('') + '</div>';
   if (hechas) h += '<div class="nxl" style="margin-top:12px"><div class="nx sep">Hechas en las últimas 24 h</div>' + hechas + '</div>';
   box.innerHTML = h || '<div class="vacio">No hay nada programado para esta cuenta todavía.</div>';
 }

@@ -828,9 +828,34 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       if (ptr && !ptr.en_ventana && ptr.ts) t0 = Math.max(t0, new Date(ptr.ts).getTime());
       const lpHoy = localParts(now, tz), pdHoy = perfilDia(aR, lpHoy.ymd);
       let cur = t0;
+      // Simulación realista: cada acción cae SOLO dentro del horario de la cuenta (inicio–fin de ese día, sin el descanso) y respeta el tope diario de su tipo;
+      // lo que no cabe hoy pasa al siguiente día laborable (antes se seguía sumando tiempo y salían horas como las 7 p. m. fuera del horario).
+      const DIAS = aR.dias || DEF.dias, CAPCOL = { visit: 'vis_dia', invite: 'inv_dia', message: 'msg_dia', inmail: 'inmail_dia', react: 'react_dia', follow: 'follow_dia', comment: 'comment_dia' };
+      const capDe = tipo => { const v = Number(aR[CAPCOL[tipo]]); return Math.max(1, Math.floor((Number.isFinite(v) && v > 0 ? v : 20) * 0.86)); };
+      const hist = await historial(pool, aR, now).catch(() => ({}));
+      const hoyUsado = { visit: hist.vis_hoy, invite: hist.inv_hoy, message: hist.msg_hoy, inmail: hist.inmail_hoy, react: hist.react_hoy, follow: hist.follow_hoy, comment: hist.comment_hoy };
+      const usados = {};
+      const colocar = tipo => {
+        for (let g = 0; g < 500; g++) {
+          cur = saltarPausa(cur, aR);
+          const lp = localParts(new Date(cur), tz), pd = perfilDia(aR, lp.ymd);
+          const abierto = DIAS.includes(lp.dow) && lp.hour >= pd.ini && lp.hour < pd.fin;
+          if (!abierto) { const pv = proximaVentana(aR, new Date(cur)); cur = pv && pv.ts ? Math.max(cur + 60e3, new Date(pv.ts).getTime()) : cur + 3600e3; continue; }
+          const key = lp.ymd + '|' + tipo, usado = usados[key] !== undefined ? usados[key] : (lp.ymd === lpHoy.ymd ? (hoyUsado[tipo] || 0) : 0);
+          if (usado >= capDe(tipo)) { cur += Math.ceil((pd.fin - lp.hour) * 3600e3) + 60e3; continue; }   // tope del día agotado: pasa al próximo día laborable
+          usados[key] = usado + 1;
+          return { lp, pd };
+        }
+        return { lp: localParts(new Date(cur), tz), pd: pdHoy };
+      };
       res.json({
         hechas: hechas.map(r => ({ tipo: r.tipo, estado: r.estado, quien: r.nombre || r.slug, campana: r.campana || '', t: r.done_at })),
-        cola: cola.map((r, i) => { cur = saltarPausa(cur, aR); const ts = new Date(cur), lp = localParts(ts, tz); cur += gapS * 1000 * (0.85 + (i % 3) * 0.15); return { tipo: r.tipo, quien: r.nombre || r.slug, campana: r.campana || '', en_curso: r.estado === 'taken', ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd && lp.hour < pdHoy.fin }; }),
+        cola: cola.map((r, i) => {
+          const { lp, pd } = colocar(r.tipo), ts = new Date(cur);
+          const gap = lp.ymd === lpHoy.ymd ? gapS : Math.max(a.gap_min || 300, ((pd.fin - pd.ini - 1.2) * 3600) / capDe(r.tipo));
+          cur += gap * 1000 * (0.85 + (i % 3) * 0.15);
+          return { tipo: r.tipo, quien: r.nombre || r.slug, campana: r.campana || '', en_curso: r.estado === 'taken', ts: ts.toISOString(), hoy: lp.ymd === lpHoy.ymd };
+        }),
         total: cola.length,
       });
     } catch (e) { console.error('[li] cola', e.message); res.status(500).json({ error: 'Error' }); }
