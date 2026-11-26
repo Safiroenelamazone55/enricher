@@ -22851,3 +22851,9 @@ body.ibx-lb-open{overflow:hidden}
 .tk__tbl .ll-t tbody td { height: 48px; }
 .tk-gocell { width: 1%; white-space: nowrap; text-align: right; border-right: 0 !important; }
 .tk__tbl .ll-t tbody tr:hover .seq-task__go { background: rgba(0,122,255,.16); }
+
+/* Tareas: los filtros viven en la misma fila que el buscador (una sola fila, con scroll horizontal si no caben) */
+.ll__bar > .tkbar { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow-x: auto; padding: 0; white-space: nowrap; scrollbar-width: none; }
+.ll__bar > .tkbar::-webkit-scrollbar { display: none; }
+.ll__bar > .tkbar > * { flex: none; }
+.ll__bar:has(> .tkbar) .ll-search { flex: 0 0 220px; width: 220px; min-width: 0; }

@@ -31521,12 +31521,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const body = all.slice(0, 200).map(r => `<tr onclick="LeadManagerModule.tkOpen('${r.key}')">${cols.map(c => `<td>${cell(c[0], r)}</td>`).join('')}<td class="tk-gocell"><span class="seq-task__go">${r.kind === 'ap' || r.tipo === 'revisar' ? 'Revisar' : 'Hacer tarea'} ›</span></td></tr>`).join('');
     return `<div class="tk">${strip}
       <div class="ll__bar"><label class="ll-search">${I('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 15)}<input id="tk-q" placeholder="Buscar una tarea…" value="${esc(_tk.q)}" autocomplete="off" oninput="LeadManagerModule.tkSearch(this.value)"></label>
-        <button class="ll-btn${nF ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${nF ? ` <i class="ll-n">${nF}</i>` : ''}</button><span class="sp"></span>
+        <button class="ll-btn${nF ? ' is-on' : ''}" onclick="LeadManagerModule.tkFiltToggle()">${I('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>', 14)} Filtros${nF ? ` <i class="ll-n">${nF}</i>` : ''}</button>${_tk.filtOpen ? _tkFilterBar() : '<span class="sp"></span>'}
         <button class="ll-ico" title="Columnas" onclick="LeadManagerModule.tkColsMenu(event)">${I('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 16)}</button>
         <button class="ll-btn" onclick="LeadManagerModule.tkClassic(true)" title="Vista con aprobaciones, correcciones y prioridad">Vista clásica</button>
         <button class="ll-btn" onclick="LeadManagerModule.tkCreate()">${I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 14)} Crear tarea</button>
         <button class="ll-pri" ${first ? '' : 'disabled'} onclick="LeadManagerModule.tkStart()">${I('<polygon points="5 3 19 12 5 21 5 3"/>', 14)} Iniciar ${all.length} tarea${all.length === 1 ? '' : 's'}</button></div>
-      ${_tk.filtOpen ? _tkFilterBar() : ''}
       <div class="ll__tbl tk__tbl"><table class="ll-t"><thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join('')}<th class="tk-gocell"></th></tr></thead><tbody>${all.length ? body : `<tr><td colspan="${cols.length + 1}" class="ll-empty">${rows.length ? 'No tienes ninguna tarea con este estado.' : '<b>No tienes tareas pendientes</b><br>Las tareas de tus secuencias y las que crees aparecerán aquí.'}</td></tr>`}</tbody></table></div>
       <div class="ll__foot"><span><b>${all.length ? 1 : 0} - ${Math.min(200, all.length)}</b> de ${all.length}</span></div></div>`;
   }
