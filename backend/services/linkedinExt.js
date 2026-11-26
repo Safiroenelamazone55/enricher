@@ -473,7 +473,7 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
       for (const a of rows) {
         const h = await historial(pool, a, now), ef = efectivos(a, now);
         const { rows: [q] } = await pool.query(`SELECT COUNT(*) FILTER (WHERE estado='queued')::int AS cola, COUNT(*) FILTER (WHERE estado='failed')::int AS fallos FROM li_actions WHERE account_id=$1 AND created_at > NOW() - INTERVAL '7 days'`, [a.id]);
-        out.push({ ...publica(a), hoy: h, efectivos: { inv: ef.inv, inv_semana: ef.inv_semana, msg: ef.msg, vis: ef.vis, inmail: ef.inmail, total: ef.total, dia_calentamiento: ef.dia, calentando: ef.calentando }, cola: q.cola, fallos_7d: q.fallos,
+        out.push({ ...publica(a), hoy: h, efectivos: { inv: ef.inv, inv_semana: ef.inv_semana, msg: ef.msg, vis: ef.vis, inmail: ef.inmail, react: ef.react, follow: ef.follow, comment: ef.comment, total: ef.total, dia_calentamiento: ef.dia, calentando: ef.calentando }, cola: q.cola, fallos_7d: q.fallos,
           conectada: !!(a.ultimo_visto && now - new Date(a.ultimo_visto) < 5 * 60 * 1000) });
       }
       res.json(out);
