@@ -22685,7 +22685,7 @@ body.ibx-lb-open{overflow:hidden}
 
 /* ══ Ajustes del cliente — medidas reales de «Ajustes de la cuenta» de lemlist (leídas de su CSS): Inter; menú 14 px/500 en filas de 32 px;
       etiquetas de grupo 12 px; títulos 16 px/700 (el del modal 18 px/600); etiquetas 14 px/500 y descripciones 14 px en gris claro. Fondo crema. ══ */
-.fin-pi-box.lim-box.lim2 { max-width: 960px; width: 94vw; height: min(80vh, 600px); flex-direction: row !important; background: #F7F5F2; border-radius: 14px; position: relative; padding: 0; overflow: hidden; font-family: Inter, var(--font, system-ui), sans-serif; font-size: 14px; color: #213856; }
+.fin-pi-box.lim-box.lim2 { max-width: 1180px; width: 94vw; height: min(82vh, 640px); flex-direction: row !important; background: #F7F5F2; border-radius: 14px; position: relative; padding: 0; overflow: hidden; font-family: Inter, var(--font, system-ui), sans-serif; font-size: 14px; color: #213856; }
 .lim2 * { font-family: inherit; }
 .lim2-x { position: absolute; top: 14px; right: 16px; z-index: 3; border: 0; background: none; font-size: 1rem; cursor: pointer; color: #6B7280; width: 28px; height: 28px; border-radius: 8px; } .lim2-x:hover { background: #EFEBE4; }
 .lim2-nav { width: 250px; flex: none; padding: 20px 14px; background: #F7F5F2; border-right: 1px solid #ECE8E0; overflow-y: auto; }
