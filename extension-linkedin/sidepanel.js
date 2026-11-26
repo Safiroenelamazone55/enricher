@@ -36,7 +36,7 @@ const TIPO = { visit: 'Visitar perfil', invite: 'Enviar invitación', message: '
 function faltan(ts) { const m = Math.max(0, Math.round((new Date(ts) - Date.now()) / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; }
 const hh = n => String(n).padStart(2, '0') + ':00';
 function pintarExtra(e) {
-  const r = e.resumen, box = $('extra'); if (!r) { box.innerHTML = ''; return; }
+  const r = e.resumen, box = $('extra'); $('h-n').textContent = r ? r.en_cola : 0; if (!r) { box.innerHTML = ''; return; }
   const v = r.ventana || {}, pt = r.por_tipo || {}, prox = r.proximas || [];
   const hora = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const partes = [pt.visit && pt.visit + ' visitas', pt.invite && pt.invite + ' invitaciones', pt.message && pt.message + ' mensajes', pt.inmail && pt.inmail + ' InMail'].filter(Boolean).join(' · ');
@@ -72,6 +72,33 @@ setInterval(() => { pintar(); if (pestana === 'lista') pintarLista(); }, 30000);
 
 const paso = (ok, t) => `<div class="step${ok ? ' ok' : ''}"><i>${ok ? '✓' : '·'}</i><span>${t}</span></div>`;
 
+// ── cabecera y atajos (estilo lemlist) ──
+const NOVA_LM = APP + '?tab=lead-manager';
+const abrirU = u => chrome.tabs.create({ url: u });
+let _popK = '';
+function popup(k, items) {
+  const p = $('pop');
+  if (!p.hidden && _popK === k) { p.hidden = true; return; }
+  _popK = k; p.innerHTML = items.map(i => i === '-' ? '<hr>' : '<button data-i="' + items.indexOf(i) + '">' + i[0] + '</button>').join('');
+  p.hidden = false;
+  p.onclick = ev => { const b = ev.target.closest('button'); if (!b) return; p.hidden = true; items[Number(b.dataset.i)][1](); };
+}
+document.addEventListener('click', ev => { if (!ev.target.closest('#pop, #h-vistas, #h-mas')) $('pop').hidden = true; });
+$('h-nova').onclick = () => abrirU(APP);
+$('h-cola').onclick = () => mostrarPestana('lista');
+$('h-vistas').onclick = () => popup('v', [['Estado', () => mostrarPestana('estado')], ['Lista Outreach', () => mostrarPestana('lista')], ['Errores', () => mostrarPestana('errores')]]);
+const ajustes = () => { mostrarPestana('estado'); const d = $('avanzado'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
+$('h-mas').onclick = () => popup('m', [['Ajustes', ajustes], ['Abrir Nova', () => abrirU(APP)], ['Abrir LinkedIn', () => abrirU('https://www.linkedin.com/feed/')], '-', ['Desvincular este Chrome', () => $('desvincular').click()]]);
+$('h-x').onclick = () => { if (document.body.classList.contains('emb')) { try { parent.postMessage({ flowCerrar: true }, '*'); } catch (_) {} } else window.close(); };
+document.querySelectorAll('.at').forEach(b => { b.onclick = () => { const a = b.dataset.a; if (a === 'ajustes') ajustes(); else abrirU(NOVA_LM); }; });
+$('e-lista').onclick = () => mostrarPestana('lista');
+$('e-err').onclick = () => mostrarPestana('errores');
+async function bienvenida() {
+  const r = await msg('par_estado'); const { estado, paused } = await chrome.storage.local.get({ estado: {}, paused: true });
+  const nombre = String(r && r.usuario || '').split(/[ @]/)[0];
+  $('hola-t').textContent = '¡Bienvenido' + (nombre ? ', ' + nombre.charAt(0).toUpperCase() + nombre.slice(1) : '') + '!';
+  $('hola-s').textContent = paused ? 'Actívala para que FLOW empiece a trabajar.' : 'FLOW trabaja con tus topes y horario.';
+}
 function mostrarLogin(on) { const l = $('login-wrap'); if (l) l.hidden = !on; }
 window.addEventListener('message', ev => {
   if (!ev.data || !ev.data.flowLogin) return;
@@ -180,6 +207,7 @@ async function pintar() {
   if (token) pintarVinculada();
   pintarErrores();
   pintarAlerta();
+  if (token) bienvenida();
 }
 
 chrome.storage.local.get({ lanzadorOculto: false }, r => { $('vlanz').checked = !r.lanzadorOculto; });

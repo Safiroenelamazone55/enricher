@@ -97,8 +97,51 @@ details .in-d{padding:0 18px 18px}
 .modo{display:flex;gap:12px;align-items:center;margin-top:12px;padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:15px;color:var(--mut)}
 .modo b{font-size:15px;font-weight:700;padding:3px 12px;border-radius:99px;flex:none}
 .modo.as b{background:var(--warnbg);color:var(--warn)}.modo.au b{background:var(--okbg);color:var(--ok)}.modo.nd b{background:#EEF0F4;color:var(--mut)}
+/* ── Escala de lemlist (medida en su extensión): Inter 14 px, controles de 32 px, borde fino, radio 10 ── */
+body{font:14px/20px Inter,-apple-system,"Segoe UI",system-ui,sans-serif;background:#fff;padding-bottom:20px}
+.top{height:56px;padding:0 14px;gap:6px;border-bottom:.75px solid rgba(31,41,55,.1);position:sticky;top:0;z-index:5}
+.brandl{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:600;letter-spacing:-.02em;color:#213856;text-decoration:none;cursor:pointer}.brandl img{width:26px;height:26px;border-radius:7px}.brandl svg{color:#577090}
+.hpill{height:28px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:8px;border:1px solid #BFD0FF;background:#EAF0FF;color:#316BFE;font-size:12.5px}.hpill b{font-weight:600}
+.hb{height:32px;min-width:32px;padding:0 6px;border:0;background:none;color:#4B5563;display:flex;align-items:center;justify-content:center;gap:2px;border-radius:8px}.hb:hover{background:#F3F4F6}
+.pop{position:fixed;top:52px;right:12px;z-index:30;min-width:220px;background:#fff;border:.75px solid rgba(31,41,55,.12);border-radius:10px;box-shadow:0 10px 30px rgba(31,41,55,.16);padding:6px}.pop[hidden]{display:none}
+.pop button{display:flex;width:100%;height:32px;border:0;background:none;text-align:left;align-items:center;gap:8px;padding:0 10px;border-radius:8px;font-size:14px;color:#213856}.pop button:hover{background:#F3F4F6}.pop hr{border:0;border-top:1px solid #EEF0F3;margin:5px 0}
+.wrap{padding:16px 14px 0}
+button{height:32px;padding:1px 10px;font-size:14px;font-weight:500;border-radius:10px;border:.75px solid rgba(31,41,55,.1);color:#1F2937}
+h2{font-size:14px;font-weight:600}.lead{font-size:14px}h3{font-size:14px;font-weight:600;margin:16px 0 8px}
+.hola h2{font-size:14px;font-weight:700;margin:0}.hola p{margin:2px 0 12px;color:#6B7280;font-size:14px}
+.atajos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.at{display:flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:1px 6px;font-size:13.5px;font-weight:500;color:#1F2937;background:#fff;white-space:nowrap}.alerta[hidden]{display:none}.at svg{flex:none;color:#4B5563}
+.sec2{margin:18px 0 8px;font-size:14px;font-weight:600;color:#213856}
+.vis{display:grid;grid-template-columns:1fr 1fr;gap:8px}.vi{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border:.75px solid rgba(31,41,55,.1);border-radius:10px;background:#fff;font-weight:500}.vi span{flex:1}
+.vl{width:20px;height:20px;border-radius:4px;background:#0A66C2;color:#fff;display:inline-flex;align-items:center;justify-content:center;font:800 11px/1 system-ui;font-style:normal;flex:none}
+.sw{width:34px;height:20px}.sw i::after{top:3px;left:3px;width:14px;height:14px}.sw input:checked+i::after{transform:translateX(14px)}
+.card{padding:12px;border:.75px solid rgba(31,41,55,.1)}
+.cardh{padding:10px 12px;border:.75px solid rgba(31,41,55,.1);border-radius:10px;margin-top:14px}.av{width:32px;height:32px;font-size:14px;border-radius:7px}.who b{font-size:14px;font-weight:600}.who small{font-size:12.5px}
+.hero{padding:10px 2px 2px}.hero b{font-size:14px;font-weight:600}.hero span{font-size:13px}.dot{width:9px;height:9px;box-shadow:0 0 0 3px var(--warnbg)}
+.msg{padding:10px 12px;font-size:14px;margin-top:10px}.msg small{font-size:12.5px}
+.modo{padding:8px 12px;font-size:13px;margin-top:10px;border:.75px solid rgba(31,41,55,.1)}.modo b{font-size:12.5px;padding:2px 10px}
+.sec{margin:18px 0 8px;font-size:14px;font-weight:600}.sec .ct{font-size:12px}
+.tiles{gap:8px}.tile{padding:10px 12px;border:.75px solid rgba(31,41,55,.1);border-radius:10px}.tile small{font-size:12.5px}.tile b{font-size:16px}.tile span{font-size:12.5px}
+.acts{margin-top:14px;gap:8px}.acts button{height:32px}
+.foot{font-size:12.5px;margin:10px 2px 0}
+button.fa{min-height:48px;height:auto;padding:0 12px;margin-top:8px;font-size:14px;gap:12px;border-radius:10px}button.fa .ic{width:30px;height:30px;font-size:14px;border-radius:8px}button.fa em{font-size:14px}
+details summary{font-size:14px;min-height:44px;padding:0 12px}details .in-d{padding:0 12px 12px}
+.tabs{margin:0 0 12px}.tabs button{height:36px;font-size:14px;padding:0 10px}
+.nx{min-height:40px;padding:0 12px}.nx .tm{font-size:13px;width:78px}.nx .nm{font-size:14px}.nx .tp{font-size:12px;padding:2px 9px}.nx.sep{font-size:12px;min-height:30px}.nxl{border:.75px solid rgba(31,41,55,.1);border-radius:10px}
+.er{font-size:14px;padding:10px 12px}
+label{font-size:14px;margin:12px 0 4px}input,select{height:32px;font-size:14px;border-radius:10px;border:.75px solid rgba(31,41,55,.15)}
+.step{font-size:14px}.li b{font-size:14px}
 </style></head><body>
-<div class="top"><img src="icons/icon128.png" alt=""><div class="brand">FLOW<small>· secuencias y tareas</small></div><span class="sp"></span><button class="lat" id="lateral" hidden title="Abrir esta ventana como panel lateral fijo">Panel lateral</button></div>
+<div class="top">
+  <a class="brandl" id="h-nova" title="Abrir Nova"><img src="icons/icon128.png" alt=""><span>FLOW</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+  <span class="sp"></span>
+  <button class="hpill" id="h-cola" title="Acciones en cola"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><b id="h-n">0</b></button>
+  <button class="hb" id="h-vistas" title="Secciones"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+  <button class="hb" id="h-mas" title="Más"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
+  <button class="hb" id="h-x" title="Cerrar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  <button class="lat" id="lateral" hidden title="Abrir esta ventana como panel lateral fijo">Panel lateral</button>
+</div>
+<div class="pop" id="pop" hidden></div>
 <div class="wrap">
 
 <!-- 1) Aún no vinculada -->
@@ -146,6 +189,13 @@ details .in-d{padding:0 18px 18px}
 <div id="tab-estado">
 <!-- 2) Ya vinculada -->
 <div id="vinculada" hidden>
+  <div class="hola"><h2 id="hola-t">¡Bienvenido!</h2><p id="hola-s">Cargando…</p></div>
+  <div class="atajos">
+    <button class="at" data-a="tareas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Tareas<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></button>
+    <button class="at" data-a="bandeja"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg>Bandeja de entrada<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></button>
+    <button class="at" data-a="ajustes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes</button>
+    <button class="at" data-a="campana"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>Crear campaña<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></button>
+  </div>
   <div class="cardh">
     <i class="av">in</i>
     <div class="who" id="acct"><b id="acctname">Leyendo cuenta…</b><small id="acctslug">Cuenta de LinkedIn en este Chrome</small></div>
@@ -161,8 +211,12 @@ details .in-d{padding:0 18px 18px}
   <p class="foot">Respeta topes y horario. Se detiene si LinkedIn avisa.</p>
 </div>
 
-<details class="card"><summary>Avanzado</summary><div class="in-d">
-<label style="display:flex;gap:10px;align-items:center;margin:0 0 14px;font-weight:500"><input type="checkbox" id="vlanz" style="width:auto;height:auto"> Mostrar el cuadradito de FLOW en LinkedIn</label>
+<div class="sec2">Visibilidad de la extensión</div>
+<div class="vis"><div class="vi"><i class="vl">in</i><span>LinkedIn</span><label class="sw"><input type="checkbox" id="vlanz"><i></i></label></div></div>
+<div class="sec2">Empezar</div>
+<button class="fa" id="e-lista"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><span>Ver todo lo que hará esta cuenta, en orden</span><em>Empezar →</em></button>
+<button class="fa" id="e-err"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></span><span>Revisar errores y avisos</span><em>Empezar →</em></button>
+<details class="card" id="avanzado"><summary>Avanzado</summary><div class="in-d">
 <label for="tok" style="margin-top:0">Vincular con un token (solo si lo anterior no funciona)</label><input id="tok" type="password" placeholder="nvli_…" autocomplete="off">
 <div class="row"><button id="save">Guardar token</button><button id="desvincular">Desvincular este Chrome</button></div></div></details>
 </div>

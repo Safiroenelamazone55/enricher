@@ -72,6 +72,7 @@
       } else { panel.classList.remove('open'); tab.style.display = 'flex'; empujar(false); }
     };
     x.onclick = () => abrir(false);
+    window.addEventListener('message', ev => { if (ev.data && ev.data.flowCerrar) abrir(false); });
 
     hide.addEventListener('pointerdown', e => e.stopPropagation());
     hide.addEventListener('pointerup', e => { e.stopPropagation(); try { chrome.storage.local.set({ lanzadorOculto: true }); } catch (_) {} });
