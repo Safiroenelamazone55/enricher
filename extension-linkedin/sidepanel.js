@@ -138,7 +138,8 @@ async function pintarErrores() {
   const dia = errores.filter(e => e.nivel === 'error' && Date.now() - e.t < 864e5).length;
   $('nerr').hidden = !dia; $('nerr').textContent = dia;
   if (pestana !== 'errores') return;
-  $('errlista').innerHTML = errores.length ? errores.map((e, i) => '<div class="er ' + esc(e.nivel) + '"><button class="cp1" data-i="' + i + '">Copiar</button><b>' + esc(e.tipo) + '</b>' + (e.n > 1 ? '<span class="n">×' + e.n + '</span>' : '') + '<span class="t">' + esc(fechaE(e.t)) + '</span><div>' + esc(e.msg) + '</div>' + (e.ctx ? '<details><summary style="padding:4px 0 0;font-size:11.5px">Detalle técnico</summary><pre>' + esc(JSON.stringify(e.ctx, null, 1)) + '</pre></details>' : '') + '</div>').join('') : '<div class="card"><small>Todo en orden: no hay errores registrados.</small></div>';
+  const ICO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  $('errlista').innerHTML = errores.length ? errores.map((e, i) => '<div class="code ' + esc(e.nivel) + '"><button class="cpi" data-i="' + i + '" title="Copiar este error">' + ICO + '</button><span class="ch">[' + esc(fechaE(e.t)) + '] ' + esc(String(e.nivel).toUpperCase()) + ' ' + esc(e.tipo) + (e.n > 1 ? ' ×' + e.n : '') + '</span>' + esc(e.msg) + (e.ctx ? '\n' + esc(JSON.stringify(e.ctx)) : '') + '</div>').join('') : '<div class="code"><button class="cpi" data-i="-1" title="Copiar informe">' + ICO + '</button><span class="ch">// errores</span><span class="ok">✓ Sin errores registrados</span></div>';
 }
 async function informe() {
   const { errores, estado, identidad, paused } = await chrome.storage.local.get({ errores: [], estado: {}, identidad: {}, paused: true });
@@ -156,12 +157,12 @@ $('copiar').onclick = async () => {
   $('copiado').hidden = false; setTimeout(() => { $('copiado').hidden = true; }, 2500);
 };
 $('errlista').addEventListener('click', async ev => {
-  const b = ev.target.closest('.cp1'); if (!b) return;
+  const b = ev.target.closest('.cpi'); if (!b) return;
   const { errores, estado, identidad } = await chrome.storage.local.get({ errores: [], estado: {}, identidad: {} });
-  const e = errores[Number(b.dataset.i)]; if (!e) return;
-  const txt = ['FLOW v' + chrome.runtime.getManifest().version + ' — error', 'Cuenta: ' + (identidad.slug ? 'linkedin.com/in/' + identidad.slug : '(sin leer)'), '[' + fechaE(e.t) + '] ' + e.nivel.toUpperCase() + ' ' + e.tipo + (e.n > 1 ? ' ×' + e.n : ''), e.msg, e.ctx ? JSON.stringify(e.ctx) : '', 'Estado: ' + (estado.msg || '—')].filter(Boolean).join('\n');
+  const e = errores[Number(b.dataset.i)];
+  const txt = !e ? await informe() : ['FLOW v' + chrome.runtime.getManifest().version + ' — error', 'Cuenta: ' + (identidad.slug ? 'linkedin.com/in/' + identidad.slug : '(sin leer)'), '[' + fechaE(e.t) + '] ' + e.nivel.toUpperCase() + ' ' + e.tipo + (e.n > 1 ? ' ×' + e.n : ''), e.msg, e.ctx ? JSON.stringify(e.ctx) : '', 'Estado: ' + (estado.msg || '—')].filter(Boolean).join('\n');
   try { await navigator.clipboard.writeText(txt); } catch (_) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
-  b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = 'Copiar'; }, 1800);
+  b.classList.add('hecho'); const h = b.innerHTML; b.textContent = '✓'; setTimeout(() => { b.innerHTML = h; b.classList.remove('hecho'); }, 1500);
 });
 $('limpiar').onclick = async () => { await chrome.storage.local.set({ errores: [] }); pintarErrores(); };
 
