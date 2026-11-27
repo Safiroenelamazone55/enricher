@@ -356,7 +356,7 @@ const _liApplyDisposition = (uid, cid, body) => new Promise((resolve, reject) =>
   const res = { status() { return { json: resolve }; }, json: resolve };
   Promise.resolve(_lmDispositionHandler(fake, res)).catch(reject);
 });
-require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition });
+require('./services/linkedinExt').mount(app, { pool, requireAuth, applyDisposition: _liApplyDisposition, addMembership: (...a) => _lmAddMembershipCall(...a) });
 require('./services/extScraperLicense').mount(app, { pool });   // licencias del LinkedIn Sales Scraper (producto aparte, de pago — endpoints públicos a propósito)
 require('./services/solucionesRoutes').mount(app, { pool, requireAuth });   // módulo «Soluciones»: panel DENTRO de Nova para ver/generar/revocar esas mismas licencias (requiere sesión)
 const CF = require('./services/canteraFiltros');

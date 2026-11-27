@@ -252,6 +252,8 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS proxima_accion_at TIMESTAMPTZ`);
   await pool.query(`CREATE TABLE IF NOT EXISTS li_ext_log (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, account_id INTEGER, nivel TEXT NOT NULL DEFAULT 'error', tipo TEXT NOT NULL DEFAULT '', msg TEXT NOT NULL DEFAULT '', ctx JSONB, version TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await pool.query(`CREATE INDEX IF NOT EXISTS li_ext_log_idx ON li_ext_log (user_id, created_at DESC)`);
+  // Ajustes del panel de FLOW (Ajustes → Gestionar duplicados): uno por espacio de trabajo.
+  await pool.query(`CREATE TABLE IF NOT EXISTS li_ext_prefs (user_id INTEGER PRIMARY KEY, dup_modo TEXT NOT NULL DEFAULT 'esta', dup_dias_on BOOLEAN NOT NULL DEFAULT FALSE, dup_dias INTEGER NOT NULL DEFAULT 30, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS snapshot TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE li_actions ADD COLUMN IF NOT EXISTS datos JSONB`);
   await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS linkedin_auto BOOLEAN NOT NULL DEFAULT FALSE`).catch(() => {});
@@ -318,7 +320,7 @@ function parseNotificacion(txt) {
   return { nombre: m[1].trim(), tipo };
 }
 
-function mount(app, { pool, requireAuth, applyDisposition }) {
+function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
   const aplicar = async (uid, cid, body) => { try { return applyDisposition ? await applyDisposition(uid, cid, body) : null; } catch (e) { console.error('[li] disposición', e.message); return null; } };
   const sendEngine = () => require('./sendEngine');
   const pausarInscripcion = async (a, motivo, nota) => {
@@ -1031,14 +1033,139 @@ function mount(app, { pool, requireAuth, applyDisposition }) {
   app.post('/api/li/ext/activar', liAuth, async (req, res) => {
     try {
       const a = req.liAcc;
-      if (a.estado === 'restringida' || (a.estado === 'pausada' && a.pausa_hasta && new Date(a.pausa_hasta) > new Date())) return res.json({ ok: false, estado: a.estado, motivo: a.motivo });
-      if (a.estado === 'pausada' || a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL WHERE id=$1`, [a.id]);
+      // La pausa automática por «3 fallos seguidos» la puede levantar la persona desde FLOW (es una decisión suya y reinicia el contador);
+      // las pausas por restricción o aviso de LinkedIn, no: esas solo se levantan desde Nova.
+      const porFallos = a.estado === 'pausada' && /fallos seguidos/i.test(a.motivo || '');
+      if (a.estado === 'restringida' || (a.estado === 'pausada' && a.pausa_hasta && new Date(a.pausa_hasta) > new Date() && !porFallos)) return res.json({ ok: false, estado: a.estado, motivo: a.motivo });
+      if (a.estado === 'pausada' || a.estado === 'desconectada') await pool.query(`UPDATE li_accounts SET estado='activa', motivo='', pausa_hasta=NULL, fallos_seguidos=0 WHERE id=$1`, [a.id]);
       // Al activar NO sale una acción al instante (huella clara: «lo prendí y ya hizo algo»): se sortea una espera de 3–9 min.
       // Solo en modo prueba (botón «Probar ahora») se salta la espera.
       const prueba = !!(req.body && req.body.prueba);
       await pool.query(prueba ? `UPDATE li_accounts SET proxima_accion_at = NOW() - INTERVAL '1 second' WHERE id=$1` : `UPDATE li_accounts SET proxima_accion_at = NOW() + ($2 || ' seconds')::interval WHERE id=$1`, prueba ? [a.id] : [a.id, String(180 + Math.floor(Math.random() * 360))]);
       res.json({ ok: true, estado: 'activa', prueba });
     } catch (e) { console.error('[li] activar', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+
+  // ───────── Panel del prospecto: FLOW abierto sobre un perfil de LinkedIn (como el de lemlist) ─────────
+  const slugLimpio = s => { let t = String(s || '').trim(); try { t = decodeURIComponent(t); } catch (_) {} return t.toLowerCase().replace(/[?#].*$/, '').replace(/^.*\/in\//, '').replace(/\/+$/, '').slice(0, 120); };
+  const SQL_SLUG = `lower(rtrim(split_part(regexp_replace(k.linkedin, '[?#].*$', ''), '/in/', 2), '/'))`;
+  const PREFS_DEF = { dup_modo: 'esta', dup_dias_on: false, dup_dias: 30 };
+  const leerPrefs = async uid => { const { rows: [p] } = await pool.query(`SELECT dup_modo, dup_dias_on, dup_dias FROM li_ext_prefs WHERE user_id=$1`, [uid]); return p || { ...PREFS_DEF }; };
+  const fichaContacto = async (uid, slug) => {
+    const { rows: [k] } = await pool.query(`SELECT k.id, k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.email, k.email_status, k.telefono, k.movil, k.estado, k.disposition, k.outbound_client_id FROM lm_contacts k WHERE k.user_id=$1 AND ${SQL_SLUG}=$2 ORDER BY k.id LIMIT 1`, [uid, slug]);
+    if (!k) return { contacto: null, inscrito: [] };
+    const { rows: ins } = await pool.query(`SELECT s.id, s.nombre, cs.estado, cs.paso FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id WHERE cs.user_id=$1 AND cs.contact_id=$2 ORDER BY cs.created_at DESC`, [uid, k.id]);
+    return { contacto: k, inscrito: ins };
+  };
+  // ¿Quién es este prospecto en Nova? + a qué secuencias se le puede añadir (las del cliente de esta cuenta, primero).
+  app.post('/api/li/ext/prospecto', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, slug = slugLimpio((req.body || {}).slug);
+      const prefs = await leerPrefs(a.user_id);
+      if (!slug) return res.json({ contacto: null, inscrito: [], secuencias: [], cliente: null, prefs });
+      const f = await fichaContacto(a.user_id, slug);
+      const { rows: secs } = await pool.query(
+        `SELECT s.id, s.nombre, s.estado, c.nombre AS campana, oc.nombre AS cliente, COALESCE(c.outbound_client_id, s.outbound_client_id) AS cliente_id
+           FROM sequences s LEFT JOIN campaigns c ON c.id=s.campaign_id LEFT JOIN outbound_clients oc ON oc.id=COALESCE(c.outbound_client_id, s.outbound_client_id)
+          WHERE s.user_id=$1 AND s.estado <> 'archivada'
+          ORDER BY (COALESCE(c.outbound_client_id, s.outbound_client_id) IS NOT DISTINCT FROM $2) DESC, s.id DESC LIMIT 200`, [a.user_id, a.outbound_client_id]);
+      const { rows: [cl] } = a.outbound_client_id ? await pool.query(`SELECT id, nombre FROM outbound_clients WHERE id=$1`, [a.outbound_client_id]) : { rows: [] };
+      res.json({ ...f, cliente: cl || null, prefs, secuencias: secs.map(s => ({ id: s.id, nombre: s.nombre, estado: s.estado, campana: s.campana || '', cliente: s.cliente || '', del_cliente: s.cliente_id != null && s.cliente_id === a.outbound_client_id })) });
+    } catch (e) { console.error('[li] prospecto', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+  // «Guardar contacto»: lo crea en Nova (cliente = el de esta cuenta de LinkedIn). Si ya existía, devuelve el que hay (nunca duplica).
+  app.post('/api/li/ext/prospecto/guardar', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {}, slug = slugLimpio(b.slug);
+      if (!slug) return res.status(400).json({ error: 'No pude leer el perfil de LinkedIn' });
+      const f = await fichaContacto(a.user_id, slug);
+      if (f.contacto) return res.json({ ...f, existia: true });
+      const t = s => String(s == null ? '' : s).trim().slice(0, 300);
+      const partes = t(b.nombre).replace(/,.*$/, '').split(/\s+/).filter(Boolean);
+      if (!partes.length) return res.status(400).json({ error: 'Falta el nombre del prospecto' });
+      const { rows: [k] } = await pool.query(
+        `INSERT INTO lm_contacts (user_id, nombre, apellido, cargo, linkedin, empresa_nombre, ciudad, estado, fuente, outbound_client_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'nuevo','extension_linkedin',$8) RETURNING id, outbound_client_id`,
+        [a.user_id, partes[0], partes.slice(1).join(' '), t(b.cargo), 'https://www.linkedin.com/in/' + slug, t(b.empresa), t(b.ubicacion), a.outbound_client_id || null]);
+      await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota','Contacto creado · fuente: extensión de LinkedIn (FLOW)',NOW(),'hecha')`, [a.user_id, k.id, k.outbound_client_id]).catch(() => {});
+      res.status(201).json({ ...(await fichaContacto(a.user_id, slug)), existia: false });
+    } catch (e) { console.error('[li] prospecto/guardar', e.message); res.status(500).json({ error: 'No se pudo guardar el contacto' }); }
+  });
+  // «Añadir a la campaña»: aplica Ajustes → Gestionar duplicados y luego inscribe con la lógica normal de Nova (exclusiones, goteo, cadencia, regla del mismo cliente).
+  app.post('/api/li/ext/prospecto/campana', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {}, cid = parseInt(b.contact_id, 10), sid = parseInt(b.sequence_id, 10);
+      if (!cid || !sid) return res.status(400).json({ error: 'Faltan datos' });
+      const { rows: [k] } = await pool.query(`SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, a.user_id]);
+      const { rows: [s] } = await pool.query(`SELECT id, nombre FROM sequences WHERE id=$1 AND user_id=$2 AND estado <> 'archivada'`, [sid, a.user_id]);
+      if (!k || !s) return res.status(404).json({ error: 'No encontrado' });
+      const p = await leerPrefs(a.user_id);
+      const { rows: ins } = await pool.query(`SELECT cs.sequence_id, cs.estado, s.nombre FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id WHERE cs.user_id=$1 AND cs.contact_id=$2 ORDER BY cs.created_at DESC`, [a.user_id, cid]);
+      const omitir = motivo => res.json({ ok: false, omitido: true, motivo });
+      const aqui = ins.find(x => x.sequence_id === sid);
+      if (aqui) return omitir(`Ya está en «${aqui.nombre}».`);
+      if (p.dup_modo === 'activa') {
+        const o = ins.find(x => x.estado === 'activo');
+        if (o) return omitir(`Se omite: ya está en la secuencia activa «${o.nombre}» (Ajustes → Gestionar duplicados).`);
+        if (p.dup_dias_on) {
+          const { rows: [r] } = await pool.query(
+            `SELECT 1 FROM activities WHERE user_id=$1 AND contact_id=$2 AND estado='hecha' AND fecha > NOW() - ($3 || ' days')::interval
+               AND (tipo IN ('email','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR (tipo='nota' AND nota ~ '\\(automático, extensión\\)[[:space:]]*$')) LIMIT 1`, [a.user_id, cid, String(p.dup_dias)]);
+          if (r) return omitir(`Se omite: lo contactaste en los últimos ${p.dup_dias} días (Ajustes → Gestionar duplicados).`);
+        }
+      } else if (p.dup_modo === 'cualquiera' && ins.length) {
+        return omitir(`Se omite: ya está en otra secuencia («${ins[0].nombre}») (Ajustes → Gestionar duplicados).`);
+      }
+      if (!addMembership) return res.status(500).json({ error: 'No disponible' });
+      const r = await addMembership(a.user_id, 'sequence', [cid], sid);
+      if (!r || !r.added) return res.json({ ok: false, omitido: true, motivo: (r && r.excluidos) ? 'Se omite: la empresa está en la lista de exclusión.' : 'Nova no lo añadió: ya fue contactado por este cliente o está en marcha en otra secuencia suya.', detalle: r || null });
+      res.json({ ok: true, secuencia: s.nombre, detalle: r });
+    } catch (e) { console.error('[li] prospecto/campana', e.message); res.json({ ok: false, omitido: true, motivo: e.message || 'No se pudo añadir' }); }
+  });
+  // Email / teléfono del prospecto: guardar a mano o pedir a Nova que lo busque (mismo buscador y verificador del Lead Manager).
+  app.post('/api/li/ext/prospecto/datos', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {}, cid = parseInt(b.contact_id, 10);
+      const { rows: [k] } = await pool.query(`SELECT id, email, telefono FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, a.user_id]);
+      if (!k) return res.status(404).json({ error: 'No encontrado' });
+      if (b.accion === 'buscar_email') {
+        const { queueVerify } = require('./lmVerifyService');
+        await pool.query(`UPDATE lm_contacts SET email_status=NULL WHERE id=$1 AND COALESCE(email,'')=''`, [cid]);
+        return res.json({ ok: true, ...queueVerify(pool, a.user_id, [cid]) });
+      }
+      if (b.accion === 'buscar_telefono') {
+        // No hay un buscador de teléfonos: solo se mira lo que Nova ya sabe (otro contacto de la empresa o la ficha de la empresa).
+        const { rows: [t] } = await pool.query(`SELECT COALESCE(NULLIF(k.telefono,''), NULLIF(k.movil,'')) AS tel FROM lm_contacts k WHERE k.id=$1`, [cid]);
+        return res.json({ ok: true, telefono: (t && t.tel) || '' });
+      }
+      const sets = [], vals = [cid, a.user_id];
+      if (typeof b.email === 'string') {
+        const e = b.email.trim().toLowerCase();
+        if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return res.status(400).json({ error: 'Ese email no parece válido' });
+        vals.push(e); sets.push(`email=$${vals.length}`, `email_status=NULL`, `email_score=NULL`);
+      }
+      if (typeof b.telefono === 'string') { vals.push(b.telefono.trim().slice(0, 40)); sets.push(`telefono=$${vals.length}`); }
+      if (!sets.length) return res.json({ ok: true });
+      await pool.query(`UPDATE lm_contacts SET ${sets.join(', ')}, updated_at=NOW() WHERE id=$1 AND user_id=$2`, vals);
+      if (typeof b.email === 'string' && b.email.trim()) { try { require('./lmVerifyService').queueVerify(pool, a.user_id, [cid]); } catch (_) {} }
+      res.json({ ok: true });
+    } catch (e) { console.error('[li] prospecto/datos', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+  // Ajustes del panel (Gestionar duplicados) + lo que queda por hacer hoy (equivale a los «créditos» de lemlist).
+  app.post('/api/li/ext/prefs', liAuth, async (req, res) => {
+    try {
+      const a = req.liAcc, b = req.body || {};
+      if (b.guardar) {
+        const modo = ['esta', 'activa', 'cualquiera'].includes(b.dup_modo) ? b.dup_modo : 'esta';
+        const dias = Math.max(1, Math.min(365, parseInt(b.dup_dias, 10) || 30));
+        await pool.query(`INSERT INTO li_ext_prefs (user_id, dup_modo, dup_dias_on, dup_dias, updated_at) VALUES ($1,$2,$3,$4,NOW()) ON CONFLICT (user_id) DO UPDATE SET dup_modo=EXCLUDED.dup_modo, dup_dias_on=EXCLUDED.dup_dias_on, dup_dias=EXCLUDED.dup_dias, updated_at=NOW()`, [a.user_id, modo, !!b.dup_dias_on, dias]);
+      }
+      const ef = efectivos(a, new Date());
+      const { rows: hechas } = await pool.query(`SELECT tipo, COUNT(*)::int n FROM li_actions WHERE account_id=$1 AND estado='done' AND tipo IN ('invite','visit','message','inmail','react','follow','comment') AND (done_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date GROUP BY 1`, [a.id, a.tz || DEF.tz]);
+      const por = Object.fromEntries(hechas.map(r => [r.tipo, r.n]));
+      const hoy = hechas.reduce((s, r) => s + r.n, 0);
+      res.json({ prefs: await leerPrefs(a.user_id), hoy: { hechas: hoy, tope: ef.total, restantes: Math.max(0, ef.total - hoy), por_tipo: por, topes: { invite: ef.inv, visit: ef.vis, message: ef.msg, inmail: ef.inmail } } });
+    } catch (e) { console.error('[li] prefs', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
   // Registro de errores de la extensión (para que la persona pueda decir «falló X» y se vea qué pasó). Solo texto corto, nunca datos de LinkedIn.
