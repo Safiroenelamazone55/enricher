@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FLOW",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "FLOW: automatización de secuencias y tareas comerciales. Ejecuta en esta cuenta de LinkedIn las acciones que Nova programa, con topes diarios. Modo asistido por defecto.",
   "permissions": [
     "storage",
@@ -10,7 +10,9 @@
     "cookies",
     "sidePanel",
     "webRequest",
-    "scripting"
+    "scripting",
+    "power",
+    "idle"
   ],
   "host_permissions": [
     "https://*.linkedin.com/*",

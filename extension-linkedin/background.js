@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.11.0';
+const VERSION = '0.11.1';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -167,7 +167,31 @@ try {
 } catch (_) {}
 
 let fallosRed = 0;
-async function tick(manual) { lastTick = Date.now(); try { await tickInner(manual); } finally { armar(); } }
+const hm = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+async function tick(manual) {
+  const ahora = Date.now();
+  try {
+    const { ultimoLatido } = await chrome.storage.local.get({ ultimoLatido: 0 });
+    if (ultimoLatido && ahora - ultimoLatido > 6 * 60000 && !manual) {
+      const m = Math.round((ahora - ultimoLatido) / 60000);
+      await logErr('aviso', 'equipo_inactivo', 'FLOW estuvo ~' + (m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min') + ' sin poder trabajar (de ' + hm(ultimoLatido) + ' a ' + hm(ahora) + '): el equipo se durmió o Chrome estuvo cerrado/congelado.', { desde: ultimoLatido, hasta: ahora, min: m });
+    }
+    await chrome.storage.local.set({ ultimoLatido: ahora });
+  } catch (_) {}
+  lastTick = ahora;
+  try { await tickInner(manual); } finally { armar(); ajustarDespierto(); }
+}
+// Mantener el equipo despierto SOLO mientras FLOW tiene que trabajar (en horario de envío, o ejecutando una acción). La pantalla sí puede apagarse. Se puede quitar en Ajustes.
+async function ajustarDespierto() {
+  try {
+    const { token, paused, estado, mantenerDespierto } = await chrome.storage.local.get({ token: '', paused: true, estado: {}, mantenerDespierto: true });
+    const v = estado && estado.resumen && estado.resumen.ventana;
+    const trabajando = !!(v && (v.en_ventana || v.descanso)) || (estado && estado.nivel === 'work');
+    if (token && !paused && mantenerDespierto !== false && trabajando) chrome.power.requestKeepAwake('system');
+    else chrome.power.releaseKeepAwake();
+  } catch (_) {}
+}
+chrome.storage.onChanged.addListener(c => { if (c.paused || c.token || c.mantenerDespierto || c.estado) ajustarDespierto(); });
 async function tickInner(manual) {
   if (busy) return;
   const { token, paused } = await get();
@@ -188,7 +212,7 @@ async function tickInner(manual) {
     await setEstado({ msg: `Ejecutando: ${r.accion.tipo} → ${r.accion.slug}` + (r.modo === 'auto' ? '' : ' (asistido)'), nivel: 'work', accion: r.accion, slug, modo: r.modo || '' });
     // Si abrir la página o hablar con ella falla, igual se informa a Nova (si no, la acción quedaría «en curso» y se daría por fallida a los 10 min)
     let res; try { res = await ejecutar(r.accion, r.modo); } catch (e) { res = { codigo: 'fallo', error: /tard/i.test(e.message) ? 'pagina_lenta' : 'excepcion_extension', detalle: String(e && e.message || e).slice(0, 200) }; }
-    if (res.codigo !== 'ok') await logErr(res.codigo === 'omitida' ? 'aviso' : 'error', 'accion_' + (res.error || res.codigo), `${r.accion.tipo} → ${r.accion.slug}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}${res.detalle ? ' — ' + res.detalle : ''}`, { tipo: r.accion.tipo, slug: r.accion.slug, codigo: res.codigo, error: res.error, detalle: res.detalle });
+    if (res.codigo !== 'ok') await logErr(res.codigo === 'omitida' || res.error === 'equipo_suspendido' ? 'aviso' : 'error', 'accion_' + (res.error || res.codigo), `${r.accion.tipo} → ${r.accion.slug}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}${res.detalle ? ' — ' + String(res.detalle).slice(0, 150) : ''}`, { tipo: r.accion.tipo, slug: r.accion.slug, codigo: res.codigo, error: res.error, detalle: res.detalle, diag: res.diag || null });
     await enviarResultado(r.accion.id, res);
     if (res.codigo === 'restringida') await chrome.storage.local.set({ paused: true });
     await setEstado({ msg: `Resultado ${r.accion.tipo}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}`, nivel: res.codigo === 'ok' ? 'ok' : 'warn', accion: null });
@@ -212,18 +236,44 @@ function traducir(m) {
 }
 
 // Abre el perfil (en primer plano si es asistido y es una acción real) y le pide al content script que la haga.
+const LIMITE_MS = { visit: 120000, check_connections: 180000, check_inbox: 180000, check_notifications: 180000, invite: 180000, follow: 150000, react: 150000 };
 async function ejecutar(a, modo) {
-  const r = await Promise.race([ejecutarInner(a, modo), new Promise(res => setTimeout(() => res({ codigo: 'fallo', error: 'tiempo_agotado', detalle: 'La acción tardó más de 5 minutos sin responder' }), 300000))]);
-  return r;
+  const asistido = !String(a.tipo).startsWith('check_') && modo !== 'auto';
+  const limite = asistido ? 300000 : (LIMITE_MS[a.tipo] || 240000);   // asistido: la persona puede tardar; en automático una visita no pasa de ~1 min
+  const t0 = Date.now(), est = { tabId: null, asistido };
+  let timer;
+  const vencido = new Promise(res => { timer = setTimeout(async () => res(await diagnosticoTimeout(a, est, t0, limite)), limite); });
+  try { return await Promise.race([ejecutarInner(a, modo, est), vencido]); } finally { clearTimeout(timer); }
 }
-async function ejecutarInner(a, modo) {
+// Cuando una acción no responde: deja escrito POR QUÉ (equipo inactivo/bloqueado, pestaña congelada o descartada, ventana minimizada, pasos que llegó a hacer, batería)
+async function diagnosticoTimeout(a, est, t0, limite) {
+  const d = { transcurrido_s: Math.round((Date.now() - t0) / 1000), limite_s: Math.round(limite / 1000) };
+  try { d.equipo = await new Promise(r => chrome.idle.queryState(60, r)); } catch (_) {}
+  try {
+    if (est.tabId) {
+      const t = await chrome.tabs.get(est.tabId);
+      d.pestana = { estado: t.status, activa: t.active, descartada: !!t.discarded };
+      try { const w = await chrome.windows.get(t.windowId); d.ventana = { estado: w.state, enfocada: w.focused }; } catch (_) {}
+      d.contenido = await Promise.race([new Promise(r => chrome.tabs.sendMessage(est.tabId, { cmd: 'diagnostico' }, x => r(chrome.runtime.lastError ? { sin_respuesta: String(chrome.runtime.lastError.message).slice(0, 60) } : x))), sleep(4000).then(() => ({ colgada: true }))]);
+      if (!est.asistido) setTimeout(() => chrome.tabs.remove(est.tabId).catch(() => {}), 500);
+    } else d.pestana = 'no_llego_a_abrirse';
+  } catch (e) { d.diag_error = String(e && e.message || e).slice(0, 80); }
+  const exceso = d.transcurrido_s * 1000 - limite;
+  const dormido = exceso > 90000;   // el aviso llegó con mucho retraso: el equipo estuvo suspendido
+  return { codigo: 'fallo', error: dormido ? 'equipo_suspendido' : 'tiempo_agotado', detalle: (dormido ? 'El equipo estuvo suspendido o Chrome congelado (el aviso llegó ' + Math.round(exceso / 60000) + ' min tarde). ' : 'La acción tardó más de ' + Math.round(limite / 1000) + ' s sin responder. ') + 'Diag: ' + JSON.stringify(d).slice(0, 420), diag: d };
+}
+async function ejecutarInner(a, modo, est) {
   const esCheck = String(a.tipo).startsWith('check_');
   const asistido = !esCheck && modo !== 'auto';
   const url = a.url || (await cfg()).chequeos[a.tipo];
   const tab = await chrome.tabs.create({ url, active: asistido });
+  if (est) est.tabId = tab.id;
   try {
     await esperarCarga(tab.id, 45000);
     await sleep(2500 + Math.random() * 6500);   // un humano tarda en mirar la página (2,5–9 s, nunca igual)
+    // En una pestaña en segundo plano Chrome frena los temporizadores de la página y una espera de 15 s puede alargarse hasta minutos:
+    // la «lectura» de la visita se hace aquí (el service worker no se frena) y la página solo hace un desplazamiento rápido.
+    if (a.tipo === 'visit' && !asistido) await sleep(6000 + Math.random() * 8000);
     let r;
     // InMail: el clic en «Mensaje» abre Sales Navigator en una pestaña nueva; hay que escuchar ANTES de pulsar
     let nuevaTab = null, quitarEscucha = () => {};

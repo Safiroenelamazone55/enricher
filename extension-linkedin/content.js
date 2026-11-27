@@ -10,6 +10,9 @@
   const vis = el => !!(el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
   const R = (codigo, error, detalle, extra) => ({ codigo, error: error || '', detalle: detalle || '', ...(extra || {}) });
   let CFG = null;
+  // Migas de pan: si la acción se cuelga, el service worker las pide para saber hasta dónde llegó
+  const _t0 = Date.now(), traza = [];
+  const marca = s => { traza.push(Math.round((Date.now() - _t0) / 1000) + 's ' + s); if (traza.length > 30) traza.shift(); };
   const cargarConfig = () => new Promise(res => { try { chrome.runtime.sendMessage({ cmd: 'config' }, c => res(c || null)); } catch (_) { res(null); } });
   const T = k => (CFG && CFG.textos && CFG.textos[k]) || [];
   const SEL = k => (CFG && CFG.selectores && CFG.selectores[k]) || '';
@@ -165,7 +168,10 @@
   async function visitar() {
     if (!estadoPerfil().hayPerfil) return R('omitida', 'perfil_no_encontrado');
     const n = Math.round(rnd(2, 5));   // número de desplazamientos distinto cada vez, con alguna vuelta hacia arriba y pausas largas de lectura
-    for (let i = 0; i < n; i++) { window.scrollBy({ top: (Math.random() < 0.18 ? -1 : 1) * rnd(180, 760), behavior: 'smooth' }); await sleep(rnd(1100, 4200) + (Math.random() < 0.15 ? rnd(2500, 6000) : 0)); }
+    const oculta = document.hidden;     // pestaña en segundo plano: Chrome frena sus temporizadores → desplazamientos instantáneos y pausas cortas (la «lectura» ya la hizo el service worker)
+    marca('visitar: ' + n + ' desplazamientos' + (oculta ? ' (pestaña oculta)' : ''));
+    for (let i = 0; i < n; i++) { window.scrollBy({ top: (Math.random() < 0.18 ? -1 : 1) * rnd(180, 760), behavior: oculta ? 'auto' : 'smooth' }); marca('desplazamiento ' + (i + 1)); await sleep(oculta ? rnd(250, 700) : rnd(1100, 4200) + (Math.random() < 0.15 ? rnd(2500, 6000) : 0)); }
+    marca('visitar: terminado');
     const av = avisoLinkedIn(); if (av) return porAviso(av);
     return R('ok');
   }
@@ -423,10 +429,14 @@
   }
 
   chrome.runtime.onMessage.addListener((m, _s, send) => {
+    if (m && m.cmd === 'diagnostico') {
+      (async () => { let bat = null; try { const b = await navigator.getBattery(); bat = { nivel: Math.round(b.level * 100), cargando: b.charging }; } catch (_) {} send({ visibilidad: document.visibilityState, listo: document.readyState, bateria: bat, ejecutando: !!window.__novaEjecutando, traza: traza.slice(-10) }); })();
+      return true;
+    }
     if (m && m.cmd === 'perfil') { try { send(leerPerfil()); } catch (e) { send({ hayPerfil: false, error: String((e && e.message) || e) }); } return false; }
     if (!m || m.cmd !== 'ejecutar') return false;
     (async () => {
-      window.__novaEjecutando = true;
+      window.__novaEjecutando = true; marca('ejecutar ' + (m.accion && m.accion.tipo));
       try {
         if (m.config) CFG = m.config; else if (!CFG) CFG = await cargarConfig();
         const av = avisoLinkedIn(); if (av) return send(porAviso(av));

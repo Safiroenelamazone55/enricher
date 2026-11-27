@@ -325,6 +325,8 @@ async function ajGuardar() {
 }
 document.querySelectorAll('input[name=dup]').forEach(x => { x.onchange = ajGuardar; });
 $('aj-dias-on').onchange = ajGuardar; $('aj-dias').onchange = ajGuardar;
+chrome.storage.local.get({ mantenerDespierto: true }, r => { $('aj-despierto').checked = r.mantenerDespierto !== false; });
+$('aj-despierto').onchange = () => chrome.storage.local.set({ mantenerDespierto: $('aj-despierto').checked });
 $('aj-atras').onclick = () => { $('pag-ajustes').hidden = true; };
 $('aj-x').onclick = () => { $('pag-ajustes').hidden = true; cerrarPanel(); };
 $('aj-lista').onclick = () => { $('pag-ajustes').hidden = true; mostrarPestana('lista'); };

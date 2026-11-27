@@ -77,6 +77,8 @@ async function tipoFrenado(pool, a, tipo) {
 const FALLOS_PAUSA = 3;          // fallos seguidos que pausan la cuenta (algo cambió o LinkedIn avisa)
 const PAUSA_RESTRICCION_H = 48;  // tras una restricción / aviso de LinkedIn
 const PAUSA_FALLOS_H = 24;
+const TECNICOS = new Set(['tiempo_agotado', 'equipo_suspendido', 'sin_content_script', 'pagina_lenta', 'excepcion_extension']);   // el equipo/Chrome no respondió: NO es una señal de LinkedIn
+const FALLOS_TECNICOS_PAUSA = 6, PAUSA_TECNICA_H = 2;
 const TAKEN_TIMEOUT_MIN = 10;    // una acción «en curso» que no responde NUNCA se reintenta sola (podría haberse enviado)
 
 const hash = t => crypto.createHash('sha256').update(String(t)).digest('hex');
@@ -249,6 +251,7 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS plan_renovacion DATE`).catch(() => {});
   await pool.query(`ALTER TABLE li_accounts ALTER COLUMN inmail_dia SET DEFAULT 5, ALTER COLUMN gap_min SET DEFAULT 300, ALTER COLUMN gap_max SET DEFAULT 1200`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS li_slug TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS fallos_tecnicos INTEGER NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE li_accounts ADD COLUMN IF NOT EXISTS proxima_accion_at TIMESTAMPTZ`);
   await pool.query(`CREATE TABLE IF NOT EXISTS li_ext_log (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, account_id INTEGER, nivel TEXT NOT NULL DEFAULT 'error', tipo TEXT NOT NULL DEFAULT '', msg TEXT NOT NULL DEFAULT '', ctx JSONB, version TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
   await pool.query(`CREATE INDEX IF NOT EXISTS li_ext_log_idx ON li_ext_log (user_id, created_at DESC)`);
@@ -341,11 +344,13 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       const ok = esOmitida ? OMITIDAS_TRANSITORIAS.has(error) : (SEGUROS.has(ac.tipo) || ANTES_DE_ENVIAR.has(error));
       if (!ok) return false;
       const { rows: [c] } = await pool.query(`SELECT COUNT(*)::int AS n FROM li_actions WHERE contact_id=$1 AND step_id=$2 AND estado IN ('failed','skipped')`, [ac.contact_id, ac.step_id]);
-      if (c.n > REINTENTO_DEMORA_H.length) return false;
-      const h = REINTENTO_DEMORA_H[c.n - 1];
+      const tec = TECNICOS.has(error), MIN_TEC = [10, 30, 60, 120, 240];
+      const maxN = tec ? MIN_TEC.length : REINTENTO_DEMORA_H.length;
+      if (c.n > maxN) return false;
+      const minutos = tec ? MIN_TEC[c.n - 1] : REINTENTO_DEMORA_H[c.n - 1] * 60;
       await pool.query(`INSERT INTO li_actions (user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params, not_before)
-        SELECT user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params, NOW() + ($2 || ' hours')::interval FROM li_actions WHERE id=$1`, [ac.id, String(h)]);
-      await nota(ac, `Reintento automático ${c.n}/${REINTENTO_DEMORA_H.length} dentro de ${h} h (${error || 'error'}): no hace falta que hagas nada`);
+        SELECT user_id, account_id, tipo, slug, url, contact_id, sequence_id, step_id, nota, texto, params, NOW() + ($2 || ' minutes')::interval FROM li_actions WHERE id=$1`, [ac.id, String(minutos)]);
+      await nota(ac, `Reintento automático ${c.n}/${maxN} dentro de ${minutos >= 60 ? (minutos / 60) + ' h' : minutos + ' min'} (${error || 'error'}): no hace falta que hagas nada`);
       return true;
     } catch (e) { console.error('[li] reintentar', e.message); return false; }
   }
@@ -819,7 +824,7 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       }
       if (codigo === 'ok') {
         await pool.query(`UPDATE li_actions SET estado='done', done_at=NOW(), error='', detalle=$2, datos=$3::jsonb WHERE id=$1`, [id, det, b.datos ? JSON.stringify(b.datos).slice(0, 200000) : null]);
-        await pool.query(`UPDATE li_accounts SET fallos_seguidos=0 WHERE id=$1`, [a.id]);
+        await pool.query(`UPDATE li_accounts SET fallos_seguidos=0, fallos_tecnicos=0 WHERE id=$1`, [a.id]);
         if (String(ac.tipo).startsWith('check_')) extra = await procesarChequeo(a, ac.tipo, b.datos);
         else if (ac.contact_id && ac.sequence_id && ac.step_id) {
           const rot = { invite: 'Invitación de LinkedIn enviada' + (ac.nota ? ' con nota' : ''), message: 'Mensaje de LinkedIn enviado', visit: 'Perfil de LinkedIn visitado', react: 'Reaccionó a una publicación en LinkedIn', follow: ac.params && ac.params.fallback_de ? 'Siguió el perfil en LinkedIn (no tenía publicación reciente)' : 'Siguió el perfil en LinkedIn', comment: 'Comentó una publicación en LinkedIn' + (b.datos && b.datos.comentario ? ': «' + String(b.datos.comentario).slice(0, 300) + '»' : ''), inmail: 'InMail de LinkedIn enviado' }[ac.tipo] || 'Acción de LinkedIn hecha';
@@ -869,6 +874,12 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
         await pool.query(`UPDATE li_actions SET estado='failed', error=$2, detalle=$3, snapshot=$4 WHERE id=$1`, [id, String(b.error || 'fallo').slice(0, 60), det, snap]);
         if (!String(ac.tipo).startsWith('check_') && !(await reintentar(ac, b.error, false))) await pausarInscripcion(ac, 'linkedin_fallo', `Secuencia pausada: falló un paso de LinkedIn (${b.error || 'fallo'}). Puede haberse enviado: revisa en LinkedIn antes de repetir.`);
         const esLectura = String(ac.tipo).startsWith('check_');   // una lectura que no encuentra datos no cuenta como fallo de la cuenta
+        if (TECNICOS.has(b.error)) {
+          // Chrome/el equipo no respondió (suspensión, pestaña congelada…): no se pausa 24 h por esto; solo si se repite muchas veces seguidas, 2 h para que lo revises
+          const { rows: [t] } = await pool.query(`UPDATE li_accounts SET fallos_tecnicos = fallos_tecnicos + 1 WHERE id=$1 RETURNING fallos_tecnicos`, [a.id]);
+          if (t && t.fallos_tecnicos >= FALLOS_TECNICOS_PAUSA) await pausar(pool, a.id, PAUSA_TECNICA_H, 'pausada', `${FALLOS_TECNICOS_PAUSA} veces seguidas sin que Chrome responda (equipo suspendido o pestaña congelada): pausa de ${PAUSA_TECNICA_H} h. Revisa que Chrome esté abierto y el equipo despierto`, false);
+          return res.json({ ok: true, extra });
+        }
         const { rows: [u] } = esLectura ? { rows: [null] } : await pool.query(`UPDATE li_accounts SET fallos_seguidos = fallos_seguidos + 1 WHERE id=$1 RETURNING fallos_seguidos`, [a.id]);
         if (u && u.fallos_seguidos >= FALLOS_PAUSA) await pausar(pool, a.id, PAUSA_FALLOS_H, 'pausada', `${FALLOS_PAUSA} fallos seguidos: pausa automática de 24 h. Puede que LinkedIn haya cambiado su página o haya un aviso`, false);
       }
