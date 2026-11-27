@@ -146,7 +146,7 @@ const NotepadModule = (() => {
   }
   function print(id) {
     const n = find(id); if (!n) return; const w = window.open('', '_blank'); if (!w) return;
-    w.document.write(`<title>${esc(titleOf(n))}</title><body style="font:15px/1.6 Inter,Segoe UI,sans-serif;padding:32px;white-space:pre-wrap">${esc(n.cuerpo)}</body>`); w.document.close(); w.focus(); w.print();
+    w.document.write(`<title>${esc(titleOf(n))}</title><body style="font:14px/1.6 Inter,Segoe UI,sans-serif;padding:32px;white-space:pre-wrap">${esc(n.cuerpo)}</body>`); w.document.close(); w.focus(); w.print();
   }
 
   // ── crear tarea desde una nota ──

@@ -715,7 +715,7 @@ const SpacesModule = (() => {
     const el = _sl.el; if (!el) return; let g = '', h = '';
     _sl.items.forEach((it, i) => {
       if (it.g !== g) { g = it.g; h += `<div class="sp-slash__g">${esc(g)}</div>`; }
-      const icst = it.ic_c ? `color:${it.ic_c};font-weight:800` : it.ic_bg ? `background:${it.ic_bg}` : '';
+      const icst = it.ic_c ? `color:${it.ic_c};font-weight:500` : it.ic_bg ? `background:${it.ic_bg}` : '';
       const ic = it.ic_b ? `<i class="sp-slash__i"><span class="sp-bdg sp-bdg--${it.ic_b}" style="padding:0 5px">Ab</span></i>` : `<i class="sp-slash__i" style="${icst}">${it.svg || esc(it.ic)}</i>`;
       h += `<button type="button" class="sp-slash__r${i === _sl.sel ? ' on' : ''}" data-i="${i}" onclick="SpacesModule.slashPick(${i})" onmousemove="SpacesModule.slashHover(${i})">${ic}<span>${esc(it.l)}</span></button>`;
     });
@@ -771,7 +771,7 @@ const SpacesModule = (() => {
     const btn = (c, l, t, x) => `<button type="button" class="sp-dtb${x ? ' ' + x : ''}" title="${t}" onmousedown="event.preventDefault();SpacesModule.docCmd('${c}')">${l}</button>`;
     const pal = (k, t, l) => `<button type="button" class="sp-dtb" title="${t}" onmousedown="event.preventDefault();SpacesModule.docColor('${k}',this)">${l}</button>`;
     const cfg = v.config && Array.isArray(v.config.blocks) ? v.config : { blocks: [{ id: 'b0', t: 'p', html: (v.config && typeof v.config.html === 'string') ? v.config.html : '' }], rev: (v.config && v.config.rev) || 0 };
-    const inline = `${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('icode', _DI('code'), 'Código insertado')}${btn('link', _DI('link'), 'Enlace')}${pal('fc', 'Color del texto', '<span style="border-bottom:3px solid #E5600F;line-height:1">A</span>')}${pal('bg', 'Resaltado', '<span style="background:#FFF2B3;padding:0 4px">A</span>')}${pal('bdg', 'Insignia', '<span class="sp-bdg sp-bdg--blue" style="padding:0 5px;font-size:.7rem">Ab</span>')}`;
+    const inline = `${btn('bold', '<b>B</b>', 'Negrita')}${btn('italic', '<i>I</i>', 'Cursiva')}${btn('underline', '<u>U</u>', 'Subrayado')}${btn('strikeThrough', '<s>S</s>', 'Tachado')}${btn('icode', _DI('code'), 'Código insertado')}${btn('link', _DI('link'), 'Enlace')}${pal('fc', 'Color del texto', '<span style="border-bottom:3px solid #E5600F;line-height:1">A</span>')}${pal('bg', 'Resaltado', '<span style="background:#FFF2B3;padding:0 4px">A</span>')}${pal('bdg', 'Insignia', '<span class="sp-bdg sp-bdg--blue" style="padding:0 5px;font-size:12px">Ab</span>')}`;
     b.innerHTML = `<div class="sp-docw"><div class="sp-dtbar">${btn('t:h1', 'H1', 'Título 1')}${btn('t:h2', 'H2', 'Título 2')}${btn('t:h3', 'H3', 'Título 3')}${btn('t:p', _DI('p'), 'Texto normal')}<span class="sp-dtbar__s"></span>${btn('t:ul', _DI('ul'), 'Lista con viñetas')}${btn('t:ol', _DI('ol'), 'Lista numerada')}${btn('t:todo', _DI('todo'), 'Lista de control')}${btn('t:quote', _DI('quote'), 'Cita')}${btn('t:code', _DI('code'), 'Bloque de código')}${btn('t:call-info', _DI('info'), 'Banner')}${btn('t:hr', _DI('hr'), 'Divisor')}<span class="sp-dtbar__s"></span>${inline}${btn('removeFormat', _DI('eraser'), 'Quitar formato')}<span class="sp-pres" id="sp-pres"></span><span class="sp-dtbar__st" id="sp-doc-st">Guardado</span></div>
       <div class="sp-dpage"><input class="sp-dtitle" id="sp-dtitle" value="${esc(v.nombre && v.nombre !== 'Documento' ? v.nombre : '')}" placeholder="Documento sin título" maxlength="120" onchange="SpacesModule.docTitle(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('sp-doc').focus();}">
         <div class="sp-dhint">Escribe <kbd>/</kbd> para insertar bloques, <kbd>@</kbd> para mencionar a alguien</div>
@@ -1628,7 +1628,7 @@ const SpacesModule = (() => {
     const cl = (_clients.l || []).map(c => [c.id, c.nombre + (c.empresa ? ' · ' + c.empresa : '')]);
     const real = t.real_s || 0, est = t.est_min || 0, base = (+p.horas_estimadas || 0) * 3600 || est * 60, usoPc = base ? Math.round(real / base * 100) : null;
     const cs = sum.costos, pend = cs ? Math.max(0, cs.monto - cs.cobrado) : 0, hrs = real / 3600;
-    const people = (t.por_persona || []).map(x => `<div class="pcf-pr"><span>${esc(x.nombre)}</span><b>${_hh(x.s)}</b></div>`).join('') || '<div class="sp-dim" style="font-size:.78rem">Aún no hay horas registradas.</div>';
+    const people = (t.por_persona || []).map(x => `<div class="pcf-pr"><span>${esc(x.nombre)}</span><b>${_hh(x.s)}</b></div>`).join('') || '<div class="sp-dim" style="font-size:12px">Aún no hay horas registradas.</div>';
     b.innerHTML = `<div class="pcf">
       <div class="pcf-hd"><div><b>Configuración del proyecto</b><span>Todo lo que define, mide y cobra este proyecto. El avance y las gráficas están en la vista Panel.</span></div><button class="btn btn--primary btn--sm" id="pcf-save" onclick="SpacesModule.cfgSave()">Guardar cambios</button></div>
       <div class="pcf-grid">
@@ -1683,7 +1683,7 @@ const SpacesModule = (() => {
   function cfgResp(btn) { btn.classList.toggle('on'); const n = btn.dataset.n; _cfgResp = btn.classList.contains('on') ? [...new Set([..._cfgResp, n])] : _cfgResp.filter(x => x !== n); }
   function _cfgRepPaint() {
     const box = $q('cfg-rep'); if (!box) return; const names = [...new Set(_team.map(x => x.nombre).filter(Boolean))];
-    box.innerHTML = _cfgRep.map((r, i) => `<div class="pcf-rr"><select class="form-input" onchange="SpacesModule.cfgRepSet(${i},'nombre',this.value)">${names.map(n => `<option${n === r.nombre ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select><input class="form-input" type="number" min="0" max="100" value="${r.pct}" oninput="SpacesModule.cfgRepSet(${i},'pct',this.value)"><span>%</span><button type="button" class="sp-pj__m" style="opacity:1" onclick="SpacesModule.cfgRepDel(${i})">✕</button></div>`).join('') || '<div class="sp-dim" style="font-size:.78rem">Sin reparto: el 100 % es del responsable.</div>';
+    box.innerHTML = _cfgRep.map((r, i) => `<div class="pcf-rr"><select class="form-input" onchange="SpacesModule.cfgRepSet(${i},'nombre',this.value)">${names.map(n => `<option${n === r.nombre ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select><input class="form-input" type="number" min="0" max="100" value="${r.pct}" oninput="SpacesModule.cfgRepSet(${i},'pct',this.value)"><span>%</span><button type="button" class="sp-pj__m" style="opacity:1" onclick="SpacesModule.cfgRepDel(${i})">✕</button></div>`).join('') || '<div class="sp-dim" style="font-size:12px">Sin reparto: el 100 % es del responsable.</div>';
     const tot = _cfgRep.reduce((a, r) => a + (+r.pct || 0), 0), s = $q('cfg-rep-sum'); if (s) s.textContent = _cfgRep.length ? `· suma ${tot}%` : '';
     if (s) s.style.color = _cfgRep.length && tot !== 100 ? '#D9534F' : '';
   }

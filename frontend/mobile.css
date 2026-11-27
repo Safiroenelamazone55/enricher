@@ -37,7 +37,7 @@
   .gtb-burger:active { background: #EEF1EF; }
   .global-topbar { gap: 6px !important; padding: 0 8px !important; }
   .global-topbar__ws, .global-topbar .rtt__time { display: none !important; }
-  .global-topbar__name { font-size: 14px; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .global-topbar__name { font-size:14px; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;line-height:20px}
   .global-topbar .rchat__strip { gap: 0 !important; }
   .global-topbar .rchat__strip-btn { width: 36px !important; height: 40px !important; }
   .global-topbar .rchat__strip-sep { display: none !important; }
@@ -83,9 +83,9 @@
 #m-backbar { display: none; }
 @media (max-width: 720px) {
   body.m-detail #m-backbar { display: flex; align-items: center; gap: 8px; position: fixed; top: var(--topbar-h, 52px); left: 0; right: 0; height: 44px; padding: 0 10px 0 4px; z-index: 9200; background: #fff; border-bottom: 1px solid #E6E9E7; }
-  .m-backbar__b { display: inline-flex; align-items: center; gap: 2px; height: 36px; padding: 0 10px 0 6px; border: 0; background: transparent; color: var(--primary, #00804C); font: inherit; font-size: 14px; font-weight: 600; border-radius: 8px; }
+  .m-backbar__b { display: inline-flex; align-items: center; gap: 2px; height: 36px; padding: 0 10px 0 6px; border: 0; background: transparent; color: var(--primary, #00804C); font: inherit; font-size:14px; font-weight:500; border-radius: 8px; }
   .m-backbar__b:active { background: #EEF6F1; }
-  .m-backbar__t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: #14211B; }
+  .m-backbar__t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size:14px; font-weight:500; color: #14211B;line-height:20px}
   body.m-detail #appShell .app-main { padding-top: 44px !important; }
 
   /* WhatsApp (Operaciones y Outreach) */
@@ -138,7 +138,7 @@
   .lm2-nav { position: fixed !important; top: var(--topbar-h, 52px); left: 0; bottom: 0; z-index: 9400; width: min(290px, 86vw) !important; height: auto !important; align-self: auto !important; overflow-y: auto; overflow-x: hidden; transform: translateX(-104%); transition: transform .2s ease; }
   body.nav-open .lm2-nav { transform: none; box-shadow: 14px 0 40px rgba(0,0,0,.28); }
   .lm2-nav .snav-panel__hd .sidebar__toggle { display: none !important; }
-  .lm2-nav__item { padding: 12px 12px !important; min-height: 44px; font-size: .9rem; }
+  .lm2-nav__item { padding: 12px 12px !important; min-height: 44px; font-size:14px;line-height:20px}
   .lm2-nav .lm2-nav__lbl, .lm2-nav--collapsed .lm2-nav__lbl, .lm2-nav--collapsed .lm2-nav__cnt, .lm2-nav--collapsed .lm2-nav__grp, .lm2-nav--collapsed .snav-panel__title, .lm2-nav--collapsed .snav-back span { display: inline-block !important; opacity: 1 !important; max-width: none !important; width: auto !important; }
   .lm2-nav--collapsed .lm2-nav__grp { display: block !important; }
   .lm2-nav--collapsed .lm2-nav__item { justify-content: flex-start !important; padding: 12px 12px !important; }
@@ -226,7 +226,7 @@
   #pane-mgmt-mywork .d3-task-row { flex-wrap: wrap; row-gap: 4px; padding-right: 12px; }
   #pane-mgmt-mywork .d3-task-body { flex: 1 1 0; min-width: 0; }
   #pane-mgmt-mywork .d3-task-name { white-space: normal; }
-  #pane-mgmt-mywork .mw-fst, #pane-mgmt-mywork .d3-task-date { order: 6; font-size: .74rem; }
+  #pane-mgmt-mywork .mw-fst, #pane-mgmt-mywork .d3-task-date { order: 6; font-size:12px;line-height:16px}
   #pane-mgmt-mywork .d3-task-date { margin-left: auto; }
   #pane-mgmt-mywork .d3-openproj-btn, #pane-mgmt-mywork .task-elapsed { display: none; }
   #pane-mgmt-mywork .mw-fchips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
@@ -324,7 +324,7 @@
 /* Calendario (móvil): cabecera compacta y la vista Día usa todo el ancho (el detalle vacío no ocupa lugar) */
 @media (max-width: 720px) {
   .cal2m__bar { flex-wrap: wrap !important; gap: 6px 8px !important; padding: 10px 12px !important; align-items: center; }
-  .cal2m__title b { font-size: 1.15rem !important; } .cal2m__dow { display: none !important; }
+  .cal2m__title b { font-size:18px !important;line-height:24px} .cal2m__dow { display: none !important; }
   .cal2m__seg--v { margin: 0 0 0 auto !important; }
   .cal2m__right { width: 100%; flex-wrap: nowrap !important; justify-content: space-between; gap: 6px !important; overflow-x: auto; scrollbar-width: none; }
   .cal2m__sel { max-width: 130px; min-width: 0; } .cal2m__gc { flex: none; padding: 0 8px; }
@@ -346,9 +346,9 @@
 #m-tabbar, #m-sheet { display: none; }
 @media (max-width: 720px) {
   body.m-bar #m-tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 9350; height: calc(58px + env(safe-area-inset-bottom, 0px)); padding: 0 4px env(safe-area-inset-bottom, 0px); background: #fff; border-top: 1px solid var(--border, #E2E7E3); box-shadow: 0 -4px 16px rgba(16,24,20,.06); }
-  .m-tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; border: 0; background: none; color: var(--text-muted, #8B9690); font: inherit; font-size: .68rem; font-weight: 500; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .m-tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; border: 0; background: none; color: var(--text-muted, #8B9690); font: inherit; font-size:10px; font-weight:500; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .m-tb svg { width: 22px; height: 22px; } .m-tb span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .m-tb.on { color: var(--primary, #007AFF); font-weight: 600; }
+  .m-tb.on { color: var(--primary, #007AFF); font-weight:500; }
   /* el contenido deja sitio a la barra; el menú ☰ y los iconos secundarios pasan a «Más» */
   body.m-bar #appShell .app-layout { height: calc(100dvh - var(--topbar-h, 52px) - 58px - env(safe-area-inset-bottom, 0px)); }
   body.m-bar #appShell .app-main { padding-bottom: 20px !important; }
@@ -362,9 +362,9 @@
   #m-sheet .m-sheet__box { position: absolute; left: 0; right: 0; bottom: 0; max-height: 78dvh; overflow-y: auto; padding: 8px 14px calc(18px + env(safe-area-inset-bottom, 0px)); background: #fff; border-radius: 18px 18px 0 0; transform: translateY(100%); transition: transform .2s ease; }
   #m-sheet.on { pointer-events: auto; } #m-sheet.on .m-sheet__bg { opacity: 1; } #m-sheet.on .m-sheet__box { transform: none; }
   .m-sheet__grip { width: 38px; height: 4px; border-radius: 99px; background: var(--border-strong, #D5DDD7); margin: 4px auto 10px; }
-  .m-sheet__t { font-size: .8rem; font-weight: 600; color: var(--text-muted, #8B9690); padding: 0 4px 8px; }
+  .m-sheet__t { font-size:12px; font-weight:500; color: var(--text-muted, #8B9690); padding: 0 4px 8px;line-height:16px}
   .m-sheet__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .m-sh { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; border: 1px solid var(--border, #E2E7E3); border-radius: 14px; background: var(--surface-secondary, #F7F8F6); color: var(--text-primary, #14211B); font: inherit; font-size: .78rem; font-weight: 500; text-align: center; cursor: pointer; } .m-sh svg { width: 24px; height: 24px; color: var(--text-secondary, #5F6B64); }
+  .m-sh { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; border: 1px solid var(--border, #E2E7E3); border-radius: 14px; background: var(--surface-secondary, #F7F8F6); color: var(--text-primary, #14211B); font: inherit; font-size:12px; font-weight:500; text-align: center; cursor: pointer; } .m-sh svg { width: 24px; height: 24px; color: var(--text-secondary, #5F6B64); }
   .m-sh.on { background: var(--primary-soft, #E6F0FF); border-color: transparent; color: var(--primary, #007AFF); } .m-sh.on svg { color: var(--primary, #007AFF); }
   /* panel flotante y chat respetan la barra inferior */
   body.m-bar .npd { max-height: calc(100dvh - 140px); }
@@ -378,7 +378,7 @@
   .opp-kcol__h { padding: 0 2px 8px !important; }
   .opp-kcol__b { padding: 0 !important; gap: 10px !important; }
   .opp-kc { padding: 14px !important; box-shadow: 0 1px 3px rgba(16,24,20,.06); }
-  .opp-kc__t { font-size: .95rem !important; -webkit-line-clamp: 3; }
+  .opp-kc__t { font-size:14px !important; -webkit-line-clamp: 3;line-height:20px}
 }
 @media (max-width: 720px) { .opp-board { align-items: stretch !important; } .opp-kcol { width: 100% !important; min-width: 0 !important; flex: none; } .opp-kc { width: 100%; box-sizing: border-box; } }
 
@@ -389,14 +389,14 @@
   #pane-mgmt-dashboard .d3-grid > *, #pane-mgmt-dashboard .d3-hero, #pane-mgmt-dashboard .d3-revcard, #pane-mgmt-dashboard .d3-actcard, #pane-mgmt-dashboard .d3-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
   #pane-mgmt-dashboard .d3-act-timer, #pane-mgmt-dashboard .d3-act-statsrow { min-width: 0; }
   #pane-mgmt-dashboard .d3-hrs-metrics, #pane-mgmt-dashboard .d3-act-statsrow { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px 12px !important; }
-  #pane-mgmt-dashboard .d3-hrs-metric__v { font-size: 1.05rem; white-space: normal; }
+  #pane-mgmt-dashboard .d3-hrs-metric__v { font-size:14px; white-space: normal;line-height:20px}
   #pane-mgmt-dashboard .d3-hrs-btn { width: 100%; box-sizing: border-box; }
   #pane-mgmt-dashboard .d3-card-header { flex-wrap: wrap; gap: 6px 10px; }
   #pane-mgmt-dashboard .d3-card-title { white-space: normal; flex: 1 1 auto; min-width: 0; }
   #pane-mgmt-dashboard .d3-task-row { flex-wrap: wrap; row-gap: 4px; }
   #pane-mgmt-dashboard .d3-task-body { flex: 1 0 calc(100% - 112px); min-width: 0; }
   #pane-mgmt-dashboard .d3-task-name { white-space: normal; }
-  #pane-mgmt-dashboard .d3-task-date { order: 6; margin-left: 40px; font-size: .74rem; }
+  #pane-mgmt-dashboard .d3-task-date { order: 6; margin-left: 40px; font-size:12px;line-height:16px}
   #pane-mgmt-dashboard .d3-openproj-btn, #pane-mgmt-dashboard .task-elapsed { display: none; }
   #pane-mgmt-dashboard .d3-tasks-scroll { max-height: none; }
 
@@ -404,7 +404,7 @@
   #pane-mgmt-spaces .sp-bar { flex-wrap: wrap; gap: 8px; } #pane-mgmt-spaces .sp-bar__r { flex-wrap: wrap; width: 100%; }
 
   /* Oportunidades: título y botón caben en una fila */
-  #pane-mgmt-opportunities .pane-title { font-size: 1.25rem; } #pane-mgmt-opportunities .pane-header__row .btn { padding: 0 10px; white-space: nowrap; }
+  #pane-mgmt-opportunities .pane-title { font-size:18px;line-height:24px} #pane-mgmt-opportunities .pane-header__row .btn { padding: 0 10px; white-space: nowrap; }
 
   /* Outreach: paneles que no se pasan del ancho */
   #lm2-body, #lm2-body > * { max-width: 100%; min-width: 0; }
@@ -421,15 +421,15 @@
   #pane-mgmt-dashboard .d3-actcard { min-height: 0 !important; height: auto !important; }
   #pane-mgmt-dashboard .d3-act-timer { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 14px !important; border-left: 0 !important; padding-left: 0 !important; }
   #pane-mgmt-dashboard .d3-act-statsrow { width: 100%; }
-  #pane-mgmt-dashboard .d3-hrs-metric__l { white-space: normal; font-size: .76rem; }
-  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: nowrap; font-size: 1.1rem; }
+  #pane-mgmt-dashboard .d3-hrs-metric__l { white-space: normal; font-size:12px;line-height:16px}
+  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: nowrap; font-size:18px;line-height:24px}
 }
 
 @media (max-width: 720px) {
   /* Kanban (Mi trabajo, Espacios): secciones apiladas por estado, no columnas laterales */
   .kanban-board { display: flex !important; flex-direction: column !important; overflow: visible !important; gap: 12px !important; height: auto !important; }
   .kanban-col { width: 100% !important; min-width: 0 !important; max-width: 100% !important; flex: none !important; height: auto !important; max-height: none !important; }
-  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: normal; font-size: 1rem; }
+  #pane-mgmt-dashboard .d3-hrs-metric__v { white-space: normal; font-size:14px;line-height:20px}
   #pane-mgmt-dashboard .d3-actcard > * { flex: none; }
   #pane-mgmt-dashboard .d3-act-timer ~ * { margin-top: 0; }
 }

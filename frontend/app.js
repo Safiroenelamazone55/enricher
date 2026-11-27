@@ -505,7 +505,7 @@ async function initAuth() {
 
   } catch (err) {
     if (window.__novaBootDone) window.__novaBootDone();
-    authBar.innerHTML = `<span style="font-size:.78rem;color:var(--err)">⚠ Can't reach server</span>`;
+    authBar.innerHTML = `<span style="font-size:12px;color:var(--err)">⚠ Can't reach server</span>`;
     authWall.classList.remove('hidden');
     appShell.classList.add('hidden');
     console.error('[auth] /api/auth/me failed:', err.message);
@@ -531,13 +531,13 @@ async function initAuth() {
   const banner = document.createElement('div');
   banner.style.cssText = [
     'position:fixed;top:0;left:0;right:0;z-index:300',
-    'background:#7f1d1d;color:#fff;font-size:.85rem;font-weight:600',
+    'background:#7f1d1d;color:#fff;font-size:14px;font-weight:500',
     'padding:13px 20px;display:flex;align-items:center;justify-content:space-between',
     'gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)',
   ].join(';');
   banner.innerHTML = `<span>${msg}</span>
     <button style="background:rgba(255,255,255,.2);border:none;border-radius:6px;
-      color:#fff;padding:4px 12px;cursor:pointer;font-size:.8rem;font-weight:600"
+      color:#fff;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:500"
       onclick="this.parentElement.remove()">Cerrar</button>`;
   document.body.prepend(banner);
 })();
@@ -659,9 +659,9 @@ const TaskTplModule = (() => {
     _target = { type, id };
     await _load();
     const what = type === 'task' ? 'Sus líneas entran como <b>subtareas</b> de esta tarea.' : 'Sus líneas entran como <b>tareas</b> del proyecto (con sus subtareas).';
-    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;min-width:0"><div style="font-weight:600">' + _e(p.nombre) + '</div><div style="font-size:.75rem;color:#64748B">' + (p.items || []).reduce((n, it) => n + _count(it), 0) + ' elementos' + (p.descripcion ? ' · ' + _e(p.descripcion) : '') + '</div></div><button class="btn btn--primary btn--sm" onclick="TaskTplModule.doImport(' + p.id + ')">Importar</button></div>').join('')
+    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;min-width:0"><div style="font-weight:500">' + _e(p.nombre) + '</div><div style="font-size:12px;color:#64748B">' + (p.items || []).reduce((n, it) => n + _count(it), 0) + ' elementos' + (p.descripcion ? ' · ' + _e(p.descripcion) : '') + '</div></div><button class="btn btn--primary btn--sm" onclick="TaskTplModule.doImport(' + p.id + ')">Importar</button></div>').join('')
       : '<div class="kdr__e" style="padding:18px">Todavía no tienes plantillas. Crea la primera.</div>';
-    _shell('Importar plantilla', '<div style="font-size:.8rem;color:#64748B;margin-bottom:8px">' + what + '</div>' + rows + '<div style="margin-top:14px"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.openManager()">＋ Crear / gestionar plantillas</button></div>');
+    _shell('Importar plantilla', '<div style="font-size:12px;color:#64748B;margin-bottom:8px">' + what + '</div>' + rows + '<div style="margin-top:14px"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.openManager()">＋ Crear / gestionar plantillas</button></div>');
   }
   async function doImport(tplId) {
     if (!_target) return;
@@ -674,7 +674,7 @@ const TaskTplModule = (() => {
   }
   async function openManager() {
     await _load(); _editId = null;
-    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;font-weight:600">' + _e(p.nombre) + '</div><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.edit(' + p.id + ')">Editar</button><button class="btn btn--ghost btn--sm" style="color:#D94B4B" onclick="TaskTplModule.remove(' + p.id + ')">Eliminar</button></div>').join('') : '<div class="kdr__e" style="padding:14px">Sin plantillas todavía.</div>';
+    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;font-weight:500">' + _e(p.nombre) + '</div><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.edit(' + p.id + ')">Editar</button><button class="btn btn--ghost btn--sm" style="color:#D94B4B" onclick="TaskTplModule.remove(' + p.id + ')">Eliminar</button></div>').join('') : '<div class="kdr__e" style="padding:14px">Sin plantillas todavía.</div>';
     _shell('Plantillas de tareas', rows + '<div style="margin-top:12px"><button class="btn btn--primary btn--sm" onclick="TaskTplModule.edit(0)">＋ Nueva plantilla</button></div>');
   }
   function edit(id) {
@@ -682,7 +682,7 @@ const TaskTplModule = (() => {
     _shell(id ? 'Editar plantilla' : 'Nueva plantilla',
       '<input class="form-input" id="tpl-nombre" placeholder="Nombre (ej. Lanzamiento de nueva campaña)" value="' + _e(p.nombre) + '" style="margin-bottom:8px">' +
       '<textarea class="form-input" id="tpl-text" rows="12" style="font-family:inherit" placeholder="Una línea por tarea.&#10;  Con sangría o &quot;- &quot; = subtarea.&#10;Añade [cliente] al final para mostrarla en el portal del cliente,&#10;o [cliente: Título para el cliente] para darle otro nombre.">' + _e(serialize(p.items)) + '</textarea>' +
-      '<div style="font-size:.75rem;color:#64748B;margin:6px 0 12px">Ejemplo: <code>Preparar lista de prospección [cliente: Preparando tu próxima lista]</code></div>' +
+      '<div style="font-size:12px;color:#64748B;margin:6px 0 12px">Ejemplo: <code>Preparar lista de prospección [cliente: Preparando tu próxima lista]</code></div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.openManager()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="TaskTplModule.save()">Guardar</button></div>');
   }
   async function save() {
@@ -705,10 +705,10 @@ const TaskTplModule = (() => {
     try { const r = await apiFetch(API + '/mgmt/tasks/' + taskId); tk = r.ok ? await r.json() : null; } catch (_) {}
     if (!tk) { showBanner('No se pudo cargar la tarea', 'error'); return; }
     _shell('Visible para el cliente',
-      '<div style="font-size:.8rem;color:#64748B;margin-bottom:10px">El cliente verá solo el título y el estado (Planificada, En curso, Hecha) en su portal. Nunca verá horas, costos, notas ni quién la hace. Solo aplica si el proyecto está vinculado a un cliente outbound.</div>' +
+      '<div style="font-size:12px;color:#64748B;margin-bottom:10px">El cliente verá solo el título y el estado (Planificada, En curso, Hecha) en su portal. Nunca verá horas, costos, notas ni quién la hace. Solo aplica si el proyecto está vinculado a un cliente outbound.</div>' +
       '<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="tpl-vis"' + (tk.visible_cliente ? ' checked' : '') + '> <b>Mostrar esta tarea al cliente</b></label>' +
       '<input class="form-input" id="tpl-tc" placeholder="Título para el cliente (opcional)" value="' + _e(tk.titulo_cliente || '') + '">' +
-      '<div style="font-size:.72rem;color:#94A3B8;margin:4px 0 12px">Título interno: ' + _e(tk.titulo) + '</div>' +
+      '<div style="font-size:12px;color:#94A3B8;margin:4px 0 12px">Título interno: ' + _e(tk.titulo) + '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.close()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="TaskTplModule.saveVisible(' + taskId + ')">Guardar</button></div>');
   }
   async function saveVisible(taskId) {
@@ -2686,7 +2686,7 @@ const FinanceModule = (() => {
       const dlLabel = dlDate ? dlDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
       const today = new Date(); today.setHours(0,0,0,0);
       const dlHtml = (dlDate && dlDate < today && !isCob)
-        ? `<span style="color:#DC2626;font-weight:600">${dlLabel}</span>`
+        ? `<span style="color:#DC2626;font-weight:500">${dlLabel}</span>`
         : `<span>${dlLabel}</span>`;
 
       const isTask  = p.source === 'task';
@@ -2707,7 +2707,7 @@ const FinanceModule = (() => {
       return `<div class="finance-row finance-grid" onclick="${rowClick}">
         <div class="fin-cell">
           <div class="client-nombre">${esc(p.concepto || '—')}</div>
-          <div class="client-meta" style="font-size:.73rem">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : '<span class="muted">Sin cliente</span>'}</div>
+          <div class="client-meta" style="font-size:12px">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : '<span class="muted">Sin cliente</span>'}</div>
         </div>
         <div class="fin-cell client-meta">${p.project_nombre ? esc(p.project_nombre) : '<span class="muted">—</span>'}</div>
         <div class="fin-cell client-meta">${p.canal ? esc(p.canal) : '<span class="muted">—</span>'}</div>
@@ -4117,7 +4117,7 @@ const FinanceModule = (() => {
           <label class="fin-cfg-field"><span class="fin-cfg-lbl">Monto (${esc(p.moneda || 'USD')})</span><input class="form-input" type="number" min="0" step="0.01" id="fbc-monto"></label>
           <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de cobro</span><input class="form-input" type="date" id="fbc-fecha" value="${hoy}"></label>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;color:var(--text)"><input type="checkbox" id="fbc-cobrado" checked> Ya lo cobré (el cliente ya pagó)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)"><input type="checkbox" id="fbc-cobrado" checked> Ya lo cobré (el cliente ya pagó)</label>
       </div>
       <div class="fin-pi-box__ft" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('fb-cobro-modal').remove()">Cancelar</button>
@@ -5972,15 +5972,15 @@ const CanteraModule = (() => {
     if (!L.length) return '';
     const rows = L.map((x, i) => {
       const who = (x.personas || []).join(', ') + ((x.n || 0) > (x.personas || []).length ? '…' : '');
-      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="padding:2px 8px;font-size:.72rem;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
+      const sug = x.sugerida ? `<button class="btn btn--sm" type="button" style="padding:2px 8px;font-size:12px;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis" onclick="CanteraModule.impAliasSug(${i})">¿Será «${esc(x.sugerida.borrador)}»? Usar</button>` : '';
       return `<div class="cant-al-row" data-i="${i}" style="display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:4px 0;border-top:1px solid #E5E2DC">
-        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.84rem"><b>${esc(x.archivo || '(sin nombre de empresa)')}</b> <span class="cant-hint" style="margin:0 0 0 6px">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</span></div>
+        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px"><b>${esc(x.archivo || '(sin nombre de empresa)')}</b> <span class="cant-hint" style="margin:0 0 0 6px">${x.n} contacto(s)${who ? ': ' + esc(who) : ''}</span></div>
         <div>${x.archivo ? sug : ''}</div>
-        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:4px 8px;border:1px solid #D9D6CF;border-radius:0;font:inherit;font-size:.8rem;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
+        <div style="position:relative" id="cant-al-box-${i}">${x.archivo ? `<input id="cant-al-in-${i}" autocomplete="off" placeholder="Escribe para buscar en este borrador…" oninput="CanteraModule.impAliasSearch(${i}, this.value)" onblur="setTimeout(()=>document.getElementById('cant-al-menu-${i}')?.remove(),180)" style="width:100%;box-sizing:border-box;padding:4px 8px;border:1px solid #D9D6CF;border-radius:0;font:inherit;font-size:12px;background:#fff"><div id="cant-al-pick-${i}"></div>` : '<span class="cant-hint" style="margin:0">Sin nombre de empresa en el archivo</span>'}</div>
       </div>`;
     }).join('');
     return `<div class="lm-imp-err" style="background:#FAF8F4;border-color:#E5E2DC;color:inherit">
-      <div style="font-weight:600;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
+      <div style="font-weight:500;margin-bottom:2px">${L.length} empresa(s) del archivo no están en este borrador</div>
       <div class="cant-hint" style="margin:0 0 6px">Si alguna ya está con otro nombre, búscala y vincúlala. Las demás puedes crearlas como empresas nuevas. Lo que no resuelvas ahora queda guardado en la pestaña Configuración, con su LinkedIn, para verificarlo después.</div>
       ${rows}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
@@ -6217,9 +6217,9 @@ const CanteraModule = (() => {
     if (_bdPageIdx < 0) _bdPageIdx = 0;
     const from = total ? _bdPageIdx * ps + 1 : 0, to = Math.min(total, (_bdPageIdx + 1) * ps);
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraModule.bdGoPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
-    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:var(--text2,#45586A)">
       <span>Mostrando <b>${from}–${to}</b> de <b>${total}</b></span>
-      <select onchange="CanteraModule.bdSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="CanteraModule.bdSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:14px;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, _bdPageIdx <= 0, '‹')}
       <span>${_bdPageIdx + 1} / ${pages}</span>
       ${nav(1, _bdPageIdx >= pages - 1, '›')}
@@ -6390,7 +6390,7 @@ const CanteraModule = (() => {
       case 'prioridad': return esc(c.prioridad || '—');
       case 'datos_extra': { const e = Object.entries(c.datos_extra || {}); if (!e.length) return '—'; const tx = e.map(([k, v]) => k + ': ' + v).join(' · '); return `<span class="cant-nota-cell" title="${esc(tx)}">${esc(tx)}</span>`; }
       case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:12px" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
@@ -6520,9 +6520,9 @@ const CanteraModule = (() => {
       </div>
 
       <div class="cant-stepbar">
-        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
+        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos <span style="font-weight:400;font-size:12px;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
-        <button class="cant-step${_step === 6 ? ' on' : ''}" onclick="CanteraModule.setStep(6)">Datos a investigar <span style="font-weight:400;font-size:.72rem;opacity:.7">(opcional)</span></button>
+        <button class="cant-step${_step === 6 ? ' on' : ''}" onclick="CanteraModule.setStep(6)">Datos a investigar <span style="font-weight:400;font-size:12px;opacity:.7">(opcional)</span></button>
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
         <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
@@ -6532,7 +6532,7 @@ const CanteraModule = (() => {
       </div>
 
       ${_step === 1 ? `<div class="cant-section">
-        <div class="cant-note" style="background:#EEF4FF;border:1px solid #C7D7FE;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:.84rem;line-height:1.5;color:#1D2939">
+        <div class="cant-note" style="background:#EEF4FF;border:1px solid #C7D7FE;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:14px;line-height:20px;color:#1D2939">
           <b>Validación básica · opcional.</b> Es una revisión rápida y superficial, sin IA y sin costo: solo compara los datos que ya importaste. Puedes completarla, completar solo algunos filtros o saltarla; la <b>validación profunda</b> (investigación con IA, por clave API o pegando la instrucción en tu herramienta de IA) funciona igual sin haberla corrido.<br><br>
           <b>Estos filtros deciden sobre la EMPRESA.</b> Primero se define la empresa objetivo, y solo las empresas que cumplen pasan al análisis. Si una no cumple, se descarta entera con su motivo.
           <ul style="margin:6px 0 0 18px;padding:0">
@@ -6670,7 +6670,7 @@ const CanteraModule = (() => {
                 ? `<div style="display:flex;gap:6px"><input class="form-input" id="cant-de-new-${i}" autocomplete="off" placeholder="Nombre, ej. cliente_ideal" onkeydown="if(event.key==='Enter'){event.preventDefault();CanteraModule.deCreate(${i})}"><button type="button" class="btn btn--primary btn--sm" onclick="CanteraModule.deCreate(${i})">Crear</button><button type="button" class="btn btn--ghost btn--sm" onclick="CanteraModule.deNewCancel(${i})" title="Cancelar">✕</button></div>`
                 : `<button type="button" class="form-input cant-de-btn" onclick="CanteraModule.showDeNames(${i})" onblur="CanteraModule.hideDeNames(${i})"><span>${d.nombre ? esc(d.nombre) : '<em class="cant-hint">Elige un campo…</em>'}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>`}<div id="cant-de-menu-${i}" class="cant-de-menu" style="display:none"></div><span class="cant-hint" id="cant-de-slug-${i}">${d.nombre ? '{{' + esc(_slugVar(d.nombre)) + '}}' : ''}</span></div>
               <label style="flex:1"><span class="cant-hint">Qué debe averiguar (la pregunta)</span><textarea class="form-input" rows="5" placeholder="Ej. ¿Cuál es su competidor directo más visible en la misma zona? Responde solo con el nombre de la empresa." oninput="CanteraModule.setDatoExtra(${i},'pregunta',this.value)">${esc(d.pregunta || '')}</textarea></label>
-              <label style="width:150px;font-size:.78rem"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
+              <label style="width:150px;font-size:12px"><span class="cant-hint">Cuándo</span><select class="form-input" onchange="CanteraModule.setDatoExtra(${i},'solo_si_califica',this.value==='1')"><option value="1"${d.solo_si_califica !== false ? ' selected' : ''}>Solo si califica</option><option value="0"${d.solo_si_califica === false ? ' selected' : ''}>Siempre</option></select></label>
               <button class="lm-bulk-ghost cant-x" style="margin-top:18px" onclick="CanteraModule.removeDatoExtra(${i})">✕</button>
             </div>`).join('')}
           <button class="add-role" onclick="CanteraModule.addDatoExtra()">+ Agregar dato</button>
@@ -7162,9 +7162,9 @@ const CanteraModule = (() => {
     const pages = Math.max(1, Math.ceil(total / ps));
     const from = total ? _cantPageIdx * ps + 1 : 0, to = Math.min(total, (_cantPageIdx + 1) * ps);
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraModule.cantGoPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
-    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:var(--text2,#45586A)">
       <span>Mostrando <b>${from}–${to}</b> de <b>${total}</b></span>
-      <select onchange="CanteraModule.cantSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="CanteraModule.cantSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:14px;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, _cantPageIdx <= 0, '‹')}
       <span>${_cantPageIdx + 1} / ${pages}</span>
       ${nav(1, _cantPageIdx >= pages - 1, '›')}
@@ -8741,7 +8741,7 @@ const CanteraModule = (() => {
           <option value="">Sin secuencia</option>
           ${secuencias.map(s => `<option value="${s.id}"${String(_current.sequence_id) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}
         </select></label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir contactos de respaldo</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="cant-pr-resp" checked> Incluir contactos de respaldo</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closePromote()">Cancelar</button>
@@ -8797,7 +8797,7 @@ const CanteraModule = (() => {
     document.getElementById('cant-seq-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-seq-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeSendSeq(); };
-    const prioChk = (n) => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="cant-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
+    const prioChk = (n) => `<label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="cant-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeSendSeq()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
@@ -9075,7 +9075,7 @@ const CanteraMesaModule = (() => {
       case 'prioridad': return esc(c.prioridad || '—');
       case 'datos_extra': { const e = Object.entries(c.datos_extra || {}); if (!e.length) return '—'; const tx = e.map(([k, v]) => k + ': ' + v).join(' · '); return `<span class="cant-nota-cell" title="${esc(tx)}">${esc(tx)}</span>`; }
       case 'puntaje': return c.puntaje != null ? `<span title="${esc((c.puntaje_detalle || []).map(d => d.variable + ': ' + d.puntos + '/' + d.peso).join(' · '))}">${c.puntaje}/100</span>` : '—';
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}" style="cursor:pointer" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:12px" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span class="cant-nota-cell" title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
@@ -9410,7 +9410,7 @@ const CanteraMesaModule = (() => {
         <p class="cant-hint" style="margin:0">Las empresas calificadas de tu selección, con sus contactos "Decide"/"Respaldo", se crean como reales. Esto no se puede deshacer.</p>
         <label class="cant-flabel">Cliente<select id="mesa-pr-client" class="form-input" onchange="_cantCascade.change('mesa-pr','client')"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
         <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-pr-camp" class="form-input" onchange="_cantCascade.change('mesa-pr','camp')"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="mesa-pr-resp" checked> Incluir contactos de respaldo</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="mesa-pr-resp" checked> Incluir contactos de respaldo</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-promote-modal').remove()">Cancelar</button>
@@ -9449,7 +9449,7 @@ const CanteraMesaModule = (() => {
     document.getElementById('mesa-seq-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mesa-seq-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    const prioChk = n => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="mesa-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
+    const prioChk = n => `<label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="mesa-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-seq-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
@@ -9632,9 +9632,9 @@ const CanteraMesaModule = (() => {
     const pages = Math.max(1, Math.ceil(_total / ps));
     const from = _total ? _page * ps + 1 : 0, to = Math.min(_total, (_page + 1) * ps);
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraMesaModule.goPage(${dir})">${label}</button>`;
-    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:var(--text2,#45586A)">
       <span>Mostrando <b>${from}–${to}</b> de <b>${_total}</b></span>
-      <select onchange="CanteraMesaModule.setPageSize(this.value)" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="CanteraMesaModule.setPageSize(this.value)" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:14px;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, _page <= 0, '‹')}<span>${_page + 1} / ${pages}</span>${nav(1, _page >= pages - 1, '›')}
     </div>`;
   }
@@ -10023,7 +10023,7 @@ const CanteraGlobalModule = (() => {
       return `${_lfBody(quick)}<div class="lf-clear"><button ${_hasActiveFiltros() ? '' : 'disabled'} onclick="CanteraGlobalModule.clearAll()">Borrar todos los filtros</button></div>`;
     }
     return `<div class="cant-global-panel-hd">
-        <h3 style="margin:0;font-size:.92rem">Criterios</h3>
+        <h3 style="margin:0;font-size:14px">Criterios</h3>
         <div style="display:flex;align-items:center;gap:8px">
           ${vistaToggle}
           <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Guardar filtro</button>
@@ -10199,9 +10199,9 @@ const CanteraGlobalModule = (() => {
     if (_page < 0) _page = 0;
     const from = _total ? _page * ps + 1 : 0, to = Math.min(_total, (_page + 1) * ps);
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraGlobalModule.goPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
-    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:var(--text2,#45586A)">
       <span>Mostrando <b>${from}–${to}</b> de <b>${_total}</b></span>
-      <select onchange="CanteraGlobalModule.setPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="CanteraGlobalModule.setPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:14px;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, _page <= 0, '‹')}
       <span>${_page + 1} / ${pages}</span>
       ${nav(1, _page >= pages - 1, '›')}
@@ -10393,7 +10393,7 @@ const CanteraCriteriosModule = (() => {
       <div class="cant-tier-card">
         <div class="cant-tier-row">
           <span class="tier-badge t1a" style="flex-shrink:0">${(t.tiers || []).length} Tier(s)</span>
-          <span style="font-weight:700;flex:1">${esc(t.nombre)}</span>
+          <span style="font-weight:500;flex:1">${esc(t.nombre)}</span>
           <button class="btn btn--primary btn--sm" onclick="CanteraCriteriosModule.useTemplate(${t.id})">Usar en borrador nuevo</button>
           <button class="cant-x" onclick="CanteraCriteriosModule.remove(${t.id})">✕</button>
         </div>
@@ -10456,7 +10456,7 @@ const CanteraConfigModule = (() => {
     const el = document.getElementById(_cid); if (!el) return;
     const row = (ok, label, detalle) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <span class="cant-estado cant-estado--${ok ? 'aprobado' : 'descartado'}">${ok ? 'Configurada' : 'Falta configurar'}</span>
-      <span style="font-size:.84rem;color:var(--text2,#6C6862)">${esc(label)}</span>
+      <span style="font-size:12px;color:var(--text2,#6C6862)">${esc(label)}</span>
     </div><p class="cant-hint" style="margin:0 0 14px">${detalle}</p>`;
     el.innerHTML = `${_cid === 'cantera-config-body' ? '<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Configuración</h2></div></div>' : ''}
       <div class="cant-section">
@@ -11354,7 +11354,7 @@ const DashboardModule = (() => {
     if (it.padre) sub.push(`Subtarea de ${esc(it.padre)}`);
     if (it.cliente) sub.push(`${isOpp ? 'Prospecto' : 'Cliente'}: ${esc(it.cliente)}${it.empresa && it.empresa !== it.cliente ? ' · ' + esc(it.empresa) : ''}`);
     const _vencida = it.deadline && new Date(String(it.deadline).split('T')[0] + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
-    if (dl) sub.push(_vencida ? `<span style="color:#D94B4B;font-weight:600">Vencida el ${dl}</span>` : `Vence ${dl}`);
+    if (dl) sub.push(_vencida ? `<span style="color:#D94B4B;font-weight:500">Vencida el ${dl}</span>` : `Vence ${dl}`);
     return `<button class="tp-card${sel ? ' tp-card--sel' : ''}" data-k="${it.kind}" data-i="${it.id}" onclick="DashboardModule._tpSelect('${it.kind}',${it.id})">
       <span class="tp-radio"></span>
       <span class="tp-card__body">
@@ -11993,7 +11993,7 @@ const DashboardModule = (() => {
         <div class="d3-alert-header">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           <span class="d3-alert-title">Todo en orden</span>
-          <span style="font-size:.62rem;color:#065F46;">Sin pendientes de integridad</span>
+          <span style="font-size:10px;color:#065F46;">Sin pendientes de integridad</span>
         </div>`;
       return;
     }
@@ -18846,12 +18846,12 @@ const MeetingsModule = (() => {
   async function _loadTeam() {
     const list = $('meeting-attendees-list');
     if (!list) return;
-    list.innerHTML = '<span class="muted" style="font-size:.8rem">Cargando…</span>';
+    list.innerHTML = '<span class="muted" style="font-size:12px">Cargando…</span>';
     try {
       const res = await apiFetch(`${API}/mgmt/team`);
       const members = res.ok ? await res.json() : [];
       if (!members.length) {
-        list.innerHTML = '<span class="muted" style="font-size:.8rem">Sin miembros de equipo</span>';
+        list.innerHTML = '<span class="muted" style="font-size:12px">Sin miembros de equipo</span>';
         return;
       }
       list.innerHTML = members.map(m =>
@@ -18863,7 +18863,7 @@ const MeetingsModule = (() => {
          </label>`
       ).join('');
     } catch {
-      list.innerHTML = '<span class="muted" style="font-size:.8rem">Error al cargar</span>';
+      list.innerHTML = '<span class="muted" style="font-size:12px">Error al cargar</span>';
     }
   }
 
@@ -19987,7 +19987,7 @@ const ProjectsModule = (() => {
     if (!mains.length) { showBanner(esSub ? 'No hay otra tarea a la que moverla en este proyecto.' : 'No hay otra tarea principal en este proyecto.', 'error'); return; }
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu';
-    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#B4AFA8">${esSub ? 'Mover a…' : 'Convertir en subtarea de…'}</div>`
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:10px;font-weight:500;letter-spacing:normal;text-transform:none;color:#B4AFA8">${esSub ? 'Mover a…' : 'Convertir en subtarea de…'}</div>`
       + mains.map(m => `<button class="d3-status-opt" onclick="ProjectsModule.convertToSub(${taskId},${m.id})">${esc(m.titulo)}</button>`).join('');
     const x = Math.max(8, Math.min((e && e.clientX) || 200, window.innerWidth - 280));
     menu.style.cssText = `position:fixed;z-index:9999;visibility:hidden;top:0;left:${x}px;max-height:300px;overflow:auto;min-width:220px`;
@@ -20524,7 +20524,7 @@ const ProjectsModule = (() => {
         <select class="pjlinks__form-select" id="pjrec-freq-${pid}">${freqOpts}</select>
         <select class="pjlinks__form-select" id="pjrec-resp-${pid}">${respOpts}</select>
       </div>
-      <div class="pjlinks__form-row pjlinks__form-row--sm"><label style="display:flex;align-items:center;gap:6px;font-size:.8rem"><input type="checkbox" id="pjrec-vis-${pid}"${t?.visible_cliente ? ' checked' : ''}> Visible para el cliente</label><input class="pjlinks__form-input" id="pjrec-tc-${pid}" type="text" placeholder="Título para el cliente (opcional)" value="${esc(t?.titulo_cliente || '')}"></div>
+      <div class="pjlinks__form-row pjlinks__form-row--sm"><label style="display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox" id="pjrec-vis-${pid}"${t?.visible_cliente ? ' checked' : ''}> Visible para el cliente</label><input class="pjlinks__form-input" id="pjrec-tc-${pid}" type="text" placeholder="Título para el cliente (opcional)" value="${esc(t?.titulo_cliente || '')}"></div>
       <div class="pjlinks__form-actions">
         <button type="button" class="btn btn--ghost btn--sm" onclick="event.stopPropagation();${cancelFn}">Cancelar</button>
         <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();${saveFn}">Guardar</button>
@@ -21505,7 +21505,7 @@ const ProjectsModule = (() => {
     sel.forEach(n => { if (!names.includes(n)) names.push(n); });   // por si un responsable ya no está en el equipo
     list.innerHTML = names.map(n => `<label class="proj-resp-chip${sel.has(n) ? ' on' : ''}">
       <input type="checkbox" value="${esc(n)}"${sel.has(n) ? ' checked' : ''} onchange="ProjectsModule.onRespChange(this)">${esc(n)}</label>`).join('')
-      || '<span class="muted" style="font-size:.8rem">Agrega miembros en Equipo para poder asignarlos.</span>';
+      || '<span class="muted" style="font-size:12px">Agrega miembros en Equipo para poder asignarlos.</span>';
     const rep = (p && Array.isArray(p.reparto)) ? p.reparto : [];
     $('proj-reparto-on').checked = rep.length > 0;
     _renderRepartoRows(rep);
@@ -21604,12 +21604,12 @@ const ProjectsModule = (() => {
   function _renderRepartoRows(rep) {
     const wrap = $('proj-reparto-list'); if (!wrap) return;
     const sel = _drawerRespSel();
-    if (!sel.length) { wrap.innerHTML = '<span class="muted" style="font-size:.78rem">Marca primero a los responsables del proyecto.</span>'; return; }
+    if (!sel.length) { wrap.innerHTML = '<span class="muted" style="font-size:12px">Marca primero a los responsables del proyecto.</span>'; return; }
     const pctOf = n => { const r = (rep || []).find(x => String(x.nombre) === n); return r ? +r.pct : ''; };
     wrap.innerHTML = sel.map(n => `<div class="proj-reparto-row"><span>${esc(n)}</span>
         <input type="number" class="form-input" data-rep-nombre="${esc(n)}" min="0" max="100" step="1" value="${pctOf(n)}" placeholder="%" oninput="ProjectsModule.repartoHint()"><b>%</b></div>`).join('')
       + `<button type="button" class="btn btn--ghost btn--xs" onclick="ProjectsModule.repartoIgual()">Partes iguales</button>
-         <span class="muted" id="proj-reparto-hint" style="font-size:.75rem"></span>`;
+         <span class="muted" id="proj-reparto-hint" style="font-size:12px"></span>`;
     _repartoHint();
   }
   function _drawerReparto() {
@@ -21775,7 +21775,7 @@ const ProjectsModule = (() => {
           <span class="qc-title">Proyecto creado</span>
           <button class="qc-close" onclick="ProjectsModule.closeFirstTaskPrompt()">✕</button>
         </div>
-        <p style="margin:0 0 18px;font-size:.88rem;color:var(--text2,#6C6862);line-height:1.5">"${esc(nombre)}" ya está listo. Crea la primera tarea para tener de dónde partir.</p>
+        <p style="margin:0 0 18px;font-size:14px;color:var(--text2,#6C6862);line-height:20px">"${esc(nombre)}" ya está listo. Crea la primera tarea para tener de dónde partir.</p>
         <div class="qc-actions">
           <button type="button" class="qc-btn qc-btn--cancel" onclick="ProjectsModule.closeFirstTaskPrompt()">Ahora no</button>
           <button type="button" class="qc-btn qc-btn--save" onclick="ProjectsModule.goCreateFirstTask(${pid})">Crear tarea</button>
@@ -22895,7 +22895,7 @@ const BlocksModule = (() => {
       const proj = t.project_nombre
         ? `${esc(t.project_nombre)}${t.client_nombre ? ' · <span style="color:var(--muted)">' + esc(t.client_nombre) + '</span>' : ''}` : '—';
       return `<tr class="clients-table__row">
-        <td style="font-weight:600">${esc(t.titulo)}</td>
+        <td style="font-weight:500">${esc(t.titulo)}</td>
         <td>${proj}</td>
         <td>${(t.responsables?.length ? t.responsables : t.responsable ? [t.responsable] : []).map(r=>esc(r)).join(', ') || '<span style="color:var(--muted)">—</span>'}</td>
         <td><span class="blk-motivo">${t.notas ? esc(t.notas) : '<span style="color:var(--muted)">—</span>'}</span></td>
@@ -23066,7 +23066,7 @@ const TeamModule = (() => {
     const a = _accOf(m);
     if (!a) return '';
     const t = a.has_password ? ['Entra con contraseña', '#065F46', '#D1FAE5'] : a.password_pending ? ['Falta crear contraseña', '#92400E', '#FEF3C7'] : a.has_google ? ['Entra con Google', '#1E40AF', '#DBEAFE'] : null;
-    return t ? `<span style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:600;color:${t[1]};background:${t[2]}">${t[0]}</span>` : '';
+    return t ? `<span style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:500;color:${t[1]};background:${t[2]}">${t[0]}</span>` : '';
   }
   function _closeAcc() { document.getElementById('team-acc-modal')?.remove(); }
   function _accModal(inner) {
@@ -23080,12 +23080,12 @@ const TeamModule = (() => {
     const emailed = !!r.emailed;
     _accModal(`<div class="fin-pi-box__hd"><h3>${esReset ? 'Enlace para restablecer contraseña' : 'Acceso creado'}</h3><button class="fin-pi-x" onclick="TeamModule.closeAcc()">✕</button></div>
       <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
-        <p style="margin:0 0 10px;font-size:.92rem">${emailed
+        <p style="margin:0 0 10px;font-size:14px">${emailed
           ? `Se envió un correo a <b>${esc(email)}</b> desde <b>${esc(r.from || '')}</b> con el enlace para ${esReset ? 'elegir una nueva contraseña' : 'crear su contraseña'}.`
           : `<span style="color:#B45309"><b>El correo no salió.</b> ${esc(r.email_error || '')}</span><br>Copia este enlace y mándaselo tú a <b>${esc(email)}</b>.`}</p>
         <label class="fin-cfg-lbl" style="display:block;margin:10px 0 4px">Enlace (de un solo uso, vence ${esReset ? 'en 24 horas' : 'en 7 días'})</label>
-        <div style="display:flex;gap:6px"><input class="form-input" id="team-acc-link" readonly value="${esc(r.link)}" style="flex:1;font-size:.78rem" onclick="this.select()"><button type="button" class="btn btn--ghost btn--sm" onclick="TeamModule.copyAccLink()">Copiar</button></div>
-        <p class="cant-hint" style="margin:10px 0 0;font-size:.78rem">Con ese enlace ${esc(nombre)} elige su propia contraseña y entra desde app.novacentrax.com con su correo. Tú nunca ves su contraseña.</p>
+        <div style="display:flex;gap:6px"><input class="form-input" id="team-acc-link" readonly value="${esc(r.link)}" style="flex:1;font-size:12px" onclick="this.select()"><button type="button" class="btn btn--ghost btn--sm" onclick="TeamModule.copyAccLink()">Copiar</button></div>
+        <p class="cant-hint" style="margin:10px 0 0;font-size:12px">Con ese enlace ${esc(nombre)} elige su propia contraseña y entra desde app.novacentrax.com con su correo. Tú nunca ves su contraseña.</p>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="TeamModule.closeAcc()">Listo</button></div></div>`);
   }
@@ -23109,9 +23109,9 @@ const TeamModule = (() => {
     const estado = a && a.has_password ? 'Ya entra con correo y contraseña.' : a && a.password_pending ? 'Tiene acceso creado, pero aún no eligió su contraseña.' : a && a.has_google ? 'Entra con su cuenta de Google. Puedes además darle contraseña.' : 'Todavía no tiene acceso a Nova.';
     _accModal(`<div class="fin-pi-box__hd"><h3>Acceso de ${esc(m.nombre)}</h3><button class="fin-pi-x" onclick="TeamModule.closeAcc()">✕</button></div>
       <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
-        <p style="margin:0 0 4px;font-size:.92rem"><b>${esc(m.email)}</b></p>
-        <p style="margin:0 0 12px;font-size:.88rem;color:var(--text-muted,#7a766f)">${estado}</p>
-        <p style="margin:0;font-size:.84rem">${tiene ? 'Le enviaremos por correo un enlace de un solo uso para que elija una contraseña nueva.' : 'Le enviaremos por correo un enlace de un solo uso para que cree su contraseña y pueda entrar con este correo (sin Google).'}</p>
+        <p style="margin:0 0 4px;font-size:14px"><b>${esc(m.email)}</b></p>
+        <p style="margin:0 0 12px;font-size:14px;color:var(--text-muted,#7a766f)">${estado}</p>
+        <p style="margin:0;font-size:14px">${tiene ? 'Le enviaremos por correo un enlace de un solo uso para que elija una contraseña nueva.' : 'Le enviaremos por correo un enlace de un solo uso para que cree su contraseña y pueda entrar con este correo (sin Google).'}</p>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="TeamModule.closeAcc()">Cancelar</button>
@@ -24630,7 +24630,7 @@ const LeadManagerModule = (() => {
   // Avisos de LinkedIn de la secuencia: pasos que hoy NO se pueden automatizar y quedan como tarea manual (sin clave de IA, cuenta gratuita, InMail bloqueado)
   let _seqLiAvisos = { id: 0, list: [] };
   async function _seqLoadLiAvisos(id) { try { const r = await apiFetch(`${API}/li/sequence/${id}/avisos`); const d = r && r.ok ? await r.json() : {}; _seqLiAvisos = { id, list: d.avisos || [] }; } catch (_) { _seqLiAvisos = { id, list: [] }; } }
-  function _seqLiAvisosHtml(id) { const l = _seqLiAvisos.id === id ? _seqLiAvisos.list : []; return l.map(a => `<div style="display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:11px 14px;border-radius:10px;background:#FFF6E5;border:1px solid #F3D9A4;color:#7A4A06;font-size:13.5px;line-height:1.45"><span style="font-size:16px;line-height:1.2">⚠</span><span>${esc(a.msg)}</span></div>`).join(''); }
+  function _seqLiAvisosHtml(id) { const l = _seqLiAvisos.id === id ? _seqLiAvisos.list : []; return l.map(a => `<div style="display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:11px 14px;border-radius:10px;background:#FFF6E5;border:1px solid #F3D9A4;color:#7A4A06;font-size:14px;line-height:20px"><span style="font-size:14px;line-height:1.2">⚠</span><span>${esc(a.msg)}</span></div>`).join(''); }
   // ── LinkedIn con la extensión de Nova: cuentas, topes, calentamiento y cola ──
   const _li = { accs: null, queue: null, events: [], acc: 0, timer: null };
   const _LI_EST = { activa: ['Activa', '#00804C', '#EAF5EE'], pausada: ['Pausada', '#B45309', '#FFF7E6'], restringida: ['En pausa por restricción', '#B42318', '#FDECEA'], desconectada: ['Sin sesión de LinkedIn', '#B42318', '#FDECEA'] };
@@ -25280,7 +25280,7 @@ const LeadManagerModule = (() => {
           <option value=""${!p.vacaciones_pais ? ' selected' : ''}>— Ninguno (no pausar por feriados) —</option>
           ${Object.entries(_CC_FERIADOS).map(([k, v]) => `<option value="${k}"${p.vacaciones_pais === k ? ' selected' : ''}>${esc(v.nombre)}</option>`).join('')}
         </select>
-        ${p.vacaciones_pais && _CC_FERIADOS[p.vacaciones_pais] ? `<div class="cc-days" style="flex-wrap:wrap;justify-content:flex-start;gap:8px;margin-top:12px">${_CC_FERIADOS[p.vacaciones_pais].feriados.map(([k, l]) => `<label class="cc-rad" style="display:inline-flex;width:auto;padding:6px 10px"><input type="checkbox"${p.vacaciones.includes(k) ? ' checked' : ''} onchange="LeadManagerModule.ccVacToggle('${k}', this.checked)"><span style="margin-left:6px;font-size:13px">${esc(l)}</span></label>`).join('')}</div>` : ''}</div>`;
+        ${p.vacaciones_pais && _CC_FERIADOS[p.vacaciones_pais] ? `<div class="cc-days" style="flex-wrap:wrap;justify-content:flex-start;gap:8px;margin-top:12px">${_CC_FERIADOS[p.vacaciones_pais].feriados.map(([k, l]) => `<label class="cc-rad" style="display:inline-flex;width:auto;padding:6px 10px"><input type="checkbox"${p.vacaciones.includes(k) ? ' checked' : ''} onchange="LeadManagerModule.ccVacToggle('${k}', this.checked)"><span style="margin-left:6px;font-size:14px">${esc(l)}</span></label>`).join('')}</div>` : ''}</div>`;
   }
   function ccVacToggle(k, on) {
     const a = _cc.cfg.planificacion.vacaciones;
@@ -27296,38 +27296,38 @@ const LeadManagerModule = (() => {
   function _rptCss() {
     return `*{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#111513;--ink2:#505753;--mute:#8C928F;--line:#D9DBD7;--hair:#ECEDEA;--paper:#F5F5F2;--acc:#0B6B4F;--acc2:#E6F0EC}
-body{font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif;color:var(--ink);background:#E3E3DF;line-height:1.55;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-font-smoothing:antialiased}
+body{font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif;color:var(--ink);background:#E3E3DF;line-height:1.55;font-size:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-font-smoothing:antialiased}
 .ser,h1,h2,.kpi b,.mk b,.fnum,.seqblk__nm{font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif}
-.bar{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:11px 22px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:500}
-.bar button{background:#fff;color:var(--ink);border:0;border-radius:6px;padding:9px 18px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+.bar{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:11px 22px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:500}
+.bar button{background:#fff;color:var(--ink);border:0;border-radius:6px;padding:9px 18px;font-weight:500;font-size:14px;cursor:pointer;font-family:inherit}
 .doc{max-width:860px;margin:28px auto;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.12);counter-reset:sec}
 
 /* ── Portada: composición tipográfica, sin adornos ── */
 .cover{position:relative;padding:42px 56px 40px;min-height:830px;display:flex;flex-direction:column;border-bottom:1px solid var(--line);break-after:page}
 .cv-top{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:2px solid var(--ink)}
 .rpt-logo{height:21px;width:auto;display:block;filter:brightness(0)}
-.cv-meta{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.cv-meta{font-size:10px;letter-spacing:normal;text-transform:none;color:var(--ink2);font-weight:500}
 .cv-mid{margin:auto 0;padding:56px 0 44px}
-.kicker{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--acc);font-weight:600}
-.cover h1{font-size:46px;line-height:1.1;font-weight:500;letter-spacing:-.03em;margin-top:20px;max-width:690px;color:var(--ink)}
-.cv-sub{font-size:15px;color:var(--ink2);margin-top:20px;max-width:560px;line-height:1.5}
-.pill{display:inline-block;border:1px solid var(--line);color:var(--ink2);border-radius:999px;font-size:10.5px;font-weight:600;padding:2px 11px;letter-spacing:.04em;background:#fff!important;font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif}
+.kicker{font-size:10px;letter-spacing:normal;text-transform:none;color:var(--acc);font-weight:500}
+.cover h1{font-size:46px;line-height:1.1;font-weight:500;letter-spacing:normal;margin-top:20px;max-width:690px;color:var(--ink)}
+.cv-sub{font-size:14px;color:var(--ink2);margin-top:20px;max-width:560px;line-height:1.5}
+.pill{display:inline-block;border:1px solid var(--line);color:var(--ink2);border-radius:999px;font-size:10px;font-weight:500;padding:2px 11px;letter-spacing:normal;background:#fff!important;font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border-top:1px solid var(--ink)}
 .fact{padding:14px 16px 16px 0}
-.fact .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:600}
-.fact .v{font-size:13.5px;font-weight:500;color:var(--ink);margin-top:4px;line-height:1.35}
+.fact .k{font-size:10px;letter-spacing:normal;text-transform:none;color:var(--mute);font-weight:500}
+.fact .v{font-size:14px;font-weight:500;color:var(--ink);margin-top:4px;line-height:1.35}
 
 /* ── Cifras clave ── */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));border-top:1px solid var(--line);margin-top:4px}
 .kpi{padding:20px 12px 4px 0}
-.kpi b{display:block;font-size:44px;line-height:1;font-weight:300;color:var(--ink);letter-spacing:-.03em}
+.kpi b{display:block;font-size:44px;line-height:1;font-weight:400;color:var(--ink);letter-spacing:normal}
 .kpi.hero b{color:var(--acc)}
-.kpi span{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-top:10px;display:block}
+.kpi span{font-size:10px;letter-spacing:normal;text-transform:none;color:var(--mute);font-weight:500;margin-top:10px;display:block}
 
 /* ── Secciones: título a la izquierda, contenido a la derecha ── */
 .sec{margin:0 56px;padding:30px 0 28px;border-top:1px solid var(--ink);display:flow-root}
-.sec>h2{float:left;clear:left;width:176px;font-size:19px;line-height:1.22;font-weight:600;letter-spacing:-.02em;color:var(--ink);margin:0 0 10px;display:block;break-after:avoid}
-.sec>h2:before{counter-increment:sec;content:counter(sec,decimal-leading-zero);display:block;font-size:34px;font-weight:300;letter-spacing:-.035em;line-height:1;color:var(--acc);margin-bottom:12px}
+.sec>h2{float:left;clear:left;width:176px;font-size:18px;line-height:1.22;font-weight:600;letter-spacing:normal;color:var(--ink);margin:0 0 10px;display:block;break-after:avoid}
+.sec>h2:before{counter-increment:sec;content:counter(sec,decimal-leading-zero);display:block;font-size:24px;font-weight:400;letter-spacing:normal;line-height:1;color:var(--acc);margin-bottom:12px}
 .sec>.rp-sub{float:left;clear:left;width:176px;font-size:12px;color:var(--ink2);margin:0;line-height:1.5}
 .sec>*:not(h2):not(.rp-sub){margin-left:214px}
 .sec>table{width:calc(100% - 214px)}
@@ -27338,103 +27338,103 @@ body{font-family:"Plus Jakarta Sans",Inter,"Segoe UI",system-ui,sans-serif;color
 .sec>.rp-sub,.sec--wide>h2,.sec--wide>.rp-sub{break-after:avoid}
 .sec>h2{break-inside:avoid;orphans:3;widows:3}
 .mc-mail,.mc-li,.mc-wa{padding:12px 16px}
-.mc-mail{font-size:12.5px;line-height:1.52}
+.mc-mail{font-size:12px;line-height:16px}
 .mc-mbody{padding:10px 0 4px}
 .sec--wide>table{width:100%}
 
 /* ── Contexto ── */
 .ctx{margin:0 0 16px}
 .ctx:last-child{margin-bottom:0}
-.ctx-h{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-bottom:6px;break-after:avoid}
-.ctx-h .src{color:var(--mute);font-weight:500;text-transform:none;letter-spacing:0}
+.ctx-h{font-size:10px;letter-spacing:normal;text-transform:none;color:var(--mute);font-weight:500;margin-bottom:6px;break-after:avoid}
+.ctx-h .src{color:var(--mute);font-weight:500;text-transform:none;letter-spacing:normal}
 .ctx--split .ctx-b{columns:2;column-gap:28px}
 .ctx--note{border-left:2px solid var(--ink);background:var(--paper);padding:11px 16px}
 .ctx--note2{border-left-color:var(--mute)}
 .ctx--note .ctx-h{color:var(--ink)}
-.rt-p{font-size:12.5px;color:var(--ink);margin:0 0 6px;break-inside:avoid;line-height:1.5}
+.rt-p{font-size:12px;color:var(--ink);margin:0 0 6px;break-inside:avoid;line-height:1.5}
 .rt-p:last-child{margin-bottom:0}
-.rt-h{font-size:12.5px;font-weight:600;color:var(--ink);margin:8px 0 3px;break-after:avoid;break-inside:avoid}
-.rt-ul{margin:2px 0 7px;padding-left:16px;font-size:12.5px;color:var(--ink)}
+.rt-h{font-size:12px;font-weight:500;color:var(--ink);margin:8px 0 3px;break-after:avoid;break-inside:avoid}
+.rt-ul{margin:2px 0 7px;padding-left:16px;font-size:12px;color:var(--ink)}
 .rt-ul li{margin:1px 0;break-inside:avoid;line-height:1.45}
 .rt-ul--2{columns:2;column-gap:22px}
 .ctx-b>*:first-child{margin-top:0}
 
 /* ── Tablas ── */
-table{width:100%;border-collapse:collapse;font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:12px}
 .kvt th{text-align:left;color:var(--mute);font-weight:500;width:42%;padding:8px 0;vertical-align:top;font-size:12px}
 .kvt td{padding:8px 0;color:var(--ink);font-weight:500}
 .kvt tr+tr th,.kvt tr+tr td,.kvt tr:first-child th,.kvt tr:first-child td{border-top:1px solid var(--hair)}
 .kvt tr:first-child th,.kvt tr:first-child td{border-top:0}
-.tbl thead th{text-align:left;padding:8px 10px 8px 0;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:600;border-bottom:1px solid var(--ink)}
+.tbl thead th{text-align:left;padding:8px 10px 8px 0;font-size:10px;letter-spacing:normal;text-transform:none;color:var(--mute);font-weight:500;border-bottom:1px solid var(--ink)}
 .tbl td{padding:9px 10px 9px 0;border-bottom:1px solid var(--hair);vertical-align:top;color:var(--ink)}
 .tbl td.c,.tbl th.c{text-align:left;white-space:nowrap;padding-right:16px}
 .tbl td.r,.tbl th.r{text-align:right;padding-right:0}
-.chip{display:inline-block;color:var(--ink2);font-size:11px;font-weight:600;padding:0;border:0;background:none}
+.chip{display:inline-block;color:var(--ink2);font-size:12px;font-weight:500;padding:0;border:0;background:none}
 .dchips{white-space:nowrap}
-.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:3px;background:var(--hair);color:#B4B9B6;font-size:10px;font-weight:600;margin-right:3px}
+.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:3px;background:var(--hair);color:#B4B9B6;font-size:10px;font-weight:500;margin-right:3px}
 .dchip.on{background:var(--ink);color:#fff}
-.h3{font-size:9.5px;color:var(--mute);margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:600}
+.h3{font-size:10px;color:var(--mute);margin-bottom:8px;text-transform:none;letter-spacing:normal;font-weight:500}
 .muted{color:#A3AAA6;font-style:italic}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:28px}
 .segline{margin:2px 0 8px}.segline:last-child{margin-bottom:0}
-.segmsg{font-size:11.5px;color:var(--ink2);font-style:italic;margin-top:2px}
+.segmsg{font-size:12px;color:var(--ink2);font-style:italic;margin-top:2px}
 
 /* ── Embudo ── */
 .funnel{margin-top:0}
-.frow{display:grid;grid-template-columns:130px 1fr 48px;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--hair);font-size:12.5px;color:var(--ink2);font-weight:500}
+.frow{display:grid;grid-template-columns:130px 1fr 48px;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--hair);font-size:12px;color:var(--ink2);font-weight:500}
 .frow:first-child{padding-top:0}
 .fbar{height:4px;background:var(--hair);overflow:hidden}
 .fbar i{display:block;height:100%;background:var(--acc)}
 .frow.alt .fbar i{background:var(--ink)}
-.fnum{font-weight:400;color:var(--ink);text-align:right;font-size:19px}
+.fnum{font-weight:400;color:var(--ink);text-align:right;font-size:18px}
 
 /* ── Campaña: bloque por secuencia ── */
 .seqblk{border:1px solid var(--line);margin:0 0 18px;overflow:hidden}
 .seqblk:last-child{margin-bottom:0}
 .seqblk__hd{background:var(--paper);padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line);break-inside:avoid;break-after:avoid}
-.seqblk__nm{font-size:16px;color:var(--ink);font-weight:600;letter-spacing:-.01em}
+.seqblk__nm{font-size:14px;color:var(--ink);font-weight:500;letter-spacing:normal}
 .seqblk__bd{padding:16px 20px}
 .cfgline{font-size:12px;color:var(--ink2);margin-bottom:5px}
 .cfgline b{color:var(--ink)}
 .minik{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));margin:12px 0 6px;border-top:1px solid var(--ink);border-bottom:1px solid var(--line)}
 .mk{text-align:left;padding:11px 12px 10px 0}
-.mk b{font-size:25px;color:var(--ink);display:block;font-weight:300;line-height:1.1}
+.mk b{font-size:24px;color:var(--ink);display:block;font-weight:400;line-height:1.1}
 .mk.hero b{color:var(--acc)}
-.mk span{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--mute);font-weight:600}
+.mk span{font-size:10px;text-transform:none;letter-spacing:normal;color:var(--mute);font-weight:500}
 .steps-line{font-size:12px;color:var(--ink2);margin-top:10px;line-height:2}
-.steps-line .sday{display:inline-block;background:var(--ink);color:#fff;border-radius:3px;font-size:10px;font-weight:600;padding:1px 7px;margin-right:5px}
+.steps-line .sday{display:inline-block;background:var(--ink);color:#fff;border-radius:3px;font-size:10px;font-weight:500;padding:1px 7px;margin-right:5px}
 .steps-line .sarrow{color:#C3C8C5;margin:0 8px}
 .cmp-msgs{margin-top:16px}
 
 /* ── Secuencia planteada ── */
 .tls{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));margin-top:2px}
 .tl{position:relative;padding:0 10px 0 0;break-inside:avoid}
-.tl-d{font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);margin-bottom:9px}
+.tl-d{font-size:10px;font-weight:500;letter-spacing:normal;text-transform:none;color:var(--ink);margin-bottom:9px}
 .tl-line{position:relative;height:9px;margin-bottom:11px}
 .tl-line:before{content:"";position:absolute;left:0;right:0;top:4px;height:1px;background:var(--line)}
 .tl-dot{position:absolute;left:0;top:0;width:9px;height:9px;background:var(--c,#999);box-shadow:0 0 0 4px #fff}
-.tl-b b{display:block;font-size:12px;font-weight:600;color:var(--c,#333);margin-bottom:2px}
-.tl-b span{display:block;font-size:11.5px;color:var(--ink2);line-height:1.4}
-.tl-b .tl-h{color:var(--mute);margin-top:2px;font-size:11px}
+.tl-b b{display:block;font-size:12px;font-weight:500;color:var(--c,#333);margin-bottom:2px}
+.tl-b span{display:block;font-size:12px;color:var(--ink2);line-height:16px}
+.tl-b .tl-h{color:var(--mute);margin-top:2px;font-size:12px}
 
 /* ── Mensajes ── */
 .mcard{border:1px solid var(--line);margin:0 0 14px;break-inside:avoid;background:#fff}
-.mc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hair);font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ink2)}
+.mc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hair);font-size:10px;letter-spacing:normal;text-transform:none;font-weight:500;color:var(--ink2)}
 .mc-day{color:var(--ink)}
-.mc-ch{font-weight:600}
-.mc-acc{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink2);font-size:11.5px}
-.mc-tag{font-weight:600;color:var(--mute);margin-left:auto}
+.mc-ch{font-weight:500}
+.mc-acc{font-weight:500;text-transform:none;letter-spacing:normal;color:var(--ink2);font-size:12px}
+.mc-tag{font-weight:500;color:var(--mute);margin-left:auto}
 .mc-tag--lang{color:var(--acc)}
 .mc-tag+.mc-tag{margin-left:0}
 .mc-mail,.mc-li,.mc-wa{padding:14px 18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.58;color:#222}
 .mc-mrow{display:flex;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--hair);color:#5A5F5C}
-.mc-mrow b{flex:none;width:54px;color:var(--mute);font-weight:600}
-.mc-mrow--s span{color:#111;font-weight:600}
+.mc-mrow b{flex:none;width:54px;color:var(--mute);font-weight:500}
+.mc-mrow--s span{color:#111;font-weight:500}
 .mc-mbody{padding:14px 0 6px;color:#222}
 .mc-sig{margin-top:8px;padding-top:12px;border-top:1px solid var(--hair)}
 .mc-bub{background:#F2F3F1;border-radius:8px;padding:11px 15px;color:#222}
 .mc-bub--wa{background:#DDF3D0}
-.mc-cnt{text-align:right;font-size:11px;color:var(--mute);margin-top:5px}
+.mc-cnt{text-align:right;font-size:12px;color:var(--mute);margin-top:5px}
 .m-var{background:var(--acc2);color:var(--acc);padding:0 3px}
 
 /* ── Dispositivos ── */
@@ -27455,22 +27455,22 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 .dv-sc:after{content:"";position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(255,255,255,0),#fff)}
 .dv--laptop .dv-sc:after{background:linear-gradient(rgba(237,238,236,0),#EDEEEC)}
 .toc{margin:0 56px;padding:34px 0 30px;border-top:1px solid var(--ink);break-after:page}
-.toc-t{font-size:40px;font-weight:500;letter-spacing:-.03em;line-height:1.1;margin:0 0 36px;color:var(--ink)}
+.toc-t{font-size:24px;font-weight:500;letter-spacing:normal;line-height:1.1;margin:0 0 36px;color:var(--ink)}
 .toc ol{list-style:none;margin:0;border-top:1px solid var(--ink)}
 .toc li{border-bottom:1px solid var(--line)}
 .toc a{display:grid;grid-template-columns:72px 1fr;align-items:baseline;padding:20px 0;color:var(--ink);text-decoration:none}
-.toc-n{font-size:30px;font-weight:300;letter-spacing:-.03em;color:var(--acc);line-height:1}
-.toc-l b{display:block;font-size:18px;font-weight:500;letter-spacing:-.015em;color:var(--ink)}
+.toc-n{font-size:24px;font-weight:400;letter-spacing:normal;color:var(--acc);line-height:1}
+.toc-l b{display:block;font-size:18px;font-weight:500;letter-spacing:normal;color:var(--ink)}
 .toc--tight a{padding:13px 0}
 .toc--tight .toc-t{margin-bottom:24px}
 .toc{break-inside:avoid}
 .toc-l em{display:block;font-style:normal;font-size:12px;color:var(--mute);margin-top:4px;line-height:1.45;max-width:520px}
 .rhead{display:none}
-.dv-lb{margin-top:10px;font-size:10px;font-weight:600;color:var(--ink2);letter-spacing:.14em;text-transform:uppercase}
+.dv-lb{margin-top:10px;font-size:10px;font-weight:500;color:var(--ink2);letter-spacing:normal;text-transform:none}
 
 /* ── Pie ── */
-.foot{padding:12px 56px;background:#fff;color:var(--mute);font-size:10px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);letter-spacing:.04em}
-.foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;text-transform:uppercase;letter-spacing:.14em}
+.foot{padding:12px 56px;background:#fff;color:var(--mute);font-size:10px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);letter-spacing:normal}
+.foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:500;text-transform:none;letter-spacing:normal}
 .foot-r{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;margin-left:16px}
 /* Contenedor de impresión en <table>: el <tfoot> se repite en cada página y RESERVA su alto por página, así el contenido nunca queda debajo del pie. */
 .sheet{width:100%;border-collapse:collapse}
@@ -27487,7 +27487,7 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
   .foot{padding:0 30px}
   @page{size:A4;margin:0}
   .head-sp{height:20mm}
-  .rhead{display:flex;position:fixed;top:0;left:0;right:0;height:14mm;padding:0 30px 3mm;justify-content:space-between;align-items:flex-end;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--mute);background:#fff;z-index:1}
+  .rhead{display:flex;position:fixed;top:0;left:0;right:0;height:14mm;padding:0 30px 3mm;justify-content:space-between;align-items:flex-end;font-size:10px;letter-spacing:normal;text-transform:none;font-weight:500;color:var(--mute);background:#fff;z-index:1}
   .rhead:after{content:"";position:absolute;left:30px;right:30px;bottom:0;height:1px;background:var(--line)}
   .rh-r{max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .toc{margin:0 30px;padding:20px 0 0;min-height:246mm}
@@ -27801,10 +27801,10 @@ ${rhead}${foot}
     m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
       <div class="fin-pi-box__hd"><h3>Descargar plantillas de la secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('lm-copydoc-modal').remove()">✕</button></div>
       <div class="fin-pi-form" style="display:block;padding:4px 22px 6px">
-        <p style="margin:0 0 12px;font-size:.9rem">Un documento con la fecha de inicio y el texto de cada paso (día, canal, asunto y mensaje) de <b>${esc(s.nombre)}</b> — ${nPasos} paso${nPasos === 1 ? '' : 's'}.</p>
-        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem;margin:0 0 6px"><input type="checkbox" id="cd-var" checked style="width:auto"> Incluir las variantes (A/B o por segmento)</label>
-        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem;margin:0 0 6px"><input type="checkbox" id="cd-fechas" checked style="width:auto"> Mostrar la fecha de cada paso (si la secuencia ya tiene fecha de inicio)</label>
-        <label style="display:flex;gap:8px;align-items:center;font-size:.86rem"><input type="checkbox" id="cd-firma" checked style="width:auto"> Mostrar la firma del buzón al final de los emails</label>
+        <p style="margin:0 0 12px;font-size:14px">Un documento con la fecha de inicio y el texto de cada paso (día, canal, asunto y mensaje) de <b>${esc(s.nombre)}</b> — ${nPasos} paso${nPasos === 1 ? '' : 's'}.</p>
+        <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:0 0 6px"><input type="checkbox" id="cd-var" checked style="width:auto"> Incluir las variantes (A/B o por segmento)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:0 0 6px"><input type="checkbox" id="cd-fechas" checked style="width:auto"> Mostrar la fecha de cada paso (si la secuencia ya tiene fecha de inicio)</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="cd-firma" checked style="width:auto"> Mostrar la firma del buzón al final de los emails</label>
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqCopyDocGen(${id},'pdf')">Descargar PDF</button>
@@ -27847,7 +27847,7 @@ ${rhead}${foot}
       + '.paso{margin:0 0 18px;padding:0 0 12px;border-bottom:1px solid #E5E2DC;page-break-inside:avoid}'
       + 'h3{font-size:13pt;margin:0 0 2px;color:#0A5BC4}.meta{margin:0 0 8px;color:#6B6760;font-size:9.5pt}'
       + '.lbl{margin:8px 0 2px;font-size:9pt;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#8A8680}'
-      + '.firma{margin:4px 0 6px;padding:8px 0 0;border-top:1px dashed #D5D1CA}.txt{margin:0 0 6px;white-space:normal}.var{margin:10px 0 0;font-weight:bold;color:#7A5200}.vacio{color:#999}'
+      + '.firma{margin:4px 0 6px;padding:8px 0 0;border-top:1px dashed #D5D1CA}.txt{margin:0 0 6px;white-space:normal}.var{margin:10px 0 0;font-weight:500;color:#7A5200}.vacio{color:#999}'
       + '@media print{body{margin:0}}</style></head><body>'
       + '<h1>Plantillas de la secuencia</h1><h2>' + esc(s.nombre || '') + (cli ? ' · Cliente: ' + esc(cli) : '') + (cmp ? ' · Campaña: ' + esc(cmp) : '') + '</h2>'
       + '<div class="inicio"><b>' + (okInicio ? 'La secuencia inicia el ' + esc(fLong(inicio)) : 'Fecha de inicio por definir') + '</b>' + (steps.length ? ' · ' + steps.length + ' paso' + (steps.length === 1 ? '' : 's') + ' (día ' + (steps[0].dia || 1) + ' al día ' + (steps[steps.length - 1].dia || 1) + ')' : '') + '</div>'
@@ -27945,7 +27945,7 @@ ${rhead}${foot}
     const cli = (_clients || []).find(c => c.id === s.outbound_client_id), cmp = (_campaigns || []).find(c => c.id === s.campaign_id);
     const steps = _seqSteps(id);
     const card = (t, inner, sub) => `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">${t}${sub ? ` <span style="font-weight:400;font-size:12px;color:#64748B">— ${sub}</span>` : ''}</div>${inner}</div>`;
-    const kv = (rows) => `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px">${rows.filter(r => r[1] !== '' && r[1] != null).map(([k, v]) => `<div><div style="font-size:11px;color:#64748B;font-weight:600">${k}</div><div style="font-size:13.5px">${v}</div></div>`).join('')}</div>`;
+    const kv = (rows) => `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px">${rows.filter(r => r[1] !== '' && r[1] != null).map(([k, v]) => `<div><div style="font-size:12px;color:#64748B;font-weight:500">${k}</div><div style="font-size:14px">${v}</div></div>`).join('')}</div>`;
     const MODE = { manual: 'Manual (yo envío)', auto: 'Automático', preaprobado: 'Pre-aprobado (yo apruebo)' };
     const ES = { draft: 'Borrador', activa: 'Activa', pausada: 'Pausada', completada: 'Culminada', archivada: 'Archivada' };
     const dias = ['L', 'M', 'X', 'J', 'V', 'S', 'D'], mask = _sanSendDays(s.send_days);
@@ -27960,7 +27960,7 @@ ${rhead}${foot}
     if (!list) return cfg + `<div class="cp-empty2" style="padding:22px">Cargando contactos…</div>`;
     const empresasN = new Set(list.map(c => c.company_id != null ? 'i' + c.company_id : 'n' + (c.company_nombre || '').toLowerCase())).size;
     const count = (arr, fn) => { const m = {}; arr.forEach(x => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; }); return m; };
-    const bars = (m, total, empty) => { const ks = Object.keys(m).sort((a, b) => m[b] - m[a]); return ks.map(k => `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:3px 0"><span style="width:130px;flex:none">${esc(k)}</span><span style="flex:1;background:#EEF1F4;height:8px"><span style="display:block;height:8px;width:${Math.round(100 * m[k] / (total || 1))}%;background:#0B1220"></span></span><b style="width:34px;text-align:right">${m[k]}</b></div>`).join('') + (empty ? `<div style="font-size:12px;color:#B45309;margin-top:4px">${empty}</div>` : ''); };
+    const bars = (m, total, empty) => { const ks = Object.keys(m).sort((a, b) => m[b] - m[a]); return ks.map(k => `<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0"><span style="width:130px;flex:none">${esc(k)}</span><span style="flex:1;background:#EEF1F4;height:8px"><span style="display:block;height:8px;width:${Math.round(100 * m[k] / (total || 1))}%;background:#0B1220"></span></span><b style="width:34px;text-align:right">${m[k]}</b></div>`).join('') + (empty ? `<div style="font-size:12px;color:#B45309;margin-top:4px">${empty}</div>` : ''); };
     const conEmail = list.filter(c => c.email).length, sinEmail = list.length - conEmail;
     const porPais = count(list, c => c.pais), sinPais = list.filter(c => !c.pais).length;
     const porIdi = count(list, c => c.idioma_ef), sinIdi = list.filter(c => !c.idioma_ef).length;
@@ -27968,18 +27968,18 @@ ${rhead}${foot}
     // El selector abre con el idioma que mejor encaja con ese grupo: el que PRIORIZAN sus contactos por nivel (nativo…) y, si no, el de su país.
     const _idiSug = key => { const m = {}; list.filter(c => key === '_none' ? !c.idioma_ef : c.idioma_ef === key).forEach(c => { if (c.idioma_nivel && c.idioma_nivel !== key) m[c.idioma_nivel] = (m[c.idioma_nivel] || 0) + 2; if (c.idioma_pais && c.idioma_pais !== key) m[c.idioma_pais] = (m[c.idioma_pais] || 0) + 1; }); const t = Object.keys(m).sort((a, b) => m[b] - m[a]); return t[0] || ''; };
     // Estado del grupo: ✓ si el idioma ya está guardado en todos sus contactos; si no, cuántos son solo deducidos (por nivel o por país).
-    const _idiEstado = key => { const g = list.filter(c => key === '_none' ? !c.idioma_ef : c.idioma_ef === key); if (!g.length || key === '_none') return ''; const ded = g.filter(c => c.idioma_origen !== 'guardado').length; return ded ? `<span title="Idioma deducido (nivel o país), todavía no guardado en el contacto. Elige «Confirmar» para fijarlo." style="font-size:11px;color:#B45309;white-space:nowrap">${ded === g.length ? 'deducido' : ded + ' deducidos'}</span>` : `<span title="Idioma guardado en todos los contactos del grupo" style="font-size:11px;color:#15803D;white-space:nowrap">✓ guardado</span>`; };
-    const _idiAsig = (n, key) => { const sug = _idiSug(key), opts = sug ? [sug, ..._IDIOMAS_UI.filter(l => l !== sug)] : _IDIOMAS_UI; return `<span onclick="event.preventDefault();event.stopPropagation()" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center"><span style="font-size:11.5px;color:#64748B">Asignar a todo el grupo:</span>${_idiEstado(key)}<select class="form-input" id="idi-to-${n}" onchange="if(this.value)LeadManagerModule.seqIdiAsignar(${id},'${encodeURIComponent(key)}',${n})" style="width:auto;min-width:170px;padding:2px 8px;font-size:12px"><option value="" selected>${key === '_none' ? 'Elegir idioma…' : esc(key) + ' · actual'}</option>${key !== '_none' ? `<option value="${esc(key)}">Confirmar «${esc(key)}» para todos</option>` : ''}${opts.filter(l => l !== key).map((l, k) => `<option value="${esc(l)}">${esc(l)}${k === 0 && sug ? ' · sugerido' : ''}</option>`).join('')}</select></span>`; };
-    const mkIdi = asig => idiNames.map((k, n) => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px"><span><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</span>${asig ? _idiAsig(n, k) : _idiEstado(k)}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
-      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:13px;color:#B45309;display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</span>${asig ? _idiAsig(99, '_none') : ''}</summary><div style="font-size:12.5px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
+    const _idiEstado = key => { const g = list.filter(c => key === '_none' ? !c.idioma_ef : c.idioma_ef === key); if (!g.length || key === '_none') return ''; const ded = g.filter(c => c.idioma_origen !== 'guardado').length; return ded ? `<span title="Idioma deducido (nivel o país), todavía no guardado en el contacto. Elige «Confirmar» para fijarlo." style="font-size:12px;color:#B45309;white-space:nowrap">${ded === g.length ? 'deducido' : ded + ' deducidos'}</span>` : `<span title="Idioma guardado en todos los contactos del grupo" style="font-size:12px;color:#15803D;white-space:nowrap">✓ guardado</span>`; };
+    const _idiAsig = (n, key) => { const sug = _idiSug(key), opts = sug ? [sug, ..._IDIOMAS_UI.filter(l => l !== sug)] : _IDIOMAS_UI; return `<span onclick="event.preventDefault();event.stopPropagation()" style="margin-left:auto;display:inline-flex;gap:6px;align-items:center"><span style="font-size:12px;color:#64748B">Asignar a todo el grupo:</span>${_idiEstado(key)}<select class="form-input" id="idi-to-${n}" onchange="if(this.value)LeadManagerModule.seqIdiAsignar(${id},'${encodeURIComponent(key)}',${n})" style="width:auto;min-width:170px;padding:2px 8px;font-size:12px"><option value="" selected>${key === '_none' ? 'Elegir idioma…' : esc(key) + ' · actual'}</option>${key !== '_none' ? `<option value="${esc(key)}">Confirmar «${esc(key)}» para todos</option>` : ''}${opts.filter(l => l !== key).map((l, k) => `<option value="${esc(l)}">${esc(l)}${k === 0 && sug ? ' · sugerido' : ''}</option>`).join('')}</select></span>`; };
+    const mkIdi = asig => idiNames.map((k, n) => `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px"><span><b>${esc(k)}</b> · ${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</span>${asig ? _idiAsig(n, k) : _idiEstado(k)}</summary><div style="font-size:12px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => c.idioma_ef === k).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' ')) + (c.company_nombre ? ' <span style="color:#94A3B8">(' + esc(c.company_nombre) + ')</span>' : '')).join(' · ')}${porIdi[k] > 60 ? ' …' : ''}</div></details>`).join('')
+      + (sinIdi ? `<details style="border-top:1px solid #EEF1F4;padding:6px 0"><summary style="cursor:pointer;font-size:14px;color:#B45309;display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0"><b>Por revisar</b> · ${sinIdi} sin idioma (sin país/ciudad reconocible o país con varios idiomas)</span>${asig ? _idiAsig(99, '_none') : ''}</summary><div style="font-size:12px;color:#475569;margin:6px 0 2px 14px;line-height:1.7">${list.filter(c => !c.idioma_ef).slice(0, 60).map(c => esc([c.nombre, c.apellido].filter(Boolean).join(' '))).join(' · ')}</div></details>` : '');
     const idiBlock = mkIdi(true), idiRead = mkIdi(false);
     const aud = card('Audiencia', kv([['Empresas', empresasN], ['Contactos', list.length], ['Con email', conEmail + ' (' + Math.round(100 * conEmail / (list.length || 1)) + '%)'], ['Idiomas distintos', idiNames.length || '']])
-      + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:14px"><div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por país</div>${bars(porPais, list.length, sinPais ? sinPais + ' sin país' : '') || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos</div>'}</div>
-        <div><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiRead || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
+      + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:14px"><div><div style="font-weight:500;font-size:12px;margin-bottom:4px">Por país</div>${bars(porPais, list.length, sinPais ? sinPais + ' sin país' : '') || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos</div>'}</div>
+        <div><div style="font-weight:500;font-size:12px;margin-bottom:4px">Por idioma <span style="font-weight:400;color:#64748B">(pulsa para ver quiénes)</span></div>${idiRead || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin datos de ubicación</div>'}</div></div>`);
     // Calidad de los datos
     const emails = {}; list.forEach(c => { const e = String(c.email || '').toLowerCase(); if (e) emails[e] = (emails[e] || 0) + 1; });
     const dup = Object.values(emails).filter(n => n > 1).length;
-    const q = (n, lbl, hint) => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;border-top:1px solid #EEF1F4"><span style="width:20px;flex:none">${n ? '⚠' : '✓'}</span><span style="flex:1">${lbl}${n && hint ? ` <span style="color:#64748B;font-size:12px">— ${hint}</span>` : ''}</span><b style="color:${n ? '#B45309' : '#15803D'}">${n}</b></div>`;
+    const q = (n, lbl, hint) => `<div style="display:flex;align-items:center;gap:8px;font-size:14px;padding:5px 0;border-top:1px solid #EEF1F4"><span style="width:20px;flex:none">${n ? '⚠' : '✓'}</span><span style="flex:1">${lbl}${n && hint ? ` <span style="color:#64748B;font-size:12px">— ${hint}</span>` : ''}</span><b style="color:${n ? '#B45309' : '#15803D'}">${n}</b></div>`;
     const cal = card('Calidad de los datos', q(sinEmail, 'Contactos sin email', 'bloquean los pasos de email') + q(sinPais, 'Contactos sin país', 'corrígelo en Datos → Enriquecer → País') + q(sinIdi, 'Contactos con idioma por revisar', 'Datos → Enriquecer → Idioma') + q(dup, 'Emails repetidos', 'el mismo email en más de un contacto'), 'qué conviene arreglar antes de lanzar');
     // Avance
     const porEstado = count(list, c => c.estado || 'activo'), porPaso = count(list, c => c.paso ? 'Paso ' + c.paso : 'Sin empezar');
@@ -27987,7 +27987,7 @@ ${rhead}${foot}
     const pasoKeys = Object.keys(porPaso).sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
     const pasoM = {}; pasoKeys.forEach(k => { pasoM[k] = porPaso[k]; });
     const avance = card('Avance', kv(Object.keys(porEstado).map(k => [ELBL[k] || k, porEstado[k]]))
-      + `<div style="margin-top:12px;font-weight:600;font-size:12.5px;margin-bottom:4px">Contactos en cada paso</div>${bars(pasoM, list.length) || ''}`);
+      + `<div style="margin-top:12px;font-weight:500;font-size:12px;margin-bottom:4px">Contactos en cada paso</div>${bars(pasoM, list.length) || ''}`);
     const resp = list.filter(c => c.estado === 'respondido' || c.real_disposition).length;
     const res = card('Resultado', kv([['Respondieron', resp + ' (' + Math.round(100 * resp / (list.length || 1)) + '%)']]) + `<div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqTab('metricas')">Ver métricas completas</button></div>`);
     // Mensajes por idioma: qué pasos cubren cada idioma de los contactos, y qué hacer si falta
@@ -27996,13 +27996,13 @@ ${rhead}${foot}
     const isLangStep = st => st.variant_mode === 'segment' && st.variant_field === 'idioma';
     const anyLangStep = steps.some(isLangStep);
     const matrix = idiNames.length && steps.length
-      ? `<div style="overflow-x:auto"><table class="clients-table" style="min-width:420px"><thead><tr><th>Paso</th>${idiNames.map(k => `<th style="text-align:center">${esc(k)}<div style="font-weight:400;font-size:11px;color:#64748B">${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</div></th>`).join('')}</tr></thead><tbody>${steps.map((st, i) => `<tr><td><b>${i + 1}.</b> ${esc(st.titulo || st.canal || 'Paso')} <span style="color:#94A3B8;font-size:11px">${esc(st.canal || '')}${st.dia ? ' · día ' + st.dia : ''}</span></td>${idiNames.map(k => !isLangStep(st) ? '<td style="text-align:center;color:#94A3B8" title="Mensaje único: todos reciben el mismo">·</td>' : covers(st, k) ? '<td style="text-align:center;color:#15803D;font-weight:700" title="Tiene mensaje en este idioma">✓</td>' : `<td style="text-align:center;color:#B45309;font-weight:700" title="${faltante === 'detener' ? 'Falta: los contactos de este idioma se detendrán en este paso' : 'Falta: recibirán el mensaje base'}">⚠</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+      ? `<div style="overflow-x:auto"><table class="clients-table" style="min-width:420px"><thead><tr><th>Paso</th>${idiNames.map(k => `<th style="text-align:center">${esc(k)}<div style="font-weight:400;font-size:12px;color:#64748B">${porIdi[k]} contacto${porIdi[k] !== 1 ? 's' : ''}</div></th>`).join('')}</tr></thead><tbody>${steps.map((st, i) => `<tr><td><b>${i + 1}.</b> ${esc(st.titulo || st.canal || 'Paso')} <span style="color:#94A3B8;font-size:12px">${esc(st.canal || '')}${st.dia ? ' · día ' + st.dia : ''}</span></td>${idiNames.map(k => !isLangStep(st) ? '<td style="text-align:center;color:#94A3B8" title="Mensaje único: todos reciben el mismo">·</td>' : covers(st, k) ? '<td style="text-align:center;color:#15803D;font-weight:500" title="Tiene mensaje en este idioma">✓</td>' : `<td style="text-align:center;color:#B45309;font-weight:500" title="${faltante === 'detener' ? 'Falta: los contactos de este idioma se detendrán en este paso' : 'Falta: recibirán el mensaje base'}">⚠</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
       : '<div class="cp-empty2" style="padding:8px 0;text-align:left">Aún no hay idiomas detectados o pasos para comparar.</div>';
-    const idiCard = card('Mensajes e idiomas', `<div style="font-size:12.5px;color:#475569;margin-bottom:10px">${anyLangStep ? '✓ el paso tiene mensaje para ese idioma · ⚠ falta · · mensaje único para todos.' : 'Ningún paso está configurado por idioma todavía: todos los contactos reciben el mismo mensaje. En un paso, elige <b>Mensaje del paso → Por idioma del contacto</b> para escribir una versión por idioma.'}</div>${matrix}
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #EEF1F4"><label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:4px">Si a un contacto le falta el mensaje de su idioma</label>
+    const idiCard = card('Mensajes e idiomas', `<div style="font-size:12px;color:#475569;margin-bottom:10px">${anyLangStep ? '✓ el paso tiene mensaje para ese idioma · ⚠ falta · · mensaje único para todos.' : 'Ningún paso está configurado por idioma todavía: todos los contactos reciben el mismo mensaje. En un paso, elige <b>Mensaje del paso → Por idioma del contacto</b> para escribir una versión por idioma.'}</div>${matrix}
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #EEF1F4"><label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px">Si a un contacto le falta el mensaje de su idioma</label>
         <select class="form-input" style="max-width:420px" onchange="LeadManagerModule.seqIdiomaFaltante(${id},this.value)"><option value="base"${faltante === 'base' ? ' selected' : ''}>Enviarle el mensaje base</option><option value="detener"${faltante === 'detener' ? ' selected' : ''}>Detenerlo y avisarme (pasa a Pausados)</option></select>
         <div style="font-size:12px;color:#64748B;margin-top:4px">Con “Detener”, nadie recibe un mensaje en un idioma que no habla. Al añadir la traducción, el contacto se reanuda solo.</div></div>`, 'cada contacto recibe el mensaje de su idioma');
-    const idiAsigCard = card('Idioma de los contactos', `<div style="font-size:12.5px;color:#475569;margin-bottom:8px">Elige el idioma de un grupo entero desde su selector: queda guardado en cada contacto y manda sobre el que se deduce por su nivel o su país. «Confirmar» fija el idioma actual.</div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin contactos todavía.</div>'}`);
+    const idiAsigCard = card('Idioma de los contactos', `<div style="font-size:12px;color:#475569;margin-bottom:8px">Elige el idioma de un grupo entero desde su selector: queda guardado en cada contacto y manda sobre el que se deduce por su nivel o su país. «Confirmar» fija el idioma actual.</div>${idiBlock || '<div class="cp-empty2" style="padding:6px 0;text-align:left">Sin contactos todavía.</div>'}`);
     if (mode === 'info') return aud + cal + avance + res;
     return cfg + idiAsigCard + idiCard;
   }
@@ -28196,7 +28196,7 @@ ${rhead}${foot}
         ? `<td class="client-meta" colspan="2"><span style="color:var(--muted);font-size:12px" title="No está enrolado en esta secuencia: es a quien te derivaron">↪ Referido por ${esc(e._from.join(', '))} — nuevo prospecto, sin enrolar aquí</span></td>`
         : `<td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
       <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>`}
-      <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:11px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : (e.prev_disposition ? '<span style="color:var(--muted);font-size:11px" title="Se clasificó en otra secuencia; aquí todavía no tiene resultado">Antes: ' + esc(_dispoLabel(e.prev_disposition)) + '</span>' : '<span style="color:var(--muted)">—</span>'))}</td>
+      <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:12px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : (e.prev_disposition ? '<span style="color:var(--muted);font-size:12px" title="Se clasificó en otra secuencia; aquí todavía no tiene resultado">Antes: ' + esc(_dispoLabel(e.prev_disposition)) + '</span>' : '<span style="color:var(--muted)">—</span>'))}</td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
         ${e._synth ? '' : `${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
@@ -29114,7 +29114,7 @@ ${rhead}${foot}
     const all = _fixScopeAll, n = _fixOpenList().length;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '280px';
     menu.innerHTML = `<div class="cp-mark-menu__list"><button class="cp-mark-menu__b" ${n ? '' : 'disabled'} onclick="document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove());LeadManagerModule.fixExport()">Exportar «${all ? 'Todos los pendientes' : 'Por corregir'}» (${n}) a CSV</button>
-      <div style="padding:6px 12px 8px;font-size:.72rem;line-height:1.4;color:#8B9690;max-width:280px">Trae el ID de cada contacto. Rellena las columnas Email / Email personal y vuelve a importarlo: se actualizan por ID, sin duplicar, y salen de esta lista.</div></div>`;
+      <div style="padding:6px 12px 8px;font-size:12px;line-height:16px;color:#8B9690;max-width:280px">Trae el ID de cada contacto. Rellena las columnas Email / Email personal y vuelve a importarlo: se actualizan por ID, sin duplicar, y salen de esta lista.</div></div>`;
     document.body.appendChild(menu);
     const r = ((ev && (ev.currentTarget || ev.target)) || document.body).getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.right - 280, window.innerWidth - 290))}px`;
@@ -29515,7 +29515,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <label class="pax-all"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><b>Seleccionar todos</b><span>(<span id="pa-count">${sorted.length}</span> visibles)</span></label>
       </div>` : ''}
       <div class="pax-list">${rows}</div>
-      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-sel" style="font-size:.85rem"></span><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-sel" style="font-size:14px"></span><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-pa-modal').remove()">Cerrar</button>
         ${list.length ? `<button class="btn btn--primary btn--sm" id="pa-mark" onclick="LeadManagerModule.pendingAcceptMark()">✓ Marcar como aceptados</button>` : ''}
       </div></div></div>`;
@@ -29992,17 +29992,17 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         <div class="seq-app__who">${meta}</div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
-      ${(a.gaps && a.gaps.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEE2E2;border:1px solid #F5B5B5;font-size:12.5px;color:#991B1B"><b>⚠ Le falta un dato a este mensaje y no se puede aprobar así.</b> ${a.gaps.map(g => esc(g.motivo) + ' en el ' + esc(g.campo) + ': <code>' + esc(g.texto) + '</code>').join(' · ')}. Complétalo en el texto (o corrige el dato del contacto) y vuelve a aprobar.</div>` : ''}
-      ${(a.vars_vacias && a.vars_vacias.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEF3C7;border:1px solid #F5D9A0;font-size:12.5px;color:#92400E"><b>⚠ Hay huecos en este mensaje.</b> Estas variables no tienen valor para este contacto y salen en blanco: ${a.vars_vacias.map(v => '<code>{{' + esc(v) + '}}</code>').join(', ')}. Corrige el dato del contacto o edita el texto antes de aprobar.</div>` : ''}
+      ${(a.gaps && a.gaps.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEE2E2;border:1px solid #F5B5B5;font-size:12px;color:#991B1B"><b>⚠ Le falta un dato a este mensaje y no se puede aprobar así.</b> ${a.gaps.map(g => esc(g.motivo) + ' en el ' + esc(g.campo) + ': <code>' + esc(g.texto) + '</code>').join(' · ')}. Complétalo en el texto (o corrige el dato del contacto) y vuelve a aprobar.</div>` : ''}
+      ${(a.vars_vacias && a.vars_vacias.length) ? `<div style="margin:8px 0;padding:8px 12px;background:#FEF3C7;border:1px solid #F5D9A0;font-size:12px;color:#92400E"><b>⚠ Hay huecos en este mensaje.</b> Estas variables no tienen valor para este contacto y salen en blanco: ${a.vars_vacias.map(v => '<code>{{' + esc(v) + '}}</code>').join(', ')}. Corrige el dato del contacto o edita el texto antes de aprobar.</div>` : ''}
       ${a.reply_to_prev && a.reply_subject
-        ? `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px;flex-wrap:wrap"><span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px">Asunto</span>
-            <div style="flex:1;min-width:240px;border:1px solid #E1E6EC;background:#F8FAFC;padding:8px 10px;font-size:13.5px"><b>${esc(a.reply_subject)}</b></div>
-            <span style="font-size:11.5px;font-weight:600;color:#1D4ED8;background:#DBEAFE;padding:3px 8px" title="Este email se envía como respuesta dentro del hilo del email anterior">↩ Respuesta en el mismo hilo</span></div>
-          <div style="font-size:11.5px;color:#64748B;margin:0 0 6px 68px">El asunto lo fija el hilo del email anterior, no se edita aquí.</div>
+        ? `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px;flex-wrap:wrap"><span style="font-size:12px;font-weight:500;letter-spacing:normal;text-transform:none;color:#64748B;width:58px">Asunto</span>
+            <div style="flex:1;min-width:240px;border:1px solid #E1E6EC;background:#F8FAFC;padding:8px 10px;font-size:14px"><b>${esc(a.reply_subject)}</b></div>
+            <span style="font-size:12px;font-weight:500;color:#1D4ED8;background:#DBEAFE;padding:3px 8px" title="Este email se envía como respuesta dentro del hilo del email anterior">↩ Respuesta en el mismo hilo</span></div>
+          <div style="font-size:12px;color:#64748B;margin:0 0 6px 68px">El asunto lo fija el hilo del email anterior, no se edita aquí.</div>
           <input type="hidden" id="app-subj-${a.id}" value="${esc(a.asunto)}">`
-        : `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px"><label for="app-subj-${a.id}" style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748B;width:58px;flex:none">Asunto</label>
+        : `<div style="display:flex;gap:10px;align-items:center;margin:8px 0 4px"><label for="app-subj-${a.id}" style="font-size:12px;font-weight:500;letter-spacing:normal;text-transform:none;color:#64748B;width:58px;flex:none">Asunto</label>
             <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto del email" style="flex:1;margin:0"></div>
-          ${a.reply_to_prev ? '<div style="font-size:11.5px;color:#B45309;margin:0 0 6px 68px">Este paso está pensado como respuesta a un email anterior, pero no hay ninguno enviado: saldrá como un correo nuevo.</div>' : ''}`}
+          ${a.reply_to_prev ? '<div style="font-size:12px;color:#B45309;margin:0 0 6px 68px">Este paso está pensado como respuesta a un email anterior, pero no hay ninguno enviado: saldrá como un correo nuevo.</div>' : ''}`}
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
       ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved, a.idioma, a.variant)}
       <div class="seq-app__ft">
@@ -30017,7 +30017,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _seqModeChip(s) {
     const M = { auto: ['Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['Con tu aprobación', '#F1EFEB', '#A96D0C'] };
     const m = M[s?.send_mode]; if (!m) return '';
-    return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
+    return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:10px;vertical-align:3px">${m[0]}</span>`;
   }
   // Porción de la lista para la página actual (corrige la página si el filtro dejó menos filas)
   function _seqPageSlice(list, page, setPage) {
@@ -30840,8 +30840,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const h = _prospectHour(tz);
     const dot = c => `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c};margin:0 4px 1px 0;vertical-align:middle"></span>`;
     const tag = h == null ? '' : (h >= 8 && h < 18)
-      ? `<span style="color:#15803D;font-weight:600">${dot('#15803D')}buen horario</span>`
-      : `<span style="color:#B42318;font-weight:600">${dot('#D94B4B')}fuera de horario</span>`;
+      ? `<span style="color:#15803D;font-weight:500">${dot('#15803D')}buen horario</span>`
+      : `<span style="color:#B42318;font-weight:500">${dot('#D94B4B')}fuera de horario</span>`;
     return `${NI('clock', 12)} Hora del prospecto: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#B4AFA8">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
   }
   const _clockOff = tz => { const h = _prospectHour(tz); return h != null && !(h >= 8 && h < 18); };   // fuera de 8:00–18:00 del prospecto
@@ -31230,7 +31230,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
       <span class="lm-step__ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}${st.canal === 'email' && !_stepHasCopy(st) ? '<span title="Este paso de email no tiene mensaje escrito: no se enviará nada ni se generarán borradores hasta que lo escribas. Pulsa el paso para escribirlo." style="margin-left:8px;font-size:11px;font-weight:700;color:#B45309;background:#FEF3C7;padding:1px 7px">⚠ Sin mensaje</span>' : ''}</div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}${st.canal === 'email' && !_stepHasCopy(st) ? '<span title="Este paso de email no tiene mensaje escrito: no se enviará nada ni se generarán borradores hasta que lo escribas. Pulsa el paso para escribirlo." style="margin-left:8px;font-size:12px;font-weight:500;color:#B45309;background:#FEF3C7;padding:1px 7px">⚠ Sin mensaje</span>' : ''}</div>
         ${progHtml}
       </div>
       <div class="lm-step__status">
@@ -32207,7 +32207,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_isMt) mainAction = `LeadManagerModule.mtOpen(${it.contact_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div><b>${esc(it.contact_name || '')}</b>${(() => { const k0 = (_contacts || []).find(x => x.id === it.contact_id); return k0 && k0.codigo ? ` <span class="lm-code" title="Identificador único del contacto">${esc(k0.codigo)}</span>` : ''; })()}${edad ? ` <span style="font-size:.74rem;font-weight:700;color:${edadCol}">· ${edad}</span>` : ''}<div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
+        <div><b>${esc(it.contact_name || '')}</b>${(() => { const k0 = (_contacts || []).find(x => x.id === it.contact_id); return k0 && k0.codigo ? ` <span class="lm-code" title="Identificador único del contacto">${esc(k0.codigo)}</span>` : ''; })()}${edad ? ` <span style="font-size:12px;font-weight:500;color:${edadCol}">· ${edad}</span>` : ''}<div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
@@ -32549,7 +32549,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     menu.className = 'chat-ctx-menu';
     menu.style.maxHeight = '70vh'; menu.style.overflowY = 'auto';
     menu.onclick = e => e.stopPropagation();
-    const label = t => `<div style="padding:7px 10px 3px;font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">${t}</div>`;
+    const label = t => `<div style="padding:7px 10px 3px;font-size:10px;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:normal">${t}</div>`;
     const opt = (checked, onclick, txt) => `<button class="chat-ctx-item" onclick="${onclick}">${esc(txt)}${checked ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
     const seqOpts = [...(_sequences || [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
     menu.innerHTML = label('Etiqueta')
@@ -32878,7 +32878,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const q = (jid || '').replace(/'/g, "\'");
-    const html = `<div style="padding:7px 12px 4px;font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8F8B83">Resolver respuesta</div><div class="cp-mark-menu__list">`
+    const html = `<div style="padding:7px 12px 4px;font-size:12px;font-weight:500;letter-spacing:normal;text-transform:none;color:#8F8B83">Resolver respuesta</div><div class="cp-mark-menu__list">`
       + _DISPOS.filter(d => d[0] !== 'aceptado').map(d => item(esc(d[1]), `LeadManagerModule.waResolveDo(${cid},'${d[0]}','${q}',${connId || 0})`, d[2])).join('')
       + `<div class="cp-mark-menu__sep"></div>` + item('Aplazar hasta… (fuera de oficina / vacaciones)', `LeadManagerModule.ldAplazar(${cid})`, '#0E7490') + `</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.innerHTML = html; document.body.appendChild(menu);
@@ -33193,7 +33193,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
                  <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
                  <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
                  <div class="ibx-sched__custom">
-                   <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                   <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:12px;padding:5px 7px">
                    <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
                  </div>
                </div>
@@ -33385,7 +33385,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <div class="lm-pick-list" id="cmp-results" style="padding:6px 0 0;max-height:180px"></div>
           <div id="cmp-selected" style="display:none"></div>
           <div id="cmp-newwrap" style="display:none">
-            <div style="display:flex;justify-content:space-between;align-items:center;font-size:.76rem;font-weight:700;color:var(--muted);margin:6px 0">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:500;color:var(--muted);margin:6px 0">
               <span>Contacto nuevo — se crea al enviar</span>
               <button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpNuevoCancel()" title="Cambiar destinatario">✕</button>
             </div>
@@ -33434,7 +33434,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
             <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('man9')">Mañana 9:00</button>
             <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('lun9')">Lunes 9:00</button>
             <div class="ibx-sched__custom">
-              <input type="datetime-local" class="dle-i" id="cmp-sched-dt" style="font-size:.74rem;padding:5px 7px">
+              <input type="datetime-local" class="dle-i" id="cmp-sched-dt" style="font-size:12px;padding:5px 7px">
               <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cmpSchedPick('custom')">OK</button>
             </div>
           </div>
@@ -33952,7 +33952,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const lc = (_contacts || []).find(x => x.id === c.id) || {};
     const ya = new Set((lc.sequences || []).filter(x => ['activo', 'pausado', 'respondido'].includes(x.estado)).map(x => x.id));
     const list = [...(_sequences || [])].filter(x => !ya.has(x.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    _ibPop(ev, () => list.length ? list.map(x => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibSeqAdd(${x.id})">${esc(x.nombre)}</button>`).join('') : '<div style="padding:10px 12px;font-size:.78rem;color:var(--text-muted)">No hay más secuencias disponibles.</div>');
+    _ibPop(ev, () => list.length ? list.map(x => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibSeqAdd(${x.id})">${esc(x.nombre)}</button>`).join('') : '<div style="padding:10px 12px;font-size:12px;color:var(--text-muted)">No hay más secuencias disponibles.</div>');
   }
   async function ibSeqAdd(seqId) {
     if (_ibFiltrosPopClose) _ibFiltrosPopClose();
@@ -33997,7 +33997,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   const _ibItem = (js, txt, on, ico) => `<button class="chat-ctx-item" onclick="${js}">${ico ? `<span style="width:16px;display:inline-flex">${ico}</span>` : ''}${esc(txt)}${on ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
   function ibViewMenu(ev) {
     const n = _ibCounts();
-    _ibPop(ev, () => _IB_VIEWS.map(([k, l]) => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibTab('${k}')">${esc(l)}<span style="margin-left:auto;color:var(--text-muted);font-size:.72rem">${k === 'envios' ? '' : (n[k] || '')}</span>${_ibTab === k ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`).join(''));
+    _ibPop(ev, () => _IB_VIEWS.map(([k, l]) => `<button class="chat-ctx-item" onclick="LeadManagerModule.ibTab('${k}')">${esc(l)}<span style="margin-left:auto;color:var(--text-muted);font-size:12px">${k === 'envios' ? '' : (n[k] || '')}</span>${_ibTab === k ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`).join(''));
   }
   function ibCliMenu(ev) {
     _ibPop(ev, () => _ibItem("LeadManagerModule.ibCli(0)", 'Todos los clientes', !_ibCli) + _clients.map(c => _ibItem(`LeadManagerModule.ibCli(${c.id})`, c.nombre, _ibCli === c.id)).join(''));
@@ -35318,8 +35318,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const chipTxt = mb && (mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error');
     const consentInfo = needsConsent
       ? `<div class="mbx-consent" style="margin-top:8px;padding:8px 10px;background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px">
-          <div style="font-size:.76rem;color:#1E4A8C;font-weight:600;margin-bottom:2px">⏳ Falta consent del admin para leer respuestas (IMAP)</div>
-          ${mb.admin_consent_requested_at ? `<div style="font-size:.72rem;color:#0062CC">Solicitud enviada a ${esc(mb.admin_consent_sent_to || '')} · ${_ago(mb.admin_consent_requested_at)}</div>` : ''}
+          <div style="font-size:12px;color:#1E4A8C;font-weight:500;margin-bottom:2px">⏳ Falta consent del admin para leer respuestas (IMAP)</div>
+          ${mb.admin_consent_requested_at ? `<div style="font-size:12px;color:#0062CC">Solicitud enviada a ${esc(mb.admin_consent_sent_to || '')} · ${_ago(mb.admin_consent_requested_at)}</div>` : ''}
         </div>`
       : '';
     const consentBtn = needsConsent
@@ -35535,8 +35535,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         </div>
         <div class="dle-f dle-f--full" id="mbx-oauth-panel" style="display:${prov === 'microsoft' ? '' : 'none'}">
           <div style="background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px;padding:14px 16px">
-            <div style="font-weight:600;color:#1F1D1B;margin-bottom:6px">Conexión segura con Microsoft (OAuth)</div>
-            <div style="font-size:.82rem;color:#6C6862;line-height:1.5;margin-bottom:12px">
+            <div style="font-weight:500;color:#1F1D1B;margin-bottom:6px">Conexión segura con Microsoft (OAuth)</div>
+            <div style="font-size:12px;color:#6C6862;line-height:16px;margin-bottom:12px">
               Se abrirá una ventana de Microsoft para que inicies sesión y aprobes el acceso a IMAP y SMTP.
               No hace falta contraseña ni permiso del admin del tenant (evita el bloqueo de auth básica desde 2022).
             </div>
@@ -35549,7 +35549,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           </div>
         </div>
         <div class="dle-f dle-f--full"><span class="seq-drip-hint" id="mbx-hint">${_MB_HINT[prov]}</span></div>
-        <div class="dle-f dle-f--full" id="mbx-err" style="display:none;color:var(--danger);font-size:.8rem"></div>
+        <div class="dle-f dle-f--full" id="mbx-err" style="display:none;color:var(--danger);font-size:12px"></div>
       </div>
       <div class="dle-foot"><span class="sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbClose()">Cancelar</button>
@@ -35729,9 +35729,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const nz = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
     const has = l => Object.keys(d.langs).some(k => nz(k) === nz(l)) && String(d.langs[Object.keys(d.langs).find(k => nz(k) === nz(l))] || '').trim();
     const info = d.info || [];
-    const status = info.length ? `<div style="border:1px solid #E5E7EB;background:#F8FAFC;padding:8px 10px;margin-bottom:10px;font-size:12.5px"><div style="margin-bottom:6px"><b>Idiomas de este cliente</b> <span style="color:#64748B">(según los mensajes por idioma de sus secuencias y sus contactos)</span></div>${info.map(x => `<div style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="width:16px">${has(x.idioma) ? '✓' : '⚠'}</span><b style="min-width:92px">${esc(x.idioma)}</b><span style="color:#64748B;flex:1">${x.secuencias.length ? 'en ' + x.secuencias.length + ' secuencia' + (x.secuencias.length !== 1 ? 's' : '') + ' · ' : ''}${x.contactos} contacto${x.contactos !== 1 ? 's' : ''}</span>${has(x.idioma) ? '<span style="color:#15803D">tiene firma</span>' : `<button type="button" class="btn btn--ghost btn--sm" style="color:#B45309" onclick="LeadManagerModule.mbSigMake(${JSON.stringify(x.idioma).replace(/"/g, '&quot;')})">Falta firma · Crear</button>`}</div>`).join('')}</div>` : '';
+    const status = info.length ? `<div style="border:1px solid #E5E7EB;background:#F8FAFC;padding:8px 10px;margin-bottom:10px;font-size:12px"><div style="margin-bottom:6px"><b>Idiomas de este cliente</b> <span style="color:#64748B">(según los mensajes por idioma de sus secuencias y sus contactos)</span></div>${info.map(x => `<div style="display:flex;gap:8px;align-items:center;margin:3px 0"><span style="width:16px">${has(x.idioma) ? '✓' : '⚠'}</span><b style="min-width:92px">${esc(x.idioma)}</b><span style="color:#64748B;flex:1">${x.secuencias.length ? 'en ' + x.secuencias.length + ' secuencia' + (x.secuencias.length !== 1 ? 's' : '') + ' · ' : ''}${x.contactos} contacto${x.contactos !== 1 ? 's' : ''}</span>${has(x.idioma) ? '<span style="color:#15803D">tiene firma</span>' : `<button type="button" class="btn btn--ghost btn--sm" style="color:#B45309" onclick="LeadManagerModule.mbSigMake(${JSON.stringify(x.idioma).replace(/"/g, '&quot;')})">Falta firma · Crear</button>`}</div>`).join('')}</div>` : '';
     return status + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">${tab('', 'Predeterminada')}${langs.map(l => tab(l, l)).join('')}
-      <select class="form-input" id="mbx-sig-newlang" style="width:auto;padding:3px 8px;font-size:12.5px"><option value="">＋ Firma en otro idioma…</option>${cands.length ? `<optgroup label="Idiomas de tus contactos">${cands.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup>` : ''}<optgroup label="Todos">${pool.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup></select>
+      <select class="form-input" id="mbx-sig-newlang" style="width:auto;padding:3px 8px;font-size:12px"><option value="">＋ Firma en otro idioma…</option>${cands.length ? `<optgroup label="Idiomas de tus contactos">${cands.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup>` : ''}<optgroup label="Todos">${pool.map(l => `<option>${esc(l)}</option>`).join('')}</optgroup></select>
       <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSigAddLang()">Añadir (copia la actual)</button>
       ${cands.length ? `<button type="button" class="btn btn--ghost btn--sm" title="Crea una firma para cada idioma de tus contactos que aún no tiene, copiando la predeterminada para que cambies los textos" onclick="LeadManagerModule.mbSigFill()">Rellenar idiomas que faltan (${cands.length})</button>` : ''}
       ${d.cur !== '' ? `<button type="button" class="btn btn--ghost btn--sm" style="color:#DC2626" onclick="LeadManagerModule.mbSigDel()">Quitar esta firma</button>` : ''}</div>
@@ -35775,16 +35775,16 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span class="dle-l" style="margin:0">HTML de la firma</span>
               <div style="display:flex;gap:6px">
-                <label class="btn btn--ghost btn--sm" style="font-size:.72rem;cursor:pointer;margin:0">
+                <label class="btn btn--ghost btn--sm" style="font-size:12px;cursor:pointer;margin:0">
                   🖼 Subir imagen
                   <input type="file" id="mbx-sig-img" accept="image/*" style="display:none" onchange="LeadManagerModule.mbSignatureImg(event)">
                 </label>
-                <button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem" onclick="LeadManagerModule.mbSignatureInsertLink()">🔗 Insertar link</button>
-                <button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem" onclick="LeadManagerModule.mbSignatureClear()">Vaciar</button>
+                <button type="button" class="btn btn--ghost btn--sm" style="font-size:12px" onclick="LeadManagerModule.mbSignatureInsertLink()">🔗 Insertar link</button>
+                <button type="button" class="btn btn--ghost btn--sm" style="font-size:12px" onclick="LeadManagerModule.mbSignatureClear()">Vaciar</button>
               </div>
             </div>
             <textarea id="mbx-sig-html" rows="10" style="width:100%;padding:10px 12px;border:1px solid #E5E4E1;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;box-sizing:border-box" oninput="LeadManagerModule.mbSignaturePreview()" placeholder="Pega aquí tu HTML de firma. Ej.:&#10;&#10;&lt;p style=&quot;font-family:Arial;font-size:13px;color:#333&quot;&gt;&#10;  Saludos,&lt;br&gt;&#10;  &lt;b&gt;Jenny Obregón&lt;/b&gt; · CEO&lt;br&gt;&#10;  &lt;a href=&quot;https://novacentrax.com&quot;&gt;novacentrax.com&lt;/a&gt;&#10;&lt;/p&gt;">${esc(mb.signature_html || '')}</textarea>
-            <div style="margin-top:4px;color:#918C85;font-size:.72rem" id="mbx-sig-size">${mb.signature_html ? (mb.signature_html.length / 1024).toFixed(1) + ' KB' : 'Vacía'}</div>
+            <div style="margin-top:4px;color:#918C85;font-size:12px" id="mbx-sig-size">${mb.signature_html ? (mb.signature_html.length / 1024).toFixed(1) + ' KB' : 'Vacía'}</div>
           </div>
           <div class="dle-f dle-f--full">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px"><span class="dle-l" style="margin:0 8px 0 0">Vista previa — así se ve en:</span>
@@ -35793,9 +35793,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
               <button type="button" class="btn btn--ghost btn--sm mbx-dev" data-w="1100" onclick="LeadManagerModule.mbSigDevice(1100)">💻 Laptop</button></div>
             <div style="background:#F1F5F9;border:1px solid #E5E4E1;padding:10px;overflow:auto"><iframe id="mbx-sig-prevf" style="width:375px;max-width:100%;height:120px;border:0;background:#fff;display:block"></iframe></div>
             <div id="mbx-sig-meas" style="margin-top:6px;font-size:12px;color:#64748B"></div>
-            <div style="margin-top:4px;font-size:11.5px;color:#918C85">Al enviar, Nova adapta la firma sola: el texto puede saltar de línea y las imágenes y tablas nunca pasan del ancho de la pantalla.</div>
+            <div style="margin-top:4px;font-size:12px;color:#918C85">Al enviar, Nova adapta la firma sola: el texto puede saltar de línea y las imágenes y tablas nunca pasan del ancho de la pantalla.</div>
           </div>
-          <div class="dle-f dle-f--full" id="mbx-sig-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
+          <div class="dle-f dle-f--full" id="mbx-sig-err" style="display:none;color:var(--danger);font-size:14px"></div>
         </div>
       </div>
       <div class="dle-foot" style="flex:0 0 auto;padding:14px 22px;border-top:1px solid #E5E4E1;background:#FAF8F5;border-radius:0 0 12px 12px">
@@ -35937,8 +35937,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const toOpts = Array.isArray(_acData.to_options) ? _acData.to_options : [];
     const sugerenciasHtml = toOpts.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
-           <span style="font-size:.72rem;color:#918c85">Sugerencias del cliente:</span>
-           ${toOpts.map((o, i) => `<button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentAddChip('to', ${esc(JSON.stringify(o.email))})">+ ${esc(o.email)} <span style="color:#918c85">(${esc(o.label)})</span></button>`).join('')}
+           <span style="font-size:12px;color:#918c85">Sugerencias del cliente:</span>
+           ${toOpts.map((o, i) => `<button type="button" class="btn btn--ghost btn--sm" style="font-size:12px;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentAddChip('to', ${esc(JSON.stringify(o.email))})">+ ${esc(o.email)} <span style="color:#918c85">(${esc(o.label)})</span></button>`).join('')}
          </div>`
       : '';
     m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:940px;width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0">
@@ -35970,18 +35970,18 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <div class="dle-f dle-f--full">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span class="dle-l" style="margin:0">Vista previa del correo</span>
-              <button type="button" id="ac-toggle-html" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentToggleHtml()" style="font-size:.72rem">✎ Editar HTML</button>
+              <button type="button" id="ac-toggle-html" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentToggleHtml()" style="font-size:12px">✎ Editar HTML</button>
             </div>
             <div id="ac-preview" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:20px 22px;max-height:340px;overflow-y:auto;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B"></div>
             <textarea id="ac-body" rows="10" style="display:none;width:100%;margin-top:8px;padding:10px 12px;border:1px solid #E5E4E1;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;box-sizing:border-box" oninput="LeadManagerModule.mbAdminConsentSync()"></textarea>
           </div>
           <div class="dle-f dle-f--full">
-            <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:.76rem;color:#6C6862">
-              <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
+            <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:12px;color:#6C6862">
+              <b>Link de aprobación:</b> <code style="font-size:12px;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
             </div>
           </div>
-          ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px;padding:8px 12px;color:#1E4A8C;font-size:.8rem;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>ℹ Última solicitud enviada a <b>${esc(_acData.already_sent_to)}</b> · ${_ago(_acData.already_sent_at)}. Puedes reenviar cuantas veces necesites.</span><button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentClearRecipients()">↺ Empezar de cero</button></div></div>` : ''}
-          <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
+          ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px;padding:8px 12px;color:#1E4A8C;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>ℹ Última solicitud enviada a <b>${esc(_acData.already_sent_to)}</b> · ${_ago(_acData.already_sent_at)}. Puedes reenviar cuantas veces necesites.</span><button type="button" class="btn btn--ghost btn--sm" style="font-size:12px;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentClearRecipients()">↺ Empezar de cero</button></div></div>` : ''}
+          <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:14px"></div>
         </div>
       </div>
       <div class="dle-foot" style="flex:0 0 auto;padding:14px 22px;border-top:1px solid #E5E4E1;background:#FAF8F5;border-radius:0 0 12px 12px"><span class="sp"></span>
@@ -36009,7 +36009,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const el = $(which === 'to' ? 'ac-to-chips' : 'ac-cc-chips'); if (!el) return;
     el.innerHTML = arr.length
       ? arr.map((e, i) => `<span class="ac-chip">${esc(e)}<button type="button" onclick="LeadManagerModule.mbAdminConsentRmChip('${which}', ${i})" aria-label="Quitar">×</button></span>`).join('')
-      : `<span style="color:#918c85;font-size:.75rem">Sin ${which === 'to' ? 'destinatarios' : 'CC'}</span>`;
+      : `<span style="color:#918c85;font-size:12px">Sin ${which === 'to' ? 'destinatarios' : 'CC'}</span>`;
   }
   function mbAdminConsentAddChip(which, email) {
     email = String(email || '').trim().replace(/[,;]$/, '');
@@ -36255,7 +36255,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     };
     const f = _lgFrame(_LG.sel);
     body.innerHTML = `
-      <div style="font-size:12.5px;color:#64748B;margin-bottom:8px">Así se verá el encabezado del portal del cliente. Arrastra el logo para moverlo y usa la rueda del mouse (o el zoom) para acercarlo o alejarlo.</div>
+      <div style="font-size:12px;color:#64748B;margin-bottom:8px">Así se verá el encabezado del portal del cliente. Arrastra el logo para moverlo y usa la rueda del mouse (o el zoom) para acercarlo o alejarlo.</div>
       <div id="lg-prev">${_lgPreviewHtml()}</div>
       ${warn ? `<div class="lg-warn">⚠ ${warn}</div>` : ''}
       <div class="lg-row"><div style="flex:1;min-width:260px"><div class="lg-lbl">Color del encabezado</div><div class="lg-sw">${_LG_SW.map(([c, n]) => `<button class="lg-sw__b${_LG.bg.toLowerCase() === c.toLowerCase() ? ' on' : ''}" title="${n}" style="background:${c}" onclick="LeadManagerModule.lgBg('${c}')"></button>`).join('')}
@@ -36345,7 +36345,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const w = _wsLogo;
     if (!w) return '<div class="cp-empty2" style="padding:12px">Cargando…</div>';
     return `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      <div style="background:#0B1220;padding:14px 22px;min-width:220px;min-height:64px;display:grid;place-items:center;border:1px solid #1E293B">${w.has ? `<img src="${API}/lm/portal/workspace-logo/file?v=${w.v}" alt="Logo" style="height:34px;width:auto;max-width:220px;object-fit:contain">` : '<span style="color:#64748B;font-size:12.5px">Sin logo (se muestra «Nova»)</span>'}</div>
+      <div style="background:#0B1220;padding:14px 22px;min-width:220px;min-height:64px;display:grid;place-items:center;border:1px solid #1E293B">${w.has ? `<img src="${API}/lm/portal/workspace-logo/file?v=${w.v}" alt="Logo" style="height:34px;width:auto;max-width:220px;object-fit:contain">` : '<span style="color:#64748B;font-size:12px">Sin logo (se muestra «Nova»)</span>'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn--primary btn--sm" style="cursor:pointer">${w.has ? 'Cambiar logo' : 'Subir logo blanco'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onchange="LeadManagerModule.wsLogoUpload(this)"></label>${w.has ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wsLogoDelete()">Quitar</button>' : ''}</div></div>`;
   }
   function _wsLogoCard() {
@@ -36354,7 +36354,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const b = document.getElementById('ws-logo-box'); if (b) b.innerHTML = _wsLogoBody();
     }, 0);
     return `<div class="cp-card"><div class="cp-card__t">Portal de clientes · logo de tu marca</div>
-      <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Sube tu logo en <b>blanco</b> (PNG con fondo transparente, ideal). Aparece en el encabezado de todos los portales de clientes, junto al logo de cada cliente. Si el cliente usa un encabezado claro, se muestra en negro automáticamente.</div>
+      <div style="font-size:12px;line-height:16px;color:#64748B;margin-bottom:10px">Sube tu logo en <b>blanco</b> (PNG con fondo transparente, ideal). Aparece en el encabezado de todos los portales de clientes, junto al logo de cada cliente. Si el cliente usa un encabezado claro, se muestra en negro automáticamente.</div>
       <div id="ws-logo-box">${_wsLogoBody()}</div></div>`;
   }
   async function wsLogoUpload(inp) {
@@ -36560,16 +36560,16 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _portalHtml(cid, a, h) {
     const url = _portalUrl(cid);
     const accs = (a.accounts || []).map(x => `<tr>
-        <td><b>${esc(x.email)}</b><div style="font-size:11.5px;color:#64748B">${esc(x.nombre || '')}</div></td>
+        <td><b>${esc(x.email)}</b><div style="font-size:12px;color:#64748B">${esc(x.nombre || '')}</div></td>
         <td>${x.activo ? '<span class="lm-vb" style="background:#DCFCE7;color:#15803D">Activo</span>' : '<span class="lm-vb" style="background:#EEF1F5;color:#64748B">Desactivado</span>'}${x.must_change ? ' <span class="lm-vb" style="background:#FEF3C7;color:#A16207">Pendiente de cambiar clave</span>' : ''}</td>
         <td>${x.last_login ? new Date(x.last_login).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Nunca'}</td>
         <td style="white-space:nowrap"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalSecs(${x.id})">Secciones que ve</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalReset(${x.id})">Nueva clave</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalToggle(${x.id},${!x.activo})">${x.activo ? 'Desactivar' : 'Activar'}</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalDel(${x.id})">Eliminar</button></td></tr>
-        <tr id="portal-sec-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;padding:6px 2px">${a.sections.map(k => `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${x.sections[k] ? 'checked' : ''} onchange="LeadManagerModule.portalSec(${x.id},this)"> ${esc(_PORTAL_SEC[k] || k)}</label>`).join('')}</div></td></tr>`).join('');
-    const row = (r, extra) => `<div style="border-bottom:1px solid #EEF1F4;padding:9px 0;display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}${r.cargo ? ` <span style="color:#64748B;font-weight:400">· ${esc(r.cargo)}</span>` : ''}</div><div style="font-size:12px;color:#64748B">${esc(r.empresa || '')}${extra ? ' · ' + extra : ''}</div>${r.snippet ? `<div style="font-size:12px;background:#F8FAFC;border-left:3px solid #2563EB;padding:5px 8px;margin-top:4px">${esc(r.snippet)}</div>` : ''}</div>
+        <tr id="portal-sec-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;padding:6px 2px">${a.sections.map(k => `<label style="font-size:12px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${x.sections[k] ? 'checked' : ''} onchange="LeadManagerModule.portalSec(${x.id},this)"> ${esc(_PORTAL_SEC[k] || k)}</label>`).join('')}</div></td></tr>`).join('');
+    const row = (r, extra) => `<div style="border-bottom:1px solid #EEF1F4;padding:9px 0;display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-weight:500;font-size:14px">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}${r.cargo ? ` <span style="color:#64748B;font-weight:400">· ${esc(r.cargo)}</span>` : ''}</div><div style="font-size:12px;color:#64748B">${esc(r.empresa || '')}${extra ? ' · ' + extra : ''}</div>${r.snippet ? `<div style="font-size:12px;background:#F8FAFC;border-left:3px solid #2563EB;padding:5px 8px;margin-top:4px">${esc(r.snippet)}</div>` : ''}</div>
         <input class="lm-inp" style="width:280px;flex:none" maxlength="600" placeholder="Nota visible para el cliente…" value="${esc(r.portal_nota || '')}" onchange="LeadManagerModule.portalNota(${r.contact_id},this)"></div>`;
     const dt = d => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '';
     const cl = _clients.find(x => x.id === cid) || {};
-    const flag = (key, on, title, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:6px 0"><input type="checkbox" ${on ? 'checked' : ''} onchange="LeadManagerModule.portalFlag(${cid},'${key}',this.checked)" style="margin-top:3px"><span><b style="font-size:13.5px">${title}</b><br><span style="font-size:12px;color:#64748B">${hint}</span></span></label>`;
+    const flag = (key, on, title, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:6px 0"><input type="checkbox" ${on ? 'checked' : ''} onchange="LeadManagerModule.portalFlag(${cid},'${key}',this.checked)" style="margin-top:3px"><span><b style="font-size:14px">${title}</b><br><span style="font-size:12px;color:#64748B">${hint}</span></span></label>`;
     const tzName = cl.timezone || '';
     const B = {};
     B.accesos = `${_portalAccessCard(cid, a)}
@@ -36581,13 +36581,13 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       ${_portalUpdatesCard(cid)}
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Lista de arranque</div><div class="cp-empty2" style="padding:6px 0 10px;text-align:left">Los primeros pasos del proyecto, para que el cliente vea cómo vamos arrancando.</div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.suOpen(${cid})">Editar lista de arranque</button></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Reuniones y respuestas que le destacamos <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto</span></div>
-        <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin reuniones próximas</div>'}
-        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas</div>'}
-        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Respuestas con interés por convertir en reunión (${h.positive_pending.filter(r => !r.neutral).length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Nada pendiente</div>'}
+        <div style="font-weight:500;font-size:12px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin reuniones próximas</div>'}
+        <div style="font-weight:500;font-size:12px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas</div>'}
+        <div style="font-weight:500;font-size:12px;margin:12px 0 2px">Respuestas con interés por convertir en reunión (${h.positive_pending.filter(r => !r.neutral).length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Nada pendiente</div>'}
       </div>`;
     B.avisos = `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Recordatorio de seguimiento</div>
         ${flag('seguimiento_avisos', cl.seguimiento_avisos !== false, 'Avisar al cliente por correo cuando toque dar seguimiento', 'Le escribimos cuando una reunión pasó sin resultado, cuando una oportunidad lleva 3, 7 o 14 días hábiles sin movimiento, o cuando llega la fecha que él mismo programó. Sale en el idioma de cada persona y solo en su horario de trabajo (8–17 h).')}
-        <div style="font-size:12.5px;margin:10px 0 4px"><b>Zona horaria del cliente:</b> ${tzName ? esc(tzName) : 'sin definir (se usa Nueva York)'} · <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">cambiar en Editar cliente</a></div>
+        <div style="font-size:12px;margin:10px 0 4px"><b>Zona horaria del cliente:</b> ${tzName ? esc(tzName) : 'sin definir (se usa Nueva York)'} · <a href="#" onclick="LeadManagerModule.openClientDrawer(${cid});return false;">cambiar en Editar cliente</a></div>
         <div style="margin-top:10px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalPreviewAviso(${cid})">Ver cómo se ve el correo</button></div></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Cuándo sale el próximo correo</div><div id="pa-avnext"><div class="cp-empty2" style="padding:10px">Calculando…</div></div></div>
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Correos ya enviados</div><div id="pa-avlog"><div class="cp-empty2" style="padding:10px">Cargando…</div></div></div>`;
@@ -36621,9 +36621,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       else if (n.when) cuando = `Se enviará a partir de las <b>8:00 en ${esc(n.tz)}</b>${n.tz_definida ? '' : ' (zona sin definir, se usa esa por defecto)'} → <b>${esc(fmt(n.when))}</b> en tu hora (${esc(loc)}). La revisión corre cada hora, así que puede salir dentro de esa hora.`;
       else cuando = 'No se pudo calcular el horario.';
       const KL = { reunion: 'Reunión pendiente de resultado', fecha: 'Llegó la fecha de seguimiento que programó', dias: 'Días sin actividad', cierre: 'Días sin actividad (sugerir cierre)' };
-      box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">${cuando}</div>
-        ${n.items.length ? `<div style="font-size:12.5px;margin-bottom:8px"><b>Oportunidades que se avisarían:</b><ul style="margin:4px 0 0 18px;padding:0">${n.items.map(i => `<li>${esc(i.nombre)}${i.empresa ? ' (' + esc(i.empresa) + ')' : ''} — ${esc(KL[i.kind] || i.kind)}${i.kind === 'dias' || i.kind === 'cierre' ? ' · ' + i.dias + ' días hábiles' : ''}</li>`).join('')}</ul></div>` : ''}
-        ${n.recipients.map(x => `<details style="border-top:1px solid #EEF1F4;padding:8px 0"${n.recipients.length === 1 ? ' open' : ''}><summary style="cursor:pointer;font-size:12.5px"><b>${esc(x.email)}</b> · ${esc(LN[x.lang] || x.lang)} · <span style="color:#64748B">${esc(x.subject)}</span></summary><iframe sandbox="" style="width:100%;height:420px;border:1px solid #E1E6EC;margin-top:8px;background:#fff" srcdoc="${esc(x.html)}"></iframe></details>`).join('')}`;
+      box.innerHTML = `<div style="font-size:14px;margin-bottom:8px">${cuando}</div>
+        ${n.items.length ? `<div style="font-size:12px;margin-bottom:8px"><b>Oportunidades que se avisarían:</b><ul style="margin:4px 0 0 18px;padding:0">${n.items.map(i => `<li>${esc(i.nombre)}${i.empresa ? ' (' + esc(i.empresa) + ')' : ''} — ${esc(KL[i.kind] || i.kind)}${i.kind === 'dias' || i.kind === 'cierre' ? ' · ' + i.dias + ' días hábiles' : ''}</li>`).join('')}</ul></div>` : ''}
+        ${n.recipients.map(x => `<details style="border-top:1px solid #EEF1F4;padding:8px 0"${n.recipients.length === 1 ? ' open' : ''}><summary style="cursor:pointer;font-size:12px"><b>${esc(x.email)}</b> · ${esc(LN[x.lang] || x.lang)} · <span style="color:#64748B">${esc(x.subject)}</span></summary><iframe sandbox="" style="width:100%;height:420px;border:1px solid #E1E6EC;margin-top:8px;background:#fff" srcdoc="${esc(x.html)}"></iframe></details>`).join('')}`;
     } catch (e) { box.innerHTML = '<div class="cp-empty2" style="padding:10px">No se pudo calcular el próximo envío.</div>'; }
   }
   async function _paAvLog(cid) {
@@ -36632,9 +36632,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       const r = await apiFetch(`${API}/portal/admin/followup-log?client=${cid}`); const list = await r.json();
       if (!Array.isArray(list)) throw new Error('Error');
       const LN = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
-      box.innerHTML = list.length ? list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:10px 0"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:13px">${esc(x.subject)}</b><span style="font-size:12px;color:#64748B">${new Date(x.sent_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+      box.innerHTML = list.length ? list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:10px 0"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(x.subject)}</b><span style="font-size:12px;color:#64748B">${new Date(x.sent_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
           <div style="font-size:12px;color:#475569;margin:2px 0">Para: <b>${esc(x.to_email)}</b> · ${esc(LN[x.lang] || x.lang)} · ${(x.items || []).map(i => esc(i.nombre) + (i.empresa ? ' (' + esc(i.empresa) + ')' : '')).join(', ')}</div>
-          <details><summary style="font-size:12px;color:#2563EB;cursor:pointer">Ver mensaje</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;background:#F8FAFC;border:1px solid #E1E6EC;padding:10px;margin:6px 0 0">${esc(x.body)}</pre></details></div>`).join('')
+          <details><summary style="font-size:12px;color:#2563EB;cursor:pointer">Ver mensaje</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12px;background:#F8FAFC;border:1px solid #E1E6EC;padding:10px;margin:6px 0 0">${esc(x.body)}</pre></details></div>`).join('')
         : '<div class="cp-empty2" style="padding:10px;text-align:left">Todavía no se ha enviado ningún aviso a este cliente.</div>';
     } catch (e) { box.innerHTML = '<div class="cp-empty2" style="padding:10px">No se pudo cargar el registro.</div>'; }
   }
@@ -36685,7 +36685,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // Resumen escrito: lo que publiques aparece arriba del Resumen en el portal del cliente
   function _portalUpdatesCard(cid) {
     const list = window.__portalUpd || [];
-    const rows = list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:8px 0;display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:12px;color:#64748B">${x.published_at ? 'Publicado ' + new Date(x.published_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '<b>Borrador</b> (no visible)'}${x.titulo ? ' · <b style="color:#0F172A">' + esc(x.titulo) + '</b>' : ''}</div><div style="font-size:13px;white-space:pre-wrap;margin-top:2px">${esc(String(x.cuerpo).slice(0, 220))}${String(x.cuerpo).length > 220 ? '…' : ''}</div></div>
+    const rows = list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:8px 0;display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:12px;color:#64748B">${x.published_at ? 'Publicado ' + new Date(x.published_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '<b>Borrador</b> (no visible)'}${x.titulo ? ' · <b style="color:#0F172A">' + esc(x.titulo) + '</b>' : ''}</div><div style="font-size:14px;white-space:pre-wrap;margin-top:2px">${esc(String(x.cuerpo).slice(0, 220))}${String(x.cuerpo).length > 220 ? '…' : ''}</div></div>
       <div style="white-space:nowrap"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.puToggle(${x.id},${!x.published_at})">${x.published_at ? 'Retirar' : 'Publicar'}</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.puDel(${x.id})">Eliminar</button></div></div>`).join('');
     return `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Mensaje para el cliente <span style="font-weight:400;font-size:12px;color:#64748B">— aparece arriba del Resumen en su portal (semanal, mensual o cuando quieras)</span></div>
       <input class="lm-inp" id="pu-t" maxlength="160" placeholder="Título (opcional), ej. Semana del 15 al 20 de septiembre" style="width:100%;margin-bottom:6px">
@@ -36705,7 +36705,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _portalDrawChat(scroll) {
     const el = document.getElementById('portal-chat'); if (!el) return;
     const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-    el.innerHTML = _portalChat.length ? _portalChat.map(x => `<div style="max-width:78%;padding:7px 10px;font-size:13px;white-space:pre-wrap;word-break:break-word;${x.autor === 'equipo' ? 'align-self:flex-end;background:#0B1220;color:#fff' : 'align-self:flex-start;background:#fff;border:1px solid #E1E6EC'}">${esc(x.texto)}<div style="font-size:10.5px;opacity:.6;margin-top:2px">${esc(x.autor === 'equipo' ? (x.autor_nombre || 'Equipo') : (x.autor_nombre || 'Cliente'))} · ${new Date(x.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>`).join('') : '<div class="cp-empty2" style="padding:10px">Sin mensajes todavía.</div>';
+    el.innerHTML = _portalChat.length ? _portalChat.map(x => `<div style="max-width:78%;padding:7px 10px;font-size:14px;white-space:pre-wrap;word-break:break-word;${x.autor === 'equipo' ? 'align-self:flex-end;background:#0B1220;color:#fff' : 'align-self:flex-start;background:#fff;border:1px solid #E1E6EC'}">${esc(x.texto)}<div style="font-size:10px;opacity:.6;margin-top:2px">${esc(x.autor === 'equipo' ? (x.autor_nombre || 'Equipo') : (x.autor_nombre || 'Cliente'))} · ${new Date(x.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>`).join('') : '<div class="cp-empty2" style="padding:10px">Sin mensajes todavía.</div>';
     if (scroll || atEnd) el.scrollTop = el.scrollHeight;
   }
   async function _portalApi(path, method, body) {
@@ -37252,9 +37252,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       return `<div class="cn-row" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #E5E7EB;background:#fff;margin-bottom:8px">
         <input type="checkbox" ${done ? 'checked' : ''} title="${done ? 'Reabrir' : 'Marcar como hecha'}" style="margin-top:4px" onchange="LeadManagerModule.cnSet(${n.id},'${done ? 'tarea' : 'hecha'}')">
         <div style="flex:1;min-width:0">
-          <div id="cn-t-${n.id}" style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;${done ? 'text-decoration:line-through;color:#94A3B8' : ''}">${_cnText(n)}</div>${_cnComments(n)}
-          <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:#94A3B8">
-            <select class="form-input" style="width:auto;padding:2px 6px;font-size:11.5px;font-weight:700;color:${e[1]};background:${e[2]}" onchange="LeadManagerModule.cnSet(${n.id},this.value)">
+          <div id="cn-t-${n.id}" style="white-space:pre-wrap;word-break:break-word;font-size:14px;${done ? 'text-decoration:line-through;color:#94A3B8' : ''}">${_cnText(n)}</div>${_cnComments(n)}
+          <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:#94A3B8">
+            <select class="form-input" style="width:auto;padding:2px 6px;font-size:12px;font-weight:500;color:${e[1]};background:${e[2]}" onchange="LeadManagerModule.cnSet(${n.id},this.value)">
               ${Object.keys(_CN_EST).map(k => `<option value="${k}" ${k === n.estado ? 'selected' : ''}>${_CN_EST[k][0]}</option>`).join('')}</select>
             <span>${when}${n.autor ? ' · ' + esc(n.autor) : ''}</span>
             <a href="javascript:void(0)" onclick="LeadManagerModule.cnEdit(${n.id})">Editar</a>
@@ -37263,7 +37263,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     };
     box.innerHTML = `
       <div style="margin-bottom:14px">
-        <textarea id="cn-new" class="form-input" rows="6" placeholder="Escribe una nota del cliente… (Ctrl+Enter para guardar)" style="width:100%;min-height:140px;resize:vertical;font-size:14px;line-height:1.5;display:block" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,420)+'px'" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')LeadManagerModule.cnAdd()"></textarea>
+        <textarea id="cn-new" class="form-input" rows="6" placeholder="Escribe una nota del cliente… (Ctrl+Enter para guardar)" style="width:100%;min-height:140px;resize:vertical;font-size:14px;line-height:20px;display:block" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,420)+'px'" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter')LeadManagerModule.cnAdd()"></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
           <select id="cn-est" class="form-input" style="width:auto">${Object.keys(_CN_EST).filter(k => k !== 'hecha').map(k => `<option value="${k}">${_CN_EST[k][0]}</option>`).join('')}</select>
           <button class="btn btn--primary btn--sm" id="cn-add" onclick="LeadManagerModule.cnAdd()">＋ Agregar</button>
@@ -37291,7 +37291,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   async function cnSet(id, estado) { try { await _cnPatch(id, { estado }); _cnRender(); } catch (e) { showBanner('Error: ' + e.message, 'error'); _cnRender(); } }
   function cnEdit(id) {
     const n = _cnNotes.find(x => x.id === id), el = $('cn-t-' + id); if (!n || !el) return;
-    el.outerHTML = `<div id="cn-t-${id}"><textarea id="cn-e-${id}" class="form-input" rows="6" style="width:100%;min-height:120px;resize:vertical;font-size:14px;line-height:1.5">${esc(n.texto)}</textarea>
+    el.outerHTML = `<div id="cn-t-${id}"><textarea id="cn-e-${id}" class="form-input" rows="6" style="width:100%;min-height:120px;resize:vertical;font-size:14px;line-height:20px">${esc(n.texto)}</textarea>
       <div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cnEditSave(${id})">Guardar</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cnFilter(LeadManagerModule.cnCurFilter())">Cancelar</button></div></div>`;
   }
   async function cnEditSave(id) {
@@ -37334,7 +37334,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _cnComments(n) {
     const cs = _cnMarks(n).filter(m => m.c);
     if (!cs.length) return '';
-    return `<div style="margin-top:8px;border-left:3px solid #C4B5FD;padding-left:10px">${cs.map(m => `<div style="font-size:12.5px;margin-bottom:5px;cursor:pointer" onclick="LeadManagerModule.cnMarkClick(event,${n.id},'${m.id}')"><span style="${m.color ? `background:${_CN_COL[m.color][0]};` : ''}color:#64748B">«${esc(m.q.length > 60 ? m.q.slice(0, 60) + '…' : m.q)}»</span> <span style="color:#7C3AED">💬</span> ${esc(m.c)}</div>`).join('')}</div>`;
+    return `<div style="margin-top:8px;border-left:3px solid #C4B5FD;padding-left:10px">${cs.map(m => `<div style="font-size:12px;margin-bottom:5px;cursor:pointer" onclick="LeadManagerModule.cnMarkClick(event,${n.id},'${m.id}')"><span style="${m.color ? `background:${_CN_COL[m.color][0]};` : ''}color:#64748B">«${esc(m.q.length > 60 ? m.q.slice(0, 60) + '…' : m.q)}»</span> <span style="color:#7C3AED">💬</span> ${esc(m.c)}</div>`).join('')}</div>`;
   }
   function _cnOff(el, node, off) { const r = document.createRange(); r.selectNodeContents(el); r.setEnd(node, off); return r.toString().length; }
   function _cnBindSel() {
@@ -37386,7 +37386,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     document.getElementById('cn-pop')?.remove();
     const p = document.createElement('div'); p.id = 'cn-pop';
     p.style.cssText = `position:fixed;z-index:10000;width:300px;background:#fff;border:1px solid #C4B5FD;box-shadow:0 10px 30px rgba(15,23,42,.22);padding:10px;left:${Math.max(8, Math.min(rect.left, window.innerWidth - 316))}px;top:${Math.min(rect.bottom + 8, window.innerHeight - 200)}px`;
-    p.innerHTML = `<div style="font-size:11.5px;color:#64748B;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</div>
+    p.innerHTML = `<div style="font-size:12px;color:#64748B;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</div>
       <textarea id="cn-pop-t" class="form-input" rows="4" style="width:100%;resize:vertical" placeholder="Escribe tu comentario…">${esc(val)}</textarea>
       <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">${onDel ? '<button class="btn btn--ghost btn--sm" style="margin-right:auto;color:#DC2626" id="cn-pop-d">Eliminar</button>' : ''}<button class="btn btn--ghost btn--sm" id="cn-pop-x">Cancelar</button><button class="btn btn--primary btn--sm" id="cn-pop-s">Guardar</button></div>`;
     document.body.appendChild(p);
@@ -38206,12 +38206,12 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const sample = i => data.slice(0, 3).map(r => r[i]).filter(Boolean).map(esc).join(' · ') || '<span style="color:#CBD5E1">—</span>';
     const used = new Set(d.codes.filter(Boolean));
     const falta = !(used.has('nombre') || used.has('d1') || used.has('dominio_web') || used.has('website') || used.has('linkedin'));
-    const prev = _exRows().slice(0, 3).map(r => `<div style="font-size:.8rem"><b>${esc(r.nombre || (r.dominios || [])[0] || '—')}</b> · ${(r.dominios || []).length} dominio(s) · ${(r.contactos || []).length} contacto(s)${r.tipo ? ' · ' + esc(r.tipo) : ''}</div>`).join('');
+    const prev = _exRows().slice(0, 3).map(r => `<div style="font-size:12px"><b>${esc(r.nombre || (r.dominios || [])[0] || '—')}</b> · ${(r.dominios || []).length} dominio(s) · ${(r.contactos || []).length} contacto(s)${r.tipo ? ' · ' + esc(r.tipo) : ''}</div>`).join('');
     return `<div class="cp-card" style="padding:16px;margin-bottom:16px;display:grid;gap:10px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>Asigna las columnas</b><span style="font-size:.8rem;color:#64748B">Revisa qué campo es cada columna de tu archivo antes de importar (${data.length} fila(s)).</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>Asigna las columnas</b><span style="font-size:12px;color:#64748B">Revisa qué campo es cada columna de tu archivo antes de importar (${data.length} fila(s)).</span>
         <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="LeadManagerModule.exClearFile()">Cancelar</button></div>
-      <div class="lm-dt-wrap" style="max-height:340px;overflow:auto"><table class="clients-table"><thead><tr><th>Columna del archivo</th><th>Ejemplos</th><th style="min-width:260px">Es el campo…</th></tr></thead><tbody>${d.rows[d.hi].slice(0, cols).map((h, i) => `<tr><td><b>${esc(h || '(sin título)')}</b></td><td style="font-size:.8rem;color:#475569">${sample(i)}</td><td><select class="form-input" style="width:100%" onchange="LeadManagerModule.exMap(${i},this.value)">${_exFieldOptions(d.codes[i] || '', maxC)}</select></td></tr>`).join('')}</tbody></table></div>
-      ${falta ? '<div style="color:#B91C1C;font-size:.82rem">Asigna al menos una columna de Empresa, Dominio, Website o LinkedIn.</div>' : `<div style="display:grid;gap:2px"><span style="font-size:.75rem;color:#64748B">Vista previa de las primeras empresas:</span>${prev}</div>`}
+      <div class="lm-dt-wrap" style="max-height:340px;overflow:auto"><table class="clients-table"><thead><tr><th>Columna del archivo</th><th>Ejemplos</th><th style="min-width:260px">Es el campo…</th></tr></thead><tbody>${d.rows[d.hi].slice(0, cols).map((h, i) => `<tr><td><b>${esc(h || '(sin título)')}</b></td><td style="font-size:12px;color:#475569">${sample(i)}</td><td><select class="form-input" style="width:100%" onchange="LeadManagerModule.exMap(${i},this.value)">${_exFieldOptions(d.codes[i] || '', maxC)}</select></td></tr>`).join('')}</tbody></table></div>
+      ${falta ? '<div style="color:#B91C1C;font-size:14px">Asigna al menos una columna de Empresa, Dominio, Website o LinkedIn.</div>' : `<div style="display:grid;gap:2px"><span style="font-size:12px;color:#64748B">Vista previa de las primeras empresas:</span>${prev}</div>`}
     </div>`;
   }
   function exMap(i, code) {
@@ -38361,7 +38361,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ${d.rows ? '' : `<textarea class="form-input" rows="5" style="font-family:inherit" placeholder="Sube tu Excel o CSV con el botón de abajo, o pega aquí la tabla (con la fila de títulos). Después podrás asignar cada columna a su campo antes de importar." oninput="LeadManagerModule.exSet('text',this.value)" onchange="LeadManagerModule.exTextCommit()">${esc(d.text)}</textarea>`}
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <label class="btn btn--ghost btn--sm" style="cursor:pointer">Subir Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" style="display:none" onchange="LeadManagerModule.exFile(this)"></label>
-          <span id="ex-count" style="font-size:.8rem;color:#64748B">${d.rows ? _exCountTxt() : 'Aún no hay archivo'}${d.fileName ? ' · ' + esc(d.fileName) : ''}</span>
+          <span id="ex-count" style="font-size:12px;color:#64748B">${d.rows ? _exCountTxt() : 'Aún no hay archivo'}${d.fileName ? ' · ' + esc(d.fileName) : ''}</span>
           <button class="btn btn--primary btn--sm" style="margin-left:auto"${d.rows && _exRows().length ? '' : ' disabled'} onclick="LeadManagerModule.exSave()">${d.rows && _exRows().length ? 'Importar ' + _exRows().length + ' empresa(s)' : 'Importar'}</button>
         </div>
       </div>
@@ -39636,9 +39636,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         const inSeq = (x.sequences || []).length;
         const li = liUrl(x.linkedin);
         return `<div class="ref-cand" style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 11px;border:1px solid var(--border,#EAE7E2);border-radius:10px;margin-bottom:7px">
-          <div style="min-width:0"><div style="font-weight:600;font-size:.9rem">${esc(nom)} ${x.contact_priority ? `<span style="font-weight:500;font-size:.72rem;color:#6C6862;background:#F1EFEB;border-radius:999px;padding:1px 7px">${esc(x.contact_priority)}</span>` : ''}</div>
-            <div style="font-size:.8rem;color:var(--text-muted,#7a766f)">${esc(x.cargo || 'Sin cargo')} · ${inSeq ? 'ya está en una secuencia' : 'sin secuencia todavía'}</div>
-            <div style="font-size:.8rem;margin-top:2px">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#0A66C2;font-weight:600">Ver LinkedIn ↗</a>` : '<span style="color:#B45309">Sin LinkedIn guardado</span>'}</div></div>
+          <div style="min-width:0"><div style="font-weight:500;font-size:14px">${esc(nom)} ${x.contact_priority ? `<span style="font-weight:500;font-size:12px;color:#6C6862;background:#F1EFEB;border-radius:999px;padding:1px 7px">${esc(x.contact_priority)}</span>` : ''}</div>
+            <div style="font-size:12px;color:var(--text-muted,#7a766f)">${esc(x.cargo || 'Sin cargo')} · ${inSeq ? 'ya está en una secuencia' : 'sin secuencia todavía'}</div>
+            <div style="font-size:12px;margin-top:2px">${li ? `<a href="${esc(li)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#0A66C2;font-weight:500">Ver LinkedIn ↗</a>` : '<span style="color:#B45309">Sin LinkedIn guardado</span>'}</div></div>
           <button type="button" class="btn btn--primary btn--sm" style="flex:none" onclick="LeadManagerModule.ldReferExisting(${cid},'${disp}',${x.id})">Seguir con este</button>
         </div>`;
       };
@@ -40107,10 +40107,10 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
           <label class="dle-f"><span class="dle-l">Valor estimado (opcional)</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
           <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
-          <label class="dle-f"><span class="dle-l">Fecha de cierre estimada <span style="font-weight:500;color:#B45309">· interna</span></span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"><span class="dle-hint" style="color:#94A3B8;font-size:.72rem;margin-top:3px;display:block">Cuándo esperas cerrar el negocio. No sale en el informe ni en el portal del cliente.</span></label>
+          <label class="dle-f"><span class="dle-l">Fecha de cierre estimada <span style="font-weight:500;color:#B45309">· interna</span></span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"><span class="dle-hint" style="color:#94A3B8;font-size:12px;margin-top:3px;display:block">Cuándo esperas cerrar el negocio. No sale en el informe ni en el portal del cliente.</span></label>
           <div class="dle-f dle-f--full" style="border-top:1px solid #F1EFEB;padding-top:10px;margin-top:2px"><span class="dle-l">Reunión pactada — solo si ya hay fecha acordada con el prospecto. Esta SÍ aparece en el informe y programa los recordatorios (día anterior y 30 min antes)</span>
             <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><input class="dle-i" id="dle-mt-fecha" type="date" style="flex:1;min-width:140px" title="Fecha de la reunión" value="${c.reunion_fecha ? String(c.reunion_fecha).slice(0, 10) : ''}"><input class="dle-i" id="dle-mt-hora" type="time" style="flex:1;min-width:110px" title="Hora de la reunión"><select class="dle-i" id="dle-mt-tz" style="flex:1;min-width:150px">${_dlTzOpts(c, '')}</select></div>
-            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Fecha y hora en la zona horaria del prospecto. Déjala vacía si todavía no hay reunión: así no cuenta como reunión en el informe. Al guardar con hora podrás ver y editar los mensajes.</div></div>
+            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:12px;margin-top:4px">Fecha y hora en la zona horaria del prospecto. Déjala vacía si todavía no hay reunión: así no cuenta como reunión en el informe. Al guardar con hora podrás ver y editar los mensajes.</div></div>
         </div>
         <div class="dle-notas-col">
           <span class="dle-l">Notas y comentarios</span>
@@ -40144,17 +40144,17 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     // (no como título arriba) — pedido explícito 2026-09-02.
     const fmt = f => { try { return new Date(f).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
     return `<div class="dl-notas-list">${notas.length
-      ? notas.map(n => `<div class="dl-nota" style="padding:6px 0;border-bottom:1px solid var(--border,#EAE7E2);font-size:.82rem">
-          <div style="display:flex;justify-content:space-between;gap:6px"><div style="white-space:pre-wrap">${esc(n.nota || '')}</div><button class="fin-pi-x" style="flex-shrink:0;width:16px;height:16px;font-size:.7rem" title="Eliminar" onclick="LeadManagerModule.dlNotaDel(${cid},${n.id})">✕</button></div>
-          <div style="color:var(--text-muted,#918C85);font-size:.7rem;margin-top:3px">${[n.autor, fmt(n.fecha)].filter(Boolean).join(' · ')}</div>
+      ? notas.map(n => `<div class="dl-nota" style="padding:6px 0;border-bottom:1px solid var(--border,#EAE7E2);font-size:14px">
+          <div style="display:flex;justify-content:space-between;gap:6px"><div style="white-space:pre-wrap">${esc(n.nota || '')}</div><button class="fin-pi-x" style="flex-shrink:0;width:16px;height:16px;font-size:12px" title="Eliminar" onclick="LeadManagerModule.dlNotaDel(${cid},${n.id})">✕</button></div>
+          <div style="color:var(--text-muted,#918C85);font-size:12px;margin-top:3px">${[n.autor, fmt(n.fecha)].filter(Boolean).join(' · ')}</div>
           <div style="margin-top:5px"><button class="dl-share${n.portal_visible ? ' on' : ''}" onclick="LeadManagerModule.dlNotaShare(${cid},${n.id},${!n.portal_visible})" title="${n.portal_visible ? 'Clic para dejar de compartirla' : 'Clic para mostrarla al cliente en su portal'}">${n.portal_visible ? '👁 Visible para el cliente en el portal' : 'Compartir con el cliente'}</button></div>
         </div>`).join('')
-      : `<div class="dle-hint" style="color:var(--text-muted,#918C85);font-size:.8rem;padding:4px 0">Sin notas todavía.</div>`}</div>
+      : `<div class="dle-hint" style="color:var(--text-muted,#918C85);font-size:12px;padding:4px 0">Sin notas todavía.</div>`}</div>
       <div style="display:flex;gap:6px">
         <input class="dle-i" id="dl-nota-nueva" placeholder="Escribe una nota o comentario…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.dlNotaAdd(${cid})}">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlNotaAdd(${cid})">Agregar</button>
       </div>
-      <label style="display:flex;gap:6px;align-items:center;font-size:.76rem;margin-top:6px;color:#475569;cursor:pointer"><input type="checkbox" id="dl-nota-share"> 👁 Compartir esta nota con el cliente en su portal</label>`;
+      <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;color:#475569;cursor:pointer"><input type="checkbox" id="dl-nota-share"> 👁 Compartir esta nota con el cliente en su portal</label>`;
   }
   async function dlNotaAdd(cid) {
     const inp = $('dl-nota-nueva');
@@ -40318,7 +40318,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const est = n => m ? '<span class="mt-est mt-est--' + m['rem' + n + '_estado'] + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
     const mm = m || {};
     const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Primer aviso' : 'Segundo aviso') + '</span>' + est(n) + '</div>' +
-      '<input class="mt-i" id="mt-subj' + n + '" placeholder="Asunto" value="' + esc(mm['subj' + n] || mm['default_subj' + n] || '') + '" oninput="this.dataset.d=1" style="margin-bottom:6px;font-weight:600">' +
+      '<input class="mt-i" id="mt-subj' + n + '" placeholder="Asunto" value="' + esc(mm['subj' + n] || mm['default_subj' + n] || '') + '" oninput="this.dataset.d=1" style="margin-bottom:6px;font-weight:500">' +
       '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(mm['msg' + n] || mm['default' + n] || '') + '</textarea>' +
       '<div class="mt-msg__ft">' + (() => {
         const est = m && m['rem' + n + '_estado'], prog = m && (m['rem' + n + '_prog'] || m.modo === 'auto');
@@ -41322,9 +41322,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? _delVarBtn(i, 'Eliminar esta variante') : ''}</div>`;
       const _prevS = $('step-reply')?.checked ? _stepPrevSubject() : null;
-      const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">${isInmail ? 'Título del InMail' : 'Asunto'} <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
+      const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">${isInmail ? 'Título del InMail' : 'Asunto'} <span style="color:#918C85;font-weight:400;font-size:12px">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
-      const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:600;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${_stepAbBadge(i)}<span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${(v.targets || [])[0] ? `<button type="button" class="flt-add" style="margin:0 6px 0 0;padding:2px 8px;font-size:11.5px" title="Añade otro mensaje en este mismo idioma para probar A/B" onclick="LeadManagerModule.stepAddAB(${i})">＋ Variante A/B</button>` : ''}${d.variants.length > 1 ? _delVarBtn(i, _stepAbPos(i).n >= 2 ? 'Eliminar esta variante A/B' : (i === 0 ? 'Eliminar el mensaje base (el siguiente pasa a ser el base)' : 'Quitar este idioma')) : ''}</div>` : '';
+      const langHd = (!single && d.mode === 'idioma') ? `<div class="step-var-hd"><span style="font-size:12px;font-weight:500;margin-right:8px">${i === 0 ? 'Mensaje base · ' : ''}Idioma</span><select class="form-input" style="width:auto;min-width:150px" onchange="LeadManagerModule.stepVarLang(${i},this.value)"><option value="">— Elegir —</option>${_IDIOMAS_UI.concat((v.targets || []).filter(t => t && !_IDIOMAS_UI.includes(t))).map(l => `<option value="${esc(l)}"${(v.targets || [])[0] === l ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${_stepAbBadge(i)}<span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${(v.targets || [])[0] ? `<button type="button" class="flt-add" style="margin:0 6px 0 0;padding:2px 8px;font-size:12px" title="Añade otro mensaje en este mismo idioma para probar A/B" onclick="LeadManagerModule.stepAddAB(${i})">＋ Variante A/B</button>` : ''}${d.variants.length > 1 ? _delVarBtn(i, _stepAbPos(i).n >= 2 ? 'Eliminar esta variante A/B' : (i === 0 ? 'Eliminar el mensaje base (el siguiente pasa a ser el base)' : 'Quitar este idioma')) : ''}</div>` : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       // Aquí va el CONTEXTO (por qué comentas), no el tema: el largo, el tono y el
       // "adáptate a lo que sea el post" ya los impone el sistema en el backend.
@@ -41371,7 +41371,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _stepAbBadge(i) {
     if (!_stepDraft || !_stepDraft.variants[i]) return '';
     const p = _stepAbPos(i); if (p.n < 2) return '';
-    return `<span style="margin-left:8px;font-size:11px;font-weight:700;color:#7C3AED;background:#EDE9FE;padding:2px 7px">Variante ${String.fromCharCode(65 + p.k)} de ${p.n} · A/B</span>`;
+    return `<span style="margin-left:8px;font-size:12px;font-weight:500;color:#7C3AED;background:#EDE9FE;padding:2px 7px">Variante ${String.fromCharCode(65 + p.k)} de ${p.n} · A/B</span>`;
   }
   function _stepAbNames() {
     _stepDraft.variants.forEach((v, i) => { const l = (v.targets || [])[0]; if (!l) return; const p = _stepAbPos(i); v.nombre = p.k ? `${l} ${String.fromCharCode(65 + p.k)}` : l; });
@@ -41722,9 +41722,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const pages = Math.max(1, Math.ceil(total / ps));
     const from = total ? page * ps + 1 : 0, to = Math.min(total, (page + 1) * ps);
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="LeadManagerModule.${fn}(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
-    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:#5b6b7b">
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:#5b6b7b">
       <span>Mostrando <b style="color:#0f2b3d">${from}–${to}</b> de <b style="color:#0f2b3d">${total}</b></span>
-      <select onchange="LeadManagerModule.lmSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid #EAE7E2;border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="LeadManagerModule.lmSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid #EAE7E2;border-radius:8px;background:#fff;font-size:14px;color:inherit;cursor:pointer">${[50, 100].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, page <= 0, '‹')}
       <span>${page + 1} / ${pages}</span>
       ${nav(1, page >= pages - 1, '›')}
@@ -42268,7 +42268,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function resetCtCols() { _ctCols = [..._CT_COLS_DEFAULT]; _ctColsSave(); _renderContacts(); const pop = document.getElementById('lm-cols-pop'); if (pop) pop.innerHTML = _colsPopHtml(); }
   function _colsPopHtml() {
     const on = _ctColsGet();
-    return `<div class="lm-pop__hd">Columnas visibles <button class="lm-link" style="margin-left:auto;font-size:11px" onclick="LeadManagerModule.resetCtCols()">Restablecer</button></div>
+    return `<div class="lm-pop__hd">Columnas visibles <button class="lm-link" style="margin-left:auto;font-size:12px" onclick="LeadManagerModule.resetCtCols()">Restablecer</button></div>
       ${_CT_COLDEFS.map(d => `
       <label class="lm-pop__it${d.fixed ? ' fx' : ''}">
         <span class="lm-sw${on.includes(d.k) ? ' on' : ''}"${d.fixed ? '' : ` onclick="LeadManagerModule.toggleCtCol('${d.k}')"`}><span class="lm-sw__dot"></span></span>
@@ -42915,7 +42915,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _cpMergeFrom = id; document.getElementById('sed-pop')?.remove();
     const c = _contacts.find(x => x.id === id); if (!c) return;
     const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
-    _llModal('Combinar con otro contacto', `<p style="margin:0 0 10px;color:#55657D;font-size:13.5px"><b>${esc(nm)}</b> se fusionará dentro del contacto que elijas: su historial, secuencias, mensajes y tareas pasan al elegido, y sus datos solo rellenan lo que ahí esté vacío. <b>No se puede deshacer.</b></p>
+    _llModal('Combinar con otro contacto', `<p style="margin:0 0 10px;color:#55657D;font-size:14px"><b>${esc(nm)}</b> se fusionará dentro del contacto que elijas: su historial, secuencias, mensajes y tareas pasan al elegido, y sus datos solo rellenan lo que ahí esté vacío. <b>No se puede deshacer.</b></p>
       <div class="cpm-search">${_llI('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', 15)}<input id="cpm-mq" placeholder="Buscar por nombre, email o empresa" oninput="LeadManagerModule.cpMergeSearch(this.value)" autofocus></div>
       <div id="cpm-mres" class="cpm-mres"><div class="cp2-empty">Escribe al menos 2 letras para buscar.</div></div>`, '', 520);
     setTimeout(() => document.getElementById('cpm-mq')?.focus(), 30);
@@ -45181,7 +45181,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const tierBadge = d.tier === 'alto'
       ? `<span class="lm-vb" style="background:#EAE7E2;color:#5B21B6" title="${esc(d.model)}">Fable · alto valor</span>`
       : `<span class="lm-vb" style="background:#F1EFEB;color:#1E5FA8" title="${esc(d.model)}">Haiku · volumen</span>`;
-    if (d.error) return `<div class="lm-ai-card"><div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div><div style="color:#C4342B;font-size:12.5px">${esc(d.error)}</div></div>`;
+    if (d.error) return `<div class="lm-ai-card"><div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div><div style="color:#C4342B;font-size:12px">${esc(d.error)}</div></div>`;
     return `<div class="lm-ai-card" data-did="${d.id}">
       <div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
         <span class="lm-ai-cost" title="Costo estimado de esta generación">$${Number(d.cost_usd).toFixed(4)}</span></div>
@@ -45381,8 +45381,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.style.minWidth = '230px';
-    menu.innerHTML = `<div class="cp-mark-menu__list" style="max-height:340px;overflow:auto"><div style="padding:6px 10px;font-size:.72rem;color:#64748B">Agregar columnas</div>`
-      + (DG_EXTRA[_dgEntity] || []).map(([k, l]) => `<label style="display:flex;gap:8px;align-items:center;padding:6px 10px;font-size:.85rem;cursor:pointer"><input type="checkbox" ${on.has(k) ? 'checked' : ''} onchange="LeadManagerModule.dgToggleExtraCol('${k}',this.checked)"> ${esc(l)}</label>`).join('') + `</div>`;
+    menu.innerHTML = `<div class="cp-mark-menu__list" style="max-height:340px;overflow:auto"><div style="padding:6px 10px;font-size:12px;color:#64748B">Agregar columnas</div>`
+      + (DG_EXTRA[_dgEntity] || []).map(([k, l]) => `<label style="display:flex;gap:8px;align-items:center;padding:6px 10px;font-size:14px;cursor:pointer"><input type="checkbox" ${on.has(k) ? 'checked' : ''} onchange="LeadManagerModule.dgToggleExtraCol('${k}',this.checked)"> ${esc(l)}</label>`).join('') + `</div>`;
     document.body.appendChild(menu);
     const kb = document.querySelector('.dg-kebab');
     const r = (kb || document.body).getBoundingClientRect();
@@ -46424,9 +46424,9 @@ const WorkloadModule = (() => {
         ${total>0?`<div class="wl-bar">${bar}</div>
         <div class="wl-legend">${ESTADOS.filter(s=>counts[s]>0).map(s=>
           `<span class="wl-legend-dot" style="background:${EST_BG[s]}"></span><span class="wl-legend-label">${EST_LBL[s]} (${counts[s]})</span>`
-        ).join('')}</div>`:'<div style="color:var(--muted);font-size:.8rem;padding:4px 0 8px">Sin tareas asignadas</div>'}
+        ).join('')}</div>`:'<div style="color:var(--muted);font-size:12px;padding:4px 0 8px">Sin tareas asignadas</div>'}
         ${preview}
-        ${active>3?`<div style="color:var(--muted);font-size:.75rem;margin-top:6px">+${active-3} tarea${active-3>1?'s':''} más</div>`:''}
+        ${active>3?`<div style="color:var(--muted);font-size:12px;margin-top:6px">+${active-3} tarea${active-3>1?'s':''} más</div>`:''}
       </div>`;
     }).join('');
 
@@ -49712,7 +49712,7 @@ const PlantillasModule = (() => {
     const fl = v.faltan.length ? `<div class="pl-warn" style="background:#FEE2E2;color:#991B1B;border-color:#FCA5A5"><b>Faltan campos obligatorios</b> (no se puede exportar): ${E(v.faltan.map(f => f.l).join(' · '))}</div>` : '';
     const rows = [['Cierre usado', _nf(c.cierre_usado, 0) + ' %' + (c.cierre_real ? '' : ' (supuesto)')], ['Ventas al mes', _nf(c.ventas_mes, 1)], ['Ingreso al mes', sym + _nf(c.ingreso_mes, 0)], ['Veces el mensual', _nf(c.veces_mensual, 1)], ['Veces el piloto', _nf(c.veces_piloto, 1)],
       ['Ventas para cubrir el piloto', _nf(c.ventas_para_cubrir_piloto, 1)], ['Mes de la 1.ª venta', c.mes_primera_venta == null ? '—' : c.mes_primera_venta], ['Ticket mínimo (3×)', sym + _nf(c.ticket_minimo_3x, 0)]];
-    box.innerHTML = fl + av + `<details class="pl-box" style="margin:8px 0"><summary class="pl-box__t" style="cursor:pointer">Cálculos del caso (solo para ti)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:.82rem;margin-top:8px">${rows.map(r => `<span style="color:#6C6862">${r[0]}</span><b style="text-align:right">${r[1]}</b>`).join('')}</div></details>`;
+    box.innerHTML = fl + av + `<details class="pl-box" style="margin:8px 0"><summary class="pl-box__t" style="cursor:pointer">Cálculos del caso (solo para ti)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:14px;margin-top:8px">${rows.map(r => `<span style="color:#6C6862">${r[0]}</span><b style="text-align:right">${r[1]}</b>`).join('')}</div></details>`;
   }
   // Antes de guardar/exportar: obligatorios completos y confirmación en los casos débiles o con [corchetes] sin rellenar
   function _gate(borrador) {
@@ -50140,7 +50140,7 @@ const QuickWaModule = (() => {
             <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
           </div>
         </div>
-        <div id="qwa-auto-warn" class="hidden" style="background:#FEF3C7;color:#92400E;font-size:.78rem;padding:7px 12px;display:none;align-items:center;gap:6px;border-bottom:1px solid #FDE68A">⚠ Chat adivinado por coincidencia de nombre, no por el número — puede ser otra persona con el mismo nombre. <button class="lm-bulk-ghost" style="margin-left:auto;padding:2px 8px;flex-shrink:0" onclick="QuickWaModule.vincularAbrir()">¿No es? Vincular otra</button></div>
+        <div id="qwa-auto-warn" class="hidden" style="background:#FEF3C7;color:#92400E;font-size:12px;padding:7px 12px;display:none;align-items:center;gap:6px;border-bottom:1px solid #FDE68A">⚠ Chat adivinado por coincidencia de nombre, no por el número — puede ser otra persona con el mismo nombre. <button class="lm-bulk-ghost" style="margin-left:auto;padding:2px 8px;flex-shrink:0" onclick="QuickWaModule.vincularAbrir()">¿No es? Vincular otra</button></div>
         <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
         <div id="qwa-quote" class="rchat-quote hidden"></div>
         <div id="qwa-img-preview" class="wa-img-prev hidden"></div>
@@ -50167,7 +50167,7 @@ const QuickWaModule = (() => {
               <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('man9')">Mañana 9:00</button>
               <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('lun9')">Lunes 9:00</button>
               <div class="wa-sched__custom">
-                <input type="datetime-local" class="dle-i" id="qwa-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                <input type="datetime-local" class="dle-i" id="qwa-sched-dt" style="font-size:12px;padding:5px 7px">
                 <button class="btn btn--primary btn--sm" onclick="QuickWaModule.programarPick('custom')">OK</button>
               </div>
             </div>
@@ -50245,7 +50245,7 @@ const QuickWaModule = (() => {
     m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box lm-pick-box">
       <div class="fin-pi-box__hd"><h3>Vincular la conversación real</h3><button class="fin-pi-x" onclick="document.getElementById('qwa-link-modal').remove()">✕</button></div>
-      <p style="padding:0 20px;margin:0 0 8px;font-size:.8rem;color:var(--muted,#918C85)">WhatsApp a veces no manda el número real de un contacto — si su conversación aparece vacía pero sabes que ya escribió antes, búscala aquí por nombre o mensaje y vincúlala.</p>
+      <p style="padding:0 20px;margin:0 0 8px;font-size:12px;color:var(--muted,#918C85)">WhatsApp a veces no manda el número real de un contacto — si su conversación aparece vacía pero sabes que ya escribió antes, búscala aquí por nombre o mensaje y vincúlala.</p>
       <div class="fin-pi-form" style="padding-bottom:0">
         <input class="form-input fin-pi-full" id="qwa-link-q" placeholder="Busca por nombre o texto del último mensaje…" autocomplete="off" oninput="QuickWaModule._vincularFiltrar(this.value)">
       </div>
@@ -51427,7 +51427,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     const pop = document.createElement('div');
     pop.className = 'wa-sw-pop';
     pop.style.top = '64px';
-    pop.innerHTML = `<div style="padding:10px 12px 0;font-size:.8rem;font-weight:700;color:var(--text,#1F1D1B)">Métricas del equipo</div>
+    pop.innerHTML = `<div style="padding:10px 12px 0;font-size:12px;font-weight:500;color:var(--text,#1F1D1B)">Métricas del equipo</div>
       <div class="wa-metrics" id="wa-metrics-body"><div class="chat-ch-empty">Calculando…</div></div>`;
     document.body.appendChild(pop);
     setTimeout(() => document.addEventListener('click', function onDoc(e) {
@@ -51967,7 +51967,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     return `
       <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Fusionar con otro chat</button>
       <div class="chat-ctx-sep"></div>
-      <p style="padding:0 12px;margin:6px 0;font-size:.72rem;color:var(--muted,#918C85)">Elige el otro chat de esta misma persona. Se quedan los mensajes de los DOS, unidos en uno solo — no se puede deshacer.</p>
+      <p style="padding:0 12px;margin:6px 0;font-size:12px;color:var(--muted,#918C85)">Elige el otro chat de esta misma persona. Se quedan los mensajes de los DOS, unidos en uno solo — no se puede deshacer.</p>
       <input type="text" id="wa-fusion-q" class="cdd__search" placeholder="Buscar por nombre…" autocomplete="off" oninput="WaChatModule._fusionarFiltrar(this.value)">
       <div id="wa-fusion-list">${_fusionarListaHtml('')}</div>`;
   }
@@ -53048,7 +53048,7 @@ const ObcWaModule = (() => {
                   <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('man9')">Mañana 9:00</button>
                   <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('lun9')">Lunes 9:00</button>
                   <div class="wa-sched__custom">
-                    <input type="datetime-local" class="dle-i" id="ocwa-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                    <input type="datetime-local" class="dle-i" id="ocwa-sched-dt" style="font-size:12px;padding:5px 7px">
                     <button class="btn btn--primary btn--sm" onclick="ObcWaModule.programarPick('custom')">OK</button>
                   </div>
                 </div>
@@ -53796,10 +53796,10 @@ const ChatModule = (() => {
   function _showMeetingReminder(m) {
     const hora = m.hora_inicio ? String(m.hora_inicio).slice(0, 5) : '';
     const el = document.createElement('div');
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e3a5f;color:#fff;font-size:.84rem;font-weight:600;padding:11px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);animation:slideDown .2s ease';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e3a5f;color:#fff;font-size:14px;font-weight:500;padding:11px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);animation:slideDown .2s ease';
     el.innerHTML = `<span style="flex:1">📅 “${esc(m.titulo || 'Reunión')}”${hora ? ` empieza a las ${hora}` : ' está por empezar'}</span>`
-      + (m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="background:rgba(255,255,255,.18);border-radius:5px;color:#fff;padding:4px 12px;text-decoration:none;font-size:.78rem">Unirse</a>` : '')
-      + `<button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.18);border:none;border-radius:5px;color:#fff;padding:3px 10px;cursor:pointer;font-size:.78rem">✕</button>`;
+      + (m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="background:rgba(255,255,255,.18);border-radius:5px;color:#fff;padding:4px 12px;text-decoration:none;font-size:12px">Unirse</a>` : '')
+      + `<button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.18);border:none;border-radius:5px;color:#fff;padding:3px 10px;cursor:pointer;font-size:12px">✕</button>`;
     document.body.prepend(el);
     setTimeout(() => el.remove(), 20000);
   }
@@ -54014,19 +54014,19 @@ const ChatModule = (() => {
   async function _loadMsgs(channel, containerId) {
     const el = $(containerId);
     if (!el) return;
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:40px 0">Cargando…</div>`;
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:14px;padding:40px 0">Cargando…</div>`;
     try {
       const res  = await apiFetch(`${API}/chat/messages/${encodeURIComponent(channel)}`);
       const msgs = await res.json();
       if (!Array.isArray(msgs) || !msgs.length) {
-        el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:40px 0">Sin mensajes aún. ¡Sé el primero!</div>`;
+        el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:14px;padding:40px 0">Sin mensajes aún. ¡Sé el primero!</div>`;
         return;
       }
       el.innerHTML = msgs.map((m, i) => _msgHtml(m, msgs[i - 1], false)).join('');
       _lastMsg[containerId] = msgs[msgs.length - 1];
       el.scrollTop = el.scrollHeight;
     } catch (e) {
-      el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:40px 0">Error al cargar mensajes.</div>`;
+      el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:14px;padding:40px 0">Error al cargar mensajes.</div>`;
     }
   }
 
@@ -54852,7 +54852,7 @@ const RNotifPanel = (() => {
   async function load() {
     const el = $('rnotif-content');
     if (!el) return;
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:44px 0">Cargando alertas…</div>`;
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:14px;padding:44px 0">Cargando alertas…</div>`;
     try {
       const res  = await apiFetch(`${API}/mgmt/integrity`);
       const data = await res.json();
@@ -54909,7 +54909,7 @@ const RNotifPanel = (() => {
       _render(data);
       _updateBadge(_eventosDe(data));
     } catch (e) {
-      el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:44px 0">Error al cargar.</div>`;
+      el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:14px;padding:44px 0">Error al cargar.</div>`;
     }
   }
 
@@ -55200,7 +55200,7 @@ const RNotifPanel = (() => {
     if (!mains.length) { TasksModule.openDrawer(null, projectId); return; }
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu rnf-subpick';
-    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#B4AFA8">Subtarea dentro de…</div>`
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:10px;font-weight:500;letter-spacing:normal;text-transform:none;color:#B4AFA8">Subtarea dentro de…</div>`
       + mains.slice(0, 14).map(t => `<button class="d3-status-opt" onclick="TasksModule.openDrawer(null,${projectId},${t.id});document.querySelectorAll('.rnf-subpick').forEach(m=>m.remove())">${esc(t.titulo)}</button>`).join('');
     const r = (e && e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : { left: 220, bottom: 220 };
     menu.style.cssText = `position:fixed;z-index:10060;top:${Math.min(r.bottom + 4, window.innerHeight - 280)}px;left:${Math.max(8, r.left - 140)}px;max-height:260px;overflow:auto;min-width:220px`;
@@ -57529,7 +57529,7 @@ function initApp() {
         list.appendChild(item);
       });
       if (!list.children.length) {
-        list.innerHTML = '<div style="padding:8px 12px;font-size:.75rem;color:var(--muted)">Sin resultados</div>';
+        list.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Sin resultados</div>';
       }
     }
 
@@ -57633,7 +57633,7 @@ function initApp() {
       const top3 = sampleVals.slice(0, 2);
       sampleCell.innerHTML = top3.length
         ? top3.map(v => `<span class="col-map-sample-chip">${esc(v.length > 16 ? v.slice(0,14)+'…' : v)}</span>`).join('')
-        : '<span style="color:var(--muted);font-style:italic;font-size:.72rem">sin datos</span>';
+        : '<span style="color:var(--muted);font-style:italic;font-size:12px">sin datos</span>';
       sampleCell.title = sampleVals.join(' · ');
 
       // Searchable custom select
@@ -57849,7 +57849,7 @@ function initApp() {
           // Wire download button to job xlsx
           _wireDownloadBtn(jobId, batchResults.length);
           _setBanner(
-            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:700;color:var(--brand)">⬇ Descargar Excel</a></div>`
+            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:500;color:var(--brand)">⬇ Descargar Excel</a></div>`
           );
           document.getElementById('bannerDlLink')?.addEventListener('click', e => {
             e.preventDefault(); _downloadJobXlsx(jobId);
@@ -57922,7 +57922,7 @@ function initApp() {
           _wireDownloadBtn(jobId, batchResults.length);
           _repairLeadData(batchResults);
           _setBanner(
-            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:700;color:var(--brand)">⬇ Descargar Excel</a></div>`
+            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:500;color:var(--brand)">⬇ Descargar Excel</a></div>`
           );
           document.getElementById('bannerDlLink')?.addEventListener('click', e => {
             e.preventDefault(); _downloadJobXlsx(jobId);
@@ -58064,7 +58064,7 @@ function initApp() {
       const globalI    = start + i;
 
       const emailCell = bestEmail
-        ? `<span class="mono" style="font-weight:700">${esc(bestEmail)}</span>${catchAll ? ' ' + catchAllWarn() : ''}`
+        ? `<span class="mono" style="font-weight:500">${esc(bestEmail)}</span>${catchAll ? ' ' + catchAllWarn() : ''}`
         : '<span style="color:var(--muted)">—</span>';
 
       const tr = document.createElement('tr');
@@ -58300,7 +58300,7 @@ function initApp() {
 
         const scrollCells = `
           ${dataCells}
-          <td class="vt-scroll" style="white-space:nowrap;font-size:.75rem;color:var(--muted)">${date}</td>
+          <td class="vt-scroll" style="white-space:nowrap;font-size:12px;color:var(--muted)">${date}</td>
           <td class="vt-scroll">${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : ''}</td>`;
 
         return `<tr class="${canRetry ? 'verif-row--retryable' : ''}" data-vid="${esc(r.bounceVerifyId)}" data-retryable="${canRetry}">
@@ -58341,7 +58341,7 @@ function initApp() {
       body.innerHTML = `
         ${retryBarHtml}
         <div class="verif-controls">
-          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);cursor:pointer">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer">
             <input type="checkbox" id="verifSelectAll"/> Seleccionar todas
           </label>
           ${selectPendingBtn}
@@ -58349,7 +58349,7 @@ function initApp() {
             <div class="verif-col-search">
               <input type="text" id="verifColSearch" placeholder="🔍 Buscar columna…"
                 style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
-                       font-size:.78rem;outline:none;width:160px"/>
+                       font-size:12px;outline:none;width:160px"/>
             </div>` : ''}
         </div>
         <div class="vt-wrap">
@@ -58365,7 +58365,7 @@ function initApp() {
             <tbody>${rowsHtml}</tbody>
           </table>
         </div>
-        <p style="font-size:.75rem;color:var(--muted);margin-top:10px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end">
+        <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end">
           ${filterNote}
           <span class="verif-footer-count">${rows.length} verificación${rows.length !== 1 ? 'es' : ''}</span>
         </p>`;
@@ -58482,7 +58482,7 @@ function initApp() {
           if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
           // Flash success, then reload
-          retryBar.innerHTML = `<span style="color:#16a34a;font-weight:600">
+          retryBar.innerHTML = `<span style="color:#16a34a;font-weight:500">
             ✅ ${data.sent} email${data.sent !== 1 ? 's' : ''} re-enviados${data.failed ? ` · ${data.failed} fallaron` : ''} — recargando…
           </span>`;
           setTimeout(() => loadVerifications(filters), 1800);
@@ -58763,17 +58763,17 @@ function initApp() {
       const jobs = data.jobs || [];
 
       if (!jobs.length) {
-        body.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0">No hay cargas anteriores.</div>`;
+        body.innerHTML = `<div style="color:var(--muted);font-size:14px;padding:8px 0">No hay cargas anteriores.</div>`;
         return;
       }
 
       body.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="border-bottom:1.5px solid var(--border)">
-              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Fecha</th>
-              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Leads</th>
-              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Estado</th>
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:500">Fecha</th>
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:500">Leads</th>
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:500">Estado</th>
               <th style="padding:6px 10px"></th>
             </tr>
           </thead>
@@ -58783,10 +58783,10 @@ function initApp() {
                 ? new Date(j.createdAt).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
                 : '—';
               const statusBadge = j.status === 'done'
-                ? `<span style="color:var(--ok);font-weight:600">✅ Listo</span>`
+                ? `<span style="color:var(--ok);font-weight:500">✅ Listo</span>`
                 : j.status === 'running'
-                ? `<span style="color:var(--warn);font-weight:600">⏳ Procesando</span>`
-                : `<span style="color:var(--err);font-weight:600">❌ Error</span>`;
+                ? `<span style="color:var(--warn);font-weight:500">⏳ Procesando</span>`
+                : `<span style="color:var(--err);font-weight:500">❌ Error</span>`;
               const verifyBtn = j.status === 'done'
                 ? `<button class="btn btn--primary btn--sm" onclick="_verifyHistoryJob('${esc(j.jobId)}', ${j.total ?? 0})">🎯 Verificar</button>`
                 : '';
@@ -58806,7 +58806,7 @@ function initApp() {
           </tbody>
         </table>`;
     } catch (_) {
-      body.innerHTML = `<div style="color:var(--muted);font-size:.82rem">No se pudo cargar el historial.</div>`;
+      body.innerHTML = `<div style="color:var(--muted);font-size:14px">No se pudo cargar el historial.</div>`;
     }
   }
 
@@ -58893,19 +58893,19 @@ function renderSingleResult(d) {
   const bestCand = d.candidates?.find(c => c.email === bestEmail) ?? d.candidates?.[0];
 
   const mx = d.mxFound
-    ? `<span class="mx-ok">✓ MX found</span> <span class="mono" style="font-size:.72rem;color:var(--muted)">${esc(d.mxHost || '')}</span>`
+    ? `<span class="mx-ok">✓ MX found</span> <span class="mono" style="font-size:12px;color:var(--muted)">${esc(d.mxHost || '')}</span>`
     : `<span class="mx-no">✗ No MX records</span>`;
 
   let html = `
     <div style="margin-bottom:14px">
-      <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Domain</div>
-      <div style="font-weight:700;font-size:.95rem">${esc(d.domain || '—')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Domain</div>
+      <div style="font-weight:500;font-size:14px">${esc(d.domain || '—')}</div>
       <div style="margin-top:4px">${mx}</div>
       ${d.warning ? `<div class="alert alert--warn" style="margin-top:8px;padding:7px 12px">${esc(d.warning)}</div>` : ''}
     </div>`;
 
   if (!bestEmail) {
-    html += `<div style="color:var(--muted);font-size:.85rem">No email could be found for this lead.</div>`;
+    html += `<div style="color:var(--muted);font-size:14px">No email could be found for this lead.</div>`;
   } else {
     const blockClass = catchAll ? 'catchall'
                      : (confidence === 'low' || confidence === 'unverifiable' || confidence === 'none') ? 'low-conf'
@@ -58919,7 +58919,7 @@ function renderSingleResult(d) {
           ${confBadge(confidence)}
           ${sourcePill(d.bestSource)}
           ${catchAll ? catchAllWarn() : ''}
-          ${bestCand ? `<span style="font-size:.72rem;color:var(--muted)">${esc(bestCand.pattern)}</span>` : ''}
+          ${bestCand ? `<span style="font-size:12px;color:var(--muted)">${esc(bestCand.pattern)}</span>` : ''}
         </div>
         ${bestCand ? `<div style="margin-top:8px">${renderScoreBar(bestCand.score)}</div>` : ''}
       </div>`;
@@ -58929,13 +58929,13 @@ function renderSingleResult(d) {
         <div class="bounce-notice">
           <div class="bounce-notice__spin"></div>
           Verificación por correo real en curso — resultado disponible en ~1 hora.
-          <span style="font-size:.68rem;color:#64748b;margin-left:auto">ID: ${esc(d.bounceVerifyId.slice(0,8))}…</span>
+          <span style="font-size:10px;color:#64748b;margin-left:auto">ID: ${esc(d.bounceVerifyId.slice(0,8))}…</span>
         </div>`;
     }
 
     if (d.candidates?.length > 0) {
       html += `
-        <div style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;margin:18px 0 8px">
+        <div style="font-size:12px;font-weight:500;color:var(--muted);letter-spacing:normal;margin:18px 0 8px">
           TODOS LOS CANDIDATOS (${d.candidates.length})
         </div>
         <div class="cand-table-wrap">

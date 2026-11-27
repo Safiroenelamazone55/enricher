@@ -4,13 +4,9 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Nova</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261127u"/>
-  <link rel="stylesheet" href="mobile.css?v=24"/>
-  <link rel="stylesheet" href="contenido.css?v=4"/>
+  <link rel="stylesheet" href="style.css?v=20261127z"/>
+  <link rel="stylesheet" href="mobile.css?v=25"/>
+  <link rel="stylesheet" href="contenido.css?v=5"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -25,7 +21,7 @@
   #nova-boot{position:fixed;inset:0;z-index:99999;background:#F7F8F6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .28s ease}
   #nova-boot.out{opacity:0;pointer-events:none}
   #nova-boot svg{width:46px;height:46px;color:#14211B;animation:novaPulse 1.3s ease-in-out infinite}
-  #nova-boot .nb-t{font:500 13px/1.3 Inter,system-ui,sans-serif;color:#6B7280;opacity:0;animation:novaFade .4s ease .45s forwards}
+  #nova-boot .nb-t{font:500 12px/1.3 Inter,system-ui,sans-serif;color:#6B7280;opacity:0;animation:novaFade .4s ease .45s forwards}
   #nova-boot .nb-bar{width:150px;height:3px;background:#E5E7EB;overflow:hidden;position:relative;opacity:0;animation:novaFade .3s ease .3s forwards}
   #nova-boot .nb-bar::after{content:'';position:absolute;top:0;bottom:0;width:45%;background:#14211B;animation:novaSlide 1.1s ease-in-out infinite}
   @keyframes novaPulse{0%,100%{transform:scale(1) rotate(0);opacity:.95}50%{transform:scale(.88) rotate(45deg);opacity:.55}}
@@ -1700,7 +1696,7 @@
                   </button>
                 </div>
               </div>
-              <div style="font-size:.65rem;color:#C4BAB3;text-align:right;padding:4px 4px 0">Enter para enviar · Shift+Enter nueva línea</div>
+              <div style="font-size:10px;color:#C4BAB3;text-align:right;padding:4px 4px 0">Enter para enviar · Shift+Enter nueva línea</div>
             </div>
           </div><!-- /chat-composer-group -->
 
@@ -1853,7 +1849,7 @@
                   <button class="wa-sched__opt" onclick="WaChatModule.programarPick('man9')">Mañana 9:00</button>
                   <button class="wa-sched__opt" onclick="WaChatModule.programarPick('lun9')">Lunes 9:00</button>
                   <div class="wa-sched__custom">
-                    <input type="datetime-local" class="dle-i" id="wa-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                    <input type="datetime-local" class="dle-i" id="wa-sched-dt" style="font-size:12px;padding:5px 7px">
                     <button class="btn btn--primary btn--sm" onclick="WaChatModule.programarPick('custom')">OK</button>
                   </div>
                 </div>
@@ -1982,8 +1978,8 @@
           <div id="colMapExtra" class="col-map-extra hidden"></div>
         </div>
 
-        <div style="margin-top:14px;font-size:.78rem;color:var(--muted)">
-          <a href="https://api.novacentrax.com/api/template" style="color:var(--brand);font-weight:600">Descargar plantilla →</a>
+        <div style="margin-top:14px;font-size:12px;color:var(--muted)">
+          <a href="https://api.novacentrax.com/api/template" style="color:var(--brand);font-weight:500">Descargar plantilla →</a>
         </div>
 
         <div class="field" style="margin-top:14px">
@@ -2030,7 +2026,7 @@
           <h3 id="previewTitle">Resultados</h3>
           <div style="display:flex;gap:8px;align-items:center">
             <input type="text" id="searchBox" placeholder="Buscar nombre o dominio…"
-              style="padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:.82rem;outline:none;width:200px;font-family:var(--font)"/>
+              style="padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:14px;outline:none;width:200px;font-family:var(--font)"/>
             <button class="btn btn--green btn--sm" id="btnDownloadResult">⬇ Descargar Excel</button>
           </div>
         </div>
@@ -2063,7 +2059,7 @@
             Actualizar
           </button>
         </div>
-        <div id="historyBody"><div style="color:var(--muted);font-size:.82rem;padding:8px 0">Cargando historial…</div></div>
+        <div id="historyBody"><div style="color:var(--muted);font-size:14px;padding:8px 0">Cargando historial…</div></div>
       </div>
 
     </div><!-- /pane-batch -->
@@ -2092,7 +2088,7 @@
           </button>
         </div>
 
-        <p style="font-size:.8rem;color:var(--muted);margin:8px 0 14px">
+        <p style="font-size:12px;color:var(--muted);margin:8px 0 14px">
           Un correo sin rebote en 1 hora se marca como Verificado.
         </p>
 
@@ -2340,7 +2336,7 @@
           <input type="file" id="brand-logo-file" accept="image/*" style="display:none" onchange="WorkspaceModule.onLogoFile(this)">
           <button class="btn btn--ghost btn--sm" onclick="$('brand-logo-file').click()">Subir imagen</button>
           <div style="margin-top:6px">
-            <input type="text" id="brand-logo-url" class="form-input" placeholder="…o pega una URL" style="font-size:.8rem" oninput="WorkspaceModule.onLogoUrl(this.value)">
+            <input type="text" id="brand-logo-url" class="form-input" placeholder="…o pega una URL" style="font-size:12px" oninput="WorkspaceModule.onLogoUrl(this.value)">
           </div>
           <button class="brand-logo-clear" id="brand-logo-clear" style="display:none" onclick="WorkspaceModule.clearLogo()">✕ Quitar logo</button>
         </div>
@@ -2355,12 +2351,12 @@
     <div class="form-row">
       <label class="form-label">Nombre interno del workspace</label>
       <input type="text" id="wsname-input" class="form-input" placeholder="Ej: Producción">
-      <span style="font-size:.72rem;color:var(--muted);margin-top:4px;display:block">Se muestra debajo del logo en el sidebar</span>
+      <span style="font-size:12px;color:var(--muted);margin-top:4px;display:block">Se muestra debajo del logo en el sidebar</span>
     </div>
 
     <!-- Preview -->
     <div class="brand-preview-box">
-      <span style="font-size:.7rem;color:var(--muted);margin-bottom:6px;display:block">Vista previa en sidebar</span>
+      <span style="font-size:12px;color:var(--muted);margin-bottom:6px;display:block">Vista previa en sidebar</span>
       <div class="brand-preview-inner">
         <div class="brand-preview-icon" id="brand-prev-icon">
           <svg width="14" height="14" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="#7C3AED"/></svg>
@@ -2414,7 +2410,7 @@
       </section>
 
       <section class="cfg__sec" data-sec="permisos" hidden>
-        <h3 style="font-size:.95rem;font-weight:700;margin:0 0 4px">Roles y permisos</h3>
+        <h3 style="font-size:14px;font-weight:500;margin:0 0 4px">Roles y permisos</h3>
         <div id="cfg-permisos-mount"></div>
       </section>
 
@@ -2422,13 +2418,13 @@
            lo que voy usando para asi saber cuando comprar mas plan". Cuenta
            real desde /api/workspace/usage, no inventada. -->
       <section class="cfg__sec" data-sec="agentes" hidden>
-        <h3 style="font-size:.95rem;font-weight:700;margin:0 0 4px">Agentes de vigilancia</h3>
-        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Revisan solos que el sistema funcione (correo, WhatsApp, conexiones, servidor) y te avisan en la campana de alertas cuando algo falla.</p>
+        <h3 style="font-size:14px;font-weight:500;margin:0 0 4px">Agentes de vigilancia</h3>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 16px">Revisan solos que el sistema funcione (correo, WhatsApp, conexiones, servidor) y te avisan en la campana de alertas cuando algo falla.</p>
         <div id="agt-root"></div>
       </section>
 
       <section class="cfg__sec" data-sec="uso" hidden>
-        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Resumen de actividad del workspace este mes, para saber cuándo hace falta más capacidad.</p>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 16px">Resumen de actividad del workspace este mes, para saber cuándo hace falta más capacidad.</p>
         <div id="usage-grid" class="usage-grid">
           <div class="usage-card"><div class="usage-card__v" id="usage-contactos">—</div><div class="usage-card__l">Contactos en Base Global</div></div>
           <div class="usage-card"><div class="usage-card__v" id="usage-empresas">—</div><div class="usage-card__l">Empresas</div></div>
@@ -2444,8 +2440,8 @@
              uso de RAM, de espacio... para saber si tengo que aumentar el
              plan". Desde /api/workspace/server-usage (os.totalmem/freemem +
              df del disco, en el propio servidor). -->
-        <h3 style="font-size:.9rem;font-weight:700;color:var(--text,#1F1D1B);margin:24px 0 4px">Servidor</h3>
-        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Uso real de la VPS donde corre Nova, para saber cuándo hace falta más plan.</p>
+        <h3 style="font-size:14px;font-weight:500;color:var(--text,#1F1D1B);margin:24px 0 4px">Servidor</h3>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 16px">Uso real de la VPS donde corre Nova, para saber cuándo hace falta más plan.</p>
         <div id="server-usage-grid" class="usage-grid">
           <div class="usage-card">
             <div class="usage-card__v" id="usage-ram">—</div>
@@ -2526,7 +2522,7 @@
       <!-- VISTA ALERTAS -->
       <div class="rchat__view hidden" id="rchat-view-notifs">
         <div class="rnotif__scroll" id="rnotif-content">
-          <div style="text-align:center;color:var(--muted);font-size:.82rem;padding:40px 0">Cargando alertas…</div>
+          <div style="text-align:center;color:var(--muted);font-size:14px;padding:40px 0">Cargando alertas…</div>
         </div>
         <div class="rnf-footer hidden" id="rnotif-footer"></div>
       </div>
@@ -3161,13 +3157,13 @@
       <div class="invite-success-head">
         <div class="invite-success-avatar" id="invite-success-avatar"></div>
         <div>
-          <div id="invite-success-name" style="font-weight:600;font-size:.9rem"></div>
-          <div id="invite-success-cargo" style="font-size:.75rem;color:var(--muted)"></div>
+          <div id="invite-success-name" style="font-weight:500;font-size:14px"></div>
+          <div id="invite-success-cargo" style="font-size:12px;color:var(--muted)"></div>
         </div>
       </div>
-      <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Envíale este link. Cuando entre con su Gmail quedará registrada en el equipo automáticamente. Expira en 7 días.</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Envíale este link. Cuando entre con su Gmail quedará registrada en el equipo automáticamente. Expira en 7 días.</p>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="invite-link-input" class="form-input" readonly style="flex:1;font-size:.75rem;background:#FAFAF9">
+        <input type="text" id="invite-link-input" class="form-input" readonly style="flex:1;font-size:12px;background:#FAFAF9">
         <button class="btn btn--ghost btn--sm" onclick="WorkspaceModule.copyInvite()" id="invite-copy-btn">Copiar</button>
       </div>
       <button class="btn btn--ghost" style="width:100%;margin-top:10px" onclick="WorkspaceModule.resetInvite()">Invitar a otra persona</button>
@@ -3185,9 +3181,9 @@
     </button>
   </div>
   <div style="padding:0 24px 8px">
-    <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Define cuántas unidades de cada moneda equivalen a 1 USD. El dashboard convertirá todo a USD automáticamente.</p>
+    <p style="font-size:12px;color:var(--text2);margin:0 0 16px">Define cuántas unidades de cada moneda equivalen a 1 USD. El dashboard convertirá todo a USD automáticamente.</p>
     <div id="fx-rows" style="display:flex;flex-direction:column;gap:10px"></div>
-    <p id="fx-no-currencies" style="font-size:.82rem;color:var(--muted);display:none">No tienes proyectos en otras monedas aún.</p>
+    <p id="fx-no-currencies" style="font-size:12px;color:var(--muted);display:none">No tienes proyectos en otras monedas aún.</p>
   </div>
   <div class="drawer__footer" style="margin-top:16px;padding:0 24px 24px">
     <button class="btn btn--ghost" onclick="FxRatesModule.close()">Cancelar</button>
@@ -3364,7 +3360,7 @@
     <div class="form-row">
       <label class="form-label">Participantes</label>
       <div class="meeting-attendees" id="meeting-attendees-list">
-        <span class="muted" style="font-size:.8rem">Cargando equipo…</span>
+        <span class="muted" style="font-size:12px">Cargando equipo…</span>
       </div>
     </div>
     <div class="form-row">
@@ -3559,15 +3555,15 @@
     var wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(20,22,26,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit';
     wrap.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:26px 24px;box-shadow:0 20px 50px rgba(0,0,0,.25)">'
-      + '<h2 style="margin:0 0 6px;font-size:1.25rem;color:#1F1D1B">Elige tu contraseña</h2>'
-      + '<p id="rs-sub" style="margin:0 0 16px;font-size:.88rem;color:#6b6760">Comprobando el enlace…</p>'
-      + '<form id="rs-form" style="display:none"><label style="font-size:.78rem;color:#6b6760">Nueva contraseña</label>'
-      + '<input id="rs-p1" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:.95rem">'
-      + '<label style="font-size:.78rem;color:#6b6760">Repítela</label>'
-      + '<input id="rs-p2" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 6px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:.95rem">'
-      + '<p style="margin:0 0 14px;font-size:.76rem;color:#8a867f">Mínimo 10 caracteres, con letras y al menos un número.</p>'
-      + '<button id="rs-go" type="submit" style="width:100%;padding:11px;border:0;border-radius:8px;background:#0A84FF;color:#fff;font-weight:600;font-size:.95rem;cursor:pointer">Guardar y entrar</button></form>'
-      + '<p id="rs-msg" style="margin:12px 0 0;font-size:.84rem;color:#B91C1C"></p></div>';
+      + '<h2 style="margin:0 0 6px;font-size:18px;color:#1F1D1B">Elige tu contraseña</h2>'
+      + '<p id="rs-sub" style="margin:0 0 16px;font-size:14px;color:#6b6760">Comprobando el enlace…</p>'
+      + '<form id="rs-form" style="display:none"><label style="font-size:12px;color:#6b6760">Nueva contraseña</label>'
+      + '<input id="rs-p1" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 12px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:14px">'
+      + '<label style="font-size:12px;color:#6b6760">Repítela</label>'
+      + '<input id="rs-p2" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;margin:4px 0 6px;padding:10px 12px;border:1px solid #D9D5CE;border-radius:8px;font-size:14px">'
+      + '<p style="margin:0 0 14px;font-size:12px;color:#8a867f">Mínimo 10 caracteres, con letras y al menos un número.</p>'
+      + '<button id="rs-go" type="submit" style="width:100%;padding:11px;border:0;border-radius:8px;background:#0A84FF;color:#fff;font-weight:500;font-size:14px;cursor:pointer">Guardar y entrar</button></form>'
+      + '<p id="rs-msg" style="margin:12px 0 0;font-size:14px;color:#B91C1C"></p></div>';
     document.body.appendChild(wrap);
     var sub = wrap.querySelector('#rs-sub'), form = wrap.querySelector('#rs-form'), msg = wrap.querySelector('#rs-msg');
     fetch(API_ + '/auth/reset-info?token=' + encodeURIComponent(token), { credentials: 'include' })
@@ -3589,7 +3585,7 @@
   })();
 </script>
 
-<script src="app.js?v=20261127zh"></script>
+<script src="app.js?v=20261127zl"></script>
 <script src="worldclock.js?v=4"></script>
 <script src="agentes.js?v=4"></script>
 <script src="spaces.js?v=20261103p"></script>
