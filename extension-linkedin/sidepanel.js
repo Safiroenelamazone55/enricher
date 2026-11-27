@@ -110,7 +110,7 @@ $('e-lista').onclick = () => mostrarPestana('lista');
 $('e-err').onclick = () => mostrarPestana('errores');
 async function bienvenida() {
   const r = await msg('par_estado'); const { estado, paused } = await chrome.storage.local.get({ estado: {}, paused: true });
-  const nombre = String(r && r.usuario || '').split(/[ @]/)[0];
+  const nombre = String((r && r.nombre) || '').trim().split(/\s+/)[0] || String(r && r.usuario || '').split(/[ @]/)[0];   // el mismo nombre que Nova usa contigo
   $('hola-t').textContent = '¡Bienvenido' + (nombre ? ', ' + nombre.charAt(0).toUpperCase() + nombre.slice(1) : '') + '!';
   $('hola-s').textContent = paused ? 'Actívala para que FLOW empiece a trabajar.' : 'FLOW trabaja con tus topes y horario.';
 }
@@ -331,7 +331,7 @@ async function abrirAjustes() {
   const r = await msg('par_estado');
   const mail = String((r && r.usuario) || '');
   const loc = mail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\d+.*$/, '').trim();
-  const nom = loc.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || mail || 'Tu cuenta';
+  const nom = String((r && r.nombre) || '').trim() || loc.split(' ').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || mail || 'Tu cuenta';
   $('aj-nom').textContent = nom; $('aj-mail').textContent = mail;
   $('aj-ini').textContent = nom.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
   const p = await msg('prefs', {});

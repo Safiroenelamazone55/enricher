@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.11.6';
+const VERSION = '0.11.7';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -357,7 +357,7 @@ async function parEstado() {
   try { nova = await novaFetch('/li/pair/accounts'); } catch (e) { return { nova: 'sin_conexion', sesion_linkedin: sesion, li_slug: slug }; }
   if (nova.status === 401) return { nova: 'sin_sesion', sesion_linkedin: sesion, li_slug: slug };
   if (nova.status !== 200) return { nova: 'error', detalle: (nova.data && nova.data.error) || ('HTTP ' + nova.status), sesion_linkedin: sesion, li_slug: slug };
-  return { nova: 'ok', sesion_linkedin: sesion, li_slug: slug, cuentas: nova.data.cuentas || [], clientes: nova.data.clientes || [], usuario: nova.data.usuario || '' };
+  return { nova: 'ok', sesion_linkedin: sesion, li_slug: slug, cuentas: nova.data.cuentas || [], clientes: nova.data.clientes || [], usuario: nova.data.usuario || '', nombre: nova.data.nombre || '' };
 }
 async function parVincular(d) {
   const slug = (await sesionIniciada()) ? await leerIdentidadUnica() : '';

@@ -989,7 +989,7 @@ function _renderHomeInner(grid) {
   // Saludo y fecha (la pantalla de inicio de los módulos: sobria, sin adornos)
   try {
     const u = window._authUser || {}, h = new Date().getHours();
-    const nom = String(u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
+    const nom = String(u.memberNombre || u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
     const hi = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
     const fecha = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
     const hero = document.getElementById('home-hero');
@@ -34771,7 +34771,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     ['target', '#E8590C', 'Identifica señales de compra', 'Ponte en contacto con los prospectos que ya respondieron o muestran interés.', "LeadManagerModule.go('leads')"],
   ];
   function _aiHeroHtml() {
-    const u = window._authUser || {}, nom = String(u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
+    const u = window._authUser || {}, nom = String(u.memberNombre || u.name || u.nombre || '').trim().split(/\s+/)[0] || '';
     const cl = (_clients || []).find(c => c.id === _gcli) || (_clients || []).find(c => c.estado === 'activo') || (_clients || [])[0];
     const cid = cl ? cl.id : 0;
     const mb = cid ? _mbFor(cid) : null, mbOk = !!(mb && mb.estado === 'conectado');

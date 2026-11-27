@@ -694,7 +694,9 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       const uid = req.workspaceOwnerId;
       const { rows: cuentas } = await pool.query(`SELECT a.id, a.nombre, a.li_slug, a.estado, a.outbound_client_id, c.nombre AS cliente, (a.ultimo_visto > NOW() - INTERVAL '5 minutes') AS conectada FROM li_accounts a LEFT JOIN outbound_clients c ON c.id=a.outbound_client_id WHERE a.user_id=$1 ORDER BY a.id`, [uid]);
       const { rows: clientes } = await pool.query(`SELECT id, nombre FROM outbound_clients WHERE user_id=$1 AND COALESCE(estado,'') <> 'cerrado' ORDER BY nombre`, [uid]);
-      res.json({ ok: true, cuentas, clientes, usuario: (req.user && (req.user.email || req.user.nombre || req.user.name)) || '' });
+      let nombreU = (req.user && req.user.name) || '';
+      try { const { rows: [tm] } = await pool.query(`SELECT nombre FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`, [uid, req.user && req.user.email]); if (tm && tm.nombre) nombreU = tm.nombre; } catch (_) {}
+      res.json({ ok: true, cuentas, clientes, nombre: nombreU, usuario: (req.user && (req.user.email || req.user.nombre || req.user.name)) || '' });
     } catch (e) { console.error('[li] pair accounts', e.message); res.status(500).json({ error: 'No se pudieron cargar las cuentas' }); }
   });
   app.post('/api/li/pair', requireAuth, async (req, res) => {
