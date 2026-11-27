@@ -23816,7 +23816,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'sequence')  body.innerHTML = _vSequenceDetail(_activeSeq);
     else if (_section === 'activities') body.innerHTML = _vActivities();
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
-    else if (_section === 'inbox')     body.innerHTML = _vInbox();
+    else if (_section === 'inbox')     { body.innerHTML = _vInbox(); _ibSize(); requestAnimationFrame(_ibFit); }
     else if (_section === 'wa')        { body.innerHTML = _vWaList(); _waMount(); }
     else if (_section === 'calls')     body.innerHTML = _vCalls();
     else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
@@ -33776,9 +33776,11 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   // ahora se calcula sumando ese "chrome" real + un mínimo visible para leer.
   let _ibFitBound = false;
   // Altura del Inbox = el espacio visible hasta el borde inferior (el relleno de la página se quita por CSS para este panel).
+  let _ibH = 0;
   function _ibSize() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
-    g.style.height = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 14) + 'px';
+    _ibH = Math.max(260, window.innerHeight - g.getBoundingClientRect().top - 14);
+    g.style.height = _ibH + 'px';
   }
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
@@ -33822,6 +33824,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function _ibPaint() {
     const el = document.getElementById('ibx-wrap');
     if (el) el.outerHTML = _ibWrapHtml();
+    _ibSize();
     requestAnimationFrame(() => { _ibFit(); _ibTaFit(); });
   }
   // La caja de escribir crece con el texto (hasta el 55 % de la pantalla): el mensaje sugerido se ve completo, sin desplazarse dentro de la caja.
@@ -33972,7 +33975,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
         ? `<div id="ibx-envios" style="padding:10px 4px">${_ibEnvHtml()}</div>`
         : _ibTab === 'env' && _ibEnvShowTable
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
-        : `<div class="ibx-grid ibx-grid--3${hasThread ? '' : ' ibx-grid--empty'}">
+        : `<div class="ibx-grid ibx-grid--3${hasThread ? '' : ' ibx-grid--empty'}"${_ibH ? ` style="height:${_ibH}px"` : ''}>
              <div class="ibx-list">${_ibHeadHtml()}<div class="ibx-rows" id="ibx-rows">${_ibListHtml()}</div></div>
              <div class="ibx-conv">${hasThread ? _ibConvHtml() : _ibEmptyHtml()}</div>
              ${hasThread && _ibThread ? _ibSideHtml() : ''}
