@@ -432,11 +432,12 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
            FROM lm_contacts k
           WHERE k.user_id=$1 AND ($2::int IS NULL OR k.outbound_client_id=$2) AND k.li_aceptado_at IS NULL
             AND lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) = ANY($3::text[])`,
-        [a.user_id, a.outbound_client_id || null, [...mapa.keys()], tz]);
+        [a.user_id, a.outbound_client_id || null, [...new Set([...mapa.keys()].flatMap(s => [s, encodeURIComponent(s).toLowerCase()]))], tz]);
       const hoy = localParts(new Date(), tz).ymd;
+      const decod = s => { try { return decodeURIComponent(s); } catch (_) { return s; } };
       for (const r of rows) {
         if (!r.invitada) continue;                       // sin ninguna invitación enviada: ya era contacto, no es una aceptación
-        const fecha = mapa.get(r.slug) || null;          // día en que se conectaron (si la página lo dice)
+        const fecha = mapa.get(r.slug) || mapa.get(decod(r.slug)) || null;          // día en que se conectaron (si la página lo dice)
         if (fecha && fecha < r.invitada) continue;       // se conectaron ANTES de invitarla: no aceptó nuestra invitación
         const historico = !!fecha && daysBetween(fecha, hoy) > 1;   // detectado tarde: se registra con su fecha real, sin re-enrutar la secuencia
         await eventoNuevo(a, 'aceptada', r.slug, 'conexión aceptada');
