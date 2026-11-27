@@ -83,14 +83,27 @@ function mount(app, { pool, requireAuth }) {
   });
   app.put('/api/lm/warmup/buzones/:id/auto', requireAuth, async (req, res) => {
     try {
-      const b = req.body || {}, techo = Math.min(Math.max(parseInt(b.techo) || 60, 10), 200);
-      const { rowCount } = await pool.query(`UPDATE lm_mailboxes SET ramp_auto=$3, ramp_techo=$4 WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId, !!b.auto, techo]);
-      if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
-      await pool.query(`INSERT INTO lm_mailbox_events (mailbox_id, tipo, detalle) VALUES ($1,$2,$3)`, [req.params.id, b.auto ? 'auto_on' : 'auto_off', b.auto ? `Ajuste automático activado (techo ${techo} al día).` : 'Ajuste automático desactivado.']);
-      res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+      const b = req.body || {}, on = !!b.auto;
+      const { rows: [m] } = await pool.query(`SELECT id, daily_limit, ramp_on, ramp_start, ramp_step, ramp_target, ramp_techo FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+      if (!m) return res.status(404).json({ error: 'Buzón no encontrado' });
+      let techo = Math.min(Math.max(parseInt(b.techo) || m.ramp_techo || 60, 10), 200), nota = '';
+      if (on) {
+        if (m.daily_limit > 0) {   // el límite fijo pasa a ser el punto de partida y deja de mandar
+          const L = m.daily_limit; techo = Math.max(techo, L + 10);
+          await pool.query(`UPDATE lm_mailboxes SET ramp_on=TRUE, ramp_start=$2, ramp_target=GREATEST($2, $3), daily_limit=NULL, ramp_started_on=COALESCE(ramp_started_on, CURRENT_DATE) WHERE id=$1`, [m.id, L, m.ramp_target]);
+          nota = ` El límite fijo de ${L} pasó a ser el punto de partida.`;
+        } else if (!m.ramp_on) {   // sin tope: arranca desde lo que ya envía de verdad (nunca por debajo)
+          const { rows: [u] } = await pool.query(`SELECT COALESCE(MAX(n),0)::int AS maxdia FROM (SELECT COUNT(*) n FROM lm_messages WHERE mailbox_id=$1 AND estado IN ('sent','replied','bounced') AND sent_at > NOW() - interval '14 days' GROUP BY sent_at::date) x`, [m.id]);
+          const base = Math.max(30, u.maxdia); techo = Math.max(techo, base + 10);
+          await pool.query(`UPDATE lm_mailboxes SET ramp_on=TRUE, ramp_start=$2, ramp_target=$2, ramp_started_on=CURRENT_DATE WHERE id=$1`, [m.id, base]);
+          nota = ` Antes no tenía tope: arranca en ${base} al día (lo que ya enviaba o 30, el mayor).`;
+        } else techo = Math.max(techo, m.ramp_target + 10);
+      }
+      await pool.query(`UPDATE lm_mailboxes SET ramp_auto=$2, ramp_techo=$3 WHERE id=$1`, [m.id, on, techo]);
+      await pool.query(`INSERT INTO lm_mailbox_events (mailbox_id, tipo, detalle) VALUES ($1,$2,$3)`, [m.id, on ? 'auto_on' : 'auto_off', on ? `Ajuste automático activado (techo ${techo} al día).${nota}` : 'Ajuste automático desactivado.']);
+      res.json({ ok: true, nota });
+    } catch (e) { aviso('auto', e.message); res.status(500).json({ error: 'No se pudo guardar' }); }
   });
-
 
   // ── Pruebas de bandeja ──
   app.post('/api/lm/warmup/pruebas', requireAuth, async (req, res) => {

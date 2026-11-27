@@ -91,7 +91,7 @@ const WarmupModule = (() => {
           <span class="wm-chev">${SV('<path d="m6 9 6 6 6-6"/>')}</span>
         </div>
         <div class="wm-row__act" onclick="event.stopPropagation()">
-          <label class="wm-sw" title="Sube el cupo si los rebotes son bajos y lo baja si son altos"><input type="checkbox" ${x.ramp_auto ? 'checked' : ''} ${x.ramp_on ? '' : 'disabled'} onchange="WarmupModule.auto(${x.id},this.checked)"><span></span>Ajuste automático</label>
+          <label class="wm-sw" title="Manda sobre el límite fijo: sube el cupo si los rebotes son bajos y lo baja si son altos"><input type="checkbox" ${x.ramp_auto ? 'checked' : ''} onchange="WarmupModule.auto(${x.id},this.checked)"><span></span>Ajuste automático</label>
           <button class="wm-btn" onclick="WarmupModule.revisar(${x.id},this)">Revisar ahora</button>
         </div>${det}</div>`;
     };
@@ -217,8 +217,9 @@ const WarmupModule = (() => {
     const x = (_b || []).find(y => y.id === id);
     try {
       const r = await apiFetch(`${API}/lm/warmup/buzones/${id}/auto`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: on, techo: x ? x.ramp_techo : 60 }) });
-      if (!r.ok) throw new Error('Error'); if (x) x.ramp_auto = on;
-      showBanner(on ? 'Ajuste automático activado: el cupo se revisa cada día' : 'Ajuste automático desactivado', 'success');
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error('Error');
+      showBanner(on ? 'Ajuste automático activado: el cupo se revisa cada día.' + (d.nota || '') : 'Ajuste automático desactivado', 'success');
+      await _load(); _pintar();
     } catch (_) { showBanner('No se pudo guardar', 'error'); await _load(); _pintar(); }
   }
   return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar, lanzar, copiar };

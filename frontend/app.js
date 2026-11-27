@@ -35717,7 +35717,9 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (!r.ok) throw new Error(d.error || 'Error');
       const fld = (id, lbl, v, hint) => `<label class="mbh-f"><span>${lbl}</span><input id="${id}" type="number" min="1" value="${v}"><small>${hint}</small></label>`;
       box.innerHTML = `<div class="mbh-sw"><label class="rp-sw"><input type="checkbox" id="mbh-on" ${d.ramp_on ? 'checked' : ''} onchange="LeadManagerModule.mbRampSave()"><span></span></label><b>${d.ramp_on ? 'Calentamiento activo' : 'Calentamiento apagado'}</b></div>
-        <div class="mbh-lim"><label class="mbh-f"><span>Límite diario de este buzón</span><input id="mbh-limit" type="number" min="1" value="${d.daily_limit || ''}" placeholder="Auto (${d.ramp_cap})"><small>Es el máximo que este buzón envía por día, sumando <b>todas</b> sus secuencias. Vacío = lo decide el calentamiento. Lo que no entre hoy sale mañana, por orden de programación.</small></label></div>
+        <div class="mbh-sw" style="margin-top:10px"><label class="rp-sw"><input type="checkbox" id="mbh-auto" ${d.ramp_auto ? 'checked' : ''} onchange="LeadManagerModule.mbRampSave()"><span></span></label><b>Ajuste automático</b></div>
+        <div class="mbh-p" style="margin:4px 0 8px">${d.ramp_auto ? 'Activo: cada día Nova sube el tope si los rebotes son bajos y lo baja si son altos. <b>Manda sobre el límite fijo</b>, que queda apagado.' : 'Apagado. Si lo enciendes, Nova ajusta el tope sola y el límite fijo deja de mandar.'}</div>
+        <div class="mbh-lim" style="${d.ramp_auto ? 'opacity:.45;pointer-events:none' : ''}"><label class="mbh-f"><span>Límite diario de este buzón${d.ramp_auto ? ' (apagado por el ajuste automático)' : ''}</span><input id="mbh-limit" type="number" min="1" ${d.ramp_auto ? 'disabled' : ''} value="${d.ramp_auto ? '' : (d.daily_limit || '')}" placeholder="${d.ramp_auto ? 'Lo decide el ajuste automático' : 'Auto (' + d.ramp_cap + ')'}"><small>Es el máximo que este buzón envía por día, sumando <b>todas</b> sus secuencias. Vacío = lo decide el calentamiento. Lo que no entre hoy sale mañana, por orden de programación.</small></label></div>
         <div class="mbh-fields">${fld('mbh-start', 'Empieza en', d.ramp_start, 'envíos por día')}${fld('mbh-step', 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('mbh-target', 'Meta', d.ramp_target, 'envíos por día')}</div>
         ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> envíos · enviados hoy <b>${d.sent_today}</b></div>
           <div class="mbh-curve">${d.curva.map(x => `<span${x.semana === d.semana + 1 ? ' class="on"' : ''}>Sem ${x.semana}<b>${x.tope}</b></span>`).join('')}</div>` : '<div class="mbh-p">Al encenderlo, empieza hoy. El tope aplica a todos los envíos automáticos de las secuencias de este cliente.</div>'}
@@ -35727,7 +35729,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   async function mbRampSave(cerrar) {
     if (!_mbhId) return;
     const v = id => parseInt(document.getElementById(id)?.value);
-    const body = { on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target'), limit: (document.getElementById('mbh-limit') || {}).value || '' };
+    const body = { auto: !!document.getElementById('mbh-auto')?.checked, on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target'), limit: (document.getElementById('mbh-limit') || {}).value || '' };
     const msg = document.getElementById('mbh-msg');
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

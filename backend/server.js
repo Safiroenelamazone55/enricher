@@ -7036,7 +7036,7 @@ app.get('/api/lm/mailboxes/:id/health', requireAuth, async (req, res) => {
 // Calentamiento gradual: estado actual (tope de hoy, enviados hoy, semana)
 async function _rampStatus(mbId, uid, tz) {
   const { rows: [r] } = await pool.query(`
-    SELECT mb.id, mb.daily_limit, mb.ramp_on, mb.ramp_start, mb.ramp_step, mb.ramp_target, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS started_on,
+    SELECT mb.id, mb.daily_limit, mb.ramp_on, mb.ramp_auto, mb.ramp_techo, mb.ramp_start, mb.ramp_step, mb.ramp_target, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS started_on,
            (SELECT COUNT(*)::int FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
              WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                AND (mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date) AS sent_today,
@@ -7118,18 +7118,25 @@ app.put('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
   try {
     const b = req.body || {};
     const clamp = (v, lo, hi, def) => { const n = parseInt(v); return isNaN(n) ? def : Math.min(hi, Math.max(lo, n)); };
-    const on = !!b.on, start = clamp(b.start, 1, 200, 5), step = clamp(b.step, 1, 200, 5), target = clamp(b.target, start, 1000, 30);
+    const limForm = (b.limit === '' || b.limit == null) ? null : clamp(b.limit, 1, 5000, null);
+    // al ACTIVAR el ajuste automático con un límite fijo escrito, ese número pasa a ser el punto de partida de la rampa
+    const nuevoAuto = auto && !(b.auto === undefined);
+    const on = auto ? true : !!b.on;
+    let start = clamp(b.start, 1, 200, 5), step = clamp(b.step, 1, 200, 5), target = clamp(b.target, start, 1000, 30);
+    if (nuevoAuto && !cur.ramp_auto && limForm) { start = Math.min(limForm, 200); target = Math.max(limForm, target); }
     const tz = await _tzOfUser(req.user && req.user.id);
-    const { rows: [cur] } = await pool.query('SELECT ramp_on, ramp_started_on FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    const { rows: [cur] } = await pool.query('SELECT ramp_on, ramp_started_on, ramp_auto FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
     if (!cur) return res.status(404).json({ error: 'Buzón no encontrado' });
+    // Ajuste automático: si está activo manda sobre el límite fijo (que queda apagado) y obliga a tener la rampa encendida
+    const auto = b.auto === undefined ? !!cur.ramp_auto : !!b.auto;
     // al encender (o si nunca tuvo fecha) la rampa arranca hoy; apagar y volver a encender la reinicia
     const restart = on && (!cur.ramp_on || !cur.ramp_started_on);
     await pool.query(`UPDATE lm_mailboxes SET ramp_on=$3, ramp_start=$4, ramp_step=$5, ramp_target=$6,
         ramp_started_on = CASE WHEN $7 THEN (NOW() AT TIME ZONE $8)::date ELSE ramp_started_on END WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId, on, start, step, target, restart, tz]);
     // límite propio del buzón (vacío = usa el calentamiento)
-    const lim = (b.limit === '' || b.limit == null) ? null : clamp(b.limit, 1, 5000, null);
-    await pool.query('UPDATE lm_mailboxes SET daily_limit=$3 WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId, lim]);
+    const lim = auto ? null : limForm;
+    await pool.query('UPDATE lm_mailboxes SET daily_limit=$3, ramp_auto=$4 WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId, lim, auto]);
     res.json(await _rampStatus(req.params.id, req.workspaceOwnerId, tz));
   } catch (err) { console.error('[mailbox] ramp PUT', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
 });
