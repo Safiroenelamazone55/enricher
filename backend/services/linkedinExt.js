@@ -20,6 +20,8 @@ const DEF = {
 const TIPOS = ['invite', 'message', 'visit', 'inmail'];
 const CHEQUEOS = ['check_connections', 'check_inbox', 'check_notifications'];   // lecturas que hace la extensión para detectar aceptaciones, respuestas e interacciones
 const CHEQUEO_CADA_MIN = { check_connections: 60, check_inbox: 45, check_notifications: 180 };
+// Actividad (alias ac) que prueba que se envió una invitación de LinkedIn: la de FLOW, una tarea manual hecha de un paso de tipo invitación, o «linkedin_connect».
+const SQL_EVID_INVITE = `(ac.tipo='linkedin_connect' OR ac.nota LIKE 'Invitación de LinkedIn enviada%' OR (ac.nota ~ '^Paso [0-9]+' AND (SELECT st.accion FROM lm_contact_sequences cs2 JOIN sequence_steps st ON st.sequence_id=cs2.sequence_id WHERE cs2.contact_id=ac.contact_id ORDER BY cs2.id DESC, st.dia, st.orden, st.id OFFSET (substring(ac.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')) OR ac.nota ~* '^Paso [0-9]+: .*(conexi|conect|invit|connect|solicitud)')`;
 DEF.chequeos_dia = 30;   // «comprobaciones de red en 24 h»: el valor de la pantalla Límites de lemlist
 
 // Configuración que viaja DESDE el servidor hacia la extensión (como hace lemlist): si LinkedIn cambia su página, se corrige aquí y
@@ -426,8 +428,7 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
                 (SELECT ((MIN(t)) AT TIME ZONE $4)::date::text FROM (
                     SELECT x.done_at AS t FROM li_actions x WHERE x.contact_id=k.id AND x.tipo='invite' AND x.estado='done'
                     UNION ALL
-                    SELECT ac.fecha FROM activities ac WHERE ac.contact_id=k.id AND ac.estado='hecha'
-                       AND (ac.tipo='linkedin_connect' OR ac.nota LIKE 'Invitación de LinkedIn enviada%' OR ac.nota ~* '^Paso [0-9]+: .*(conexi|invit|connect)')) q) AS invitada
+                    SELECT ac.fecha FROM activities ac WHERE ac.contact_id=k.id AND ac.estado='hecha' AND ${SQL_EVID_INVITE}) q) AS invitada
            FROM lm_contacts k
           WHERE k.user_id=$1 AND ($2::int IS NULL OR k.outbound_client_id=$2) AND k.li_aceptado_at IS NULL
             AND lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) = ANY($3::text[])`,
@@ -490,7 +491,11 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
           if (ya) continue;
           if (Math.random() > Math.min(1, 1 / (CHEQUEO_CADA_MIN[t] * 0.3))) continue;
           const filtro = t === 'check_connections' ? `tipo='invite'` : t === 'check_inbox' ? `tipo IN ('invite','message','inmail')` : `tipo IN ('invite','message','inmail')`;
-          const { rows: [hay] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='done' AND ${filtro} AND done_at > NOW() - INTERVAL '45 days' LIMIT 1`, [a.id]);
+          let { rows: [hay] } = await pool.query(`SELECT 1 FROM li_actions WHERE account_id=$1 AND estado='done' AND ${filtro} AND done_at > NOW() - INTERVAL '45 days' LIMIT 1`, [a.id]);
+          if (!hay && t === 'check_connections') {
+            // invitaciones enviadas a mano (tarea hecha en Nova) que aún no figuran como aceptadas
+            ({ rows: [hay] } = await pool.query(`SELECT 1 FROM activities ac JOIN lm_contacts k ON k.id=ac.contact_id WHERE k.user_id=$1 AND ($2::int IS NULL OR k.outbound_client_id=$2) AND k.li_aceptado_at IS NULL AND ac.estado='hecha' AND ac.fecha > NOW() - INTERVAL '45 days' AND ${SQL_EVID_INVITE} LIMIT 1`, [a.user_id, a.outbound_client_id || null]));
+          }
           if (!hay) continue;
           await pool.query(`INSERT INTO li_actions (user_id, account_id, tipo, slug, url) VALUES ($1,$2,$3,'-',$4)`, [a.user_id, a.id, t, CONFIG.chequeos[t]]);
         }
