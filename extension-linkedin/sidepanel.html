@@ -196,6 +196,10 @@ body.emb{height:100vh;overflow-y:auto;padding-bottom:28px}
 .cf{position:fixed;inset:0;z-index:60;background:rgba(17,24,39,.45);display:flex;align-items:center;justify-content:center;padding:20px}.cf[hidden]{display:none}
 .cf>div{background:#fff;border-radius:14px;padding:20px;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.cf h4{margin:0 0 6px;font-size:17px}.cf p{margin:0 0 16px;font-size:14px;color:#4B5563;line-height:1.45}.cf .r{display:flex;gap:10px;justify-content:flex-end}.cf button{height:38px;font-size:14.5px}.cf .bad{background:#D92D20;border-color:#D92D20;color:#fff}.cf .bad:hover{background:#B42318}
 .tabs[hidden],.row[hidden]{display:none}
+.hoy{margin-top:12px;border:.75px solid rgba(31,41,55,.12);border-radius:12px;padding:14px 16px;background:#fff}
+.hoy small{display:block;font-size:13px;color:#6B7280}.hoy .n{font-size:28px;font-weight:700;color:#1F2937;line-height:1.2;margin:2px 0 10px}.hoy .n span{font-size:14px;font-weight:500;color:#6B7280;margin-left:6px}
+.hoy .bar{height:6px;border-radius:99px;background:#EEF0F4;overflow:hidden;margin:0 0 10px}.hoy .bar i{display:block;height:100%;border-radius:99px;background:var(--blue);transition:width .3s}
+.hoy .d{font-size:13px;line-height:1.5;color:#6B7280}.hoy .d b{font-weight:600;color:#374151}
 body.sinvin .sec2,body.sinvin .vis,body.sinvin button.fa{display:none}
 /* conexión: elegir el cliente outbound (como la lista de Clientes outbound de Nova) */
 .clist{display:flex;flex-direction:column;gap:8px;max-height:330px;overflow:auto;margin:8px 0 4px;padding:2px}
@@ -288,6 +292,7 @@ span.pf-find{cursor:default;display:inline-flex;align-items:center}
   <div class="hero" id="hero"><span class="dot"></span><div><b id="pill">En pausa</b><span id="sub">Nada se ejecuta hasta que la actives</span></div></div>
   <div class="modo" id="modo"></div>
   <div class="msg" id="st">Cargando…</div>
+  <div id="hoy"></div>
   <div id="extra"></div>
   <div class="acts"><button id="now">↻ Comprobar ahora</button><button id="probar" title="Solo para pruebas o tras un fallo: salta la espera y ejecuta la siguiente acción ya">▶ Probar ahora</button></div>
   <button id="toggle" class="go" hidden>Activar</button>

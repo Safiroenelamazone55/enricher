@@ -52,6 +52,20 @@ function pintarExtra(e) {
   if (e.modo !== 'auto') h += '<details class="card" style="margin-top:14px"><summary>Qué pasa en modo asistido</summary><div class="in-d">La extensión abre cada perfil en una pestaña de LinkedIn. <b>Las visitas se hacen solas.</b> En invitaciones y mensajes deja el texto escrito y <b>tú pulsas «Enviar»</b>; luego sigue con la siguiente. Mantén este Chrome abierto con LinkedIn iniciado.</div></details>';
   box.innerHTML = h;
 }
+// «Acciones restantes hoy» + lo hecho por tipo (los números reales de Nova, con los topes de HOY)
+let _hoyT = 0;
+async function pintarHoy(forzar) {
+  const box = $('hoy'); if (!box) return;
+  if (!forzar && Date.now() - _hoyT < 20000) return; _hoyT = Date.now();
+  const p = await msg('prefs', {});
+  if (!p || p.error || !p.hoy) { box.innerHTML = ''; return; }
+  const h = p.hoy, t = h.topes || {}, x = h.por_tipo || {};
+  const pct = h.tope ? Math.min(100, Math.round(100 * (h.hechas || 0) / h.tope)) : 0;
+  const trozos = ['Hechas hoy: <b>' + (h.hechas || 0) + '</b>', 'invitaciones ' + (x.invite || 0) + '/' + (t.invite || 0), 'visitas ' + (x.visit || 0) + '/' + (t.visit || 0), 'mensajes ' + (x.message || 0) + '/' + (t.message || 0)];
+  if (x.inmail) trozos.push('InMail ' + x.inmail + '/' + (t.inmail || 0));
+  [['react', 'reacciones'], ['follow', 'seguidos'], ['comment', 'comentarios']].forEach(([k, l]) => { if (x[k]) trozos.push(x[k] + ' ' + l); });
+  box.innerHTML = '<div class="hoy"><small>Acciones restantes hoy</small><div class="n">' + (h.restantes != null ? h.restantes : '—') + '<span>' + (h.tope ? 'de ' + h.tope + ' de hoy' : '') + '</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="d">' + trozos.join(' · ') + '</div></div>';
+}
 let _proxT = 0;
 async function pintarProx(forzar) {
   const box = $('prox'); if (!box) return;
@@ -68,7 +82,7 @@ async function pintarProx(forzar) {
   box.innerHTML = h;
   const vm = $('vermas'); if (vm) vm.onclick = () => mostrarPestana('lista');
 }
-setInterval(() => { pintar(); if (pestana === 'lista') pintarLista(); }, 30000);
+setInterval(() => { pintar(); pintarHoy(true); if (pestana === 'lista') pintarLista(); }, 30000);
 
 const paso = (ok, t) => `<div class="step${ok ? ' ok' : ''}"><i>${ok ? '✓' : '·'}</i><span>${t}</span></div>`;
 
@@ -212,7 +226,7 @@ async function pintar() {
   const { token } = await chrome.storage.local.get({ token: '' });
   $('vinculada').hidden = !token; $('conectar').hidden = !!token; $('tabs').hidden = !token; document.body.classList.toggle('sinvin', !token);
   if (!token && pestana !== 'estado') mostrarPestana('estado');
-  if (token) pintarVinculada();
+  if (token) { pintarVinculada(); pintarHoy(); }
   pintarErrores();
   pintarAlerta();
   if (token) bienvenida();
