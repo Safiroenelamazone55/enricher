@@ -21,6 +21,7 @@ function mount(app, { pool, requireAuth }) {
         estado TEXT NOT NULL DEFAULT 'probando', last_error TEXT NOT NULL DEFAULT '', sent_folder TEXT NOT NULL DEFAULT '',
         verified_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_warm_pool_email_uq ON lm_warm_pool (user_id, lower(email))`);
+      await pool.query(`ALTER TABLE lm_warm_pool ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'grupo'`);   // 'grupo' = calienta a los demás · 'semilla' = solo recibe las pruebas de bandeja
     } catch (e) { aviso('tablas', e.message); }
   })();
 
@@ -79,7 +80,7 @@ function mount(app, { pool, requireAuth }) {
   });
 
   // ── Grupo de buzones de calentamiento (los que irán calentando a los demás) ──
-  const publico = r => ({ id: r.id, email: r.email, provider: r.provider, estado: r.estado, last_error: r.last_error, verified_at: r.verified_at, created_at: r.created_at });
+  const publico = r => ({ id: r.id, rol: r.rol, email: r.email, provider: r.provider, estado: r.estado, last_error: r.last_error, verified_at: r.verified_at, created_at: r.created_at });
   app.get('/api/lm/warmup/pool', requireAuth, async (req, res) => {
     try { const { rows } = await pool.query(`SELECT * FROM lm_warm_pool WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]); res.json(rows.map(publico)); }
     catch (e) { res.status(500).json({ error: 'No se pudo cargar el grupo' }); }
@@ -104,11 +105,11 @@ function mount(app, { pool, requireAuth }) {
       if (!hosts.smtp_host || !hosts.imap_host) return res.status(400).json({ error: 'Faltan los servidores SMTP/IMAP para este proveedor.' });
       const ids = [];
       for (const f of filasIn) {
-        const { rows: [r] } = await pool.query(`INSERT INTO lm_warm_pool (user_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'probando','')
+        const { rows: [r] } = await pool.query(`INSERT INTO lm_warm_pool (user_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error, rol)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'probando','',$10)
             ON CONFLICT (user_id, lower(email)) DO UPDATE SET provider=EXCLUDED.provider, smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port, smtp_secure=EXCLUDED.smtp_secure,
-              imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port, pass_enc=EXCLUDED.pass_enc, estado='probando', last_error='' RETURNING id`,
-          [req.workspaceOwnerId, f.email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(f.password)]);
+              imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port, pass_enc=EXCLUDED.pass_enc, estado='probando', last_error='', rol=EXCLUDED.rol RETURNING id`,
+          [req.workspaceOwnerId, f.email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(f.password), b.rol === 'semilla' ? 'semilla' : 'grupo']);
         ids.push(r.id);
       }
       res.status(202).json({ ok: true, total: ids.length });

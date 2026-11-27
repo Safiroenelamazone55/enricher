@@ -2,7 +2,7 @@
 // Usa lo global de app.js: API, apiFetch, esc, showBanner, novaConfirm.
 const WarmupModule = (() => {
   const BODY = { 'warmup': 'warmup-body', 'warmup-buzones': 'warmup-buzones-body', 'warmup-pool': 'warmup-pool-body', 'warmup-pruebas': 'warmup-pruebas-body' };
-  let _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
+  let _rolImp = 'grupo', _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
   const el = id => document.getElementById(id);
   const hoy = () => { const d = new Date(); return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }); };
   const SV = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -29,7 +29,7 @@ const WarmupModule = (() => {
     if (_b === null) { host.innerHTML = '<div class="wm"><div class="wm-vacio">Cargando…</div></div>'; return; }
     host.innerHTML = '<div class="wm">' + ({ 'warmup': _dash, 'warmup-buzones': _buzones, 'warmup-pool': _grupo, 'warmup-pruebas': _pruebas }[_tab] || _dash)() + '</div>';
     clearTimeout(_poll);
-    if (_tab === 'warmup-pool' && (_pool || []).some(x => x.estado === 'probando')) _poll = setTimeout(async () => { if (_tab !== 'warmup-pool') return; await _load(); _pintar(); }, 3000);
+    if ((_tab === 'warmup-pool' || _tab === 'warmup-pruebas') && (_pool || []).some(x => x.estado === 'probando')) _poll = setTimeout(async () => { if (_tab !== 'warmup-pool' && _tab !== 'warmup-pruebas') return; await _load(); _pintar(); }, 3000);
   }
   async function render(tab) {
     _tab = BODY[tab] ? tab : 'warmup';
@@ -39,7 +39,7 @@ const WarmupModule = (() => {
 
   // ── Panel de control ──
   function _dash() {
-    const b = _b || [], pl = _pool || [];
+    const b = _b || [], pl = (_pool || []).filter(x => x.rol !== 'semilla');
     const verdes = b.filter(x => x.salud && x.salud.nota >= 90).length, autos = b.filter(x => x.ramp_auto).length, conPool = pl.filter(x => x.estado === 'conectado').length;
     const pasos = [
       { t: 'Conecta tus buzones', ok: b.length > 0, txt: b.length ? `${b.length} buzón${b.length > 1 ? 'es' : ''} conectado${b.length > 1 ? 's' : ''}` : 'Aún no hay buzones', btn: b.length ? 'Ver buzones' : 'Conectar buzón', f: b.length ? "WarmupModule.ir('warmup-buzones')" : "selectModule('leadmanagement')" },
@@ -100,19 +100,20 @@ const WarmupModule = (() => {
 
   // ── Grupo de calentamiento ──
   function _grupo() {
-    const pl = _pool || [], listos = pl.filter(x => x.estado === 'conectado').length;
+    const pl = (_pool || []).filter(x => x.rol !== 'semilla'), listos = pl.filter(x => x.estado === 'conectado').length;
     const est = x => ({ conectado: chip('Conectado', 'verde'), solo_envio: chip('Solo envío', 'ambar'), probando: chip('Probando…', 'azul'), error: chip('Error', 'rojo') }[x.estado] || chip(x.estado));
     return _titulo('Grupo de calentamiento', `${pl.length ? `${listos} de ${pl.length} buzones listos. ` : ''}Buzones propios que se escriben entre sí para dar actividad y reputación a los demás.`,
-        `<button class="wm-btn wm-btn--pri" onclick="WarmupModule.importar()">+ Importar buzones</button>`) +
+        `<button class="wm-btn wm-btn--pri" onclick="WarmupModule.importar('grupo')">+ Importar buzones</button>`) +
       `<div class="wm-aviso">${SV('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>', 16)}<span>Aquí se guardan y verifican los buzones (con la contraseña cifrada). El envío de calentamiento entre ellos todavía <b>no está activo</b>: se enciende cuando el grupo esté completo y probado.</span></div>` +
       (pl.length ? `<div class="wm-card wm-tbl"><div class="wm-tr wm-tr--h"><span>Buzón</span><span>Proveedor</span><span>Estado</span><span></span></div>${pl.map(x => `<div class="wm-tr"><span class="wm-tr__e"><b>${esc(x.email)}</b>${x.last_error ? `<small>${esc(x.last_error)}</small>` : ''}</span><span>${esc(x.provider)}</span><span>${est(x)}</span><span class="wm-tr__a"><button class="wm-btn" onclick="WarmupModule.probar(${x.id})">Probar</button><button class="wm-btn wm-btn--rojo" onclick="WarmupModule.quitar(${x.id})">Quitar</button></span></div>`).join('')}</div>`
         : '<div class="wm-card"><div class="wm-vacio">Todavía no hay buzones en el grupo. Importa los que creaste (correo y contraseña de aplicación).</div></div>');
   }
-  function importar() {
+  function importar(rol) {
+    _rolImp = rol === 'semilla' ? 'semilla' : 'grupo';
     el('wm-modal')?.remove();
     const m = document.createElement('div'); m.id = 'wm-modal'; m.className = 'wm-modal'; m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="wm-modal__box"><div class="wm-modal__hd"><h3>Importar buzones de calentamiento</h3><button class="wm-x" onclick="document.getElementById('wm-modal').remove()">✕</button></div>
-      <p class="wm-modal__p">Pega una línea por buzón: <code>correo,contraseña de aplicación</code> (hasta 40). Se prueban solos y la contraseña se guarda cifrada.</p>
+    m.innerHTML = `<div class="wm-modal__box"><div class="wm-modal__hd"><h3>${_rolImp === 'semilla' ? 'Conectar cuentas semilla' : 'Importar buzones de calentamiento'}</h3><button class="wm-x" onclick="document.getElementById('wm-modal').remove()">✕</button></div>
+      <p class="wm-modal__p">Pega una línea por ${_rolImp === 'semilla' ? 'cuenta' : 'buzón'}: <code>correo,contraseña de aplicación</code> (hasta 40). Se prueban solas y la contraseña se guarda cifrada.${_rolImp === 'semilla' ? ' Cada proveedor (Gmail, Outlook, Zoho) se importa por separado.' : ''}</p>
       <div class="wm-modal__g"><label>Proveedor<select id="wm-prov" onchange="document.getElementById('wm-zreg').style.display=this.value==='zoho'?'':'none'"><option value="zoho">Zoho Mail</option><option value="google">Google Workspace / Gmail</option><option value="microsoft">Microsoft 365 (SMTP con contraseña)</option><option value="otro">Otro (SMTP/IMAP)</option></select></label>
       <label id="wm-zreg">Región de Zoho<select id="wm-zr"><option value="com">com (EE. UU.)</option><option value="eu">eu (Europa)</option><option value="in">in (India)</option><option value="com.au">com.au</option><option value="jp">jp</option></select></label></div>
       <textarea id="wm-filas" rows="9" placeholder="calentar1@tudominio.com,abcd efgh ijkl mnop&#10;calentar2@tudominio.com,..." spellcheck="false"></textarea>
@@ -126,7 +127,7 @@ const WarmupModule = (() => {
     if (!filas.length) { err.textContent = 'Pega al menos una línea.'; err.style.display = ''; return; }
     const btn = el('wm-go'); btn.disabled = true; btn.textContent = 'Importando…';
     try {
-      const r = await apiFetch(`${API}/lm/warmup/pool/importar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: el('wm-prov').value, zoho_region: el('wm-zr').value, filas }) });
+      const r = await apiFetch(`${API}/lm/warmup/pool/importar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rol: _rolImp, provider: el('wm-prov').value, zoho_region: el('wm-zr').value, filas }) });
       const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'No se pudo importar');
       el('wm-modal')?.remove(); showBanner(`✓ ${d.total} buzón${d.total > 1 ? 'es' : ''} importado${d.total > 1 ? 's' : ''}: se están probando`, 'success');
       await _load(); _pintar();
@@ -139,10 +140,16 @@ const WarmupModule = (() => {
     await apiFetch(`${API}/lm/warmup/pool/${id}`, { method: 'DELETE' }); await _load(); _pintar();
   }
 
-  // ── Pruebas de bandeja ──
+  // ── Pruebas de bandeja + cuentas semilla ──
   function _pruebas() {
-    return _titulo('Pruebas de bandeja', 'Comprueba en qué carpeta cae un correo antes de lanzar una campaña.') +
-      `<div class="wm-card"><div class="wm-vacio"><b>Próximamente</b><br>Se enviará un correo de prueba desde un buzón a cuentas semilla (Gmail, Outlook, Zoho…) y se leerá por IMAP si cayó en Entrada, Promociones o Spam.<br>Necesita 4–6 cuentas semilla conectadas.</div></div>`;
+    const se = (_pool || []).filter(x => x.rol === 'semilla'), ok = se.filter(x => x.estado === 'conectado').length;
+    const est = x => ({ conectado: chip('Conectada', 'verde'), solo_envio: chip('Solo envío', 'ambar'), probando: chip('Probando…', 'azul'), error: chip('Error', 'rojo') }[x.estado] || chip(x.estado));
+    const prov = { zoho: 'Zoho', google: 'Google', microsoft: 'Microsoft', otro: 'Otro' };
+    return _titulo('Pruebas de bandeja', 'Comprueba en qué carpeta cae un correo antes de lanzar una campaña.', `<button class="wm-btn wm-btn--pri" onclick="WarmupModule.importar('semilla')">+ Conectar cuentas semilla</button>`) +
+      `<div class="wm-card"><div class="wm-card__t">Cuentas semilla ${se.length ? `· ${ok} de ${se.length} listas` : ''}</div>
+        <div style="padding:14px 16px;font-size:14px;line-height:20px;color:#5A6472">Son cuentas de correo que solo reciben las pruebas: Nova envía un correo desde el buzón de un cliente a todas las semillas y lee por IMAP en qué carpeta apareció (Entrada, Promociones o Spam).<br>Lo ideal: 1–2 Gmail, 1–2 Outlook y 1 Zoho. Si tus prospectos usan Google Workspace o Microsoft 365, añade una de cada una.</div>
+        ${se.length ? se.map(x => `<div class="wm-tr" style="display:grid;grid-template-columns:minmax(220px,2fr) 110px 130px auto;gap:12px;align-items:center;padding:12px 16px;border-top:.75px solid rgba(31,41,55,.08);font-size:14px;line-height:20px"><span class="wm-tr__e"><b>${esc(x.email)}</b>${x.last_error ? `<small>${esc(x.last_error)}</small>` : ''}</span><span>${esc(prov[x.provider] || x.provider)}</span><span>${est(x)}</span><span class="wm-tr__a"><button class="wm-btn" onclick="WarmupModule.probar(${x.id})">Probar</button><button class="wm-btn wm-btn--rojo" onclick="WarmupModule.quitar(${x.id})">Quitar</button></span></div>`).join('') : '<div class="wm-vacio" style="padding:20px">Todavía no hay cuentas semilla conectadas.</div>'}</div>
+      <div class="wm-aviso" style="margin-top:16px">${SV('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>', 16)}<span>Aquí se guardan y verifican las cuentas. El botón para <b>lanzar la prueba</b> y ver el resultado llega en el siguiente paso, cuando haya al menos 3 semillas listas.</span></div>`;
   }
 
   // ── acciones ──
