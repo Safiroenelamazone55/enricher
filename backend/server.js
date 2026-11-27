@@ -6923,7 +6923,7 @@ app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
-// Varios buzones por cliente (hasta 5): el hilo con un contacto sigue por el buzón con el que se habló por última vez (si no hay historial, el primero enviable).
+// Varios buzones por cliente (hasta 20): el hilo con un contacto sigue por el buzón con el que se habló por última vez (si no hay historial, el primero enviable).
 const MB_DE_CONTACTO = (k, soloEnviables) => `LEFT JOIN LATERAL (
   SELECT mbx.* FROM lm_mailboxes mbx
    WHERE mbx.outbound_client_id = ${k}.outbound_client_id AND mbx.user_id = ${k}.user_id ${soloEnviables ? "AND mbx.estado IN ('conectado','solo_envio')" : ''}
@@ -6931,7 +6931,7 @@ const MB_DE_CONTACTO = (k, soloEnviables) => `LEFT JOIN LATERAL (
         SELECT MAX(COALESCE(mm.sent_at, mm.created_at)) AS t FROM lm_messages mm WHERE mm.contact_id = ${k}.id AND mm.mailbox_id = mbx.id
         UNION ALL SELECT MAX(ii.received_at) FROM lm_inbox_messages ii WHERE ii.contact_id = ${k}.id AND ii.mailbox_id = mbx.id) xx) DESC NULLS LAST, mbx.id
    LIMIT 1) mb ON TRUE`;
-const MAX_BUZONES_CLIENTE = 5;
+const MAX_BUZONES_CLIENTE = 20;
 // Antes de guardar un buzón: si ya existe con ese correo se actualiza; si hay un hueco «pendiente de aprobación» (sin correo) lo ocupa; si no, debe haber espacio (máx. 5).
 async function _mbPrepararAlta(uid, clientId, email) {
   const { rows } = await pool.query(`SELECT id, lower(email) AS email FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [uid, clientId]);
@@ -7068,7 +7068,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
         FROM sequences ss LEFT JOIN lm_messages mm ON mm.sequence_id = ss.id
        WHERE ss.user_id=$1 AND ss.outbound_client_id=$2 GROUP BY ss.id ORDER BY ss.nombre`, [uid, cid, tz]);
     const { rows: [ws] } = await pool.query(`SELECT COUNT(*)::int AS n FROM lm_messages mm WHERE mm.user_id=$1 AND mm.estado IN ('sent','replied','bounced') AND ${day.split('$3').join('$2')}`, [uid, tz]);
-    // tope de los buzones del cliente (hasta 5): la SUMA de sus topes; si alguno no tiene tope, no hay tope
+    // tope de los buzones del cliente (hasta 20): la SUMA de sus topes; si alguno no tiene tope, no hay tope
     const topados = mbs.length > 0 && mbs.every(x => x.cap !== null);
     let capBuzon = topados ? mbs.reduce((a, x) => a + x.cap, 0) : null;
     const rampCap = topados && mbs.every(x => x.cap_ramp !== null) ? mbs.reduce((a, x) => a + x.cap_ramp, 0) : null;

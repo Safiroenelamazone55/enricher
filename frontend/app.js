@@ -35313,7 +35313,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     if (_mailboxes === null) await _mbReload();
   }
   function mbManageClose() { document.getElementById('mbx-manage-modal')?.remove(); _mbManageClientId = null; }
-  const _MB_MAX = 5;
+  const _MB_MAX = 20;
   function _mbBodyHtml(c) {
     if (_mailboxes === null) return '<div class="mbx mbx--flat"><div class="mbx-sub">Cargando…</div></div>';
     const lista = _mbDe(c.id), n = lista.length;
