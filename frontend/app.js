@@ -35292,7 +35292,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       if (body && c) body.innerHTML = _mbBodyHtml(c);
     }
   }
-  function _mbFor(clientId) { return Array.isArray(_mailboxes) ? _mailboxes.find(m => m.outbound_client_id === clientId) : null; }
+  function _mbFor(clientId) { if (!Array.isArray(_mailboxes)) return null; const l = _mailboxes.filter(m => m.outbound_client_id === clientId); return l.find(m => m.estado === 'conectado') || l.find(m => m.estado === 'solo_envio') || l[0] || null; }
+  const _mbDe = clientId => Array.isArray(_mailboxes) ? _mailboxes.filter(m => m.outbound_client_id === clientId) : [];
   let _mbManageClientId = null;
   async function mbManageOpen(clientId) {
     mbManageClose();
@@ -35300,16 +35301,27 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     _mbManageClientId = clientId;
     const m = document.createElement('div'); m.id = 'mbx-manage-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) mbManageClose(); };
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
-      <div class="fin-pi-box__hd"><h3>Buzón de ${esc(c.nombre)}</h3><button class="fin-pi-x" onclick="LeadManagerModule.mbManageClose()">✕</button></div>
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:480px;max-height:90vh;overflow:auto">
+      <div class="fin-pi-box__hd"><h3>Buzones de ${esc(c.nombre)}</h3><button class="fin-pi-x" onclick="LeadManagerModule.mbManageClose()">✕</button></div>
       <div id="mbx-manage-body" style="padding:4px 22px 22px">${_mailboxes === null ? '<div class="mbx-sub">Cargando…</div>' : _mbBodyHtml(c)}</div>
     </div>`;
     document.body.appendChild(m);
     if (_mailboxes === null) await _mbReload();
   }
   function mbManageClose() { document.getElementById('mbx-manage-modal')?.remove(); _mbManageClientId = null; }
+  const _MB_MAX = 5;
   function _mbBodyHtml(c) {
-    const mb = _mbFor(c.id);
+    if (_mailboxes === null) return '<div class="mbx mbx--flat"><div class="mbx-sub">Cargando…</div></div>';
+    const lista = _mbDe(c.id), n = lista.length;
+    if (!n) return `<div class="mbx mbx--flat"><div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova. Puedes conectar hasta ${_MB_MAX}: Nova reparte los envíos entre ellos.</div>
+           <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button></div>`;
+    return `<div class="mbx mbx--flat">${lista.map(mb => `<div style="padding:12px 0;border-top:${mb === lista[0] ? '0' : '1px solid #E5E7EB'}">${_mbCardHtml(c, mb)}</div>`).join('')}
+      <div style="margin-top:6px;padding-top:12px;border-top:1px solid #E5E7EB">
+        ${n < _MB_MAX ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">+ Añadir otro buzón (${n}/${_MB_MAX})</button>` : `<div class="mbx-sub">Este cliente ya tiene el máximo de ${_MB_MAX} buzones.</div>`}
+        <div class="mbx-sub" style="margin-top:8px">${n > 1 ? 'Nova reparte los envíos entre estos buzones y cada contacto sigue recibiendo del mismo remitente. El cupo diario del cliente es la suma de los cupos de sus buzones.' : 'Con más buzones Nova reparte los envíos y el cliente puede enviar más al día sin quemar ninguno.'}</div>
+      </div></div>`;
+  }
+  function _mbCardHtml(c, mb) {
     const provLbl = mb ? (_MB_PROV.find(p => p[0] === mb.provider) || ['', mb.provider])[1] : '';
     // Estado "necesita aprobación del admin" pisa el chip normal: es un caso especial
     // que requiere una acción distinta (mandar correo al admin, no re-conectar).
@@ -35347,14 +35359,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
              <div class="mbm__list">
                ${!needsConsent ? `<button class="mbm__row" onclick="LeadManagerModule.mbTest(${mb.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>Probar envío</button>` : ''}
                <button class="mbm__row" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Nombre del remitente y firma HTML de este buzón"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>Remitente y firma${(mb.signature_html || mb.from_name) ? '<i class="mbm__ok">Configurada</i>' : ''}</button>
-               <button class="mbm__row" onclick="LeadManagerModule.mbOpen(${c.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>Cambiar de buzón</button>
+               
                ${mb.provider === 'microsoft' && !needsConsent ? `<button class="mbm__row" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del administrador"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg></span>Pedir aprobación al administrador</button>` : ''}
              </div>
              <button class="mbm__del" onclick="LeadManagerModule.mbDelete(${mb.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span>Quitar este buzón</button>
            </div>`
         : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
            <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button>`;
-    return `<div class="mbx mbx--flat">${inner}</div>`;
+    return inner;
   }
   // ── WhatsApp del cliente outbound: mismo patrón que el buzón — un modal desde el
   // "⋮" en vez de vivir suelto, y el ítem del menú dice "Conectar"/"Editar" según si
@@ -35514,13 +35526,14 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
   function mbOpen(clientId) {
     mbClose();
     const c = _clients.find(x => x.id === clientId); if (!c) return;
-    const mb = _mbFor(clientId);
+    if (_mbDe(clientId).length >= _MB_MAX) return showBanner(`Un cliente puede tener hasta ${_MB_MAX} buzones. Quita uno para añadir otro.`, 'warn');
+    const mb = null;   // siempre se conecta un buzón NUEVO (los demás siguen conectados)
     const m = document.createElement('div'); m.id = 'mbx-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) mbClose(); };
     const prov = (mb && mb.provider) || 'google';
     const zregion = (mb && mb.provider === 'zoho') ? _zohoRegionFromHost(mb.smtp_host) : 'com';
     m.innerHTML = `<div class="fin-pi-box dle-box">
-      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Buzón de ${esc(c.nombre)}</div><div class="dle-hd__s">Se conecta por SMTP (enviar) e IMAP (leer). La contraseña se guarda cifrada.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbClose()">✕</button></div>
+      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Añadir buzón a ${esc(c.nombre)}</div><div class="dle-hd__s">Se conecta por SMTP (enviar) e IMAP (leer). La contraseña se guarda cifrada.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbClose()">✕</button></div>
       <div class="dle-grid">
         <label class="dle-f"><span class="dle-l">Proveedor</span><select class="dle-i" id="mbx-prov" onchange="LeadManagerModule.mbProv(this.value)">${_MB_PROV.map(p => `<option value="${p[0]}"${prov === p[0] ? ' selected' : ''}>${p[1]}</option>`).join('')}</select></label>
         <label class="dle-f" id="mbx-zregion-f" style="display:${prov === 'zoho' ? '' : 'none'}"><span class="dle-l">Región de Zoho</span><select class="dle-i" id="mbx-zregion">${_MB_ZOHO_REGIONS.map(r => `<option value="${r[0]}"${zregion === r[0] ? ' selected' : ''}>${r[1]}</option>`).join('')}</select></label>
