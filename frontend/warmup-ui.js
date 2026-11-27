@@ -91,7 +91,7 @@ const WarmupModule = (() => {
           <span class="wm-chev">${SV('<path d="m6 9 6 6 6-6"/>')}</span>
         </div>
         <div class="wm-row__act" onclick="event.stopPropagation()">
-          <label class="wm-sw" title="Manda sobre el límite fijo: sube el cupo si los rebotes son bajos y lo baja si son altos"><input type="checkbox" ${x.ramp_auto ? 'checked' : ''} onchange="WarmupModule.auto(${x.id},this.checked)"><span></span>Ajuste automático</label>
+          <label class="wm-sw" title="Manda sobre el límite fijo: sube el cupo si los rebotes son bajos y lo baja si son altos"><input type="checkbox" ${x.ramp_auto ? 'checked' : ''} onchange="WarmupModule.auto(${x.id},this.checked)"><span></span>Ajuste automático</label>${x.ramp_auto ? `<label class="wm-max" title="Es el único límite cuando el ajuste automático está activo">Máximo <input type="number" min="10" max="500" value="${x.ramp_techo}" onchange="WarmupModule.techo(${x.id},this.value)"> al día</label>` : ''}
           <button class="wm-btn" onclick="WarmupModule.revisar(${x.id},this)">Revisar ahora</button>
         </div>${det}</div>`;
     };
@@ -213,6 +213,12 @@ const WarmupModule = (() => {
       _open.add(id); await _load(); _pintar(); showBanner('✓ Buzón revisado', 'success');
     } catch (e) { showBanner('No se pudo revisar: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Revisar ahora'; } }
   }
+  async function techo(id, v) {
+    try {
+      const r = await apiFetch(`${API}/lm/warmup/buzones/${id}/techo`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ techo: v }) });
+      if (!r.ok) throw new Error('Error'); showBanner('✓ Máximo guardado', 'success'); await _load(); _pintar();
+    } catch (_) { showBanner('No se pudo guardar', 'error'); }
+  }
   async function auto(id, on) {
     const x = (_b || []).find(y => y.id === id);
     try {
@@ -222,5 +228,5 @@ const WarmupModule = (() => {
       await _load(); _pintar();
     } catch (_) { showBanner('No se pudo guardar', 'error'); await _load(); _pintar(); }
   }
-  return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar, lanzar, copiar };
+  return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar, lanzar, copiar, techo };
 })();
