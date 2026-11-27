@@ -214,6 +214,7 @@ async function tickInner(manual) {
     let res; try { res = await ejecutar(r.accion, r.modo); } catch (e) { res = { codigo: 'fallo', error: /tard/i.test(e.message) ? 'pagina_lenta' : 'excepcion_extension', detalle: String(e && e.message || e).slice(0, 200) }; }
     if (res.codigo !== 'ok') await logErr(res.codigo === 'omitida' || res.error === 'equipo_suspendido' ? 'aviso' : 'error', 'accion_' + (res.error || res.codigo), `${r.accion.tipo} → ${r.accion.slug}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}${res.detalle ? ' — ' + String(res.detalle).slice(0, 150) : ''}`, { tipo: r.accion.tipo, slug: r.accion.slug, codigo: res.codigo, error: res.error, detalle: res.detalle, diag: res.diag || null });
     await enviarResultado(r.accion.id, res);
+    if (r.accion.tipo === 'check_connections' && res.codigo === 'ok') await chrome.storage.local.set({ conexPendiente: false });
     if (res.codigo === 'restringida') await chrome.storage.local.set({ paused: true });
     await setEstado({ msg: `Resultado ${r.accion.tipo}: ${res.codigo}${res.error ? ' (' + res.error + ')' : ''}`, nivel: res.codigo === 'ok' ? 'ok' : 'warn', accion: null });
   } catch (e) {
@@ -286,7 +287,7 @@ async function ejecutarInner(a, modo, est) {
       });
     }
     for (let i = 0; i < 3; i++) {
-      try { r = await chrome.tabs.sendMessage(tab.id, { cmd: 'ejecutar', accion: a, asistido, config: await cfg() }); break; } catch (e) { await sleep(2000); }
+      try { r = await chrome.tabs.sendMessage(tab.id, { cmd: 'ejecutar', accion: a, asistido, config: await cfg(), profundo: a.tipo === 'check_connections' && !!(await chrome.storage.local.get({ conexPendiente: false })).conexPendiente }); break; } catch (e) { await sleep(2000); }
     }
     if (a.tipo === 'inmail' && r && r.codigo === 'abierto') {
       const t2 = await nuevaTab; quitarEscucha();
@@ -364,7 +365,7 @@ async function parVincular(d) {
   const body = d.account_id ? { account_id: d.account_id, li_slug: slug } : { nueva: { nombre: d.nombre || 'Cuenta LinkedIn', outbound_client_id: d.cliente_id || null }, li_slug: slug };
   const r = await novaFetch('/li/pair', { method: 'POST', body: JSON.stringify(body) });
   if (r.status !== 200 || !r.data.token) return { error: (r.data && r.data.error) || ('HTTP ' + r.status) };
-  await chrome.storage.local.set({ token: r.data.token, paused: true, estado: { msg: 'Cuenta vinculada. Pulsa Activar cuando quieras empezar.', nivel: 'ok', t: Date.now(), slug }, identidad: { slug, t: Date.now() } });
+  await chrome.storage.local.set({ token: r.data.token, paused: true, conexPendiente: true, estado: { msg: 'Cuenta vinculada. Pulsa Activar cuando quieras empezar.', nivel: 'ok', t: Date.now(), slug }, identidad: { slug, t: Date.now() } });
   return { ok: true, cuenta: r.data.cuenta, slug };
 }
 

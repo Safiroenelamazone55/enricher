@@ -370,16 +370,17 @@
     });
     return out;
   }
-  async function leerConexiones() {
+  // Normal: las primeras ~10 conexiones (las que acaban de aceptar), sin bajar de más. Profunda: hasta ~100, solo la primera vez que se vincula la cuenta.
+  async function leerConexiones(profundo) {
     await sleep(rnd(1500, 3000));
     const av0 = avisoLinkedIn(); if (av0) return porAviso(av0);
     const main0 = document.querySelector('main') || document.body, oculta = document.hidden;
     const contar = () => new Set([...main0.querySelectorAll('a[href*="/in/"]')].map(y => slugDeHref(y.getAttribute('href'))).filter(Boolean)).size;
     // La lista carga de a pocas: se baja hasta que deja de crecer (máx. ~100 conexiones), porque antes solo se veían las 10 primeras
     let ultimo = -1, igual = 0;
-    for (let i = 0; i < 9 && igual < 2; i++) {
+    for (let i = 0; i < (profundo ? 9 : 1) && igual < 2; i++) {
       const n = contar(); igual = n === ultimo ? igual + 1 : 0; ultimo = n;
-      if (n >= 100) break;
+      if (n >= (profundo ? 100 : 10)) break;   // en la lectura normal, si ya se ven 10 no se baja nada
       const mas = [...main0.querySelectorAll('button')].find(b => /^(show more results|ver más resultados|mostrar más resultados)$/i.test(String(b.innerText || '').trim()) && vis(b));
       if (mas) mas.click();
       window.scrollTo({ top: document.documentElement.scrollHeight, behavior: oculta ? 'auto' : 'smooth' });
@@ -388,7 +389,7 @@
     const av = avisoLinkedIn(); if (av) return porAviso(av);
     const main = document.querySelector('main') || document.body;
     const total = (String(main.innerText || '').match(/(\d[\d.,]*)\s+(connections|conexiones)/i) || [])[1];
-    const conexiones = parseConexiones(main).slice(0, 120);
+    const conexiones = parseConexiones(main).slice(0, profundo ? 120 : 30);
     if (total && Number(String(total).replace(/\D/g, '')) === 0) return R('ok', '', '', { datos: { slugs: [], conexiones: [] } });
     if (!conexiones.length) return R('fallo', 'sin_datos', 'No se encontraron conexiones en la página', { snapshot: snapshot() });
     return R('ok', '', '', { datos: { slugs: conexiones.map(c => c.slug), conexiones } });
@@ -488,7 +489,7 @@
           : a.tipo === 'follow' ? await seguir(a, m.asistido)
           : a.tipo === 'comment' ? await comentar(a, m.asistido)
           : a.tipo === 'inmail' ? await inmail(a, m.asistido)
-          : a.tipo === 'check_connections' ? await leerConexiones()
+          : a.tipo === 'check_connections' ? await leerConexiones(!!m.profundo)
           : a.tipo === 'check_inbox' ? await leerBandeja()
           : a.tipo === 'check_notifications' ? await leerNotificaciones()
           : R('omitida', 'tipo_no_soportado', 'Esta versión no ejecuta ' + a.tipo);
