@@ -19,19 +19,15 @@
       .tab.on .dot{display:block}
       .tab .hide{position:absolute;top:-7px;left:-7px;width:18px;height:18px;border-radius:50%;background:#577090;color:#fff;font:700 12px/18px system-ui;text-align:center;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
       .tab:hover .hide{display:block}
-      .panel{position:fixed;top:0;right:0;height:100vh;width:480px;max-width:92vw;background:#FBFBFB;box-shadow:-6px 0 28px rgba(20,30,60,.28);border-left:1px solid #E3E6EC;display:none;flex-direction:column;box-sizing:border-box}
-      .panel.open{display:flex}
-      .bar{height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 14px;background:#fff;border-bottom:1px solid #EFEFEF;font:600 13px system-ui,sans-serif;color:#577090}
-      .bar button{all:unset;cursor:pointer;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:400 20px system-ui;color:#577090}
-      .bar button:hover{background:#F0F2F6}
-      iframe{border:0;flex:1;width:100%}`,
+      .panel{position:fixed;top:0;right:0;height:100vh;width:500px;max-width:92vw;background:#fff;box-shadow:rgba(0,0,0,.08) 0 8px 16px 0,rgba(0,0,0,.04) 0 0 4px 0;display:flex;flex-direction:column;box-sizing:border-box;transform:translateX(100%);visibility:hidden;transition:transform .3s,visibility 0s .3s}
+      .panel.open{transform:none;visibility:visible;transition:transform .3s,visibility 0s}
+            iframe{border:0;flex:1;width:100%;height:100%;display:block;background:#fff}`,
     });
     const logo = el('img', { src: chrome.runtime.getURL('icons/icon128.png'), alt: 'FLOW' });
     const dot = el('span', { className: 'dot' });
     const hide = el('span', { className: 'hide', textContent: '×', title: 'Ocultar (se vuelve a mostrar desde el panel de FLOW → Avanzado)' });
     const tab = el('div', { className: 'tab', title: 'FLOW · abrir (arrastra para subir o bajar)' }, [hide, dot, logo]);
-    const x = el('button', { textContent: '×', title: 'Cerrar' });
-    const panel = el('div', { className: 'panel' }, [el('div', { className: 'bar' }, [el('span', { textContent: 'FLOW' }), x])]);
+    const panel = el('div', { className: 'panel' }, []);
     sh.appendChild(css); sh.appendChild(tab); sh.appendChild(panel);
 
     let frame = null, top = 190;
@@ -41,7 +37,7 @@
     try { chrome.storage.local.get({ lanzadorTop: 190 }, r => { top = Number(r.lanzadorTop) || 190; place(); }); } catch (_) {}
 
     // Al abrir, la página se empuja a la izquierda (margen derecho en <html>) para que el panel no tape nada.
-    const ANCHO = 480, empujar = on => {
+    const ANCHO = 500, empujar = on => {
       const h = document.documentElement;
       if (on) { h.style.setProperty('transition', 'margin-right .15s', 'important'); h.style.setProperty('margin-right', Math.min(ANCHO, window.innerWidth * 0.92) + 'px', 'important'); }
       else { h.style.removeProperty('margin-right'); setTimeout(() => h.style.removeProperty('transition'), 250); }
@@ -50,8 +46,8 @@
       if (!frame) { frame = el('iframe', { src: chrome.runtime.getURL('sidepanel.html?p=2') }); panel.appendChild(frame); }
       panel.classList.add('open'); tab.style.display = 'none'; empujar(true);
     };
-    // Lo normal: abre el panel lateral REAL de Chrome (encoge de verdad la página, nada queda tapado). Si no se pudiera, panel flotante.
-    const abrirPanelReal = () => { try { chrome.runtime.sendMessage({ cmd: 'abrirPanel' }, r => { if (chrome.runtime.lastError || !r || !r.ok) abrirIframe(); }); } catch (_) { abrirIframe(); } };
+    // Lo normal: panel de 500 px pegado a la derecha (el mismo ancho que el de lemlist) que empuja la página a la izquierda.
+    const abrirPanelReal = () => abrirIframe();
     let loginFrame = null;
     const quitarLogin = () => { if (loginFrame) { loginFrame.remove(); loginFrame = null; } };
     window.addEventListener('message', ev => { if (loginFrame && ev.source === loginFrame.contentWindow && ev.data && ev.data.flowLogin) { quitarLogin(); if (ev.data.ok) abrirPanelReal(); } });
@@ -71,8 +67,7 @@
         } catch (_) { abrirPanelReal(); }
       } else { panel.classList.remove('open'); tab.style.display = 'flex'; empujar(false); }
     };
-    x.onclick = () => abrir(false);
-    window.addEventListener('message', ev => { if (ev.data && ev.data.flowCerrar) abrir(false); });
+        window.addEventListener('message', ev => { if (ev.data && ev.data.flowCerrar) abrir(false); });
 
     hide.addEventListener('pointerdown', e => e.stopPropagation());
     hide.addEventListener('pointerup', e => { e.stopPropagation(); try { chrome.storage.local.set({ lanzadorOculto: true }); } catch (_) {} });
@@ -85,6 +80,10 @@
       if (d.moved) { try { chrome.storage.local.set({ lanzadorTop: top }); } catch (_) {} } else abrir(true);
     });
     window.addEventListener('resize', place);
+    let urlVista = location.href;
+    const avisarUrl = () => { try { if (frame && frame.contentWindow) frame.contentWindow.postMessage({ flowUrl: location.href }, '*'); } catch (_) {} };
+    setInterval(() => { if (location.href !== urlVista) { urlVista = location.href; avisarUrl(); } }, 700);
+    window.addEventListener('message', ev => { if (frame && ev.source === frame.contentWindow && ev.data && ev.data.flowListo) avisarUrl(); });
 
     const estado = () => { try { chrome.storage.local.get({ paused: true, token: '', lanzadorOculto: false }, r => { tab.classList.toggle('on', !r.paused && !!r.token); host.style.display = r.lanzadorOculto ? 'none' : ''; }); } catch (_) {} };
     estado(); try { chrome.storage.onChanged.addListener(estado); } catch (_) {}

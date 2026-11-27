@@ -705,7 +705,8 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       if (slug) {
         const { rows: [ya] } = await pool.query(`SELECT id, nombre FROM li_accounts WHERE user_id=$1 AND li_slug=$2 ORDER BY id LIMIT 1`, [uid, slug]);
         if (ya) {
-          await pool.query(`UPDATE li_accounts SET token_hash=$2, estado='pausada', motivo='Reconectada desde la extensión: actívala cuando estés lista', ultimo_visto=NULL, pausa_hasta=NULL WHERE id=$1`, [ya.id, hash(token)]);
+          // Si en la pantalla de conexión se eligió otro cliente outbound, esta cuenta pasa a ese cliente (es una elección explícita de la persona).
+          await pool.query(`UPDATE li_accounts SET token_hash=$2, estado='pausada', motivo='Reconectada desde la extensión: actívala cuando estés lista', ultimo_visto=NULL, pausa_hasta=NULL, outbound_client_id=COALESCE($3, outbound_client_id) WHERE id=$1`, [ya.id, hash(token), parseInt((b.nueva || {}).outbound_client_id, 10) || null]);
           return res.json({ ok: true, token, cuenta: ya, reutilizada: true });
         }
       }
@@ -1054,7 +1055,7 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
   const fichaContacto = async (uid, slug) => {
     const { rows: [k] } = await pool.query(`SELECT k.id, k.nombre, k.apellido, k.cargo, k.empresa_nombre, k.email, k.email_status, k.telefono, k.movil, k.estado, k.disposition, k.outbound_client_id FROM lm_contacts k WHERE k.user_id=$1 AND ${SQL_SLUG}=$2 ORDER BY k.id LIMIT 1`, [uid, slug]);
     if (!k) return { contacto: null, inscrito: [] };
-    const { rows: ins } = await pool.query(`SELECT s.id, s.nombre, cs.estado, cs.paso FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id WHERE cs.user_id=$1 AND cs.contact_id=$2 ORDER BY cs.created_at DESC`, [uid, k.id]);
+    const { rows: ins } = await pool.query(`SELECT s.id, s.nombre, c.nombre AS campana, cs.estado, cs.paso FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id LEFT JOIN campaigns c ON c.id=s.campaign_id WHERE cs.user_id=$1 AND cs.contact_id=$2 ORDER BY (cs.estado='activo') DESC, cs.created_at DESC`, [uid, k.id]);
     return { contacto: k, inscrito: ins };
   };
   // ¿Quién es este prospecto en Nova? + a qué secuencias se le puede añadir (las del cliente de esta cuenta, primero).

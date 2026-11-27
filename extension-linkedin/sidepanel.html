@@ -2,6 +2,7 @@
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FLOW</title><link rel="icon" type="image/png" href="icons/icon48.png">
 <style>
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/inter-latin-wght-normal.woff2) format("woff2")}
 /* Medidas tomadas de la captura del desplegable de lemlist (660 px): texto 17–18 px, filas de 60 px (activación) y 75 px («How to?»),
    borde 1 px #EFEFEF, radio 10 px, fondo #FBFBFB con filas blancas, azul #316BFE, interruptor 37×21, título #213856, gris #577090.
    Logo y marca: los de Nova. */
@@ -10,7 +11,7 @@
 html,body{margin:0}
 body{font:17px/1.45 Inter,"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--pg);-webkit-font-smoothing:antialiased;padding:0 0 24px}
 body.pop{width:560px;min-height:520px}
-body.emb{width:auto;min-height:0}body.emb .top{display:none}body.emb .wrap{padding-top:14px}
+body.emb{width:auto;min-height:0}
 .top{display:flex;align-items:center;gap:12px;padding:11px 22px;height:54px;background:#fff;border-bottom:1px solid var(--line)}
 .top img{width:31px;height:31px;border-radius:8px;display:block}
 .top .brand{font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1}.top .brand small{font-size:16px;font-weight:500;color:var(--mut);letter-spacing:0;margin-left:6px}
@@ -131,6 +132,83 @@ details summary{font-size:14px;min-height:44px;padding:0 12px}details .in-d{padd
 .er{font-size:14px;padding:10px 12px}
 label{font-size:14px;margin:12px 0 4px}input,select{height:32px;font-size:14px;border-radius:10px;border:.75px solid rgba(31,41,55,.15)}
 .step{font-size:14px}.li b{font-size:14px}
+
+/* ── Panel de 500 px dentro de LinkedIn (medidas del de lemlist): encabezado propio, ficha del prospecto, ajustes ── */
+body.emb{height:100vh;overflow-y:auto;padding-bottom:28px}
+.top{height:62px}.brandl{font-size:22px}.brandl img{width:28px;height:28px}
+.hb{height:36px;min-width:36px}.hpill{height:30px;font-size:13px}
+#pop{top:58px;right:10px;min-width:250px;padding:6px;border-radius:12px;box-shadow:0 12px 32px rgba(31,41,55,.18)}
+#pop button{height:44px;gap:12px;font-size:15px;padding:0 12px}#pop button svg{flex:none;color:#4B5563}
+#pop button.danger,#pop button.danger svg{color:#D92D20}#pop button.cur{background:#F3F4F6;font-weight:600}
+.wrap{padding:18px 16px 0}
+.tabs{gap:2px;margin:0 0 14px}.tabs button{height:40px;font-size:15px;padding:0 12px;white-space:nowrap}
+/* ficha del prospecto */
+.pf-head{display:flex;align-items:center;gap:12px}
+.pf-av{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#E8EEFF;color:#316BFE;display:flex;align-items:center;justify-content:center;font:700 16px/1 Inter,system-ui,sans-serif;flex:none}
+.pf-nm{flex:1;min-width:0;display:flex;align-items:center;gap:8px}.pf-nm b{font-size:19px;font-weight:600;line-height:1.2;color:#1F2937;overflow-wrap:anywhere}
+.pf-nm .vl{width:20px;height:20px;border-radius:4px;font-size:11px;background:#4B5563}
+.pf-sub{margin:10px 0 0;color:#4B5563;font-size:15px;line-height:1.45}
+.pf-sub .t{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pf-chip{display:inline-flex;align-items:center;gap:7px;margin-top:8px;max-width:100%;height:30px;padding:0 12px 0 4px;border:.75px solid rgba(31,41,55,.15);border-radius:99px;background:#fff;color:#1F2937;font-size:14px;font-weight:500}
+.pf-chip i{width:22px;height:22px;border-radius:50%;background:#316BFE;color:#fff;font:700 10px/22px Inter,system-ui;text-align:center;font-style:normal;flex:none}.pf-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-loc{margin-top:6px;font-size:13px;color:#6B7280}
+.pf-acts{display:flex;gap:10px;margin-top:16px}.pf-acts button{height:40px;font-size:15px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.pf-acts #pf-camp{flex:1.25}.pf-acts #pf-save{flex:1}
+.pf-acts button.hecho{border-color:#9AD8BC;color:var(--ok);background:var(--okbg)}
+.pf-card{margin-top:16px;border:.75px solid rgba(31,41,55,.12);border-radius:12px;padding:16px 16px 18px;background:#fff}
+.pf-card h3{margin:0 0 12px;font-size:16px;font-weight:600;color:#1F2937}
+.pf-card label{margin:12px 0 6px;font-size:13px;font-weight:500;color:#4B5563}.pf-card label:first-of-type{margin-top:0}
+.pf-in{display:flex;align-items:center;gap:8px;height:42px;padding:0 8px 0 12px;border:.75px solid rgba(31,41,55,.15);border-radius:10px;background:#fff}
+.pf-in:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(49,107,254,.15)}
+.pf-in svg{flex:none;color:#6B7280}.pf-in input{flex:1;min-width:0;height:100%;border:0;padding:0;outline:0!important;box-shadow:none!important;background:none;font-size:15px}
+.pf-find{height:26px;padding:0 10px;border-radius:99px;border:.75px solid #BFD0FF;background:#EAF0FF;color:#316BFE;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;flex:none}.pf-find:hover{background:#DCE6FF}
+.pf-nota{margin:6px 2px 0;font-size:12.5px;color:#6B7280}.pf-nota.ok{color:var(--ok)}.pf-nota.warn{color:var(--warn)}.pf-nota.err{color:var(--err)}
+.pf-seq{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px}.pf-seq span{font-size:12.5px;padding:3px 10px;border-radius:99px;background:var(--okbg);color:var(--ok);font-weight:500}.pf-seq span.p{background:#EEF0F4;color:var(--mut)}
+.pf-msg{margin-top:12px}
+.pf-pick{margin-top:10px;border:.75px solid rgba(31,41,55,.12);border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(31,41,55,.12);overflow:hidden}
+.pf-pick input{height:40px;border:0;border-bottom:.75px solid rgba(31,41,55,.1);border-radius:0;padding:0 14px;font-size:14.5px}
+.pf-pick .ls{max-height:300px;overflow:auto}.pf-pick .it{display:block;width:100%;height:auto;min-height:48px;padding:8px 14px;border:0;border-radius:0;text-align:left;background:#fff;border-top:.75px solid rgba(31,41,55,.06)}.pf-pick .it:hover{background:#F5F8FF}
+.pf-pick .it b{display:block;font-size:14px;font-weight:600;color:#1F2937}.pf-pick .it small{font-size:12px}
+.pf-pick .sep{padding:6px 14px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B7280;background:#F7F8FA}
+/* páginas a pantalla completa: Ajustes y «¿Cómo hacerlo?» */
+.pag{position:fixed;inset:0;z-index:40;background:#fff;display:flex;flex-direction:column}.pag[hidden]{display:none}
+.pag-top{flex:none;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:.75px solid rgba(31,41,55,.1)}
+.pag-top button{height:36px;border:0;background:none;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:16px;color:#1F2937;border-radius:8px}.pag-top button:hover{background:#F3F4F6}
+.pag-body{flex:1;overflow:auto;padding:18px 16px}
+.pag-foot{flex:none;display:flex;gap:10px;padding:12px 16px;border-top:.75px solid rgba(31,41,55,.1);background:#fff}
+.pag-foot .inv{flex:1;height:42px;font-size:15px}.pag-foot .out{width:44px;height:42px;padding:0;color:#D92D20;border-color:#F4B6B0;display:flex;align-items:center;justify-content:center}.pag-foot .out:hover{background:#FDECEA}
+.perfil{text-align:center;padding:6px 0 18px}.perfil .big{width:92px;height:92px;border-radius:50%;background:#6366F1;color:#fff;display:flex;align-items:center;justify-content:center;font:600 34px/1 Inter,system-ui;margin:0 auto 12px}
+.perfil b{display:block;font-size:19px;font-weight:600;color:#1F2937}.perfil small{display:block;margin-top:3px;font-size:14px;color:#6B7280}
+.cred{border:.75px solid rgba(31,41,55,.12);border-radius:12px;padding:16px;background:#fff;margin-bottom:14px}
+.cred small{display:block;font-size:13px;color:#6B7280}.cred .n{font-size:30px;font-weight:700;color:#1F2937;line-height:1.2;margin:2px 0 12px}.cred .n span{font-size:14px;font-weight:500;color:#6B7280;margin-left:6px}
+.cred .row{margin-top:0}.cred .row button{height:38px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+.aj{border:.75px solid rgba(31,41,55,.12);border-radius:12px;padding:16px;background:#fff}
+.aj-h{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;color:#1F2937;margin-bottom:14px}.aj-h i{width:34px;height:34px;border-radius:9px;background:#EAF0FF;color:#316BFE;display:flex;align-items:center;justify-content:center;font-style:normal}
+.aj h4{margin:0 0 10px;font-size:15px;font-weight:600;color:#1F2937}
+.rd{display:flex;gap:12px;align-items:flex-start;padding:8px 0;cursor:pointer;position:relative}.rd input{position:absolute;opacity:0;width:0;height:0}
+.rd .ci{width:20px;height:20px;border-radius:50%;border:1.5px solid #C4CBD6;flex:none;margin-top:1px;position:relative;background:#fff}
+.rd input:checked+.ci{border-color:var(--blue)}.rd input:checked+.ci::after{content:'';position:absolute;inset:3.5px;border-radius:50%;background:var(--blue)}
+.rd b{display:block;font-size:15px;font-weight:500;color:#1F2937;line-height:1.35}.rd small{display:block;font-size:13.5px;color:#6B7280;margin-top:2px;line-height:1.4}
+.rd-sub{margin:4px 0 6px 32px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#F5F6F8;font-size:14px;color:#4B5563}.rd-sub[data-off="1"]{opacity:.55;pointer-events:none}
+.rd-sub input[type=number]{width:70px;height:32px;padding:0 8px;text-align:center}.rd-sub .sw{flex:none}.rd-sub span.tx{flex:1;min-width:0}
+.guardado{font-size:13px;color:var(--ok);height:18px;margin-top:8px}
+.how{display:flex;gap:12px;padding:12px 0;border-top:.75px solid rgba(31,41,55,.08)}.how:first-of-type{border-top:0}.how i{width:26px;height:26px;border-radius:50%;background:#EAF0FF;color:#316BFE;font:700 13px/26px Inter,system-ui;text-align:center;font-style:normal;flex:none}.how b{display:block;font-size:15px;font-weight:600;color:#1F2937}.how span{font-size:14px;color:#4B5563;line-height:1.45}
+.cf{position:fixed;inset:0;z-index:60;background:rgba(17,24,39,.45);display:flex;align-items:center;justify-content:center;padding:20px}.cf[hidden]{display:none}
+.cf>div{background:#fff;border-radius:14px;padding:20px;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.cf h4{margin:0 0 6px;font-size:17px}.cf p{margin:0 0 16px;font-size:14px;color:#4B5563;line-height:1.45}.cf .r{display:flex;gap:10px;justify-content:flex-end}.cf button{height:38px;font-size:14.5px}.cf .bad{background:#D92D20;border-color:#D92D20;color:#fff}.cf .bad:hover{background:#B42318}
+.tabs[hidden],.row[hidden]{display:none}
+body.sinvin .sec2,body.sinvin .vis,body.sinvin button.fa{display:none}
+/* conexión: elegir el cliente outbound (como la lista de Clientes outbound de Nova) */
+.clist{display:flex;flex-direction:column;gap:8px;max-height:330px;overflow:auto;margin:8px 0 4px;padding:2px}
+.cli{display:flex;align-items:center;gap:12px;padding:10px 12px;border:.75px solid rgba(31,41,55,.14);border-radius:10px;background:#fff;cursor:pointer}.cli:hover{background:#F8FAFF}
+.cli.on{border-color:var(--blue);background:#F5F8FF;box-shadow:0 0 0 2px rgba(49,107,254,.18)}
+.cli i{width:36px;height:36px;border-radius:8px;background:#DCEBFF;color:#1D5FBF;display:flex;align-items:center;justify-content:center;font:600 16px/1 Inter,system-ui;font-style:normal;flex:none}
+.cli div{flex:1;min-width:0}.cli b{display:block;font-size:15px;font-weight:600;color:#1F2937}.cli small{display:block;font-size:12.5px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cli .ck{width:20px;height:20px;border-radius:50%;border:1.5px solid #C4CBD6;flex:none;position:relative}.cli.on .ck{border-color:var(--blue)}.cli.on .ck::after{content:'';position:absolute;inset:3.5px;border-radius:50%;background:var(--blue)}
+#cbuscar{margin-top:6px}
+.pf-acts #pf-camp.en{background:#EAF7F1;border-color:#9AD8BC;color:#0E6B4C}.pf-acts #pf-camp.en:hover{background:#DDF1E8}
+.pf-acts #pf-camp span.tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+span.pf-find{cursor:default;display:inline-flex;align-items:center}
+.pf-find.st.ok{background:#E8F6EF;border-color:#9AD8BC;color:#0E6B4C}.pf-find.st.err{background:#FDECEA;border-color:#F4B6B0;color:#B42318}.pf-find.st.warn{background:#FFF6E5;border-color:#F3D08A;color:#B45309}.pf-find.st:not(.ok):not(.err):not(.warn){background:#F1F3F6;border-color:#D9DEE6;color:#6B7280}
 </style></head><body>
 <div class="top">
   <a class="brandl" id="h-nova" title="Abrir Nova"><img src="icons/icon128.png" alt=""><span>FLOW</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
@@ -148,27 +226,32 @@ label{font-size:14px;margin:12px 0 4px}input,select{height:32px;font-size:14px;b
 <div id="login-wrap" hidden><iframe src="login.html" title="Acceso"></iframe></div>
 
 <div id="conectar" hidden>
-  <h2>Conectar esta cuenta de LinkedIn con Nova</h2>
-  <p class="lead">Usa la sesión de Nova y de LinkedIn de este Chrome. No se pide ninguna contraseña.</p>
+  <h2>Conecta esta cuenta de LinkedIn con Nova</h2>
+  <p class="lead">Entra con tu cuenta de Nova y elige a qué cliente outbound pertenece este LinkedIn. Nunca se pide la contraseña de LinkedIn.</p>
   <div class="card" style="margin-top:16px">
     <div id="pasos"></div>
+    <div id="gate" hidden>
+      <div class="li"><span class="in" style="background:#316BFE">N</span><div><b id="gate-user">—</b><small>Sesión de Nova abierta en este Chrome</small></div></div>
+      <div class="row"><button id="gate-ok" class="pri">Continuar</button><button id="gate-otro">Usar otra cuenta</button></div>
+      <p class="foot" style="margin-top:10px">«Usar otra cuenta» cierra tu sesión de Nova en este Chrome para que entres con otra.</p>
+    </div>
     <div id="elegir" hidden>
-      <div class="li"><span class="in">in</span><div><b id="slug">—</b><small>Cuenta de LinkedIn abierta en este Chrome</small></div></div>
-      <label for="cuenta">¿A qué cuenta de Nova la conectas?</label>
-      <select id="cuenta"></select>
-      <div id="nueva">
-        <label for="nombre">Nombre de la cuenta</label><input id="nombre" placeholder="Ej. LinkedIn de Jenny">
-        <label for="cliente">Cliente outbound (opcional)</label><select id="cliente"></select>
-      </div>
-      <p style="margin:12px 0 0"><small>Nova podrá enviar invitaciones, visitas y mensajes que tú programes (con topes), y leer aceptaciones y respuestas. Nunca recibe tu contraseña.</small></p>
-      <div class="row"><button id="vincular" class="pri">Permitir y conectar</button></div>
+      <div class="li"><span class="in">in</span><div><b id="slug">—</b><small>Cuenta de LinkedIn abierta en este Chrome · Nova: <span id="elegir-user"></span></small></div></div>
+      <label for="cbuscar" style="margin-top:14px">¿A qué cliente outbound pertenece?</label>
+      <input id="cbuscar" placeholder="Buscar cliente…" autocomplete="off">
+      <div class="clist" id="clist"></div>
+      <p id="caviso" class="foot" style="margin:6px 2px 0"></p>
+      <div class="row"><button id="vincular" class="pri" disabled>Permitir y conectar</button></div>
     </div>
     <div class="row" id="accion-extra" hidden><button id="abrir">Abrir</button><button id="reintentar">Reintentar</button></div>
     <p id="err" style="color:var(--err);margin:12px 0 0;font-size:14px"></p>
   </div>
 </div>
 
-<div class="tabs" id="tabs" hidden><button id="t-estado" class="on">Estado</button><button id="t-lista">Lista Outreach <span id="nlista" class="bd bl" hidden></span></button><button id="t-err">Errores <span id="nerr" class="bd" hidden></span></button></div>
+<div class="tabs" id="tabs" hidden><button id="t-pro" hidden>Prospecto</button><button id="t-estado" class="on">Estado</button><button id="t-lista">Lista Outreach <span id="nlista" class="bd bl" hidden></span></button><button id="t-err">Errores <span id="nerr" class="bd" hidden></span></button></div>
+
+<!-- Pestaña Prospecto (ficha como la de lemlist) -->
+<div id="tab-prospecto" hidden><div id="pro-body"></div></div>
 
 <!-- Pestaña Lista Outreach -->
 <div id="tab-lista" hidden>
@@ -221,4 +304,46 @@ label{font-size:14px;margin:12px 0 4px}input,select{height:32px;font-size:14px;b
 <div class="row"><button id="save">Guardar token</button><button id="desvincular">Desvincular este Chrome</button></div></div></details>
 </div>
 </div>
+<!-- Ajustes (como la página de ajustes de lemlist) -->
+<div class="pag" id="pag-ajustes" hidden>
+  <div class="pag-top"><button id="aj-atras"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Atrás</button><button id="aj-x" title="Cerrar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+  <div class="pag-body">
+    <div class="perfil"><div class="big" id="aj-ini">?</div><b id="aj-nom">—</b><small id="aj-mail"></small></div>
+    <div class="cred">
+      <small>Acciones restantes hoy</small>
+      <div class="n"><span id="aj-rest" style="font-size:30px;font-weight:700;color:#1F2937;margin:0">—</span><span id="aj-de"></span></div>
+      <small id="aj-det" style="margin:-6px 0 12px"></small>
+      <div class="row"><button id="aj-lista"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Ver Lista Outreach</button><button id="aj-nova"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg>Abrir Nova</button></div>
+    </div>
+    <div class="aj">
+      <div class="aj-h"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></i>Ajustes</div>
+      <h4>Gestionar duplicados</h4>
+      <label class="rd"><input type="radio" name="dup" value="esta"><span class="ci"></span><span><b>Omitir los prospectos que ya están en esta secuencia</b><small>Solo se omiten los prospectos que ya están en la secuencia a la que los añades.</small></span></label>
+      <label class="rd"><input type="radio" name="dup" value="activa"><span class="ci"></span><span><b>Omitir los prospectos que ya están en una secuencia activa</b><small>Retiene a cualquier persona que esté en curso en otra secuencia.</small></span></label>
+      <div class="rd-sub" id="aj-sub" data-off="1"><label class="sw"><input type="checkbox" id="aj-dias-on"><i></i></label><span class="tx">Omitir los prospectos contactados en los últimos</span><input type="number" id="aj-dias" min="1" max="365" value="30"><span>días</span></div>
+      <label class="rd"><input type="radio" name="dup" value="cualquiera"><span class="ci"></span><span><b>Omitir los prospectos que ya están en cualquier otra secuencia</b><small>Aunque esa otra secuencia esté pausada, en borrador o ya terminada.</small></span></label>
+      <div class="guardado" id="aj-ok"></div>
+    </div>
+    <p class="foot" style="margin:14px 2px 0">Estos ajustes se aplican cuando pulsas «Añadir a la campaña» en la ficha de un prospecto. Se guardan solos.</p>
+    <button class="fa" id="aj-avanzado" style="margin-top:14px"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span><span>Vincular con un token</span><em>Avanzado →</em></button>
+  </div>
+  <div class="pag-foot"><button class="pri inv" id="aj-inv"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><path d="M12 5v14M5 12h14"/></svg>Invita a tu equipo</button><button class="out" id="aj-out" title="Cerrar sesión"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div>
+</div>
+
+<!-- ¿Cómo hacerlo? -->
+<div class="pag" id="pag-how" hidden>
+  <div class="pag-top"><button id="how-atras"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Atrás</button><button id="how-x" title="Cerrar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+  <div class="pag-body">
+    <h2 style="font-size:19px;margin:0 0 4px">¿Cómo hacerlo?</h2>
+    <p class="lead" style="font-size:14.5px;margin:0 0 10px">De un perfil de LinkedIn a una secuencia de Nova, en cuatro pasos.</p>
+    <div class="how"><i>1</i><div><b>Abre el perfil de la persona</b><span>Con este panel abierto, la pestaña <u>Prospecto</u> muestra su nombre, cargo y empresa. Cambia solo cuando pasas a otro perfil.</span></div></div>
+    <div class="how"><i>2</i><div><b>Guárdala en Nova</b><span>«Guardar contacto» la crea en Lead Manager, ligada al cliente de esta cuenta de LinkedIn. Si ya existía no se duplica.</span></div></div>
+    <div class="how"><i>3</i><div><b>Añádela a una secuencia</b><span>«Añadir a la campaña» te deja elegir la secuencia (primero las de este cliente). Respeta tus <u>Ajustes → Gestionar duplicados</u>.</span></div></div>
+    <div class="how"><i>4</i><div><b>FLOW hace el resto</b><span>Las visitas, invitaciones y mensajes salen solos con tus topes y horario. Míralos en <u>Estado</u> y <u>Lista Outreach</u>; si algo falla, en <u>Errores</u>.</span></div></div>
+    <div class="how"><i>✉</i><div><b>¿Falta el email?</b><span>«Encontrar email» usa el buscador y verificador de Nova (nombre + empresa). También puedes escribirlo a mano.</span></div></div>
+  </div>
+</div>
+
+<!-- Confirmación de «Cerrar sesión» -->
+<div class="cf" id="cf" hidden><div><h4>¿Cerrar sesión?</h4><p>FLOW dejará de trabajar en este Chrome hasta que vuelvas a vincularlo. No se borra nada de Nova.</p><div class="r"><button id="cf-no">Cancelar</button><button class="bad" id="cf-si">Cerrar sesión</button></div></div></div>
 <script src="sidepanel.js"></script></body></html>

@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.10.15';
+const VERSION = '0.11.0';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -53,6 +53,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_google') { get().then(({ apiBase }) => chrome.tabs.create({ url: apiBase + '/api/auth/google' })).then(() => send({ ok: true })).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_forgot') { novaFetch('/auth/forgot', { method: 'POST', body: JSON.stringify({ email: String((m.datos || {}).email || '').trim() }) }).then(r => send(r.status === 200 ? { ok: true } : { error: (r.data && r.data.error) || 'No se pudo enviar el enlace' })).catch(e => send({ error: String(e && e.message || e) })); return true; }
+  if (m.cmd === 'nova_logout') { novaFetch('/auth/logout').then(() => send({ ok: true })).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_login') { novaLogin(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_estado') { parEstado().then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'par_vincular') { parVincular(m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
@@ -62,6 +63,18 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.cmd === 'abrirPanel') { chrome.sidePanel.open({ tabId: _s.tab && _s.tab.id }).then(() => send({ ok: true })).catch(e => send({ ok: false, error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'comentario') { api('/ext/comentario', { id: m.id, post: m.post }).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'alerta') { alertar(m.tipo, m.url).then(() => send({ ok: true })); return true; }
+  // Panel «Prospecto»: leer el perfil abierto en la pestaña y hablar con Nova sobre ese prospecto
+  if (m.cmd === 'perfil_leer') {
+    (async () => {
+      let id = _s.tab && _s.tab.id;
+      if (!id) { const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); id = t && t.id; }
+      if (!id) return send({ hayPerfil: false });
+      chrome.tabs.sendMessage(id, { cmd: 'perfil' }, r => send(chrome.runtime.lastError || !r ? { hayPerfil: false, sinPagina: true } : r));
+    })().catch(() => send({ hayPerfil: false }));
+    return true;
+  }
+  const RUTAS = { prospecto: '/ext/prospecto', prospecto_guardar: '/ext/prospecto/guardar', prospecto_campana: '/ext/prospecto/campana', prospecto_datos: '/ext/prospecto/datos', prefs: '/ext/prefs' };
+  if (RUTAS[m.cmd]) { api(RUTAS[m.cmd], m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   return false;
 });
 

@@ -395,7 +395,35 @@
     });
   }
 
+  // ── Datos del prospecto que se ve en pantalla (para el panel «Prospecto» de FLOW) ──
+  // Solo LEE lo que ya está visible en el perfil; no hace clics ni peticiones. LinkedIn no usa <h1>: el nombre es el primer <h2> de la tarjeta superior.
+  function leerPerfil() {
+    const m = location.pathname.match(/^\/in\/([^/?#]+)/);
+    if (!m) return { hayPerfil: false };
+    const main = document.querySelector('main');
+    if (!main) return { hayPerfil: false, slug: decodeURIComponent(m[1]).toLowerCase(), cargando: true };
+    const h = [...main.querySelectorAll('h1, h2')].find(e => (e.innerText || '').trim().length > 1);
+    if (!h) return { hayPerfil: false, slug: decodeURIComponent(m[1]).toLowerCase(), cargando: true };
+    const sec = h.closest('section') || main;
+    const nombre = (h.innerText || '').trim().replace(/\s+/g, ' ');
+    const ruido = /^(not added to|no a[ñn]adid|verify|verifica|·$|\(?(he|she|they|él|ella)\b|1st|2nd|3rd|1\.º|2\.º|3\.º|1\.er|\d+\s*(connections|conexiones|followers|seguidores)|open to|add section|add profile|enhance|message|mensaje|connect|conectar|follow|seguir|more|más|pending|pendiente|resources|recursos|contact info|informaci[oó]n de contacto)/i;
+    const lineas = (sec.innerText || '').split('\n').map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const iNom = lineas.indexOf(nombre);
+    const ic = lineas.findIndex(l => /^(contact info|informaci[oó]n de contacto)$/i.test(l));
+    const cuerpo = lineas.slice(iNom + 1, ic > 0 ? ic : iNom + 8).filter(l => !ruido.test(l));
+    // cuerpo = [titular, ubicación] (la ubicación es la última línea antes de «Contact info»)
+    const ubicacion = cuerpo.length > 1 ? cuerpo[cuerpo.length - 1] : '';
+    const titular = cuerpo.length > 1 ? cuerpo.slice(0, -1).join(' ') : (cuerpo[0] || '');
+    let empresa = '';
+    if (ic > 0) { const c = lineas[ic + 1]; if (c && !ruido.test(c) && !/connections|conexiones|followers|seguidores/i.test(c)) empresa = c; }
+    if (!empresa) { const mm = titular.match(/(?:\bat\b|\ben\b|@)\s+([^|·•\n]+?)(?:\s*[|·•]|$)/i); if (mm) empresa = mm[1].trim(); }
+    const foto = [...sec.querySelectorAll('img')].find(i => i.width >= 80 && !/cover|portada/i.test(i.alt || ''));
+    const grado = ((sec.innerText || '').match(/·\s*(1st|1\.º|1\.er|1º|2nd|2\.º|2º|3rd|3\.º|3º)/) || [])[1] || '';
+    return { hayPerfil: true, slug: decodeURIComponent(m[1]).toLowerCase().replace(/\/+$/, ''), nombre, titular, empresa, ubicacion, grado, foto: foto ? foto.src : '' };
+  }
+
   chrome.runtime.onMessage.addListener((m, _s, send) => {
+    if (m && m.cmd === 'perfil') { try { send(leerPerfil()); } catch (e) { send({ hayPerfil: false, error: String((e && e.message) || e) }); } return false; }
     if (!m || m.cmd !== 'ejecutar') return false;
     (async () => {
       window.__novaEjecutando = true;
