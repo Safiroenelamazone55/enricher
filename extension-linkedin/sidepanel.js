@@ -1,4 +1,14 @@
 const $ = id => document.getElementById(id);
+// iconos de los avisos (estilo banner de Nova)
+const _sv = p => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
+const AVICO = {
+  ok: _sv('<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>'),
+  warn: _sv('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'),
+  err: _sv('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'),
+  work: _sv('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  info: _sv('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'),
+};
+const avico = n => '<span class="ico">' + (AVICO[n] || AVICO.info) + '</span>';
 const APP = 'https://app.novacentrax.com/';
 let accion = null;   // qué hace el botón «Abrir»
 
@@ -16,7 +26,7 @@ async function pintarVinculada() {
   $('toggle').className = paused ? 'go' : 'pri';
   $('swon').checked = on;
   $('st').className = 'msg ' + (e.nivel || '');
-  $('st').innerHTML = '<div>' + esc(e.msg) + (e.t ? '<small>Revisado ' + new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</small>' : '') + '</div>';
+  $('st').innerHTML = avico(e.nivel || 'ok') + '<div>' + esc(e.msg) + (e.t ? '<small>Revisado ' + new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</small>' : '') + '</div>';
   {
     // Muestra el nombre y el usuario de LinkedIn, no la URL completa
     const base = String(e.slug || '').replace(/-[a-z0-9]{6,12}$/i, '');
@@ -189,7 +199,7 @@ async function pintarAlerta() {
   const bloqueo = !e && estado && estado.nivel === 'err' ? estado : null;
   if (!e && !bloqueo) { box.hidden = true; return; }
   const txt = e ? e.tipo.replace(/_/g, ' ') + ': ' + String(e.msg || '').slice(0, 110) : String(bloqueo.msg || '').slice(0, 130);
-  box.innerHTML = '<span class="tx"><b>Hay un error</b>' + esc(txt) + '</span><button id="alerta-mas">Ver más ›</button><button class="x" id="alerta-x" title="Ocultar">×</button>';
+  box.innerHTML = avico('err') + '<span class="tx"><b>Hay un error</b>' + esc(txt) + '</span><button class="mas" id="alerta-mas">Ver más</button><button class="x" id="alerta-x" title="Ocultar">×</button>';
   box.hidden = false;
   $('alerta-mas').onclick = () => mostrarPestana('errores');
   $('alerta-x').onclick = async () => { await chrome.storage.local.set({ alertaVista: Date.now() }); box.hidden = true; };
@@ -403,14 +413,14 @@ function pintarProspecto() {
     (p.ubicacion ? '<div class="pf-loc">' + esc(p.ubicacion) + (p.grado ? ' · ' + esc(p.grado) : '') + '</div>' : '') +
     '<div class="pf-acts">' + btnCamp + '<button id="pf-save"' + (c ? ' class="hecho" disabled' : '') + '>' + (c ? IC.ok + 'Guardado en Nova' : IC.plus + 'Guardar contacto') + '</button></div>' +
     '<div id="pf-msg" class="pf-msg">' + htmlMsg() + '</div><div id="pf-pick"></div>' +
-    (pro && pro.error ? '<div class="msg warn pf-msg"><div>No pude consultar a Nova (' + esc(pro.error) + '). Reintento solo.</div></div>' : '') +
+    (pro && pro.error ? '<div class="msg warn pf-msg">' + avico('warn') + '<div>No pude consultar a Nova (' + esc(pro.error) + '). Reintento solo.</div></div>' : '') +
     (ins.length ? '<div class="pf-seq">' + ins.map(i => '<span class="' + (i.estado === 'activo' ? '' : 'p') + '" title="Paso ' + esc(i.paso) + '">' + esc(i.nombre) + (i.estado === 'activo' ? '' : ' · ' + esc(i.estado)) + '</span>').join('') + '</div>' : '') +
     '<div class="pf-card"><h3>Información de contacto</h3>' +
     '<label for="pf-email">Email</label><div class="pf-in">' + IC.mail + '<input id="pf-email" type="email" placeholder="Introducir email" autocomplete="off" value="' + esc(c ? c.email : '') + '">' + pillEmail + '</div><div class="pf-nota" id="pf-email-n"></div>' +
     '<label for="pf-tel">Teléfono</label><div class="pf-in">' + IC.tel + '<input id="pf-tel" type="tel" placeholder="Introducir número de teléfono" autocomplete="off" value="' + esc(c ? (c.telefono || c.movil || '') : '') + '">' + pillTel + '</div><div class="pf-nota" id="pf-tel-n"></div></div>';
 }
 let _pm = { t: '', n: '' };   // último aviso de la ficha: sobrevive a que la ficha se repinte
-const htmlMsg = () => _pm.t ? '<div class="msg ' + (_pm.n || '') + '"><div>' + esc(_pm.t) + '</div></div>' : '';
+const htmlMsg = () => _pm.t ? '<div class="msg ' + (_pm.n || '') + '">' + avico(_pm.n || 'info') + '<div>' + esc(_pm.t) + '</div></div>' : '';
 const proMsg = (t, nivel) => { _pm = { t: t || '', n: nivel || '' }; const m = $('pf-msg'); if (m) m.innerHTML = htmlMsg(); };
 const proNota = (id, t, nivel) => { const m = $(id); if (m) { m.className = 'pf-nota' + (nivel ? ' ' + nivel : ''); m.textContent = t || ''; } };
 async function asegurarContacto() {

@@ -196,6 +196,18 @@ body.emb{height:100vh;overflow-y:auto;padding-bottom:28px}
 .cf{position:fixed;inset:0;z-index:60;background:rgba(17,24,39,.45);display:flex;align-items:center;justify-content:center;padding:20px}.cf[hidden]{display:none}
 .cf>div{background:#fff;border-radius:14px;padding:20px;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}.cf h4{margin:0 0 6px;font-size:17px}.cf p{margin:0 0 16px;font-size:14px;color:#4B5563;line-height:1.45}.cf .r{display:flex;gap:10px;justify-content:flex-end}.cf button{height:38px;font-size:14.5px}.cf .bad{background:#D92D20;border-color:#D92D20;color:#fff}.cf .bad:hover{background:#B42318}
 .tabs[hidden],.row[hidden]{display:none}
+/* avisos con el estilo de los banners de Nova: icono + texto + acción + cerrar; cada nivel conserva su color */
+.msg,.alerta{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:.75px solid #D9DEE6;border-left-width:.75px;background:var(--soft);font-size:14px;line-height:1.4;color:#1F2937;margin-top:12px}
+.msg::before{display:none}
+.msg .ico,.alerta .ico{flex:none;display:flex;color:var(--mut)}
+.msg>div,.alerta .tx{flex:1;min-width:0}
+.msg.ok{background:var(--okbg);border-color:#B7E0CC}.msg.ok .ico{color:var(--ok)}
+.msg.warn{background:var(--warnbg);border-color:#F1D9A6}.msg.warn .ico{color:var(--warn)}
+.msg.err,.alerta{background:var(--errbg);border-color:#F2B8B0}.msg.err .ico,.alerta .ico{color:var(--err)}
+.msg.work{background:var(--workbg);border-color:#B9D3F0}.msg.work .ico{color:var(--work)}
+.alerta .tx b{display:block;font-weight:600}
+.alerta button.mas{height:32px;padding:0 14px;border-radius:8px;border:0;background:var(--blue);color:#fff;font-size:13.5px;font-weight:600;white-space:nowrap;flex:none}.alerta button.mas:hover{background:var(--blue-d)}
+.alerta button.x{height:28px;min-width:28px;padding:0;border:0;background:none;color:var(--mut);font-size:20px;line-height:1;flex:none}.alerta button.x:hover{background:rgba(0,0,0,.06)}
 .hoy{margin-top:12px;border:.75px solid rgba(31,41,55,.12);border-radius:12px;padding:14px 16px;background:#fff}
 .hoy small{display:block;font-size:13px;color:#6B7280}.hoy .n{font-size:28px;font-weight:700;color:#1F2937;line-height:1.2;margin:2px 0 10px}.hoy .n span{font-size:14px;font-weight:500;color:#6B7280;margin-left:6px}
 .hoy .bar{height:6px;border-radius:99px;background:#EEF0F4;overflow:hidden;margin:0 0 10px}.hoy .bar i{display:block;height:100%;border-radius:99px;background:var(--blue);transition:width .3s}
