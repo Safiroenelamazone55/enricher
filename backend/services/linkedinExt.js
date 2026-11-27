@@ -424,14 +424,14 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       // Candidatos: contactos de ESTE cliente que están en la lista de conexiones, sin aceptación registrada y con una invitación enviada
       // (por FLOW o a mano desde una tarea de Nova). Antes solo se miraban las que FLOW envió, y las demás no se detectaban nunca.
       const { rows } = await pool.query(
-        `SELECT k.id, k.nombre, lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) AS slug,
+        `SELECT k.id, k.nombre, lower(split_part(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/',1)) AS slug,
                 (SELECT ((MIN(t)) AT TIME ZONE $4)::date::text FROM (
                     SELECT x.done_at AS t FROM li_actions x WHERE x.contact_id=k.id AND x.tipo='invite' AND x.estado='done'
                     UNION ALL
                     SELECT ac.fecha FROM activities ac WHERE ac.contact_id=k.id AND ac.estado='hecha' AND ${SQL_EVID_INVITE}) q) AS invitada
            FROM lm_contacts k
           WHERE k.user_id=$1 AND ($2::int IS NULL OR k.outbound_client_id=$2) AND k.li_aceptado_at IS NULL
-            AND lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) = ANY($3::text[])`,
+            AND lower(split_part(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/',1)) = ANY($3::text[])`,
         [a.user_id, a.outbound_client_id || null, [...new Set([...mapa.keys()].flatMap(s => [s, encodeURIComponent(s).toLowerCase()]))], tz]);
       const hoy = localParts(new Date(), tz).ymd;
       const decod = s => { try { return decodeURIComponent(s); } catch (_) { return s; } };
@@ -1087,7 +1087,7 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
 
   // ───────── Panel del prospecto: FLOW abierto sobre un perfil de LinkedIn (como el de lemlist) ─────────
   const slugLimpio = s => { let t = String(s || '').trim(); try { t = decodeURIComponent(t); } catch (_) {} return t.toLowerCase().replace(/[?#].*$/, '').replace(/^.*\/in\//, '').replace(/\/+$/, '').slice(0, 120); };
-  const SQL_SLUG = `lower(rtrim(split_part(regexp_replace(k.linkedin, '[?#].*$', ''), '/in/', 2), '/'))`;
+  const SQL_SLUG = `lower(split_part(split_part(regexp_replace(k.linkedin, '[?#].*$', ''), '/in/', 2), '/', 1))`;
   const PREFS_DEF = { dup_modo: 'esta', dup_dias_on: false, dup_dias: 30 };
   const leerPrefs = async uid => { const { rows: [p] } = await pool.query(`SELECT dup_modo, dup_dias_on, dup_dias FROM li_ext_prefs WHERE user_id=$1`, [uid]); return p || { ...PREFS_DEF }; };
   const fichaContacto = async (uid, slug) => {
