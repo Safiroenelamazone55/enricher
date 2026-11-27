@@ -1068,6 +1068,7 @@ function _applyHomeMode(on) {
   // modulo -- pedido explicito (referencia Odoo).
   document.getElementById('gtb-brand')?.classList.toggle('hidden', !on);
   document.getElementById('gtb-mod-brand')?.classList.toggle('hidden', !!on);
+  document.getElementById('gtb-nav-toggle')?.classList.toggle('hidden', !!on);
 }
 
 // "Ventana" de un proyecto puntual — pedido explícito 2026-09-02: entrar a un
@@ -57004,6 +57005,7 @@ const TimerModule = (() => {
 function _navCollapsedGlobal() { try { return localStorage.getItem('nova_nav_collapsed') === '1'; } catch (_) { return false; } }
 function _setNavCollapsedGlobal(on) {
   try { localStorage.setItem('nova_nav_collapsed', on ? '1' : '0'); } catch (_) {}
+  { const tg = document.getElementById('gtb-nav-toggle'); if (tg) tg.title = on ? 'Mostrar panel' : 'Ocultar panel'; }
   const sb = document.getElementById('sidebar');
   if (sb) {
     sb.classList.toggle('sidebar--collapsed', on);

@@ -22965,3 +22965,10 @@ body.ibx-lb-open{overflow:hidden}
 .global-topbar__brand.msw-btn:hover { background: #F3F4F6; }
 .global-topbar__brand.msw-btn.hidden { display: none; }
 #sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { justify-content: flex-end; }
+
+/* La franja de arriba de la barra lateral ya no existe: el selector de módulos y el botón de plegar viven en el encabezado superior */
+#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { display: none; }
+.gtb-navtog { width: 32px; height: 32px; margin-left: 2px; border: 0; border-radius: 8px; background: transparent; color: #6B7280; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .12s, color .12s; }
+.gtb-navtog:hover { background: #F3F4F6; color: #1F2937; }
+.gtb-navtog.hidden { display: none; }
+#sidebar .sidebar__nav { padding-top: 12px; }
