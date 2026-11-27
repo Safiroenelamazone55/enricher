@@ -403,7 +403,7 @@ function pintarProspecto() {
   const refCamp = ins.find(i => i.estado === 'activo') || ins[0];
   const nomCamp = refCamp ? (refCamp.campana || refCamp.nombre) : '';
   const btnCamp = ins.length
-    ? '<button class="pri en" id="pf-camp" title="' + esc(ins.map(i => (i.campana ? i.campana + ' · ' : '') + i.nombre + (i.estado === 'activo' ? '' : ' (' + i.estado + ')')).join('\n') + '\nClic para añadirlo a otra') + '">' + IC.ok + '<span class="tx">En campaña: ' + esc(nomCamp) + (ins.length > 1 ? ' +' + (ins.length - 1) : '') + '</span></button>'
+    ? '<button class="pri en" id="pf-camp" title="' + esc(ins.map(i => (i.campana ? i.campana + ' · ' : '') + i.nombre + (i.estado === 'activo' ? '' : ' (' + i.estado + ')')).join('\n') + '\nClic para añadirlo a otra') + '">' + IC.ok + '<span class="tx">Campaña: ' + esc(nomCamp) + (ins.length > 1 ? ' +' + (ins.length - 1) : '') + '</span></button>'
     : '<button class="pri" id="pf-camp">' + IC.plane + 'Añadir a la campaña</button>';
   box.innerHTML =
     '<div class="pf-head">' + (p.foto ? '<img class="pf-av" alt="" src="' + esc(p.foto) + '">' : '<div class="pf-av">' + esc(iniciales(p.nombre)) + '</div>') +
