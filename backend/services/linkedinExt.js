@@ -1176,7 +1176,8 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
       const { rows: hechas } = await pool.query(`SELECT tipo, COUNT(*)::int n FROM li_actions WHERE account_id=$1 AND estado='done' AND tipo IN ('invite','visit','message','inmail','react','follow','comment') AND (done_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date GROUP BY 1`, [a.id, a.tz || DEF.tz]);
       const por = Object.fromEntries(hechas.map(r => [r.tipo, r.n]));
       const hoy = hechas.reduce((s, r) => s + r.n, 0);
-      const { rows: cola } = await pool.query(`SELECT tipo, COUNT(*)::int n FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('invite','visit','message','inmail','react','follow','comment') GROUP BY 1`, [a.id]);
+      // en_cola = lo PROGRAMADO PARA HOY (no lo de otros días): sin fecha de espera, o con espera que vence hoy en la hora local de la cuenta
+      const { rows: cola } = await pool.query(`SELECT tipo, COUNT(*)::int n FROM li_actions WHERE account_id=$1 AND estado='queued' AND tipo IN ('invite','visit','message','inmail','react','follow','comment') AND (not_before IS NULL OR (not_before AT TIME ZONE $2)::date <= (NOW() AT TIME ZONE $2)::date) GROUP BY 1`, [a.id, a.tz || DEF.tz]);
       res.json({ prefs: await leerPrefs(a.user_id), hoy: { hechas: hoy, tope: ef.total, restantes: Math.max(0, ef.total - hoy), por_tipo: por, en_cola: Object.fromEntries(cola.map(r => [r.tipo, r.n])), topes: { invite: ef.inv, visit: ef.vis, message: ef.msg, inmail: ef.inmail, react: ef.react, follow: ef.follow, comment: ef.comment } } });
     } catch (e) { console.error('[li] prefs', e.message); res.status(500).json({ error: 'Error' }); }
   });

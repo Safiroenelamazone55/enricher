@@ -63,13 +63,12 @@ function pintarExtra(e) {
   box.innerHTML = h;
 }
 // «Acciones restantes hoy» + lo hecho por tipo (los números reales de Nova, con los topes de HOY)
-// Sale cada tipo que se está usando (hecho hoy o con algo en cola) como «hechas/tope»; si aún no hay nada, los tres básicos.
+// Solo salen los tipos PROGRAMADOS PARA HOY (hechos hoy o en cola para hoy) como «hechas/tope»; los que hoy no se usan no aparecen.
 const TIPOS_HOY = [['invite', 'invitaciones'], ['visit', 'visitas'], ['message', 'mensajes'], ['inmail', 'InMail'], ['react', 'reacciones'], ['follow', 'seguimientos'], ['comment', 'comentarios']];
 function trozosHoy(h) {
   const x = h.por_tipo || {}, c = h.en_cola || {}, t = h.topes || {};
-  let usados = TIPOS_HOY.filter(([k]) => (x[k] || 0) > 0 || (c[k] || 0) > 0);
-  if (!usados.length) usados = TIPOS_HOY.slice(0, 3);
-  return usados.map(([k, l]) => l + ' ' + (x[k] || 0) + '/' + (t[k] || 0));
+  const usados = TIPOS_HOY.filter(([k]) => (x[k] || 0) > 0 || (c[k] || 0) > 0);
+  return usados.length ? usados.map(([k, l]) => l + ' ' + (x[k] || 0) + '/' + (t[k] || 0)) : ['sin acciones programadas para hoy'];
 }
 let _hoyT = 0;
 async function pintarHoy(forzar) {
