@@ -22929,14 +22929,13 @@ body.ibx-lb-open{overflow:hidden}
 /* ── Selector de módulos y pantalla de carga (medidas tomadas del selector de productos de lemlist; letra Inter) ── */
 @font-face { font-family: Inter; font-style: normal; font-weight: 100 900; font-display: swap; src: url(/fonts/inter-latin-wght-normal.woff2) format("woff2"); }
 .msw-btn, .msw-menu, .nl { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-.snav-back.msw-btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 6px; margin-left: -4px; border: 0; border-radius: 8px; background: transparent; color: #1F2937; font-size: 16px; font-weight: 600; letter-spacing: -.01em; cursor: pointer; transition: background .12s; }
-.snav-back.msw-btn:hover, .snav-back.msw-btn.open { background: #F3F4F6; color: #1F2937; }
+.msw-btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 6px; margin-left: -4px; border: 0; border-radius: 8px; background: transparent; color: #1F2937; font-size: 16px; font-weight: 600; letter-spacing: -.01em; cursor: pointer; transition: background .12s; }
+.msw-btn:hover, .msw-btn.open { background: #F3F4F6; color: #1F2937; }
 .msw-btn .msw-ic { width: 22px; height: 22px; display: inline-flex; flex: none; }
 .msw-btn .msw-ic svg { width: 22px; height: 22px; }
 .msw-btn .msw-nm { white-space: nowrap; }
 .msw-btn .msw-chev { color: #6B7280; flex: none; transition: transform .15s; }
 .msw-btn.open .msw-chev { transform: rotate(180deg); }
-#sidebar.sidebar--collapsed .snav-back.msw-btn .msw-nm, #sidebar.sidebar--collapsed .snav-back.msw-btn .msw-chev, .lm2-nav--collapsed .snav-back.msw-btn .msw-nm, .lm2-nav--collapsed .snav-back.msw-btn .msw-chev { display: none; }
 .msw-menu { position: fixed; z-index: 9990; width: 360px; max-width: calc(100vw - 16px); overflow-y: auto; background: #fff; border-radius: 12px; border: .75px solid rgba(31,41,55,.1); box-shadow: 0 0 4px rgba(0,0,0,.04), 0 8px 16px rgba(0,0,0,.08); animation: msw-in .12s ease-out; }
 @keyframes msw-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .msw-menu ul { list-style: none; margin: 0; padding: 4px; }
@@ -22960,3 +22959,9 @@ body.ibx-lb-open{overflow:hidden}
 .nl-bar { position: absolute; top: 0; bottom: 0; left: 0; width: 20%; border-radius: 100px; background: #404040; animation: nl-slide 1.5s linear infinite alternate both; }
 @keyframes nl-slide { 0% { left: 0; width: 20%; } 8% { left: 0; width: 30%; } 92% { left: 70%; width: 30%; } 100% { left: 80%; width: 20%; } }
 @media (prefers-reduced-motion: reduce) { .nl-bar { animation-duration: 3s; } .msw-menu { animation: none; } }
+
+/* El selector de módulos vive en el encabezado superior (donde estaba «▶ Outreach»); la barra lateral queda solo con su botón de plegar */
+.global-topbar__brand.msw-btn { height: 36px; padding: 0 10px 0 8px; margin-left: 4px; gap: 8px; font-size: 16px; font-weight: 600; color: #1F2937; flex-shrink: 0; }
+.global-topbar__brand.msw-btn:hover { background: #F3F4F6; }
+.global-topbar__brand.msw-btn.hidden { display: none; }
+#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { justify-content: flex-end; }
