@@ -4,7 +4,12 @@
 // todas las pausas y escrituras tienen tiempos humanos al azar. Textos, selectores y patrones vienen de Nova (se corrigen sin reinstalar).
 (() => {
   if (window.__novaLi) return; window.__novaLi = true;
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const sleepLocal = ms => new Promise(r => setTimeout(r, ms));
+  // En una pestaña oculta (sobre todo con Chrome minimizado) los temporizadores de la PÁGINA se frenan o se congelan: las esperas largas las cuenta el service worker
+  // (la respuesta del mensaje no depende de temporizadores de la página). Si el service worker no contesta, se usa el temporizador local.
+  const sleep = ms => (document.hidden && ms >= 250)
+    ? new Promise(r => { let fin = false; const f = () => { if (!fin) { fin = true; r(); } }; try { chrome.runtime.sendMessage({ cmd: 'dormir', ms }, () => { if (chrome.runtime.lastError) sleepLocal(ms).then(f); else f(); }); } catch (_) { sleepLocal(ms).then(f); } sleepLocal(ms + 6000).then(f); })
+    : sleepLocal(ms);
   const rnd = (a, b) => a + Math.random() * (b - a);
   const norm = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
   const vis = el => !!(el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
@@ -471,7 +476,7 @@
 
   chrome.runtime.onMessage.addListener((m, _s, send) => {
     if (m && m.cmd === 'diagnostico') {
-      (async () => { let bat = null; try { const b = await navigator.getBattery(); bat = { nivel: Math.round(b.level * 100), cargando: b.charging }; } catch (_) {} send({ visibilidad: document.visibilityState, listo: document.readyState, bateria: bat, ejecutando: !!window.__novaEjecutando, traza: traza.slice(-10) }); })();
+      (async () => { let bat = null; try { const b = await Promise.race([navigator.getBattery(), sleepLocal(600).then(() => null)]); if (b) bat = { nivel: Math.round(b.level * 100), cargando: b.charging }; } catch (_) {} send({ visibilidad: document.visibilityState, listo: document.readyState, bateria: bat, ejecutando: !!window.__novaEjecutando, traza: traza.slice(-10) }); })();
       return true;
     }
     if (m && m.cmd === 'perfil') { try { send(leerPerfil()); } catch (e) { send({ hayPerfil: false, error: String((e && e.message) || e) }); } return false; }

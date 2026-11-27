@@ -5,7 +5,7 @@
 //    avisa a Nova (que pausa la cuenta) y se pausa a sí misma.
 //  · Recibe de Nova la configuración (textos, selectores, patrones de bloqueo): si LinkedIn cambia su página, se corrige en el servidor.
 // Nunca envía la cookie de LinkedIn: solo comprueba que existe para saber si la sesión está iniciada.
-const VERSION = '0.11.8';
+const VERSION = '0.11.9';
 const DEFAULTS = { apiBase: 'https://api.novacentrax.com', token: '', paused: true };
 const CONFIG_DEFECTO = {
   v: 0,
@@ -50,6 +50,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (!m) return false;
   if (m.cmd === 'tick') { tick(true).then(() => send({ ok: true })); return true; }
   if (m.cmd === 'config') { cfg().then(send); return true; }
+  if (m.cmd === 'dormir') { setTimeout(() => send({ ok: true }), Math.min(Math.max(+m.ms || 0, 0), 60000)); return true; }
   if (m.cmd === 'puente') { puente(m.orden, m.datos || {}).then(send).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_google') { get().then(({ apiBase }) => chrome.tabs.create({ url: apiBase + '/api/auth/google' })).then(() => send({ ok: true })).catch(e => send({ error: String(e && e.message || e) })); return true; }
   if (m.cmd === 'nova_forgot') { novaFetch('/auth/forgot', { method: 'POST', body: JSON.stringify({ email: String((m.datos || {}).email || '').trim() }) }).then(r => send(r.status === 200 ? { ok: true } : { error: (r.data && r.data.error) || 'No se pudo enviar el enlace' })).catch(e => send({ error: String(e && e.message || e) })); return true; }
@@ -241,7 +242,7 @@ const LIMITE_MS = { visit: 120000, check_connections: 180000, check_inbox: 18000
 async function ejecutar(a, modo) {
   const asistido = !String(a.tipo).startsWith('check_') && modo !== 'auto';
   const limite = asistido ? 300000 : (LIMITE_MS[a.tipo] || 240000);   // asistido: la persona puede tardar; en automático una visita no pasa de ~1 min
-  const t0 = Date.now(), est = { tabId: null, asistido };
+  const t0 = Date.now(), est = { tabId: null, winId: null, asistido };
   let timer;
   const vencido = new Promise(res => { timer = setTimeout(async () => res(await diagnosticoTimeout(a, est, t0, limite)), limite); });
   try { return await Promise.race([ejecutarInner(a, modo, est), vencido]); } finally { clearTimeout(timer); }
@@ -256,7 +257,7 @@ async function diagnosticoTimeout(a, est, t0, limite) {
       d.pestana = { estado: t.status, activa: t.active, descartada: !!t.discarded };
       try { const w = await chrome.windows.get(t.windowId); d.ventana = { estado: w.state, enfocada: w.focused }; } catch (_) {}
       d.contenido = await Promise.race([new Promise(r => chrome.tabs.sendMessage(est.tabId, { cmd: 'diagnostico' }, x => r(chrome.runtime.lastError ? { sin_respuesta: String(chrome.runtime.lastError.message).slice(0, 60) } : x))), sleep(4000).then(() => ({ colgada: true }))]);
-      if (!est.asistido) setTimeout(() => chrome.tabs.remove(est.tabId).catch(() => {}), 500);
+      if (!est.asistido) setTimeout(() => cerrarAccion(est.tabId, est.winId), 500);
     } else d.pestana = 'no_llego_a_abrirse';
   } catch (e) { d.diag_error = String(e && e.message || e).slice(0, 80); }
   const exceso = d.transcurrido_s * 1000 - limite;
@@ -267,8 +268,13 @@ async function ejecutarInner(a, modo, est) {
   const esCheck = String(a.tipo).startsWith('check_');
   const asistido = !esCheck && modo !== 'auto';
   const url = a.url || (await cfg()).chequeos[a.tipo];
-  const tab = await chrome.tabs.create({ url, active: asistido });
-  if (est) est.tabId = tab.id;
+  // Con TODAS las ventanas de Chrome minimizadas, una pestaña nueva queda congelada y la acción no avanza (tiempo agotado): se usa una ventana propia, visible pero sin robar el foco
+  let tab, winId = null;
+  if (!asistido && await todasMinimizadas()) {
+    try { const w = await chrome.windows.create({ url, type: 'normal', state: 'normal', focused: false, width: 1280, height: 820, left: 120, top: 60 }); winId = w.id; tab = (w.tabs && w.tabs[0]) || (await chrome.tabs.query({ windowId: w.id }))[0]; } catch (_) { tab = null; winId = null; }
+  }
+  if (!tab) tab = await chrome.tabs.create({ url, active: asistido });
+  if (est) { est.tabId = tab.id; est.winId = winId; }
   try {
     await esperarCarga(tab.id, 45000);
     await sleep(2500 + Math.random() * 6500);   // un humano tarda en mirar la página (2,5–9 s, nunca igual)
@@ -302,9 +308,13 @@ async function ejecutarInner(a, modo, est) {
     quitarEscucha();
     return r || { codigo: 'fallo', error: 'sin_content_script', detalle: 'La página no respondió' };
   } finally {
-    if (!asistido) setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {}), 3000);
+    if (!asistido) setTimeout(() => cerrarAccion(tab.id, winId), 3000);
   }
 }
+async function todasMinimizadas() {
+  try { const ws = await chrome.windows.getAll({ windowTypes: ['normal'] }); return ws.length > 0 && ws.every(w => w.state === 'minimized'); } catch (_) { return false; }
+}
+function cerrarAccion(tabId, winId) { if (winId) chrome.windows.remove(winId).catch(() => chrome.tabs.remove(tabId).catch(() => {})); else chrome.tabs.remove(tabId).catch(() => {}); }
 function esperarCarga(tabId, ms) {
   return new Promise((res, rej) => {
     const t = setTimeout(() => { chrome.tabs.onUpdated.removeListener(f); rej(new Error('La página tardó demasiado en cargar')); }, ms);
