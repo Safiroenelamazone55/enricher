@@ -830,6 +830,7 @@ function _setActiveModule(mod) {
   const railIcon = document.querySelector(`.snav-mod[data-module="${mod}"] svg`);
   if (modIcon) modIcon.innerHTML = _moduleIcon(mod) || (railIcon ? railIcon.outerHTML : '');   // el icono nuevo, en blanco y negro
   if (modName) modName.textContent = _MOD_TITLES[mod] || '';
+  try { window.ModSwitch && ModSwitch.refresh(); } catch (_) {}
 }
 function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }
 function _setNavCollapsed(on) {
@@ -838,6 +839,7 @@ function _setNavCollapsed(on) {
 }
 function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
+  try { if (window.event && window.event.isTrusted && window.NovaLoader) NovaLoader.start(mod); } catch (_) {}
   if (_navCollapsed()) _setNavCollapsed(false);
   _applyHomeMode(false);
   document.getElementById('appShell')?.classList.remove('standalone-users');
@@ -1096,6 +1098,101 @@ function goHome(opts = {}) {
   if (!opts.silent) history.pushState({ novaTab: 'home' }, '', _tabUrlHref('home'));
   renderHome();
 }
+
+const _uniq = (() => { let n = 0; return svg => { if (!svg) return ''; const k = '-u' + (++n); return svg.replace(/(\s)id="([A-Za-z0-9_-]+)"/g, (m, sp, i) => sp + 'id="' + i + k + '"').replace(/url\(#([A-Za-z0-9_-]+)\)/g, (m, i) => 'url(#' + i + k + ')'); }; })();
+// ── Selector de módulos (menú desplegable arriba a la izquierda, como el de lemlist) ──
+const ModSwitch = (() => {
+  const SV = d => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+  const CHEV = '<svg class="msw-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  const CHECK = SV('<path d="M20 6 9 17l-5-5"/>');
+  const HOME_ICO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F2937" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const icoOf = id => { try { if (!_homeIcoCache) _homeIcoCache = _buildHomeIcons(); return _uniq(_homeIcoCache[{ config: 'empresa', enricher: 'cantera' }[id] || id] || ''); } catch (_) { return ''; } };
+  // Mismos módulos, mismo orden y mismos permisos que la pantalla de inicio
+  const lista = () => {
+    const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
+    const u = window._authUser || {}, datosOk = !!(u.isOwner || !u.permisos || (u.permisos.datos && u.permisos.datos.n > 0));
+    return [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))].filter(m => m.id !== 'cantera' || datosOk);
+  };
+  const inner = mod => '<span class="msw-ic">' + icoOf(mod) + '</span><span class="msw-nm">' + esc(_MOD_TITLES[mod] || 'Módulos') + '</span>' + CHEV;
+  const refresh = () => document.querySelectorAll('.msw-btn').forEach(b => { b.innerHTML = inner(_activeModule); });
+  let menu = null, anchor = null;
+  const close = () => { if (!menu) return; menu.remove(); menu = null; if (anchor) anchor.classList.remove('open'); anchor = null; document.removeEventListener('mousedown', fuera, true); document.removeEventListener('keydown', tecla, true); window.removeEventListener('resize', close); };
+  const fuera = ev => { if (menu && !menu.contains(ev.target) && !(anchor && anchor.contains(ev.target))) close(); };
+  const tecla = ev => {
+    if (!menu) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); close(); if (anchor) anchor.focus(); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault(); const its = [...menu.querySelectorAll('.msw-item')], i = its.indexOf(document.activeElement);
+      its[(i + (ev.key === 'ArrowDown' ? 1 : -1) + its.length) % its.length].focus();
+    }
+  };
+  const pick = id => {
+    close();
+    if (id === '__home') return goHome();
+    const m = HOME_MODULES.find(x => x.id === id); if (!m) return;
+    if (m.action) { try { new Function(m.action)(); } catch (_) {} } else selectModule(id);
+  };
+  const open = btn => {
+    close(); anchor = btn; btn.classList.add('open');
+    const items = [{ id: '__home', name: 'Inicio', desc: 'Todas tus aplicaciones' }, ...lista()];
+    menu = document.createElement('div'); menu.className = 'msw-menu'; menu.setAttribute('role', 'menu');
+    menu.innerHTML = '<ul>' + items.map(m => {
+      const on = m.id === _activeModule && !document.getElementById('appShell')?.classList.contains('home-mode');
+      return '<li><a class="msw-item' + (on ? ' on' : '') + '" role="menuitem" tabindex="0" data-id="' + esc(m.id) + '"><span class="msw-tile">' + (m.id === '__home' ? HOME_ICO : icoOf(m.id)) + '</span><span class="msw-tx"><b>' + esc(m.name) + '</b><small>' + esc(m.desc || '') + '</small></span>' + (on ? '<span class="msw-ck">' + CHECK + '</span>' : '') + '</a></li>';
+    }).join('') + '</ul>';
+    document.body.appendChild(menu);
+    const r = btn.getBoundingClientRect(), w = menu.offsetWidth;
+    menu.style.left = Math.max(8, Math.min(r.left - 4, window.innerWidth - w - 8)) + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+    menu.style.maxHeight = Math.max(240, window.innerHeight - r.bottom - 16) + 'px';
+    menu.addEventListener('click', ev => { const a = ev.target.closest('.msw-item'); if (a) pick(a.dataset.id); });
+    menu.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { const a = ev.target.closest('.msw-item'); if (a) { ev.preventDefault(); pick(a.dataset.id); } } });
+    document.addEventListener('mousedown', fuera, true); document.addEventListener('keydown', tecla, true); window.addEventListener('resize', close);
+    (menu.querySelector('.msw-item.on') || menu.querySelector('.msw-item')).focus({ preventScroll: true });
+  };
+  const toggle = btn => { if (menu && anchor === btn) close(); else open(btn); };
+  return { toggle, open, close, refresh, inner };
+})();
+window.ModSwitch = ModSwitch;
+try { ModSwitch.refresh(); } catch (_) {}
+
+// ── Pantalla de carga entre módulos (logo del módulo + barra que va y viene, como la de lemlist) ──
+// Solo aparece si el cambio TARDA (hay peticiones a la API en curso pasados ~150 ms): si es instantáneo, no se ve nada.
+const NovaLoader = (() => {
+  let pend = 0, el = null, tShow = 0, tPoll = 0, tMax = 0, shownAt = 0;
+  const _f = window.fetch.bind(window);
+  window.fetch = (...a) => {
+    const u = String((a[0] && a[0].url) || a[0] || '');
+    const api = /\/api\//.test(u); if (api) pend++;
+    const p = _f(...a);
+    if (api) p.then(() => { pend = Math.max(0, pend - 1); }, () => { pend = Math.max(0, pend - 1); });
+    return p;
+  };
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const render = mod => {
+    remove();
+    let ico = ''; try { if (!_homeIcoCache) _homeIcoCache = _buildHomeIcons(); ico = _uniq(_homeIcoCache[{ config: 'empresa', enricher: 'cantera' }[mod] || mod] || ''); } catch (_) {}
+    el = document.createElement('div'); el.className = 'nl'; el.setAttribute('role', 'status'); el.setAttribute('aria-label', 'Cargando');
+    el.innerHTML = '<div class="nl-b"><div class="nl-logo"><span class="nl-ic">' + ico + '</span><span class="nl-nm">' + esc(_MOD_TITLES[mod] || 'Nova') + '</span></div><div class="nl-track"><span class="nl-bar"></span></div></div>';
+    document.body.appendChild(el); shownAt = performance.now();
+    requestAnimationFrame(() => el && el.classList.add('on'));
+    let calm = 0;
+    tPoll = setInterval(() => {   // se va cuando ya no quedan peticiones (2 lecturas seguidas) y se vio al menos 450 ms
+      calm = pend === 0 ? calm + 1 : 0;
+      if (calm >= 2 && performance.now() - shownAt > 450) stop();
+    }, 120);
+    tMax = setTimeout(stop, 8000);   // seguro: nunca se queda pegada
+  };
+  const remove = () => { if (el) { el.remove(); el = null; } };
+  function stop() {
+    clearTimeout(tShow); clearInterval(tPoll); clearTimeout(tMax);
+    if (!el) return; const e = el; el = null; e.classList.remove('on'); setTimeout(() => e.remove(), 160);
+  }
+  const start = mod => { stop(); tShow = setTimeout(() => { if (pend > 0) render(mod); }, 150); };
+  return { start, stop };
+})();
+window.NovaLoader = NovaLoader;
 
 // ── Menú de workspace (cambiar de módulo) ──────────────────
 let _wsMenuOpen = false;
@@ -23521,7 +23618,7 @@ const LeadManagerModule = (() => {
     const collapsed = _navCollapsedGlobal();
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav${collapsed ? ' lm2-nav--collapsed' : ''}">
-        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button></div>
+        <div class="snav-panel__hd"><button class="snav-back msw-btn" title="Cambiar de módulo" aria-label="Cambiar de módulo" aria-haspopup="menu" onclick="ModSwitch.toggle(this)">${ModSwitch.inner('leadmanagement')}</button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
         <div class="snav-foot">
           <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">

@@ -22924,3 +22924,39 @@ body.ibx-lb-open{overflow:hidden}
 .rp-stats--row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(118px, 1fr); grid-template-columns: none; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
 .inf.rp .rp-stats--row .rp-stat > span { font-size: 13px; line-height: 17px; }
 .inf.rp .rp-stats--row .rp-stat .rp-d { font-size: 12px; line-height: 16px; }
+
+
+/* ── Selector de módulos y pantalla de carga (medidas tomadas del selector de productos de lemlist; letra Inter) ── */
+@font-face { font-family: Inter; font-style: normal; font-weight: 100 900; font-display: swap; src: url(/fonts/inter-latin-wght-normal.woff2) format("woff2"); }
+.msw-btn, .msw-menu, .nl { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.snav-back.msw-btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 6px; margin-left: -4px; border: 0; border-radius: 8px; background: transparent; color: #1F2937; font-size: 16px; font-weight: 600; letter-spacing: -.01em; cursor: pointer; transition: background .12s; }
+.snav-back.msw-btn:hover, .snav-back.msw-btn.open { background: #F3F4F6; color: #1F2937; }
+.msw-btn .msw-ic { width: 22px; height: 22px; display: inline-flex; flex: none; }
+.msw-btn .msw-ic svg { width: 22px; height: 22px; }
+.msw-btn .msw-nm { white-space: nowrap; }
+.msw-btn .msw-chev { color: #6B7280; flex: none; transition: transform .15s; }
+.msw-btn.open .msw-chev { transform: rotate(180deg); }
+#sidebar.sidebar--collapsed .snav-back.msw-btn .msw-nm, #sidebar.sidebar--collapsed .snav-back.msw-btn .msw-chev, .lm2-nav--collapsed .snav-back.msw-btn .msw-nm, .lm2-nav--collapsed .snav-back.msw-btn .msw-chev { display: none; }
+.msw-menu { position: fixed; z-index: 9990; width: 360px; max-width: calc(100vw - 16px); overflow-y: auto; background: #fff; border-radius: 12px; border: .75px solid rgba(31,41,55,.1); box-shadow: 0 0 4px rgba(0,0,0,.04), 0 8px 16px rgba(0,0,0,.08); animation: msw-in .12s ease-out; }
+@keyframes msw-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.msw-menu ul { list-style: none; margin: 0; padding: 4px; }
+.msw-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; color: #1F2937; text-decoration: none; cursor: pointer; outline: 0; }
+.msw-item:hover, .msw-item:focus-visible, .msw-item.on { background: #F3F4F6; }
+.msw-item:focus-visible { box-shadow: 0 0 0 2px rgba(49,107,254,.35) inset; }
+.msw-tile { width: 32px; height: 32px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #F6F6F6; }
+.msw-tile svg { width: 26px; height: 26px; }
+.msw-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msw-tx b { font-size: 14px; line-height: 20px; font-weight: 500; color: #1F2937; }
+.msw-tx small { font-size: 12px; line-height: 16px; font-weight: 400; color: #5A6472; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.msw-ck { flex: none; color: #1F2937; display: flex; padding-right: 6px; }
+.nl { position: fixed; inset: 0; z-index: 99990; background: #fff; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
+.nl.on { opacity: 1; }
+.nl-b { display: flex; flex-direction: column; gap: 14px; min-width: 262px; }
+.nl-logo { display: flex; align-items: center; gap: 12px; height: 50px; }
+.nl-ic { width: 50px; height: 50px; flex: none; display: flex; }
+.nl-ic svg { width: 50px; height: 50px; }
+.nl-nm { font-size: 38px; line-height: 50px; font-weight: 700; letter-spacing: -.03em; color: #111827; white-space: nowrap; }
+.nl-track { position: relative; height: 6px; border-radius: 100px; background: #F6F6F6; overflow: hidden; }
+.nl-bar { position: absolute; top: 0; bottom: 0; left: 0; width: 20%; border-radius: 100px; background: #404040; animation: nl-slide 1.5s linear infinite alternate both; }
+@keyframes nl-slide { 0% { left: 0; width: 20%; } 8% { left: 0; width: 30%; } 92% { left: 70%; width: 30%; } 100% { left: 80%; width: 20%; } }
+@media (prefers-reduced-motion: reduce) { .nl-bar { animation-duration: 3s; } .msw-menu { animation: none; } }
