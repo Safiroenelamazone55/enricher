@@ -79,6 +79,7 @@ const WarmupModule = (() => {
         <div class="wm-det__col"><div class="wm-det__t">Calentamiento</div>
           <div class="wm-fac"><span class="wm-fac__n">Fase</span><span class="wm-fac__p">${esc(f.texto)}</span><div class="wm-fac__d">${esc(f.detalle || '')}</div></div>
           ${x.ramp_on ? `<div class="wm-fac"><span class="wm-fac__n">Rampa</span><span class="wm-fac__p">${x.ramp_start} → ${x.ramp_target}</span><div class="wm-fac__d">Sube ${x.ramp_step} al día cada semana hasta ${x.ramp_target}.</div></div>` : ''}
+          ${x.ramp_auto ? `<div class="wm-fac"><span class="wm-fac__n">Última revisión del ajuste</span><span class="wm-fac__p">${x.revision ? ago(x.revision.at) : 'pendiente'}</span><div class="wm-fac__d">${x.revision ? esc(x.revision.detalle) : 'Se evalúa una vez al día. La primera revisión llega en las próximas horas.'}</div></div>` : ''}
           <div class="wm-det__t" style="margin-top:14px">Últimos cambios</div>
           ${x.eventos.length ? x.eventos.map(e => `<div class="wm-ev"><span>${esc(e.detalle)}</span><i>${ago(e.at)}</i></div>`).join('') : '<div class="wm-fac__d">Todavía no hay cambios automáticos.</div>'}</div></div>`;
       return `<div class="wm-row${abierto ? ' is-open' : ''}">

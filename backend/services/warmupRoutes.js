@@ -44,11 +44,13 @@ function mount(app, { pool, requireAuth }) {
              h.datos AS salud, h.checked_at AS salud_en
         FROM lm_mailboxes mb LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id LEFT JOIN lm_mailbox_health h ON h.mailbox_id = mb.id
        WHERE mb.user_id=$1 AND mb.email <> '' ORDER BY oc.nombre NULLS LAST, mb.id`, [uid, TZ]);
-    const ev = rows.length ? (await pool.query(`SELECT mailbox_id, tipo, detalle, created_at FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY mailbox_id ORDER BY created_at DESC) rn FROM lm_mailbox_events WHERE mailbox_id = ANY($1::int[])) x WHERE rn <= 5 ORDER BY created_at DESC`, [rows.map(r => r.id)])).rows : [];
+    const ev = rows.length ? (await pool.query(`SELECT mailbox_id, tipo, detalle, created_at FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY mailbox_id ORDER BY created_at DESC) rn FROM lm_mailbox_events WHERE mailbox_id = ANY($1::int[]) AND tipo <> 'ramp_mantiene') x WHERE rn <= 5 ORDER BY created_at DESC`, [rows.map(r => r.id)])).rows : [];
+    const revs = rows.length ? (await pool.query(`SELECT DISTINCT ON (mailbox_id) mailbox_id, detalle, created_at AS at FROM lm_mailbox_events WHERE mailbox_id = ANY($1::int[]) AND tipo LIKE 'ramp_%' ORDER BY mailbox_id, created_at DESC`, [rows.map(r => r.id)])).rows : [];
     return rows.map(r => ({
       ...r, tasa_rebote: r.n14 ? Math.round(r.b14 / r.n14 * 1000) / 10 : null, fase: W.fase(r),
       consejo: r.salud ? W.consejo(r.salud.nota) : null,
       eventos: ev.filter(e => e.mailbox_id === r.id).map(e => ({ tipo: e.tipo, detalle: e.detalle, at: e.created_at })),
+      revision: (revs.find(e => e.mailbox_id === r.id) || null),
     }));
   }
   // Última prueba de bandeja terminada (últimos 21 días) de un buzón, ya sumada
