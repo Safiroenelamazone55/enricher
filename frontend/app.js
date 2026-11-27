@@ -1068,7 +1068,6 @@ function _applyHomeMode(on) {
   // modulo -- pedido explicito (referencia Odoo).
   document.getElementById('gtb-brand')?.classList.toggle('hidden', !on);
   document.getElementById('gtb-mod-brand')?.classList.toggle('hidden', !!on);
-  document.getElementById('gtb-nav-toggle')?.classList.toggle('hidden', !!on);
 }
 
 // "Ventana" de un proyecto puntual — pedido explícito 2026-09-02: entrar a un
@@ -1190,8 +1189,36 @@ const NovaLoader = (() => {
     clearTimeout(tShow); clearInterval(tPoll); clearTimeout(tMax);
     if (!el) return; const e = el; el = null; e.classList.remove('on'); setTimeout(() => e.remove(), 160);
   }
-  const start = mod => { stop(); tShow = setTimeout(() => { if (pend > 0) render(mod); }, 150); };
-  return { start, stop };
+  const start = mod => { stopInline(); stop(); tShow = setTimeout(() => { if (pend > 0) render(mod); }, 150); };
+
+  // ── Aviso de carga dentro de una sección (todos los módulos): aparece solo si al cambiar de sección algo tarda en llegar ──
+  let elIn = null, tShowIn = 0, tPollIn = 0, tMaxIn = 0, shownIn = 0;
+  const removeIn = () => { if (elIn) { elIn.remove(); elIn = null; } };
+  function stopInline() {
+    clearTimeout(tShowIn); clearInterval(tPollIn); clearTimeout(tMaxIn);
+    if (!elIn) return; const e = elIn; elIn = null; e.classList.remove('on'); setTimeout(() => e.remove(), 140);
+  }
+  const renderInline = () => {
+    removeIn();
+    const tb = document.getElementById('global-topbar'), top = tb ? tb.getBoundingClientRect().bottom : 0;
+    let left = 0;
+    const rail = document.querySelector('.snav-rail'); if (rail && rail.offsetParent !== null) left = rail.getBoundingClientRect().right;
+    const nav = [document.querySelector('.lm2-nav'), document.getElementById('sidebar')].find(e => e && e.offsetParent !== null && e.getBoundingClientRect().width > 0);
+    if (nav) left = Math.max(left, nav.getBoundingClientRect().right);
+    let w = document.querySelector('.pane.active'); while (w && getComputedStyle(w).backgroundColor === 'rgba(0, 0, 0, 0)') w = w.parentElement;
+    elIn = document.createElement('div'); elIn.className = 'nl-in'; elIn.setAttribute('role', 'status'); elIn.setAttribute('aria-label', 'Cargando');
+    elIn.style.cssText = 'left:' + left + 'px;top:' + top + 'px;background:' + (w ? getComputedStyle(w).backgroundColor : '#fff');
+    elIn.innerHTML = '<div class="nl-in-b"><div class="nl-in-t">Cargando, espere por favor...</div><div class="nl-track nl-track--blue"><span class="nl-bar"></span></div></div>';
+    document.body.appendChild(elIn); shownIn = performance.now();
+    requestAnimationFrame(() => elIn && elIn.classList.add('on'));
+    let calm = 0;
+    tPollIn = setInterval(() => { calm = pend === 0 ? calm + 1 : 0; if (calm >= 2 && performance.now() - shownIn > 350) stopInline(); }, 120);
+    tMaxIn = setTimeout(stopInline, 8000);
+  };
+  const startInline = () => { stopInline(); tShowIn = setTimeout(() => { if (pend > 0 && !el) renderInline(); }, 150); };
+  // cada clic de la persona en una sección del menú lateral (cualquier módulo)
+  document.addEventListener('click', ev => { if (ev.isTrusted && ev.target.closest && ev.target.closest('.snav-item, .lm2-nav__item')) startInline(); }, true);
+  return { start, stop, startInline, stopInline };
 })();
 window.NovaLoader = NovaLoader;
 
@@ -23619,7 +23646,7 @@ const LeadManagerModule = (() => {
     const collapsed = _navCollapsedGlobal();
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav${collapsed ? ' lm2-nav--collapsed' : ''}">
-        <div class="snav-panel__hd"><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button></div>
+        <div class="snav-panel__hd"><button class="snav-back msw-btn" type="button" title="Cambiar de módulo" aria-label="Cambiar de módulo" aria-haspopup="menu" onclick="ModSwitch.toggle(this)">${ModSwitch.inner('leadmanagement')}</button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
         <div class="snav-foot">
           <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">
@@ -57005,7 +57032,6 @@ const TimerModule = (() => {
 function _navCollapsedGlobal() { try { return localStorage.getItem('nova_nav_collapsed') === '1'; } catch (_) { return false; } }
 function _setNavCollapsedGlobal(on) {
   try { localStorage.setItem('nova_nav_collapsed', on ? '1' : '0'); } catch (_) {}
-  { const tg = document.getElementById('gtb-nav-toggle'); if (tg) tg.title = on ? 'Mostrar panel' : 'Ocultar panel'; }
   const sb = document.getElementById('sidebar');
   if (sb) {
     sb.classList.toggle('sidebar--collapsed', on);

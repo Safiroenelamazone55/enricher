@@ -22960,15 +22960,19 @@ body.ibx-lb-open{overflow:hidden}
 @keyframes nl-slide { 0% { left: 0; width: 20%; } 8% { left: 0; width: 30%; } 92% { left: 70%; width: 30%; } 100% { left: 80%; width: 20%; } }
 @media (prefers-reduced-motion: reduce) { .nl-bar { animation-duration: 3s; } .msw-menu { animation: none; } }
 
-/* El selector de módulos vive en el encabezado superior (donde estaba «▶ Outreach»); la barra lateral queda solo con su botón de plegar */
-.global-topbar__brand.msw-btn { height: 36px; padding: 0 10px 0 8px; margin-left: 4px; gap: 8px; font-size: 16px; font-weight: 600; color: #1F2937; flex-shrink: 0; }
-.global-topbar__brand.msw-btn:hover { background: #F3F4F6; }
-.global-topbar__brand.msw-btn.hidden { display: none; }
-#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { justify-content: flex-end; }
 
-/* La franja de arriba de la barra lateral ya no existe: el selector de módulos y el botón de plegar viven en el encabezado superior */
-#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { display: none; }
-.gtb-navtog { width: 32px; height: 32px; margin-left: 2px; border: 0; border-radius: 8px; background: transparent; color: #6B7280; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background .12s, color .12s; }
-.gtb-navtog:hover { background: #F3F4F6; color: #1F2937; }
-.gtb-navtog.hidden { display: none; }
-#sidebar .sidebar__nav { padding-top: 12px; }
+
+/* Selector de módulos DENTRO de la barra lateral (como lemlist), con la franja baja: 44 px en vez de 56 */
+#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { display: flex; align-items: center; justify-content: space-between; height: 44px; min-height: 44px; padding: 0 8px 0 10px !important; border-bottom: .75px solid rgba(31,41,55,.1); }
+.snav-panel__hd .msw-btn { margin-left: 0; }
+.snav-panel__hd .sidebar__toggle { width: 28px; height: 28px; }
+#sidebar.sidebar--collapsed .snav-panel__hd .msw-nm, #sidebar.sidebar--collapsed .snav-panel__hd .msw-chev, .lm2-nav--collapsed .snav-panel__hd .msw-nm, .lm2-nav--collapsed .snav-panel__hd .msw-chev { display: none; }
+.lm2-nav--collapsed .snav-back { display: inline-flex !important; }
+/* Aviso de carga dentro de la sección: texto + barra azul que va y viene (medidas de lemlist) */
+.nl-in { position: fixed; right: 0; bottom: 0; z-index: 9980; display: flex; align-items: center; justify-content: center; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; opacity: 0; transition: opacity .12s; }
+.nl-in.on { opacity: 1; }
+.nl-in-b { width: 286px; max-width: 80%; display: flex; flex-direction: column; gap: 14px; }
+.nl-in-t { font-size: 14px; line-height: 20px; font-weight: 500; color: #213856; text-align: center; }
+.nl-track--blue .nl-bar { background: #316BFF; }
+
+.nl-in .nl-track { background: #ECEAE6; }
