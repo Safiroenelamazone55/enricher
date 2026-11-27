@@ -9030,6 +9030,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
   } catch (e) { console.error('[dash drill]', e.message); res.status(500).json({ error: 'No se pudo cargar el detalle' }); }
 });
 app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
+require('./services/warmupRoutes').mount(app, { pool, requireAuth });   // Módulo Warm-up: salud y calentamiento de buzones, ajuste automático de rampa, grupo de calentamiento
 require('./services/reportsRoutes').mount(app, { pool, requireAuth, tzOfUser: _tzOfUser });   // Informes estilo lemlist: Overview, Campañas, Actividad, Equipo, Llamadas + dashboards personalizados
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 require('./services/inicioRoutes').mount(app, { pool, requireAuth, permsSvc, puedeVerWa: _puedeVerWa });   // Formulario de inicio del cliente + modulo Inicios de cliente

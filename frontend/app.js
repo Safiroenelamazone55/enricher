@@ -811,7 +811,7 @@ const MatchSuggest = (() => {
   return { close: _close };
 })();
 
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', inicios: 'Inicios de cliente', soluciones: 'Soluciones', contenido: 'Contenido', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', warmup: 'Warm-up', finance: 'Finanzas', cantera: 'Cantera', herramientas: 'Herramientas', plantillas: 'Plantillas', inicios: 'Inicios de cliente', soluciones: 'Soluciones', contenido: 'Contenido', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -886,6 +886,8 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>' },
   { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias, inbox, leads y deals',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
+  { id: 'warmup', tab: 'warmup', name: 'Warm-up', desc: 'Salud y calentamiento de los buzones: puntuación, rampa automática y grupo de calentamiento', color: 'orange',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>' },
   // Cantera: prospección y preparación de datos (antes dentro de Outreach). «Tabla de datos» también sigue disponible en Outreach.
   { id: 'cantera',        tab: 'cantera',        name: 'Cantera',        desc: 'Prospección y preparación de datos: borradores, mesa de trabajo, base global, cargas y tabla de datos', color: 'orange',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>' },
@@ -939,6 +941,7 @@ function _buildHomeIcons() {
   const ICO2 = {
     management: d2(`${df('m', GRN, INK)}<rect x="5" y="5" width="28" height="28" rx="9" fill="url(#m0)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#m1)"/><rect x="15" y="15" width="28" height="28" rx="9" fill="url(#mh)"/><circle cx="37" cy="11" r="5.5" fill="${LIM[1]}" stroke="#fff" stroke-width="2"/>`),
     leadmanagement: d2(`${df('o', GRN, LIM)}<path d="M4 19 14 24 4 29z" fill="url(#o1)" stroke="url(#o1)" stroke-width="3" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#o0)" stroke="url(#o0)" stroke-width="6" stroke-linejoin="round"/><path d="M12 9 40 24 12 39z" fill="url(#oh)" stroke="url(#oh)" stroke-width="6" stroke-linejoin="round"/>`),
+    warmup: d2(`${df('w', GRN, LIM, INK)}<path d="M24 4c1 7 9 11 9 21a9 9 0 0 1-18 0c0-5 3-7 5-10 1 3 2 4 4 4 1-4-1-9 0-15z" fill="url(#w0)"/><path d="M24 4c1 7 9 11 9 21a9 9 0 0 1-18 0c0-5 3-7 5-10 1 3 2 4 4 4 1-4-1-9 0-15z" fill="url(#wh)"/><path d="M24 40a5 5 0 0 1-5-5c0-3 3-4 4-7 2 2 6 3 6 7a5 5 0 0 1-5 5z" fill="url(#w1)"/>`),
     cantera: d2(`${df('c', LIM, GRN, INK)}<rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#c0)"/><rect x="6" y="17" width="36" height="15" rx="7.5" fill="url(#c1)"/><rect x="6" y="29" width="36" height="15" rx="7.5" fill="url(#c2)"/><rect x="6" y="5" width="36" height="15" rx="7.5" fill="url(#ch)"/>`),
     contenido: d2(`${df('t', GRN, LIM)}<rect x="5" y="9" width="34" height="34" rx="10" fill="url(#t0)"/><rect x="5" y="9" width="34" height="34" rx="10" fill="url(#th)"/><circle cx="15.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="20" r="4" fill="#fff" fill-opacity=".92"/><circle cx="15.5" cy="32" r="4" fill="#fff" fill-opacity=".92"/><circle cx="28.5" cy="32" r="4" fill="#fff" fill-opacity=".55"/><circle cx="38" cy="12" r="7" fill="url(#t1)" stroke="#fff" stroke-width="2.5"/>`),
     finance: d2(`${df('f', GRN, LIM, INK)}<rect x="10" y="6" width="24" height="12" rx="6" fill="url(#f2)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#f0)"/><rect x="4" y="14" width="40" height="29" rx="10" fill="url(#fh)"/><rect x="26" y="24" width="18" height="12" rx="6" fill="url(#f1)"/><circle cx="33" cy="30" r="2.8" fill="${INK[1]}"/>`),
@@ -1009,6 +1012,7 @@ function _renderHomeInner(grid) {
     plantillas: { i: sv('<path d="M14.5 2.8H7A2.5 2.5 0 0 0 4.5 5.3v13.4A2.5 2.5 0 0 0 7 21.2h10a2.5 2.5 0 0 0 2.5-2.5V7.8z" fill="currentColor" fill-opacity=".24"/><path d="M14 2.8v3.6a1.4 1.4 0 0 0 1.4 1.4h4.1M8.5 13h7M8.5 16.5h4.5"/>') },
     inicios: { i: sv('<path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5V7a2.5 2.5 0 0 1 2.5-2.5H8" fill="currentColor" fill-opacity=".24"/><rect x="8" y="2.5" width="8" height="4" rx="1.4" fill="#14211B" fill-opacity="0"/><path d="m8.8 14.2 2.3 2.3 4.2-4.6"/>') },
     empresa: { i: sv('<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="8" cy="12" r="2" fill="currentColor" fill-opacity=".24"/><circle cx="16" cy="18" r="2" fill="currentColor" fill-opacity=".24"/>') },
+    warmup: { i: sv('<path fill="currentColor" fill-opacity=".24" d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>') },
     soluciones: { i: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="currentColor" fill-opacity=".24"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') },
   };
   // Estilo «Odoo»: una sola cuadrícula centrada de aplicaciones — icono grande de color con su nombre debajo, sin tarjetas ni descripciones.
@@ -1021,7 +1025,7 @@ function _renderHomeInner(grid) {
       <div class="home-app__n">${m.name}</div>
     </div>`;
   };
-  const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
+  const ORDER = ['management', 'leadmanagement', 'warmup', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
   const _u = window._authUser || {}, _datosOk = !!(_u.isOwner || !_u.permisos || (_u.permisos.datos && _u.permisos.datos.n > 0));
   const ordered = [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))].filter(m => m.id !== 'cantera' || _datosOk);
   const html = `<section class="home-sec"><div class="home-apps">${ordered.map(card).join('')}</div></section>`;
@@ -1110,7 +1114,7 @@ const ModSwitch = (() => {
   const icoOf = id => { try { if (!_homeIcoCache) _homeIcoCache = _buildHomeIcons(); return _uniq(_homeIcoCache[{ config: 'empresa', enricher: 'cantera' }[id] || id] || ''); } catch (_) { return ''; } };
   // Mismos módulos, mismo orden y mismos permisos que la pantalla de inicio
   const lista = () => {
-    const ORDER = ['management', 'leadmanagement', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
+    const ORDER = ['management', 'leadmanagement', 'warmup', 'cantera', 'contenido', 'finance', 'herramientas', 'plantillas', 'inicios', 'soluciones', 'empresa'];
     const u = window._authUser || {}, datosOk = !!(u.isOwner || !u.permisos || (u.permisos.datos && u.permisos.datos.n > 0));
     return [...ORDER.map(id => HOME_MODULES.find(m => m.id === id)).filter(Boolean), ...HOME_MODULES.filter(m => !ORDER.includes(m.id))].filter(m => m.id !== 'cantera' || datosOk);
   };
@@ -37539,7 +37543,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     const bar = `<div class="inf-tabs">${TABS.map(([k, l]) => `<button class="${_dv.tab === k ? 'on' : ''}" onclick="LeadManagerModule.dvSet('tab','${k}')">${l}</button>`).join('')}</div>`;
     const d = _dv.data;
     let body;
-    if (_dv.tab === 'warmup') body = _dvSoon('Warm-up de buzones', 'El calentamiento automático de buzones todavía no existe en Nova. Mientras tanto, la protección está en el envío: topes diarios por buzón, intervalo entre correos y bloqueo de direcciones que ya rebotaron.');
+    if (_dv.tab === 'warmup') body = `<div class="rd-card"><div class="rd-none"><b>Warm-up de buzones</b><br>La salud, la rampa automática y el grupo de calentamiento ahora viven en su propio módulo.<br><button class="ll-btn" style="margin-top:10px" onclick="selectModule('warmup')">Abrir Warm-up</button></div></div>`;
     else if (_dv.tab === 'inbox') body = _dvSoon('Pruebas de inbox', 'Las pruebas de colocación (bandeja de entrada, promociones o spam) en cuentas semilla todavía no están disponibles.');
     else if (!d) body = '<div class="ll-empty">Cargando entregabilidad…</div>';
     else if (d.error) body = '<div class="ll-empty">No se pudo cargar la entregabilidad.</div>';
@@ -57158,6 +57162,7 @@ function initApp() {
     if (tabName === 'plantillas') PlantillasModule.render('plantillas-body');
     if (tabName === 'inicios' && typeof InicioModule !== 'undefined') InicioModule.render('inicios-body');
     if (tabName === 'soluciones') SolucionesModule.render('soluciones-body');
+    if (tabName.indexOf('warmup') === 0 && typeof WarmupModule !== 'undefined') WarmupModule.render(tabName);
     if (tabName.indexOf('contenido') === 0 && typeof ContenidoModule !== 'undefined') ContenidoModule.render(tabName);
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();

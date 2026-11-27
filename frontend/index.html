@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css?v=20261127z"/>
   <link rel="stylesheet" href="mobile.css?v=25"/>
   <link rel="stylesheet" href="contenido.css?v=5"/>
+  <link rel="stylesheet" href="warmup.css?v=1"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -344,6 +345,9 @@
       <!-- Soluciones: productos propios de pago (extensiones/apps con licencia) que Nova vende por fuera — gestión de licencias. -->
       <button class="snav-mod" data-module="soluciones" onclick="selectModule('soluciones')" data-tip="Soluciones" aria-label="Soluciones">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      </button>
+      <button class="snav-mod" data-module="warmup" onclick="selectModule('warmup')" data-tip="Warm-up" aria-label="Warm-up">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
       </button>
     </div>
     <div class="snav-rail__spacer"></div>
@@ -723,7 +727,28 @@
         </button>
       </div>
 
-      <!-- Soluciones: productos propios que Nova vende por fuera (extensiones/apps de pago). Por ahora solo el LinkedIn Sales Scraper. -->
+            <!-- Warm-up (estilo Lemwarm): salud y calentamiento de los buzones -->
+      <div class="snav-group" data-module="warmup" id="snav-body-warmup">
+        <button class="snav-item" data-tab="warmup" data-tooltip="Panel de control">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+          <span class="snav-item__label">Panel de control</span>
+        </button>
+        <div class="snav-cat">Gestión</div>
+        <button class="snav-item" data-tab="warmup-buzones" data-tooltip="Buzones">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></span>
+          <span class="snav-item__label">Buzones</span>
+        </button>
+        <button class="snav-item" data-tab="warmup-pool" data-tooltip="Grupo de calentamiento">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span class="snav-item__label">Calentamiento</span>
+        </button>
+        <button class="snav-item" data-tab="warmup-pruebas" data-tooltip="Pruebas de bandeja">
+          <span class="snav-item__icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+          <span class="snav-item__label">Pruebas</span>
+        </button>
+      </div>
+
+<!-- Soluciones: productos propios que Nova vende por fuera (extensiones/apps de pago). Por ahora solo el LinkedIn Sales Scraper. -->
       <div class="snav-group" data-module="soluciones" id="snav-body-soluciones">
         <div class="snav-cat">Productos</div>
         <button class="snav-item" data-tab="soluciones" data-tooltip="Soluciones">
@@ -2189,6 +2214,10 @@
     <div class="pane" id="pane-soluciones">
       <div id="soluciones-body"></div>
     </div><!-- /pane-soluciones -->
+    <div class="pane" id="pane-warmup"><div id="warmup-body"></div></div>
+    <div class="pane" id="pane-warmup-buzones"><div id="warmup-buzones-body"></div></div>
+    <div class="pane" id="pane-warmup-pool"><div id="warmup-pool-body"></div></div>
+    <div class="pane" id="pane-warmup-pruebas"><div id="warmup-pruebas-body"></div></div>
     <div class="pane" id="pane-contenido-hoy"><div id="contenido-hoy-body"></div></div>
     <div class="pane" id="pane-contenido-estrategia"><div id="contenido-estrategia-body"></div></div>
     <div class="pane" id="pane-contenido-ideas"><div id="contenido-ideas-body"></div></div>
@@ -2603,6 +2632,10 @@
     <button class="snav-mod ws-mod" data-module="soluciones" onclick="selectModule('soluciones');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
       <span class="ws-mod__lbl">Soluciones</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="warmup" onclick="selectModule('warmup');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <span class="ws-mod__lbl">Warm-up</span><span class="ws-mod__chk"></span>
     </button>
   </div>
 
@@ -3585,7 +3618,7 @@
   })();
 </script>
 
-<script src="app.js?v=20261127zn"></script>
+<script src="app.js?v=20261127zo"></script>
 <script src="worldclock.js?v=4"></script>
 <script src="agentes.js?v=4"></script>
 <script src="spaces.js?v=20261103p"></script>
@@ -3599,6 +3632,7 @@
 <script src="mobile.js?v=8"></script>
 <script src="varchips.js?v=2026101201"></script>
 <script src="translator.js?v=2026101203"></script>
+<script src="warmup-ui.js?v=2"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
