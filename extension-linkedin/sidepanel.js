@@ -53,17 +53,23 @@ function pintarExtra(e) {
   box.innerHTML = h;
 }
 // «Acciones restantes hoy» + lo hecho por tipo (los números reales de Nova, con los topes de HOY)
+// Sale cada tipo que se está usando (hecho hoy o con algo en cola) como «hechas/tope»; si aún no hay nada, los tres básicos.
+const TIPOS_HOY = [['invite', 'invitaciones'], ['visit', 'visitas'], ['message', 'mensajes'], ['inmail', 'InMail'], ['react', 'reacciones'], ['follow', 'seguimientos'], ['comment', 'comentarios']];
+function trozosHoy(h) {
+  const x = h.por_tipo || {}, c = h.en_cola || {}, t = h.topes || {};
+  let usados = TIPOS_HOY.filter(([k]) => (x[k] || 0) > 0 || (c[k] || 0) > 0);
+  if (!usados.length) usados = TIPOS_HOY.slice(0, 3);
+  return usados.map(([k, l]) => l + ' ' + (x[k] || 0) + '/' + (t[k] || 0));
+}
 let _hoyT = 0;
 async function pintarHoy(forzar) {
   const box = $('hoy'); if (!box) return;
   if (!forzar && Date.now() - _hoyT < 20000) return; _hoyT = Date.now();
   const p = await msg('prefs', {});
   if (!p || p.error || !p.hoy) { box.innerHTML = ''; return; }
-  const h = p.hoy, t = h.topes || {}, x = h.por_tipo || {};
+  const h = p.hoy;
   const pct = h.tope ? Math.min(100, Math.round(100 * (h.hechas || 0) / h.tope)) : 0;
-  const trozos = ['Hechas hoy: <b>' + (h.hechas || 0) + '</b>', 'invitaciones ' + (x.invite || 0) + '/' + (t.invite || 0), 'visitas ' + (x.visit || 0) + '/' + (t.visit || 0), 'mensajes ' + (x.message || 0) + '/' + (t.message || 0)];
-  if (x.inmail) trozos.push('InMail ' + x.inmail + '/' + (t.inmail || 0));
-  [['react', 'reacciones'], ['follow', 'seguidos'], ['comment', 'comentarios']].forEach(([k, l]) => { if (x[k]) trozos.push(x[k] + ' ' + l); });
+  const trozos = ['Hechas hoy: <b>' + (h.hechas || 0) + '</b>', ...trozosHoy(h)];
   box.innerHTML = '<div class="hoy"><small>Acciones restantes hoy</small><div class="n">' + (h.restantes != null ? h.restantes : '—') + '<span>' + (h.tope ? 'de ' + h.tope + ' de hoy' : '') + '</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="d">' + trozos.join(' · ') + '</div></div>';
 }
 let _proxT = 0;
@@ -326,8 +332,7 @@ async function abrirAjustes() {
   $('aj-dias-on').checked = !!pr.dup_dias_on; $('aj-dias').value = pr.dup_dias || 30; ajSub();
   $('aj-rest').textContent = h.restantes != null ? h.restantes : '—';
   $('aj-de').textContent = h.tope ? 'de ' + h.tope + ' de hoy' : '';
-  const t = h.topes || {}, x = h.por_tipo || {};
-  $('aj-det').textContent = 'Hechas hoy: ' + (h.hechas || 0) + ' · invitaciones ' + (x.invite || 0) + '/' + (t.invite || 0) + ' · visitas ' + (x.visit || 0) + '/' + (t.visit || 0) + ' · mensajes ' + (x.message || 0) + '/' + (t.message || 0);
+  $('aj-det').textContent = ['Hechas hoy: ' + (h.hechas || 0), ...trozosHoy(h)].join(' · ');
 }
 const ajSub = () => { const m = (document.querySelector('input[name=dup]:checked') || {}).value; $('aj-sub').dataset.off = m === 'activa' ? '0' : '1'; };
 async function ajGuardar() {
