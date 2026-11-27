@@ -6923,6 +6923,23 @@ app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
+// Varios buzones por cliente (hasta 5): el hilo con un contacto sigue por el buzón con el que se habló por última vez (si no hay historial, el primero enviable).
+const MB_DE_CONTACTO = (k, soloEnviables) => `LEFT JOIN LATERAL (
+  SELECT mbx.* FROM lm_mailboxes mbx
+   WHERE mbx.outbound_client_id = ${k}.outbound_client_id AND mbx.user_id = ${k}.user_id ${soloEnviables ? "AND mbx.estado IN ('conectado','solo_envio')" : ''}
+   ORDER BY (SELECT MAX(t) FROM (
+        SELECT MAX(COALESCE(mm.sent_at, mm.created_at)) AS t FROM lm_messages mm WHERE mm.contact_id = ${k}.id AND mm.mailbox_id = mbx.id
+        UNION ALL SELECT MAX(ii.received_at) FROM lm_inbox_messages ii WHERE ii.contact_id = ${k}.id AND ii.mailbox_id = mbx.id) xx) DESC NULLS LAST, mbx.id
+   LIMIT 1) mb ON TRUE`;
+const MAX_BUZONES_CLIENTE = 5;
+// Antes de guardar un buzón: si ya existe con ese correo se actualiza; si hay un hueco «pendiente de aprobación» (sin correo) lo ocupa; si no, debe haber espacio (máx. 5).
+async function _mbPrepararAlta(uid, clientId, email) {
+  const { rows } = await pool.query(`SELECT id, lower(email) AS email FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [uid, clientId]);
+  if (rows.some(r => r.email === String(email).toLowerCase())) return;
+  const hueco = rows.find(r => r.email === '');
+  if (hueco) { await pool.query(`UPDATE lm_mailboxes SET email=$1 WHERE id=$2`, [email, hueco.id]); return; }
+  if (rows.length >= MAX_BUZONES_CLIENTE) { const e = new Error(`Un cliente puede tener hasta ${MAX_BUZONES_CLIENTE} buzones. Quita uno para añadir otro.`); e.status = 400; throw e; }
+}
 app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
   const b = req.body || {};
   const cid = parseInt(b.outbound_client_id) || null;
@@ -6940,10 +6957,11 @@ app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
     if (!t.smtpOk) return res.status(400).json({ error: t.error || 'No se pudo conectar el buzón' });
     const estado = t.imapOk ? 'conectado' : 'solo_envio';
     const lastErr = t.imapOk ? '' : (t.error || 'IMAP no disponible');
+    await _mbPrepararAlta(req.workspaceOwnerId, cid, email);
     const { rows } = await pool.query(`
       INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error, sent_folder, verified_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
-      ON CONFLICT (user_id, outbound_client_id) DO UPDATE SET
+      ON CONFLICT (user_id, outbound_client_id, lower(email)) DO UPDATE SET
         email=EXCLUDED.email, provider=EXCLUDED.provider, smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port,
         smtp_secure=EXCLUDED.smtp_secure, imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port,
         pass_enc=EXCLUDED.pass_enc, estado=EXCLUDED.estado, last_error=EXCLUDED.last_error, sent_folder=EXCLUDED.sent_folder,
@@ -6954,7 +6972,7 @@ app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
       RETURNING id, outbound_client_id, email, provider, estado, last_error, verified_at
     `, [req.workspaceOwnerId, cid, email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(pass), estado, lastErr, t.sentFolder || '']);
     res.status(201).json(rows[0]);
-  } catch (err) { console.error('[mailbox] POST', err.message); res.status(500).json({ error: 'Error al guardar el buzón' }); }
+  } catch (err) { if (err.status) return res.status(err.status).json({ error: err.message }); console.error('[mailbox] POST', err.message); res.status(500).json({ error: 'Error al guardar el buzón' }); }
 });
 app.post('/api/lm/mailboxes/:id/test', requireAuth, async (req, res) => {
   try {
@@ -7037,7 +7055,11 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const uid = req.workspaceOwnerId, tz = await _tzOfUser(req.user && req.user.id);
     const cid = parseInt(req.query.client_id) || 0, sid = parseInt(req.query.sequence_id) || 0;
     if (!cid) return res.json({ sinCliente: true });
-    const { rows: [mb] } = await pool.query('SELECT id, email, daily_limit, ramp_on, ramp_start, ramp_step, ramp_target, ramp_started_on FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2', [uid, cid]);
+    const { rows: mbs } = await pool.query(
+      `SELECT id, email, daily_limit, ramp_on, nv_mb_cap(id,$3) AS cap,
+              CASE WHEN ramp_on AND ramp_started_on IS NOT NULL THEN LEAST(ramp_target, ramp_start + ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - ramp_started_on), 0)::numeric / 7)::int) END AS cap_ramp,
+              CASE WHEN ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - ramp_started_on), 0)::numeric / 7)::int END AS semana
+         FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY id`, [uid, cid, tz]);
     const { rows: [cfg] } = await pool.query('SELECT enabled, daily_limit FROM lm_send_settings WHERE user_id=$1', [uid]);
     const day = "(mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date";
     const { rows: porSeq } = await pool.query(`
@@ -7046,17 +7068,12 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
         FROM sequences ss LEFT JOIN lm_messages mm ON mm.sequence_id = ss.id
        WHERE ss.user_id=$1 AND ss.outbound_client_id=$2 GROUP BY ss.id ORDER BY ss.nombre`, [uid, cid, tz]);
     const { rows: [ws] } = await pool.query(`SELECT COUNT(*)::int AS n FROM lm_messages mm WHERE mm.user_id=$1 AND mm.estado IN ('sent','replied','bounced') AND ${day.split('$3').join('$2')}`, [uid, tz]);
-    // tope del buzón por calentamiento (misma fórmula que el motor)
-    let capBuzon = null, semana = 0;
-    if (mb && mb.ramp_on && mb.ramp_started_on) {
-      const { rows: [sw] } = await pool.query("SELECT FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - ramp_started_on), 0)::numeric / 7)::int AS semana FROM lm_mailboxes WHERE id=$1", [mb.id, tz]);
-      semana = sw ? sw.semana : 0;
-      capBuzon = Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * semana);
-    }
-    const rampCap = capBuzon;
-    if (mb && mb.daily_limit > 0) {   // el número que la persona fijó en el buzón manda
-      capBuzon = mb.daily_limit;
-    }
+    // tope de los buzones del cliente (hasta 5): la SUMA de sus topes; si alguno no tiene tope, no hay tope
+    const topados = mbs.length > 0 && mbs.every(x => x.cap !== null);
+    let capBuzon = topados ? mbs.reduce((a, x) => a + x.cap, 0) : null;
+    const rampCap = topados && mbs.every(x => x.cap_ramp !== null) ? mbs.reduce((a, x) => a + x.cap_ramp, 0) : null;
+    const semana = mbs.length ? mbs[0].semana : 0;
+    const mb = mbs.length ? { id: mbs[0].id, email: mbs.map(x => x.email).join(' + '), ramp_on: mbs.some(x => x.ramp_on), daily_limit: mbs.every(x => x.daily_limit > 0) ? mbs.reduce((a, x) => a + x.daily_limit, 0) : 0, n: mbs.length } : null;
     const esta = porSeq.find(x => x.id === sid) || { hoy: 0, limite: 0 };
     const otras = porSeq.filter(x => x.id !== sid && x.hoy > 0);
     const hoyCliente = porSeq.reduce((a, x) => a + x.hoy, 0), hoyOtras = hoyCliente - esta.hoy;
@@ -7070,7 +7087,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
-      buzon: mb ? { id: mb.id, email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
+      buzon: mb ? { id: mb.id, email: mb.email, buzones: mb.n, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
       workspace: { activo: false, limite: null, enviados_hoy: ws.n, envio_global: !!(cfg && cfg.enabled) },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
@@ -7273,12 +7290,12 @@ app.post('/api/lm/mailboxes/mark-admin-consent-required', requireAuth, async (re
                                  smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
                                  estado, needs_admin_consent, last_error)
             VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
-       ON CONFLICT (user_id, outbound_client_id)
+       ON CONFLICT (user_id, outbound_client_id, lower(email))
        DO UPDATE SET needs_admin_consent=TRUE`,
       [uid, clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
        'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
     const { rows } = await pool.query(
-      `SELECT id FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [uid, clientId]);
+      `SELECT id FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY (email='') DESC, id`, [uid, clientId]);
     res.json({ ok: true, mailbox_id: rows[0]?.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -7527,7 +7544,7 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
                                    smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
                                    estado, needs_admin_consent, last_error)
               VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
-         ON CONFLICT (user_id, outbound_client_id)
+         ON CONFLICT (user_id, outbound_client_id, lower(email))
          DO UPDATE SET needs_admin_consent=TRUE`,
         [st.uid, st.clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
          'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
@@ -7584,13 +7601,14 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
     const emailLc = tok.email.toLowerCase();
     const expiresAt = new Date(Date.now() + (tok.expires_in * 1000));
     const hosts = mailboxSvc.resolveHosts('microsoft', {});
+    await _mbPrepararAlta(st.uid, st.clientId, emailLc);
     await pool.query(
       `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
                                  smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
                                  oauth_access_enc, oauth_refresh_enc, oauth_expires_at, oauth_scopes,
                                  estado, verified_at)
             VALUES ($1,$2,$3,'microsoft','oauth','microsoft',$4,$5,$6,$7,$8,$9,$10,$11,$12,'nuevo',NOW())
-       ON CONFLICT (user_id, outbound_client_id)
+       ON CONFLICT (user_id, outbound_client_id, lower(email))
        DO UPDATE SET email=EXCLUDED.email, provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
                      smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port, smtp_secure=EXCLUDED.smtp_secure,
                      imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port,
@@ -7602,7 +7620,7 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
        mailboxSvc.encPass(tok.access_token), mailboxSvc.encPass(tok.refresh_token), expiresAt, tok.scope]
     );
     // Verificar SMTP+IMAP en el momento para dejar el estado limpio.
-    const { rows } = await pool.query(`SELECT * FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [st.uid, st.clientId]);
+    const { rows } = await pool.query(`SELECT * FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 AND lower(email)=$3`, [st.uid, st.clientId, emailLc]);
     const mb = rows[0];
     const auth = await mailboxSvc.getMailboxAuth(pool, mb);
     const t = await mailboxSvc.testMailbox(mb, auth);
@@ -7807,7 +7825,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
         LEFT JOIN outx o ON o.contact_id = k.id
         LEFT JOIN lm_companies co ON co.id = k.company_id
         LEFT JOIN outbound_clients oc ON oc.id = k.outbound_client_id
-        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
+        ${MB_DE_CONTACTO('k')}
         LEFT JOIN LATERAL (
           SELECT asunto, LEFT(cuerpo, 160) AS cuerpo, tipo, ooo_hasta
             FROM lm_inbox_messages
@@ -7867,7 +7885,7 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
         FROM lm_contacts k
         LEFT JOIN lm_companies co ON co.id = k.company_id
         LEFT JOIN outbound_clients oc ON oc.id = k.outbound_client_id
-        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
+        ${MB_DE_CONTACTO('k')}
        WHERE k.id=$2 AND k.user_id=$1
     `, [req.workspaceOwnerId, cid]);
     // A quien iria la respuesta: se calcula aqui para que la usuaria lo VEA antes
@@ -7930,8 +7948,7 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
   try {
     const { rows: [k] } = await pool.query(
       `SELECT k.*, mb.id AS mb_id FROM lm_contacts k
-        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id
-             AND mb.user_id = k.user_id AND mb.estado IN ('conectado','solo_envio')
+        ${MB_DE_CONTACTO('k', true)}
        WHERE k.id=$1 AND k.user_id=$2`, [cid, req.workspaceOwnerId]);
     if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
     // Sin email profesional, el correo va al personal (misma regla del motor de envíos)
@@ -8116,8 +8133,7 @@ app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
   try {
     const { rows: [k] } = await pool.query(
       `SELECT k.*, mb.id AS mb_id FROM lm_contacts k
-        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id
-             AND mb.user_id = k.user_id AND mb.estado IN ('conectado','solo_envio')
+        ${MB_DE_CONTACTO('k', true)}
        WHERE k.id=$1 AND k.user_id=$2`, [cid, req.workspaceOwnerId]);
     if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
     if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
@@ -8395,9 +8411,7 @@ app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth
     const asunto = String((req.body || {}).asunto || row.asunto);
     const cuerpo = String((req.body || {}).cuerpo || row.cuerpo);
     if (require('./services/sendEngine').blankBody(cuerpo)) return res.status(400).json({ error: 'El mensaje está vacío: escribe el texto antes de aprobar.' });
-    const { rows: [mbq] } = await pool.query(
-      `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
-        WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, req.workspaceOwnerId]);
+    const mbq = await require('./services/sendEngine')._pickMailbox(pool, req.workspaceOwnerId, enr.sequence_id, enr.contact_id, 'America/Lima');
     if (!mbq) return res.status(400).json({ error: 'Sin buzón conectado para este cliente — conecta uno antes de aprobar' });
     await pool.query(
       `UPDATE lm_contacts SET email=$1, email_status='', data_issue='',

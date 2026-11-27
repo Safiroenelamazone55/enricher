@@ -1788,7 +1788,9 @@ async function initDb() {
         created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_mailboxes_client_uq ON lm_mailboxes (user_id, outbound_client_id);`);
+    // Varios buzones por cliente (hasta 5): ya no es único por cliente, sino por cliente + correo.
+    await pool.query(`DROP INDEX IF EXISTS lm_mailboxes_client_uq;`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_mailboxes_client_email_uq ON lm_mailboxes (user_id, outbound_client_id, lower(email));`);
     // F2 (vigilante IMAP): cursor de lectura por buzón. uidvalidity cambia si el servidor
     // resetea la carpeta (hay que re-anclar el cursor); last_uid = último UID ya procesado.
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS imap_uidvalidity BIGINT NOT NULL DEFAULT 0;`);
@@ -1997,6 +1999,29 @@ async function initDb() {
     // F2: envíos por buzón del cliente (SMTP). mailbox_id = por qué buzón salió;
     // smtp_message_id = header Message-ID (threading real en respuestas).
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS mailbox_id      INTEGER REFERENCES lm_mailboxes(id) ON DELETE SET NULL;`);
+    // ── Varios buzones por cliente: cupo de HOY por buzón y si el cliente se quedó sin cupo (misma regla que el motor usaba para un solo buzón) ──
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_messages_mailbox_sent_idx ON lm_messages (mailbox_id, sent_at);`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION nv_mb_cap(p_id int, p_tz text) RETURNS int LANGUAGE sql STABLE AS $$
+        SELECT CASE WHEN mb.daily_limit > 0 THEN mb.daily_limit
+                    WHEN mb.ramp_on AND mb.ramp_started_on IS NOT NULL
+                      THEN LEAST(mb.ramp_target, mb.ramp_start + mb.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE p_tz)::date - mb.ramp_started_on), 0)::numeric / 7)::int)
+                    ELSE NULL END
+          FROM lm_mailboxes mb WHERE mb.id = p_id
+      $$`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION nv_mb_sent(p_id int, p_tz text) RETURNS int LANGUAGE sql STABLE AS $$
+        SELECT COUNT(*)::int FROM lm_messages mm
+         WHERE mm.mailbox_id = p_id AND mm.estado IN ('sent','replied','bounced')
+           AND (mm.sent_at AT TIME ZONE p_tz)::date = (NOW() AT TIME ZONE p_tz)::date
+      $$`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION nv_client_full(p_cid int, p_tz text) RETURNS boolean LANGUAGE sql STABLE AS $$
+        SELECT EXISTS (SELECT 1 FROM lm_mailboxes a WHERE a.outbound_client_id = p_cid AND nv_mb_cap(a.id, p_tz) IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM lm_mailboxes b
+                            WHERE b.outbound_client_id = p_cid AND b.estado IN ('conectado','solo_envio')
+                              AND (nv_mb_cap(b.id, p_tz) IS NULL OR nv_mb_sent(b.id, p_tz) < nv_mb_cap(b.id, p_tz)))
+      $$`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS smtp_message_id TEXT NOT NULL DEFAULT '';`);
     // Envío programado (estado='scheduled'): el motor lo despacha cuando scheduled_at vence.
     // in_reply_to se congela al programar para conservar el threading aunque lleguen más correos.

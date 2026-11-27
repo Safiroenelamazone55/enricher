@@ -530,17 +530,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
              WHERE mi.sequence_id = s.id AND mi.sent_at IS NOT NULL
                AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5),1) * (0.6 + random() * 0.9) * interval '1 minute')
            )
-       -- Calentamiento gradual del BUZÓN del cliente: si hoy ya se llegó al tope de la rampa, se salta y el motor sigue con otros.
-       AND NOT EXISTS (
-            SELECT 1 FROM lm_mailboxes mb
-             WHERE mb.outbound_client_id = s.outbound_client_id AND (mb.daily_limit > 0 OR (mb.ramp_on AND mb.ramp_started_on IS NOT NULL))
-               -- el límite propio de la secuencia lo decide la persona: si lo puso, prevalece sobre el calentamiento (que es el valor por defecto)
-               -- (el tope del buzón aplica siempre; el límite de la secuencia es un sublímite aparte, más abajo)
-               AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
-                     WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
-                       AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
-                   >= CASE WHEN mb.daily_limit > 0 THEN mb.daily_limit ELSE LEAST(mb.ramp_target, mb.ramp_start + mb.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int) END
-           )
+       -- Calentamiento gradual de los BUZONES del cliente (hasta 5): se salta solo si TODOS sus buzones conectados ya llegaron hoy a su tope.
+       AND NOT nv_client_full(s.outbound_client_id, $2)
        -- Límite diario POR SECUENCIA (buzón del cliente): si esta secuencia ya llegó a su tope hoy,
        -- se salta y el motor sigue con las demás. 0 = sin límite propio (aplica solo el global).
        AND (COALESCE(s.daily_limit, 0) <= 0 OR (
@@ -726,9 +717,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       [uid, enr.contact_id, step.id]
     );
     if (!waiting) {
-      const { rows: [mbq] } = await pool.query(
-        `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
-          WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, uid]);
+      const mbq = await _pickMailbox(pool, uid, enr.sequence_id, enr.contact_id, cfg.timezone);
       // Sin buzón conectado no se redacta el borrador (evita huérfanos que fallan al
       // aprobar). Se reintenta en el próximo tick cuando la usuaria conecte el buzón.
       if (!mbq) { await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '1 hour' WHERE id=$1`, [enr.enr_id]); return false; }
@@ -747,14 +736,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 
   // ── Buzón del cliente (F2): si la secuencia pertenece a un cliente con buzón
   // conectado, el envío sale por SU buzón (SMTP). Sin buzón → Gmail del workspace.
-  const { rows: [mbx] } = await pool.query(
-    `SELECT mb.*, COALESCE(oc.cc_email,'') AS cc_email FROM lm_mailboxes mb
-      JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
-      LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id
-     WHERE s.id = $1 AND mb.user_id = $2 AND mb.estado IN ('conectado','solo_envio')
-     LIMIT 1`,
-    [enr.sequence_id, uid]
-  );
+  const mbx = await _pickMailbox(pool, uid, enr.sequence_id, enr.contact_id, cfg.timezone);
 
   // Firma: la del buzón (si el cliente puso una) pisa a la global del user.
   // Así cada cliente tiene su propia firma personalizada.
@@ -943,21 +925,27 @@ async function estimateSendTimes(pool, uid) {
                AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS sent_today,
            (SELECT COUNT(*)::int FROM lm_messages x JOIN sequences xs ON xs.id=x.sequence_id WHERE xs.outbound_client_id=s.outbound_client_id AND x.estado IN ('sent','replied','bounced')
                AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) AS client_today,
-           (SELECT row_to_json(b) FROM (SELECT mb.daily_limit, mb.ramp_on, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS ramp_started_on, mb.ramp_start, mb.ramp_step, mb.ramp_target
-              FROM lm_mailboxes mb WHERE mb.outbound_client_id = s.outbound_client_id LIMIT 1) b) AS mbx
+           (SELECT json_agg(row_to_json(b)) FROM (SELECT mb.daily_limit, mb.ramp_on, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS ramp_started_on, mb.ramp_start, mb.ramp_step, mb.ramp_target
+              FROM lm_mailboxes mb WHERE mb.outbound_client_id = s.outbound_client_id AND mb.estado IN ('conectado','solo_envio')) b) AS mbx
       FROM lm_messages m JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
      WHERE m.user_id=$1 AND m.estado='approved' AND s.estado='activa' ORDER BY COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC`, [uid]);
   const out = {}, cursor = {}, perDay = {}, clientDay = {};
   // Tope del buzón del cliente en una fecha (mismo criterio que _mailboxFull): límite propio, o calentamiento semanal.
-  const mbCap = (mb, dk) => {
-    if (!mb) return 0;
+  const mbCap1 = (mb, dk) => {
     if (mb.daily_limit > 0) return mb.daily_limit;
     if (mb.ramp_on && mb.ramp_started_on) {
       const wk = Math.floor(Math.max((Date.parse(dk) - Date.parse(mb.ramp_started_on)) / 864e5, 0) / 7);
       return Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * wk);
     }
     return 0;
+  };
+  // Con varios buzones el tope del cliente es la SUMA de los topes; si alguno no tiene tope, no hay tope.
+  const mbCap = (mbs, dk) => {
+    if (!mbs || !mbs.length) return 0;
+    let tot = 0;
+    for (const mb of mbs) { const c = mbCap1(mb, dk); if (!c) return 0; tot += c; }
+    return tot;
   };
   for (const r of rows) {
     const tz = r.seq_tz || r.cfg_tz || 'America/Lima', ws = r.window_start ?? 9, we = r.window_end ?? 18, mask = _sanSendDays(r.send_days);
@@ -990,16 +978,42 @@ async function estimateSendTimes(pool, uid) {
 // ¿El buzón de este cliente ya llegó hoy a su tope? (límite propio del buzón; si no tiene, el calentamiento). Cuenta TODAS sus secuencias.
 async function _mailboxFull(pool, clientId, tz) {
   if (!clientId) return false;
-  const { rows: [r] } = await pool.query(
-    `SELECT mb.daily_limit, mb.ramp_on, mb.ramp_started_on, mb.ramp_start, mb.ramp_step, mb.ramp_target,
-            (SELECT COUNT(*)::int FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
-              WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
-                AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date) AS n,
-            CASE WHEN mb.ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int END AS semana
-       FROM lm_mailboxes mb WHERE mb.outbound_client_id = $1 LIMIT 1`, [clientId, tz]);
-  if (!r) return false;
-  const cap = r.daily_limit > 0 ? r.daily_limit : ((r.ramp_on && r.ramp_started_on) ? Math.min(r.ramp_target, r.ramp_start + r.ramp_step * r.semana) : null);
-  return cap !== null && r.n >= cap;
+  const { rows: [r] } = await pool.query(`SELECT nv_client_full($1,$2) AS full`, [clientId, tz]);
+  return !!(r && r.full);
+}
+
+// Elige el buzón de envío entre los del cliente de la secuencia (hasta 5): primero el que YA escribió a ese contacto (mismo remitente en todo el hilo)
+// si aún tiene cupo hoy; si no, el que tenga más cupo restante (descontando los borradores que ya tiene apartados). Sin cupo en ninguno → el primero.
+async function _pickMailbox(pool, uid, sequenceId, contactId, tz) {
+  const { rows } = await pool.query(
+    `SELECT mb.id, nv_mb_cap(mb.id,$4) AS cap, nv_mb_sent(mb.id,$4) AS hoy,
+            (SELECT COUNT(*)::int FROM lm_messages pm WHERE pm.mailbox_id = mb.id AND pm.contact_id = $3 AND pm.estado IN ('sent','replied','bounced')) AS previos,
+            (SELECT COUNT(*)::int FROM lm_messages dm WHERE dm.mailbox_id = mb.id AND dm.estado IN ('awaiting','approved','queued')) AS pend
+       FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+      WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') ORDER BY mb.id`,
+    [sequenceId, uid, contactId || 0, tz || 'America/Lima']);
+  if (!rows.length) return null;
+  const libre = r => (r.cap === null ? 1000 : r.cap - r.hoy);
+  const conCupo = rows.filter(r => libre(r) > 0);
+  const orden = (conCupo.length ? conCupo : rows).slice().sort((a, b) => ((b.previos > 0) - (a.previos > 0)) || ((libre(b) - b.pend) - (libre(a) - a.pend)) || (a.id - b.id));
+  const { rows: [mb] } = await pool.query(
+    `SELECT mb.*, COALESCE(oc.cc_email,'') AS cc_email FROM lm_mailboxes mb LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id WHERE mb.id=$1`, [orden[0].id]);
+  return mb || null;
+}
+// Un borrador aprobado sale por el buzón que se le asignó al crearlo; si ese buzón ya llegó a su tope hoy y otro del cliente tiene cupo, sale por el otro.
+async function _rebalanceDraftMailbox(pool, m) {
+  if (!m.mb_ok) return;
+  const tz = m.timezone || 'America/Lima';
+  const { rows: [st] } = await pool.query(`SELECT nv_mb_cap($1,$2) AS cap, nv_mb_sent($1,$2) AS hoy`, [m.mb_ok, tz]);
+  if (!st || st.cap === null || st.hoy < st.cap) return;
+  const alt = await _pickMailbox(pool, m.user_id, m.sequence_id, m.contact_id, tz);
+  if (!alt || alt.id === m.mb_ok) return;
+  await pool.query(`UPDATE lm_messages SET mailbox_id=$1 WHERE id=$2`, [alt.id, m.id]);
+  Object.assign(m, { mb_ok: alt.id, mb_email: alt.email, pass_enc: alt.pass_enc, smtp_host: alt.smtp_host, smtp_port: alt.smtp_port, smtp_secure: alt.smtp_secure,
+    imap_host: alt.imap_host, imap_port: alt.imap_port, provider: alt.provider, sent_folder: alt.sent_folder, mb_estado: alt.estado,
+    auth_method: alt.auth_method, oauth_provider: alt.oauth_provider, oauth_access_enc: alt.oauth_access_enc, oauth_refresh_enc: alt.oauth_refresh_enc,
+    oauth_expires_at: alt.oauth_expires_at, mb_signature: alt.signature_html, mb_signatures: alt.signatures, mb_from_name: alt.from_name, mailbox_id: alt.id });
+  console.log(`[send-engine] buzón lleno → el borrador ${m.id} sale por ${alt.email}`);
 }
 
 async function _flushApproved(pool, apiBase) {
@@ -1037,17 +1051,14 @@ async function _flushApproved(pool, apiBase) {
        -- Lo que no cabe hoy espera a mañana por SU propio tope, nunca por lo que hagan otras secuencias o clientes.
        AND (COALESCE(s.daily_limit,0) <= 0 OR (SELECT COUNT(*) FROM lm_messages x WHERE x.sequence_id = s.id AND x.estado IN ('sent','replied','bounced')
             AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) < s.daily_limit)
-       AND NOT EXISTS (SELECT 1 FROM lm_mailboxes mb3 WHERE mb3.outbound_client_id = s.outbound_client_id AND (mb3.daily_limit > 0 OR (mb3.ramp_on AND mb3.ramp_started_on IS NOT NULL))
-            -- (el tope del buzón aplica siempre)
-            AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id WHERE ss.outbound_client_id = mb3.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
-                  AND (mm.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date)
-                >= CASE WHEN mb3.daily_limit > 0 THEN mb3.daily_limit ELSE LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int) END)
+       AND NOT nv_client_full(s.outbound_client_id, COALESCE(cfg.timezone,'America/Lima'))
        -- El goteo escalonado manda: aunque lo aprobaras antes, no sale hasta el día que le toca a SU contacto.
        AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences e WHERE e.sequence_id = m.sequence_id AND e.contact_id = m.contact_id AND e.next_action_at > NOW())
      ORDER BY m.sequence_id, COALESCE(m.scheduled_at, m.created_at) ASC, m.created_at ASC
   `);
   for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
     try {
+      try { await _rebalanceDraftMailbox(pool, m); } catch (e) { console.warn('[flush] rebalance buzón:', e.message); }
       // Red de seguridad: un borrador aprobado con un hueco (dato vacío) NO sale: vuelve a «por aprobar» para que lo completes.
       { const _gp = draftGaps(m.asunto, m.cuerpo); if (_gp.length) { await pool.query(`UPDATE lm_messages SET estado='awaiting' WHERE id=$1 AND estado='approved'`, [m.id]); console.warn('[flush] borrador con hueco devuelto a por aprobar:', m.id, _gp[0].motivo); continue; } }
       // Lista de exclusión: aunque el borrador ya esté aprobado, si ahora su empresa/contacto está excluido NO sale.
@@ -1250,9 +1261,7 @@ async function _draftPreapprovedBatch(pool, seen, onlyContactId) {
         variantName = multi ? String(variant.nombre || 'A') : '';
       }
       if (blankBody(cuerpoTxt)) continue;   // paso sin mensaje: no se genera borrador vacío
-      const { rows: [mbq] } = await pool.query(
-        `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
-          WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, enr.user_id]);
+      const mbq = await _pickMailbox(pool, enr.user_id, enr.sequence_id, enr.contact_id, 'America/Lima');
       if (!mbq) continue; // sin buzón conectado: no se redacta borrador (evita huérfanos)
       const token = crypto.randomBytes(12).toString('hex');
       await pool.query(
@@ -1422,4 +1431,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
 
 // Redacta YA el borrador de un contacto (sin esperar al barrido de 1 min): se usa al corregirle el email para que aparezca enseguida en "Por aprobar".
 async function draftNowForContact(pool, contactId) { await _draftPreapprovedBatch(pool, [], contactId); }
-module.exports = { draftGaps, estimateSendTimes, responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
+module.exports = { _pickMailbox, draftGaps, estimateSendTimes, responsiveSig, pickSignature, emptyVars, draftNowForContact, blankBody, stepHasCopy, idiomaGap, attachCustom, startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };
