@@ -53,7 +53,7 @@ async function listasNegras(domain) {
 }
 
 const ptsDns = e => e === 'ok' ? 1 : e === 'warn' ? 0.5 : 0;
-async function puntuar(domain, provider) {
+async function puntuar(domain, provider, prueba) {
   const [salud, nacio, neg] = await Promise.all([
     checkDomain(domain, provider).catch(() => null),
     rdapEdad(domain),
@@ -68,8 +68,10 @@ async function puntuar(domain, provider) {
     f.push({ k: 'dns', nombre: 'Configuración del correo (DNS)', pts, max: 40, medido: true,
       detalle: [['SPF', spf], ['DKIM', dkim], ['DMARC', dmarc]].map(([n, c]) => `${n}: ${c ? (c.estado === 'ok' ? 'correcto' : c.estado === 'warn' ? 'mejorable' : 'falta o falla') : '—'}`).join(' · ') });
   } else f.push({ k: 'dns', nombre: 'Configuración del correo (DNS)', pts: 0, max: 40, medido: false, detalle: 'No se pudo consultar el DNS ahora.' });
-  // Spam del calentamiento (30): aún sin datos
-  f.push({ k: 'spam', nombre: 'Spam del calentamiento', pts: 0, max: 30, medido: false, detalle: 'Se medirá con las pruebas de bandeja y el calentamiento (todavía no activos).' });
+  // Spam (30): sale de la última prueba de bandeja (Entrada = 1, Promociones = 0,7, Spam o no llegó = 0)
+  const sp = require('./placement').puntosDePrueba(prueba);
+  if (sp) f.push({ k: 'spam', nombre: 'Colocación en la bandeja', pts: sp.pts, max: 30, medido: true, detalle: `Última prueba: ${prueba.inbox} en Entrada, ${prueba.promociones || 0} en Promociones, ${prueba.spam || 0} en Spam, ${prueba.no_llego || 0} sin llegar (de ${prueba.total} cuentas).` });
+  else f.push({ k: 'spam', nombre: 'Colocación en la bandeja', pts: 0, max: 30, medido: false, detalle: 'Se mide con una prueba de bandeja (Warm-up → Pruebas) o con un calentamiento.' });
   // Listas negras (20)
   if (neg.concluyente) f.push({ k: 'listas', nombre: 'Listas negras del dominio', pts: neg.listado ? 0 : 20, max: 20, medido: true, detalle: neg.listas.map(x => `${x.lista}: ${x.estado === 'limpio' ? 'limpio' : x.estado === 'listado' ? 'LISTADO' : 'sin respuesta'}`).join(' · ') });
   else f.push({ k: 'listas', nombre: 'Listas negras del dominio', pts: 0, max: 20, medido: false, detalle: 'Las listas no respondieron desde el servidor; se reintenta.' });
@@ -81,7 +83,8 @@ async function puntuar(domain, provider) {
   } else f.push({ k: 'edad', nombre: 'Antigüedad del dominio', pts: 0, max: 10, medido: false, detalle: 'El registro del dominio no la publica.' });
   const disp = f.filter(x => x.medido), maxDisp = disp.reduce((a, x) => a + x.max, 0), pts = disp.reduce((a, x) => a + x.pts, 0);
   const nota = maxDisp ? Math.round(pts / maxDisp * 100) : null;
-  return { nota, puntos: pts, de: maxDisp, factores: f, dns: salud ? { resumen: salud.resumen, dnsHost: salud.dnsHost } : null, revisadoEn: new Date().toISOString() };
+  const arreglos = salud ? salud.checks.filter(c => c.estado !== 'ok').map(c => ({ nombre: c.label, estado: c.estado, detalle: c.detalle, pasos: c.pasos || [], registro: c.registro && c.registro.valor ? { tipo: c.registro.tipo, nombre: c.registro.nombre, valor: c.registro.valor, actual: c.registro.actual || '' } : null, panel: c.panel || null, nota: c.nota || '' })) : [];
+  return { nota, puntos: pts, de: maxDisp, factores: f, arreglos, dns: salud ? { resumen: salud.resumen, dnsHost: salud.dnsHost } : null, revisadoEn: new Date().toISOString() };
 }
 
 // Qué hacer según la nota (mismos tramos de Lemwarm: <65 parar e investigar · 65–90 solo calentar · >90 listo)

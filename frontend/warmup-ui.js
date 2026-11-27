@@ -2,7 +2,7 @@
 // Usa lo global de app.js: API, apiFetch, esc, showBanner, novaConfirm.
 const WarmupModule = (() => {
   const BODY = { 'warmup': 'warmup-body', 'warmup-buzones': 'warmup-buzones-body', 'warmup-pool': 'warmup-pool-body', 'warmup-pruebas': 'warmup-pruebas-body' };
-  let _modoImp = 'una', _rolImp = 'grupo', _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
+  let _tests = null, _modoImp = 'una', _rolImp = 'grupo', _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
   const el = id => document.getElementById(id);
   const hoy = () => { const d = new Date(); return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }); };
   const SV = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -19,8 +19,8 @@ const WarmupModule = (() => {
   async function _load() {
     _cargando = true;
     try {
-      const [a, p] = await Promise.all([apiFetch(`${API}/lm/warmup/buzones`).then(r => r.ok ? r.json() : []).catch(() => []), apiFetch(`${API}/lm/warmup/pool`).then(r => r.ok ? r.json() : []).catch(() => [])]);
-      _b = a; _pool = p;
+      const [a, p, t] = await Promise.all([apiFetch(`${API}/lm/warmup/buzones`).then(r => r.ok ? r.json() : []).catch(() => []), apiFetch(`${API}/lm/warmup/pool`).then(r => r.ok ? r.json() : []).catch(() => []), apiFetch(`${API}/lm/warmup/pruebas`).then(r => r.ok ? r.json() : []).catch(() => [])]);
+      _b = a; _pool = p; _tests = t;
     } finally { _cargando = false; }
   }
   function _titulo(t, s, acc) { return `<div class="wm-hd"><div><h1>${t}</h1>${s ? `<p>${s}</p>` : ''}</div>${acc || ''}</div>`; }
@@ -29,7 +29,7 @@ const WarmupModule = (() => {
     if (_b === null) { host.innerHTML = '<div class="wm"><div class="wm-vacio">Cargando…</div></div>'; return; }
     host.innerHTML = '<div class="wm">' + ({ 'warmup': _dash, 'warmup-buzones': _buzones, 'warmup-pool': _grupo, 'warmup-pruebas': _pruebas }[_tab] || _dash)() + '</div>';
     clearTimeout(_poll);
-    if ((_tab === 'warmup-pool' || _tab === 'warmup-pruebas') && (_pool || []).some(x => x.estado === 'probando')) _poll = setTimeout(async () => { if (_tab !== 'warmup-pool' && _tab !== 'warmup-pruebas') return; await _load(); _pintar(); }, 3000);
+    if ((_tab === 'warmup-pool' || _tab === 'warmup-pruebas') && ((_pool || []).some(x => x.estado === 'probando') || (_tests || []).some(t => t.estado === 'esperando'))) _poll = setTimeout(async () => { if (_tab !== 'warmup-pool' && _tab !== 'warmup-pruebas') return; await _load(); _pintar(); }, 3000);
   }
   async function render(tab) {
     _tab = BODY[tab] ? tab : 'warmup';
@@ -73,7 +73,8 @@ const WarmupModule = (() => {
       const det = !abierto ? '' : `<div class="wm-det">
         <div class="wm-det__col"><div class="wm-det__t">Puntuación${s ? ` · ${s.puntos} de ${s.de} puntos medibles` : ''}</div>
           ${s ? s.factores.map(g => `<div class="wm-fac"><span class="wm-fac__n">${esc(g.nombre)}</span><span class="wm-fac__p">${g.medido ? `${g.pts}/${g.max}` : `<i>sin medir · ${g.max}</i>`}</span><div class="wm-fac__d">${esc(g.detalle)}</div></div>`).join('') : '<div class="wm-vacio" style="padding:12px 0">Revisando el dominio…</div>'}
-          ${s ? `<div class="wm-det__s">Revisado ${ago(s.revisadoEn)}</div>` : ''}</div>
+          ${s ? `<div class="wm-det__s">Revisado ${ago(s.revisadoEn)}</div>` : ''}
+          ${s && s.arreglos && s.arreglos.length ? `<div class="wm-det__t" style="margin-top:18px">Qué arreglar para subir la nota</div>${s.arreglos.map(_arreglo).join('')}` : ''}</div>
         <div class="wm-det__col"><div class="wm-det__t">Calentamiento</div>
           <div class="wm-fac"><span class="wm-fac__n">Fase</span><span class="wm-fac__p">${esc(f.texto)}</span><div class="wm-fac__d">${esc(f.detalle || '')}</div></div>
           ${x.ramp_on ? `<div class="wm-fac"><span class="wm-fac__n">Rampa</span><span class="wm-fac__p">${x.ramp_start} → ${x.ramp_target}</span><div class="wm-fac__d">Sube ${x.ramp_step} al día cada semana hasta ${x.ramp_target}.</div></div>` : ''}
@@ -98,6 +99,13 @@ const WarmupModule = (() => {
       (b.length ? `<div class="wm-list">${b.map(fila).join('')}</div>` : '<div class="wm-card"><div class="wm-vacio">Aún no hay buzones conectados. Conéctalos desde Outreach → Clientes outbound → Remitentes.</div></div>');
   }
 
+  function _arreglo(a) {
+    const r = a.registro;
+    return `<div class="wm-fix"><div class="wm-fix__h"><b>${esc(a.nombre)}</b>${chip(a.estado === 'fail' ? 'Falta o falla' : 'Mejorable', a.estado === 'fail' ? 'rojo' : 'ambar')}</div><div class="wm-fac__d">${esc(a.detalle)}</div>
+      ${a.pasos.length ? `<ol class="wm-fix__p">${a.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      ${r ? `<div class="wm-rec"><div><span>Tipo</span><b>${esc(r.tipo)}</b></div><div><span>Nombre</span><b>${esc(r.nombre)}</b></div><div class="wm-rec__v"><span>Valor</span><code>${esc(r.valor)}</code></div><button class="wm-btn" data-v="${esc(r.valor)}" onclick="WarmupModule.copiar(this)">Copiar valor</button></div>` : ''}
+      ${a.panel && a.panel.url ? `<a class="wm-fix__l" href="${esc(a.panel.url)}" target="_blank" rel="noopener">Abrir ${esc(a.panel.nombre || 'el panel')} ↗</a>` : ''}${a.nota ? `<div class="wm-fac__d" style="margin-top:6px">${esc(a.nota)}</div>` : ''}</div>`;
+  }
   // ── Grupo de calentamiento ──
   function _grupo() {
     const pl = (_pool || []).filter(x => x.rol !== 'semilla'), listos = pl.filter(x => x.estado === 'conectado').length;
@@ -159,11 +167,40 @@ const WarmupModule = (() => {
     const est = x => ({ conectado: chip('Conectada', 'verde'), solo_envio: chip('Solo envío', 'ambar'), probando: chip('Probando…', 'azul'), error: chip('Error', 'rojo') }[x.estado] || chip(x.estado));
     const prov = { zoho: 'Zoho', google: 'Google', microsoft: 'Microsoft', otro: 'Otro' };
     return _titulo('Pruebas de bandeja', 'Comprueba en qué carpeta cae un correo antes de lanzar una campaña.', `<button class="wm-btn wm-btn--pri" onclick="WarmupModule.importar('semilla')">+ Conectar cuentas semilla</button>`) +
-      `<div class="wm-card"><div class="wm-card__t">Cuentas semilla ${se.length ? `· ${ok} de ${se.length} listas` : ''}</div>
+      _lanzador(se) + _historial() + `<div class="wm-card"><div class="wm-card__t">Cuentas semilla ${se.length ? `· ${ok} de ${se.length} listas` : ''}</div>
         <div style="padding:14px 16px;font-size:14px;line-height:20px;color:#5A6472">Son cuentas de correo que solo reciben las pruebas: Nova envía un correo desde el buzón de un cliente a todas las semillas y lee por IMAP en qué carpeta apareció (Entrada, Promociones o Spam).<br>Lo ideal: 1–2 Gmail, 1–2 Outlook y 1 Zoho. Si tus prospectos usan Google Workspace o Microsoft 365, añade una de cada una.</div>
-        ${se.length ? se.map(x => `<div class="wm-tr" style="display:grid;grid-template-columns:minmax(220px,2fr) 110px 130px auto;gap:12px;align-items:center;padding:12px 16px;border-top:.75px solid rgba(31,41,55,.08);font-size:14px;line-height:20px"><span class="wm-tr__e"><b>${esc(x.email)}</b>${x.last_error ? `<small>${esc(x.last_error)}</small>` : ''}</span><span>${esc(prov[x.provider] || x.provider)}</span><span>${est(x)}</span><span class="wm-tr__a"><button class="wm-btn" onclick="WarmupModule.probar(${x.id})">Probar</button><button class="wm-btn wm-btn--rojo" onclick="WarmupModule.quitar(${x.id})">Quitar</button></span></div>`).join('') : '<div class="wm-vacio" style="padding:20px">Todavía no hay cuentas semilla conectadas.</div>'}</div>
-      <div class="wm-aviso" style="margin-top:16px">${SV('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>', 16)}<span>Aquí se guardan y verifican las cuentas. El botón para <b>lanzar la prueba</b> y ver el resultado llega en el siguiente paso, cuando haya al menos 3 semillas listas.</span></div>`;
+        ${se.length ? se.map(x => `<div class="wm-tr" style="display:grid;grid-template-columns:minmax(220px,2fr) 110px 130px auto;gap:12px;align-items:center;padding:12px 16px;border-top:.75px solid rgba(31,41,55,.08);font-size:14px;line-height:20px"><span class="wm-tr__e"><b>${esc(x.email)}</b>${x.last_error ? `<small>${esc(x.last_error)}</small>` : ''}</span><span>${esc(prov[x.provider] || x.provider)}</span><span>${est(x)}</span><span class="wm-tr__a"><button class="wm-btn" onclick="WarmupModule.probar(${x.id})">Probar</button><button class="wm-btn wm-btn--rojo" onclick="WarmupModule.quitar(${x.id})">Quitar</button></span></div>`).join('') : '<div class="wm-vacio" style="padding:20px">Todavía no hay cuentas semilla conectadas.</div>'}</div>`;
   }
+
+  function _lanzador(se) {
+    const ok = se.filter(x => x.estado === 'conectado').length, b = (_b || []).filter(x => x.estado === 'conectado' || x.estado === 'solo_envio');
+    const enCurso = (_tests || []).some(t => t.estado === 'esperando');
+    return `<div class="wm-card"><div class="wm-card__t">Lanzar una prueba</div><div class="wm-lanz">
+      <div class="wm-lanz__t">Elige el buzón que va a enviar. Nova le manda un correo neutro a cada semilla conectada (${ok}) y espera hasta ~20 minutos a que llegue para ver en qué carpeta cayó.${ok > 0 && ok < 3 ? ' <b>Con menos de 3 semillas el resultado es poco fiable.</b>' : ''}</div>
+      <div class="wm-lanz__f"><select id="wm-pb">${b.map(x => `<option value="${x.id}">${esc(x.email)}</option>`).join('')}</select>
+      <button class="wm-btn wm-btn--pri" ${ok && b.length && !enCurso ? '' : 'disabled'} onclick="WarmupModule.lanzar()">${enCurso ? 'Prueba en curso…' : 'Lanzar prueba'}</button></div>
+      ${ok ? '' : '<div class="wm-fac__d">Primero conecta al menos una cuenta semilla (abajo).</div>'}</div></div>`;
+  }
+  function _historial() {
+    const ts = _tests || []; if (!ts.length) return '';
+    const car = { inbox: ['Entrada', 'verde'], promociones: ['Promociones', 'ambar'], spam: ['Spam', 'rojo'], no_llego: ['No llegó', 'rojo'], pendiente: ['Esperando…', 'azul'], error: ['Error', 'gris'] };
+    return `<div class="wm-card"><div class="wm-card__t">Resultados</div>${ts.map(t => {
+      const rs = t.resultados || [], hechas = rs.filter(r => r.estado !== 'pendiente').length;
+      return `<div class="wm-test"><div class="wm-test__h"><b>${esc(t.email)}</b><span>${new Date(t.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>${t.estado === 'esperando' ? chip(`En curso · ${hechas} de ${rs.length}`, 'azul') : chip('Terminada', 'verde')}</div>
+        <div class="wm-test__r">${rs.map(r => { const c = car[r.estado === 'inbox' || r.carpeta ? (r.estado) : r.estado] || [r.estado, 'gris']; return `<span class="wm-test__s"><i>${esc(r.email)}</i>${chip(c[0], c[1])}</span>`; }).join('')}</div></div>`;
+    }).join('')}</div>`;
+  }
+  async function lanzar() {
+    const id = parseInt((el('wm-pb') || {}).value); if (!id) return;
+    const x = (_b || []).find(y => y.id === id), se = (_pool || []).filter(y => y.rol === 'semilla' && y.estado === 'conectado').length;
+    if (!(await novaConfirm({ title: '¿Lanzar la prueba de bandeja?', message: `Se enviarán <b>${se}</b> correo${se > 1 ? 's' : ''} de prueba desde <b>${esc(x ? x.email : '')}</b> a tus cuentas semilla. Es un volumen mínimo.`, ok: 'Lanzar', cancel: 'Cancelar' }))) return;
+    try {
+      const r = await apiFetch(`${API}/lm/warmup/pruebas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mailbox_id: id }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'No se pudo lanzar');
+      showBanner('✓ Prueba lanzada: los resultados aparecen en unos minutos', 'success'); await _load(); _pintar();
+    } catch (e) { showBanner(e.message, 'error'); }
+  }
+  async function copiar(btn) { try { await navigator.clipboard.writeText(btn.dataset.v); const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = t; }, 1400); } catch (_) { showBanner('No se pudo copiar', 'error'); } }
 
   // ── acciones ──
   function ir(t) { if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(t); }
@@ -184,5 +221,5 @@ const WarmupModule = (() => {
       showBanner(on ? 'Ajuste automático activado: el cupo se revisa cada día' : 'Ajuste automático desactivado', 'success');
     } catch (_) { showBanner('No se pudo guardar', 'error'); await _load(); _pintar(); }
   }
-  return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar };
+  return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar, lanzar, copiar };
 })();

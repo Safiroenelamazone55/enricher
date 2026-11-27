@@ -292,4 +292,4 @@ async function sendFromMailbox(mb, pass, msg) {
   return { messageId: mid };
 }
 
-module.exports = { PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, getMailboxAuth, _friendlyErr };
+module.exports = { _imapConnect, PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, getMailboxAuth, _friendlyErr };

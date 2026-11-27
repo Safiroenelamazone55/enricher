@@ -2,6 +2,7 @@
 // Módulo «Warm-up» (estilo Lemwarm): salud y calentamiento de los buzones de los clientes + grupo de buzones de calentamiento.
 const W = require('./warmup');
 const mailboxSvc = require('./mailboxService');
+const PL = require('./placement');
 
 const TZ = 'America/Lima';
 const aviso = (...a) => console.warn('[warmup]', ...a);
@@ -21,6 +22,9 @@ function mount(app, { pool, requireAuth }) {
         estado TEXT NOT NULL DEFAULT 'probando', last_error TEXT NOT NULL DEFAULT '', sent_folder TEXT NOT NULL DEFAULT '',
         verified_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_warm_pool_email_uq ON lm_warm_pool (user_id, lower(email))`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS lm_placement_tests (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, mailbox_id INTEGER NOT NULL REFERENCES lm_mailboxes(id) ON DELETE CASCADE, token TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'esperando', resumen JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), terminado_at TIMESTAMPTZ)`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS lm_placement_results (id SERIAL PRIMARY KEY, test_id INTEGER NOT NULL REFERENCES lm_placement_tests(id) ON DELETE CASCADE, seed_id INTEGER NOT NULL REFERENCES lm_warm_pool(id) ON DELETE CASCADE, estado TEXT NOT NULL DEFAULT 'pendiente', carpeta TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '', checked_at TIMESTAMPTZ, UNIQUE (test_id, seed_id))`);
+      setTimeout(() => PL.retomar(pool, alTerminar).catch(e => aviso('retomar', e.message)), 20000);
       await pool.query(`ALTER TABLE lm_warm_pool ADD COLUMN IF NOT EXISTS rol TEXT NOT NULL DEFAULT 'grupo'`);   // 'grupo' = calienta a los demás · 'semilla' = solo recibe las pruebas de bandeja
     } catch (e) { aviso('tablas', e.message); }
   })();
@@ -47,9 +51,17 @@ function mount(app, { pool, requireAuth }) {
       eventos: ev.filter(e => e.mailbox_id === r.id).map(e => ({ tipo: e.tipo, detalle: e.detalle, at: e.created_at })),
     }));
   }
+  // Última prueba de bandeja terminada (últimos 21 días) de un buzón, ya sumada
+  async function ultimaPrueba(mbId) {
+    const { rows: [t] } = await pool.query(`SELECT id, resumen, created_at FROM lm_placement_tests WHERE mailbox_id=$1 AND estado='listo' AND created_at > NOW() - interval '21 days' ORDER BY created_at DESC LIMIT 1`, [mbId]);
+    if (!t) return null;
+    const r = t.resumen || {}; const total = Object.values(r).reduce((a, n) => a + n, 0) - (r.error || 0);
+    return total > 0 ? { total, inbox: r.inbox || 0, promociones: r.promociones || 0, spam: r.spam || 0, no_llego: r.no_llego || 0, at: t.created_at } : null;
+  }
+  async function alTerminar(t) { try { const { rows: [mb] } = await pool.query(`SELECT id, email, provider FROM lm_mailboxes WHERE id=$1`, [t.mailbox_id]); if (mb) await revisar(mb); } catch (e) { aviso('alTerminar', e.message); } }
   async function revisar(mb) {
     const dom = String(mb.email).split('@')[1];
-    const datos = await W.puntuar(dom, mb.provider);
+    const datos = await W.puntuar(dom, mb.provider, await ultimaPrueba(mb.id));
     await pool.query(`INSERT INTO lm_mailbox_health (mailbox_id, datos, checked_at) VALUES ($1,$2,NOW()) ON CONFLICT (mailbox_id) DO UPDATE SET datos=EXCLUDED.datos, checked_at=NOW()`, [mb.id, JSON.stringify(datos)]);
     return datos;
   }
@@ -79,6 +91,19 @@ function mount(app, { pool, requireAuth }) {
     } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
   });
 
+
+  // ── Pruebas de bandeja ──
+  app.post('/api/lm/warmup/pruebas', requireAuth, async (req, res) => {
+    try { res.status(202).json(await PL.lanzar(pool, req.workspaceOwnerId, parseInt((req.body || {}).mailbox_id) || 0, alTerminar)); }
+    catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : 'No se pudo lanzar la prueba' }); if (!e.status) aviso('prueba', e.message); }
+  });
+  app.get('/api/lm/warmup/pruebas', requireAuth, async (req, res) => {
+    try {
+      const { rows: ts } = await pool.query(`SELECT t.id, t.token, t.estado, t.resumen, t.created_at, t.terminado_at, mb.email FROM lm_placement_tests t JOIN lm_mailboxes mb ON mb.id = t.mailbox_id WHERE t.user_id=$1 ORDER BY t.created_at DESC LIMIT 15`, [req.workspaceOwnerId]);
+      const { rows: rs } = ts.length ? await pool.query(`SELECT r.test_id, r.estado, r.carpeta, r.error, s.email, s.provider FROM lm_placement_results r JOIN lm_warm_pool s ON s.id = r.seed_id WHERE r.test_id = ANY($1::int[]) ORDER BY s.id`, [ts.map(t => t.id)]) : { rows: [] };
+      res.json(ts.map(t => ({ ...t, resultados: rs.filter(r => r.test_id === t.id) })));
+    } catch (e) { aviso('pruebas', e.message); res.status(500).json({ error: 'No se pudo cargar las pruebas' }); }
+  });
   // ── Grupo de buzones de calentamiento (los que irán calentando a los demás) ──
   const publico = r => ({ id: r.id, rol: r.rol, email: r.email, provider: r.provider, estado: r.estado, last_error: r.last_error, verified_at: r.verified_at, created_at: r.created_at });
   app.get('/api/lm/warmup/pool', requireAuth, async (req, res) => {
