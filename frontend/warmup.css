@@ -87,3 +87,9 @@
 .wm-modal textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 18px; }
 .wm-err { margin-top: 10px; color: #B42318; font-size: 12px; line-height: 16px; } .wm-modal__ft { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 @media (max-width: 1000px) { .wm-steps { grid-template-columns: 1fr 1fr; } .wm-step { border-radius: 0 !important; } .wm-kpis { grid-template-columns: 1fr 1fr; } .wm-row__main { grid-template-columns: 36px 1fr 44px 20px; } .wm-row__f, .wm-row__c, .wm-row__r { display: none; } .wm-det { grid-template-columns: 1fr; } .wm-tbl .wm-tr { grid-template-columns: 1fr auto; } }
+
+.wm-seg { display: inline-flex; padding: 2px; margin: 12px 0 4px; background: #F3F4F6; border-radius: 8px; }
+.wm-seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; font: 500 14px/20px Inter, sans-serif; color: #5A6472; cursor: pointer; }
+.wm-seg button.on { background: #fff; color: #1F2937; box-shadow: 0 0 2px rgba(0,0,0,.12); }
+.wm-modal input { font: 400 14px/20px Inter, sans-serif; color: #1F2937; border: .75px solid rgba(31,41,55,.2); border-radius: 8px; padding: 7px 10px; background: #fff; }
+.wm-modal__g label input { margin-top: 0; }

@@ -2,7 +2,7 @@
 // Usa lo global de app.js: API, apiFetch, esc, showBanner, novaConfirm.
 const WarmupModule = (() => {
   const BODY = { 'warmup': 'warmup-body', 'warmup-buzones': 'warmup-buzones-body', 'warmup-pool': 'warmup-pool-body', 'warmup-pruebas': 'warmup-pruebas-body' };
-  let _rolImp = 'grupo', _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
+  let _modoImp = 'una', _rolImp = 'grupo', _b = null, _pool = null, _tab = 'warmup', _open = new Set(), _poll = 0, _cargando = false;
   const el = id => document.getElementById(id);
   const hoy = () => { const d = new Date(); return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }); };
   const SV = (d, w) => `<svg width="${w || 16}" height="${w || 16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -113,18 +113,23 @@ const WarmupModule = (() => {
     el('wm-modal')?.remove();
     const m = document.createElement('div'); m.id = 'wm-modal'; m.className = 'wm-modal'; m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="wm-modal__box"><div class="wm-modal__hd"><h3>${_rolImp === 'semilla' ? 'Conectar cuentas semilla' : 'Importar buzones de calentamiento'}</h3><button class="wm-x" onclick="document.getElementById('wm-modal').remove()">✕</button></div>
-      <p class="wm-modal__p">Pega una línea por ${_rolImp === 'semilla' ? 'cuenta' : 'buzón'}: <code>correo,contraseña de aplicación</code> (hasta 40). Se prueban solas y la contraseña se guarda cifrada.${_rolImp === 'semilla' ? ' Cada proveedor (Gmail, Outlook, Zoho) se importa por separado.' : ''}</p>
+      <div class="wm-seg"><button type="button" id="wm-m-una" class="on" onclick="WarmupModule.modo('una')">Una por una</button><button type="button" id="wm-m-varias" onclick="WarmupModule.modo('varias')">Varias a la vez</button></div>
+      <p class="wm-modal__p" id="wm-p-varias" style="display:none">Pega una línea por ${_rolImp === 'semilla' ? 'cuenta' : 'buzón'}: <code>correo,contraseña de aplicación</code> (hasta 40). Se prueban solas y la contraseña se guarda cifrada.${_rolImp === 'semilla' ? ' Cada proveedor (Gmail, Outlook, Zoho) se importa por separado.' : ''}</p>
       <div class="wm-modal__g"><label>Proveedor<select id="wm-prov" onchange="document.getElementById('wm-zreg').style.display=this.value==='zoho'?'':'none'"><option value="zoho">Zoho Mail</option><option value="google">Google Workspace / Gmail</option><option value="microsoft">Microsoft 365 (SMTP con contraseña)</option><option value="otro">Otro (SMTP/IMAP)</option></select></label>
       <label id="wm-zreg">Región de Zoho<select id="wm-zr"><option value="com">com (EE. UU.)</option><option value="eu">eu (Europa)</option><option value="in">in (India)</option><option value="com.au">com.au</option><option value="jp">jp</option></select></label></div>
-      <textarea id="wm-filas" rows="9" placeholder="calentar1@tudominio.com,abcd efgh ijkl mnop&#10;calentar2@tudominio.com,..." spellcheck="false"></textarea>
+      <p class="wm-modal__p" id="wm-p-una">Escribe el correo y su contraseña de aplicación. Se prueba sola y la contraseña se guarda cifrada.</p>
+      <div id="wm-una" class="wm-modal__g" style="flex-direction:column"><label>Correo<input id="wm-e1" type="email" placeholder="nombre@dominio.com" autocomplete="off"></label><label>Contraseña de aplicación<input id="wm-p1" type="password" placeholder="••••••••••••••••" autocomplete="new-password"></label></div>
+      <textarea id="wm-filas" style="display:none" rows="9" placeholder="calentar1@tudominio.com,abcd efgh ijkl mnop&#10;calentar2@tudominio.com,..." spellcheck="false"></textarea>
       <div id="wm-err" class="wm-err" style="display:none"></div>
       <div class="wm-modal__ft"><button class="wm-btn" onclick="document.getElementById('wm-modal').remove()">Cancelar</button><button class="wm-btn wm-btn--pri" id="wm-go" onclick="WarmupModule.enviarImport()">Importar y probar</button></div></div>`;
-    document.body.appendChild(m); setTimeout(() => el('wm-filas')?.focus(), 50);
+    document.body.appendChild(m); _modoImp = 'una'; setTimeout(() => el('wm-e1')?.focus(), 50);
   }
   async function enviarImport() {
-    const filas = String((el('wm-filas') || {}).value || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { const i = l.search(/[,;\t]/); return i < 0 ? { email: l, password: '' } : { email: l.slice(0, i).trim(), password: l.slice(i + 1).trim() }; });
+    const filas = _modoImp === 'una'
+      ? [{ email: String((el('wm-e1') || {}).value || '').trim(), password: String((el('wm-p1') || {}).value || '').trim() }].filter(f => f.email || f.password)
+      : String((el('wm-filas') || {}).value || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { const i = l.search(/[,;\t]/); return i < 0 ? { email: l, password: '' } : { email: l.slice(0, i).trim(), password: l.slice(i + 1).trim() }; });
     const err = el('wm-err'); err.style.display = 'none';
-    if (!filas.length) { err.textContent = 'Pega al menos una línea.'; err.style.display = ''; return; }
+    if (!filas.length || filas.some(f => !f.email || !f.password)) { err.textContent = _modoImp === 'una' ? 'Escribe el correo y la contraseña de aplicación.' : 'Cada línea necesita correo y contraseña separados por coma.'; err.style.display = ''; return; }
     const btn = el('wm-go'); btn.disabled = true; btn.textContent = 'Importando…';
     try {
       const r = await apiFetch(`${API}/lm/warmup/pool/importar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rol: _rolImp, provider: el('wm-prov').value, zoho_region: el('wm-zr').value, filas }) });
@@ -132,6 +137,14 @@ const WarmupModule = (() => {
       el('wm-modal')?.remove(); showBanner(`✓ ${d.total} buzón${d.total > 1 ? 'es' : ''} importado${d.total > 1 ? 's' : ''}: se están probando`, 'success');
       await _load(); _pintar();
     } catch (e) { err.textContent = e.message; err.style.display = ''; btn.disabled = false; btn.textContent = 'Importar y probar'; }
+  }
+  function modo(m) {
+    _modoImp = m === 'varias' ? 'varias' : 'una';
+    const v = _modoImp === 'varias';
+    el('wm-m-una')?.classList.toggle('on', !v); el('wm-m-varias')?.classList.toggle('on', v);
+    ['wm-una', 'wm-p-una'].forEach(i => { const e = el(i); if (e) e.style.display = v ? 'none' : ''; });
+    ['wm-filas', 'wm-p-varias'].forEach(i => { const e = el(i); if (e) e.style.display = v ? '' : 'none'; });
+    setTimeout(() => el(v ? 'wm-filas' : 'wm-e1')?.focus(), 30);
   }
   async function probar(id) { await apiFetch(`${API}/lm/warmup/pool/${id}/probar`, { method: 'POST' }); await _load(); _pintar(); }
   async function quitar(id) {
@@ -171,5 +184,5 @@ const WarmupModule = (() => {
       showBanner(on ? 'Ajuste automático activado: el cupo se revisa cada día' : 'Ajuste automático desactivado', 'success');
     } catch (_) { showBanner('No se pudo guardar', 'error'); await _load(); _pintar(); }
   }
-  return { render, ir, abrir, revisar, auto, importar, enviarImport, probar, quitar };
+  return { render, ir, abrir, revisar, auto, importar, enviarImport, modo, probar, quitar };
 })();
