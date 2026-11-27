@@ -108,3 +108,11 @@
 
 .wm-max { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 20px; color: #1F2937; }
 .wm-max input { width: 64px; font: 400 14px/20px Inter, sans-serif; border: .75px solid rgba(31,41,55,.2); border-radius: 8px; padding: 4px 8px; text-align: right; }
+
+.wm-step.is-avail { background: #fff; border-color: rgba(31,41,55,.14); }
+.wm-step.is-avail .wm-step__n { background: #5A6472; }
+.wm-step.is-avail .wm-btn { background: #1F2937; border-color: #1F2937; color: #fff; }
+.wm-step.is-avail .wm-btn:hover:not(:disabled) { background: #111827; }
+
+.wm-row__c small b { font-weight: 500; color: #1F2937; }
+.wm-autoinfo { color: #16A34A !important; }

@@ -45,10 +45,11 @@ const WarmupModule = (() => {
       { t: 'Conecta tus buzones', ok: b.length > 0, txt: b.length ? `${b.length} buzón${b.length > 1 ? 'es' : ''} conectado${b.length > 1 ? 's' : ''}` : 'Aún no hay buzones', btn: b.length ? 'Ver buzones' : 'Conectar buzón', f: b.length ? "WarmupModule.ir('warmup-buzones')" : "selectModule('leadmanagement')" },
       { t: 'Revisa la salud del dominio', ok: b.length > 0 && verdes === b.length, txt: b.length ? `${verdes} de ${b.length} en verde (90 o más)` : 'Primero conecta un buzón', btn: 'Revisar', f: "WarmupModule.ir('warmup-buzones')" },
       { t: 'Activa el ajuste automático', ok: b.length > 0 && autos === b.length, txt: b.length ? `${autos} de ${b.length} con ajuste automático` : 'Primero conecta un buzón', btn: 'Configurar', f: "WarmupModule.ir('warmup-buzones')" },
-      { t: 'Crea tu grupo de calentamiento', ok: conPool >= 10, txt: pl.length ? `${conPool} de ${pl.length} buzones listos` : 'Importa tus buzones de calentamiento', btn: pl.length ? 'Ver grupo' : 'Importar buzones', f: "WarmupModule.ir('warmup-pool')" },
+      { t: 'Crea tu grupo de calentamiento', ok: conPool >= 10, txt: pl.length ? `${conPool} de ${pl.length} buzones listos` : 'De momento no disponible: se activará cuando elijas una herramienta de calentamiento', btn: pl.length ? 'Ver grupo' : 'Importar buzones', f: "WarmupModule.ir('warmup-pool')", off: !pl.length },
     ];
     let actual = pasos.findIndex(p => !p.ok); if (actual < 0) actual = 99;
-    const cards = pasos.map((p, i) => `<div class="wm-step ${p.ok ? 'is-ok' : i === actual ? 'is-now' : 'is-next'}"><div class="wm-step__t"><span class="wm-step__n">${p.ok ? SV('<path d="M20 6 9 17l-5-5"/>', 14) : i + 1}</span>${esc(p.t)}</div><div class="wm-step__d">${esc(p.txt)}</div><button class="wm-btn${p.ok ? '' : i === actual ? ' wm-btn--pri' : ''}" ${i > actual ? 'disabled' : ''} onclick="${p.f}">${p.ok ? '✓ ' : ''}${esc(p.btn)}</button></div>`).join('');
+    const libre = (p, i) => !p.ok && !p.off && b.length > 0 && i !== actual;   // disponible aunque no sea «el siguiente»
+    const cards = pasos.map((p, i) => `<div class="wm-step ${p.ok ? 'is-ok' : p.off || (!b.length && i > 0) ? 'is-next' : i === actual ? 'is-now' : 'is-avail'}"><div class="wm-step__t"><span class="wm-step__n">${p.ok ? SV('<path d="M20 6 9 17l-5-5"/>', 14) : i + 1}</span>${esc(p.t)}</div><div class="wm-step__d">${esc(p.txt)}</div><button class="wm-btn${p.ok ? '' : i === actual ? ' wm-btn--pri' : ''}" ${(p.off || (!b.length && i > 0)) && !p.ok ? 'disabled' : ''} onclick="${p.f}">${p.ok ? '✓ ' : ''}${esc(p.btn)}</button></div>`).join('');
     const notas = b.map(x => x.salud && x.salud.nota).filter(n => n !== null && n !== undefined);
     const media = notas.length ? Math.round(notas.reduce((a, n) => a + n, 0) / notas.length) : null;
     const env = b.reduce((a, x) => a + (x.enviados_hoy || 0), 0), cupo = b.every(x => x.cap_hoy !== null) ? b.reduce((a, x) => a + (x.cap_hoy || 0), 0) : null;
@@ -86,7 +87,7 @@ const WarmupModule = (() => {
           <div class="wm-row__id"><b>${esc(x.email)}</b><small>${esc(x.cliente || 'Sin cliente')} · ${esc(x.provider)}${x.estado !== 'conectado' ? ' · ' + esc(x.estado) : ''}</small></div>
           ${ring(s ? s.nota : null)}
           <div class="wm-row__f">${faseChip(f)}<small>${esc(f.detalle || '')}</small></div>
-          <div class="wm-row__c"><div class="wm-bar"><i style="width:${pct}%"></i></div><small>${x.enviados_hoy} de ${x.cap_hoy === null ? '∞' : x.cap_hoy} hoy</small></div>
+          <div class="wm-row__c"><div class="wm-bar"><i style="width:${pct}%${pct >= 100 ? ';background:#D97706' : ''}"></i></div><small><b>${x.enviados_hoy}</b> de <b>${x.cap_hoy === null ? '∞' : x.cap_hoy}</b> hoy</small>${x.ramp_auto ? `<small class="wm-autoinfo">Ajuste automático · puede subir hasta ${x.ramp_techo}</small>` : ''}</div>
           <div class="wm-row__r"><b>${x.tasa_rebote === null ? '—' : x.tasa_rebote + ' %'}</b><small>rebote 14 d</small></div>
           <span class="wm-chev">${SV('<path d="m6 9 6 6 6-6"/>')}</span>
         </div>
