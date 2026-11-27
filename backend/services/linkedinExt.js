@@ -413,15 +413,34 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
   async function procesarChequeo(a, tipo, datos) {
     const out = { aceptadas: 0, respuestas: 0, interacciones: 0 };
     if (tipo === 'check_connections') {
-      const slugs = (Array.isArray(datos && datos.slugs) ? datos.slugs : []).map(x => String(x).toLowerCase()).slice(0, 200);
-      if (!slugs.length) return out;
+      // La extensión manda {conexiones:[{slug, fecha:'YYYY-MM-DD'}]} (versión nueva) o solo {slugs:[…]} (anterior).
+      const lista = Array.isArray(datos && datos.conexiones) ? datos.conexiones : (Array.isArray(datos && datos.slugs) ? datos.slugs.map(s => ({ slug: s })) : []);
+      const mapa = new Map();
+      for (const x of lista.slice(0, 300)) { const s = String((x && x.slug) || '').toLowerCase().trim(); if (s) mapa.set(s, /^\d{4}-\d{2}-\d{2}$/.test(String((x && x.fecha) || '')) ? x.fecha : null); }
+      if (!mapa.size) return out;
+      const tz = a.tz || DEF.tz;
+      // Candidatos: contactos de ESTE cliente que están en la lista de conexiones, sin aceptación registrada y con una invitación enviada
+      // (por FLOW o a mano desde una tarea de Nova). Antes solo se miraban las que FLOW envió, y las demás no se detectaban nunca.
       const { rows } = await pool.query(
-        `SELECT DISTINCT ON (x.slug) x.slug, x.contact_id, x.sequence_id FROM li_actions x
-          WHERE x.account_id=$1 AND x.tipo='invite' AND x.estado='done' AND x.slug = ANY($2::text[]) AND x.done_at > NOW() - INTERVAL '60 days' ORDER BY x.slug, x.done_at DESC`, [a.id, slugs]);
+        `SELECT k.id, k.nombre, lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) AS slug,
+                (SELECT ((MIN(t)) AT TIME ZONE $4)::date::text FROM (
+                    SELECT x.done_at AS t FROM li_actions x WHERE x.contact_id=k.id AND x.tipo='invite' AND x.estado='done'
+                    UNION ALL
+                    SELECT ac.fecha FROM activities ac WHERE ac.contact_id=k.id AND ac.estado='hecha'
+                       AND (ac.tipo='linkedin_connect' OR ac.nota LIKE 'Invitación de LinkedIn enviada%' OR ac.nota ~* '^Paso [0-9]+: .*(conexi|invit|connect)')) q) AS invitada
+           FROM lm_contacts k
+          WHERE k.user_id=$1 AND ($2::int IS NULL OR k.outbound_client_id=$2) AND k.li_aceptado_at IS NULL
+            AND lower(rtrim(split_part(regexp_replace(k.linkedin,'[?#].*$',''),'/in/',2),'/')) = ANY($3::text[])`,
+        [a.user_id, a.outbound_client_id || null, [...mapa.keys()], tz]);
+      const hoy = localParts(new Date(), tz).ymd;
       for (const r of rows) {
-        if (!(await eventoNuevo(a, 'aceptada', r.slug, 'conexión aceptada'))) continue;
+        if (!r.invitada) continue;                       // sin ninguna invitación enviada: ya era contacto, no es una aceptación
+        const fecha = mapa.get(r.slug) || null;          // día en que se conectaron (si la página lo dice)
+        if (fecha && fecha < r.invitada) continue;       // se conectaron ANTES de invitarla: no aceptó nuestra invitación
+        const historico = !!fecha && daysBetween(fecha, hoy) > 1;   // detectado tarde: se registra con su fecha real, sin re-enrutar la secuencia
+        await eventoNuevo(a, 'aceptada', r.slug, 'conexión aceptada');
         out.aceptadas++;
-        if (r.contact_id) await aplicar(a.user_id, r.contact_id, { disposition: 'aceptado', canal: 'linkedin', nota: 'Detectado automáticamente por la extensión de LinkedIn', sequence_id: r.sequence_id || undefined });
+        await aplicar(a.user_id, r.id, { disposition: 'aceptado', canal: 'linkedin', nota: 'Detectado automáticamente en tu lista de conexiones de LinkedIn' + (fecha ? ' (conectaron el ' + fecha + ')' : ''), fecha: fecha || undefined, historico });
       }
     } else if (tipo === 'check_inbox') {
       const conv = (Array.isArray(datos && datos.conversaciones) ? datos.conversaciones : []).slice(0, 60);

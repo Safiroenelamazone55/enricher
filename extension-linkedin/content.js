@@ -342,16 +342,56 @@
   async function desplazar(veces) { for (let i = 0; i < veces; i++) { window.scrollBy({ top: rnd(500, 900), behavior: 'smooth' }); await sleep(rnd(1200, 2400)); } }
 
   // Conexiones recientes: las personas que aceptaron aparecen arriba. La página dice «N connections»; con 0 no hay nada que leer (y no es un fallo).
+  // «Connected on November 26, 2026» / «Conectado el 26 de noviembre de 2026» → '2026-11-26'
+  const MESES = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
+  const iso = (y, m, d) => y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  function fechaConexion(txt) {
+    let m = String(txt || '').match(/Connected on ([A-Za-z]+) (\d{1,2}), (\d{4})/i);
+    if (m && MESES[m[1].toLowerCase()]) return iso(m[3], MESES[m[1].toLowerCase()], m[2]);
+    m = String(txt || '').match(/Conectad[oa]s? el (\d{1,2}) de ([a-záéíóú]+)(?: de)? (\d{4})/i);
+    if (m && MESES[m[2].toLowerCase()]) return iso(m[3], MESES[m[2].toLowerCase()], m[1]);
+    return null;
+  }
+  const slugDeHref = h => { const m = String(h || '').match(/\/in\/([^\/?#]+)/i); if (!m) return ''; try { return decodeURIComponent(m[1]).toLowerCase(); } catch (_) { return m[1].toLowerCase(); } };
+  // Cada tarjeta de la lista: el slug de la persona y el día en que se conectaron (se sube hasta la tarjeta que contiene a UNA sola persona)
+  function parseConexiones(main) {
+    const vistos = new Set(), out = [];
+    main.querySelectorAll('a[href*="/in/"]').forEach(x => {
+      const slug = slugDeHref(x.getAttribute('href')); if (!slug || vistos.has(slug)) return;
+      vistos.add(slug);
+      let card = x, fecha = null;
+      for (let k = 0; k < 8 && card.parentElement; k++) {
+        card = card.parentElement;
+        const otros = new Set([...card.querySelectorAll('a[href*="/in/"]')].map(y => slugDeHref(y.getAttribute('href'))).filter(Boolean));
+        if (otros.size > 1) break;
+        fecha = fechaConexion(card.innerText); if (fecha) break;
+      }
+      out.push({ slug, fecha });
+    });
+    return out;
+  }
   async function leerConexiones() {
-    await sleep(rnd(1500, 3000)); await desplazar(2);
+    await sleep(rnd(1500, 3000));
+    const av0 = avisoLinkedIn(); if (av0) return porAviso(av0);
+    const main0 = document.querySelector('main') || document.body, oculta = document.hidden;
+    const contar = () => new Set([...main0.querySelectorAll('a[href*="/in/"]')].map(y => slugDeHref(y.getAttribute('href'))).filter(Boolean)).size;
+    // La lista carga de a pocas: se baja hasta que deja de crecer (máx. ~100 conexiones), porque antes solo se veían las 10 primeras
+    let ultimo = -1, igual = 0;
+    for (let i = 0; i < 9 && igual < 2; i++) {
+      const n = contar(); igual = n === ultimo ? igual + 1 : 0; ultimo = n;
+      if (n >= 100) break;
+      const mas = [...main0.querySelectorAll('button')].find(b => /^(show more results|ver más resultados|mostrar más resultados)$/i.test(String(b.innerText || '').trim()) && vis(b));
+      if (mas) mas.click();
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: oculta ? 'auto' : 'smooth' });
+      await sleep(oculta ? rnd(900, 1500) : rnd(1500, 2600));
+    }
     const av = avisoLinkedIn(); if (av) return porAviso(av);
     const main = document.querySelector('main') || document.body;
     const total = (String(main.innerText || '').match(/(\d[\d.,]*)\s+(connections|conexiones)/i) || [])[1];
-    const slugs = new Set();
-    main.querySelectorAll('a[href*="/in/"]').forEach(x => { const m = String(x.getAttribute('href') || '').match(/\/in\/([^\/?#]+)/i); if (m) slugs.add(decodeURIComponent(m[1]).toLowerCase()); });
-    if (total && Number(String(total).replace(/\D/g, '')) === 0) return R('ok', '', '', { datos: { slugs: [] } });
-    if (!slugs.size) return R('fallo', 'sin_datos', 'No se encontraron conexiones en la página', { snapshot: snapshot() });
-    return R('ok', '', '', { datos: { slugs: [...slugs].slice(0, 80) } });
+    const conexiones = parseConexiones(main).slice(0, 120);
+    if (total && Number(String(total).replace(/\D/g, '')) === 0) return R('ok', '', '', { datos: { slugs: [], conexiones: [] } });
+    if (!conexiones.length) return R('fallo', 'sin_datos', 'No se encontraron conexiones en la página', { snapshot: snapshot() });
+    return R('ok', '', '', { datos: { slugs: conexiones.map(c => c.slug), conexiones } });
   }
 
   // Bandeja (clases comprobadas en una cuenta real): nombre, último texto y si tiene mensajes sin leer. «propio» = el último mensaje lo escribí yo (Tú: / You:)

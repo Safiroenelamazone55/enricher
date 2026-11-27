@@ -5744,15 +5744,20 @@ const _lmDispositionHandler = async (req, res) => {
         await pool.query(`UPDATE lm_contacts SET updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
         return res.json({ ok: true, disposition: oldDisp, paused: 0, rerouted: 0, stage: null, no_change: true });
       }
-      await pool.query(`UPDATE lm_contacts SET li_aceptado_at=NOW(), updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      // fecha (YYYY-MM-DD) = el día REAL en que aceptó (la extensión la lee de «Connected on…»); sin fecha, ahora. historico = detectado tarde: se registra, pero NO se re-enruta la secuencia.
+      const _fb = String((req.body || {}).fecha || '');
+      const _fd = /^\d{4}-\d{2}-\d{2}$/.test(_fb) ? new Date(_fb + 'T17:00:00Z') : null;   // 12:00 hora de Lima
+      const accFecha = _fd && !isNaN(_fd) && _fd <= new Date() && _fd > new Date(Date.now() - 2 * 365 * 864e5) ? _fd.toISOString() : null;
+      const historico = !!(req.body || {}).historico;
+      await pool.query(`UPDATE lm_contacts SET li_aceptado_at=COALESCE($3::timestamptz, NOW()), updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid, accFecha]);
       await pool.query(
         `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
-         VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
-        [uid, cid, obcId, `Aceptó la conexión en LinkedIn${nota ? ' — ' + nota : ''}`]
+         VALUES ($1,$2,$3,'nota',$4,COALESCE($5::timestamptz, NOW()),'hecha')`,
+        [uid, cid, obcId, `Aceptó la conexión en LinkedIn${nota ? ' — ' + nota : ''}`, accFecha]
       ).catch(() => {});
       let rerouted = 0;
       // yaAceptado evita re-enrutar dos veces si ya se había marcado antes.
-      if (!yaAceptado) {
+      if (!yaAceptado && !historico) {
         const seqs = seqId
           ? [seqId]
           : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
