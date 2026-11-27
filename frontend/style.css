@@ -22976,3 +22976,9 @@ body.ibx-lb-open{overflow:hidden}
 .nl-track--blue .nl-bar { background: #316BFF; }
 
 .nl-in .nl-track { background: #ECEAE6; }
+
+/* El selector de módulos vive en el encabezado superior (donde estaba «▶ Outreach»); la barra lateral queda con una franja baja que solo lleva el botón de plegar */
+.global-topbar__brand.msw-btn { height: 36px; padding: 0 10px 0 8px; margin-left: 4px; gap: 8px; font-size: 16px; font-weight: 600; color: #1F2937; flex-shrink: 0; }
+.global-topbar__brand.msw-btn:hover, .global-topbar__brand.msw-btn.open { background: #F3F4F6; }
+.global-topbar__brand.msw-btn.hidden { display: none; }
+#sidebar .snav-panel__hd, .lm2-nav .snav-panel__hd { height: 36px; min-height: 36px; justify-content: flex-end; padding: 0 8px !important; }
