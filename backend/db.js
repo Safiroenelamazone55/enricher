@@ -2016,6 +2016,10 @@ async function initDb() {
            AND (mm.sent_at AT TIME ZONE p_tz)::date = (NOW() AT TIME ZONE p_tz)::date
       $$`);
     await pool.query(`
+      CREATE OR REPLACE FUNCTION nv_mb_n(p_cid int) RETURNS int LANGUAGE sql STABLE AS $$
+        SELECT GREATEST(COUNT(*)::int, 1) FROM lm_mailboxes WHERE outbound_client_id = p_cid AND estado IN ('conectado','solo_envio')
+      $$`);
+    await pool.query(`
       CREATE OR REPLACE FUNCTION nv_client_full(p_cid int, p_tz text) RETURNS boolean LANGUAGE sql STABLE AS $$
         SELECT EXISTS (SELECT 1 FROM lm_mailboxes a WHERE a.outbound_client_id = p_cid AND nv_mb_cap(a.id, p_tz) IS NOT NULL)
            AND NOT EXISTS (SELECT 1 FROM lm_mailboxes b

@@ -24916,20 +24916,43 @@ const LeadManagerModule = (() => {
     const d = _lim.ramp[mb.id];
     if (!d) return `<div class="lim2-box"><div class="lim2-hint" style="margin:0">No se pudo cargar los límites de ${esc(mb.email)}.</div></div>`;
     const r2 = (lbl, ctl) => `<div class="lim2-r2"><div class="lim2-r2__l">${lbl}</div>${ctl}</div>`;
-    const ok = ['ok', 'conectado', 'activo'].includes(mb.estado);
+    const ok = ['ok', 'conectado', 'activo'].includes(mb.estado), au = !!d.ramp_auto;
+    // UNA sola forma de limitar a la vez: ajuste automático (solo hay un «máximo») o manual (límite fijo o calentamiento por semanas)
+    const modo = r2('Ajuste automático <small>Nova sube y baja el tope según los rebotes. Si lo enciendes, <b>desaparece el límite fijo</b>: lo único que queda es el máximo.</small>', `<label class="rp-sw"><input type="checkbox" id="lim-mb-auto-${mb.id}"${au ? ' checked' : ''} onchange="LeadManagerModule.limMbAuto(${mb.id})"><span></span></label>`);
+    const manual = r2('Calentar este buzón <small>Empieza con pocos envíos y sube cada semana hasta la meta.</small>', `<label class="rp-sw"><input type="checkbox" id="lim-mb-on-${mb.id}"${d.ramp_on ? ' checked' : ''}><span></span></label>`)
+      + r2('Número máximo de emails enviados por este buzón en 24 h <small>Vacío = automático según el calentamiento.</small>', _limStp('lim-mb-limit-' + mb.id, d.daily_limit || '', 1, 2000, 'Auto (' + d.ramp_cap + ')'))
+      + r2('Emails por día al empezar el calentamiento', _limStp('lim-mb-start-' + mb.id, d.ramp_start, 1, 500))
+      + r2('Emails más por día cada semana', _limStp('lim-mb-step-' + mb.id, d.ramp_step, 1, 200))
+      + r2('Meta de emails por día al terminar el calentamiento', _limStp('lim-mb-target-' + mb.id, d.ramp_target, 1, 2000));
+    const auto = r2('Máximo de emails por día <small>Es el <b>único límite</b> con el ajuste automático: el tope de hoy sube y baja solo, pero nunca pasa de aquí.</small>', _limStp('lim-mb-techo-' + mb.id, d.ramp_techo, 10, 500));
     return `<div class="lim2-box"><div class="lim2-box__h"><b>${esc(mb.email)}</b><span class="cc-chip ${ok ? 'ok' : 'warn'}">${esc(mb.estado || '—')}</span></div>
-      ${r2('Calentar este buzón <small>Empieza con pocos envíos y sube cada semana hasta la meta.</small>', `<label class="rp-sw"><input type="checkbox" id="lim-mb-on-${mb.id}"${d.ramp_on ? ' checked' : ''}><span></span></label>`)}
-      ${r2('Número máximo de emails enviados por este buzón en 24 h <small>Vacío = automático según el calentamiento.</small>', _limStp('lim-mb-limit-' + mb.id, d.daily_limit || '', 1, 2000, 'Auto (' + d.ramp_cap + ')'))}
-      ${r2('Emails por día al empezar el calentamiento', _limStp('lim-mb-start-' + mb.id, d.ramp_start, 1, 500))}
-      ${r2('Emails más por día cada semana', _limStp('lim-mb-step-' + mb.id, d.ramp_step, 1, 200))}
-      ${r2('Meta de emails por día al terminar el calentamiento', _limStp('lim-mb-target-' + mb.id, d.ramp_target, 1, 2000))}
-      ${d.ramp_on ? `<div class="lim2-stt"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> · enviados hoy <b>${d.sent_today}</b></div>` : ''}
+      ${modo}${au ? auto : manual}
+      ${d.ramp_on ? `<div class="lim2-stt"><b>${au ? 'Ajuste automático' : 'Semana ' + (d.semana + 1)}</b>: tope de hoy <b>${d.cap_today}</b>${au ? ' (puede subir hasta <b>' + d.ramp_techo + '</b>)' : ''} · enviados hoy <b>${d.sent_today}</b></div>` : ''}
       <div class="lim2-ft"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.limMbSave(${mb.id})">Guardar</button><span id="lim-mb-msg-${mb.id}" class="mbh-msg"></span></div></div>`;
+  }
+  async function limMbAuto(mbId) {
+    const on = !!document.getElementById(`lim-mb-auto-${mbId}`)?.checked, msg = document.getElementById(`lim-mb-msg-${mbId}`);
+    try {
+      const r = await apiFetch(`${API}/lm/warmup/buzones/${mbId}/auto`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: on }) });
+      const d0 = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d0.error || 'Error');
+      const r2 = await apiFetch(`${API}/lm/mailboxes/${mbId}/ramp`); if (r2.ok) _lim.ramp[mbId] = await r2.json();
+      const mb = (_mailboxes || []).find(x => x.id === mbId); if (mb && _lim.ramp[mbId]) { mb.ramp_on = _lim.ramp[mbId].ramp_on; mb.daily_limit = _lim.ramp[mbId].daily_limit; }
+      _limPaint(); showBanner(on ? 'Ajuste automático activado.' + (d0.nota || '') : 'Ajuste automático desactivado', 'success');
+    } catch (e) { if (msg) { msg.textContent = 'No se pudo cambiar: ' + e.message; msg.style.color = 'var(--danger)'; } }
   }
   async function limMbSave(mbId) {
     const v = id => parseInt(document.getElementById(id)?.value);
-    const body = { on: !!document.getElementById(`lim-mb-on-${mbId}`)?.checked, start: v(`lim-mb-start-${mbId}`), step: v(`lim-mb-step-${mbId}`), target: v(`lim-mb-target-${mbId}`), limit: (document.getElementById(`lim-mb-limit-${mbId}`) || {}).value || '' };
     const msg = document.getElementById(`lim-mb-msg-${mbId}`);
+    if (document.getElementById(`lim-mb-auto-${mbId}`)?.checked) {   // con ajuste automático solo se guarda el máximo
+      try {
+        const r0 = await apiFetch(`${API}/lm/warmup/buzones/${mbId}/techo`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ techo: v(`lim-mb-techo-${mbId}`) }) });
+        if (!r0.ok) throw new Error((await r0.json().catch(() => ({}))).error || 'Error');
+        const r1 = await apiFetch(`${API}/lm/mailboxes/${mbId}/ramp`); if (r1.ok) _lim.ramp[mbId] = await r1.json();
+        _limPaint(); showBanner('✓ Máximo guardado', 'success');
+      } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
+      return;
+    }
+    const body = { auto: false, on: !!document.getElementById(`lim-mb-on-${mbId}`)?.checked, start: v(`lim-mb-start-${mbId}`), step: v(`lim-mb-step-${mbId}`), target: v(`lim-mb-target-${mbId}`), limit: (document.getElementById(`lim-mb-limit-${mbId}`) || {}).value || '' };
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
@@ -26748,7 +26771,7 @@ const LeadManagerModule = (() => {
     });
   }
   const _CAP_TIPO = { visita: 'vis', invite: 'inv', invite_nota: 'inv', mensaje: 'msg', inmail: 'inmail', like: 'react', follow: 'follow', comentario: 'comment' };
-  const _CAP_NOM = { vis: 'Visitas', inv: 'Invitaciones', msg: 'Mensajes', inmail: 'InMail', react: 'Reacciones', follow: 'Seguir', comment: 'Comentarios' };
+  const _CAP_NOM = { vis: 'Visitas', inv: 'Invitaciones', msg: 'Mensajes', inmail: 'InMail', react: 'Reacciones', follow: 'Seguir', comment: 'Comentarios', email: 'Emails' };
   async function _capEnsure(id, force) {
     if (!id || (!force && _cap.id === id && _cap.data)) { _capPaint(); return; }
     const prev = _cap.id === id && _cap.P ? _cap.P : null;
@@ -26777,6 +26800,8 @@ const LeadManagerModule = (() => {
     const d = _cap.data, P = P0 || _cap.P; if (!d || !P) return null;
     const mask = String(d.send_days || '1111100').padEnd(7, '0'), DAY = 864e5;
     const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
+    // Email: solo gasta cupo si la secuencia envía sola (auto / pre-aprobado) y el cliente tiene buzón; si es manual, los envía la persona
+    const EM = (d.email && d.email.modo !== 'manual' && !d.email.sin_buzon && (d.email.cap_dias || []).some(x => x != null)) ? d.email : null, hoyMs = hoy.getTime();
     let start = d.starts_on ? new Date(d.starts_on) : hoy; start = new Date(Math.max(start.getTime(), hoy.getTime())); start.setUTCHours(0, 0, 0, 0);
     const okDay = t => mask[(new Date(t).getUTCDay() + 6) % 7] === '1';
     const roll = t => { let g = 0; while (!okDay(t) && g++ < 8) t += DAY; return t; };
@@ -26811,6 +26836,14 @@ const LeadManagerModule = (() => {
       const cap = { inv: c.inv, msg: c.msg, vis: c.vis, inmail: c.inmail, react: c.react, follow: c.follow, comment: c.comment }; let total = c.total;
       if (rd.activo) { cap.inv = Math.min(c.inv, rd.inicio + rd.paso * dia); if (cal) { total = Math.min(total, rd.total_nuevo); cap.msg = Math.min(c.msg, 8 + 2 * dia); cap.vis = Math.min(c.vis, 10 + 2 * dia); cap.inmail = Math.min(c.inmail, 2 + dia); } }
       Object.keys(cap).forEach(k => { cap[k] = Math.max(1, Math.round(cap[k] * f)); }); total = Math.max(1, Math.round(total * f)); if (d.ritmo_max) total = Math.min(total, d.ritmo_max);
+      // Email: tope del día = suma de los topes de los buzones del cliente, limitado por el ritmo máximo del horario y el límite propio de la secuencia
+      const off = Math.round((t - hoyMs) / DAY);
+      if (EM) {
+        const ce = EM.cap_dias[Math.min(Math.max(off, 0), EM.cap_dias.length - 1)];
+        let e = ce == null ? 1e6 : ce; e = Math.min(e, EM.ritmo_max || 1e6); if (EM.limite_seq > 0) e = Math.min(e, EM.limite_seq);
+        if (off > 0 && P.descontar !== false) e = Math.max(0, Math.round(e - (EM.otras_dia || 0)));
+        cap.email = e;
+      }
       // los límites son del CLIENTE: lo que ya usan sus otras secuencias automáticas activas no está disponible para esta
       const rs = (P.descontar !== false && d.otras) ? d.otras.reservado : null;
       if (rs) { let sumR = 0; Object.keys(cap).forEach(k => { const rr = Math.round(rs[k] || 0); cap[k] = Math.max(0, cap[k] - rr); sumR += rr; }); total = Math.max(0, total - sumR); }
@@ -26820,19 +26853,20 @@ const LeadManagerModule = (() => {
       row.capTipo = cap; row.capTotal = total;
       if (i === 0 && d.resto_hoy != null) { const hh = Object.values(d.hoy || {}).reduce((x, y) => x + y, 0); total = Math.min(total, hh + d.resto_hoy); row.capTotal = total; restTot = Math.min(restTot, total); }
       if (i === 0 && d.hoy) { let sh = 0; Object.keys(cap).forEach(k => { const h = Math.min(rest[k], d.hoy[k] || 0); if (h > 0) { rest[k] -= h; sh += h; row.hechas[k] = h; if (k === 'inv') { restInv = Math.max(0, restInv - h); row._inv = h; } } }); restTot = Math.max(0, restTot - sh); row.hechasTot = sh; }
-      // las tareas vencidas hasta hoy, de la más antigua a la más nueva; las de email/llamada no gastan tope
+      if (EM && off === 0) { const gastado = Math.min(rest.email, EM.hoy || 0); rest.email -= gastado; const mia = Math.min(gastado, EM.esta_hoy || 0); if (mia > 0) row.hechas.email = mia; }
+      // las tareas vencidas hasta hoy, de la más antigua a la más nueva; las de llamada no gastan tope (los emails sí, si la secuencia envía sola)
       let guard = 0;
       while (guard++ < 5000) {
         const due = items.filter(it => it.due <= t && it.qa + it.qn > 0.001).sort((a, b) => a.due - b.due || a.j - b.j);
         let moved = false;
         for (const it of due) {
-          const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : null, q = it.qa + it.qn;
+          const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : (st.canal === 'email' && EM ? 'email' : null), q = it.qa + it.qn;
           if (!tipo) { items.splice(items.indexOf(it), 1); spawn(it.j + 1, it.qa, it.qn, t, st.dia); moved = true; continue; }
           if (!(it._cnt)) { it._cnt = true; row.dem[tipo] = (row.dem[tipo] || 0) + q; }
-          const lim = Math.min(rest[tipo], restTot, tipo === 'inv' ? restInv : Infinity);
+          const lim = tipo === 'email' ? rest.email : Math.min(rest[tipo], restTot, tipo === 'inv' ? restInv : Infinity);
           if (lim <= 0) continue;
           const ex = Math.min(q, lim), fr = ex / q;
-          row.hechas[tipo] = (row.hechas[tipo] || 0) + ex; row.hechasTot += ex; rest[tipo] -= ex; restTot -= ex; if (tipo === 'inv') { restInv -= ex; row._inv = (row._inv || 0) + ex; }
+          row.hechas[tipo] = (row.hechas[tipo] || 0) + ex; if (tipo !== 'email') { row.hechasTot += ex; restTot -= ex; } rest[tipo] -= ex; if (tipo === 'inv') { restInv -= ex; row._inv = (row._inv || 0) + ex; }
           retrasoMax = Math.max(retrasoMax, Math.round((t - it.due) / DAY));
           const ea = it.qa * fr, en = it.qn * fr; it.qa -= ea; it.qn -= en; if (it.qa + it.qn < 0.001) items.splice(items.indexOf(it), 1); else it._cnt = true;
           let na = ea, nn = en;
@@ -26844,7 +26878,7 @@ const LeadManagerModule = (() => {
       }
       invHist.push(row._inv || 0);
       // lo que sigue esperando
-      items.filter(it => it.due <= t).forEach(it => { const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : null; if (tipo) { row.cola[tipo] = (row.cola[tipo] || 0) + it.qa + it.qn; row.colaTot += it.qa + it.qn; } });
+      items.filter(it => it.due <= t).forEach(it => { const st = steps[it.j], tipo = st.canal === 'linkedin' ? _CAP_TIPO[st.accion] : (st.canal === 'email' && EM ? 'email' : null); if (tipo) { row.cola[tipo] = (row.cola[tipo] || 0) + it.qa + it.qn; row.colaTot += it.qa + it.qn; } });
       items.forEach(it => { it._cnt = false; });
       if (row.colaTot >= 0.5 && primerCola == null) primerCola = i;
       if (row.colaTot > colaMax) { colaMax = row.colaTot; pico = i; }
@@ -26876,9 +26910,10 @@ const LeadManagerModule = (() => {
   function _capBody() {
     if (_cap.err) return `<div class="cap-empty"><b>No se pudo cargar</b><span>${esc(_cap.err)}</span></div>`;
     const d = _cap.data, P = _cap.P; if (!d || !P) return '<div class="cap-empty">Calculando…</div>';
-    const liSteps = (d.steps || []).filter(x => x.canal === 'linkedin' && _CAP_TIPO[x.accion]);
-    if (!liSteps.length) return '<div class="cap-empty"><b>Esta secuencia no tiene pasos de LinkedIn</b><span>Esta vista mide cuánta carga de LinkedIn (visitas, invitaciones, mensajes…) cabe en los topes diarios.</span></div>';
-    const tiposSeq = [...new Set(liSteps.map(z => _CAP_TIPO[z.accion]))];
+    const liSteps = (d.steps || []).filter(x => x.canal === 'linkedin' && _CAP_TIPO[x.accion]), emSteps = (d.steps || []).filter(x => x.canal === 'email');
+    if (!liSteps.length && !emSteps.length) return '<div class="cap-empty"><b>Esta secuencia no tiene pasos de LinkedIn ni de email</b><span>Esta vista mide cuánta carga de LinkedIn (visitas, invitaciones, mensajes…) y de email cabe en los topes diarios.</span></div>';
+    const E = d.email || {}, emOn = emSteps.length && E.modo !== 'manual' && !E.sin_buzon && (E.cap_dias || []).some(x => x != null);
+    const tiposSeq = [...new Set([...liSteps.map(z => _CAP_TIPO[z.accion]), ...(emOn ? ['email'] : [])])];
     const r = _capCalc(); r.max = _capMax();
     const c = { ...d.caps, ...(P.caps || {}) }, rd = d.ramp || {};
     const capIn = (k, lbl) => `<label class="cap-f"><span>${lbl}</span><input type="number" min="0" value="${c[k]}" style="width:78px" onchange="LeadManagerModule.capSetCap('${k}', this.value)"></label>`;
@@ -26887,27 +26922,31 @@ const LeadManagerModule = (() => {
     const sq = (_sequences || []).find(x => x.id === _cap.id) || {}, cid = sq.outbound_client_id || 0, cli = _clientName(cid) || 'este cliente';
     const ot = d.otras || { secuencias: [], reservado: {}, real7d: {}, en_cola: 0 }, rdB = _capRampBase(d);
     const ocuTxt = tiposSeq.map(k => [_CAP_NOM[k], Math.round((ot.reservado || {})[k] || 0)]).filter(z => z[1] > 0).map(z => z[0].toLowerCase() + ' ≈ ' + z[1]).join(', ');
-    const dMax = Math.max(1, ...r.dias.map(x => x.hechasTot + x.colaTot));
+    const dMax = Math.max(1, ...r.dias.map(x => x.hechasTot + (x.hechas.email || 0) + x.colaTot));
     const bars = r.dias.map(x => { if (!x.ok) return `<div class="cap-col is-off" title="${_capF(x.fecha)} · día sin envíos"></div>`;
-      const h1 = Math.round(x.hechasTot / dMax * 100), h2 = Math.round(x.colaTot / dMax * 100);
+      const h1 = Math.round((x.hechasTot + (x.hechas.email || 0)) / dMax * 100), h2 = Math.round(x.colaTot / dMax * 100);
       return `<div class="cap-col" title="${_capF(x.fecha)} · se hacen ${Math.round(x.hechasTot)} · esperan ${Math.round(x.colaTot)}"><div class="cap-stk"><i class="cap-q" style="height:${h2}%"></i><i class="cap-h" style="height:${h1}%"></i></div><span>${x.fecha.getUTCDate()}</span></div>`; }).join('');
     const med = (x, k) => { const h = x.hechas[k] || 0, q = x.cola[k] || 0, cp = x.capTipo[k]; if (!h && !q) return '';
       return `<div class="cap-m"><span class="cap-mn">${_CAP_NOM[k]}</span><span class="cap-mb"><i style="width:${Math.min(100, Math.round(h / Math.max(1, cp) * 100))}%"></i></span><span class="cap-mv"><b>${Math.round(h)}</b> de ${cp}${q >= 0.5 ? ` <u>+${Math.round(q)} esperan</u>` : ''}</span></div>`; };
     const fila = x => { if (!x.ok) return '';
-      const est = x.colaTot >= 0.5 ? 'Con cola' : (x.hechasTot >= x.capTotal * 0.9 ? 'Al límite' : 'Cabe');
-      return `<div class="cap-tr"><span class="cap-d">${_capF(x.fecha)}</span><span>${x.entran ? Math.round(x.entran) : '·'}</span><div class="cap-ms">${tiposSeq.map(k => med(x, k)).join('') || '<span class="cap-no">Nada que hacer</span>'}</div><span><b>${Math.round(x.hechasTot)}</b> de ${x.capTotal}</span><span class="cap-es${est === 'Con cola' ? ' is-q' : ''}">${est}</span></div>`; };
+      const lleno = liSteps.length ? x.hechasTot >= x.capTotal * 0.9 : (x.hechas.email || 0) >= (x.capTipo.email || 1e6) * 0.9;
+      const est = x.colaTot >= 0.5 ? 'Con cola' : (lleno ? 'Al límite' : 'Cabe');
+      return `<div class="cap-tr"><span class="cap-d">${_capF(x.fecha)}</span><span>${x.entran ? Math.round(x.entran) : '·'}</span><div class="cap-ms">${tiposSeq.map(k => med(x, k)).join('') || '<span class="cap-no">Nada que hacer</span>'}</div><span>${liSteps.length ? `<b>${Math.round(x.hechasTot)}</b> de ${x.capTotal}` : `<b>${Math.round(x.hechas.email || 0)}</b> de ${(x.capTipo.email || 0) >= 1e5 ? '∞' : x.capTipo.email}`}</span><span class="cap-es${est === 'Con cola' ? ' is-q' : ''}">${est}</span></div>`; };
     const finTxt = r.fin != null ? 'el ' + _capF(r.dias[r.fin].fecha) : 'después de ' + P.dias + ' días';
     const cuello = (() => { const t = {}; r.dias.forEach(x => Object.keys(x.cola).forEach(k => { t[k] = (t[k] || 0) + x.cola[k]; })); const m = Object.entries(t).sort((a2, b2) => b2[1] - a2[1])[0]; return m && m[1] >= 1 ? _CAP_NOM[m[0]].toLowerCase() : ''; })();
     const ok = r.colaMax < 2;
     const resumen = ok
       ? `<div class="cap-sum"><b>Cabe sin retrasos.</b> Terminan hacia ${finTxt}.</div>`
       : `<div class="cap-sum"><b>Se forma cola desde el ${_capF(r.dias[r.primerCola].fecha)}</b> · pico de ${Math.round(r.colaMax)} acciones esperando · el límite que frena: ${cuello || '—'} · terminan ${finTxt}.${r.max ? ` Sin cola: <b>máx. ${r.max} contactos por día</b> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.capUsarMax()">Usar ${r.max}</button>` : ''}</div>`;
-    return `<div class="cap-top"><div class="cap-h1"><b>Capacidad de la secuencia</b><span>Simula día a día cuántas acciones de LinkedIn caben en los límites de ${esc(cli)}.</span></div></div>
+    return `<div class="cap-top"><div class="cap-h1"><b>Capacidad de la secuencia</b><span>Simula día a día cuántas acciones${liSteps.length ? ' de LinkedIn' : ''}${emSteps.length ? (liSteps.length ? ' y' : '') + ' de email' : ''} caben en los límites de ${esc(cli)}.</span></div></div>
+      ${liSteps.length ? `
       <div class="cap-bn"><div><b>Límites de ${esc(cli)}</b><span>Visitas ${c.vis} · Invitaciones ${c.inv} (${c.inv_semana} por semana) · Mensajes ${c.msg} · InMail ${c.inmail} · Total ${c.total} al día${d.sin_cuenta ? '. Aún no hay cuenta de LinkedIn conectada: son los recomendados.' : ''}${ocuTxt ? '. Otras campañas del cliente ya usan: ' + ocuTxt + '.' : ''}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'linkedin')">Editar límites del cliente</button><button class="btn btn--ghost btn--sm" title="Volver a leer los límites" onclick="LeadManagerModule.capRefresh()">↻</button></div></div>
       <div class="cap-bn"><div><b>Calentamiento: ${P.calentar ? 'activo' : 'apagado'}</b><span>${P.calentar ? (d.sin_cuenta ? 'Cuenta nueva' : 'Día ' + Math.min((rdB.dia_actual || 0) + 1, rdB.dias) + ' de ' + rdB.dias) + ' · invitaciones: ' + rdB.inicio + ' al empezar, +' + rdB.paso + ' por día · máx. ' + rdB.total_nuevo + ' acciones al día' : 'Se usan los límites completos desde el primer día'}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'linkedin')">Editar en límites del cliente</button></div></div>
+      ` : ''}
+      ${emSteps.length ? `<div class="cap-bn"><div><b>Email · ${E.sin_buzon ? 'sin buzón conectado' : E.buzones.length + (E.buzones.length === 1 ? ' buzón' : ' buzones')}</b><span>${E.modo === 'manual' ? 'Esta secuencia es <b>manual</b>: los emails los envías tú desde tu correo y no gastan el cupo de los buzones.' : E.sin_buzon ? 'Este cliente no tiene buzón conectado: los emails automáticos no saldrán hasta conectar uno.' : 'Hoy salen hasta <b>' + (E.cap_dias[0] == null ? '∞' : E.cap_dias[0]) + '</b> al día entre todos los buzones (suma de sus topes) · ya salieron <b>' + E.hoy + '</b> hoy' + (E.auto ? ' · <b>ajuste automático</b> activo' + (E.techo_total ? ' (puede llegar hasta ' + E.techo_total + ')' : '') : '') + ' · ritmo máximo por horario <b>' + E.ritmo_max + '</b> al día (cada ' + E.intervalo_min + ' min' + (E.buzones.length > 1 ? ' ÷ ' + E.buzones.length + ' buzones' : '') + ', ventana ' + E.ventana[0] + '–' + E.ventana[1] + ' h)' + (E.limite_seq > 0 ? ' · límite propio de esta secuencia <b>' + E.limite_seq + '</b>' : '') + (E.otras_dia > 0 ? ' · otras secuencias del cliente usan ≈ ' + E.otras_dia + ' al día' : '') + '. Lo que no cabe hoy sale mañana, por orden.'}</span></div><div class="cap-bn__a"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientLimits(${cid},'limites')">Editar buzones</button></div></div>` : ''}
       <div class="cap-form">${inp('contactos', 'Contactos', '', 80)}${inp('drip', 'Entran por día', '', 70)}${inp('acep', 'Aceptan', '%', 60)}${inp('resp', 'Responden', '%', 60)}${inp('dias', 'Días', '', 60)}</div>
       ${resumen}
-      ${_capPasado(d, tiposSeq)}
+      ${liSteps.length ? _capPasado(d, tiposSeq) : ''}
       <div class="cap-chart"><div class="cap-leg"><i class="cap-h"></i>Se hacen ese día <i class="cap-q"></i>Esperan al día siguiente</div><div class="cap-cols">${bars}</div></div>
       <div class="cap-tbl"><div class="cap-tr cap-th"><span>Día</span><span>Entran</span><span>Qué se hace (hecho de su límite)</span><span>Todo el día</span><span>Estado</span></div>${r.dias.map(fila).join('')}</div>`;
   }
@@ -41062,7 +41101,8 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
       }
       const puede = d.puedes_hoy;
       const lineas = [];
-      if (d.buzon.cap_hoy != null) lineas.push(d.buzon.limite_propio ? `Buzón <b>${esc(d.buzon.email)}</b>: límite diario fijado por ti, <b>${d.buzon.cap_hoy}</b> por día, entre todas sus secuencias.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}), entre todas las secuencias de este cliente.`);
+      if (d.buzon.auto) lineas.push(`${d.buzon.buzones > 1 ? 'Los <b>' + d.buzon.buzones + ' buzones</b>' : 'Buzón <b>' + esc(d.buzon.email) + '</b>'} con <b>ajuste automático</b>: hoy hasta <b>${d.buzon.cap_hoy == null ? '∞' : d.buzon.cap_hoy}</b> por día${d.buzon.buzones > 1 ? ' (suma de sus topes)' : ''}, puede subir hasta <b>${d.buzon.techo}</b>. Lo ajusta Nova según los rebotes.`);
+      else if (d.buzon.cap_hoy != null) lineas.push(d.buzon.limite_propio ? `Buzón <b>${esc(d.buzon.email)}</b>: límite diario fijado por ti, <b>${d.buzon.cap_hoy}</b> por día, entre todas sus secuencias.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}), entre todas las secuencias de este cliente.`);
       else lineas.push(`Buzón <b>${esc(d.buzon.email)}</b>: sin calentamiento, sin tope propio.`);
       if (d.workspace.activo) lineas.push(`Todo tu workspace: límite global de <b>${d.workspace.limite}</b> por día, ya van <b>${d.workspace.enviados_hoy}</b> entre todos los clientes.`);
       else if (d.workspace.envio_global === false) lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
@@ -45979,7 +46019,7 @@ Saldrán desde el buzón de cada cliente, espaciados según el intervalo de su s
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
-    sxPop, sxPopTick, sxPopClear, sxClear, sxQ, sxSort, sxToggle, capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, limEsSave, limWaSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
+    sxPop, sxPopTick, sxPopClear, sxClear, sxQ, sxSort, sxToggle, capSet, capRefresh, capDescontar, capUsarMax, ctCol, ctSearch, ctSortMenu, ctSort, ctDd, ctPick, ctClose, ctTab, ctOpen, ctBack, ctZoom, ctUse, ctUseCli, ctUseGo, ctStep, ctVer, seqFlowOpen, seqFlowClose, seqFlowSel, seqFlowVer, seqFlowSave, tkNewView, tkClearAll, tkAddMenu, tkAddPick, tkFieldMenu, tkSetField, tkOpMenu, tkSetOp, tkChipMenu, tkDelFilter, tkValMenu, tkSetQ, tkSelQ, tkDay, tkMon, tkRel, tkAdvOpen, tkConn, tkAddGroup, tkGroupDel, tkView, tkSearch, tkFiltToggle, tkClassic, tkDiscard, tkFilterSearch, tkTick, tkSaveView, tkSaveGo, tkViewDel, tkColsMenu, tkColTick, tkOpen, tkStart, tkCreate, tkcSearch, tkcPick, tkcGo, dvSet, dvPreset, dvDateOpen, dvDateApply, infSet, infPreset, infDateOpen, infDateApply, infExport, infPop, infPopQ, infPopTick, infPopClear, infAbove, infShare, infViews, infPin, infOpenView, infVmMenu, infViewNew, infViewDup, infViewRename, infViewDel, infEdit, infWDel, infWAdd, infWMenu, _infVmRows, vwSet, vwSave, vwSaveGo, vwDel, ctCleanMenu, coCleanMenu, ctAddMenu, coAddMenu, cpNav, llMode, ajTab, seqAjustes, rdMode, rdShow, rdSet, rdRetry, rdPreset, rdDateOpen, rdDateApply, rdHow, rdExport, lzTab, lzSelAll, lzPhone, lzEditStep, lzCardMenu, lzLaunch, llCleanMenu, llSearch, llPg, llBanner, llSelToggle, llSelClear, llSelPage, llAddMenu, llGoBase, llAiMenu, llAiOne, llEnrichMenu, llEnrich, llFindEmail, llStats, llModalClose, llColsOpen, llColsQ, llColsTick, llFilterQ2, lsTab, lsSearch, lsFilterMenu, lsSetTipo, lsRowMenu, lsCreate, lsPickModo, lsStep2, lsPickEnt, lsCreateGo, lsRename, lsDelete, lsOpen, lsMemSearch, lsNameEdit, lsMemTick, lsMemAll, lsMemClear, lsRemoveSel, lsFAdd, lsFPick, lsFVal, lsFQ, lsFTick, lsFDel, lsFClear, lsAddOpen, lsAddQ, lsAddTick, lsAddGo, lsAddTo, lsAddToGo, lsAddToNew, lsAddToSel, lsAddToSelCo, llColDrag, llColDrop, llColsAll, llColsSave, llColAdd, llColShow, llFilterOpen, llFilterColSearch, llFilterCol, llFilterTick, llFilterGroup, llFilterOp, llDateDay, llDateMonth, llDateSug, llFilterAll, llFilterQ, llFilterApply, llFilterDel, llFilterClear, llBulk, llHistory, llHistDel, llFromSeq, llFromSeqGo, llPasteEmails, llPasteGo, llManual, llManualGo, seqStep, seqFav, seqSetEstado, seqEstadoMenu, sedSel, sedView, sedPanel, sedZ, sedCenter, sedAddMenu, sedAddTab, sedAddSearch, sedAdd, sedCond, sedDelay, sedDlStep, sedDlNow, sedDlApply, sedStepMenu, sedDup, liSel, liToggle, liCancel, liReid, seqLiAuto, liConnectFor, openClientSenders, sndAddMenu, openClientLimits, limMbAuto, limMbSave, limLiSave, limLiRestart, limTab, limBack, limAcc, limStep, limMbPick, limEsSave, limWaSave, aiHeroSend, liwClose, liwNext, liwPermit, liwActivar, liwManual, liReconnect, openCampaignConfig, ccTab, ccSet, ccSetRep, ccDia, ccVacToggle, ccTagAdd, ccTagDel, ccSender, ccAddMenu, ccGoConnect, ccSave, ccConfirmGo, ccClose, liNew, liNewToken, liEdit, liSave, liReramp, liDel,
     openCampaignStart, closeCampaignStart, campaignStartManual, openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, apRunNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, apReviewG, fixScopeToggle, fixScopeSet, ibDraftSet, ibSuggest, navGrp, fixHeadMenu, fixExport, cpHistFilter, cpHistToggle, openContactWork, unmountEmbed, ctCoInput, ctCoPick, ctCoNew, ctCoKey, ldColsOpen, ldColsClose, ldColsSearch, ldColToggle, ldColsReset, taskApprove, taskApproveAll, seqCompleteEmailApprove, seqNoEmailNav,

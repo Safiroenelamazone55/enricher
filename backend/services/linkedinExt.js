@@ -1045,9 +1045,28 @@ function mount(app, { pool, requireAuth, applyDisposition, addMembership }) {
           if (h > 0) resto_hoy += Math.floor(h * 3600 / (Math.max(20, a.gap_min || 300) * 1.1));
         }
       }
+      // ── Email: lo que permiten los buzones del cliente (hasta 20): suma de topes por día, lo ya enviado hoy y el ritmo máximo por horario ──
+      let emailInfo = { sin_buzon: true, modo: 'manual', cap_dias: [] };
+      try {
+        const { rows: mbs } = await pool.query(`SELECT id, email, daily_limit, ramp_on, ramp_start, ramp_step, ramp_target, ramp_auto, ramp_techo, to_char(ramp_started_on,'YYYY-MM-DD') AS desde FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 AND estado IN ('conectado','solo_envio') ORDER BY id`, [uid, sq.outbound_client_id]);
+        const { rows: [ss] } = await pool.query(`SELECT send_mode, send_interval_min, daily_limit FROM sequences WHERE id=$1`, [sid]);
+        const { rows: [cfgE] } = await pool.query(`SELECT window_start, window_end FROM lm_send_settings WHERE user_id=$1`, [uid]);
+        const hoyD = new Date(); hoyD.setUTCHours(0, 0, 0, 0);
+        const capDia = (mb, t) => { if (mb.daily_limit > 0) return mb.daily_limit; if (mb.ramp_on && mb.desde) { const wk = Math.floor(Math.max((t - Date.parse(mb.desde)) / 864e5, 0) / 7); return Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * wk); } return null; };
+        const cap_dias = [];
+        for (let i = 0; i < 125; i++) { const t = hoyD.getTime() + i * 864e5; let tot = 0, sin = false; for (const mb of mbs) { const c = capDia(mb, t); if (c == null) { sin = true; break; } tot += c; } cap_dias.push(mbs.length && !sin ? tot : null); }
+        const { rows: [hh] } = mbs.length ? await pool.query(`SELECT COALESCE(SUM(nv_mb_sent(id,'America/Lima')),0)::int AS n FROM lm_mailboxes WHERE id = ANY($1::int[])`, [mbs.map(m => m.id)]) : { rows: [{ n: 0 }] };
+        const { rows: [qe] } = await pool.query(`SELECT COUNT(*) FILTER (WHERE m.sequence_id = $2 AND (m.sent_at AT TIME ZONE 'America/Lima')::date = (NOW() AT TIME ZONE 'America/Lima')::date)::int AS esta_hoy, COUNT(*) FILTER (WHERE m.sequence_id <> $2)::int AS otras7 FROM lm_messages m JOIN sequences s2 ON s2.id = m.sequence_id WHERE s2.outbound_client_id=$1 AND m.estado IN ('sent','replied','bounced') AND m.sent_at > NOW() - interval '7 days'`, [sq.outbound_client_id, sid]);
+        const hrs = Math.max(1, ((cfgE && cfgE.window_end) != null ? cfgE.window_end : 18) - ((cfgE && cfgE.window_start) != null ? cfgE.window_start : 9)), nmb = Math.max(1, mbs.length), ivE = Math.max(1, ((ss && ss.send_interval_min) || 5) / nmb);
+        const autos = mbs.filter(m => m.ramp_auto);
+        emailInfo = { sin_buzon: !mbs.length, modo: (ss && ss.send_mode) || 'manual', cap_dias, hoy: hh.n, esta_hoy: qe.esta_hoy, otras_dia: Math.round(qe.otras7 / 5 * 10) / 10, limite_seq: (ss && ss.daily_limit) || 0,
+          ritmo_max: Math.floor(hrs * 60 / (ivE * 1.05)), intervalo_min: (ss && ss.send_interval_min) || 5, ventana: [cfgE && cfgE.window_start != null ? cfgE.window_start : 9, cfgE && cfgE.window_end != null ? cfgE.window_end : 18],
+          auto: autos.length > 0, techo_total: autos.length === mbs.length && autos.length ? autos.reduce((a, m) => a + m.ramp_techo, 0) : null,
+          buzones: mbs.map(m => ({ email: m.email, auto: !!m.ramp_auto, techo: m.ramp_techo, cap_hoy: capDia(m, hoyD.getTime()) })) };
+      } catch (e) { console.error('[li] capacidad email', e.message); }
       // Ritmo máximo por horario y espera mínima entre acciones (una sola acción a la vez por cuenta): ~1,5 h menos por el arranque/cierre aleatorio y el descanso
       const ritmo_max = cuentas.length ? cuentas.reduce((t, a) => t + Math.floor(Math.max(1, (a.hora_fin - a.hora_ini) - ((a.hora_fin - a.hora_ini) >= 6 ? 1.5 : 0.6)) * 3600 / (Math.max(20, a.gap_min || 300) * 1.1)), 0) : null;
-      res.json({ avance: av, hoy, inv_hist, pasado, resto_hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: (() => { const m = String(sq.send_days || '1111100').padEnd(7, '0'), dd = a0 ? (a0.dias || DEF.dias) : null; return dd ? m.split('').map((c, i) => (c === '1' && dd.includes(i + 1) ? '1' : '0')).join('') : m; })(), starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
+      res.json({ email: emailInfo, avance: av, hoy, inv_hist, pasado, resto_hoy, ritmo_max, otras: { secuencias: otras.map(o => ({ id: o.id, nombre: o.nombre, activos: o.activos })), reservado, real7d, en_cola: qo.n }, steps, caps, cuentas: cuentas.length, sin_cuenta: sinCuenta, ramp, drip: sq.drip_per_day || 0, send_days: (() => { const m = String(sq.send_days || '1111100').padEnd(7, '0'), dd = a0 ? (a0.dias || DEF.dias) : null; return dd ? m.split('').map((c, i) => (c === '1' && dd.includes(i + 1) ? '1' : '0')).join('') : m; })(), starts_on: sq.starts_on, tz: sq.timezone || '', contactos: ct });
     } catch (e) { console.error('[li] capacidad', e.message); res.status(500).json({ error: 'No se pudo cargar' }); }
   });
 

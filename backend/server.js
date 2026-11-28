@@ -7056,7 +7056,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const cid = parseInt(req.query.client_id) || 0, sid = parseInt(req.query.sequence_id) || 0;
     if (!cid) return res.json({ sinCliente: true });
     const { rows: mbs } = await pool.query(
-      `SELECT id, email, daily_limit, ramp_on, nv_mb_cap(id,$3) AS cap,
+      `SELECT id, email, daily_limit, ramp_on, ramp_auto, ramp_techo, nv_mb_cap(id,$3) AS cap,
               CASE WHEN ramp_on AND ramp_started_on IS NOT NULL THEN LEAST(ramp_target, ramp_start + ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - ramp_started_on), 0)::numeric / 7)::int) END AS cap_ramp,
               CASE WHEN ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - ramp_started_on), 0)::numeric / 7)::int END AS semana
          FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2 ORDER BY id`, [uid, cid, tz]);
@@ -7073,7 +7073,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     let capBuzon = topados ? mbs.reduce((a, x) => a + x.cap, 0) : null;
     const rampCap = topados && mbs.every(x => x.cap_ramp !== null) ? mbs.reduce((a, x) => a + x.cap_ramp, 0) : null;
     const semana = mbs.length ? mbs[0].semana : 0;
-    const mb = mbs.length ? { id: mbs[0].id, email: mbs.map(x => x.email).join(' + '), ramp_on: mbs.some(x => x.ramp_on), daily_limit: mbs.every(x => x.daily_limit > 0) ? mbs.reduce((a, x) => a + x.daily_limit, 0) : 0, n: mbs.length } : null;
+    const mb = mbs.length ? { id: mbs[0].id, email: mbs.map(x => x.email).join(' + '), ramp_on: mbs.some(x => x.ramp_on), auto: mbs.length > 0 && mbs.every(x => x.ramp_auto), techo: mbs.reduce((a, x) => a + (x.ramp_auto ? x.ramp_techo : (x.cap || 0)), 0), daily_limit: mbs.every(x => x.daily_limit > 0) ? mbs.reduce((a, x) => a + x.daily_limit, 0) : 0, n: mbs.length } : null;
     const esta = porSeq.find(x => x.id === sid) || { hoy: 0, limite: 0 };
     const otras = porSeq.filter(x => x.id !== sid && x.hoy > 0);
     const hoyCliente = porSeq.reduce((a, x) => a + x.hoy, 0), hoyOtras = hoyCliente - esta.hoy;
@@ -7087,7 +7087,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
-      buzon: mb ? { id: mb.id, email: mb.email, buzones: mb.n, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
+      buzon: mb ? { id: mb.id, email: mb.email, buzones: mb.n, auto: mb.auto, techo: mb.techo, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
       workspace: { activo: false, limite: null, enviados_hoy: ws.n, envio_global: !!(cfg && cfg.enabled) },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),

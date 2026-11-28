@@ -528,7 +528,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
              WHERE mi.sequence_id = s.id AND mi.sent_at IS NOT NULL
-               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5),1) * (0.6 + random() * 0.9) * interval '1 minute')
+               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5)::numeric / nv_mb_n(s.outbound_client_id),1) * (0.6 + random() * 0.9) * interval '1 minute')
            )
        -- Calentamiento gradual de los BUZONES del cliente (hasta 5): se salta solo si TODOS sus buzones conectados ya llegaron hoy a su tope.
        AND NOT nv_client_full(s.outbound_client_id, $2)
@@ -736,7 +736,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
 
   // ── Buzón del cliente (F2): si la secuencia pertenece a un cliente con buzón
   // conectado, el envío sale por SU buzón (SMTP). Sin buzón → Gmail del workspace.
-  const mbx = await _pickMailbox(pool, uid, enr.sequence_id, enr.contact_id, cfg.timezone);
+  const mbx = await _pickMailbox(pool, uid, enr.sequence_id, enr.contact_id, cfg.timezone, enr.send_interval_min);
 
   // Firma: la del buzón (si el cliente puso una) pisa a la global del user.
   // Así cada cliente tiene su propia firma personalizada.
@@ -916,7 +916,7 @@ async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
 // semana, intervalo entre envíos de la secuencia). Es una estimación, no una promesa.
 async function estimateSendTimes(pool, uid) {
   const { rows } = await pool.query(`
-    SELECT m.id, m.sequence_id, m.scheduled_at, s.send_days, s.timezone AS seq_tz, COALESCE(s.send_interval_min,5) AS iv,
+    SELECT m.id, m.sequence_id, m.scheduled_at, s.send_days, s.timezone AS seq_tz, COALESCE(s.send_interval_min,5)::numeric / nv_mb_n(s.outbound_client_id) AS iv,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone AS cfg_tz,
            s.daily_limit AS seq_limit, s.outbound_client_id AS ocid,
            (SELECT MAX(mi.sent_at) FROM lm_messages mi WHERE mi.sequence_id=m.sequence_id) AS last_sent,
@@ -984,18 +984,23 @@ async function _mailboxFull(pool, clientId, tz) {
 
 // Elige el buzón de envío entre los del cliente de la secuencia (hasta 5): primero el que YA escribió a ese contacto (mismo remitente en todo el hilo)
 // si aún tiene cupo hoy; si no, el que tenga más cupo restante (descontando los borradores que ya tiene apartados). Sin cupo en ninguno → el primero.
-async function _pickMailbox(pool, uid, sequenceId, contactId, tz) {
+async function _pickMailbox(pool, uid, sequenceId, contactId, tz, intervaloMin) {
   const { rows } = await pool.query(
     `SELECT mb.id, nv_mb_cap(mb.id,$4) AS cap, nv_mb_sent(mb.id,$4) AS hoy,
             (SELECT COUNT(*)::int FROM lm_messages pm WHERE pm.mailbox_id = mb.id AND pm.contact_id = $3 AND pm.estado IN ('sent','replied','bounced')) AS previos,
-            (SELECT COUNT(*)::int FROM lm_messages dm WHERE dm.mailbox_id = mb.id AND dm.estado IN ('awaiting','approved','queued')) AS pend
+            (SELECT COUNT(*)::int FROM lm_messages dm WHERE dm.mailbox_id = mb.id AND dm.estado IN ('awaiting','approved','queued')) AS pend,
+            (SELECT EXTRACT(EPOCH FROM (NOW() - MAX(lx.sent_at)))/60 FROM lm_messages lx WHERE lx.mailbox_id = mb.id AND lx.sent_at IS NOT NULL AND lx.estado IN ('sent','replied','bounced')) AS hace_min
        FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
       WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') ORDER BY mb.id`,
     [sequenceId, uid, contactId || 0, tz || 'America/Lima']);
   if (!rows.length) return null;
   const libre = r => (r.cap === null ? 1000 : r.cap - r.hoy);
   const conCupo = rows.filter(r => libre(r) > 0);
-  const orden = (conCupo.length ? conCupo : rows).slice().sort((a, b) => ((b.previos > 0) - (a.previos > 0)) || ((libre(b) - b.pend) - (libre(a) - a.pend)) || (a.id - b.id));
+  // descanso propio del buzón (60 % del intervalo de la secuencia): si hay buzones descansados, solo entre ellos; si no, el que lleva más tiempo sin enviar
+  const descansado = r => !intervaloMin || r.hace_min === null || Number(r.hace_min) >= 0.6 * Number(intervaloMin);
+  const base = conCupo.length ? conCupo : rows, libres = base.filter(descansado);
+  const reposo = r => (r.hace_min === null ? 1e9 : Number(r.hace_min));
+  const orden = (libres.length ? libres : base).slice().sort((a, b) => ((b.previos > 0) - (a.previos > 0)) || ((libre(b) - b.pend) - (libre(a) - a.pend)) || (reposo(b) - reposo(a)) || (a.id - b.id));
   const { rows: [mb] } = await pool.query(
     `SELECT mb.*, COALESCE(oc.cc_email,'') AS cc_email FROM lm_mailboxes mb LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id WHERE mb.id=$1`, [orden[0].id]);
   return mb || null;
@@ -1045,7 +1050,7 @@ async function _flushApproved(pool, apiBase) {
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
              WHERE mi.sequence_id = m.sequence_id AND mi.sent_at IS NOT NULL
-               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5),1) * (0.6 + random() * 0.9) * interval '1 minute')
+               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5)::numeric / nv_mb_n(s.outbound_client_id),1) * (0.6 + random() * 0.9) * interval '1 minute')
            )
        -- Mismos topes que el envío automático: el límite PROPIO de la secuencia manda; si no tiene, el calentamiento del buzón.
        -- Lo que no cabe hoy espera a mañana por SU propio tope, nunca por lo que hagan otras secuencias o clientes.
